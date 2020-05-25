@@ -12,6 +12,7 @@ use crate::error::GaiaClientError;
 pub struct GaiaClient {
     socket: ClientSocket,
     sender: MessageSender,
+    drop_counter: u8,
 }
 
 impl GaiaClient {
@@ -23,6 +24,7 @@ impl GaiaClient {
         GaiaClient {
             socket: client_socket,
             sender: message_sender,
+            drop_counter: 0,
         }
     }
 
@@ -37,7 +39,14 @@ impl GaiaClient {
                         Ok(ClientEvent::Disconnection)
                     }
                     SocketEvent::Message(message) => {
-                        Ok(ClientEvent::Message(message))
+                        if self.drop_counter > 2 {
+                            self.drop_counter = 0;
+                            return Ok(ClientEvent::None)
+                        } else {
+                            self.drop_counter += 1;
+                            Ok(ClientEvent::Message(message))
+                        }
+
                     }
                     SocketEvent::None => {
                         Ok(ClientEvent::None)
