@@ -6,3 +6,5 @@ edition = "2018"
 
 [dependencies]
 gaia-socket-shared = { path = "../gaia-socket-shared" } # { git = "https://github.com/connorcarpenter/gaia-socket-shared" } #
+byteorder = "1.3"
+log = "0.4"

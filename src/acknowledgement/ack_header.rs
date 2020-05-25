@@ -1,11 +1,9 @@
-use std::io::Cursor;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use crate::error::Result;
-use crate::net::constants::ACKED_PACKET_HEADER;
+use log::{info};
 
-use super::{HeaderReader, HeaderWriter};
+pub const ACKED_PACKET_HEADER_SIZE: u8 = 8;
 
 #[derive(Copy, Clone, Debug)]
 /// This header provides reliability information.
@@ -45,35 +43,31 @@ impl AckHeader {
     pub fn ack_seq(&self) -> u16 {
         self.ack_seq
     }
-}
 
-impl HeaderWriter for AckHeader {
-    type Output = Result<()>;
-
-    fn parse(&self, buffer: &mut Vec<u8>) -> Self::Output {
-        buffer.write_u16::<BigEndian>(self.seq)?;
-        buffer.write_u16::<BigEndian>(self.ack_seq)?;
-        buffer.write_u32::<BigEndian>(self.ack_field)?;
-        Ok(())
+    pub fn write(&self, buffer: &mut Vec<u8>) {
+        buffer.write_u16::<BigEndian>(self.seq).unwrap();
+        buffer.write_u16::<BigEndian>(self.ack_seq).unwrap();
+        buffer.write_u32::<BigEndian>(self.ack_field).unwrap();
     }
-}
 
-impl HeaderReader for AckHeader {
-    type Header = Result<AckHeader>;
+    pub fn read(mut msg: &[u8]) -> (Self, String) {
 
-    fn read(rdr: &mut Cursor<&[u8]>) -> Self::Header {
-        let seq = rdr.read_u16::<BigEndian>()?;
-        let ack_seq = rdr.read_u16::<BigEndian>()?;
-        let ack_field = rdr.read_u32::<BigEndian>()?;
+        let seq = msg.read_u16::<BigEndian>().unwrap();
+        let ack_seq = msg.read_u16::<BigEndian>().unwrap();
+        let ack_field = msg.read_u32::<BigEndian>().unwrap();
 
-        Ok(AckHeader {
+        info!("READING HEADER {}, {}, {}", seq, ack_seq, ack_field);
+
+        let output = String::from_utf8_lossy(msg).to_string();
+
+        (AckHeader {
             seq,
             ack_seq,
             ack_field,
-        })
+        }, output)
     }
 
     fn size() -> u8 {
-        ACKED_PACKET_HEADER
+        ACKED_PACKET_HEADER_SIZE
     }
 }
