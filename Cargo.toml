@@ -3,3 +3,10 @@ name = "gaia-server"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 edition = "2018"
+
+[features]
+use-udp = [ "gaia-server-socket/use-udp" ]
+use-webrtc = [ "gaia-server-socket/use-webrtc" ]
+
+[dependencies]
+gaia-server-socket = { path = "../gaia-server-socket" } # { git = "https://github.com/connorcarpenter/gaia-server-socket" } #
