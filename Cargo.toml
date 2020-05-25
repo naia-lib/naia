@@ -1,0 +1,13 @@
+[package]
+name = "gaia-server-example"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+edition = "2018"
+
+[features]
+use-udp = [ "gaia-server/use-udp" ]
+use-webrtc = [ "gaia-server/use-webrtc" ]
+
+[dependencies]
+gaia-server = { path = "../gaia-server" } # { git = "https://github.com/connorcarpenter/gaia-server" } #
+tokio = { version = "0.2", features = ["macros"] }
