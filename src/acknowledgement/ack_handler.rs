@@ -1,6 +1,11 @@
 use std::collections::HashMap;
 
-use crate::sequence_buffer::{sequence_greater_than, sequence_less_than, SequenceNumber, SequenceBuffer};
+use log::{info};
+
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use super::sequence_buffer::{sequence_greater_than, sequence_less_than, SequenceNumber, SequenceBuffer};
+
+use super::ack_header::AckHeader;
 
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
 const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
@@ -73,11 +78,10 @@ impl AckHandler {
         &mut self,
         message: String,
     ) -> String {
-        ///TODO: Get these values off the header of the packet
-        //        remote_seq_num: u16,
-        //        remote_ack_seq: u16,
-        //        mut remote_ack_field: u32,
-
+        let (ack_header, stripped_message) = AckHeader::read(message.as_bytes());
+        let remote_seq_num = ack_header.sequence();
+        let remote_ack_seq = ack_header.ack_seq();
+        let mut remote_ack_field = ack_header.ack_field();
 
         // ensure that `self.remote_ack_sequence_num` is always increasing (with wrapping)
         if sequence_greater_than(remote_ack_seq, self.remote_ack_sequence_num) {
@@ -100,9 +104,7 @@ impl AckHandler {
             remote_ack_field >>= 1;
         }
 
-        ///TODO: Make sure you've stripped the ack header off before returning this
-
-        message
+        stripped_message
     }
 
     /// Enqueues the outgoing packet for acknowledgment.
@@ -110,6 +112,20 @@ impl AckHandler {
         &mut self,
         message: String,
     ) -> String {
+
+        // Add Ack Header onto message!
+        let outgoing_packet = OutgoingPacket::new(message.as_bytes());
+
+        let seq_num = self.local_sequence_num();
+        let last_seq = self.remote_sequence_num();
+        let bit_field = self.ack_bitfield();
+
+        let header = AckHeader::new(seq_num, last_seq, bit_field);
+        header.write(&mut outgoing_packet.header);
+
+        info!("WRITING HEADER {}, {}, {}", seq_num, last_seq, bit_field);
+        ////////////////////////////////
+
         self.sent_packets.insert(
             self.sequence_number,
             SentPacket {},
@@ -118,12 +134,7 @@ impl AckHandler {
         // bump the local sequence number for the next outgoing packet
         self.sequence_number = self.sequence_number.wrapping_add(1);
 
-        ///TODO: Add Ack Header onto message!
-        //        let seq_num = self.local_sequence_num();
-        //        let last_seq = self.remote_sequence_num();
-        //        let bit_field = self.ack_bitfield();
-
-        message
+        outgoing_packet.contents()
     }
 
     /// Returns a `Vec` of packets we believe have been dropped.
@@ -151,3 +162,25 @@ pub struct SentPacket;
 
 #[derive(Clone, Default)]
 pub struct ReceivedPacket;
+
+//////////////////hmmmmmm
+
+pub struct OutgoingPacket<'p> {
+    header: Vec<u8>,
+    payload: &'p [u8],
+}
+
+impl<'p> OutgoingPacket<'p> {
+    pub fn new(payload: &'p [u8]) -> OutgoingPacket<'p> {
+        OutgoingPacketBuilder {
+            header: Vec::new(),
+            payload,
+        }
+    }
+
+    pub fn contents(&self) -> String {
+        [self.header.as_slice(), &self.payload]
+            .concat()
+            .to_
+    }
+}
