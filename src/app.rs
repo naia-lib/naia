@@ -29,8 +29,10 @@ impl App {
                 match event {
                     ClientEvent::Connection => {
                         info!("Client connected to: {}", self.client.server_address());
-                        self.client.send(PING_MSG.to_string())
-                            .expect("send error");
+                        self.count += 1;
+                        let to_server_message: String = "Client Packet ".to_string() + self.count.to_string().as_str();
+                        info!("Client send: {}", to_server_message);
+                        self.client.send(to_server_message);
                     }
                     ClientEvent::Disconnection => {
                         info!("Client disconnected from: {}", self.client.server_address());
@@ -38,9 +40,9 @@ impl App {
                     ClientEvent::Message(message) => {
                         info!("Client recv: {}", message);
 
-                        if message.eq(&PONG_MSG.to_string()) && self.count < 10 {
+                        if self.count < 10 {
                             self.count += 1;
-                            let to_server_message: String = PING_MSG.to_string();
+                            let to_server_message: String = "Client Packet ".to_string() + self.count.to_string().as_str();
                             info!("Client send: {}", to_server_message);
                             self.client.send(to_server_message);
                         }
