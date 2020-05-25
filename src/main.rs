@@ -17,6 +17,8 @@ async fn main() {
 
     let mut server = GaiaServer::listen(current_socket_address.as_str()).await;
 
+    let mut count = 0;
+
     loop {
         match server.receive().await {
             Ok(event) => {
@@ -29,15 +31,19 @@ async fn main() {
                     }
                     ServerEvent::Message(address, message) => {
                         info!("Gaia Server recv <- {}: {}", address, message);
-
-                        let new_message= message.replace("Client", "Server");
-
-                        info!("Gaia Server send -> {}: {}", address, new_message);
-                        server.send((address, new_message))
-                            .await;
                     }
                     ServerEvent::Tick => {
                         // This could be used for your non-network logic (game loop?)
+                        count += 1;
+                        if count > 299 {
+                            count = 0;
+                        }
+                        for addr in server.get_clients() {
+                            let new_message = "Server Packet ".to_string() + count.to_string().as_str();
+                            info!("Gaia Server send -> {}: {}", addr, new_message);
+                            server.send((addr, new_message))
+                                .await;
+                        }
                     }
                 }
             }
