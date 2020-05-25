@@ -6,4 +6,5 @@ edition = "2018"
 
 [dependencies]
 gaia-client-socket = { path = "../gaia-client-socket" } # { git = "https://github.com/connorcarpenter/gaia-client-socket" } #
+gaia-shared = { path = "../gaia-shared" } # { git = "https://github.com/connorcarpenter/gaia-shared" } #
 cfg-if = "*"
