@@ -3,3 +3,6 @@ name = "gaia-shared"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 edition = "2018"
+
+[dependencies]
+gaia-socket-shared = { path = "../gaia-socket-shared" } # { git = "https://github.com/connorcarpenter/gaia-socket-shared" } #
