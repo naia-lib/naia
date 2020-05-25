@@ -7,8 +7,6 @@ use simple_logger;
 use gaia_server::{GaiaServer, ServerEvent, find_my_ip_address};
 
 const SERVER_PORT: &str = "3179";
-const PING_MSG: &str = "ping";
-const PONG_MSG: &str = "pong";
 
 #[tokio::main]
 async fn main() {
@@ -32,12 +30,11 @@ async fn main() {
                     ServerEvent::Message(address, message) => {
                         info!("Gaia Server recv <- {}: {}", address, message);
 
-                        if message.eq(PING_MSG) {
-                            let to_client_message: String = PONG_MSG.to_string();
-                            info!("Gaia Server send -> {}: {}", address, to_client_message);
-                            server.send((address, to_client_message))
-                                .await.expect("send error");
-                        }
+                        let new_message= message.replace("Client", "Server");
+
+                        info!("Gaia Server send -> {}: {}", address, new_message);
+                        server.send((address, new_message))
+                            .await;
                     }
                     ServerEvent::Tick => {
                         // This could be used for your non-network logic (game loop?)
