@@ -51,7 +51,7 @@ impl GaiaServer {
                             if self.drop_counter > 3 {
                                 self.drop_counter = 0;
                             } else {
-                                self.drop_counter += 1;
+                                //self.drop_counter += 1;
                                 //this logic stays//
                                 let message = self.ack_handler.process_incoming(message);
                                 output = Some(Ok(ServerEvent::Message(address, message)));
