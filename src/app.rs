@@ -40,12 +40,13 @@ impl App {
                     ClientEvent::Message(message) => {
                         info!("Client recv: {}", message);
 
-                        if self.count < 10 {
-                            self.count += 1;
-                            let to_server_message: String = "Client Packet ".to_string() + self.count.to_string().as_str();
-                            info!("Client send: {}", to_server_message);
-                            self.client.send(to_server_message);
+                        self.count += 1;
+                        if self.count > 250 {
+                            self.count = 0;
                         }
+                        let to_server_message: String = "Client Packet ".to_string() + self.count.to_string().as_str();
+                        info!("Client send: {}", to_server_message);
+                        self.client.send(to_server_message);
                     }
                     ClientEvent::None => {
                         //info!("Client non-event");
