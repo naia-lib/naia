@@ -1,0 +1,9 @@
+[package]
+name = "gaia-client"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+gaia-client-socket = { path = "../gaia-client-socket" } # { git = "https://github.com/connorcarpenter/gaia-client-socket" } #
+cfg-if = "*"
