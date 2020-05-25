@@ -5,6 +5,7 @@ use std::{
 };
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config};
+pub use gaia_shared::AckHandler;
 
 use super::client_event::ClientEvent;
 use crate::error::GaiaClientError;
@@ -13,6 +14,7 @@ pub struct GaiaClient {
     socket: ClientSocket,
     sender: MessageSender,
     drop_counter: u8,
+    ack_handler: AckHandler,
 }
 
 impl GaiaClient {
@@ -25,6 +27,7 @@ impl GaiaClient {
             socket: client_socket,
             sender: message_sender,
             drop_counter: 0,
+            ack_handler: AckHandler::new(),
         }
     }
 
@@ -39,12 +42,16 @@ impl GaiaClient {
                         Ok(ClientEvent::Disconnection)
                     }
                     SocketEvent::Message(message) => {
+                        //Simulating dropping
                         if self.drop_counter > 2 {
                             self.drop_counter = 0;
                             return Ok(ClientEvent::None)
                         } else {
-                            self.drop_counter += 1;
+                            //self.drop_counter += 1;
+                            //this logic stays//
+                            let message = self.ack_handler.process_incoming(message);
                             Ok(ClientEvent::Message(message))
+                            ////////////////////
                         }
 
                     }
@@ -59,8 +66,9 @@ impl GaiaClient {
         }
     }
 
-    pub fn send(&mut self, message: String) -> Result<(), Box<dyn Error + Send>> {
-        self.sender.send(message)
+    pub fn send(&mut self, message: String) {
+        let message = self.ack_handler.process_outgoing(message);
+        self.sender.send(message);
     }
 
     pub fn server_address(&self) -> SocketAddr {
