@@ -10,3 +10,4 @@ use-webrtc = [ "gaia-server-socket/use-webrtc" ]
 
 [dependencies]
 gaia-server-socket = { path = "../gaia-server-socket" } # { git = "https://github.com/connorcarpenter/gaia-server-socket" } #
+gaia-shared = { path = "../gaia-shared" } # { git = "https://github.com/connorcarpenter/gaia-shared" } #
