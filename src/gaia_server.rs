@@ -6,8 +6,8 @@ use std::{
 
 use log::info;
 
-use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config};
-pub use gaia_shared::AckHandler;
+use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig};
+pub use gaia_shared::{AckHandler, Config};
 
 use super::server_event::ServerEvent;
 use crate::error::GaiaServerError;
@@ -18,12 +18,21 @@ pub struct GaiaServer {
     sender: MessageSender,
     drop_counter: u8,
     ack_handler: AckHandler,
+    config: Config,
 }
 
 impl GaiaServer {
-    pub async fn listen(address: &str) -> Self {
+    pub async fn listen(address: &str, config: Option<Config>) -> Self {
 
-        let mut server_socket = ServerSocket::listen(address, Some(Config::default())).await;
+        let config = match config {
+            Some(config) => config,
+            None => Config::default()
+        };
+
+        let mut socket_config = SocketConfig::default();
+        socket_config.connectionless = true;
+        socket_config.tick_interval = config.tick_interval;
+        let mut server_socket = ServerSocket::listen(address, Some(socket_config)).await;
 
         let sender = server_socket.get_sender();
 
@@ -32,6 +41,7 @@ impl GaiaServer {
             sender,
             drop_counter: 0,
             ack_handler: AckHandler::new(),
+            config,
         }
     }
 
@@ -41,12 +51,6 @@ impl GaiaServer {
             match self.socket.receive().await {
                 Ok(event) => {
                     match event {
-                        SocketEvent::Connection(address) => {
-                            output = Some(Ok(ServerEvent::Connection(address)));
-                        }
-                        SocketEvent::Disconnection(address) => {
-                            output = Some(Ok(ServerEvent::Disconnection(address)));
-                        }
                         SocketEvent::Packet(packet) => {
                             //Simulating dropping
                             if self.drop_counter > 5 {
@@ -62,6 +66,9 @@ impl GaiaServer {
                         }
                         SocketEvent::Tick => {
                             output = Some(Ok(ServerEvent::Tick));
+                        }
+                        _ => {
+                            // We are not using Socket Connection/Disconnection Events
                         }
                     }
                 }
