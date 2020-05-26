@@ -15,7 +15,7 @@ async fn main() {
 
     let current_socket_address = find_my_ip_address::get() + ":" + SERVER_PORT;
 
-    let mut server = GaiaServer::listen(current_socket_address.as_str()).await;
+    let mut server = GaiaServer::listen(current_socket_address.as_str(), None).await;
 
     let mut count = 0;
 
