@@ -76,9 +76,9 @@ impl AckHandler {
     /// - Update dropped packets
     pub fn process_incoming(
         &mut self,
-        message: String,
-    ) -> String {
-        let (ack_header, stripped_message) = AckHeader::read(message.as_bytes());
+        payload: &[u8],
+    ) -> Box<[u8]> {
+        let (ack_header, stripped_message) = AckHeader::read(payload);
         let remote_seq_num = ack_header.sequence();
         let remote_ack_seq = ack_header.ack_seq();
         let mut remote_ack_field = ack_header.ack_field();
@@ -110,11 +110,11 @@ impl AckHandler {
     /// Enqueues the outgoing packet for acknowledgment.
     pub fn process_outgoing(
         &mut self,
-        message: String,
-    ) -> String {
+        payload: &[u8],
+    ) -> Box<[u8]> {
 
         // Add Ack Header onto message!
-        let outgoing_packet = OutgoingPacket::new(message.as_bytes());
+        let mut outgoing_packet = OutgoingPacket::new(payload);
 
         let seq_num = self.local_sequence_num();
         let last_seq = self.remote_sequence_num();
@@ -172,15 +172,15 @@ pub struct OutgoingPacket<'p> {
 
 impl<'p> OutgoingPacket<'p> {
     pub fn new(payload: &'p [u8]) -> OutgoingPacket<'p> {
-        OutgoingPacketBuilder {
+        OutgoingPacket {
             header: Vec::new(),
             payload,
         }
     }
 
-    pub fn contents(&self) -> String {
+    pub fn contents(&self) -> Box<[u8]> {
         [self.header.as_slice(), &self.payload]
             .concat()
-            .to_
+            .into_boxed_slice()
     }
 }
