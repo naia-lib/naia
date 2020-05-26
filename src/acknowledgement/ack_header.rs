@@ -50,7 +50,7 @@ impl AckHeader {
         buffer.write_u32::<BigEndian>(self.ack_field).unwrap();
     }
 
-    pub fn read(mut msg: &[u8]) -> (Self, String) {
+    pub fn read(mut msg: &[u8]) -> (Self, Box<[u8]>) {
 
         let seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_seq = msg.read_u16::<BigEndian>().unwrap();
@@ -58,13 +58,13 @@ impl AckHeader {
 
         info!("READING HEADER {}, {}, {}", seq, ack_seq, ack_field);
 
-        let output = String::from_utf8_lossy(msg).to_string();
+        let boxed = msg[8..].to_vec().into_boxed_slice();
 
         (AckHeader {
             seq,
             ack_seq,
             ack_field,
-        }, output)
+        }, boxed)
     }
 
     fn size() -> u8 {
