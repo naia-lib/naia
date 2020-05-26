@@ -92,6 +92,9 @@ impl AckHandler {
             .insert(remote_seq_num, ReceivedPacket {});
 
         // the current `remote_ack_seq` was (clearly) received so we should remove it
+        if self.sent_packets.contains_key(&remote_ack_seq) {
+            info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Notify Packet DELIVERED! {}", remote_ack_seq);
+        }
         self.sent_packets.remove(&remote_ack_seq);
 
         // The `remote_ack_field` is going to include whether or not the past 32 packets have been
@@ -99,6 +102,14 @@ impl AckHandler {
         for i in 1..=REDUNDANT_PACKET_ACKS_SIZE {
             let ack_sequence = remote_ack_seq.wrapping_sub(i);
             if remote_ack_field & 1 == 1 {
+                if self.sent_packets.contains_key(&ack_sequence) {
+                    info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Notify Packet DELIVERED! {}", ack_sequence);
+                }
+                self.sent_packets.remove(&ack_sequence);
+            } else {
+                if self.sent_packets.contains_key(&ack_sequence) {
+                    info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Notify Packet DROPPED! {}", ack_sequence);
+                }
                 self.sent_packets.remove(&ack_sequence);
             }
             remote_ack_field >>= 1;
@@ -123,12 +134,11 @@ impl AckHandler {
         let header = AckHeader::new(seq_num, last_seq, bit_field);
         header.write(&mut outgoing_packet.header);
 
-        info!("WRITING HEADER {}, {}, {}", seq_num, last_seq, bit_field);
-        ////////////////////////////////
+        //info!("WRITING HEADER {}, {}, {}", seq_num, last_seq, bit_field);
 
         self.sent_packets.insert(
             self.sequence_number,
-            SentPacket {},
+            SentPacket { id: self.sequence_number as u32 },
         );
 
         // bump the local sequence number for the next outgoing packet
@@ -136,29 +146,12 @@ impl AckHandler {
 
         outgoing_packet.contents()
     }
-
-    /// Returns a `Vec` of packets we believe have been dropped.
-    pub fn dropped_packets(&mut self) -> Vec<SentPacket> {
-        let mut sent_sequences: Vec<SequenceNumber> = self.sent_packets.keys().cloned().collect();
-        sent_sequences.sort();
-
-        let remote_ack_sequence = self.remote_ack_sequence_num;
-        sent_sequences
-            .into_iter()
-            .filter(|s| {
-                if sequence_less_than(*s, remote_ack_sequence) {
-                    remote_ack_sequence.wrapping_sub(*s) > REDUNDANT_PACKET_ACKS_SIZE
-                } else {
-                    false
-                }
-            })
-            .flat_map(|s| self.sent_packets.remove(&s))
-            .collect()
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct SentPacket;
+pub struct SentPacket {
+    pub id: u32
+}
 
 #[derive(Clone, Default)]
 pub struct ReceivedPacket;

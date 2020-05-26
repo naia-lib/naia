@@ -3,6 +3,8 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use log::{info};
 
+use std::io::Read;
+
 pub const ACKED_PACKET_HEADER_SIZE: u8 = 8;
 
 #[derive(Copy, Clone, Debug)]
@@ -56,15 +58,16 @@ impl AckHeader {
         let ack_seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_field = msg.read_u32::<BigEndian>().unwrap();
 
-        info!("READING HEADER {}, {}, {}", seq, ack_seq, ack_field);
+        //info!("READING HEADER {}, {}, {}", seq, ack_seq, ack_field);
 
-        let boxed = msg[8..].to_vec().into_boxed_slice();
+        let mut buffer = Vec::new();
+        msg.read_to_end(&mut buffer).unwrap();
 
         (AckHeader {
             seq,
             ack_seq,
             ack_field,
-        }, boxed)
+        }, buffer.into_boxed_slice())
     }
 
     fn size() -> u8 {
