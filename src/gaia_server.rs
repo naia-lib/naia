@@ -11,6 +11,7 @@ pub use gaia_shared::AckHandler;
 
 use super::server_event::ServerEvent;
 use crate::error::GaiaServerError;
+use crate::Packet;
 
 pub struct GaiaServer {
     socket: ServerSocket,
@@ -46,15 +47,16 @@ impl GaiaServer {
                         SocketEvent::Disconnection(address) => {
                             output = Some(Ok(ServerEvent::Disconnection(address)));
                         }
-                        SocketEvent::Message(address, message) => {
+                        SocketEvent::Packet(packet) => {
                             //Simulating dropping
                             if self.drop_counter > 3 {
                                 self.drop_counter = 0;
                             } else {
                                 //self.drop_counter += 1;
                                 //this logic stays//
-                                let message = self.ack_handler.process_incoming(message);
-                                output = Some(Ok(ServerEvent::Message(address, message)));
+                                let new_payload = self.ack_handler.process_incoming(packet.payload());
+                                let newstr = String::from_utf8_lossy(&new_payload).to_string();
+                                output = Some(Ok(ServerEvent::Message(packet.address(), newstr)));
                                 ////////////////////
                             }
                         }
@@ -71,10 +73,9 @@ impl GaiaServer {
         return output.unwrap();
     }
 
-    pub async fn send(&mut self, message: (SocketAddr, String)) {
-        let (address, message) = message;
-        let message = self.ack_handler.process_outgoing(message);
-        self.sender.send((address, message)).await;
+    pub async fn send(&mut self, packet: Packet) {
+        let new_payload = self.ack_handler.process_outgoing(packet.payload());
+        self.sender.send(Packet::new_raw(packet.address(), new_payload)).await;
     }
 
     pub fn get_clients(&mut self) -> Vec<SocketAddr> {

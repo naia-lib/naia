@@ -11,3 +11,5 @@ pub use gaia_server::GaiaServer;
 
 mod server_event;
 pub use server_event::ServerEvent;
+
+pub use gaia_server_socket::Packet;
