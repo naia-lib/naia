@@ -17,7 +17,7 @@ impl App {
         info!("App Start");
 
         App {
-            client: GaiaClient::connect(&server_socket_address),
+            client: GaiaClient::connect(&server_socket_address, None),
             count: 0,
         }
     }
