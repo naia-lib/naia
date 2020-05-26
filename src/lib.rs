@@ -8,3 +8,5 @@ pub use gaia_client::GaiaClient;
 
 mod client_event;
 pub use client_event::ClientEvent;
+
+pub use gaia_client_socket::Packet;
