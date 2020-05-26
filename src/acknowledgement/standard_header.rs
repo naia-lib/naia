@@ -5,12 +5,16 @@ use log::{info};
 
 use std::io::Read;
 
+use crate::PacketType;
+
 pub const ACKED_PACKET_HEADER_SIZE: u8 = 8;
 
 #[derive(Copy, Clone, Debug)]
 /// This header provides reliability information.
-pub struct AckHeader {
-    /// This is the sequence number so that we can know where in the sequence of packages this packet belongs.
+pub struct StandardHeader {
+
+    p_type: PacketType,
+    // This is the sequence number so that we can know where in the sequence of packages this packet belongs.
     pub seq: u16,
     // This is the last acknowledged sequence number.
     ack_seq: u16,
@@ -18,12 +22,13 @@ pub struct AckHeader {
     ack_field: u32,
 }
 
-impl AckHeader {
+impl StandardHeader {
     /// When we compose packet headers, the local sequence becomes the sequence number of the packet, and the remote sequence becomes the ack.
     /// The ack bitfield is calculated by looking into a queue of up to 33 packets, containing sequence numbers in the range [remote sequence - 32, remote sequence].
     /// We set bit n (in [1,32]) in ack bits to 1 if the sequence number remote sequence - n is in the received queue.
-    pub fn new(seq_num: u16, last_seq: u16, bit_field: u32) -> AckHeader {
-        AckHeader {
+    pub fn new(p_type: PacketType, seq_num: u16, last_seq: u16, bit_field: u32) -> StandardHeader {
+        StandardHeader {
+            p_type,
             seq: seq_num,
             ack_seq: last_seq,
             ack_field: bit_field,
@@ -46,7 +51,10 @@ impl AckHeader {
         self.ack_seq
     }
 
+    pub fn packet_type(&self) -> PacketType { self.p_type }
+
     pub fn write(&self, buffer: &mut Vec<u8>) {
+        buffer.write_u8(self.p_type as u8).unwrap();
         buffer.write_u16::<BigEndian>(self.seq).unwrap();
         buffer.write_u16::<BigEndian>(self.ack_seq).unwrap();
         buffer.write_u32::<BigEndian>(self.ack_field).unwrap();
@@ -54,6 +62,7 @@ impl AckHeader {
 
     pub fn read(mut msg: &[u8]) -> (Self, Box<[u8]>) {
 
+        let p_type: PacketType = msg.read_u8().unwrap().into();
         let seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_field = msg.read_u32::<BigEndian>().unwrap();
@@ -63,7 +72,8 @@ impl AckHeader {
         let mut buffer = Vec::new();
         msg.read_to_end(&mut buffer).unwrap();
 
-        (AckHeader {
+        (StandardHeader {
+            p_type,
             seq,
             ack_seq,
             ack_field,

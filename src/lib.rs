@@ -1,6 +1,9 @@
-pub use gaia_socket_shared::{find_my_ip_address, StringUtils};
+pub use gaia_socket_shared::{find_my_ip_address, Timer};
 
 mod acknowledgement;
-pub use acknowledgement::AckHandler;
+pub use acknowledgement::{HeaderHandler, PacketType};
+
+mod config;
+pub use config::Config;
 
 extern crate log;

@@ -5,13 +5,14 @@ use log::{info};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use super::sequence_buffer::{sequence_greater_than, sequence_less_than, SequenceNumber, SequenceBuffer};
 
-use super::ack_header::AckHeader;
+use super::standard_header::StandardHeader;
+
+use crate::PacketType;
 
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
 const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
 
-/// Responsible for handling the acknowledgment of packets.
-pub struct AckHandler {
+pub struct HeaderHandler {
     // Local sequence number which we'll bump each time we send a new packet over the network.
     sequence_number: SequenceNumber,
     // The last acked sequence number of the packets we've sent to the remote host.
@@ -24,10 +25,9 @@ pub struct AckHandler {
     received_packets: SequenceBuffer<ReceivedPacket>,
 }
 
-impl AckHandler {
-    /// Constructs a new `AckHandler` with which you can perform acknowledgment operations.
+impl HeaderHandler {
     pub fn new() -> Self {
-        AckHandler {
+        HeaderHandler {
             sequence_number: 0,
             remote_ack_sequence_num: u16::max_value(),
             sent_packets: HashMap::with_capacity(DEFAULT_SEND_PACKETS_SIZE),
@@ -35,23 +35,18 @@ impl AckHandler {
         }
     }
 
-    /// Returns the current number of not yet acknowledged packets
     pub fn packets_in_flight(&self) -> u16 {
         self.sent_packets.len() as u16
     }
 
-    /// Returns the next sequence number to send.
     pub fn local_sequence_num(&self) -> SequenceNumber {
         self.sequence_number
     }
 
-    /// Returns the last sequence number received from the remote host (+1)
     pub fn remote_sequence_num(&self) -> SequenceNumber {
         self.received_packets.sequence_num().wrapping_sub(1)
     }
 
-    /// Returns the `ack_bitfield` corresponding to which of the past 32 packets we've
-    /// successfully received.
     pub fn ack_bitfield(&self) -> u32 {
         let most_recent_remote_seq_num: u16 = self.remote_sequence_num();
         let mut ack_bitfield: u32 = 0;
@@ -70,18 +65,15 @@ impl AckHandler {
         ack_bitfield
     }
 
-    /// Process the incoming sequence number.
-    ///
-    /// - Acknowledge the incoming sequence number
-    /// - Update dropped packets
     pub fn process_incoming(
         &mut self,
         payload: &[u8],
-    ) -> Box<[u8]> {
-        let (ack_header, stripped_message) = AckHeader::read(payload);
-        let remote_seq_num = ack_header.sequence();
-        let remote_ack_seq = ack_header.ack_seq();
-        let mut remote_ack_field = ack_header.ack_field();
+    ) -> (PacketType, Box<[u8]>) {
+        let (header, stripped_message) = StandardHeader::read(payload);
+        let packet_type = header.packet_type();
+        let remote_seq_num = header.sequence();
+        let remote_ack_seq = header.ack_seq();
+        let mut remote_ack_field = header.ack_field();
 
         // ensure that `self.remote_ack_sequence_num` is always increasing (with wrapping)
         if sequence_greater_than(remote_ack_seq, self.remote_ack_sequence_num) {
@@ -115,12 +107,12 @@ impl AckHandler {
             remote_ack_field >>= 1;
         }
 
-        stripped_message
+        (packet_type, stripped_message)
     }
 
-    /// Enqueues the outgoing packet for acknowledgment.
     pub fn process_outgoing(
         &mut self,
+        packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
 
@@ -131,7 +123,7 @@ impl AckHandler {
         let last_seq = self.remote_sequence_num();
         let bit_field = self.ack_bitfield();
 
-        let header = AckHeader::new(seq_num, last_seq, bit_field);
+        let header = StandardHeader::new(packet_type, seq_num, last_seq, bit_field);
         header.write(&mut outgoing_packet.header);
 
         //info!("WRITING HEADER {}, {}, {}", seq_num, last_seq, bit_field);
