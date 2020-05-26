@@ -4,7 +4,7 @@ extern crate log;
 
 use simple_logger;
 
-use gaia_server::{GaiaServer, ServerEvent, find_my_ip_address};
+use gaia_server::{GaiaServer, ServerEvent, Packet, find_my_ip_address};
 
 const SERVER_PORT: &str = "3179";
 
@@ -41,7 +41,7 @@ async fn main() {
                         for addr in server.get_clients() {
                             let new_message = "Server Packet ".to_string() + count.to_string().as_str();
                             info!("Gaia Server send -> {}: {}", addr, new_message);
-                            server.send((addr, new_message))
+                            server.send(Packet::new(addr, new_message.into_bytes()))
                                 .await;
                         }
                     }
