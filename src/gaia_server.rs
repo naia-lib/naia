@@ -49,10 +49,10 @@ impl GaiaServer {
                         }
                         SocketEvent::Packet(packet) => {
                             //Simulating dropping
-                            if self.drop_counter > 3 {
+                            if self.drop_counter > 5 {
                                 self.drop_counter = 0;
                             } else {
-                                //self.drop_counter += 1;
+                                self.drop_counter += 1;
                                 //this logic stays//
                                 let new_payload = self.ack_handler.process_incoming(packet.payload());
                                 let newstr = String::from_utf8_lossy(&new_payload).to_string();
