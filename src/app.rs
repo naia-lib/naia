@@ -1,7 +1,7 @@
 
 use log::{info};
 
-use gaia_client::{GaiaClient, ClientEvent};
+use gaia_client::{GaiaClient, ClientEvent, Packet};
 
 const PING_MSG: &str = "ping";
 const PONG_MSG: &str = "pong";
@@ -32,7 +32,7 @@ impl App {
                         self.count += 1;
                         let to_server_message: String = "Client Packet ".to_string() + self.count.to_string().as_str();
                         info!("Client send: {}", to_server_message);
-                        self.client.send(to_server_message);
+                        self.client.send(Packet::new(to_server_message.into_bytes()));
                     }
                     ClientEvent::Disconnection => {
                         info!("Client disconnected from: {}", self.client.server_address());
@@ -46,7 +46,7 @@ impl App {
                         }
                         let to_server_message: String = "Client Packet ".to_string() + self.count.to_string().as_str();
                         info!("Client send: {}", to_server_message);
-                        self.client.send(to_server_message);
+                        self.client.send(Packet::new(to_server_message.into_bytes()));
                     }
                     ClientEvent::None => {
                         //info!("Client non-event");
