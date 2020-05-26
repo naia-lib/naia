@@ -7,7 +7,7 @@ use std::{
 use log::info;
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{AckHandler, Config};
+pub use gaia_shared::{HeaderHandler, Config, PacketType};
 
 use super::server_event::ServerEvent;
 use crate::error::GaiaServerError;
@@ -17,7 +17,7 @@ pub struct GaiaServer {
     socket: ServerSocket,
     sender: MessageSender,
     drop_counter: u8,
-    ack_handler: AckHandler,
+    header_handler: HeaderHandler,
     config: Config,
 }
 
@@ -40,7 +40,7 @@ impl GaiaServer {
             socket: server_socket,
             sender,
             drop_counter: 0,
-            ack_handler: AckHandler::new(),
+            header_handler: HeaderHandler::new(),
             config,
         }
     }
@@ -58,7 +58,7 @@ impl GaiaServer {
                             } else {
                                 self.drop_counter += 1;
                                 //this logic stays//
-                                let new_payload = self.ack_handler.process_incoming(packet.payload());
+                                let (packet_type, new_payload) = self.header_handler.process_incoming(packet.payload());
                                 let newstr = String::from_utf8_lossy(&new_payload).to_string();
                                 output = Some(Ok(ServerEvent::Message(packet.address(), newstr)));
                                 ////////////////////
@@ -81,7 +81,7 @@ impl GaiaServer {
     }
 
     pub async fn send(&mut self, packet: Packet) {
-        let new_payload = self.ack_handler.process_outgoing(packet.payload());
+        let new_payload = self.header_handler.process_outgoing(PacketType::Data, packet.payload());
         self.sender.send(Packet::new_raw(packet.address(), new_payload)).await;
     }
 
