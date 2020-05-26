@@ -33,6 +33,7 @@ impl GaiaClient {
     }
 
     pub fn receive(&mut self) -> Result<ClientEvent, GaiaClientError> {
+
         match self.socket.receive() {
             Ok(event) => {
                 match event {
@@ -48,7 +49,7 @@ impl GaiaClient {
                             self.drop_counter = 0;
                             return Ok(ClientEvent::None)
                         } else {
-                            //self.drop_counter += 1;
+                            self.drop_counter += 1;
                             //this logic stays//
                             let new_payload = self.ack_handler.process_incoming(packet.payload());
                             let newstr = String::from_utf8_lossy(&new_payload).to_string();
