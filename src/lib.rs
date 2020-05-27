@@ -1,4 +1,7 @@
 
+#[macro_use]
+extern crate log;
+
 pub use gaia_shared::{find_my_ip_address};
 
 mod error;
