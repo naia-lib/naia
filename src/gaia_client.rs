@@ -4,8 +4,10 @@ use std::{
     error::Error,
 };
 
+use log::info;
+
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{HeaderHandler, Config, PacketType, Timer};
+pub use gaia_shared::{HeaderHandler, Config, PacketType, Timer, ConnectionManager};
 
 use super::client_event::ClientEvent;
 use crate::error::GaiaClientError;
@@ -19,25 +21,25 @@ pub struct GaiaClient {
     config: Config,
     connected: bool,
     handshake_timer: Timer,
-    heartbeat_timer: Timer,
-    timeout_timer: Timer,
+    connection_manager: ConnectionManager,
 }
 
 impl GaiaClient {
     pub fn connect(server_address: &str, config: Option<Config>) -> Self {
 
-        let config = match config {
+        let mut config = match config {
             Some(config) => config,
             None => Config::default()
         };
+        config.heartbeat_interval /= 2;
 
         let mut socket_config = SocketConfig::default();
         socket_config.connectionless = true;
         let mut client_socket = ClientSocket::connect(&server_address, Some(socket_config));
 
-        let handshake_timer = Timer::new(config.send_handshake_interval);
-        let heartbeat_timer = Timer::new(config.heartbeat_interval);
-        let timeout_timer = Timer::new(config.disconnection_timeout_duration);
+        let mut handshake_timer = Timer::new(config.send_handshake_interval);
+        handshake_timer.ring_manual();
+        let connection_manager = ConnectionManager::new(config.heartbeat_interval, config.disconnection_timeout_duration);
         let message_sender = client_socket.get_sender();
 
         GaiaClient {
@@ -48,8 +50,7 @@ impl GaiaClient {
             config,
             connected: false,
             handshake_timer,
-            heartbeat_timer,
-            timeout_timer,
+            connection_manager
         }
     }
 
@@ -57,14 +58,14 @@ impl GaiaClient {
 
         // send handshakes, send heartbeats, timeout if need be
         if self.connected {
-            if self.timeout_timer.ringing() {
+            if self.connection_manager.should_drop() {
                 self.connected = false;
                 return Ok(ClientEvent::Disconnection);
             }
-            if self.heartbeat_timer.ringing() {
+            if self.connection_manager.should_send_heartbeat() {
                 let outpacket = self.header_handler.process_outgoing(PacketType::Heartbeat, &[]);
                 self.sender.send(Packet::new_raw(outpacket));
-                self.heartbeat_timer.reset();
+                self.connection_manager.mark_sent();
             }
         }
         else {
@@ -90,8 +91,11 @@ impl GaiaClient {
                                 self.drop_counter += 1;
 
                                 ///////////this logic stays//////////
-                                self.timeout_timer.reset();
+
+                                self.connection_manager.mark_heard();
+
                                 let (packet_type, new_payload) = self.header_handler.process_incoming(packet.payload());
+
                                 match packet_type {
                                     PacketType::ServerHandshake => {
                                         if !self.connected {
@@ -100,8 +104,13 @@ impl GaiaClient {
                                         }
                                     }
                                     PacketType::Data => {
-                                        let newstr = String::from_utf8_lossy(&new_payload).to_string();
-                                        output = Some(Ok(ClientEvent::Message(newstr)));
+                                        //if self.connected {
+                                            let newstr = String::from_utf8_lossy(&new_payload).to_string();
+                                            output = Some(Ok(ClientEvent::Message(newstr)));
+                                        //}
+                                    }
+                                    PacketType::Heartbeat => {
+                                        info!("Heartbeat from Server");
                                     }
                                     _ => {}
                                 }
@@ -127,7 +136,7 @@ impl GaiaClient {
     pub fn send(&mut self, packet: Packet) {
         let new_payload = self.header_handler.process_outgoing(PacketType::Data, packet.payload());
         self.sender.send(Packet::new_raw(new_payload));
-        self.heartbeat_timer.reset();
+        self.connection_manager.mark_sent();
     }
 
     pub fn server_address(&self) -> SocketAddr {
