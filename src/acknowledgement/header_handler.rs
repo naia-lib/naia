@@ -85,7 +85,7 @@ impl HeaderHandler {
 
         // the current `remote_ack_seq` was (clearly) received so we should remove it
         if self.sent_packets.contains_key(&remote_ack_seq) {
-            info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Notify Packet DELIVERED! {}", remote_ack_seq);
+            //info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Notify Packet DELIVERED! {}", remote_ack_seq);
         }
         self.sent_packets.remove(&remote_ack_seq);
 
@@ -95,12 +95,12 @@ impl HeaderHandler {
             let ack_sequence = remote_ack_seq.wrapping_sub(i);
             if remote_ack_field & 1 == 1 {
                 if self.sent_packets.contains_key(&ack_sequence) {
-                    info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Notify Packet DELIVERED! {}", ack_sequence);
+                    //info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Notify Packet DELIVERED! {}", ack_sequence);
                 }
                 self.sent_packets.remove(&ack_sequence);
             } else {
                 if self.sent_packets.contains_key(&ack_sequence) {
-                    info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Notify Packet DROPPED! {}", ack_sequence);
+                    //info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Notify Packet DROPPED! {}", ack_sequence);
                 }
                 self.sent_packets.remove(&ack_sequence);
             }
