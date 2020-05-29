@@ -1,7 +1,6 @@
 
 use std::{
     net::SocketAddr,
-    error::Error,
     collections::{VecDeque, HashMap},
 };
 
@@ -18,6 +17,7 @@ pub struct GaiaServer {
     socket: ServerSocket,
     sender: MessageSender,
     drop_counter: u8,
+    drop_max: u8,
     header_handler: HeaderHandler,
     config: Config,
     clients: HashMap<SocketAddr, ConnectionManager>,
@@ -46,8 +46,9 @@ impl GaiaServer {
         GaiaServer {
             socket: server_socket,
             sender,
-            drop_counter: 0,
-            header_handler: HeaderHandler::new(),
+            drop_counter: 1,
+            drop_max: 3,
+            header_handler: HeaderHandler::new("Server"),
             config,
             clients: clients_map,
             outstanding_disconnects: VecDeque::new(),
@@ -68,7 +69,9 @@ impl GaiaServer {
                         self.outstanding_disconnects.push_back(*address);
                     } else if connection.should_send_heartbeat() {
                         let outpacket = self.header_handler.process_outgoing(PacketType::Heartbeat, &[]);
-                        self.sender.send(Packet::new_raw(*address, outpacket)).await;
+                        self.sender.send(Packet::new_raw(*address, outpacket))
+                            .await
+                            .expect("send failed!");
                         connection.mark_sent();
                     }
                 }
@@ -96,8 +99,9 @@ impl GaiaServer {
 
                             if HeaderHandler::get_packet_type(packet.payload()) == PacketType::Data {
                                 //simulate dropping
-                                if self.drop_counter > 3 {
+                                if self.drop_counter >= self.drop_max {
                                     self.drop_counter = 0;
+                                    info!("~~~~~~~~~~  dropped packet from client  ~~~~~~~~~~");
                                     continue;
                                 } else {
                                     self.drop_counter += 1;
@@ -108,7 +112,9 @@ impl GaiaServer {
                                 PacketType::ClientHandshake => {
                                     // Send Server
                                     let outpacket = self.header_handler.process_outgoing(PacketType::ServerHandshake, &[]);
-                                    self.sender.send(Packet::new_raw(address, outpacket)).await;
+                                    self.sender.send(Packet::new_raw(address, outpacket))
+                                        .await
+                                        .expect("send failed!");
 
                                     if !self.clients.contains_key(&address) {
                                         self.clients.insert(address, ConnectionManager::new(self.config.heartbeat_interval, self.config.disconnection_timeout_duration));
@@ -126,7 +132,7 @@ impl GaiaServer {
                                     }
                                 }
                                 PacketType::Heartbeat => {
-                                    info!("Client Heartbeat");
+                                    info!("<- c");
                                 }
                                 _ => {}
                             }
@@ -149,7 +155,9 @@ impl GaiaServer {
 
     pub async fn send(&mut self, packet: Packet) {
         let new_payload = self.header_handler.process_outgoing(PacketType::Data, packet.payload());
-        self.sender.send(Packet::new_raw(packet.address(), new_payload)).await;
+        self.sender.send(Packet::new_raw(packet.address(), new_payload))
+            .await
+            .expect("send failed!");
         if let Some(connection) = self.clients.get_mut(&packet.address()) {
             connection.mark_sent();
         }
