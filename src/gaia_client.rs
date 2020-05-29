@@ -7,7 +7,7 @@ use std::{
 use log::info;
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{Config, PacketType, Timer, NetConnection};
+pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp};
 
 use super::client_event::ClientEvent;
 use crate::error::GaiaClientError;
@@ -39,7 +39,10 @@ impl GaiaClient {
 
         let mut handshake_timer = Timer::new(config.send_handshake_interval);
         handshake_timer.ring_manual();
-        let server_connection = NetConnection::new(config.heartbeat_interval, config.disconnection_timeout_duration, "Client");
+        let server_connection = NetConnection::new(config.heartbeat_interval,
+                                                   config.disconnection_timeout_duration,
+                                                   "Client",
+                                                   Timestamp::now());
         let message_sender = client_socket.get_sender();
 
         GaiaClient {
@@ -69,7 +72,9 @@ impl GaiaClient {
         }
         else {
             if self.handshake_timer.ringing() {
-                self.send_internal(PacketType::ClientHandshake, Packet::empty());
+                let mut timestamp_bytes = Vec::new();
+                self.server_connection.connection_timestamp.write(&mut timestamp_bytes);
+                self.send_internal(PacketType::ClientHandshake, Packet::new(timestamp_bytes));
                 self.handshake_timer.reset();
             }
         }
