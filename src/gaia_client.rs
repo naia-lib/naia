@@ -1,7 +1,6 @@
 
 use std::{
     net::SocketAddr,
-    error::Error,
 };
 
 use log::info;
@@ -10,8 +9,10 @@ use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as Soc
 pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp};
 
 use super::client_event::ClientEvent;
-use crate::error::GaiaClientError;
-use crate::Packet;
+use crate::{
+    Packet, error::GaiaClientError};
+
+const HOST_TYPE_NAME: &str = "CLIENT";
 
 pub struct GaiaClient {
     socket: ClientSocket,
@@ -105,7 +106,7 @@ impl GaiaClient {
 
                             if let Some(server_connection) = self.server_connection.as_mut() {
                                 server_connection.mark_heard();
-                                let payload = server_connection.ack_manager.process_incoming(packet.payload());
+                                let payload = server_connection.process_incoming(packet.payload());
 
                                 match packet_type {
                                     PacketType::Data => {
@@ -124,7 +125,7 @@ impl GaiaClient {
                                 if packet_type == PacketType::ServerHandshake {
                                     self.server_connection = Some(NetConnection::new(self.config.heartbeat_interval,
                                                                                      self.config.disconnection_timeout_duration,
-                                                                                     "Client",
+                                                                                     HOST_TYPE_NAME,
                                                                                      self.pre_connection_timestamp.take().unwrap()));
                                     output = Some(Ok(ClientEvent::Connection));
                                     continue;
@@ -153,13 +154,13 @@ impl GaiaClient {
 
     fn send_internal(&mut self, packet_type: PacketType, packet: Packet) {
         if let Some(server_connection) = self.server_connection.as_mut() {
-            let new_payload = server_connection.ack_manager.process_outgoing(packet_type, packet.payload());
+            let new_payload = server_connection.process_outgoing(packet_type, packet.payload());
             self.sender.send(Packet::new_raw(new_payload))
                 .expect("send failed!");
             server_connection.mark_sent();
         }
         else {
-            let new_payload = gaia_shared::utils::get_connectionless_payload(packet_type, packet.payload());
+            let new_payload = gaia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
             self.sender.send(Packet::new_raw(new_payload))
                 .expect("send failed!");
         }
@@ -169,7 +170,10 @@ impl GaiaClient {
         return self.socket.server_address();
     }
 
-    pub fn get_sequence_number(&mut self) -> u16 {
-        return self.server_connection.as_ref().unwrap().ack_manager.local_sequence_num();
+    pub fn get_sequence_number(&mut self) -> Option<u16> {
+        if let Some(connection) = self.server_connection.as_mut() {
+            return Some(connection.get_next_packet_index());
+        }
+        return None;
     }
 }
