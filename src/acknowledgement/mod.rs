@@ -6,3 +6,4 @@ mod packet_type;
 
 pub use ack_manager::AckManager;
 pub use packet_type::PacketType;
+pub use standard_header::StandardHeader;

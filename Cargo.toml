@@ -8,3 +8,8 @@ edition = "2018"
 gaia-socket-shared = { path = "../gaia-socket-shared" } # { git = "https://github.com/connorcarpenter/gaia-socket-shared" } #
 byteorder = "1.3"
 log = "0.4"
+cfg-if = "*"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# wasm-bindgen = { version = "0.2.45", features = [ ] }
+js-sys = "0.3"
