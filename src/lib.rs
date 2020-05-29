@@ -2,7 +2,7 @@
 #[macro_use]
 extern crate log;
 
-pub use gaia_shared::{find_my_ip_address};
+pub use gaia_shared::{find_my_ip_address, Config};
 
 mod error;
 

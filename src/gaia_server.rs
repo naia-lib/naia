@@ -32,7 +32,7 @@ impl GaiaServer {
             Some(config) => config,
             None => Config::default()
         };
-        config.heartbeat_interval /= 4;
+        config.heartbeat_interval /= 2;
 
         let mut socket_config = SocketConfig::default();
         socket_config.connectionless = true;
@@ -86,51 +86,49 @@ impl GaiaServer {
                 Ok(event) => {
                     match event {
                         SocketEvent::Packet(packet) => {
-                            //Simulating dropping///////////////
-                            if self.drop_counter > 5 {
-                                self.drop_counter = 0;
-                            } else {
-                                self.drop_counter += 1;
-
-                                //this logic stays////////////////////
-
-                                let address = packet.address();
-                                match self.clients.get_mut(&address) {
-                                    Some(connection) => {
-                                        connection.mark_heard();
-                                    }
-                                    None => {} //not yet established connection
+                            let address = packet.address();
+                            match self.clients.get_mut(&address) {
+                                Some(connection) => {
+                                    connection.mark_heard();
                                 }
+                                None => {} //not yet established connection
+                            }
 
-                                let (packet_type, new_payload) = self.header_handler.process_incoming(packet.payload());
-                                match packet_type {
-                                    PacketType::ClientHandshake => {
-                                        // Send Server
-                                        let to_client_message = "trying to shake yo hand yo".to_string().into_bytes().into_boxed_slice();
-                                        let outpacket = self.header_handler.process_outgoing(PacketType::ServerHandshake, &to_client_message);
-                                        self.sender.send(Packet::new_raw(address, outpacket)).await;
-
-                                        if !self.clients.contains_key(&address) {
-                                            self.clients.insert(address, ConnectionManager::new(self.config.heartbeat_interval, self.config.disconnection_timeout_duration));
-                                            output = Some(Ok(ServerEvent::Connection(address)));
-                                            continue;
-                                        }
-                                    }
-                                    PacketType::Data => {
-                                        if self.clients.contains_key(&address) {
-                                            let newstr = String::from_utf8_lossy(&new_payload).to_string();
-                                            output = Some(Ok(ServerEvent::Message(packet.address(), newstr)));
-                                            continue;
-                                        } else {
-                                            warn!("received data from unauthenticated client: {}", address);
-                                        }
-                                    }
-                                    PacketType::Heartbeat => {
-                                        info!("Heartbeat from Client");
-                                    }
-                                    _ => {}
+                            if HeaderHandler::get_packet_type(packet.payload()) == PacketType::Data {
+                                //simulate dropping
+                                if self.drop_counter > 3 {
+                                    self.drop_counter = 0;
+                                    continue;
+                                } else {
+                                    self.drop_counter += 1;
                                 }
-                                //////////////////////////////////////
+                            }
+                            let (packet_type, new_payload) = self.header_handler.process_incoming(packet.payload());
+                            match packet_type {
+                                PacketType::ClientHandshake => {
+                                    // Send Server
+                                    let outpacket = self.header_handler.process_outgoing(PacketType::ServerHandshake, &[]);
+                                    self.sender.send(Packet::new_raw(address, outpacket)).await;
+
+                                    if !self.clients.contains_key(&address) {
+                                        self.clients.insert(address, ConnectionManager::new(self.config.heartbeat_interval, self.config.disconnection_timeout_duration));
+                                        output = Some(Ok(ServerEvent::Connection(address)));
+                                        continue;
+                                    }
+                                }
+                                PacketType::Data => {
+                                    if self.clients.contains_key(&address) {
+                                        let newstr = String::from_utf8_lossy(&new_payload).to_string();
+                                        output = Some(Ok(ServerEvent::Message(packet.address(), newstr)));
+                                        continue;
+                                    } else {
+                                        warn!("received data from unauthenticated client: {}", address);
+                                    }
+                                }
+                                PacketType::Heartbeat => {
+                                    info!("Client Heartbeat");
+                                }
+                                _ => {}
                             }
                         }
                         SocketEvent::Tick => {
@@ -159,5 +157,9 @@ impl GaiaServer {
 
     pub fn get_clients(&mut self) -> Vec<SocketAddr> {
         self.clients.keys().cloned().collect()
+    }
+
+    pub fn get_sequence_number(&mut self, addr: SocketAddr) -> u16 {
+        return self.header_handler.local_sequence_num();
     }
 }
