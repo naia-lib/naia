@@ -4,7 +4,9 @@ extern crate log;
 
 use simple_logger;
 
-use gaia_server::{GaiaServer, ServerEvent, Packet, find_my_ip_address};
+use gaia_server::{GaiaServer, ServerEvent, Packet, find_my_ip_address, Config};
+
+use std::time::Duration;
 
 const SERVER_PORT: &str = "3179";
 
@@ -15,9 +17,11 @@ async fn main() {
 
     let current_socket_address = find_my_ip_address::get() + ":" + SERVER_PORT;
 
-    let mut server = GaiaServer::listen(current_socket_address.as_str(), None).await;
+    let mut config = Config::default();
+    config.tick_interval = Duration::from_secs(10);
+    config.heartbeat_interval = Duration::from_secs(1);
 
-    let mut count = 0;
+    let mut server = GaiaServer::listen(current_socket_address.as_str(), Some(config)).await;
 
     loop {
         match server.receive().await {
@@ -34,12 +38,9 @@ async fn main() {
                     }
                     ServerEvent::Tick => {
                         // This could be used for your non-network logic (game loop?)
-                        count += 1;
-                        if count > 299 {
-                            count = 0;
-                        }
                         for addr in server.get_clients() {
-                            let new_message = "Server Packet ".to_string() + count.to_string().as_str();
+                            let count = server.get_sequence_number(addr);
+                            let new_message = "Server Packet to ".to_string() + addr.to_string().as_str() + " " + count.to_string().as_str();
                             info!("Gaia Server send -> {}: {}", addr, new_message);
                             server.send(Packet::new(addr, new_message.into_bytes()))
                                 .await;
