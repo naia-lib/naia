@@ -7,7 +7,7 @@ use std::{
 use log::info;
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{Config, PacketType, NetConnection, Timer};
+pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp};
 
 use super::server_event::ServerEvent;
 use crate::error::GaiaServerError;
@@ -114,18 +114,31 @@ impl GaiaServer {
 
                             match packet_type {
                                 PacketType::ClientHandshake => {
+                                    let payload = NetConnection::get_headerless_payload(packet.payload());
+                                    let timestamp = Timestamp::read(&payload);
+
                                     if !self.client_connections.contains_key(&address) {
                                         self.client_connections.insert(address,
                                                                        NetConnection::new(self.config.heartbeat_interval,
                                                                                           self.config.disconnection_timeout_duration,
-                                                                                          "Server"));
+                                                                                          "Server",
+                                                                                          timestamp));
+                                        output = Some(Ok(ServerEvent::Connection(address)));
                                     }
 
                                     match self.client_connections.get_mut(&address) {
                                         Some(connection) => {
-                                            self.send_internal(PacketType::ServerHandshake, Packet::new_raw(address, Box::new([])))
-                                                .await;
-                                            continue;
+                                            if timestamp == connection.connection_timestamp {
+                                                self.send_internal(PacketType::ServerHandshake, Packet::new_raw(address, Box::new([])))
+                                                    .await;
+                                                continue;
+                                            } else {
+                                                // Incoming Timestamp is different than recorded.. must be the same client trying to connect..
+                                                // so disconnect them to provide continuity
+                                                self.client_connections.remove(&address);
+                                                output = Some(Ok(ServerEvent::Disconnection(address)));
+                                                continue;
+                                            }
                                         }
                                         None => {}
                                     }
