@@ -10,8 +10,11 @@ use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as Soc
 pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp};
 
 use super::server_event::ServerEvent;
-use crate::error::GaiaServerError;
-use crate::Packet;
+use crate::{
+    Packet,
+    error::GaiaServerError};
+
+const HOST_TYPE_NAME: &str = "Server";
 
 pub struct GaiaServer {
     socket: ServerSocket,
@@ -67,7 +70,7 @@ impl GaiaServer {
                         self.outstanding_disconnects.push_back(*address);
                     } else if connection.should_send_heartbeat() {
                         // Don't try to refactor this to self.internal_send, doesn't seem to work
-                        let payload = connection.ack_manager.process_outgoing(PacketType::Heartbeat, &[]);
+                        let payload = connection.process_outgoing(PacketType::Heartbeat, &[]);
                         self.sender.send(Packet::new_raw(*address, payload))
                             .await
                             .expect("send failed!");
@@ -108,19 +111,16 @@ impl GaiaServer {
                                 }
                             }
 
-                            //let connection = self.client_connections.get(&address);
-                            //let new_payload = connection.ack_manager.process_incoming(packet.payload());
-
                             match packet_type {
                                 PacketType::ClientHandshake => {
-                                    let payload = NetConnection::get_headerless_payload(packet.payload());
+                                    let payload = gaia_shared::utils::read_headerless_payload(packet.payload());
                                     let timestamp = Timestamp::read(&payload);
 
                                     if !self.client_connections.contains_key(&address) {
                                         self.client_connections.insert(address,
                                                                        NetConnection::new(self.config.heartbeat_interval,
                                                                                           self.config.disconnection_timeout_duration,
-                                                                                          "Server",
+                                                                                          HOST_TYPE_NAME,
                                                                                           timestamp));
                                         output = Some(Ok(ServerEvent::Connection(address)));
                                     }
@@ -146,7 +146,7 @@ impl GaiaServer {
 
                                     match self.client_connections.get_mut(&address) {
                                         Some(connection) => {
-                                            let payload = connection.ack_manager.process_incoming(packet.payload());
+                                            let payload = connection.process_incoming(packet.payload());
                                             let newstr = String::from_utf8_lossy(&payload).to_string();
                                             output = Some(Ok(ServerEvent::Message(packet.address(), newstr)));
                                             continue;
@@ -160,7 +160,7 @@ impl GaiaServer {
                                     match self.client_connections.get_mut(&address) {
                                         Some(connection) => {
                                             // Still need to do this so that proper notify events fire based on the heartbeat header
-                                            connection.ack_manager.process_incoming(packet.payload());
+                                            connection.process_incoming(packet.payload());
                                             info!("<- c");
                                             continue;
                                         }
@@ -200,7 +200,7 @@ impl GaiaServer {
 
     async fn send_internal(&mut self, packet_type: PacketType, packet: Packet) {
         if let Some(connection) = self.client_connections.get_mut(&packet.address()) {
-            let payload = connection.ack_manager.process_outgoing(packet_type, packet.payload());
+            let payload = connection.process_outgoing(packet_type, packet.payload());
             match self.sender.send(Packet::new_raw(packet.address(), payload))
                 .await {
                 Ok(_) => {}
@@ -218,7 +218,7 @@ impl GaiaServer {
 
     pub fn get_sequence_number(&mut self, addr: SocketAddr) -> Option<u16> {
         if let Some(connection) = self.client_connections.get_mut(&addr) {
-            return Some(connection.ack_manager.local_sequence_num());
+            return Some(connection.get_next_packet_index());
         }
         return None;
     }
