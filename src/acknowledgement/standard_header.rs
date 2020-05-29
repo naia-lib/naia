@@ -77,4 +77,8 @@ impl StandardHeader {
             ack_field,
         }, buffer.into_boxed_slice())
     }
+
+    pub fn get_packet_type(mut payload: &[u8]) -> PacketType {
+        payload.read_u8().unwrap().into()
+    }
 }
