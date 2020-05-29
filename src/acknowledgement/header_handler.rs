@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use log::{info};
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use super::sequence_buffer::{sequence_greater_than, sequence_less_than, SequenceNumber, SequenceBuffer};
 
 use super::standard_header::StandardHeader;
@@ -23,16 +22,27 @@ pub struct HeaderHandler {
     // However, we can only reasonably ack up to `REDUNDANT_PACKET_ACKS_SIZE + 1` packets on each
     // message we send so this should be that large.
     received_packets: SequenceBuffer<ReceivedPacket>,
+
+    host_type_string: String,
 }
 
 impl HeaderHandler {
-    pub fn new() -> Self {
+    pub fn new(host_type_str: &str) -> Self {
         HeaderHandler {
             sequence_number: 0,
             remote_ack_sequence_num: u16::max_value(),
             sent_packets: HashMap::with_capacity(DEFAULT_SEND_PACKETS_SIZE),
             received_packets: SequenceBuffer::with_capacity(REDUNDANT_PACKET_ACKS_SIZE + 1),
+            host_type_string: host_type_str.to_string(),
         }
+    }
+
+    fn notify_packet_delivered(&self, packet_sequence_number: u16) {
+        info!("-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------", self.host_type_string, packet_sequence_number);
+    }
+
+    fn notify_packet_dropped(&self, packet_sequence_number: u16) {
+        info!("---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---", self.host_type_string, packet_sequence_number);
     }
 
     pub fn packets_in_flight(&self) -> u16 {
@@ -65,6 +75,11 @@ impl HeaderHandler {
         ack_bitfield
     }
 
+    pub fn get_packet_type(payload: &[u8]) -> PacketType {
+        let (header, _) = StandardHeader::read(payload);
+        header.packet_type()
+    }
+
     pub fn process_incoming(
         &mut self,
         payload: &[u8],
@@ -75,35 +90,45 @@ impl HeaderHandler {
         let remote_ack_seq = header.ack_seq();
         let mut remote_ack_field = header.ack_field();
 
+        // // we only care about notifying status of Data Packets
+        //if packet_type == PacketType::Data {
+            self.received_packets
+                .insert(remote_seq_num, ReceivedPacket {});
+        //}
+
         // ensure that `self.remote_ack_sequence_num` is always increasing (with wrapping)
         if sequence_greater_than(remote_ack_seq, self.remote_ack_sequence_num) {
             self.remote_ack_sequence_num = remote_ack_seq;
         }
 
-        self.received_packets
-            .insert(remote_seq_num, ReceivedPacket {});
-
         // the current `remote_ack_seq` was (clearly) received so we should remove it
-        if self.sent_packets.contains_key(&remote_ack_seq) {
-            //info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Notify Packet DELIVERED! {}", remote_ack_seq);
+        if let Some(sent_packet) = self.sent_packets.get(&remote_ack_seq) {
+            if sent_packet.packet_type == PacketType::Data {
+                self.notify_packet_delivered(remote_ack_seq);
+            }
+
+            self.sent_packets.remove(&remote_ack_seq);
         }
-        self.sent_packets.remove(&remote_ack_seq);
 
         // The `remote_ack_field` is going to include whether or not the past 32 packets have been
         // received successfully. If so, we have no need to resend old packets.
         for i in 1..=REDUNDANT_PACKET_ACKS_SIZE {
             let ack_sequence = remote_ack_seq.wrapping_sub(i);
-            if remote_ack_field & 1 == 1 {
-                if self.sent_packets.contains_key(&ack_sequence) {
-                    //info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Notify Packet DELIVERED! {}", ack_sequence);
+            if let Some(sent_packet) = self.sent_packets.get(&ack_sequence) {
+                if remote_ack_field & 1 == 1 {
+                    if sent_packet.packet_type == PacketType::Data {
+                        self.notify_packet_delivered(ack_sequence);
+                    }
+
+                    self.sent_packets.remove(&ack_sequence);
+                } else {
+                    if sent_packet.packet_type == PacketType::Data {
+                        self.notify_packet_dropped(ack_sequence);
+                    }
+                    self.sent_packets.remove(&ack_sequence);
                 }
-                self.sent_packets.remove(&ack_sequence);
-            } else {
-                if self.sent_packets.contains_key(&ack_sequence) {
-                    //info!("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Notify Packet DROPPED! {}", ack_sequence);
-                }
-                self.sent_packets.remove(&ack_sequence);
             }
+
             remote_ack_field >>= 1;
         }
 
@@ -117,55 +142,37 @@ impl HeaderHandler {
     ) -> Box<[u8]> {
 
         // Add Ack Header onto message!
-        let mut outgoing_packet = OutgoingPacket::new(payload);
+        let mut header_bytes = Vec::new();
 
         let seq_num = self.local_sequence_num();
         let last_seq = self.remote_sequence_num();
         let bit_field = self.ack_bitfield();
 
         let header = StandardHeader::new(packet_type, seq_num, last_seq, bit_field);
-        header.write(&mut outgoing_packet.header);
-
-        //info!("WRITING HEADER {}, {}, {}", seq_num, last_seq, bit_field);
+        header.write(&mut header_bytes);
 
         self.sent_packets.insert(
             self.sequence_number,
-            SentPacket { id: self.sequence_number as u32 },
+            SentPacket {
+                id: self.sequence_number as u32,
+                packet_type,
+            },
         );
 
         // bump the local sequence number for the next outgoing packet
         self.sequence_number = self.sequence_number.wrapping_add(1);
 
-        outgoing_packet.contents()
+        [header_bytes.as_slice(), &payload]
+            .concat()
+            .into_boxed_slice()
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SentPacket {
-    pub id: u32
+    pub id: u32,
+    pub packet_type: PacketType,
 }
 
 #[derive(Clone, Default)]
 pub struct ReceivedPacket;
-
-//////////////////hmmmmmm
-
-pub struct OutgoingPacket<'p> {
-    header: Vec<u8>,
-    payload: &'p [u8],
-}
-
-impl<'p> OutgoingPacket<'p> {
-    pub fn new(payload: &'p [u8]) -> OutgoingPacket<'p> {
-        OutgoingPacket {
-            header: Vec::new(),
-            payload,
-        }
-    }
-
-    pub fn contents(&self) -> Box<[u8]> {
-        [self.header.as_slice(), &self.payload]
-            .concat()
-            .into_boxed_slice()
-    }
-}

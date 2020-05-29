@@ -7,8 +7,6 @@ use std::io::Read;
 
 use crate::PacketType;
 
-pub const ACKED_PACKET_HEADER_SIZE: u8 = 8;
-
 #[derive(Copy, Clone, Debug)]
 /// This header provides reliability information.
 pub struct StandardHeader {
@@ -78,9 +76,5 @@ impl StandardHeader {
             ack_seq,
             ack_field,
         }, buffer.into_boxed_slice())
-    }
-
-    fn size() -> u8 {
-        ACKED_PACKET_HEADER_SIZE
     }
 }

@@ -1,5 +1,5 @@
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum PacketType {
     Data = 1,
