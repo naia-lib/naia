@@ -1,4 +1,6 @@
 
+use super::standard_header::StandardHeader;
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum PacketType {
@@ -18,5 +20,11 @@ impl From<u8> for PacketType {
             4 => return PacketType::ClientHandshake,
             _ => return PacketType::Unknown,
         };
+    }
+}
+
+impl PacketType {
+    pub fn get_from_packet(payload: &[u8]) -> PacketType {
+        StandardHeader::get_packet_type(payload)
     }
 }

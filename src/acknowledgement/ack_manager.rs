@@ -11,7 +11,7 @@ use crate::PacketType;
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
 const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
 
-pub struct HeaderHandler {
+pub struct AckManager {
     // Local sequence number which we'll bump each time we send a new packet over the network.
     sequence_number: SequenceNumber,
     // The last acked sequence number of the packets we've sent to the remote host.
@@ -26,9 +26,9 @@ pub struct HeaderHandler {
     host_type_string: String,
 }
 
-impl HeaderHandler {
+impl AckManager {
     pub fn new(host_type_str: &str) -> Self {
-        HeaderHandler {
+        AckManager {
             sequence_number: 0,
             remote_ack_sequence_num: u16::max_value(),
             sent_packets: HashMap::with_capacity(DEFAULT_SEND_PACKETS_SIZE),
@@ -75,15 +75,10 @@ impl HeaderHandler {
         ack_bitfield
     }
 
-    pub fn get_packet_type(payload: &[u8]) -> PacketType {
-        let (header, _) = StandardHeader::read(payload);
-        header.packet_type()
-    }
-
     pub fn process_incoming(
         &mut self,
         payload: &[u8],
-    ) -> (PacketType, Box<[u8]>) {
+    ) -> Box<[u8]> {
         let (header, stripped_message) = StandardHeader::read(payload);
         let packet_type = header.packet_type();
         let remote_seq_num = header.sequence();
@@ -132,7 +127,7 @@ impl HeaderHandler {
             remote_ack_field >>= 1;
         }
 
-        (packet_type, stripped_message)
+        stripped_message
     }
 
     pub fn process_outgoing(
