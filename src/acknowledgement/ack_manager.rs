@@ -80,16 +80,12 @@ impl AckManager {
         payload: &[u8],
     ) -> Box<[u8]> {
         let (header, stripped_message) = StandardHeader::read(payload);
-        let packet_type = header.packet_type();
         let remote_seq_num = header.sequence();
         let remote_ack_seq = header.ack_seq();
         let mut remote_ack_field = header.ack_field();
 
-        // // we only care about notifying status of Data Packets
-        //if packet_type == PacketType::Data {
-            self.received_packets
-                .insert(remote_seq_num, ReceivedPacket {});
-        //}
+        self.received_packets
+            .insert(remote_seq_num, ReceivedPacket {});
 
         // ensure that `self.remote_ack_sequence_num` is always increasing (with wrapping)
         if sequence_greater_than(remote_ack_seq, self.remote_ack_sequence_num) {

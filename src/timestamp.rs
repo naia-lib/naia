@@ -1,12 +1,6 @@
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use log::{info};
-
-use std::io::Read;
-
-use crate::PacketType;
-
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         // Wasm //
@@ -14,7 +8,7 @@ cfg_if! {
     }
     else {
         // Linux //
-        use std::time::{Duration, SystemTime};
+        use std::time::SystemTime;
     }
 }
 
@@ -25,23 +19,23 @@ pub struct Timestamp {
 
 impl Timestamp {
     pub fn now() -> Self {
-        let mut time: u64 = 0;
 
         cfg_if! {
             if #[cfg(target_arch = "wasm32")] {
                 // Wasm //
-                time = Date::now() as u64;
+                Timestamp {
+                    time: Date::now() as u64
+                }
             }
             else {
                 // Linux //
-                time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)
+                let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)
                     .expect("timing error!")
                     .as_secs();
+                Timestamp {
+                    time
+                }
             }
-        }
-
-        Timestamp {
-            time
         }
     }
 

@@ -1,8 +1,6 @@
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use log::{info};
-
 use std::io::Read;
 
 use crate::PacketType;
