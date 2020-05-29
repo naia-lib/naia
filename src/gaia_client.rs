@@ -17,6 +17,7 @@ pub struct GaiaClient {
     socket: ClientSocket,
     sender: MessageSender,
     drop_counter: u8,
+    drop_max: u8,
     header_handler: HeaderHandler,
     config: Config,
     connected: bool,
@@ -45,8 +46,9 @@ impl GaiaClient {
         GaiaClient {
             socket: client_socket,
             sender: message_sender,
-            drop_counter: 0,
-            header_handler: HeaderHandler::new(),
+            drop_counter: 1,
+            drop_max: 3,
+            header_handler: HeaderHandler::new("Client"),
             config,
             connected: false,
             handshake_timer,
@@ -64,14 +66,16 @@ impl GaiaClient {
             }
             if self.connection_manager.should_send_heartbeat() {
                 let outpacket = self.header_handler.process_outgoing(PacketType::Heartbeat, &[]);
-                self.sender.send(Packet::new_raw(outpacket));
+                self.sender.send(Packet::new_raw(outpacket))
+                    .expect("send failed!");
                 self.connection_manager.mark_sent();
             }
         }
         else {
             if self.handshake_timer.ringing() {
                 let outpacket = self.header_handler.process_outgoing(PacketType::ClientHandshake, &[]);
-                self.sender.send(Packet::new_raw(outpacket));
+                self.sender.send(Packet::new_raw(outpacket))
+                    .expect("send failed!");
                 self.handshake_timer.reset();
             }
         }
@@ -87,8 +91,9 @@ impl GaiaClient {
 
                             if HeaderHandler::get_packet_type(packet.payload()) == PacketType::Data {
                                 //simulate dropping
-                                if self.drop_counter > 3 {
+                                if self.drop_counter >= self.drop_max {
                                     self.drop_counter = 0;
+                                    info!("~~~~~~~~~~  dropped packet from server  ~~~~~~~~~~");
                                     continue;
                                 } else {
                                     self.drop_counter += 1;
@@ -112,7 +117,7 @@ impl GaiaClient {
                                     //}
                                 }
                                 PacketType::Heartbeat => {
-                                    info!("Server Heartbeat");
+                                    info!("<- s");
                                 }
                                 _ => {}
                             }
@@ -137,7 +142,8 @@ impl GaiaClient {
 
     pub fn send(&mut self, packet: Packet) {
         let new_payload = self.header_handler.process_outgoing(PacketType::Data, packet.payload());
-        self.sender.send(Packet::new_raw(new_payload));
+        self.sender.send(Packet::new_raw(new_payload))
+            .expect("send failed!");
         self.connection_manager.mark_sent();
     }
 
