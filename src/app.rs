@@ -37,7 +37,7 @@ impl App {
                         info!("Client recv: {}", message);
 
                         let count = self.client.get_sequence_number();
-                        let to_server_message: String = "Client Packet ".to_string() + count.to_string().as_str();
+                        let to_server_message: String = "Client Packet (".to_string() + count.to_string().as_str() + ")";
                         info!("Client send: {}", to_server_message);
                         self.client.send(Packet::new(to_server_message.into_bytes()));
                     }
