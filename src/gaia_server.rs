@@ -6,13 +6,12 @@ use std::{
 
 use log::info;
 
-use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig};
+use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
 pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp};
 
 use super::server_event::ServerEvent;
 use crate::error::GaiaServerError;
 use crate::Packet;
-use std::borrow::Borrow;
 
 pub struct GaiaServer {
     socket: ServerSocket,
@@ -181,6 +180,12 @@ impl GaiaServer {
                     }
                 }
                 Err(error) => {
+                    if let GaiaServerSocketError::SendError(address) = error {
+                        self.client_connections.remove(&address);
+                        output = Some(Ok(ServerEvent::Disconnection(address)));
+                        continue;
+                    }
+
                     output = Some(Err(GaiaServerError::Wrapped(Box::new(error))));
                     continue;
                 }
@@ -196,9 +201,13 @@ impl GaiaServer {
     async fn send_internal(&mut self, packet_type: PacketType, packet: Packet) {
         if let Some(connection) = self.client_connections.get_mut(&packet.address()) {
             let payload = connection.ack_manager.process_outgoing(packet_type, packet.payload());
-            self.sender.send(Packet::new_raw(packet.address(), payload))
-                .await
-                .expect("send failed!");
+            match self.sender.send(Packet::new_raw(packet.address(), payload))
+                .await {
+                Ok(_) => {}
+                Err(err) => {
+                    info!("send error! {}", err);
+                }
+            }
             connection.mark_sent();
         }
     }
