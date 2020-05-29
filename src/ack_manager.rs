@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use log::{info};
 
-use super::sequence_buffer::{sequence_greater_than, sequence_less_than, SequenceNumber, SequenceBuffer};
-
-use super::standard_header::StandardHeader;
+use super::{
+    standard_header::StandardHeader,
+    sequence_buffer::{sequence_greater_than, sequence_less_than, SequenceNumber, SequenceBuffer}};
 
 use crate::PacketType;
 
