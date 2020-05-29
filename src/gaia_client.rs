@@ -7,7 +7,7 @@ use std::{
 use log::info;
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{HeaderHandler, Config, PacketType, Timer, ConnectionManager};
+pub use gaia_shared::{Config, PacketType, Timer, NetConnection};
 
 use super::client_event::ClientEvent;
 use crate::error::GaiaClientError;
@@ -18,11 +18,10 @@ pub struct GaiaClient {
     sender: MessageSender,
     drop_counter: u8,
     drop_max: u8,
-    header_handler: HeaderHandler,
     config: Config,
     connected: bool,
     handshake_timer: Timer,
-    connection_manager: ConnectionManager,
+    server_connection: NetConnection,
 }
 
 impl GaiaClient {
@@ -40,7 +39,7 @@ impl GaiaClient {
 
         let mut handshake_timer = Timer::new(config.send_handshake_interval);
         handshake_timer.ring_manual();
-        let connection_manager = ConnectionManager::new(config.heartbeat_interval, config.disconnection_timeout_duration);
+        let server_connection = NetConnection::new(config.heartbeat_interval, config.disconnection_timeout_duration, "Client");
         let message_sender = client_socket.get_sender();
 
         GaiaClient {
@@ -48,11 +47,10 @@ impl GaiaClient {
             sender: message_sender,
             drop_counter: 1,
             drop_max: 3,
-            header_handler: HeaderHandler::new("Client"),
             config,
             connected: false,
             handshake_timer,
-            connection_manager
+            server_connection,
         }
     }
 
@@ -60,22 +58,18 @@ impl GaiaClient {
 
         // send handshakes, send heartbeats, timeout if need be
         if self.connected {
-            if self.connection_manager.should_drop() {
+            if self.server_connection.should_drop() {
                 self.connected = false;
                 return Ok(ClientEvent::Disconnection);
             }
-            if self.connection_manager.should_send_heartbeat() {
-                let outpacket = self.header_handler.process_outgoing(PacketType::Heartbeat, &[]);
-                self.sender.send(Packet::new_raw(outpacket))
-                    .expect("send failed!");
-                self.connection_manager.mark_sent();
+            if self.server_connection.should_send_heartbeat() {
+                self.send_internal(PacketType::Heartbeat, Packet::empty());
+                self.server_connection.mark_sent();
             }
         }
         else {
             if self.handshake_timer.ringing() {
-                let outpacket = self.header_handler.process_outgoing(PacketType::ClientHandshake, &[]);
-                self.sender.send(Packet::new_raw(outpacket))
-                    .expect("send failed!");
+                self.send_internal(PacketType::ClientHandshake, Packet::empty());
                 self.handshake_timer.reset();
             }
         }
@@ -87,9 +81,9 @@ impl GaiaClient {
                 Ok(event) => {
                     match event {
                         SocketEvent::Packet(packet) => {
-                            self.connection_manager.mark_heard();
+                            self.server_connection.mark_heard();
 
-                            if HeaderHandler::get_packet_type(packet.payload()) == PacketType::Data {
+                            if PacketType::get_from_packet(packet.payload()) == PacketType::Data {
                                 //simulate dropping
                                 if self.drop_counter >= self.drop_max {
                                     self.drop_counter = 0;
@@ -99,7 +93,8 @@ impl GaiaClient {
                                     self.drop_counter += 1;
                                 }
                             }
-                            let (packet_type, new_payload) = self.header_handler.process_incoming(packet.payload());
+                            let packet_type = PacketType::get_from_packet(packet.payload());
+                            let payload = self.server_connection.ack_manager.process_incoming(packet.payload());
 
                             match packet_type {
                                 PacketType::ServerHandshake => {
@@ -110,11 +105,9 @@ impl GaiaClient {
                                     }
                                 }
                                 PacketType::Data => {
-                                    //if self.connected {
-                                        let newstr = String::from_utf8_lossy(&new_payload).to_string();
-                                        output = Some(Ok(ClientEvent::Message(newstr)));
-                                        continue;
-                                    //}
+                                    let newstr = String::from_utf8_lossy(&payload).to_string();
+                                    output = Some(Ok(ClientEvent::Message(newstr)));
+                                    continue;
                                 }
                                 PacketType::Heartbeat => {
                                     info!("<- s");
@@ -141,10 +134,14 @@ impl GaiaClient {
     }
 
     pub fn send(&mut self, packet: Packet) {
-        let new_payload = self.header_handler.process_outgoing(PacketType::Data, packet.payload());
+        self.send_internal(PacketType::Data, packet)
+    }
+
+    fn send_internal(&mut self, packet_type: PacketType, packet: Packet) {
+        let new_payload = self.server_connection.ack_manager.process_outgoing(packet_type, packet.payload());
         self.sender.send(Packet::new_raw(new_payload))
             .expect("send failed!");
-        self.connection_manager.mark_sent();
+        self.server_connection.mark_sent();
     }
 
     pub fn server_address(&self) -> SocketAddr {
@@ -152,6 +149,6 @@ impl GaiaClient {
     }
 
     pub fn get_sequence_number(&mut self) -> u16 {
-        return self.header_handler.local_sequence_num();
+        return self.server_connection.ack_manager.local_sequence_num();
     }
 }
