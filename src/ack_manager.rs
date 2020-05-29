@@ -4,7 +4,10 @@ use log::{info};
 
 use super::{
     standard_header::StandardHeader,
-    sequence_buffer::{sequence_greater_than, sequence_less_than, SequenceNumber, SequenceBuffer}};
+    sequence_buffer::{sequence_greater_than, sequence_less_than, SequenceNumber, SequenceBuffer},
+    event_manager::EventManager,
+    ghost_manager::GhostManager,
+};
 
 use crate::PacketType;
 
@@ -37,48 +40,11 @@ impl AckManager {
         }
     }
 
-    fn notify_packet_delivered(&self, packet_sequence_number: u16) {
-        info!("-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------", self.host_type_string, packet_sequence_number);
-    }
-
-    fn notify_packet_dropped(&self, packet_sequence_number: u16) {
-        info!("---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---", self.host_type_string, packet_sequence_number);
-    }
-
-    pub fn packets_in_flight(&self) -> u16 {
-        self.sent_packets.len() as u16
-    }
-
     pub fn local_sequence_num(&self) -> SequenceNumber {
         self.sequence_number
     }
 
-    pub fn remote_sequence_num(&self) -> SequenceNumber {
-        self.received_packets.sequence_num().wrapping_sub(1)
-    }
-
-    pub fn ack_bitfield(&self) -> u32 {
-        let most_recent_remote_seq_num: u16 = self.remote_sequence_num();
-        let mut ack_bitfield: u32 = 0;
-        let mut mask: u32 = 1;
-
-        // iterate the past `REDUNDANT_PACKET_ACKS_SIZE` received packets and set the corresponding
-        // bit for each packet which exists in the buffer.
-        for i in 1..=REDUNDANT_PACKET_ACKS_SIZE {
-            let sequence = most_recent_remote_seq_num.wrapping_sub(i);
-            if self.received_packets.exists(sequence) {
-                ack_bitfield |= mask;
-            }
-            mask <<= 1;
-        }
-
-        ack_bitfield
-    }
-
-    pub fn process_incoming(
-        &mut self,
-        payload: &[u8],
-    ) -> Box<[u8]> {
+    pub fn process_incoming(&mut self, event_manager: &EventManager, ghost_manager: &GhostManager, payload: &[u8]) -> Box<[u8]> {
         let (header, stripped_message) = StandardHeader::read(payload);
         let remote_seq_num = header.sequence();
         let remote_ack_seq = header.ack_seq();
@@ -95,7 +61,7 @@ impl AckManager {
         // the current `remote_ack_seq` was (clearly) received so we should remove it
         if let Some(sent_packet) = self.sent_packets.get(&remote_ack_seq) {
             if sent_packet.packet_type == PacketType::Data {
-                self.notify_packet_delivered(remote_ack_seq);
+                self.notify_packet_delivered(event_manager, ghost_manager, remote_ack_seq);
             }
 
             self.sent_packets.remove(&remote_ack_seq);
@@ -108,13 +74,13 @@ impl AckManager {
             if let Some(sent_packet) = self.sent_packets.get(&ack_sequence) {
                 if remote_ack_field & 1 == 1 {
                     if sent_packet.packet_type == PacketType::Data {
-                        self.notify_packet_delivered(ack_sequence);
+                        self.notify_packet_delivered(event_manager, ghost_manager, ack_sequence);
                     }
 
                     self.sent_packets.remove(&ack_sequence);
                 } else {
                     if sent_packet.packet_type == PacketType::Data {
-                        self.notify_packet_dropped(ack_sequence);
+                        self.notify_packet_dropped(event_manager, ghost_manager, ack_sequence);
                     }
                     self.sent_packets.remove(&ack_sequence);
                 }
@@ -126,11 +92,7 @@ impl AckManager {
         stripped_message
     }
 
-    pub fn process_outgoing(
-        &mut self,
-        packet_type: PacketType,
-        payload: &[u8],
-    ) -> Box<[u8]> {
+    pub fn process_outgoing(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
 
         // Add Ack Header onto message!
         let mut header_bytes = Vec::new();
@@ -158,6 +120,40 @@ impl AckManager {
         [header_bytes.as_slice(), &payload]
             .concat()
             .into_boxed_slice()
+    }
+
+    fn notify_packet_delivered(&self, event_manager: &EventManager, ghost_manager: &GhostManager, packet_sequence_number: u16) {
+        info!("-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------", self.host_type_string, packet_sequence_number);
+        event_manager.notify_packet_delivered(packet_sequence_number);
+        ghost_manager.notify_packet_delivered(packet_sequence_number);
+    }
+
+    fn notify_packet_dropped(&self, event_manager: &EventManager, ghost_manager: &GhostManager, packet_sequence_number: u16) {
+        info!("---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---", self.host_type_string, packet_sequence_number);
+        event_manager.notify_packet_dropped(packet_sequence_number);
+        ghost_manager.notify_packet_dropped(packet_sequence_number);
+    }
+
+    fn remote_sequence_num(&self) -> SequenceNumber {
+        self.received_packets.sequence_num().wrapping_sub(1)
+    }
+
+    fn ack_bitfield(&self) -> u32 {
+        let most_recent_remote_seq_num: u16 = self.remote_sequence_num();
+        let mut ack_bitfield: u32 = 0;
+        let mut mask: u32 = 1;
+
+        // iterate the past `REDUNDANT_PACKET_ACKS_SIZE` received packets and set the corresponding
+        // bit for each packet which exists in the buffer.
+        for i in 1..=REDUNDANT_PACKET_ACKS_SIZE {
+            let sequence = most_recent_remote_seq_num.wrapping_sub(i);
+            if self.received_packets.exists(sequence) {
+                ack_bitfield |= mask;
+            }
+            mask <<= 1;
+        }
+
+        ack_bitfield
     }
 }
 

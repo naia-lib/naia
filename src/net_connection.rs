@@ -49,7 +49,7 @@ impl NetConnection {
     }
 
     pub fn process_incoming(&mut self, payload: &[u8]) -> Box<[u8]> {
-        self.ack_manager.process_incoming(payload)
+        self.ack_manager.process_incoming(&self.event_manager, &self.ghost_manager, payload)
     }
 
     pub fn process_outgoing(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
