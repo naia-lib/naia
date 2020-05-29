@@ -39,8 +39,8 @@ async fn main() {
                     ServerEvent::Tick => {
                         // This could be used for your non-network logic (game loop?)
                         for addr in server.get_clients() {
-                            let count = server.get_sequence_number(addr);
-                            let new_message = "Server Packet to ".to_string() + addr.to_string().as_str() + " " + count.to_string().as_str();
+                            let count = server.get_sequence_number(addr).expect("why don't we have a sequence number for this client?");
+                            let new_message = "Server Packet (".to_string() + count.to_string().as_str() + ") to " + addr.to_string().as_str();
                             info!("Gaia Server send -> {}: {}", addr, new_message);
                             server.send(Packet::new(addr, new_message.into_bytes()))
                                 .await;
