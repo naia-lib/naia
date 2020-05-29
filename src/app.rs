@@ -5,9 +5,6 @@ use gaia_client::{GaiaClient, ClientEvent, Packet, Config};
 
 use std::time::Duration;
 
-const PING_MSG: &str = "ping";
-const PONG_MSG: &str = "pong";
-
 pub struct App {
     client: GaiaClient,
 }
