@@ -83,42 +83,43 @@ impl GaiaClient {
                 Ok(event) => {
                     match event {
                         SocketEvent::Packet(packet) => {
-                                ///////////Simulating dropping/////////
-                            if self.drop_counter > 2 {
-                                self.drop_counter = 0;
-                                output = Some(Ok(ClientEvent::None));
-                            } else {
-                                self.drop_counter += 1;
+                            self.connection_manager.mark_heard();
 
-                                ///////////this logic stays//////////
-
-                                self.connection_manager.mark_heard();
-
-                                let (packet_type, new_payload) = self.header_handler.process_incoming(packet.payload());
-
-                                match packet_type {
-                                    PacketType::ServerHandshake => {
-                                        if !self.connected {
-                                            self.connected = true;
-                                            output = Some(Ok(ClientEvent::Connection));
-                                        }
-                                    }
-                                    PacketType::Data => {
-                                        //if self.connected {
-                                            let newstr = String::from_utf8_lossy(&new_payload).to_string();
-                                            output = Some(Ok(ClientEvent::Message(newstr)));
-                                        //}
-                                    }
-                                    PacketType::Heartbeat => {
-                                        info!("Heartbeat from Server");
-                                    }
-                                    _ => {}
+                            if HeaderHandler::get_packet_type(packet.payload()) == PacketType::Data {
+                                //simulate dropping
+                                if self.drop_counter > 3 {
+                                    self.drop_counter = 0;
+                                    continue;
+                                } else {
+                                    self.drop_counter += 1;
                                 }
-                                //////////////////////////////////////
+                            }
+                            let (packet_type, new_payload) = self.header_handler.process_incoming(packet.payload());
+
+                            match packet_type {
+                                PacketType::ServerHandshake => {
+                                    if !self.connected {
+                                        self.connected = true;
+                                        output = Some(Ok(ClientEvent::Connection));
+                                        continue;
+                                    }
+                                }
+                                PacketType::Data => {
+                                    //if self.connected {
+                                        let newstr = String::from_utf8_lossy(&new_payload).to_string();
+                                        output = Some(Ok(ClientEvent::Message(newstr)));
+                                        continue;
+                                    //}
+                                }
+                                PacketType::Heartbeat => {
+                                    info!("Server Heartbeat");
+                                }
+                                _ => {}
                             }
                         }
                         SocketEvent::None => {
                             output = Some(Ok(ClientEvent::None));
+                            continue;
                         }
                         _ => {
                             // We are not using Socket Connection/Disconnection Events
@@ -127,6 +128,7 @@ impl GaiaClient {
                 }
                 Err(error) => {
                     output = Some(Err(GaiaClientError::Wrapped(Box::new(error))));
+                    continue;
                 }
             }
         }
@@ -141,5 +143,9 @@ impl GaiaClient {
 
     pub fn server_address(&self) -> SocketAddr {
         return self.socket.server_address();
+    }
+
+    pub fn get_sequence_number(&mut self) -> u16 {
+        return self.header_handler.local_sequence_num();
     }
 }
