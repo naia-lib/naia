@@ -1,14 +1,15 @@
 
 use log::{info};
 
-use gaia_client::{GaiaClient, ClientEvent, Packet};
+use gaia_client::{GaiaClient, ClientEvent, Packet, Config};
+
+use std::time::Duration;
 
 const PING_MSG: &str = "ping";
 const PONG_MSG: &str = "pong";
 
 pub struct App {
     client: GaiaClient,
-    count: u8,
 }
 
 impl App {
@@ -16,9 +17,11 @@ impl App {
 
         info!("App Start");
 
+        let mut config = Config::default();
+        config.heartbeat_interval = Duration::from_secs(2);
+
         App {
-            client: GaiaClient::connect(&server_socket_address, None),
-            count: 0,
+            client: GaiaClient::connect(&server_socket_address, Some(config)),
         }
     }
 
@@ -29,10 +32,6 @@ impl App {
                 match event {
                     ClientEvent::Connection => {
                         info!("Client connected to: {}", self.client.server_address());
-                        self.count += 1;
-                        let to_server_message: String = "Client Packet ".to_string() + self.count.to_string().as_str();
-                        info!("Client send: {}", to_server_message);
-                        self.client.send(Packet::new(to_server_message.into_bytes()));
                     }
                     ClientEvent::Disconnection => {
                         info!("Client disconnected from: {}", self.client.server_address());
@@ -40,11 +39,8 @@ impl App {
                     ClientEvent::Message(message) => {
                         info!("Client recv: {}", message);
 
-                        self.count += 1;
-                        if self.count > 250 {
-                            self.count = 0;
-                        }
-                        let to_server_message: String = "Client Packet ".to_string() + self.count.to_string().as_str();
+                        let count = self.client.get_sequence_number();
+                        let to_server_message: String = "Client Packet ".to_string() + count.to_string().as_str();
                         info!("Client send: {}", to_server_message);
                         self.client.send(Packet::new(to_server_message.into_bytes()));
                     }
