@@ -19,9 +19,9 @@ pub struct GaiaClient {
     drop_counter: u8,
     drop_max: u8,
     config: Config,
-    connected: bool,
     handshake_timer: Timer,
-    server_connection: NetConnection,
+    server_connection: Option<NetConnection>,
+    pre_connection_timestamp: Option<Timestamp>,
 }
 
 impl GaiaClient {
@@ -39,10 +39,6 @@ impl GaiaClient {
 
         let mut handshake_timer = Timer::new(config.send_handshake_interval);
         handshake_timer.ring_manual();
-        let server_connection = NetConnection::new(config.heartbeat_interval,
-                                                   config.disconnection_timeout_duration,
-                                                   "Client",
-                                                   Timestamp::now());
         let message_sender = client_socket.get_sender();
 
         GaiaClient {
@@ -51,29 +47,34 @@ impl GaiaClient {
             drop_counter: 1,
             drop_max: 3,
             config,
-            connected: false,
             handshake_timer,
-            server_connection,
+            server_connection: None,
+            pre_connection_timestamp: None,
         }
     }
 
     pub fn receive(&mut self) -> Result<ClientEvent, GaiaClientError> {
 
         // send handshakes, send heartbeats, timeout if need be
-        if self.connected {
-            if self.server_connection.should_drop() {
-                self.connected = false;
+        if self.server_connection.is_some() {
+            if self.server_connection.as_ref().unwrap().should_drop() {
+                self.server_connection = None;
                 return Ok(ClientEvent::Disconnection);
             }
-            if self.server_connection.should_send_heartbeat() {
+            if self.server_connection.as_ref().unwrap().should_send_heartbeat() {
                 self.send_internal(PacketType::Heartbeat, Packet::empty());
-                self.server_connection.mark_sent();
+                self.server_connection.as_mut().unwrap().mark_sent();
             }
         }
         else {
             if self.handshake_timer.ringing() {
+
+                if self.pre_connection_timestamp.is_none() {
+                    self.pre_connection_timestamp = Some(Timestamp::now());
+                }
+
                 let mut timestamp_bytes = Vec::new();
-                self.server_connection.connection_timestamp.write(&mut timestamp_bytes);
+                self.pre_connection_timestamp.as_mut().unwrap().write(&mut timestamp_bytes);
                 self.send_internal(PacketType::ClientHandshake, Packet::new(timestamp_bytes));
                 self.handshake_timer.reset();
             }
@@ -86,10 +87,12 @@ impl GaiaClient {
                 Ok(event) => {
                     match event {
                         SocketEvent::Packet(packet) => {
-                            self.server_connection.mark_heard();
 
-                            if PacketType::get_from_packet(packet.payload()) == PacketType::Data {
-                                //simulate dropping
+                            let packet_type = PacketType::get_from_packet(packet.payload());
+
+                            // simulate dropping data packets //
+                            if packet_type == PacketType::Data {
+
                                 if self.drop_counter >= self.drop_max {
                                     self.drop_counter = 0;
                                     info!("~~~~~~~~~~  dropped packet from server  ~~~~~~~~~~");
@@ -98,35 +101,41 @@ impl GaiaClient {
                                     self.drop_counter += 1;
                                 }
                             }
-                            let packet_type = PacketType::get_from_packet(packet.payload());
-                            let payload = self.server_connection.ack_manager.process_incoming(packet.payload());
+                            /////////////////////////////////////
 
-                            match packet_type {
-                                PacketType::ServerHandshake => {
-                                    if !self.connected {
-                                        self.connected = true;
-                                        output = Some(Ok(ClientEvent::Connection));
+                            if let Some(server_connection) = self.server_connection.as_mut() {
+                                server_connection.mark_heard();
+                                let payload = server_connection.ack_manager.process_incoming(packet.payload());
+
+                                match packet_type {
+                                    PacketType::Data => {
+                                        let newstr = String::from_utf8_lossy(&payload).to_string();
+                                        output = Some(Ok(ClientEvent::Message(newstr)));
                                         continue;
                                     }
+                                    PacketType::Heartbeat => {
+                                        info!("<- s");
+                                        continue;
+                                    }
+                                    _ => {}
                                 }
-                                PacketType::Data => {
-                                    let newstr = String::from_utf8_lossy(&payload).to_string();
-                                    output = Some(Ok(ClientEvent::Message(newstr)));
+                            }
+                            else {
+                                if packet_type == PacketType::ServerHandshake {
+                                    self.server_connection = Some(NetConnection::new(self.config.heartbeat_interval,
+                                                                                     self.config.disconnection_timeout_duration,
+                                                                                     "Client",
+                                                                                     self.pre_connection_timestamp.take().unwrap()));
+                                    output = Some(Ok(ClientEvent::Connection));
                                     continue;
                                 }
-                                PacketType::Heartbeat => {
-                                    info!("<- s");
-                                }
-                                _ => {}
                             }
                         }
                         SocketEvent::None => {
                             output = Some(Ok(ClientEvent::None));
                             continue;
                         }
-                        _ => {
-                            // We are not using Socket Connection/Disconnection Events
-                        }
+                        _ => {} // We are not using Socket Connection/Disconnection Events
                     }
                 }
                 Err(error) => {
@@ -143,10 +152,17 @@ impl GaiaClient {
     }
 
     fn send_internal(&mut self, packet_type: PacketType, packet: Packet) {
-        let new_payload = self.server_connection.ack_manager.process_outgoing(packet_type, packet.payload());
-        self.sender.send(Packet::new_raw(new_payload))
-            .expect("send failed!");
-        self.server_connection.mark_sent();
+        if let Some(server_connection) = self.server_connection.as_mut() {
+            let new_payload = server_connection.ack_manager.process_outgoing(packet_type, packet.payload());
+            self.sender.send(Packet::new_raw(new_payload))
+                .expect("send failed!");
+            server_connection.mark_sent();
+        }
+        else {
+            let new_payload = gaia_shared::utils::get_connectionless_payload(packet_type, packet.payload());
+            self.sender.send(Packet::new_raw(new_payload))
+                .expect("send failed!");
+        }
     }
 
     pub fn server_address(&self) -> SocketAddr {
@@ -154,6 +170,6 @@ impl GaiaClient {
     }
 
     pub fn get_sequence_number(&mut self) -> u16 {
-        return self.server_connection.ack_manager.local_sequence_num();
+        return self.server_connection.as_ref().unwrap().ack_manager.local_sequence_num();
     }
 }
