@@ -16,4 +16,6 @@ pub use net_connection::NetConnection;
 mod timestamp;
 pub use timestamp::Timestamp;
 
+pub mod utils;
+
 extern crate log;

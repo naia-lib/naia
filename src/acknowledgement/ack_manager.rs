@@ -142,6 +142,7 @@ impl AckManager {
         let header = StandardHeader::new(packet_type, seq_num, last_seq, bit_field);
         header.write(&mut header_bytes);
 
+        // Ack stuff //
         self.sent_packets.insert(
             self.sequence_number,
             SentPacket {
@@ -152,6 +153,7 @@ impl AckManager {
 
         // bump the local sequence number for the next outgoing packet
         self.sequence_number = self.sequence_number.wrapping_add(1);
+        ///////////////
 
         [header_bytes.as_slice(), &payload]
             .concat()
