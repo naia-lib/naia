@@ -1,24 +1,34 @@
 
 use std::time::Duration;
 
-use crate::{Timer, AckManager};
-use super::StandardHeader;
-use super::Timestamp;
+use crate::{Timer, PacketType};
+
+use super::{
+    sequence_buffer::{SequenceNumber},
+    Timestamp,
+    ack_manager::AckManager,
+    event_manager::EventManager,
+    ghost_manager::GhostManager
+};
 
 pub struct NetConnection {
+    pub connection_timestamp: Timestamp,
     heartbeat_manager: Timer,
     timeout_manager: Timer,
-    pub ack_manager: AckManager,
-    pub connection_timestamp: Timestamp,
+    ack_manager: AckManager,
+    event_manager: EventManager,
+    ghost_manager: GhostManager,
 }
 
 impl NetConnection {
     pub fn new(heartbeat_interval: Duration, timeout_duration: Duration, host_name: &str, connection_timestamp: Timestamp) -> Self {
         NetConnection {
+            connection_timestamp,
             heartbeat_manager: Timer::new(heartbeat_interval),
             timeout_manager: Timer::new(timeout_duration),
             ack_manager: AckManager::new(host_name),
-            connection_timestamp,
+            event_manager: EventManager::new(),
+            ghost_manager: GhostManager::new(),
         }
     }
 
@@ -38,8 +48,15 @@ impl NetConnection {
         self.timeout_manager.ringing()
     }
 
-    pub fn get_headerless_payload(payload: &[u8]) -> Box<[u8]> {
-        let (_, stripped_message) = StandardHeader::read(payload);
-        stripped_message
+    pub fn process_incoming(&mut self, payload: &[u8]) -> Box<[u8]> {
+        self.ack_manager.process_incoming(payload)
+    }
+
+    pub fn process_outgoing(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
+        self.ack_manager.process_outgoing(packet_type, payload)
+    }
+
+    pub fn get_next_packet_index(&self) -> SequenceNumber {
+        self.ack_manager.local_sequence_num()
     }
 }

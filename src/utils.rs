@@ -1,7 +1,6 @@
-use crate::PacketType;
-use crate::StandardHeader;
+use crate::{PacketType, StandardHeader};
 
-pub fn get_connectionless_payload(
+pub fn write_connectionless_payload(
     packet_type: PacketType,
     payload: &[u8],
 ) -> Box<[u8]> {
@@ -15,4 +14,9 @@ pub fn get_connectionless_payload(
     [header_bytes.as_slice(), &payload]
         .concat()
         .into_boxed_slice()
+}
+
+pub fn read_headerless_payload(payload: &[u8]) -> Box<[u8]> {
+    let (_, stripped_message) = StandardHeader::read(payload);
+    stripped_message
 }
