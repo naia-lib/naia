@@ -1,9 +1,11 @@
 
 use log::{info};
 
+use std::time::Duration;
+
 use gaia_client::{GaiaClient, ClientEvent, Packet, Config};
 
-use std::time::Duration;
+use gaia_example_shared::manifest_load;
 
 pub struct App {
     client: GaiaClient,
@@ -18,7 +20,7 @@ impl App {
         config.heartbeat_interval = Duration::from_secs(2);
 
         App {
-            client: GaiaClient::connect(&server_socket_address, Some(config)),
+            client: GaiaClient::connect(&server_socket_address, manifest_load(), Some(config)),
         }
     }
 
