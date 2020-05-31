@@ -10,6 +10,7 @@ use-webrtc = [ "gaia-server/use-webrtc" ]
 
 [dependencies]
 gaia-server = { path = "../gaia-server" } # { git = "https://github.com/connorcarpenter/gaia-server" } #
+gaia-example-shared = { path = "../gaia-example-shared" } # { git = "https://github.com/connorcarpenter/gaia-example-shared" } #
 tokio = { version = "0.2", features = ["macros"] }
 log = "0.4"
 simple_logger = { version = "1.4" }
