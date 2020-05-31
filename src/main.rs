@@ -6,6 +6,8 @@ use simple_logger;
 
 use gaia_server::{GaiaServer, ServerEvent, Packet, find_my_ip_address, Config};
 
+use gaia_example_shared::manifest_load;
+
 use std::time::Duration;
 
 const SERVER_PORT: &str = "3179";
@@ -21,7 +23,7 @@ async fn main() {
     config.tick_interval = Duration::from_secs(10);
     config.heartbeat_interval = Duration::from_secs(1);
 
-    let mut server = GaiaServer::listen(current_socket_address.as_str(), Some(config)).await;
+    let mut server = GaiaServer::listen(current_socket_address.as_str(), manifest_load(), Some(config)).await;
 
     loop {
         match server.receive().await {
