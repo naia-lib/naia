@@ -6,7 +6,7 @@ use std::{
 use log::info;
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp};
+pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp, Manifest};
 
 use super::client_event::ClientEvent;
 use crate::{
