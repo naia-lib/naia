@@ -1,4 +1,6 @@
 
+use super::net_base::NetBase;
+
 pub trait NetObject: NetBase {
 //    fn write_create(&self, out_bytes: &mut Vec<u8>);
 //    fn write_update(&self, out_bytes: &mut Vec<u8>);

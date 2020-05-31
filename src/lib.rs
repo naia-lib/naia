@@ -13,8 +13,10 @@ mod packet_type;
 mod sequence_buffer;
 mod standard_header;
 mod timestamp;
-mod net_event;
 mod manifest;
+mod net_base;
+mod net_event;
+mod net_object;
 
 pub mod utils;
 
@@ -25,5 +27,7 @@ pub use standard_header::StandardHeader;
 pub use config::Config;
 pub use net_connection::NetConnection;
 pub use timestamp::Timestamp;
+pub use net_base::NetBase;
 pub use net_event::NetEvent;
+pub use net_object::NetObject;
 pub use manifest::Manifest;
