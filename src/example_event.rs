@@ -1,28 +1,38 @@
 
-use gaia_shared::NetEvent;
+use gaia_shared::{NetBase, NetEvent};
 
-struct ExampleEvent {
-    msg: String,
+pub struct ExampleEvent {
+    msg: Option<String>,
 }
 
 impl ExampleEvent {
     pub fn new(msg: &str) -> Self {
         ExampleEvent {
-            msg: msg.into_string()
+            msg: Some(msg.to_string())
         }
     }
 }
 
+impl NetBase for ExampleEvent {
+    fn identity() -> Box<Self> {
+        Box::new(ExampleEvent { msg: None, })
+    }
+}
+
 impl NetEvent for ExampleEvent {
-    fn is_guaranteed(&self) -> bool {
-        false
-    }
-
-    fn write(&self, buffer: &mut Vec<u8>) {
-        unimplemented!()
-    }
-
-    fn read(mut msg: &[u8]) -> Self {
-        unimplemented!()
-    }
+//    fn is_guaranteed() -> bool {
+//        false
+//    }
+//
+//    fn write(&self, buffer: &mut Vec<u8>) {
+//        let mut bytes = self.msg.into_bytes();
+//        buffer.append(&mut bytes);
+//    }
+//
+//    fn read(mut msg: &[u8]) -> Self {
+//        let msg_str = String::from_utf8_lossy(msg).to_string();
+//        ExampleEvent {
+//            msg: msg_str
+//        }
+//    }
 }
