@@ -1,7 +1,7 @@
 
 #[macro_use]
 extern crate cfg_if;
-
+extern crate anymap;
 extern crate log;
 
 mod ack_manager;
@@ -13,6 +13,8 @@ mod packet_type;
 mod sequence_buffer;
 mod standard_header;
 mod timestamp;
+mod net_event;
+mod manifest;
 
 pub mod utils;
 
@@ -23,4 +25,5 @@ pub use standard_header::StandardHeader;
 pub use config::Config;
 pub use net_connection::NetConnection;
 pub use timestamp::Timestamp;
-
+pub use net_event::NetEvent;
+pub use manifest::Manifest;
