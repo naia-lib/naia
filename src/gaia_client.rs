@@ -15,18 +15,19 @@ use crate::{
 const HOST_TYPE_NAME: &str = "CLIENT";
 
 pub struct GaiaClient {
+    manifest: Manifest,
+    config: Config,
     socket: ClientSocket,
     sender: MessageSender,
-    drop_counter: u8,
-    drop_max: u8,
-    config: Config,
-    handshake_timer: Timer,
     server_connection: Option<NetConnection>,
     pre_connection_timestamp: Option<Timestamp>,
+    handshake_timer: Timer,
+    drop_counter: u8,
+    drop_max: u8,
 }
 
 impl GaiaClient {
-    pub fn connect(server_address: &str, config: Option<Config>) -> Self {
+    pub fn connect(server_address: &str, manifest: Manifest, config: Option<Config>) -> Self {
 
         let mut config = match config {
             Some(config) => config,
@@ -43,6 +44,7 @@ impl GaiaClient {
         let message_sender = client_socket.get_sender();
 
         GaiaClient {
+            manifest,
             socket: client_socket,
             sender: message_sender,
             drop_counter: 1,
