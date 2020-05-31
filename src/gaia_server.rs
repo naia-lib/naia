@@ -7,7 +7,7 @@ use std::{
 use log::info;
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
-pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp};
+pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, Manifest};
 
 use super::server_event::ServerEvent;
 use crate::{
@@ -17,18 +17,19 @@ use crate::{
 const HOST_TYPE_NAME: &str = "Server";
 
 pub struct GaiaServer {
+    manifest: Manifest,
+    config: Config,
     socket: ServerSocket,
     sender: MessageSender,
-    drop_counter: u8,
-    drop_max: u8,
-    config: Config,
     client_connections: HashMap<SocketAddr, NetConnection>,
     outstanding_disconnects: VecDeque<SocketAddr>,
     heartbeat_timer: Timer,
+    drop_counter: u8,
+    drop_max: u8,
 }
 
 impl GaiaServer {
-    pub async fn listen(address: &str, config: Option<Config>) -> Self {
+    pub async fn listen(address: &str, manifest: Manifest, config: Option<Config>) -> Self {
 
         let mut config = match config {
             Some(config) => config,
@@ -46,6 +47,7 @@ impl GaiaServer {
         let heartbeat_timer = Timer::new(config.heartbeat_interval);
 
         GaiaServer {
+            manifest,
             socket: server_socket,
             sender,
             drop_counter: 1,
