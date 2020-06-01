@@ -1,22 +1,26 @@
 
 use gaia_shared::{NetBase, NetEvent};
 
+#[derive(Clone)]
 pub struct ExampleEvent {
     msg: Option<String>,
 }
 
 impl ExampleEvent {
-    pub fn new(msg: &str) -> Self {
+    pub fn init() -> Self {
         ExampleEvent {
-            msg: Some(msg.to_string())
+            msg: None,
+        }
+    }
+
+    pub fn new(msg: String) -> Self {
+        ExampleEvent {
+            msg: Some(msg)
         }
     }
 }
 
 impl NetBase for ExampleEvent {
-    fn identity() -> Box<Self> {
-        Box::new(ExampleEvent { msg: None, })
-    }
 }
 
 impl NetEvent for ExampleEvent {
@@ -24,10 +28,15 @@ impl NetEvent for ExampleEvent {
 //        false
 //    }
 //
-//    fn write(&self, buffer: &mut Vec<u8>) {
-//        let mut bytes = self.msg.into_bytes();
-//        buffer.append(&mut bytes);
-//    }
+    fn write(&self, buffer: &mut Vec<u8>) {
+        match &self.msg {
+            Some(msg_str) => {
+                let mut bytes = msg_str.as_bytes().to_vec();
+                buffer.append(&mut bytes);
+            },
+            None => {}
+        }
+    }
 //
 //    fn read(mut msg: &[u8]) -> Self {
 //        let msg_str = String::from_utf8_lossy(msg).to_string();
