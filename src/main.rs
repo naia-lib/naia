@@ -6,7 +6,7 @@ use simple_logger;
 
 use gaia_server::{GaiaServer, ServerEvent, Packet, find_my_ip_address, Config};
 
-use gaia_example_shared::manifest_load;
+use gaia_example_shared::{manifest_load, ExampleEvent};
 
 use std::time::Duration;
 
@@ -44,8 +44,13 @@ async fn main() {
                             let count = server.get_sequence_number(addr).expect("why don't we have a sequence number for this client?");
                             let new_message = "Server Packet (".to_string() + count.to_string().as_str() + ") to " + addr.to_string().as_str();
                             info!("Gaia Server send -> {}: {}", addr, new_message);
-                            server.send(Packet::new(addr, new_message.into_bytes()))
-                                .await;
+                            // old way, sends just bytes
+//                            server.send(Packet::new(addr, new_message.into_bytes()))
+//                                .await;
+
+                            // new way, sends an ExampleEvent
+                            let example_event = ExampleEvent::new(new_message);
+                            server.send_event(addr, example_event).await;
                         }
                     }
                 }
