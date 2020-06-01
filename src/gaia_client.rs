@@ -6,7 +6,7 @@ use std::{
 use log::info;
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp, Manifest};
+pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp, Manifest, ManagerType};
 
 use super::client_event::ClientEvent;
 use crate::{
@@ -106,14 +106,16 @@ impl GaiaClient {
                             }
                             /////////////////////////////////////
 
-                            if let Some(server_connection) = self.server_connection.as_mut() {
+                            let server_connection_wrapper = self.server_connection.as_mut();
+                            if let Some(server_connection) = server_connection_wrapper {
                                 server_connection.mark_heard();
-                                let payload = server_connection.process_incoming(packet.payload());
+                                let mut payload = server_connection.process_incoming(packet.payload());
 
                                 match packet_type {
                                     PacketType::Data => {
-                                        let newstr = String::from_utf8_lossy(&payload).to_string();
-                                        output = Some(Ok(ClientEvent::Message(newstr)));
+//                                        let newstr = String::from_utf8_lossy(&payload).to_string();
+//                                        output = Some(Ok(ClientEvent::Message(newstr)));
+                                        output = GaiaClient::process_data(server_connection, &mut payload);
                                         continue;
                                     }
                                     PacketType::Heartbeat => {
@@ -177,5 +179,28 @@ impl GaiaClient {
             return Some(connection.get_next_packet_index());
         }
         return None;
+    }
+
+    fn process_data(connection: &NetConnection, data: &mut [u8]) -> Option<Result<ClientEvent, GaiaClientError>> {
+        let output: Option<Result<ClientEvent, GaiaClientError>> = None;
+
+//        Manifest::read_test(data);
+
+//        let manager_type = Manifest::read_manager_type(data);
+//        match manager_type {
+//            ManagerType::Event => {
+                let event_count = Manifest::read_u8(data);
+                let gaia_id = Manifest::read_u16(data);//delete
+//                for x in 0..event_count {
+//                    let gaia_id = Manifest::read_gaia_id(data);
+//                    let payload_length = Manifest::read_u8(data);
+//                    let mut remainder = Vec::<u8>::new();
+//                    //data.read_to_end(&mut remainder).unwrap();
+//                }
+//            }
+//            _ => {}
+//        }
+
+        return output;
     }
 }
