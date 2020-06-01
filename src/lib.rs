@@ -18,6 +18,7 @@ mod net_type;
 mod net_base;
 mod net_event;
 mod net_object;
+mod manager_type;
 
 pub mod utils;
 
@@ -33,3 +34,4 @@ pub use net_base::NetBase;
 pub use net_event::NetEvent;
 pub use net_object::NetObject;
 pub use manifest::Manifest;
+pub use manager_type::ManagerType;
