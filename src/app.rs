@@ -44,6 +44,9 @@ impl App {
                             self.client.send(Packet::new(to_server_message.into_bytes()));
                         }
                     }
+                    ClientEvent::Event(event) => {
+                        info!("CLIENT RECEIVED EVENT");
+                    }
                     ClientEvent::None => {
                         //info!("Client non-event");
                     }
