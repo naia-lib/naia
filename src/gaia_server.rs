@@ -60,8 +60,8 @@ impl<T: ManifestType> GaiaServer<T> {
         }
     }
 
-    pub async fn receive(&mut self) -> Result<ServerEvent, GaiaServerError> {
-        let mut output: Option<Result<ServerEvent, GaiaServerError>> = None;
+    pub async fn receive(&mut self) -> Result<ServerEvent<T>, GaiaServerError> {
+        let mut output: Option<Result<ServerEvent<T>, GaiaServerError>> = None;
         while output.is_none() {
 
             // heartbeats
@@ -149,9 +149,12 @@ impl<T: ManifestType> GaiaServer<T> {
 
                                     match self.client_connections.get_mut(&address) {
                                         Some(connection) => {
-                                            let payload = connection.process_incoming(packet.payload());
-                                            let newstr = String::from_utf8_lossy(&payload).to_string();
-                                            output = Some(Ok(ServerEvent::Message(packet.address(), newstr)));
+                                            let mut payload = connection.process_incoming(packet.payload());
+
+                                            if let Some(mut new_entity) = self.manifest.read_type(&mut payload) {
+                                                output = Some(Ok(ServerEvent::Event(address, new_entity)));
+                                            }
+
                                             continue;
                                         }
                                         None => {
@@ -201,12 +204,8 @@ impl<T: ManifestType> GaiaServer<T> {
 
         let mut writer = PacketWriter::new();
         let out_bytes = writer.write(&self.manifest, event);
-        self.send(Packet::new_raw(addr, out_bytes))
+        self.send_internal(PacketType::Data,Packet::new_raw(addr, out_bytes))
                             .await;
-    }
-
-    pub async fn send(&mut self, packet: Packet) {
-        self.send_internal(PacketType::Data, packet).await;
     }
 
     async fn send_internal(&mut self, packet_type: PacketType, packet: Packet) {

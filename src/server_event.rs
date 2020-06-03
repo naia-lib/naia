@@ -1,8 +1,8 @@
 use std::net::SocketAddr;
 
-pub enum ServerEvent {
+pub enum ServerEvent<T> {
     Connection(SocketAddr),
     Disconnection(SocketAddr),
-    Message(SocketAddr, String),
+    Event(SocketAddr, T),
     Tick,
 }
