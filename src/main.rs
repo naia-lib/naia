@@ -6,7 +6,7 @@ use simple_logger;
 
 use gaia_server::{GaiaServer, ServerEvent, find_my_ip_address, Config};
 
-use gaia_example_shared::{manifest_load, StringEvent};
+use gaia_example_shared::{manifest_load, StringEvent, ExampleType};
 
 use std::time::Duration;
 
@@ -35,8 +35,18 @@ async fn main() {
                     ServerEvent::Disconnection(address) => {
                         info!("Gaia Server disconnected from: {:?}", address);
                     }
-                    ServerEvent::Message(address, message) => {
-                        info!("Gaia Server recv <- {}: {}", address, message);
+                    ServerEvent::Event(address, event_type) => {
+                        match event_type {
+                            ExampleType::StringEvent(string_event) => {
+                                let message = string_event.get_message();
+                                match message {
+                                    Some(msg) => {
+                                        info!("Gaia Server recv <- {}: {}", address, msg);
+                                    }
+                                    None => {}
+                                }
+                            }
+                        }
                     }
                     ServerEvent::Tick => {
                         // This could be used for your non-network logic (game loop?)
@@ -45,9 +55,8 @@ async fn main() {
                             let new_message = "Server Packet (".to_string() + count.to_string().as_str() + ") to " + addr.to_string().as_str();
                             info!("Gaia Server send -> {}: {}", addr, new_message);
 
-                            // new way, sends an ExampleEvent
-                            let example_event = StringEvent::new(new_message);
-                            server.send_event(addr, &example_event).await;
+                            let string_event = StringEvent::new(new_message);
+                            server.send_event(addr, &string_event).await;
                         }
                     }
                 }
