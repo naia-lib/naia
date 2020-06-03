@@ -17,7 +17,7 @@ impl<'s> PacketReader<'s> {
     }
 
     // currently returns a gaia id & payload
-    pub fn read_event(&mut self) -> Option<(u16, Box<[u8]>)> {
+    pub fn read_type(&mut self) -> Option<(u16, Box<[u8]>)> {
         let manager_type: ManagerType = self.cursor.read_u8().unwrap().into();
         match manager_type {
             ManagerType::Event => {
