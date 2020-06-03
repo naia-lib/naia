@@ -1,10 +1,8 @@
 
-use gaia_shared::NetEvent;
-
-pub enum ClientEvent {
+pub enum ClientEvent<T> {
     Connection,
     Disconnection,
     Message(String),
-    Event(Box<dyn NetEvent>),
+    Event(T),
     None,
 }
