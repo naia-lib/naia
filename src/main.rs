@@ -4,9 +4,9 @@ extern crate log;
 
 use simple_logger;
 
-use gaia_server::{GaiaServer, ServerEvent, Packet, find_my_ip_address, Config};
+use gaia_server::{GaiaServer, ServerEvent, find_my_ip_address, Config};
 
-use gaia_example_shared::{manifest_load, ExampleEvent};
+use gaia_example_shared::{manifest_load, StringEvent};
 
 use std::time::Duration;
 
@@ -49,8 +49,8 @@ async fn main() {
 //                                .await;
 
                             // new way, sends an ExampleEvent
-                            let example_event = ExampleEvent::new(new_message);
-                            server.send_event(addr, example_event).await;
+                            let example_event = StringEvent::new(new_message);
+                            server.send_event(addr, &example_event).await;
                         }
                     }
                 }
