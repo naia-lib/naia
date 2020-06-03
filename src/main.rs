@@ -56,7 +56,7 @@ async fn main() {
                             info!("Gaia Server send -> {}: {}", addr, new_message);
 
                             let string_event = StringEvent::new(new_message);
-                            server.send_event(addr, &string_event).await;
+                            server.send_event(addr, &string_event);
                         }
                     }
                 }
