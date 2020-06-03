@@ -9,7 +9,7 @@ use super::{
     ghost_manager::GhostManager,
 };
 
-use crate::PacketType;
+use crate::{PacketType, ManifestType};
 
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
 const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
@@ -44,7 +44,7 @@ impl AckManager {
         self.sequence_number
     }
 
-    pub fn process_incoming(&mut self, event_manager: &EventManager, ghost_manager: &GhostManager, payload: &[u8]) -> Box<[u8]> {
+    pub fn process_incoming<T: ManifestType>(&mut self, event_manager: &EventManager<T>, ghost_manager: &GhostManager, payload: &[u8]) -> Box<[u8]> {
         let (header, stripped_message) = StandardHeader::read(payload);
         let remote_seq_num = header.sequence();
         let remote_ack_seq = header.ack_seq();
@@ -122,13 +122,13 @@ impl AckManager {
             .into_boxed_slice()
     }
 
-    fn notify_packet_delivered(&self, event_manager: &EventManager, ghost_manager: &GhostManager, packet_sequence_number: u16) {
+    fn notify_packet_delivered<T: ManifestType>(&self, event_manager: &EventManager<T>, ghost_manager: &GhostManager, packet_sequence_number: u16) {
         info!("-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------", self.host_type_string, packet_sequence_number);
         event_manager.notify_packet_delivered(packet_sequence_number);
         ghost_manager.notify_packet_delivered(packet_sequence_number);
     }
 
-    fn notify_packet_dropped(&self, event_manager: &EventManager, ghost_manager: &GhostManager, packet_sequence_number: u16) {
+    fn notify_packet_dropped<T: ManifestType>(&self, event_manager: &EventManager<T>, ghost_manager: &GhostManager, packet_sequence_number: u16) {
         info!("---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---", self.host_type_string, packet_sequence_number);
         event_manager.notify_packet_dropped(packet_sequence_number);
         ghost_manager.notify_packet_dropped(packet_sequence_number);
