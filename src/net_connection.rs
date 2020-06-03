@@ -1,26 +1,27 @@
 
 use std::time::Duration;
 
-use crate::{Timer, PacketType};
+use crate::{Timer, PacketType, NetEvent};
 
 use super::{
     sequence_buffer::{SequenceNumber},
     Timestamp,
     ack_manager::AckManager,
     event_manager::EventManager,
-    ghost_manager::GhostManager
+    ghost_manager::GhostManager,
+    ManifestType,
 };
 
-pub struct NetConnection {
+pub struct NetConnection<T: ManifestType> {
     pub connection_timestamp: Timestamp,
     heartbeat_manager: Timer,
     timeout_manager: Timer,
     ack_manager: AckManager,
-    event_manager: EventManager,
+    event_manager: EventManager<T>,
     ghost_manager: GhostManager,
 }
 
-impl NetConnection {
+impl<T: ManifestType> NetConnection<T> {
     pub fn new(heartbeat_interval: Duration, timeout_duration: Duration, host_name: &str, connection_timestamp: Timestamp) -> Self {
         NetConnection {
             connection_timestamp,
@@ -58,5 +59,9 @@ impl NetConnection {
 
     pub fn get_next_packet_index(&self) -> SequenceNumber {
         self.ack_manager.local_sequence_num()
+    }
+
+    pub fn queue_event(&mut self, event: &impl NetEvent<T>) {
+        self.event_manager.queue_event(event);
     }
 }
