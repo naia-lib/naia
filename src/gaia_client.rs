@@ -6,7 +6,7 @@ use std::{
 use log::info;
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp, Manifest, ManagerType};
+pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp, Manifest, ManagerType, PacketReader, NetEvent, ManifestType, NetBase};
 
 use super::client_event::ClientEvent;
 use crate::{
@@ -14,8 +14,8 @@ use crate::{
 
 const HOST_TYPE_NAME: &str = "CLIENT";
 
-pub struct GaiaClient {
-    manifest: Manifest,
+pub struct GaiaClient<T: ManifestType> {
+    manifest: Manifest<T>,
     config: Config,
     socket: ClientSocket,
     sender: MessageSender,
@@ -26,8 +26,8 @@ pub struct GaiaClient {
     drop_max: u8,
 }
 
-impl GaiaClient {
-    pub fn connect(server_address: &str, manifest: Manifest, config: Option<Config>) -> Self {
+impl<T: ManifestType> GaiaClient<T> {
+    pub fn connect(server_address: &str, manifest: Manifest<T>, config: Option<Config>) -> Self {
 
         let mut config = match config {
             Some(config) => config,
@@ -56,7 +56,7 @@ impl GaiaClient {
         }
     }
 
-    pub fn receive(&mut self) -> Result<ClientEvent, GaiaClientError> {
+    pub fn receive(&mut self) -> Result<ClientEvent<T>, GaiaClientError> {
 
         // send handshakes, send heartbeats, timeout if need be
         if self.server_connection.is_some() {
@@ -84,7 +84,7 @@ impl GaiaClient {
         }
 
         // receive from socket
-        let mut output: Option<Result<ClientEvent, GaiaClientError>> = None;
+        let mut output: Option<Result<ClientEvent<T>, GaiaClientError>> = None;
         while output.is_none() {
             match self.socket.receive() {
                 Ok(event) => {
@@ -115,7 +115,7 @@ impl GaiaClient {
                                     PacketType::Data => {
 //                                        let newstr = String::from_utf8_lossy(&payload).to_string();
 //                                        output = Some(Ok(ClientEvent::Message(newstr)));
-                                        output = GaiaClient::process_data(server_connection, &mut payload);
+                                        output = GaiaClient::process_data(&self.manifest, &mut payload);
                                         continue;
                                     }
                                     PacketType::Heartbeat => {
@@ -181,25 +181,22 @@ impl GaiaClient {
         return None;
     }
 
-    fn process_data(connection: &NetConnection, data: &mut [u8]) -> Option<Result<ClientEvent, GaiaClientError>> {
-        let output: Option<Result<ClientEvent, GaiaClientError>> = None;
+    fn process_data(manifest: &Manifest<T>, data: &mut [u8]) -> Option<Result<ClientEvent<T>, GaiaClientError>> {
+        let output: Option<Result<ClientEvent<T>, GaiaClientError>> = None;
 
-//        Manifest::read_test(data);
+        let new_event = PacketReader::new(data).read_event();
 
-//        let manager_type = Manifest::read_manager_type(data);
-//        match manager_type {
-//            ManagerType::Event => {
-                let event_count = Manifest::read_u8(data);
-                let gaia_id = Manifest::read_u16(data);//delete
-//                for x in 0..event_count {
-//                    let gaia_id = Manifest::read_gaia_id(data);
-//                    let payload_length = Manifest::read_u8(data);
-//                    let mut remainder = Vec::<u8>::new();
-//                    //data.read_to_end(&mut remainder).unwrap();
-//                }
-//            }
-//            _ => {}
-//        }
+        match new_event {
+            Some((gaia_id, event_payload)) => {
+                if let Some(mut new_entity) = manifest.create_entity(gaia_id) {
+                    if new_entity.is_event() {
+                        new_entity.use_bytes(&event_payload);
+                        return Some(Ok(ClientEvent::Event(new_entity)));
+                    }
+                }
+            }
+            None => {}
+        }
 
         return output;
     }
