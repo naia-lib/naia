@@ -22,7 +22,7 @@ pub struct GaiaServer<T: ManifestType> {
     config: Config,
     socket: ServerSocket,
     sender: MessageSender,
-    client_connections: HashMap<SocketAddr, NetConnection>,
+    client_connections: HashMap<SocketAddr, NetConnection<T>>,
     outstanding_disconnects: VecDeque<SocketAddr>,
     heartbeat_timer: Timer,
     drop_counter: u8,
@@ -200,12 +200,10 @@ impl<T: ManifestType> GaiaServer<T> {
         return output.unwrap();
     }
 
-    pub async fn send_event(&mut self, addr: SocketAddr, event: &impl NetEvent<T>) {
-
-        let mut writer = PacketWriter::new();
-        let out_bytes = writer.write(&self.manifest, event);
-        self.send_internal(PacketType::Data,Packet::new_raw(addr, out_bytes))
-                            .await;
+    pub fn send_event(&mut self, addr: SocketAddr, event: &impl NetEvent<T>) {
+        if let Some(connection) = self.client_connections.get_mut(&addr) {
+            connection.queue_event(event);
+        }
     }
 
     async fn send_internal(&mut self, packet_type: PacketType, packet: Packet) {
