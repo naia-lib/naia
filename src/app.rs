@@ -35,22 +35,19 @@ impl App {
                     ClientEvent::Disconnection => {
                         info!("Client disconnected from: {}", self.client.server_address());
                     }
-                    ClientEvent::Message(message) => {
-                        info!("Client recv: {}", message);
-
-                        if let Some(count) = self.client.get_sequence_number() {
-                            let to_server_message: String = "Client Packet (".to_string() + count.to_string().as_str() + ")";
-                            info!("Client send: {}", to_server_message);
-                            self.client.send(Packet::new(to_server_message.into_bytes()));
-                        }
-                    }
-                    ClientEvent::Event(incoming_type) => {
-                        match incoming_type {
-                            ExampleType::StringEvent(incoming) => {
-                                let message = incoming.get_message();
+                    ClientEvent::Event(event_type) => {
+                        match event_type {
+                            ExampleType::StringEvent(string_event) => {
+                                let message = string_event.get_message();
                                 match message {
                                     Some(msg) => {
                                         info!("CLIENT RECEIVED EVENT: {}", msg);
+
+                                        if let Some(count) = self.client.get_sequence_number() {
+                                            let to_server_message: String = "Client Packet (".to_string() + count.to_string().as_str() + ")";
+                                            info!("Client send: {}", to_server_message);
+                                            self.client.send(Packet::new(to_server_message.into_bytes()));
+                                        }
                                     }
                                     None => {}
                                 }
@@ -60,6 +57,7 @@ impl App {
                     ClientEvent::None => {
                         //info!("Client non-event");
                     }
+                    _ => { }
                 }
             }
             Err(err) => {
