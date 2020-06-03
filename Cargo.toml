@@ -9,7 +9,6 @@ gaia-socket-shared = { path = "../gaia-socket-shared" } # { git = "https://githu
 byteorder = "1.3"
 log = "0.4"
 cfg-if = "*"
-anymap = "*"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # wasm-bindgen = { version = "0.2.45", features = [ ] }
