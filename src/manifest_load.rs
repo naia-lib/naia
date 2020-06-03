@@ -1,12 +1,11 @@
 
-use gaia_shared::{NetType, Manifest};
+use gaia_shared::{Manifest};
+use crate::{ExampleType, StringEvent};
 
-use crate::ExampleEvent;
+pub fn manifest_load() -> Manifest<ExampleType> {
+    let mut manifest = Manifest::<ExampleType>::new();
 
-pub fn manifest_load() -> Manifest {
-    let mut manifest = Manifest::new();
-
-    manifest.register_type(ExampleEvent::init());
+    manifest.register(StringEvent::init());
 
     manifest
 }
