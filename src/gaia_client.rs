@@ -6,7 +6,7 @@ use std::{
 use log::info;
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp, Manifest, ManagerType, PacketReader, NetEvent, ManifestType, NetBase};
+pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp, Manifest, ManagerType, PacketWriter, PacketReader, NetEvent, ManifestType, NetBase};
 
 use super::client_event::ClientEvent;
 use crate::{
@@ -153,8 +153,11 @@ impl<T: ManifestType> GaiaClient<T> {
         return output.unwrap();
     }
 
-    pub fn send(&mut self, packet: Packet) {
-        self.send_internal(PacketType::Data, packet)
+    pub fn send_event(&mut self, event: &impl NetEvent<T>) {
+
+        let mut writer = PacketWriter::new();
+        let out_bytes = writer.write(&self.manifest, event);
+        self.send_internal(PacketType::Data,Packet::new_raw(out_bytes));
     }
 
     fn send_internal(&mut self, packet_type: PacketType, packet: Packet) {
