@@ -5,10 +5,10 @@ use std::time::Duration;
 
 use gaia_client::{GaiaClient, ClientEvent, Packet, Config};
 
-use gaia_example_shared::manifest_load;
+use gaia_example_shared::{manifest_load, ExampleType};
 
 pub struct App {
-    client: GaiaClient,
+    client: GaiaClient<ExampleType>,
 }
 
 impl App {
@@ -44,8 +44,18 @@ impl App {
                             self.client.send(Packet::new(to_server_message.into_bytes()));
                         }
                     }
-                    ClientEvent::Event(event) => {
-                        info!("CLIENT RECEIVED EVENT");
+                    ClientEvent::Event(incoming_type) => {
+                        match incoming_type {
+                            ExampleType::StringEvent(incoming) => {
+                                let message = incoming.get_message();
+                                match message {
+                                    Some(msg) => {
+                                        info!("CLIENT RECEIVED EVENT: {}", msg);
+                                    }
+                                    None => {}
+                                }
+                            }
+                        }
                     }
                     ClientEvent::None => {
                         //info!("Client non-event");
