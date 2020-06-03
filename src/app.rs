@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use gaia_client::{GaiaClient, ClientEvent, Packet, Config};
 
-use gaia_example_shared::{manifest_load, ExampleType};
+use gaia_example_shared::{manifest_load, StringEvent, ExampleType};
 
 pub struct App {
     client: GaiaClient<ExampleType>,
@@ -41,12 +41,16 @@ impl App {
                                 let message = string_event.get_message();
                                 match message {
                                     Some(msg) => {
-                                        info!("CLIENT RECEIVED EVENT: {}", msg);
+                                        info!("Client received event: {}", msg);
 
                                         if let Some(count) = self.client.get_sequence_number() {
-                                            let to_server_message: String = "Client Packet (".to_string() + count.to_string().as_str() + ")";
-                                            info!("Client send: {}", to_server_message);
-                                            self.client.send(Packet::new(to_server_message.into_bytes()));
+                                            let new_message: String = "Client Packet (".to_string() + count.to_string().as_str() + ")";
+                                            info!("Client send: {}", new_message);
+
+                                            let string_event = StringEvent::new(new_message);
+                                            self.client.send_event(&string_event);
+
+                                            //self.client.send(Packet::new(to_server_message.into_bytes()));
                                         }
                                     }
                                     None => {}
