@@ -113,9 +113,10 @@ impl<T: ManifestType> GaiaClient<T> {
 
                                 match packet_type {
                                     PacketType::Data => {
-//                                        let newstr = String::from_utf8_lossy(&payload).to_string();
-//                                        output = Some(Ok(ClientEvent::Message(newstr)));
-                                        output = GaiaClient::process_data(&self.manifest, &mut payload);
+                                        if let Some(mut new_entity) = self.manifest.read_type(&mut payload) {
+                                            output = Some(Ok(ClientEvent::Event(new_entity)));
+                                        }
+
                                         continue;
                                     }
                                     PacketType::Heartbeat => {
@@ -179,25 +180,5 @@ impl<T: ManifestType> GaiaClient<T> {
             return Some(connection.get_next_packet_index());
         }
         return None;
-    }
-
-    fn process_data(manifest: &Manifest<T>, data: &mut [u8]) -> Option<Result<ClientEvent<T>, GaiaClientError>> {
-        let output: Option<Result<ClientEvent<T>, GaiaClientError>> = None;
-
-        let new_event = PacketReader::new(data).read_event();
-
-        match new_event {
-            Some((gaia_id, event_payload)) => {
-                if let Some(mut new_entity) = manifest.create_entity(gaia_id) {
-                    if new_entity.is_event() {
-                        new_entity.use_bytes(&event_payload);
-                        return Some(Ok(ClientEvent::Event(new_entity)));
-                    }
-                }
-            }
-            None => {}
-        }
-
-        return output;
     }
 }
