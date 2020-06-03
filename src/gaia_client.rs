@@ -19,7 +19,7 @@ pub struct GaiaClient<T: ManifestType> {
     config: Config,
     socket: ClientSocket,
     sender: MessageSender,
-    server_connection: Option<NetConnection>,
+    server_connection: Option<NetConnection<T>>,
     pre_connection_timestamp: Option<Timestamp>,
     handshake_timer: Timer,
     drop_counter: u8,
@@ -155,9 +155,9 @@ impl<T: ManifestType> GaiaClient<T> {
 
     pub fn send_event(&mut self, event: &impl NetEvent<T>) {
 
-        let mut writer = PacketWriter::new();
-        let out_bytes = writer.write(&self.manifest, event);
-        self.send_internal(PacketType::Data,Packet::new_raw(out_bytes));
+        if let Some(connection) = &mut self.server_connection {
+            connection.queue_event(event);
+        }
     }
 
     fn send_internal(&mut self, packet_type: PacketType, packet: Packet) {
