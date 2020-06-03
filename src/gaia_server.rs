@@ -7,17 +7,18 @@ use std::{
 use log::{info, error};
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
-pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, Manifest, NetEvent, ManagerType};
+pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, Manifest, NetEvent, ManagerType, ManifestType};
 
 use super::server_event::ServerEvent;
 use crate::{
     Packet,
     error::GaiaServerError};
+use gaia_shared::PacketWriter;
 
 const HOST_TYPE_NAME: &str = "Server";
 
-pub struct GaiaServer {
-    manifest: Manifest,
+pub struct GaiaServer<T: ManifestType> {
+    manifest: Manifest<T>,
     config: Config,
     socket: ServerSocket,
     sender: MessageSender,
@@ -28,8 +29,8 @@ pub struct GaiaServer {
     drop_max: u8,
 }
 
-impl GaiaServer {
-    pub async fn listen(address: &str, manifest: Manifest, config: Option<Config>) -> Self {
+impl<T: ManifestType> GaiaServer<T> {
+    pub async fn listen(address: &str, manifest: Manifest<T>, config: Option<Config>) -> Self {
 
         let mut config = match config {
             Some(config) => config,
@@ -196,32 +197,11 @@ impl GaiaServer {
         return output.unwrap();
     }
 
-    pub async fn send_event(&mut self, addr: SocketAddr, event: impl NetEvent) {
+    pub async fn send_event(&mut self, addr: SocketAddr, event: &impl NetEvent<T>) {
 
-//        Manifest::write_test(&mut payload);
-
-//        //Write event payload
-//        let mut event_payload_bytes = Vec::<u8>::new();
-//        event.write(&mut event_payload_bytes);
-//        if event_payload_bytes.len() > 255 {
-//            error!("cannot encode an event with more than 255 bytes, need to implement this");
-//        }
-//
-//        //Write event "header" (event id & payload length)
-        let mut event_total_bytes = Vec::<u8>::new();
-        Manifest::write_u8(1, &mut event_total_bytes);//DELETE
-        Manifest::write_u16(4815, &mut event_total_bytes);//DELETE
-//        self.manifest.write_gaia_id(event, &mut event_total_bytes); // write gaia id
-//        event_total_bytes.push(event_payload_bytes.len() as u8); // write payload length
-//        event_total_bytes.append(&mut event_payload_bytes); // write payload
-//
-//        //Write manager "header" (manager type & entity count)
-//        let mut out_bytes = Vec::<u8>::new();
-//        Manifest::write_manager_type(ManagerType::Event, &mut out_bytes); // write manager type
-//        Manifest::write_u8(1, &mut out_bytes); // write number of events in the following message
-//        out_bytes.append(&mut event_total_bytes); // write event payload
-
-        self.send(Packet::new(addr, event_total_bytes))//should be out_bytes
+        let mut writer = PacketWriter::new();
+        let out_bytes = writer.write(&self.manifest, event);
+        self.send(Packet::new_raw(addr, out_bytes))
                             .await;
     }
 
