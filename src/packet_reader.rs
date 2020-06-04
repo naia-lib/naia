@@ -16,28 +16,20 @@ impl<'s> PacketReader<'s> {
         }
     }
 
+    pub fn has_more(&self) -> bool {
+        return (self.cursor.position() as usize) < self.buffer.len();
+    }
+
     // currently returns a gaia id & payload
-    pub fn read_type(&mut self) -> Option<(u16, Box<[u8]>)> {
-        let manager_type: ManagerType = self.cursor.read_u8().unwrap().into();
-        match manager_type {
-            ManagerType::Event => {
-                let event_count: u8 = self.cursor.read_u8().unwrap().into();
-                for _x in 0..event_count {
-                    let gaia_id: u16 = self.cursor.read_u16::<BigEndian>().unwrap().into();
-                    let payload_length: u8 = self.cursor.read_u8().unwrap().into();
-                    let payload_start_position: usize = self.cursor.position() as usize;
-                    let payload_end_position: usize = payload_start_position + (payload_length as usize);
+    pub fn read_manager_type(&mut self) -> ManagerType {
+        return self.cursor.read_u8().unwrap().into();
+    }
 
-                    let boxed_payload = self.buffer[payload_start_position..payload_end_position]
-                        .to_vec()
-                        .into_boxed_slice();
+    pub fn get_cursor(&mut self) -> &mut Cursor<&'s [u8]> {
+        return &mut self.cursor;
+    }
 
-                    return Some((gaia_id, boxed_payload));
-                }
-            }
-            _ => {}
-        }
-
-        return None;
+    pub fn get_buffer(&self) -> &'s [u8] {
+        return &self.buffer;
     }
 }

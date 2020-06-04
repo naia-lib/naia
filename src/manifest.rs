@@ -33,25 +33,7 @@ impl<T: ManifestType> Manifest<T> {
         return *gaia_id;
     }
 
-    pub fn read_type(&self, data: &mut [u8]) -> Option<T> {
-        match PacketReader::new(data).read_type() {
-            Some((gaia_id, event_payload)) => {
-                match self.create_type(gaia_id) {
-                    Some(mut new_entity) => {
-                        if new_entity.is_event() {
-                            new_entity.use_bytes(&event_payload);
-                            return Some(new_entity);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
-        }
-        return None;
-    }
-
-    fn create_type(&self, gaia_id: u16) -> Option<T> {
+    pub fn create_type(&self, gaia_id: u16) -> Option<T> {
         let entity_entry = self.gaia_id_map.get(&gaia_id);
         match entity_entry {
             Some(entity_type) => {

@@ -1,7 +1,7 @@
 
 use std::time::Duration;
 
-use crate::{Timer, PacketType, NetEvent, Manifest, PacketWriter};
+use crate::{Timer, PacketType, NetEvent, Manifest, PacketWriter, PacketReader, ManagerType};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -18,7 +18,7 @@ pub struct NetConnection<T: ManifestType> {
     timeout_manager: Timer,
     ack_manager: AckManager,
     event_manager: EventManager<T>,
-    ghost_manager: GhostManager,
+    ghost_manager: GhostManager<T>,
 }
 
 impl<T: ManifestType> NetConnection<T> {
@@ -62,15 +62,15 @@ impl<T: ManifestType> NetConnection<T> {
     }
 
     pub fn queue_event(&mut self, event: &impl NetEvent<T>) {
-        self.event_manager.queue_event(event);
+        self.event_manager.queue_outgoing_event(event);
     }
 
     pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T>) -> Option<Box<[u8]>> {
 
-        if self.event_manager.has_queued_events() {
+        if self.event_manager.has_outgoing_events() {
             let mut writer = PacketWriter::new();
 
-            while let Some(popped_event) = self.event_manager.pop_event() {
+            while let Some(popped_event) = self.event_manager.pop_outgoing_event() {
                 writer.write_event(manifest, &popped_event);
             }
 
@@ -83,5 +83,24 @@ impl<T: ManifestType> NetConnection<T> {
         }
 
         return None;
+    }
+
+    pub fn get_incoming_event(&mut self) -> Option<T> {
+        return self.event_manager.pop_incoming_event();
+    }
+
+    pub fn process_data(&mut self, manifest: &Manifest<T>, data: &mut [u8]) {
+        let mut reader = PacketReader::new(data);
+        while reader.has_more() {
+            match reader.read_manager_type() {
+                ManagerType::Event => {
+                    self.event_manager.process_data(&mut reader, manifest);
+                }
+                ManagerType::Ghost => {
+                    self.ghost_manager.process_data(&mut reader, manifest);
+                }
+                _ => {}
+            }
+        }
     }
 }
