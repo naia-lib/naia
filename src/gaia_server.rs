@@ -4,7 +4,7 @@ use std::{
     collections::{VecDeque, HashMap},
 };
 
-use log::{info, error};
+use log::{info};
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
 pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, Manifest, NetEvent, ManagerType, ManifestType};
@@ -13,7 +13,6 @@ use super::server_event::ServerEvent;
 use crate::{
     Packet,
     error::GaiaServerError};
-use gaia_shared::PacketWriter;
 
 const HOST_TYPE_NAME: &str = "Server";
 
@@ -92,8 +91,7 @@ impl<T: ManifestType> GaiaServer<T> {
 
             for (address, connection) in self.client_connections.iter_mut() {
                 // send packets to everyone
-                if let Some(out_bytes) = connection.get_outgoing_packet(&self.manifest) {
-                    let payload = connection.process_outgoing(PacketType::Data, &out_bytes);
+                if let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
                     match self.sender.send(Packet::new_raw(*address, payload))
                         .await {
                         Ok(_) => {}
