@@ -1,7 +1,7 @@
 
 use std::time::Duration;
 
-use crate::{Timer, PacketType, NetEvent};
+use crate::{Timer, PacketType, NetEvent, Manifest, PacketWriter};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -63,5 +63,25 @@ impl<T: ManifestType> NetConnection<T> {
 
     pub fn queue_event(&mut self, event: &impl NetEvent<T>) {
         self.event_manager.queue_event(event);
+    }
+
+    pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T>) -> Option<Box<[u8]>> {
+
+        if self.event_manager.has_queued_events() {
+            let mut writer = PacketWriter::new();
+
+            while let Some(popped_event) = self.event_manager.pop_event() {
+                writer.write_event(manifest, &popped_event);
+            }
+
+            if writer.has_bytes() {
+                let out_bytes = writer.get_bytes();
+                return Some(out_bytes);
+            } else {
+                return None;
+            }
+        }
+
+        return None;
     }
 }

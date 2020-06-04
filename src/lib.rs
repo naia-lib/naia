@@ -32,7 +32,7 @@ pub use config::Config;
 pub use net_connection::NetConnection;
 pub use timestamp::Timestamp;
 //pub use net_type::{NetTypeTrait, NetType};
-pub use net_base::{NetBase, NetBaseClone};
+pub use net_base::{NetBase, NetBaseClone, NetBaseType};
 pub use net_event::{NetEvent, NetEventClone};
 pub use net_object::NetObject;
 pub use manifest::Manifest;
