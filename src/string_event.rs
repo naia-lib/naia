@@ -31,8 +31,8 @@ impl StringEvent {
 }
 
 impl NetBase<ExampleType> for StringEvent {
-    fn to_type(self) -> ExampleType {
-        return ExampleType::StringEvent(self);
+    fn to_type(&self) -> ExampleType {
+        return ExampleType::StringEvent(self.clone());
     }
     fn is_event(&self) -> bool {
         true
