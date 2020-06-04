@@ -21,8 +21,7 @@ impl<T: ManifestType> Manifest<T> {
 
     pub fn register<S: NetBase<T>>(&mut self, some_type: &S) {
         let new_gaia_id = self.gaia_id_count;
-        let boxed_type = NetBaseClone::clone_box(some_type);
-        let type_id = NetBaseType::get_type_id(&boxed_type);
+        let type_id = NetBaseType::get_type_id(some_type);
         self.type_id_map.insert(type_id, new_gaia_id);
         self.gaia_id_map.insert(new_gaia_id, NetBase::to_type(some_type));
         self.gaia_id_count += 1;

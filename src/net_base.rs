@@ -1,7 +1,7 @@
 use std::any::{Any, TypeId};
 use crate::ManifestType;
 
-pub trait NetBase<T: ManifestType>: Any + NetBaseClone<T> {
+pub trait NetBase<T: ManifestType>: Any + NetBaseClone<T> + NetBaseType<T> {
     fn to_type(&self) -> T;
     fn is_event(&self) -> bool;
 }
@@ -26,8 +26,6 @@ impl<T: ManifestType> Clone for Box<dyn NetBase<T>> {
     }
 }
 
-impl<Z: ManifestType, T: NetBase<Z> + ?Sized> NetBaseType<Z> for Box<T> {
-    fn get_type_id(&self) -> TypeId {
-        return TypeId::of::<T>()
-    }
+impl<Z: ManifestType, T: NetBase<Z>> NetBaseType<Z> for T {
+    fn get_type_id(&self) -> TypeId { return TypeId::of::<T>(); }
 }
