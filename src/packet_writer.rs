@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use crate::{ManagerType, NetEvent, NetBase, NetBaseClone, NetBaseType, Manifest, ManifestType};
+use crate::{ManagerType, NetEvent, NetBaseType, Manifest, ManifestType};
 
 pub struct PacketWriter {
     working_bytes: Vec<u8>,

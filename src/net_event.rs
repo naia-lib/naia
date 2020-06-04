@@ -1,10 +1,9 @@
 
 use super::net_base::NetBase;
 use crate::ManifestType;
-use std::borrow::Borrow;
 
 pub trait NetEvent<T: ManifestType>: NetBase<T> + NetEventClone<T> {
-//    fn is_guaranteed() -> bool;
+    fn is_guaranteed(&self) -> bool;
     fn write(&self, out_bytes: &mut Vec<u8>);
     fn read(&mut self, in_bytes: &[u8]);
 }

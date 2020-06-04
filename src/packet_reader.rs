@@ -1,5 +1,5 @@
 use std::io::{Cursor};
-use byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{ReadBytesExt};
 use crate::{ManagerType};
 
 pub struct PacketReader<'s> {

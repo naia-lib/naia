@@ -2,7 +2,7 @@
 use std::any::{TypeId};
 use std::collections::HashMap;
 
-use crate::{NetBase, NetBaseClone, NetBaseType, PacketReader};
+use crate::{NetBase, NetBaseType};
 
 pub struct Manifest<T: ManifestType> {
     gaia_id_count: u16,
