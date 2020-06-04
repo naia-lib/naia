@@ -69,8 +69,10 @@ impl<T: ManifestType> GaiaClient<T> {
                     GaiaClient::internal_send_with_connection(&mut self.sender, connection, PacketType::Heartbeat, Packet::empty());
                 }
                 // send a packet
-                if let Some(out_bytes) = connection.get_outgoing_packet(&self.manifest) {
-                    GaiaClient::internal_send_with_connection(&mut self.sender, connection, PacketType::Data, Packet::new_raw(out_bytes));
+                if let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
+                    self.sender.send(Packet::new_raw(payload))
+                        .expect("send failed!");
+                    connection.mark_sent();
                 }
                 // receive event
                 if let Some(something) = connection.get_incoming_event() {
