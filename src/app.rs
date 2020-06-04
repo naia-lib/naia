@@ -3,7 +3,7 @@ use log::{info};
 
 use std::time::Duration;
 
-use gaia_client::{GaiaClient, ClientEvent, Packet, Config};
+use gaia_client::{GaiaClient, ClientEvent, Config};
 
 use gaia_example_shared::{manifest_load, StringEvent, ExampleType};
 
@@ -49,8 +49,6 @@ impl App {
 
                                             let string_event = StringEvent::new(new_message);
                                             self.client.send_event(&string_event);
-
-                                            //self.client.send(Packet::new(to_server_message.into_bytes()));
                                         }
                                     }
                                     None => {}
