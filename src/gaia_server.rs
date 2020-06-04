@@ -72,7 +72,7 @@ impl<T: ManifestType> GaiaServer<T> {
                     if connection.should_drop() {
                         self.outstanding_disconnects.push_back(*address);
                     } else if connection.should_send_heartbeat() {
-                        // Don't try to refactor this to self.internal_send, doesn't seem to work
+                        // Don't try to refactor this to self.internal_send, doesn't seem to work cause of iter_mut()
                         let payload = connection.process_outgoing(PacketType::Heartbeat, &[]);
                         self.sender.send(Packet::new_raw(*address, payload))
                             .await
@@ -87,6 +87,21 @@ impl<T: ManifestType> GaiaServer<T> {
                 self.client_connections.remove(&addr);
                 output = Some(Ok(ServerEvent::Disconnection(addr)));
                 continue;
+            }
+
+            // send packets to everyone
+            for (address, connection) in self.client_connections.iter_mut() {
+                if let Some(out_bytes) = connection.get_outgoing_packet(&self.manifest) {
+                    let payload = connection.process_outgoing(PacketType::Data, &out_bytes);
+                    match self.sender.send(Packet::new_raw(*address, payload))
+                        .await {
+                        Ok(_) => {}
+                        Err(err) => {
+                            info!("send error! {}", err);
+                        }
+                    }
+                    connection.mark_sent();
+                }
             }
 
             //receive socket events
