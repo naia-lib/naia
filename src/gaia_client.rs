@@ -83,6 +83,13 @@ impl<T: ManifestType> GaiaClient<T> {
             }
         }
 
+        // send a packet
+        if let Some(connection) = &mut self.server_connection {
+            if let Some(out_bytes) = connection.get_outgoing_packet(&self.manifest) {
+                self.send_internal(PacketType::Data, Packet::new_raw(out_bytes));
+            }
+        }
+
         // receive from socket
         let mut output: Option<Result<ClientEvent<T>, GaiaClientError>> = None;
         while output.is_none() {
