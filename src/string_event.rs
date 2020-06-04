@@ -40,10 +40,10 @@ impl NetBase<ExampleType> for StringEvent {
 }
 
 impl NetEvent<ExampleType> for StringEvent {
-//    fn is_guaranteed() -> bool {
-//        false
-//    }
-//
+    fn is_guaranteed(&self) -> bool {
+        true
+    }
+
     fn write(&self, buffer: &mut Vec<u8>) {
         match &self.msg {
             Some(msg_str) => {
