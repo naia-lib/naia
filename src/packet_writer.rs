@@ -42,8 +42,7 @@ impl PacketWriter {
         //Write event "header" (event id & payload length)
         let mut event_total_bytes = Vec::<u8>::new();
 
-        let boxed_type = NetBaseClone::clone_box(event.as_ref());
-        let type_id = NetBaseType::get_type_id(&boxed_type);
+        let type_id = NetBaseType::get_type_id(event.as_ref());
         let gaia_id = manifest.get_gaia_id(&type_id); // get gaia id
         event_total_bytes.write_u16::<BigEndian>(gaia_id).unwrap();// write gaia id
         event_total_bytes.write_u8(event_payload_bytes.len() as u8).unwrap(); // write payload length
