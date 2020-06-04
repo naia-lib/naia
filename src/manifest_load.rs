@@ -5,7 +5,7 @@ use crate::{ExampleType, StringEvent};
 pub fn manifest_load() -> Manifest<ExampleType> {
     let mut manifest = Manifest::<ExampleType>::new();
 
-    manifest.register(StringEvent::init());
+    manifest.register(&StringEvent::init());
 
     manifest
 }
