@@ -59,34 +59,36 @@ impl<T: ManifestType> GaiaClient<T> {
     pub fn receive(&mut self) -> Result<ClientEvent<T>, GaiaClientError> {
 
         // send handshakes, send heartbeats, timeout if need be
-        if self.server_connection.is_some() {
-            if self.server_connection.as_ref().unwrap().should_drop() {
-                self.server_connection = None;
-                return Ok(ClientEvent::Disconnection);
-            }
-            if self.server_connection.as_ref().unwrap().should_send_heartbeat() {
-                self.send_internal(PacketType::Heartbeat, Packet::empty());
-                self.server_connection.as_mut().unwrap().mark_sent();
-            }
-        }
-        else {
-            if self.handshake_timer.ringing() {
-
-                if self.pre_connection_timestamp.is_none() {
-                    self.pre_connection_timestamp = Some(Timestamp::now());
+        match &mut self.server_connection {
+            Some(connection) => {
+                if connection.should_drop() {
+                    self.server_connection = None;
+                    return Ok(ClientEvent::Disconnection);
                 }
-
-                let mut timestamp_bytes = Vec::new();
-                self.pre_connection_timestamp.as_mut().unwrap().write(&mut timestamp_bytes);
-                self.send_internal(PacketType::ClientHandshake, Packet::new(timestamp_bytes));
-                self.handshake_timer.reset();
+                if connection.should_send_heartbeat() {
+                    GaiaClient::internal_send_with_connection(&mut self.sender, connection, PacketType::Heartbeat, Packet::empty());
+                }
+                // send a packet
+                if let Some(out_bytes) = connection.get_outgoing_packet(&self.manifest) {
+                    GaiaClient::internal_send_with_connection(&mut self.sender, connection, PacketType::Data, Packet::new_raw(out_bytes));
+                }
+                // receive event
+                if let Some(something) = connection.get_incoming_event() {
+                    return Ok(ClientEvent::Event(something));
+                }
             }
-        }
+            None => {
+                if self.handshake_timer.ringing() {
 
-        // send a packet
-        if let Some(connection) = &mut self.server_connection {
-            if let Some(out_bytes) = connection.get_outgoing_packet(&self.manifest) {
-                self.send_internal(PacketType::Data, Packet::new_raw(out_bytes));
+                    if self.pre_connection_timestamp.is_none() {
+                        self.pre_connection_timestamp = Some(Timestamp::now());
+                    }
+
+                    let mut timestamp_bytes = Vec::new();
+                    self.pre_connection_timestamp.as_mut().unwrap().write(&mut timestamp_bytes);
+                    GaiaClient::<T>::internal_send_connectionless(&mut self.sender, PacketType::ClientHandshake, Packet::new(timestamp_bytes));
+                    self.handshake_timer.reset();
+                }
             }
         }
 
@@ -120,10 +122,7 @@ impl<T: ManifestType> GaiaClient<T> {
 
                                 match packet_type {
                                     PacketType::Data => {
-                                        if let Some(mut new_entity) = self.manifest.read_type(&mut payload) {
-                                            output = Some(Ok(ClientEvent::Event(new_entity)));
-                                        }
-
+                                        server_connection.process_data(&self.manifest, &mut payload);
                                         continue;
                                     }
                                     PacketType::Heartbeat => {
@@ -167,18 +166,17 @@ impl<T: ManifestType> GaiaClient<T> {
         }
     }
 
-    fn send_internal(&mut self, packet_type: PacketType, packet: Packet) {
-        if let Some(server_connection) = self.server_connection.as_mut() {
-            let new_payload = server_connection.process_outgoing(packet_type, packet.payload());
-            self.sender.send(Packet::new_raw(new_payload))
-                .expect("send failed!");
-            server_connection.mark_sent();
-        }
-        else {
-            let new_payload = gaia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
-            self.sender.send(Packet::new_raw(new_payload))
-                .expect("send failed!");
-        }
+    fn internal_send_with_connection(sender: &mut MessageSender, connection: &mut NetConnection<T>, packet_type: PacketType, packet: Packet) {
+        let new_payload = connection.process_outgoing(packet_type, packet.payload());
+        sender.send(Packet::new_raw(new_payload))
+            .expect("send failed!");
+        connection.mark_sent();
+    }
+
+    fn internal_send_connectionless(sender: &mut MessageSender, packet_type: PacketType, packet: Packet) {
+        let new_payload = gaia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
+        sender.send(Packet::new_raw(new_payload))
+            .expect("send failed!");
     }
 
     pub fn server_address(&self) -> SocketAddr {
