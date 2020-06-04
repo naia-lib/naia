@@ -1,6 +1,4 @@
 
-use log::{info};
-
 use crate::{ManifestType, PacketReader, Manifest, NetEvent};
 use std::{
     collections::VecDeque};
@@ -16,12 +14,10 @@ impl<T: ManifestType> GhostManager<T> {
         }
     }
 
-    pub fn notify_packet_delivered(&self, packet_index: u16) {
-        info!("yay ghost manager notified DELIVERED!");
+    pub fn notify_packet_delivered(&mut self, packet_index: u16) {
     }
 
-    pub fn notify_packet_dropped(&self, packet_index: u16) {
-        info!("yay ghost manager notified DROPPED!");
+    pub fn notify_packet_dropped(&mut self, packet_index: u16) {
     }
 
     pub fn process_data(&mut self, reader: &PacketReader, manifest: &Manifest<T>) {

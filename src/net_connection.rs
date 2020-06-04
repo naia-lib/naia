@@ -50,7 +50,7 @@ impl<T: ManifestType> NetConnection<T> {
     }
 
     pub fn process_incoming(&mut self, payload: &[u8]) -> Box<[u8]> {
-        self.ack_manager.process_incoming(&self.event_manager, &self.ghost_manager, payload)
+        self.ack_manager.process_incoming(&mut self.event_manager, &mut self.ghost_manager, payload)
     }
 
     pub fn process_outgoing(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
@@ -70,15 +70,18 @@ impl<T: ManifestType> NetConnection<T> {
         if self.event_manager.has_outgoing_events() {
             let mut writer = PacketWriter::new();
 
-            while let Some(popped_event) = self.event_manager.pop_outgoing_event() {
+            let next_packet_index = self.get_next_packet_index();
+            while let Some(popped_event) = self.event_manager.pop_outgoing_event(next_packet_index) {
                 writer.write_event(manifest, &popped_event);
             }
 
             if writer.has_bytes() {
+                // Get bytes from writer
                 let out_bytes = writer.get_bytes();
-                return Some(out_bytes);
-            } else {
-                return None;
+
+                // Add header to it
+                let payload = self.process_outgoing(PacketType::Data, &out_bytes);
+                return Some(payload);
             }
         }
 
