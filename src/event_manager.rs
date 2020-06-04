@@ -7,7 +7,7 @@ use std::{
     rc::Rc};
 
 pub struct EventManager<T: ManifestType> {
-    queued_events: VecDeque<Box<NetEvent<T>>>
+    queued_events: VecDeque<Box<dyn NetEvent<T>>>
 }
 
 impl<T: ManifestType> EventManager<T> {
@@ -25,15 +25,16 @@ impl<T: ManifestType> EventManager<T> {
         info!("yay event manager notified DROPPED!");
     }
 
+    pub fn has_queued_events(&self) -> bool {
+        return self.queued_events.len() != 0;
+    }
+
+    pub fn pop_event(&mut self) -> Option<Box<dyn NetEvent<T>>> {
+        return self.queued_events.pop_front();
+    }
+
     pub fn queue_event(&mut self, event: &impl NetEvent<T>) {
         let clone = NetEventClone::clone_box(event);
         self.queued_events.push_back(clone);
     }
-
-//    fn write_event() {
-//        let mut writer = PacketWriter::new();
-//        let out_bytes = writer.write(&self.manifest, event);
-//        self.send_internal(PacketType::Data,Packet::new_raw(addr, out_bytes))
-//            .await;
-//    }
 }

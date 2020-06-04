@@ -2,7 +2,7 @@
 use std::any::{TypeId};
 use std::collections::HashMap;
 
-use crate::{NetBase, PacketReader};
+use crate::{NetBase, NetBaseClone, NetBaseType, PacketReader};
 
 pub struct Manifest<T: ManifestType> {
     gaia_id_count: u16,
@@ -19,15 +19,17 @@ impl<T: ManifestType> Manifest<T> {
         }
     }
 
-    pub fn register<S: NetBase<T>>(&mut self, some_type: S) {
+    pub fn register<S: NetBase<T>>(&mut self, some_type: &S) {
         let new_gaia_id = self.gaia_id_count;
-        self.type_id_map.insert(TypeId::of::<S>(), new_gaia_id);
-        self.gaia_id_map.insert(new_gaia_id, some_type.to_type());
+        let boxed_type = NetBaseClone::clone_box(some_type);
+        let type_id = NetBaseType::get_type_id(&boxed_type);
+        self.type_id_map.insert(type_id, new_gaia_id);
+        self.gaia_id_map.insert(new_gaia_id, NetBase::to_type(some_type));
         self.gaia_id_count += 1;
     }
 
-    pub fn get_gaia_id<S: NetBase<T>>(&self, _net_base: &S) -> u16 {
-        let gaia_id = self.type_id_map.get(&TypeId::of::<S>())
+    pub fn get_gaia_id(&self, type_id: &TypeId) -> u16 {
+        let gaia_id = self.type_id_map.get(type_id)
             .expect("hey I should get a TypeId here...");
         return *gaia_id;
     }
