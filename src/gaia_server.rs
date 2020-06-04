@@ -89,8 +89,9 @@ impl<T: ManifestType> GaiaServer<T> {
                 continue;
             }
 
-            // send packets to everyone
+
             for (address, connection) in self.client_connections.iter_mut() {
+                // send packets to everyone
                 if let Some(out_bytes) = connection.get_outgoing_packet(&self.manifest) {
                     let payload = connection.process_outgoing(PacketType::Data, &out_bytes);
                     match self.sender.send(Packet::new_raw(*address, payload))
@@ -101,6 +102,12 @@ impl<T: ManifestType> GaiaServer<T> {
                         }
                     }
                     connection.mark_sent();
+                }
+
+                //receive events from anyone
+                if let Some(something) = connection.get_incoming_event() {
+                    output = Some(Ok(ServerEvent::Event(*address, something)));
+                    continue;
                 }
             }
 
@@ -165,11 +172,7 @@ impl<T: ManifestType> GaiaServer<T> {
                                     match self.client_connections.get_mut(&address) {
                                         Some(connection) => {
                                             let mut payload = connection.process_incoming(packet.payload());
-
-                                            if let Some(mut new_entity) = self.manifest.read_type(&mut payload) {
-                                                output = Some(Ok(ServerEvent::Event(address, new_entity)));
-                                            }
-
+                                            connection.process_data(&self.manifest, &mut payload);
                                             continue;
                                         }
                                         None => {
