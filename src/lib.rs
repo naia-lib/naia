@@ -13,7 +13,7 @@ cfg_if! {
 
         use crate::app::App;
 
-        const SERVER_IP_ADDRESS: &str = "192.168.1.6"; // Put your Server's IP Address here!, can't easily find this automatically from the browser
+        const SERVER_IP_ADDRESS: &str = "192.168.1.9"; // Put your Server's IP Address here!, can't easily find this automatically from the browser
         const SERVER_PORT: &str = "3179";
 
         #[wasm_bindgen(start)]

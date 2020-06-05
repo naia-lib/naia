@@ -5,10 +5,10 @@ use std::time::Duration;
 
 use gaia_client::{GaiaClient, ClientEvent, Config};
 
-use gaia_example_shared::{manifest_load, StringEvent, ExampleType};
+use gaia_example_shared::{event_manifest_load, entity_manifest_load, StringEvent, ExampleEvent, ExampleEntity};
 
 pub struct App {
-    client: GaiaClient<ExampleType>,
+    client: GaiaClient<ExampleEvent, ExampleEntity>,
 }
 
 impl App {
@@ -20,7 +20,7 @@ impl App {
         config.heartbeat_interval = Duration::from_secs(2);
 
         App {
-            client: GaiaClient::connect(&server_socket_address, manifest_load(), Some(config)),
+            client: GaiaClient::connect(&server_socket_address, event_manifest_load(), entity_manifest_load(), Some(config)),
         }
     }
 
@@ -37,7 +37,7 @@ impl App {
                     }
                     ClientEvent::Event(event_type) => {
                         match event_type {
-                            ExampleType::StringEvent(string_event) => {
+                            ExampleEvent::StringEvent(string_event) => {
                                 let message = string_event.get_message();
                                 match message {
                                     Some(msg) => {
