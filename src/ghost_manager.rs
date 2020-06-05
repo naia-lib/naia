@@ -1,13 +1,13 @@
 
-use crate::{ManifestType, PacketReader, Manifest, NetEvent};
+use crate::{EntityType, PacketReader, EntityManifest, NetEntity};
 use std::{
     collections::VecDeque};
 
-pub struct GhostManager<T: ManifestType> {
-    unused_list: VecDeque<Box<dyn NetEvent<T>>>
+pub struct GhostManager<T: EntityType> {
+    unused_list: VecDeque<Box<dyn NetEntity<T>>>
 }
 
-impl<T: ManifestType> GhostManager<T> {
+impl<T: EntityType> GhostManager<T> {
     pub fn new() -> Self {
         GhostManager {
             unused_list: VecDeque::new()
@@ -20,7 +20,7 @@ impl<T: ManifestType> GhostManager<T> {
     pub fn notify_packet_dropped(&mut self, packet_index: u16) {
     }
 
-    pub fn process_data(&mut self, reader: &PacketReader, manifest: &Manifest<T>) {
+    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &EntityManifest<T>) {
 
     }
 }

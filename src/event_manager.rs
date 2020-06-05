@@ -5,15 +5,15 @@ use std::{
     rc::Rc};
 use byteorder::{BigEndian, ReadBytesExt};
 
-use crate::{ManifestType, NetEvent, NetEventClone, PacketReader, Manifest};
+use crate::{EventType, NetEvent, NetEventClone, PacketReader, EventManifest};
 
-pub struct EventManager<T: ManifestType> {
+pub struct EventManager<T: EventType> {
     queued_outgoing_events: VecDeque<Rc<Box<dyn NetEvent<T>>>>,
     queued_incoming_events: VecDeque<T>,
     sent_events: HashMap<u16, Vec<Rc<Box<dyn NetEvent<T>>>>>
 }
 
-impl<T: ManifestType> EventManager<T> {
+impl<T: EventType> EventManager<T> {
     pub fn new() -> Self {
         EventManager {
             queued_outgoing_events: VecDeque::new(),
@@ -75,7 +75,7 @@ impl<T: ManifestType> EventManager<T> {
         return self.queued_incoming_events.pop_front();
     }
 
-    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<T>) {
+    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &EventManifest<T>) {
         let buffer = reader.get_buffer();
         let cursor = reader.get_cursor();
 
@@ -86,17 +86,14 @@ impl<T: ManifestType> EventManager<T> {
             let payload_start_position: usize = cursor.position() as usize;
             let payload_end_position: usize = payload_start_position + (payload_length as usize);
 
-
             let event_payload = buffer[payload_start_position..payload_end_position]
                 .to_vec()
                 .into_boxed_slice();
 
             match manifest.create_type(gaia_id) {
                 Some(mut new_entity) => {
-                    if new_entity.is_event() {
-                        new_entity.use_bytes(&event_payload);
-                        self.queued_incoming_events.push_back(new_entity);
-                    }
+                    new_entity.use_bytes(&event_payload);
+                    self.queued_incoming_events.push_back(new_entity);
                 }
                 _ => {}
             }

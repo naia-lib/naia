@@ -3,7 +3,6 @@ use crate::ManifestType;
 
 pub trait NetBase<T: ManifestType>: Any + NetBaseClone<T> + NetBaseType<T> {
     fn to_type(&self) -> T;
-    fn is_event(&self) -> bool;
 }
 
 pub trait NetBaseClone<T: ManifestType> {
