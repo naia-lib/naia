@@ -2,12 +2,16 @@
 use std::{
     net::SocketAddr,
     collections::{VecDeque, HashMap},
+    rc::Rc,
+    cell::RefCell,
 };
 
 use log::{info};
 
+use slotmap::{new_key_type, dense::DenseSlotMap};
+
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
-pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, Manifest, NetEvent, ManagerType, ManifestType};
+pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, EventManifest, EntityManifest, NetEvent, NetEntity, ManagerType, EventType, EntityType};
 
 use super::server_event::ServerEvent;
 use crate::{
@@ -16,20 +20,24 @@ use crate::{
 
 const HOST_TYPE_NAME: &str = "Server";
 
-pub struct GaiaServer<T: ManifestType> {
-    manifest: Manifest<T>,
+new_key_type! { pub struct EntityPrimaryKey; }
+
+pub struct GaiaServer<T: EventType, U: EntityType> {
+    event_manifest: EventManifest<T>,
+    entity_manifest: EntityManifest<U>,
     config: Config,
     socket: ServerSocket,
     sender: MessageSender,
-    client_connections: HashMap<SocketAddr, NetConnection<T>>,
+    client_connections: HashMap<SocketAddr, NetConnection<T, U>>,
     outstanding_disconnects: VecDeque<SocketAddr>,
     heartbeat_timer: Timer,
+    entity_map: DenseSlotMap<EntityPrimaryKey, Rc<RefCell<dyn NetEntity<U>>>>,
     drop_counter: u8,
     drop_max: u8,
 }
 
-impl<T: ManifestType> GaiaServer<T> {
-    pub async fn listen(address: &str, manifest: Manifest<T>, config: Option<Config>) -> Self {
+impl<T: EventType, U: EntityType> GaiaServer<T, U> {
+    pub async fn listen(address: &str, event_manifest: EventManifest<T>, entity_manifest: EntityManifest<U>, config: Option<Config>) -> Self {
 
         let mut config = match config {
             Some(config) => config,
@@ -47,15 +55,17 @@ impl<T: ManifestType> GaiaServer<T> {
         let heartbeat_timer = Timer::new(config.heartbeat_interval);
 
         GaiaServer {
-            manifest,
+            event_manifest,
+            entity_manifest,
             socket: server_socket,
             sender,
-            drop_counter: 1,
-            drop_max: 3,
             config,
             client_connections: clients_map,
             outstanding_disconnects: VecDeque::new(),
             heartbeat_timer,
+            entity_map: DenseSlotMap::with_key(),
+            drop_counter: 1,
+            drop_max: 3,
         }
     }
 
@@ -91,7 +101,7 @@ impl<T: ManifestType> GaiaServer<T> {
 
             for (address, connection) in self.client_connections.iter_mut() {
                 // send packets to everyone
-                if let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
+                if let Some(payload) = connection.get_outgoing_packet(&self.event_manifest) {
                     match self.sender.send(Packet::new_raw(*address, payload))
                         .await {
                         Ok(_) => {}
@@ -170,7 +180,7 @@ impl<T: ManifestType> GaiaServer<T> {
                                     match self.client_connections.get_mut(&address) {
                                         Some(connection) => {
                                             let mut payload = connection.process_incoming(packet.payload());
-                                            connection.process_data(&self.manifest, &mut payload);
+                                            connection.process_data(&self.event_manifest, &self.entity_manifest, &mut payload);
                                             continue;
                                         }
                                         None => {
@@ -234,6 +244,11 @@ impl<T: ManifestType> GaiaServer<T> {
             }
             connection.mark_sent();
         }
+    }
+
+    pub fn add_entity(&mut self, entity: Rc<RefCell<dyn NetEntity<U>>>) -> EntityPrimaryKey {
+        //let wrapper = Rc::new(RefCell::new(entity));
+        return self.entity_map.insert(entity);
     }
 
     pub fn get_clients(&mut self) -> Vec<SocketAddr> {
