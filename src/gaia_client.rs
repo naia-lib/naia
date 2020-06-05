@@ -6,7 +6,7 @@ use std::{
 use log::info;
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp, Manifest, ManagerType, PacketWriter, PacketReader, NetEvent, ManifestType, NetBase};
+pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp, EventManifest, EntityManifest, ManagerType, PacketWriter, PacketReader, NetEvent, EventType, EntityType};
 
 use super::client_event::ClientEvent;
 use crate::{
@@ -14,20 +14,21 @@ use crate::{
 
 const HOST_TYPE_NAME: &str = "CLIENT";
 
-pub struct GaiaClient<T: ManifestType> {
-    manifest: Manifest<T>,
+pub struct GaiaClient<T: EventType, U: EntityType> {
+    event_manifest: EventManifest<T>,
+    entity_manifest: EntityManifest<U>,
     config: Config,
     socket: ClientSocket,
     sender: MessageSender,
-    server_connection: Option<NetConnection<T>>,
+    server_connection: Option<NetConnection<T, U>>,
     pre_connection_timestamp: Option<Timestamp>,
     handshake_timer: Timer,
     drop_counter: u8,
     drop_max: u8,
 }
 
-impl<T: ManifestType> GaiaClient<T> {
-    pub fn connect(server_address: &str, manifest: Manifest<T>, config: Option<Config>) -> Self {
+impl<T: EventType, U: EntityType> GaiaClient<T, U> {
+    pub fn connect(server_address: &str, event_manifest: EventManifest<T>, entity_manifest: EntityManifest<U>, config: Option<Config>) -> Self {
 
         let mut config = match config {
             Some(config) => config,
@@ -44,7 +45,8 @@ impl<T: ManifestType> GaiaClient<T> {
         let message_sender = client_socket.get_sender();
 
         GaiaClient {
-            manifest,
+            event_manifest,
+            entity_manifest,
             socket: client_socket,
             sender: message_sender,
             drop_counter: 1,
@@ -69,7 +71,7 @@ impl<T: ManifestType> GaiaClient<T> {
                     GaiaClient::internal_send_with_connection(&mut self.sender, connection, PacketType::Heartbeat, Packet::empty());
                 }
                 // send a packet
-                if let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
+                if let Some(payload) = connection.get_outgoing_packet(&self.event_manifest) {
                     self.sender.send(Packet::new_raw(payload))
                         .expect("send failed!");
                     connection.mark_sent();
@@ -88,7 +90,7 @@ impl<T: ManifestType> GaiaClient<T> {
 
                     let mut timestamp_bytes = Vec::new();
                     self.pre_connection_timestamp.as_mut().unwrap().write(&mut timestamp_bytes);
-                    GaiaClient::<T>::internal_send_connectionless(&mut self.sender, PacketType::ClientHandshake, Packet::new(timestamp_bytes));
+                    GaiaClient::<T,U>::internal_send_connectionless(&mut self.sender, PacketType::ClientHandshake, Packet::new(timestamp_bytes));
                     self.handshake_timer.reset();
                 }
             }
@@ -124,7 +126,7 @@ impl<T: ManifestType> GaiaClient<T> {
 
                                 match packet_type {
                                     PacketType::Data => {
-                                        server_connection.process_data(&self.manifest, &mut payload);
+                                        server_connection.process_data(&self.event_manifest, &self.entity_manifest, &mut payload);
                                         continue;
                                     }
                                     PacketType::Heartbeat => {
@@ -168,7 +170,7 @@ impl<T: ManifestType> GaiaClient<T> {
         }
     }
 
-    fn internal_send_with_connection(sender: &mut MessageSender, connection: &mut NetConnection<T>, packet_type: PacketType, packet: Packet) {
+    fn internal_send_with_connection(sender: &mut MessageSender, connection: &mut NetConnection<T, U>, packet_type: PacketType, packet: Packet) {
         let new_payload = connection.process_outgoing(packet_type, packet.payload());
         sender.send(Packet::new_raw(new_payload))
             .expect("send failed!");
