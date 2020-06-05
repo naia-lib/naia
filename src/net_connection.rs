@@ -1,7 +1,7 @@
 
 use std::time::Duration;
 
-use crate::{Timer, PacketType, NetEvent, Manifest, PacketWriter, PacketReader, ManagerType};
+use crate::{Timer, PacketType, NetEvent, EventManifest, EntityManifest, PacketWriter, PacketReader, ManagerType};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -9,19 +9,20 @@ use super::{
     ack_manager::AckManager,
     event_manager::EventManager,
     ghost_manager::GhostManager,
-    ManifestType,
+    EventType,
+    EntityType,
 };
 
-pub struct NetConnection<T: ManifestType> {
+pub struct NetConnection<T: EventType, U: EntityType> {
     pub connection_timestamp: Timestamp,
     heartbeat_manager: Timer,
     timeout_manager: Timer,
     ack_manager: AckManager,
     event_manager: EventManager<T>,
-    ghost_manager: GhostManager<T>,
+    ghost_manager: GhostManager<U>,
 }
 
-impl<T: ManifestType> NetConnection<T> {
+impl<T: EventType, U: EntityType> NetConnection<T, U> {
     pub fn new(heartbeat_interval: Duration, timeout_duration: Duration, host_name: &str, connection_timestamp: Timestamp) -> Self {
         NetConnection {
             connection_timestamp,
@@ -65,7 +66,7 @@ impl<T: ManifestType> NetConnection<T> {
         self.event_manager.queue_outgoing_event(event);
     }
 
-    pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T>) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(&mut self, manifest: &EventManifest<T>) -> Option<Box<[u8]>> {
 
         if self.event_manager.has_outgoing_events() {
             let mut writer = PacketWriter::new();
@@ -92,15 +93,15 @@ impl<T: ManifestType> NetConnection<T> {
         return self.event_manager.pop_incoming_event();
     }
 
-    pub fn process_data(&mut self, manifest: &Manifest<T>, data: &mut [u8]) {
+    pub fn process_data(&mut self, event_manifest: &EventManifest<T>, entity_manifest: &EntityManifest<U>, data: &mut [u8]) {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
             match reader.read_manager_type() {
                 ManagerType::Event => {
-                    self.event_manager.process_data(&mut reader, manifest);
+                    self.event_manager.process_data(&mut reader, event_manifest);
                 }
                 ManagerType::Ghost => {
-                    self.ghost_manager.process_data(&mut reader, manifest);
+                    self.ghost_manager.process_data(&mut reader, entity_manifest);
                 }
                 _ => {}
             }

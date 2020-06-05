@@ -2,28 +2,28 @@
 use std::any::{TypeId};
 use std::collections::HashMap;
 
-use crate::{NetBase, NetBaseType};
+use crate::{NetEvent, NetEventType, EventType};
 
-pub struct Manifest<T: ManifestType> {
+pub struct EventManifest<T: EventType> {
     gaia_id_count: u16,
     gaia_id_map: HashMap<u16, T>,
     type_id_map: HashMap<TypeId, u16>,
 }
 
-impl<T: ManifestType> Manifest<T> {
+impl<T: EventType> EventManifest<T> {
     pub fn new() -> Self {
-        Manifest {
+        EventManifest {
             gaia_id_count: 111,
             gaia_id_map: HashMap::new(),
             type_id_map: HashMap::new()
         }
     }
 
-    pub fn register<S: NetBase<T>>(&mut self, some_type: &S) {
+    pub fn register_event<S: NetEvent<T>>(&mut self, some_type: &S) {
         let new_gaia_id = self.gaia_id_count;
-        let type_id = NetBaseType::get_type_id(some_type);
+        let type_id = NetEventType::get_type_id(some_type);
         self.type_id_map.insert(type_id, new_gaia_id);
-        self.gaia_id_map.insert(new_gaia_id, NetBase::to_type(some_type));
+        self.gaia_id_map.insert(new_gaia_id, NetEvent::<T>::to_type(some_type));
         self.gaia_id_count += 1;
     }
 
@@ -44,14 +44,4 @@ impl<T: ManifestType> Manifest<T> {
 
         return None;
     }
-
-    pub fn process(&mut self) {
-
-    }
-}
-
-pub trait ManifestType {
-    fn optional_clone(&self) -> Option<Self> where Self: Sized;
-    fn is_event(&self) -> bool;
-    fn use_bytes(&mut self, bytes: &[u8]);
 }

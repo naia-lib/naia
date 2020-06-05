@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use crate::{ManagerType, NetEvent, NetBaseType, Manifest, ManifestType};
+use crate::{ManagerType, NetEvent, NetEventType, EventManifest, EventType};
 
 pub struct PacketWriter {
     working_bytes: Vec<u8>,
@@ -31,7 +31,7 @@ impl PacketWriter {
         out_bytes.into_boxed_slice()
     }
 
-    pub fn write_event<T: ManifestType>(&mut self, manifest: &Manifest<T>, event: &Box<dyn NetEvent<T>>) {
+    pub fn write_event<T: EventType>(&mut self, manifest: &EventManifest<T>, event: &Box<dyn NetEvent<T>>) {
         //Write event payload
         let mut event_payload_bytes = Vec::<u8>::new();
         event.as_ref().write(&mut event_payload_bytes);
@@ -42,7 +42,7 @@ impl PacketWriter {
         //Write event "header" (event id & payload length)
         let mut event_total_bytes = Vec::<u8>::new();
 
-        let type_id = NetBaseType::get_type_id(event.as_ref());
+        let type_id = NetEventType::get_type_id(event.as_ref());
         let gaia_id = manifest.get_gaia_id(&type_id); // get gaia id
         event_total_bytes.write_u16::<BigEndian>(gaia_id).unwrap();// write gaia id
         event_total_bytes.write_u8(event_payload_bytes.len() as u8).unwrap(); // write payload length
