@@ -1,6 +1,6 @@
 
-use gaia_shared::{NetBase, NetEvent};
-use crate::ExampleType;
+use gaia_shared::{NetEvent};
+use crate::ExampleEvent;
 
 #[derive(Clone)]
 pub struct StringEvent {
@@ -30,18 +30,13 @@ impl StringEvent {
     }
 }
 
-impl NetBase<ExampleType> for StringEvent {
-    fn to_type(&self) -> ExampleType {
-        return ExampleType::StringEvent(self.clone());
-    }
-    fn is_event(&self) -> bool {
-        true
-    }
-}
-
-impl NetEvent<ExampleType> for StringEvent {
+impl NetEvent<ExampleEvent> for StringEvent {
     fn is_guaranteed(&self) -> bool {
         true
+    }
+
+    fn to_type(&self) -> ExampleEvent {
+        return ExampleEvent::StringEvent(self.clone());
     }
 
     fn write(&self, buffer: &mut Vec<u8>) {
