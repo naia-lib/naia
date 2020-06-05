@@ -6,7 +6,7 @@ use simple_logger;
 
 use gaia_server::{GaiaServer, ServerEvent, find_my_ip_address, Config};
 
-use gaia_example_shared::{manifest_load, StringEvent, ExampleType};
+use gaia_example_shared::{event_manifest_load, entity_manifest_load, StringEvent, PointEntity, ExampleEvent};
 
 use std::time::Duration;
 
@@ -23,7 +23,13 @@ async fn main() {
     config.tick_interval = Duration::from_secs(10);
     config.heartbeat_interval = Duration::from_secs(1);
 
-    let mut server = GaiaServer::listen(current_socket_address.as_str(), manifest_load(), Some(config)).await;
+    let mut server = GaiaServer::listen(current_socket_address.as_str(),
+                                        event_manifest_load(),
+                                        entity_manifest_load(),
+                                        Some(config)).await;
+
+    let point_entity = PointEntity::new(3, 17);
+    server.add_entity(point_entity);
 
     loop {
         match server.receive().await {
@@ -37,7 +43,7 @@ async fn main() {
                     }
                     ServerEvent::Event(address, event_type) => {
                         match event_type {
-                            ExampleType::StringEvent(string_event) => {
+                            ExampleEvent::StringEvent(string_event) => {
                                 let message = string_event.get_message();
                                 match message {
                                     Some(msg) => {
