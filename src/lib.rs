@@ -8,7 +8,7 @@ extern crate cfg_if;
 mod ack_manager;
 mod config;
 mod event_manager;
-mod ghost_manager;
+mod entity_manager;
 mod net_connection;
 mod packet_type;
 mod sequence_buffer;
