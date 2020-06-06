@@ -19,7 +19,7 @@ pub struct NetConnection<T: EventType, U: EntityType> {
     timeout_manager: Timer,
     ack_manager: AckManager,
     event_manager: EventManager<T>,
-    ghost_manager: EntityManager<U>,
+    entity_manager: EntityManager<U>,
 }
 
 impl<T: EventType, U: EntityType> NetConnection<T, U> {
@@ -30,7 +30,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
             timeout_manager: Timer::new(timeout_duration),
             ack_manager: AckManager::new(host_name),
             event_manager: EventManager::new(),
-            ghost_manager: EntityManager::new(),
+            entity_manager: EntityManager::new(),
         }
     }
 
@@ -51,7 +51,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
     }
 
     pub fn process_incoming(&mut self, payload: &[u8]) -> Box<[u8]> {
-        self.ack_manager.process_incoming(&mut self.event_manager, &mut self.ghost_manager, payload)
+        self.ack_manager.process_incoming(&mut self.event_manager, &mut self.entity_manager, payload)
     }
 
     pub fn process_outgoing(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
@@ -100,8 +100,8 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
                 ManagerType::Event => {
                     self.event_manager.process_data(&mut reader, event_manifest);
                 }
-                ManagerType::Ghost => {
-                    self.ghost_manager.process_data(&mut reader, entity_manifest);
+                ManagerType::Entity => {
+                    self.entity_manager.process_data(&mut reader, entity_manifest);
                 }
                 _ => {}
             }
