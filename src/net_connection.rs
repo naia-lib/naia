@@ -8,7 +8,7 @@ use super::{
     Timestamp,
     ack_manager::AckManager,
     event_manager::EventManager,
-    ghost_manager::GhostManager,
+    entity_manager::EntityManager,
     EventType,
     EntityType,
 };
@@ -19,7 +19,7 @@ pub struct NetConnection<T: EventType, U: EntityType> {
     timeout_manager: Timer,
     ack_manager: AckManager,
     event_manager: EventManager<T>,
-    ghost_manager: GhostManager<U>,
+    ghost_manager: EntityManager<U>,
 }
 
 impl<T: EventType, U: EntityType> NetConnection<T, U> {
@@ -30,7 +30,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
             timeout_manager: Timer::new(timeout_duration),
             ack_manager: AckManager::new(host_name),
             event_manager: EventManager::new(),
-            ghost_manager: GhostManager::new(),
+            ghost_manager: EntityManager::new(),
         }
     }
 
