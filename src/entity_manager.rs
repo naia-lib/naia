@@ -4,7 +4,7 @@ use std::{
     collections::VecDeque};
 
 pub struct EntityManager<T: EntityType> {
-    unused_list: VecDeque<Box<dyn NetEntity<T>>>
+    unused_list: VecDeque<Box<dyn NetEntity<T>>>,
 }
 
 impl<T: EntityType> EntityManager<T> {
