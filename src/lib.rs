@@ -23,6 +23,7 @@ mod packet_reader;
 mod packet_writer;
 mod event_type;
 mod entity_type;
+mod state_mask;
 
 pub mod utils;
 
@@ -42,3 +43,4 @@ pub use packet_reader::PacketReader;
 pub use packet_writer::PacketWriter;
 pub use event_type::EventType;
 pub use entity_type::EntityType;
+pub use state_mask::StateMask;
