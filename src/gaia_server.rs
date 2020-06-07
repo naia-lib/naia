@@ -11,14 +11,12 @@ use log::{info};
 use slotmap::{new_key_type, dense::DenseSlotMap};
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
-pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, EventManifest, EntityManifest, NetEvent, NetEntity, ManagerType, EventType, EntityType};
+pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, EventManifest, EntityManifest, NetEvent, NetEntity, ManagerType, HostType, EventType, EntityType};
 
 use super::server_event::ServerEvent;
 use crate::{
     Packet,
     error::GaiaServerError};
-
-const HOST_TYPE_NAME: &str = "Server";
 
 new_key_type! { pub struct EntityPrimaryKey; }
 
@@ -151,9 +149,9 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
 
                                     if !self.client_connections.contains_key(&address) {
                                         self.client_connections.insert(address,
-                                                                       NetConnection::new(self.config.heartbeat_interval,
+                                                                       NetConnection::new(HostType::Server,
+                                                                                          self.config.heartbeat_interval,
                                                                                           self.config.disconnection_timeout_duration,
-                                                                                          HOST_TYPE_NAME,
                                                                                           timestamp));
                                         output = Some(Ok(ServerEvent::Connection(address)));
                                     }
