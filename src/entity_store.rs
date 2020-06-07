@@ -32,6 +32,10 @@ impl<T: EntityType> EntityStore<T> {
         return self.map.get(key);
     }
 
+    pub fn has_entity(&self, key: EntityKey) -> bool {
+        return self.map.contains_key(key);
+    }
+
     pub fn iter(&self) -> slotmap::dense::Iter<EntityKey, Rc<RefCell<dyn NetEntity<T>>>> {
         return self.map.iter();
     }

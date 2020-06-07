@@ -1,7 +1,7 @@
 
 use std::time::Duration;
 
-use crate::{Timer, PacketType, NetEvent, EventManifest, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType};
+use crate::{Timer, PacketType, NetEvent, EventManifest, EntityKey, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -128,5 +128,9 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
                 _ => {}
             }
         }
+    }
+
+    pub fn has_entity(&self, key: EntityKey) -> bool {
+        return self.local_entity_store.has_entity(key);
     }
 }
