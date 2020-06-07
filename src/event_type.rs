@@ -1,4 +1,3 @@
-pub trait EventType {
-    fn optional_clone(&self) -> Option<Self> where Self: Sized;
-    fn use_bytes(&mut self, bytes: &[u8]);
+pub trait EventType: Clone {
+    fn read(&mut self, bytes: &[u8]);
 }
