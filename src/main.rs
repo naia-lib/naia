@@ -6,7 +6,7 @@ use simple_logger;
 
 use gaia_server::{GaiaServer, ServerEvent, find_my_ip_address, Config};
 
-use gaia_example_shared::{event_manifest_load, entity_manifest_load, StringEvent, PointEntity, ExampleEvent};
+use gaia_example_shared::{event_manifest_load, entity_manifest_load, StringEvent, PointEntity, ExampleEvent, ExampleEntity};
 
 use std::{
     rc::Rc,
@@ -31,11 +31,16 @@ async fn main() {
                                         entity_manifest_load(),
                                         Some(config)).await;
 
-    let point_entity = PointEntity::new(3, 17);
-    server.add_entity(point_entity);
+    let mut point_entity = PointEntity::new(0, 0);
+    server.add_entity(point_entity.clone());
 
     server.on_scope_entity(Rc::new(Box::new(|address, entity| {
-        return true;
+        match entity {
+            ExampleEntity::PointEntity(point_entity) => {
+                let x = point_entity.get_x();
+                return x >= 3 && x <= 7;
+            }
+        }
     })));
 
     loop {
@@ -63,14 +68,18 @@ async fn main() {
                     }
                     ServerEvent::Tick => {
                         // This could be used for your non-network logic (game loop?)
-                        for addr in server.get_clients() {
-                            let count = server.get_sequence_number(addr).expect("why don't we have a sequence number for this client?");
-                            let new_message = "Server Packet (".to_string() + count.to_string().as_str() + ") to " + addr.to_string().as_str();
-                            info!("Gaia Server send -> {}: {}", addr, new_message);
 
-                            let string_event = StringEvent::new(new_message);
-                            server.send_event(addr, &string_event);
-                        }
+                        // Event Sending
+//                        for addr in server.get_clients() {
+//                            let count = server.get_sequence_number(addr).expect("why don't we have a sequence number for this client?");
+//                            let new_message = "Server Packet (".to_string() + count.to_string().as_str() + ") to " + addr.to_string().as_str();
+//                            info!("Gaia Server send -> {}: {}", addr, new_message);
+//
+//                            let string_event = StringEvent::new(new_message);
+//                            server.send_event(addr, &string_event);
+//                        }
+
+                        point_entity.borrow_mut().step();
                     }
                 }
             }
