@@ -4,7 +4,7 @@ use std::{
     collections::VecDeque};
 
 pub struct ServerEntityManager<T: EntityType> {
-    local_entity_store: EntityStore<T>, // server should not have an entity store, as it merely references the global entity store
+    local_entity_store: EntityStore<T>,
 }
 
 impl<T: EntityType> ServerEntityManager<T> {
@@ -29,6 +29,10 @@ impl<T: EntityType> ServerEntityManager<T> {
     }
 
     pub fn add_entity(&self, key: EntityKey) {
+        //return self.local_entity_store.has_entity(key);
+    }
+
+    pub fn remove_entity(&self, key: EntityKey) {
         //return self.local_entity_store.has_entity(key);
     }
 }

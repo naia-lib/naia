@@ -129,4 +129,11 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
             EntityManager::<U>::Client(entity_manager) => entity_manager.add_entity(key),
         }
     }
+
+    pub fn remove_entity(&self, key: EntityKey) {
+        return match &self.entity_manager {
+            EntityManager::<U>::Server(entity_manager) => entity_manager.remove_entity(key),
+            EntityManager::<U>::Client(entity_manager) => entity_manager.remove_entity(key),
+        }
+    }
 }
