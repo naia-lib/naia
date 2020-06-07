@@ -6,13 +6,11 @@ use std::{
 use log::info;
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp, EventManifest, EntityManifest, ManagerType, PacketWriter, PacketReader, NetEvent, EventType, EntityType};
+pub use gaia_shared::{Config, PacketType, Timer, NetConnection, Timestamp, EventManifest, EntityManifest, ManagerType, HostType, PacketWriter, PacketReader, NetEvent, EventType, EntityType};
 
 use super::client_event::ClientEvent;
 use crate::{
     Packet, error::GaiaClientError};
-
-const HOST_TYPE_NAME: &str = "CLIENT";
 
 pub struct GaiaClient<T: EventType, U: EntityType> {
     event_manifest: EventManifest<T>,
@@ -138,9 +136,9 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                             }
                             else {
                                 if packet_type == PacketType::ServerHandshake {
-                                    self.server_connection = Some(NetConnection::new(self.config.heartbeat_interval,
+                                    self.server_connection = Some(NetConnection::new(HostType::Client,
+                                                                                     self.config.heartbeat_interval,
                                                                                      self.config.disconnection_timeout_duration,
-                                                                                     HOST_TYPE_NAME,
                                                                                      self.pre_connection_timestamp.take().unwrap()));
                                     output = Some(Ok(ClientEvent::Connection));
                                     continue;
