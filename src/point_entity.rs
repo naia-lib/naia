@@ -26,6 +26,22 @@ impl PointEntity {
             y: Some(y),
         }))
     }
+
+    pub fn get_x(&self) -> u8 {
+        if let Some(x) = self.x {
+            return x;
+        }
+        return 0;
+    }
+
+    pub fn step(&mut self) {
+        if let Some(mut x) = self.x {
+            x += 1;
+            if x > 10 {
+                x = 0;
+            }
+        }
+    }
 }
 
 impl NetEntity<ExampleEntity> for PointEntity {
