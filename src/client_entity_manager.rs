@@ -3,13 +3,13 @@ use crate::{EntityType, PacketReader, EntityManifest, NetEntity};
 use std::{
     collections::VecDeque};
 
-pub struct EntityManager<T: EntityType> {
+pub struct ClientEntityManager<T: EntityType> {
     unused_list: VecDeque<Box<dyn NetEntity<T>>>,
 }
 
-impl<T: EntityType> EntityManager<T> {
+impl<T: EntityType> ClientEntityManager<T> {
     pub fn new() -> Self {
-        EntityManager {
+        ClientEntityManager {
             unused_list: VecDeque::new()
         }
     }

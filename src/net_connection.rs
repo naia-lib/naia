@@ -1,14 +1,15 @@
 
 use std::time::Duration;
 
-use crate::{Timer, PacketType, NetEvent, EventManifest, EntityManifest, PacketWriter, PacketReader, ManagerType};
+use crate::{Timer, PacketType, NetEvent, EventManifest, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType};
 
 use super::{
     sequence_buffer::{SequenceNumber},
     Timestamp,
     ack_manager::AckManager,
     event_manager::EventManager,
-    entity_manager::EntityManager,
+    server_entity_manager::ServerEntityManager,
+    client_entity_manager::ClientEntityManager,
     EventType,
     EntityType,
 };
@@ -19,19 +20,36 @@ pub struct NetConnection<T: EventType, U: EntityType> {
     timeout_manager: Timer,
     ack_manager: AckManager,
     event_manager: EventManager<T>,
-    entity_manager: EntityManager<U>,
+    server_entity_manager: Option<ServerEntityManager<U>>,
+    client_entity_manager: Option<ClientEntityManager<U>>,
 }
 
 impl<T: EventType, U: EntityType> NetConnection<T, U> {
-    pub fn new(heartbeat_interval: Duration, timeout_duration: Duration, host_name: &str, connection_timestamp: Timestamp) -> Self {
-        NetConnection {
-            connection_timestamp,
-            heartbeat_manager: Timer::new(heartbeat_interval),
-            timeout_manager: Timer::new(timeout_duration),
-            ack_manager: AckManager::new(host_name),
-            event_manager: EventManager::new(),
-            entity_manager: EntityManager::new(),
-        }
+    pub fn new(host_type: HostType, heartbeat_interval: Duration, timeout_duration: Duration, connection_timestamp: Timestamp) -> Self {
+        match host_type {
+            HostType::Server => {
+                return NetConnection {
+                    connection_timestamp,
+                    heartbeat_manager: Timer::new(heartbeat_interval),
+                    timeout_manager: Timer::new(timeout_duration),
+                    ack_manager: AckManager::new(host_type),
+                    event_manager: EventManager::new(),
+                    server_entity_manager: Some(ServerEntityManager::new()),
+                    client_entity_manager: None,
+                }
+            }
+            HostType::Client => {
+                return NetConnection {
+                    connection_timestamp,
+                    heartbeat_manager: Timer::new(heartbeat_interval),
+                    timeout_manager: Timer::new(timeout_duration),
+                    ack_manager: AckManager::new(host_type),
+                    event_manager: EventManager::new(),
+                    server_entity_manager: None,
+                    client_entity_manager: Some(ClientEntityManager::new()),
+                }
+            }
+        };
     }
 
     pub fn mark_sent(&mut self) {
@@ -51,7 +69,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
     }
 
     pub fn process_incoming(&mut self, payload: &[u8]) -> Box<[u8]> {
-        self.ack_manager.process_incoming(&mut self.event_manager, &mut self.entity_manager, payload)
+        self.ack_manager.process_incoming(&mut self.event_manager, &mut self.server_entity_manager, payload)
     }
 
     pub fn process_outgoing(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
@@ -101,7 +119,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
                     self.event_manager.process_data(&mut reader, event_manifest);
                 }
                 ManagerType::Entity => {
-                    self.entity_manager.process_data(&mut reader, entity_manifest);
+                    //self.server_entity_manager.process_data(&mut reader, entity_manifest);
                 }
                 _ => {}
             }

@@ -8,7 +8,8 @@ extern crate cfg_if;
 mod ack_manager;
 mod config;
 mod event_manager;
-mod entity_manager;
+mod server_entity_manager;
+mod client_entity_manager;
 mod net_connection;
 mod packet_type;
 mod sequence_buffer;
@@ -24,6 +25,7 @@ mod packet_writer;
 mod event_type;
 mod entity_type;
 mod state_mask;
+mod host_type;
 
 pub mod utils;
 
@@ -44,3 +46,4 @@ pub use packet_writer::PacketWriter;
 pub use event_type::EventType;
 pub use entity_type::EntityType;
 pub use state_mask::StateMask;
+pub use host_type::HostType;

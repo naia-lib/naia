@@ -92,7 +92,7 @@ impl<T: EventType> EventManager<T> {
 
             match manifest.create_type(gaia_id) {
                 Some(mut new_entity) => {
-                    new_entity.use_bytes(&event_payload);
+                    new_entity.read(&event_payload);
                     self.queued_incoming_events.push_back(new_entity);
                 }
                 _ => {}

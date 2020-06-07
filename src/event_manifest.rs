@@ -37,7 +37,7 @@ impl<T: EventType> EventManifest<T> {
         let entity_entry = self.gaia_id_map.get(&gaia_id);
         match entity_entry {
             Some(entity_type) => {
-                return (*entity_type).optional_clone();
+                return Some(entity_type.clone());
             }
             None => {}
         }

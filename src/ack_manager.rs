@@ -6,15 +6,16 @@ use super::{
     standard_header::StandardHeader,
     sequence_buffer::{sequence_greater_than, sequence_less_than, SequenceNumber, SequenceBuffer},
     event_manager::EventManager,
-    entity_manager::EntityManager,
+    server_entity_manager::ServerEntityManager,
 };
 
-use crate::{PacketType, EventType, EntityType};
+use crate::{PacketType, EventType, EntityType, HostType};
 
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
 const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
 
 pub struct AckManager {
+    host_type: HostType,
     // Local sequence number which we'll bump each time we send a new packet over the network.
     sequence_number: SequenceNumber,
     // The last acked sequence number of the packets we've sent to the remote host.
@@ -25,18 +26,16 @@ pub struct AckManager {
     // However, we can only reasonably ack up to `REDUNDANT_PACKET_ACKS_SIZE + 1` packets on each
     // message we send so this should be that large.
     received_packets: SequenceBuffer<ReceivedPacket>,
-
-    host_type_string: String,
 }
 
 impl AckManager {
-    pub fn new(host_type_str: &str) -> Self {
+    pub fn new(host_type: HostType) -> Self {
         AckManager {
+            host_type,
             sequence_number: 0,
             remote_ack_sequence_num: u16::max_value(),
             sent_packets: HashMap::with_capacity(DEFAULT_SEND_PACKETS_SIZE),
             received_packets: SequenceBuffer::with_capacity(REDUNDANT_PACKET_ACKS_SIZE + 1),
-            host_type_string: host_type_str.to_string(),
         }
     }
 
@@ -44,7 +43,10 @@ impl AckManager {
         self.sequence_number
     }
 
-    pub fn process_incoming<T: EventType, U: EntityType>(&mut self, event_manager: &mut EventManager<T>, entity_manager: &mut EntityManager<U>, payload: &[u8]) -> Box<[u8]> {
+    pub fn process_incoming<T: EventType, U: EntityType>(&mut self,
+                                                         event_manager: &mut EventManager<T>,
+                                                         server_entity_manager: &mut Option<ServerEntityManager<U>>,
+                                                         payload: &[u8]) -> Box<[u8]> {
         let (header, stripped_message) = StandardHeader::read(payload);
         let remote_seq_num = header.sequence();
         let remote_ack_seq = header.ack_seq();
@@ -61,7 +63,7 @@ impl AckManager {
         // the current `remote_ack_seq` was (clearly) received so we should remove it
         if let Some(sent_packet) = self.sent_packets.get(&remote_ack_seq) {
             if sent_packet.packet_type == PacketType::Data {
-                self.notify_packet_delivered(event_manager, entity_manager, remote_ack_seq);
+                self.notify_packet_delivered(event_manager, server_entity_manager, remote_ack_seq);
             }
 
             self.sent_packets.remove(&remote_ack_seq);
@@ -74,13 +76,13 @@ impl AckManager {
             if let Some(sent_packet) = self.sent_packets.get(&ack_sequence) {
                 if remote_ack_field & 1 == 1 {
                     if sent_packet.packet_type == PacketType::Data {
-                        self.notify_packet_delivered(event_manager, entity_manager, ack_sequence);
+                        self.notify_packet_delivered(event_manager, server_entity_manager, ack_sequence);
                     }
 
                     self.sent_packets.remove(&ack_sequence);
                 } else {
                     if sent_packet.packet_type == PacketType::Data {
-                        self.notify_packet_dropped(event_manager, entity_manager, ack_sequence);
+                        self.notify_packet_dropped(event_manager, server_entity_manager, ack_sequence);
                     }
                     self.sent_packets.remove(&ack_sequence);
                 }
@@ -122,16 +124,32 @@ impl AckManager {
             .into_boxed_slice()
     }
 
-    fn notify_packet_delivered<T: EventType, U: EntityType>(&self, event_manager: &mut EventManager<T>, entity_manager: &mut EntityManager<U>, packet_sequence_number: u16) {
-        info!("-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------", self.host_type_string, packet_sequence_number);
+    fn notify_packet_delivered<T: EventType, U: EntityType>(&self, event_manager: &mut EventManager<T>,
+                                                            server_entity_manager: &mut Option<ServerEntityManager<U>>,
+                                                            packet_sequence_number: u16) {
+        let host_type_string = match self.host_type {
+            HostType::Server => "Server",
+            HostType::Client => "Client",
+        };
+        info!("-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------", host_type_string, packet_sequence_number);
         event_manager.notify_packet_delivered(packet_sequence_number);
-        entity_manager.notify_packet_delivered(packet_sequence_number);
+        if let Some(entity_manager) = server_entity_manager {
+            entity_manager.notify_packet_delivered(packet_sequence_number);
+        }
     }
 
-    fn notify_packet_dropped<T: EventType, U: EntityType>(&self, event_manager: &mut EventManager<T>, entity_manager: &mut EntityManager<U>, packet_sequence_number: u16) {
-        info!("---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---", self.host_type_string, packet_sequence_number);
+    fn notify_packet_dropped<T: EventType, U: EntityType>(&self, event_manager: &mut EventManager<T>,
+                                                          server_entity_manager: &mut Option<ServerEntityManager<U>>,
+                                                          packet_sequence_number: u16) {
+        let host_type_string = match self.host_type {
+            HostType::Server => "Server",
+            HostType::Client => "Client",
+        };
+        info!("---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---", host_type_string, packet_sequence_number);
         event_manager.notify_packet_dropped(packet_sequence_number);
-        entity_manager.notify_packet_dropped(packet_sequence_number);
+        if let Some(entity_manager) = server_entity_manager {
+            entity_manager.notify_packet_delivered(packet_sequence_number);
+        }
     }
 
     fn remote_sequence_num(&self) -> SequenceNumber {
