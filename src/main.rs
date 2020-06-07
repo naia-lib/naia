@@ -32,10 +32,11 @@ async fn main() {
                                         Some(config)).await;
 
     let point_entity = PointEntity::new(3, 17);
-    let entity_key = server.add_entity(point_entity);
+    server.add_entity(point_entity);
 
-    let scope_func: Rc<Box<dyn Fn(&SocketAddr) -> bool>> = Rc::new(Box::new(|addr| true));
-    server.scope_entity(entity_key, scope_func);
+    server.on_scope_entity(Rc::new(Box::new(|address, entity| {
+        return true;
+    })));
 
     loop {
         match server.receive().await {
