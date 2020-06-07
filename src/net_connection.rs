@@ -12,6 +12,7 @@ use super::{
     client_entity_manager::ClientEntityManager,
     EventType,
     EntityType,
+    EntityStore
 };
 
 pub struct NetConnection<T: EventType, U: EntityType> {
@@ -22,6 +23,7 @@ pub struct NetConnection<T: EventType, U: EntityType> {
     event_manager: EventManager<T>,
     server_entity_manager: Option<ServerEntityManager<U>>,
     client_entity_manager: Option<ClientEntityManager<U>>,
+    local_entity_store: EntityStore<U>,
 }
 
 impl<T: EventType, U: EntityType> NetConnection<T, U> {
@@ -34,6 +36,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
                     timeout_manager: Timer::new(timeout_duration),
                     ack_manager: AckManager::new(host_type),
                     event_manager: EventManager::new(),
+                    local_entity_store:  EntityStore::new(),
                     server_entity_manager: Some(ServerEntityManager::new()),
                     client_entity_manager: None,
                 }
@@ -45,6 +48,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
                     timeout_manager: Timer::new(timeout_duration),
                     ack_manager: AckManager::new(host_type),
                     event_manager: EventManager::new(),
+                    local_entity_store:  EntityStore::new(),
                     server_entity_manager: None,
                     client_entity_manager: Some(ClientEntityManager::new()),
                 }
