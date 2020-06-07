@@ -27,6 +27,7 @@ mod entity_type;
 mod entity_store;
 mod state_mask;
 mod host_type;
+mod entity_manager;
 
 pub mod utils;
 
@@ -41,6 +42,7 @@ pub use net_event::{NetEvent, NetEventType, NetEventClone};
 pub use net_entity::{NetEntity, NetEntityType};
 pub use event_manifest::EventManifest;
 pub use entity_manifest::EntityManifest;
+pub use entity_manager::EntityManager;
 pub use manager_type::ManagerType;
 pub use packet_reader::PacketReader;
 pub use packet_writer::PacketWriter;
