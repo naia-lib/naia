@@ -20,7 +20,7 @@ pub struct GaiaServer<T: EventType, U: EntityType> {
     event_manifest: EventManifest<T>,
     entity_manifest: EntityManifest<U>,
     global_entity_store: EntityStore<U>,
-    scope_map: HashMap<EntityKey, Rc<Box<dyn Fn(&SocketAddr) -> bool>>>,
+    scope_entity_func: Option<Rc<Box<dyn Fn(&SocketAddr, U) -> bool>>>,
     config: Config,
     socket: ServerSocket,
     sender: MessageSender,
@@ -53,7 +53,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
             event_manifest,
             entity_manifest,
             global_entity_store: EntityStore::new(),
-            scope_map: HashMap::new(),
+            scope_entity_func: None,
             socket: server_socket,
             sender,
             config,
@@ -253,7 +253,6 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
     }
 
     pub fn remove_entity(&mut self, key: EntityKey) {
-        self.scope_map.remove(&key);
         return self.global_entity_store.remove_entity(key);
     }
 
@@ -261,8 +260,8 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         return self.global_entity_store.get_entity(key);
     }
 
-    pub fn scope_entity(&mut self, key: EntityKey, scope_func: Rc<Box<dyn Fn(&SocketAddr) -> bool>>) {
-        self.scope_map.insert(key, scope_func);
+    pub fn on_scope_entity(&mut self, scope_func: Rc<Box<dyn Fn(&SocketAddr, U) -> bool>>) {
+        self.scope_entity_func = Some(scope_func);
     }
 
     pub fn get_clients(&mut self) -> Vec<SocketAddr> {
@@ -277,11 +276,11 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
     }
 
     fn update_entity_scopes(&mut self) {
-        for (address, connection) in self.client_connections.iter_mut() {
-            for (key, entity) in self.global_entity_store.iter() {
-                if let Some(scope_func) = self.scope_map.get(&key) {
-                    let currently_in_scope: bool = connection.contains_key(key);
-                    let should_be_in_scope = (scope_func.as_ref().as_ref())(address);
+        if let Some(scope_func) = &self.scope_entity_func {
+            for (address, connection) in self.client_connections.iter_mut() {
+                for (key, entity) in self.global_entity_store.iter() {
+                    let currently_in_scope: bool = connection.has_entity(key);
+                    let should_be_in_scope = (scope_func.as_ref().as_ref())(address, entity.as_ref().borrow().to_type());
                     if currently_in_scope {
                         if !should_be_in_scope {
                             // remove entity from the connections local scope
