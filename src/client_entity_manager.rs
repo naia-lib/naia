@@ -31,4 +31,8 @@ impl<T: EntityType> ClientEntityManager<T> {
     pub fn add_entity(&self, key: EntityKey) {
         //return self.local_entity_store.has_entity(key);
     }
+
+    pub fn remove_entity(&self, key: EntityKey) {
+        //return self.local_entity_store.has_entity(key);
+    }
 }
