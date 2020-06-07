@@ -1,18 +1,14 @@
 
 use std::time::Duration;
 
-use crate::{Timer, PacketType, NetEvent, EventManifest, EntityKey, EntityManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType};
+use crate::{Timer, PacketType, NetEvent, EventManifest, EntityKey, ServerEntityManager, ClientEntityManager,
+            EventManager, EntityManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
+            EventType, EntityType, EntityStore};
 
 use super::{
     sequence_buffer::{SequenceNumber},
     Timestamp,
     ack_manager::AckManager,
-    event_manager::EventManager,
-    server_entity_manager::ServerEntityManager,
-    client_entity_manager::ClientEntityManager,
-    EventType,
-    EntityType,
-    EntityStore
 };
 
 pub struct NetConnection<T: EventType, U: EntityType> {
