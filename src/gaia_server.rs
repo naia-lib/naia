@@ -20,6 +20,7 @@ pub struct GaiaServer<T: EventType, U: EntityType> {
     event_manifest: EventManifest<T>,
     entity_manifest: EntityManifest<U>,
     global_entity_store: EntityStore<U>,
+    scope_map: HashMap<EntityKey, Rc<Box<dyn Fn(&SocketAddr) -> bool>>>,
     config: Config,
     socket: ServerSocket,
     sender: MessageSender,
@@ -52,6 +53,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
             event_manifest,
             entity_manifest,
             global_entity_store: EntityStore::new(),
+            scope_map: HashMap::new(),
             socket: server_socket,
             sender,
             config,
@@ -94,18 +96,6 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
 
 
             for (address, connection) in self.client_connections.iter_mut() {
-                // send packets to everyone
-                if let Some(payload) = connection.get_outgoing_packet(&self.event_manifest) {
-                    match self.sender.send(Packet::new_raw(*address, payload))
-                        .await {
-                        Ok(_) => {}
-                        Err(err) => {
-                            info!("send error! {}", err);
-                        }
-                    }
-                    connection.mark_sent();
-                }
-
                 //receive events from anyone
                 if let Some(something) = connection.get_incoming_event() {
                     output = Some(Ok(ServerEvent::Event(*address, something)));
@@ -199,6 +189,24 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                             }
                         }
                         SocketEvent::Tick => {
+
+                            // update entity scopes
+                            self.update_entity_scopes();
+
+                            // loop through all connections, send packet
+                            for (address, connection) in self.client_connections.iter_mut() {
+                                if let Some(payload) = connection.get_outgoing_packet(&self.event_manifest) {
+                                    match self.sender.send(Packet::new_raw(*address, payload))
+                                        .await {
+                                        Ok(_) => {}
+                                        Err(err) => {
+                                            info!("send error! {}", err);
+                                        }
+                                    }
+                                    connection.mark_sent();
+                                }
+                            }
+
                             output = Some(Ok(ServerEvent::Tick));
                             continue;
                         }
@@ -244,6 +252,19 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         return self.global_entity_store.add_entity(entity);
     }
 
+    pub fn remove_entity(&mut self, key: EntityKey) {
+        self.scope_map.remove(&key);
+        return self.global_entity_store.remove_entity(key);
+    }
+
+    pub fn get_entity(&mut self, key: EntityKey) -> Option<&Rc<RefCell<dyn NetEntity<U>>>> {
+        return self.global_entity_store.get_entity(key);
+    }
+
+    pub fn scope_entity(&mut self, key: EntityKey, scope_func: Rc<Box<dyn Fn(&SocketAddr) -> bool>>) {
+        self.scope_map.insert(key, scope_func);
+    }
+
     pub fn get_clients(&mut self) -> Vec<SocketAddr> {
         self.client_connections.keys().cloned().collect()
     }
@@ -253,5 +274,25 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
             return Some(connection.get_next_packet_index());
         }
         return None;
+    }
+
+    fn update_entity_scopes(&mut self) {
+        for (address, connection) in self.client_connections.iter_mut() {
+            for (key, entity) in self.global_entity_store.iter() {
+                if let Some(scope_func) = self.scope_map.get(&key) {
+                    let currently_in_scope: bool = connection.contains_key(key);
+                    let should_be_in_scope = (scope_func.as_ref().as_ref())(address);
+                    if currently_in_scope {
+                        if !should_be_in_scope {
+                            // remove entity from the connections local scope
+                        }
+                    } else {
+                        if should_be_in_scope {
+                            // add entity to the connections local scope
+                        }
+                    }
+                }
+            }
+        }
     }
 }
