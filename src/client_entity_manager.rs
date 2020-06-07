@@ -1,16 +1,16 @@
 
-use crate::{EntityType, PacketReader, EntityManifest, NetEntity};
+use crate::{EntityType, EntityKey, EntityStore, PacketReader, EntityManifest, NetEntity};
 use std::{
     collections::VecDeque};
 
 pub struct ClientEntityManager<T: EntityType> {
-    unused_list: VecDeque<Box<dyn NetEntity<T>>>,
+    local_entity_store: EntityStore<T>,
 }
 
 impl<T: EntityType> ClientEntityManager<T> {
     pub fn new() -> Self {
         ClientEntityManager {
-            unused_list: VecDeque::new()
+            local_entity_store:  EntityStore::new(),
         }
     }
 
@@ -22,5 +22,13 @@ impl<T: EntityType> ClientEntityManager<T> {
 
     pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &EntityManifest<T>) {
 
+    }
+
+    pub fn has_entity(&self, key: EntityKey) -> bool {
+        return self.local_entity_store.has_entity(key);
+    }
+
+    pub fn add_entity(&self, key: EntityKey) {
+        //return self.local_entity_store.has_entity(key);
     }
 }

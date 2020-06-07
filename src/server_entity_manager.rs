@@ -1,16 +1,16 @@
 
-use crate::{EntityType, PacketReader, EntityManifest, NetEntity};
+use crate::{EntityType, EntityKey, PacketReader, EntityManifest, NetEntity, EntityStore};
 use std::{
     collections::VecDeque};
 
 pub struct ServerEntityManager<T: EntityType> {
-    unused_list: VecDeque<Box<dyn NetEntity<T>>>,
+    local_entity_store: EntityStore<T>, // server should not have an entity store, as it merely references the global entity store
 }
 
 impl<T: EntityType> ServerEntityManager<T> {
     pub fn new() -> Self {
         ServerEntityManager {
-            unused_list: VecDeque::new()
+            local_entity_store:  EntityStore::new(),
         }
     }
 
@@ -22,5 +22,13 @@ impl<T: EntityType> ServerEntityManager<T> {
 
     pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &EntityManifest<T>) {
 
+    }
+
+    pub fn has_entity(&self, key: EntityKey) -> bool {
+        return self.local_entity_store.has_entity(key);
+    }
+
+    pub fn add_entity(&self, key: EntityKey) {
+        //return self.local_entity_store.has_entity(key);
     }
 }
