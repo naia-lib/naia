@@ -13,7 +13,7 @@ pub struct EventManifest<T: EventType> {
 impl<T: EventType> EventManifest<T> {
     pub fn new() -> Self {
         EventManifest {
-            gaia_id_count: 111,
+            gaia_id_count: 0,
             gaia_id_map: HashMap::new(),
             type_id_map: HashMap::new()
         }
@@ -33,11 +33,10 @@ impl<T: EventType> EventManifest<T> {
         return *gaia_id;
     }
 
-    pub fn create_type(&self, gaia_id: u16) -> Option<T> {
-        let entity_entry = self.gaia_id_map.get(&gaia_id);
-        match entity_entry {
-            Some(entity_type) => {
-                return Some(entity_type.clone());
+    pub fn create_event(&self, gaia_id: u16) -> Option<T> {
+        match self.gaia_id_map.get(&gaia_id) {
+            Some(event_type) => {
+                return Some(event_type.clone());
             }
             None => {}
         }
