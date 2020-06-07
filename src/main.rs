@@ -8,7 +8,10 @@ use gaia_server::{GaiaServer, ServerEvent, find_my_ip_address, Config};
 
 use gaia_example_shared::{event_manifest_load, entity_manifest_load, StringEvent, PointEntity, ExampleEvent};
 
-use std::time::Duration;
+use std::{
+    rc::Rc,
+    net::SocketAddr,
+    time::Duration};
 
 const SERVER_PORT: &str = "3179";
 
@@ -29,7 +32,10 @@ async fn main() {
                                         Some(config)).await;
 
     let point_entity = PointEntity::new(3, 17);
-    server.add_entity(point_entity);
+    let entity_key = server.add_entity(point_entity);
+
+    let scope_func: Rc<Box<dyn Fn(&SocketAddr) -> bool>> = Rc::new(Box::new(|addr| true));
+    server.scope_entity(entity_key, scope_func);
 
     loop {
         match server.receive().await {
