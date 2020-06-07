@@ -12,4 +12,3 @@ use-webrtc = [ "gaia-server-socket/use-webrtc" ]
 gaia-server-socket = { path = "../gaia-server-socket" } # { git = "https://github.com/connorcarpenter/gaia-server-socket" } #
 gaia-shared = { path = "../gaia-shared" } # { git = "https://github.com/connorcarpenter/gaia-shared" } #
 log = "0.4"
-slotmap = "0.4"

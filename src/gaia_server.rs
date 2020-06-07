@@ -8,28 +8,24 @@ use std::{
 
 use log::{info};
 
-use slotmap::{new_key_type, dense::DenseSlotMap};
-
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
-pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, EventManifest, EntityManifest, NetEvent, NetEntity, ManagerType, HostType, EventType, EntityType};
+pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, EventManifest, EntityManifest, EntityStore, EntityKey, NetEvent, NetEntity, ManagerType, HostType, EventType, EntityType};
 
 use super::server_event::ServerEvent;
 use crate::{
     Packet,
     error::GaiaServerError};
 
-new_key_type! { pub struct EntityPrimaryKey; }
-
 pub struct GaiaServer<T: EventType, U: EntityType> {
     event_manifest: EventManifest<T>,
     entity_manifest: EntityManifest<U>,
+    global_entity_store: EntityStore<U>,
     config: Config,
     socket: ServerSocket,
     sender: MessageSender,
     client_connections: HashMap<SocketAddr, NetConnection<T, U>>,
     outstanding_disconnects: VecDeque<SocketAddr>,
     heartbeat_timer: Timer,
-    entity_map: DenseSlotMap<EntityPrimaryKey, Rc<RefCell<dyn NetEntity<U>>>>,
     drop_counter: u8,
     drop_max: u8,
 }
@@ -55,13 +51,13 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         GaiaServer {
             event_manifest,
             entity_manifest,
+            global_entity_store: EntityStore::new(),
             socket: server_socket,
             sender,
             config,
             client_connections: clients_map,
             outstanding_disconnects: VecDeque::new(),
             heartbeat_timer,
-            entity_map: DenseSlotMap::with_key(),
             drop_counter: 1,
             drop_max: 3,
         }
@@ -244,9 +240,8 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         }
     }
 
-    pub fn add_entity(&mut self, entity: Rc<RefCell<dyn NetEntity<U>>>) -> EntityPrimaryKey {
-        //let wrapper = Rc::new(RefCell::new(entity));
-        return self.entity_map.insert(entity);
+    pub fn add_entity(&mut self, entity: Rc<RefCell<dyn NetEntity<U>>>) -> EntityKey {
+        return self.global_entity_store.add_entity(entity);
     }
 
     pub fn get_clients(&mut self) -> Vec<SocketAddr> {
