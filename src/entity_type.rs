@@ -1,2 +1,2 @@
-pub trait EntityType {
+pub trait EntityType: Clone {
 }

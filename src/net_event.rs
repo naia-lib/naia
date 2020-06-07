@@ -28,7 +28,6 @@ pub trait NetEventType<T: EventType> {
     fn get_type_id(&self) -> TypeId;
 }
 
-
 impl<Z: EventType, T: 'static + NetEvent<Z>> NetEventType<Z> for T {
     fn get_type_id(&self) -> TypeId { return TypeId::of::<T>(); }
 }

@@ -1,6 +1,7 @@
+use std::any::{TypeId};
 use crate::{EntityType};
 
-pub trait NetEntity<T: EntityType> {
+pub trait NetEntity<T: EntityType>: NetEntityType<T> {
 //    fn write_create(&self, out_bytes: &mut Vec<u8>);
 //    fn write_update(&self, out_bytes: &mut Vec<u8>);
     fn read(&mut self, in_bytes: &[u8]);
@@ -10,4 +11,10 @@ pub trait NetEntity<T: EntityType> {
 //    fn delete(&self);
 }
 
-//impl<Z: ManifestType, T: 'static + NetEntity<Z>> Copy for T {}
+pub trait NetEntityType<T: EntityType> {
+    fn get_type_id(&self) -> TypeId;
+}
+
+impl<Z: EntityType, T: 'static + NetEntity<Z>> NetEntityType<Z> for T {
+    fn get_type_id(&self) -> TypeId { return TypeId::of::<T>(); }
+}
