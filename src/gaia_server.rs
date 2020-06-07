@@ -279,15 +279,17 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         if let Some(scope_func) = &self.scope_entity_func {
             for (address, connection) in self.client_connections.iter_mut() {
                 for (key, entity) in self.global_entity_store.iter() {
-                    let currently_in_scope: bool = connection.has_entity(key);
+                    let currently_in_scope = connection.has_entity(key);
                     let should_be_in_scope = (scope_func.as_ref().as_ref())(address, entity.as_ref().borrow().to_type());
-                    if currently_in_scope {
-                        if !should_be_in_scope {
-                            // remove entity from the connections local scope
+                    if should_be_in_scope {
+                        if !currently_in_scope {
+                            // add entity to the connections local scope
+                            connection.add_entity(key);
                         }
                     } else {
-                        if should_be_in_scope {
-                            // add entity to the connections local scope
+                        if currently_in_scope {
+                            // remove entity from the connections local scope
+                            connection.remove_entity(key);
                         }
                     }
                 }
