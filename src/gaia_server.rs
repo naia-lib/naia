@@ -195,7 +195,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
 
                             // loop through all connections, send packet
                             for (address, connection) in self.client_connections.iter_mut() {
-                                if let Some(payload) = connection.get_outgoing_packet(&self.event_manifest) {
+                                if let Some(payload) = connection.get_outgoing_packet(&self.event_manifest, &self.entity_manifest) {
                                     match self.sender.send(Packet::new_raw(*address, payload))
                                         .await {
                                         Ok(_) => {}
@@ -284,7 +284,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                     if should_be_in_scope {
                         if !currently_in_scope {
                             // add entity to the connections local scope
-                            connection.add_entity(key);
+                            connection.add_entity(key, entity);
                         }
                     } else {
                         if currently_in_scope {
