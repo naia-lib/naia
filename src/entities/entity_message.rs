@@ -1,4 +1,4 @@
-use crate::{LocalEntityKey, NetEntity, EntityType};
+use crate::{LocalEntityKey, EntityKey, NetEntity, EntityType};
 use std::{
     rc::Rc,
     cell::RefCell
@@ -6,7 +6,7 @@ use std::{
 
 #[derive(Clone)]
 pub enum EntityMessage<T: EntityType> {
-    Create(LocalEntityKey, Rc<RefCell<dyn NetEntity<T>>>),
-    Update(LocalEntityKey),
-    Delete(LocalEntityKey),
+    Create(EntityKey, LocalEntityKey, Rc<RefCell<dyn NetEntity<T>>>),
+    Update(EntityKey, LocalEntityKey),
+    Delete(EntityKey, LocalEntityKey),
 }
