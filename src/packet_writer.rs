@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use crate::{ManagerType, NetEvent, NetEventType, EventManifest, EventType, EntityType, EntityManifest, EntityMessage, NetEntityType, LocalEntityKey, LocalEntityKeyIO};
+use crate::{ManagerType, NetEvent, NetEventType, EventManifest, EventType, EntityType, EntityManifest, ServerEntityMessage, NetEntityType, LocalEntityKey, LocalEntityKeyIO};
 use std::borrow::Borrow;
 use std::io::Write;
 
@@ -64,10 +64,10 @@ impl PacketWriter {
         self.event_working_bytes.append(&mut event_total_bytes);
     }
 
-    pub fn write_entity_message<T: EntityType>(&mut self, manifest: &EntityManifest<T>, message: &EntityMessage<T>) {
+    pub fn write_entity_message<T: EntityType>(&mut self, manifest: &EntityManifest<T>, message: &ServerEntityMessage<T>) {
 
         match message {
-            EntityMessage::Create(global_key, local_key, entity) => {
+            ServerEntityMessage::Create(global_key, local_key, entity) => {
                 //write entity payload
                 let mut entity_payload_bytes = Vec::<u8>::new();
                 entity.as_ref().borrow().write(&mut entity_payload_bytes);
@@ -92,7 +92,7 @@ impl PacketWriter {
 
                 info!("entity create message write");
             }
-            EntityMessage::Delete(global_key, local_key) => {
+            ServerEntityMessage::Delete(global_key, local_key) => {
 
                 let mut entity_total_bytes = Vec::<u8>::new();
                 entity_total_bytes.write_u8(message.write_message_type()); //Write entity message type
@@ -104,7 +104,7 @@ impl PacketWriter {
 
                 info!("entity delete message write");
             }
-            EntityMessage::Update(_, _) => {
+            ServerEntityMessage::Update(_, _) => {
                 //TODO
             }
         }

@@ -6,7 +6,7 @@ use std::{
 
 use crate::{Timer, PacketType, NetEvent, EventManifest, EntityKey, ServerEntityManager, ClientEntityManager,
             EventManager, EntityManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
-            EventType, EntityType, EntityStore, NetEntity};
+            EventType, EntityType, EntityStore, NetEntity, ClientEntityMessage};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -107,6 +107,13 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
 
     pub fn get_incoming_event(&mut self) -> Option<T> {
         return self.event_manager.pop_incoming_event();
+    }
+
+    pub fn get_incoming_entity_message(&mut self) -> Option<ClientEntityMessage<U>> {
+        if let EntityManager::Client(client_entity_manager) = &mut self.entity_manager {
+            return client_entity_manager.pop_incoming_message();
+        }
+        return None;
     }
 
     pub fn process_data(&mut self, event_manifest: &EventManifest<T>, entity_manifest: &EntityManifest<U>, data: &mut [u8]) {
