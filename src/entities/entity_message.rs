@@ -10,3 +10,13 @@ pub enum EntityMessage<T: EntityType> {
     Update(EntityKey, LocalEntityKey),
     Delete(EntityKey, LocalEntityKey),
 }
+
+impl<T: EntityType> EntityMessage<T> {
+    pub fn write_message_type(&self) -> u8 {
+        match self {
+            EntityMessage::Create(_, _, _) => 0,
+            EntityMessage::Update(_, _) => 1,
+            EntityMessage::Delete(_, _) => 2,
+        }
+    }
+}

@@ -6,6 +6,7 @@ pub struct EntityRecord {
     pub status: LocalEntityStatus,
 }
 
+#[derive(PartialEq)]
 pub enum LocalEntityStatus {
     Creating,
     Created,

@@ -11,7 +11,9 @@ use std::borrow::Borrow;
 
 pub struct ServerEntityManager<T: EntityType> {
     local_entity_store: SparseSecondaryMap<EntityKey, Rc<RefCell<dyn NetEntity<T>>>>,
-    local_to_global_key_map: SlotMap<LocalEntityKey, EntityKey>,
+    local_to_global_key_map: HashMap<LocalEntityKey, EntityKey>,
+    recycled_local_keys: Vec<LocalEntityKey>,
+    next_new_local_key: LocalEntityKey,
     entity_records: SparseSecondaryMap<EntityKey, EntityRecord>,
     queued_messages: VecDeque<EntityMessage<T>>,
     sent_messages: HashMap<u16, Vec<EntityMessage<T>>>
@@ -21,7 +23,9 @@ impl<T: EntityType> ServerEntityManager<T> {
     pub fn new() -> Self {
         ServerEntityManager {
             local_entity_store:  SparseSecondaryMap::new(),
-            local_to_global_key_map: SlotMap::with_key(),
+            local_to_global_key_map: HashMap::new(),
+            recycled_local_keys: Vec::new(),
+            next_new_local_key: 0 as LocalEntityKey,
             entity_records: SparseSecondaryMap::new(),
             queued_messages: VecDeque::new(),
             sent_messages: HashMap::new(),
@@ -44,7 +48,8 @@ impl<T: EntityType> ServerEntityManager<T> {
                         if let Some(entity_record) = self.entity_records.get(global_key) {
                             // actually delete the entity from local records
                             self.local_entity_store.remove(global_key);
-                            self.local_to_global_key_map.remove(*local_key);
+                            self.local_to_global_key_map.remove(local_key);
+                            self.recycled_local_keys.push(*local_key);
                             self.entity_records.remove(global_key);
                         }
                     }
@@ -75,10 +80,6 @@ impl<T: EntityType> ServerEntityManager<T> {
         }
     }
 
-    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &EntityManifest<T>) {
-
-    }
-
     pub fn has_entity(&self, key: EntityKey) -> bool {
         return self.local_entity_store.contains_key(key);
     }
@@ -86,7 +87,8 @@ impl<T: EntityType> ServerEntityManager<T> {
     pub fn add_entity(&mut self, key: EntityKey, entity: &Rc<RefCell<dyn NetEntity<T>>>) {
         if !self.local_entity_store.contains_key(key) {
             self.local_entity_store.insert(key, entity.clone());
-            let local_key = self.local_to_global_key_map.insert(key);
+            let local_key = self.get_new_local_key();
+            self.local_to_global_key_map.insert(local_key, key);
             let state_mask_size = entity.as_ref().borrow().get_state_mask_size();
             let entity_record = EntityRecord::new(local_key, state_mask_size);
             self.entity_records.insert(key, entity_record);
@@ -98,8 +100,10 @@ impl<T: EntityType> ServerEntityManager<T> {
 
     pub fn remove_entity(&mut self, key: EntityKey) {
         if let Some(entity_record) = self.entity_records.get_mut(key) {
-            entity_record.status = LocalEntityStatus::Deleting;
-            self.queued_messages.push_back(EntityMessage::Delete(key, entity_record.local_key));
+            if entity_record.status != LocalEntityStatus::Deleting {
+                entity_record.status = LocalEntityStatus::Deleting;
+                self.queued_messages.push_back(EntityMessage::Delete(key, entity_record.local_key));
+            }
         }
     }
 
@@ -123,5 +127,15 @@ impl<T: EntityType> ServerEntityManager<T> {
             }
             None => None
         }
+    }
+
+    fn get_new_local_key(&mut self) -> LocalEntityKey {
+        if let Some(local_key) = self.recycled_local_keys.pop() {
+            return local_key;
+        }
+
+        let output = self.next_new_local_key;
+        self.next_new_local_key += 1;
+        return output;
     }
 }

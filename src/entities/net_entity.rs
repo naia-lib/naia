@@ -4,6 +4,7 @@ use crate::{EntityType};
 pub trait NetEntity<T: EntityType>: NetEntityType<T> {
     fn get_state_mask_size(&self) -> u8;
     fn to_type(&self) -> T;
+    fn write(&self, out_bytes: &mut Vec<u8>);
 //    fn write_create(&self, out_bytes: &mut Vec<u8>);
 //    fn write_update(&self, out_bytes: &mut Vec<u8>);
     fn read(&mut self, in_bytes: &[u8]);

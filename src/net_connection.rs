@@ -117,7 +117,9 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
                     self.event_manager.process_data(&mut reader, event_manifest);
                 }
                 ManagerType::Entity => {
-                    //self.server_entity_manager.process_data(&mut reader, entity_manifest);
+                    if let EntityManager::Client(client_entity_manager) = &mut self.entity_manager {
+                        client_entity_manager.process_data(&mut reader, entity_manifest);
+                    }
                 }
                 _ => {}
             }
