@@ -17,7 +17,7 @@ impl App {
         info!("App Start");
 
         let mut config = Config::default();
-        config.heartbeat_interval = Duration::from_secs(2);
+        config.heartbeat_interval = Duration::from_secs(4);
 
         App {
             client: GaiaClient::connect(&server_socket_address, event_manifest_load(), entity_manifest_load(), Some(config)),
@@ -55,6 +55,17 @@ impl App {
                                 }
                             }
                         }
+                    }
+                    ClientEvent::CreateEntity(local_key, entity) => {
+                        match entity.as_ref() {
+                            ExampleEntity::PointEntity(point_entity) => {
+                                info!("creation of point entity with x: {}", point_entity.get_x());
+                            }
+                            _ => {}
+                        }
+                    }
+                    ClientEvent::DeleteEntity(local_key) => {
+                        info!("deletion of point entity");
                     }
                     ClientEvent::None => {
                         //info!("Client non-event");
