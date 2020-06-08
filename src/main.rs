@@ -23,8 +23,8 @@ async fn main() {
     let current_socket_address = find_my_ip_address::get() + ":" + SERVER_PORT;
 
     let mut config = Config::default();
-    config.tick_interval = Duration::from_secs(10);
-    config.heartbeat_interval = Duration::from_secs(1);
+    config.tick_interval = Duration::from_secs(2);
+    config.heartbeat_interval = Duration::from_secs(4);
 
     let mut server = GaiaServer::listen(current_socket_address.as_str(),
                                         event_manifest_load(),
