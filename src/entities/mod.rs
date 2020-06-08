@@ -6,3 +6,5 @@ pub(crate) mod entity_type;
 pub(crate) mod entity_store;
 pub(crate) mod entity_manager;
 pub(crate) mod state_mask;
+pub(crate) mod entity_record;
+pub(crate) mod entity_message;

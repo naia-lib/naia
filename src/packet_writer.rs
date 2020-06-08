@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use crate::{ManagerType, NetEvent, NetEventType, EventManifest, EventType};
+use crate::{ManagerType, NetEvent, NetEventType, EventManifest, EventType, EntityType, EntityManifest, EntityMessage};
 
 pub struct PacketWriter {
     working_bytes: Vec<u8>,
@@ -51,5 +51,30 @@ impl PacketWriter {
         self.event_count += 1;
 
         self.working_bytes.append(&mut event_total_bytes);
+    }
+
+    pub fn write_entity_message<T: EntityType>(&mut self, manifest: &EntityManifest<T>, event: &EntityMessage<T>) {
+
+        // TODO
+//        //Write event payload
+//        let mut event_payload_bytes = Vec::<u8>::new();
+//        event.as_ref().write(&mut event_payload_bytes);
+//        if event_payload_bytes.len() > 255 {
+//            error!("cannot encode an event with more than 255 bytes, need to implement this");
+//        }
+//
+//        //Write event "header" (event id & payload length)
+//        let mut event_total_bytes = Vec::<u8>::new();
+//
+//        let type_id = NetEventType::get_type_id(event.as_ref());
+//        let gaia_id = manifest.get_gaia_id(&type_id); // get gaia id
+//        event_total_bytes.write_u16::<BigEndian>(gaia_id).unwrap();// write gaia id
+//        event_total_bytes.write_u8(event_payload_bytes.len() as u8).unwrap(); // write payload length
+//        event_total_bytes.append(&mut event_payload_bytes); // write payload
+//
+//        self.event_count += 1;
+//
+//        self.working_bytes.append(&mut event_total_bytes);
+        // TODO
     }
 }

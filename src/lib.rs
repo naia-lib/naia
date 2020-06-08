@@ -41,9 +41,11 @@ pub use {
     entities::{
         net_entity::{NetEntity, NetEntityType},
         entity_manifest::EntityManifest,
-        entity_manager::EntityManager,
+        entity_manager::{EntityManager, LocalEntityKey},
         entity_type::EntityType,
         entity_store::{EntityKey, EntityStore},
+        entity_record::EntityRecord,
+        entity_message::EntityMessage,
         state_mask::StateMask,
         server_entity_manager::ServerEntityManager,
         client_entity_manager::ClientEntityManager,

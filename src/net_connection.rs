@@ -1,9 +1,12 @@
 
-use std::time::Duration;
+use std::{
+    time::Duration,
+    rc::Rc,
+    cell::RefCell,};
 
 use crate::{Timer, PacketType, NetEvent, EventManifest, EntityKey, ServerEntityManager, ClientEntityManager,
             EventManager, EntityManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
-            EventType, EntityType, EntityStore};
+            EventType, EntityType, EntityStore, NetEntity};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -70,14 +73,23 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
         self.event_manager.queue_outgoing_event(event);
     }
 
-    pub fn get_outgoing_packet(&mut self, manifest: &EventManifest<T>) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(&mut self, event_manifest: &EventManifest<T>, entity_manifest: &EntityManifest<U>) -> Option<Box<[u8]>> {
 
-        if self.event_manager.has_outgoing_events() {
+        let entity_manager_has_outgoing_messages = match &self.entity_manager {
+            EntityManager::Server(server_entity_manager) => server_entity_manager.has_outgoing_messages(),
+            EntityManager::Client(_) => false,
+        };
+        if self.event_manager.has_outgoing_events() || entity_manager_has_outgoing_messages {
             let mut writer = PacketWriter::new();
 
             let next_packet_index = self.get_next_packet_index();
             while let Some(popped_event) = self.event_manager.pop_outgoing_event(next_packet_index) {
-                writer.write_event(manifest, &popped_event);
+                writer.write_event(event_manifest, &popped_event);
+            }
+            if let EntityManager::Server(server_entity_manager) = &mut self.entity_manager {
+                while let Some(popped_entity_message) = server_entity_manager.pop_outgoing_event(next_packet_index) {
+                    writer.write_entity_message(entity_manifest, &popped_entity_message);
+                }
             }
 
             if writer.has_bytes() {
@@ -115,21 +127,21 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
     pub fn has_entity(&self, key: EntityKey) -> bool {
         return match &self.entity_manager {
             EntityManager::<U>::Server(entity_manager) => entity_manager.has_entity(key),
-            EntityManager::<U>::Client(entity_manager) => entity_manager.has_entity(key),
+            EntityManager::<U>::Client(entity_manager) => false,
         }
     }
 
-    pub fn add_entity(&self, key: EntityKey) {
-        return match &self.entity_manager {
-            EntityManager::<U>::Server(entity_manager) => entity_manager.add_entity(key),
-            EntityManager::<U>::Client(entity_manager) => entity_manager.add_entity(key),
+    pub fn add_entity(&mut self, key: EntityKey, entity: &Rc<RefCell<dyn NetEntity<U>>>) {
+        return match &mut self.entity_manager {
+            EntityManager::<U>::Server(entity_manager) => entity_manager.add_entity(key, entity),
+            EntityManager::<U>::Client(entity_manager) => {},
         }
     }
 
-    pub fn remove_entity(&self, key: EntityKey) {
-        return match &self.entity_manager {
+    pub fn remove_entity(&mut self, key: EntityKey) {
+        return match &mut self.entity_manager {
             EntityManager::<U>::Server(entity_manager) => entity_manager.remove_entity(key),
-            EntityManager::<U>::Client(entity_manager) => entity_manager.remove_entity(key),
+            EntityManager::<U>::Client(entity_manager) => {},
         }
     }
 }
