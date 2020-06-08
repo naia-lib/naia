@@ -24,15 +24,15 @@ impl<T: EntityType> ClientEntityManager<T> {
 
     }
 
-    pub fn has_entity(&self, key: EntityKey) -> bool {
-        return self.local_entity_store.has_entity(key);
-    }
-
-    pub fn add_entity(&self, key: EntityKey) {
-        //return self.local_entity_store.has_entity(key);
-    }
-
-    pub fn remove_entity(&self, key: EntityKey) {
-        //return self.local_entity_store.has_entity(key);
-    }
+//    pub fn has_entity(&self, key: EntityKey) -> bool {
+//        return self.local_entity_store.has_entity(key);
+//    }
+//
+//    pub fn add_entity(&self, key: EntityKey) {
+//        //return self.local_entity_store.has_entity(key);
+//    }
+//
+//    pub fn remove_entity(&self, key: EntityKey) {
+//        //return self.local_entity_store.has_entity(key);
+//    }
 }
