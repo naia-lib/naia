@@ -1,24 +1,22 @@
 
-use crate::{EntityType, EntityKey, EntityStore, PacketReader, EntityManifest, NetEntity, LocalEntityKey};
+use crate::{EntityType, EntityKey, EntityStore, PacketReader, EntityManifest, NetEntity, LocalEntityKey, ClientEntityMessage};
 use std::{
-    collections::VecDeque};
+    rc::Rc,
+    collections::{VecDeque, HashMap}
+};
 use byteorder::{BigEndian, ReadBytesExt};
 
 pub struct ClientEntityManager<T: EntityType> {
-    local_entity_store: EntityStore<T>,
+    local_entity_store: HashMap<LocalEntityKey, Rc<T>>,
+    queued_incoming_messages: VecDeque<ClientEntityMessage<T>>,
 }
 
 impl<T: EntityType> ClientEntityManager<T> {
     pub fn new() -> Self {
         ClientEntityManager {
-            local_entity_store:  EntityStore::new(),
+            queued_incoming_messages: VecDeque::new(),
+            local_entity_store: HashMap::new(),
         }
-    }
-
-    pub fn notify_packet_delivered(&mut self, packet_index: u16) {
-    }
-
-    pub fn notify_packet_dropped(&mut self, packet_index: u16) {
     }
 
     pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &EntityManifest<T>) {
@@ -42,10 +40,10 @@ impl<T: EntityType> ClientEntityManager<T> {
 
                     match manifest.create_entity(gaia_id) {
                         Some(mut new_entity) => {
-                            //TODO: what do we do now?!?!
-                            zzz
                             new_entity.read(&entity_payload);
-                            self.queued_incoming_events.push_back(new_entity);
+                            let rc_new_entity = Rc::new(new_entity);
+                            self.local_entity_store.insert(local_key, rc_new_entity.clone()); //TODO, throw error if entity already exists using local key
+                            self.queued_incoming_messages.push_back(ClientEntityMessage::Create(local_key, rc_new_entity));
                         }
                         _ => {}
                     }
@@ -54,11 +52,16 @@ impl<T: EntityType> ClientEntityManager<T> {
                 },
                 2 => { // Deletion
                     let local_key: LocalEntityKey = cursor.read_u16::<BigEndian>().unwrap().into();
-                    //TODO: what do we do now?!?!
-                    zzz
+                    self.local_entity_store.remove(&local_key);
+                    self.queued_incoming_messages.push_back(ClientEntityMessage::Delete(local_key));
                 },
+                _ => {}
             }
         }
+    }
+
+    pub fn pop_incoming_message(&mut self) -> Option<ClientEntityMessage<T>> {
+        return self.queued_incoming_messages.pop_front();
     }
 
 //    pub fn has_entity(&self, key: EntityKey) -> bool {
