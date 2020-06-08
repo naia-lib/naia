@@ -3,7 +3,7 @@ use crate::{LocalEntityKey, StateMask};
 pub struct EntityRecord {
     pub local_key: LocalEntityKey,
     state_mask: StateMask,
-    status: LocalEntityStatus,
+    pub status: LocalEntityStatus,
 }
 
 pub enum LocalEntityStatus {

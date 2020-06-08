@@ -87,7 +87,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
                 writer.write_event(event_manifest, &popped_event);
             }
             if let EntityManager::Server(server_entity_manager) = &mut self.entity_manager {
-                while let Some(popped_entity_message) = server_entity_manager.pop_outgoing_event(next_packet_index) {
+                while let Some(popped_entity_message) = server_entity_manager.pop_outgoing_message(next_packet_index) {
                     writer.write_entity_message(entity_manifest, &popped_entity_message);
                 }
             }

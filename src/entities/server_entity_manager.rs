@@ -6,7 +6,7 @@ use std::{
 
 use slotmap::{SlotMap, SecondaryMap, SparseSecondaryMap};
 
-use crate::{EntityType, EntityKey, PacketReader, EntityManifest, NetEntity, EntityStore, LocalEntityKey, EntityRecord, EntityMessage};
+use crate::{EntityType, EntityKey, PacketReader, EntityManifest, LocalEntityStatus, NetEntity, EntityStore, LocalEntityKey, EntityRecord, EntityMessage};
 use std::borrow::Borrow;
 
 pub struct ServerEntityManager<T: EntityType> {
@@ -29,15 +29,46 @@ impl<T: EntityType> ServerEntityManager<T> {
     }
 
     pub fn notify_packet_delivered(&mut self, packet_index: u16) {
-        self.sent_messages.remove(&packet_index);
+        if let Some(delivered_messages_list) = self.sent_messages.get(&packet_index) {
+            for delivered_message in delivered_messages_list.into_iter() {
+
+                match delivered_message {
+                    EntityMessage::Create(global_key, local_key, entity) => {
+                        if let Some(entity_record) = self.entity_records.get_mut(*global_key) {
+                            // update entity record status
+                            entity_record.status = LocalEntityStatus::Created;
+                        }
+                    },
+                    EntityMessage::Delete(global_key_ref, local_key) => {
+                        let global_key = *global_key_ref;
+                        if let Some(entity_record) = self.entity_records.get(global_key) {
+                            // actually delete the entity from local records
+                            self.local_entity_store.remove(global_key);
+                            self.local_to_global_key_map.remove(*local_key);
+                            self.entity_records.remove(global_key);
+                        }
+                    }
+                    EntityMessage::Update(_, _) => {} //this is the right thing to do, yeah?
+                }
+            }
+
+            self.sent_messages.remove(&packet_index);
+        }
         //TODO: Update EntityRecord with status
     }
 
     pub fn notify_packet_dropped(&mut self, packet_index: u16) {
         if let Some(dropped_messages_list) = self.sent_messages.get(&packet_index) {
             for dropped_message in dropped_messages_list.into_iter() {
-                //TODO: if an Update Packet, do not just immediately re-queue the message
-                self.queued_messages.push_back(dropped_message.clone());
+
+                match dropped_message {
+                    EntityMessage::Create(_, _, _) | EntityMessage::Delete(_, _) => {
+                        self.queued_messages.push_back(dropped_message.clone());
+                    },
+                    EntityMessage::Update(_, _) => {
+                        //TODO: implement this logic.. go through state masks, ect.
+                    }
+                }
             }
 
             self.sent_messages.remove(&packet_index);
@@ -53,19 +84,22 @@ impl<T: EntityType> ServerEntityManager<T> {
     }
 
     pub fn add_entity(&mut self, key: EntityKey, entity: &Rc<RefCell<dyn NetEntity<T>>>) {
-        self.local_entity_store.insert(key, entity.clone());
-        let local_key = self.local_to_global_key_map.insert(key);
-        let state_mask_size = entity.as_ref().borrow().get_state_mask_size();
-        let entity_record = EntityRecord::new(local_key, state_mask_size);
-        self.entity_records.insert(key, entity_record);
+        if !self.local_entity_store.contains_key(key) {
+            self.local_entity_store.insert(key, entity.clone());
+            let local_key = self.local_to_global_key_map.insert(key);
+            let state_mask_size = entity.as_ref().borrow().get_state_mask_size();
+            let entity_record = EntityRecord::new(local_key, state_mask_size);
+            self.entity_records.insert(key, entity_record);
+
+            //TODO: queue up create entity message
+            self.queued_messages.push_back(EntityMessage::Create(key, local_key, entity.clone()));
+        }
     }
 
     pub fn remove_entity(&mut self, key: EntityKey) {
-        self.local_entity_store.remove(key);
-        let some_record = self.entity_records.get(key);
-        if let Some(record) = some_record {
-            self.local_to_global_key_map.remove(record.local_key);
-            self.entity_records.remove(key);
+        if let Some(entity_record) = self.entity_records.get_mut(key) {
+            entity_record.status = LocalEntityStatus::Deleting;
+            self.queued_messages.push_back(EntityMessage::Delete(key, entity_record.local_key));
         }
     }
 
@@ -73,7 +107,7 @@ impl<T: EntityType> ServerEntityManager<T> {
         return self.queued_messages.len() != 0;
     }
 
-    pub fn pop_outgoing_event(&mut self, packet_index: u16) -> Option<EntityMessage<T>> {
+    pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<EntityMessage<T>> {
         match self.queued_messages.pop_front() {
             Some(message) => {
                 if !self.sent_messages.contains_key(&packet_index) {
