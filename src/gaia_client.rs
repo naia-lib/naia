@@ -69,7 +69,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                     GaiaClient::internal_send_with_connection(&mut self.sender, connection, PacketType::Heartbeat, Packet::empty());
                 }
                 // send a packet
-                if let Some(payload) = connection.get_outgoing_packet(&self.event_manifest) {
+                if let Some(payload) = connection.get_outgoing_packet(&self.event_manifest, &self.entity_manifest) {
                     self.sender.send(Packet::new_raw(payload))
                         .expect("send failed!");
                     connection.mark_sent();
