@@ -46,22 +46,28 @@ impl PointEntity {
 
 impl NetEntity<ExampleEntity> for PointEntity {
 
-//    fn write(&self, buffer: &mut Vec<u8>) {
-//        match &self.msg {
-//            Some(msg_str) => {
-//                let mut bytes = msg_str.as_bytes().to_vec();
-//                buffer.append(&mut bytes);
-//            },
-//            None => {}
-//        }
-//    }
-//
-    fn read(&mut self, msg: &[u8])  {
-//        let msg_str = String::from_utf8_lossy(msg).to_string();
-//        self.msg = Some(msg_str);
+    fn get_state_mask_size(&self) -> u8 {
+        1
     }
 
     fn to_type(&self) -> ExampleEntity {
         return ExampleEntity::PointEntity(self.clone());
     }
+
+    //    fn write(&self, buffer: &mut Vec<u8>) {
+    //        match &self.msg {
+    //            Some(msg_str) => {
+    //                let mut bytes = msg_str.as_bytes().to_vec();
+    //                buffer.append(&mut bytes);
+    //            },
+    //            None => {}
+    //        }
+    //    }
+    //
+        fn read(&mut self, msg: &[u8])  {
+    //        let msg_str = String::from_utf8_lossy(msg).to_string();
+    //        self.msg = Some(msg_str);
+        }
+
+
 }
