@@ -105,8 +105,28 @@ impl PacketWriter {
 
                 info!("entity delete message write");
             }
-            ServerEntityMessage::Update(_, _) => {
-                //TODO
+            ServerEntityMessage::Update(global_key, local_key, state_mask, entity) => {
+                //write entity payload
+                let mut entity_payload_bytes = Vec::<u8>::new();
+                entity.as_ref().borrow().write_partial(state_mask, &mut entity_payload_bytes);
+                if entity_payload_bytes.len() > 255 {
+                    error!("cannot encode an entity with more than 255 bytes, need to implement this");
+                }
+
+                //Write entity "header" (entity id & payload length)
+                let mut entity_total_bytes = Vec::<u8>::new();
+                entity_total_bytes.write_u8(message.write_message_type()); // write entity message type
+
+                local_key.write(&mut entity_total_bytes);//write local key
+                state_mask.as_ref().borrow_mut().write(&mut entity_total_bytes);// write state mask
+                entity_total_bytes.write_u8(entity_payload_bytes.len() as u8).unwrap(); // write payload length
+                entity_total_bytes.append(&mut entity_payload_bytes); // write payload
+
+                self.entity_message_count += 1;
+
+                self.entity_working_bytes.append(&mut entity_total_bytes);
+
+                info!("entity update message write");
             }
         }
     }

@@ -56,9 +56,3 @@ impl MutHandler {
         }
     }
 }
-
-
-// we want:
-// 1. an entity to immediately get a mutable list of all records out there associated with it, then iterate: Vec
-// 2. be able to add new records to an entity's list when it comes into scope for a given connection
-// 3. be able to remove records from an entities list when it goes out of scope for a given connection
