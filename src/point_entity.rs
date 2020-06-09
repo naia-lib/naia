@@ -33,7 +33,6 @@ impl PointEntity {
     }
 
     pub fn new(x: u8, y: u8) -> Rc<RefCell<Self>> {
-        //info!("point entity new");
         Rc::new(RefCell::new(PointEntity {
             key: None,
             mut_handler: None,
@@ -44,7 +43,6 @@ impl PointEntity {
 
     pub fn get_x(&self) -> u8 {
         if let Some(x) = self.x {
-            //info!("point entity get_x: {}", x);
             return x;
         }
         return 0;
@@ -58,22 +56,14 @@ impl PointEntity {
     }
 
     pub fn set_x(&mut self, value: u8) {
-        //info!("point entity set x");
         self.x = Some(value);
-        if let Some(mut_handler) = &self.mut_handler {
-            if let Some(key) = &self.key {
-                mut_handler.as_ref().borrow_mut().mutate(key, PointEntityProp::X as u8);
-            }
-        }
+        self.prop_mutated(PointEntityProp::X);
+
     }
 
     pub fn set_y(&mut self, value: u8) {
         self.y = Some(value);
-        if let Some(mut_handler) = &mut self.mut_handler {
-            if let Some(key) = &self.key {
-                mut_handler.as_ref().borrow_mut().mutate(key, PointEntityProp::Y as u8);
-            }
-        }
+        self.prop_mutated(PointEntityProp::Y);
     }
 
     pub fn step(&mut self) {
@@ -83,10 +73,15 @@ impl PointEntity {
             x = 0;
         }
         self.set_x(x);
-        //info!("point entity step: {}", x);
     }
 
-
+    fn prop_mutated(&mut self, prop: PointEntityProp) {
+        if let Some(mut_handler) = &self.mut_handler {
+            if let Some(key) = &self.key {
+                mut_handler.as_ref().borrow_mut().mutate(key, prop as u8);
+            }
+        }
+    }
 }
 
 impl NetEntity<ExampleEntity> for PointEntity {
