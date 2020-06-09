@@ -87,32 +87,30 @@ impl<T: EntityType> ServerEntityManager<T> {
                     ServerEntityMessage::Create(_, _, _) | ServerEntityMessage::Delete(_, _) => {
                         self.queued_messages.push_back(dropped_message.clone());
                     },
-                    ServerEntityMessage::Update(global_key, local_key, state_mask, entity) => {
+                    ServerEntityMessage::Update(global_key, _, _, _) => {
 
-                        let mut new_state_mask = state_mask.as_ref().borrow().clone();
+                        if let Some(state_mask_map) = self.sent_updates.get(&dropped_packet_index) {
+                            if let Some(state_mask) = state_mask_map.get(global_key) {
 
-                        // walk from dropped packet up to most recently sent packet
-                        let mut packet_index = dropped_packet_index.wrapping_add(1);
-                        while packet_index != self.last_update_packet_index {
-                            if let Some(state_mask_map) = self.sent_updates.get(&packet_index) {
-                                if let Some(state_mask) = state_mask_map.get(global_key) {
-                                    let newer_state_mask = state_mask.as_ref().borrow();
-                                    new_state_mask.nand(newer_state_mask.borrow());
+                                let mut new_state_mask = state_mask.as_ref().borrow().clone();
+
+                                // walk from dropped packet up to most recently sent packet
+                                let mut packet_index = dropped_packet_index.wrapping_add(1);
+                                while packet_index != self.last_update_packet_index {
+                                    if let Some(state_mask_map) = self.sent_updates.get(&packet_index) {
+                                        if let Some(state_mask) = state_mask_map.get(global_key) {
+                                            new_state_mask.nand(state_mask.as_ref().borrow().borrow());
+                                        }
+                                    }
+
+                                    packet_index = packet_index.wrapping_add(1);
+                                }
+
+                                if let Some(record) = self.entity_records.get_mut(*global_key) {
+                                    let mut current_state_mask = record.get_state_mask().as_ref().borrow_mut();
+                                    current_state_mask.or(new_state_mask.borrow());
                                 }
                             }
-
-                            packet_index = packet_index.wrapping_add(1);
-                        }
-
-                        if let Some(record) = self.entity_records.get_mut(*global_key) {
-//                            let new_state_mask = new_state_mask.borrow().to_str();
-//                            let is_clear_before = record.get_state_mask().as_ref().borrow().to_str();
-                            record.get_state_mask().as_ref().borrow_mut().or(new_state_mask.borrow());
-//                            let is_clear_after = record.get_state_mask().as_ref().borrow().to_str();
-//
-//                            info!("dropped packet", is_clear_before, is_clear_after)
-                            //TODO: do some logging here
-                            //log here yo
                         }
 
                         self.sent_updates.remove(&dropped_packet_index);
@@ -121,32 +119,6 @@ impl<T: EntityType> ServerEntityManager<T> {
             }
 
             self.sent_messages.remove(&dropped_packet_index);
-        }
-    }
-
-    pub fn has_entity(&self, key: EntityKey) -> bool {
-        return self.local_entity_store.contains_key(key);
-    }
-
-    pub fn add_entity(&mut self, key: EntityKey, entity: &Rc<RefCell<dyn NetEntity<T>>>) {
-        if !self.local_entity_store.contains_key(key) {
-            self.local_entity_store.insert(key, entity.clone());
-            let local_key = self.get_new_local_key();
-            self.local_to_global_key_map.insert(local_key, key);
-            let state_mask_size = entity.as_ref().borrow().get_state_mask_size();
-            let entity_record = EntityRecord::new(local_key, state_mask_size);
-            self.mut_handler.as_ref().borrow_mut().register_mask(&self.address, &key, entity_record.get_state_mask());
-            self.entity_records.insert(key, entity_record);
-            self.queued_messages.push_back(ServerEntityMessage::Create(key, local_key, entity.clone()));
-        }
-    }
-
-    pub fn remove_entity(&mut self, key: EntityKey) {
-        if let Some(entity_record) = self.entity_records.get_mut(key) {
-            if entity_record.status != LocalEntityStatus::Deleting {
-                entity_record.status = LocalEntityStatus::Deleting;
-                self.queued_messages.push_back(ServerEntityMessage::Delete(key, entity_record.local_key));
-            }
         }
     }
 
@@ -201,6 +173,32 @@ impl<T: EntityType> ServerEntityManager<T> {
             }
             None => { return None; }
 
+        }
+    }
+
+    pub fn has_entity(&self, key: EntityKey) -> bool {
+        return self.local_entity_store.contains_key(key);
+    }
+
+    pub fn add_entity(&mut self, key: EntityKey, entity: &Rc<RefCell<dyn NetEntity<T>>>) {
+        if !self.local_entity_store.contains_key(key) {
+            self.local_entity_store.insert(key, entity.clone());
+            let local_key = self.get_new_local_key();
+            self.local_to_global_key_map.insert(local_key, key);
+            let state_mask_size = entity.as_ref().borrow().get_state_mask_size();
+            let entity_record = EntityRecord::new(local_key, state_mask_size);
+            self.mut_handler.as_ref().borrow_mut().register_mask(&self.address, &key, entity_record.get_state_mask());
+            self.entity_records.insert(key, entity_record);
+            self.queued_messages.push_back(ServerEntityMessage::Create(key, local_key, entity.clone()));
+        }
+    }
+
+    pub fn remove_entity(&mut self, key: EntityKey) {
+        if let Some(entity_record) = self.entity_records.get_mut(key) {
+            if entity_record.status != LocalEntityStatus::Deleting {
+                entity_record.status = LocalEntityStatus::Deleting;
+                self.queued_messages.push_back(ServerEntityMessage::Delete(key, entity_record.local_key));
+            }
         }
     }
 

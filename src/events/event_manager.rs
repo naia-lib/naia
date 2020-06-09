@@ -79,24 +79,27 @@ impl<T: EventType> EventManager<T> {
         let buffer = reader.get_buffer();
         let cursor = reader.get_cursor();
 
-        let event_count: u8 = cursor.read_u8().unwrap().into();
-        for _x in 0..event_count {
-            let gaia_id: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
-            let payload_length: u8 = cursor.read_u8().unwrap().into();
-            let payload_start_position: usize = cursor.position() as usize;
-            let payload_end_position: usize = payload_start_position + (payload_length as usize);
+        if let Ok(event_count) = cursor.read_u8() {
+            for _x in 0..event_count {
+                let gaia_id: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
+                let payload_length: u8 = cursor.read_u8().unwrap().into();
+                let payload_start_position: usize = cursor.position() as usize;
+                let payload_end_position: usize = payload_start_position + (payload_length as usize);
 
-            let event_payload = buffer[payload_start_position..payload_end_position]
-                .to_vec()
-                .into_boxed_slice();
+                let event_payload = buffer[payload_start_position..payload_end_position]
+                    .to_vec()
+                    .into_boxed_slice();
 
-            match manifest.create_event(gaia_id) {
-                Some(mut new_entity) => {
-                    new_entity.read(&event_payload);
-                    self.queued_incoming_events.push_back(new_entity);
+                match manifest.create_event(gaia_id) {
+                    Some(mut new_entity) => {
+                        new_entity.read(&event_payload);
+                        self.queued_incoming_events.push_back(new_entity);
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
+        } else {
+            warn!("Something up with server writing multiple events here");
         }
     }
 }
