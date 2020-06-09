@@ -36,11 +36,15 @@ impl MutHandler {
         }
     }
 
-    pub fn register_mask(&mut self, address: &SocketAddr, entity_key: &EntityKey, mask: &Rc<RefCell<StateMask>>) {
-        if !self.entity_state_mask_list_map.contains_key(entity_key) {
-            self.entity_state_mask_list_map.insert(*entity_key, IndexMap::new());
-        }
+    pub fn register_entity(&mut self, entity_key: &EntityKey) {
+        self.entity_state_mask_list_map.insert(*entity_key, IndexMap::new());
+    }
 
+    pub fn deregister_entity(&mut self, entity_key: &EntityKey) {
+        self.entity_state_mask_list_map.remove(entity_key);
+    }
+
+    pub fn register_mask(&mut self, address: &SocketAddr, entity_key: &EntityKey, mask: &Rc<RefCell<StateMask>>) {
         if let Some(state_mask_list) = self.entity_state_mask_list_map.get_mut(entity_key) {
             state_mask_list.insert(*address, mask.clone());
         }
