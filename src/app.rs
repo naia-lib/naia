@@ -63,7 +63,9 @@ impl App {
                         match entity {
                             // keep in mind that the below values are clones of the original, used purely to determine the type
                             ExampleEntity::PointEntity(point_entity) => {
-                                info!("creation of point entity with x: {}", point_entity.as_ref().borrow().get_x());
+                                info!("creation of point entity with x: {}, y: {}",
+                                      point_entity.as_ref().borrow().get_x(),
+                                      point_entity.as_ref().borrow().get_y());
                             }
                             _ => {}
                         }
@@ -73,7 +75,9 @@ impl App {
                             match entity {
                                 // keep in mind that the below values are clones of the original, used purely to determine the type
                                 ExampleEntity::PointEntity(point_entity) => {
-                                    info!("update of point entity with x: {}", point_entity.as_ref().borrow().get_x());
+                                    info!("update of point entity with x: {}, y: {}",
+                                          point_entity.as_ref().borrow().get_x(),
+                                          point_entity.as_ref().borrow().get_y());
                                 }
                                 _ => {}
                             }
