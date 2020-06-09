@@ -26,7 +26,7 @@ pub use {
     packet_type::PacketType,
     standard_header::StandardHeader,
     config::Config,
-    net_connection::NetConnection,
+    net_connection::{NetConnection},
     timestamp::Timestamp,
     manager_type::ManagerType,
     packet_reader::PacketReader,
@@ -50,5 +50,6 @@ pub use {
         state_mask::StateMask,
         server_entity_manager::ServerEntityManager,
         client_entity_manager::ClientEntityManager,
+        mut_handler::MutHandler,
     },
 };
