@@ -2,6 +2,9 @@
 use log::{info};
 
 use std::time::Duration;
+use std::ops::Deref;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use gaia_client::{GaiaClient, ClientEvent, Config};
 
@@ -57,11 +60,23 @@ impl App {
                         }
                     }
                     ClientEvent::CreateEntity(local_key, entity) => {
-                        match entity.as_ref() {
+                        match entity {
+                            // keep in mind that the below values are clones of the original, used purely to determine the type
                             ExampleEntity::PointEntity(point_entity) => {
-                                info!("creation of point entity with x: {}", point_entity.get_x());
+                                info!("creation of point entity with x: {}", point_entity.as_ref().borrow().get_x());
                             }
                             _ => {}
+                        }
+                    }
+                    ClientEvent::UpdateEntity(local_key) => {
+                        if let Some(entity) = self.client.get_entity(local_key) {
+                            match entity {
+                                // keep in mind that the below values are clones of the original, used purely to determine the type
+                                ExampleEntity::PointEntity(point_entity) => {
+                                    info!("update of point entity with x: {}", point_entity.as_ref().borrow().get_x());
+                                }
+                                _ => {}
+                            }
                         }
                     }
                     ClientEvent::DeleteEntity(local_key) => {
