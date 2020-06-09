@@ -13,6 +13,7 @@ pub use gaia_shared::{Config, PacketType, Timer, ClientEntityMessage, NetConnect
 use super::client_event::ClientEvent;
 use crate::{
     Packet, error::GaiaClientError};
+use gaia_shared::LocalEntityKey;
 
 pub struct GaiaClient<T: EventType, U: EntityType> {
     event_manifest: EventManifest<T>,
@@ -210,5 +211,9 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
             return Some(connection.get_next_packet_index());
         }
         return None;
+    }
+
+    pub fn get_entity(&self, key: LocalEntityKey) -> Option<&U> {
+        return self.server_connection.as_ref().unwrap().get_local_entity(key);
     }
 }

@@ -1,13 +1,10 @@
-use std::{
-    rc::Rc,
-};
-use gaia_shared::{LocalEntityKey};
+use gaia_shared::{EventType, EntityType, LocalEntityKey};
 
-pub enum ClientEvent<T, U> {
+pub enum ClientEvent<T: EventType, U: EntityType> {
     Connection,
     Disconnection,
     Event(T),
-    CreateEntity(LocalEntityKey, Rc<U>),
+    CreateEntity(LocalEntityKey, U),
     UpdateEntity(LocalEntityKey),
     DeleteEntity(LocalEntityKey),
     None,
