@@ -12,6 +12,10 @@ use crate::{EntityType, EntityKey, PacketReader, EntityManifest, LocalEntityStat
             EntityStore, LocalEntityKey, EntityRecord, ServerEntityMessage, MutHandler, StateMask};
 use std::borrow::{Borrow, BorrowMut};
 
+use crate::{
+    sequence_buffer::{sequence_greater_than, sequence_less_than, SequenceNumber, SequenceBuffer},
+};
+
 pub struct ServerEntityManager<T: EntityType> {
     address: SocketAddr,
     local_entity_store: SparseSecondaryMap<EntityKey, Rc<RefCell<dyn NetEntity<T>>>>,
@@ -22,6 +26,7 @@ pub struct ServerEntityManager<T: EntityType> {
     queued_messages: VecDeque<ServerEntityMessage<T>>,
     sent_messages: HashMap<u16, Vec<ServerEntityMessage<T>>>,
     sent_updates: HashMap<u16, HashMap<EntityKey, Rc<RefCell<StateMask>>>>,
+    last_update_packet_index: u16,
     mut_handler: Rc<RefCell<MutHandler>>,
 }
 
@@ -37,6 +42,7 @@ impl<T: EntityType> ServerEntityManager<T> {
             queued_messages: VecDeque::new(),
             sent_messages: HashMap::new(),
             sent_updates: HashMap::<u16, HashMap<EntityKey, Rc<RefCell<StateMask>>>>::new(),
+            last_update_packet_index: 0,
             mut_handler: mut_handler.clone(),
         }
     }
@@ -63,32 +69,58 @@ impl<T: EntityType> ServerEntityManager<T> {
                             self.entity_records.remove(global_key);
                         }
                     }
-                    ServerEntityMessage::Update(_, _, _, _) => {
-                        //TODO: clear out sent updates map
+                    ServerEntityMessage::Update(global_key, local_key, state_mask, entity) => {
+                        self.sent_updates.remove(&packet_index);
                     }
                 }
             }
 
             self.sent_messages.remove(&packet_index);
         }
-        //TODO: Update EntityRecord with status
     }
 
-    pub fn notify_packet_dropped(&mut self, packet_index: u16) {
-        if let Some(dropped_messages_list) = self.sent_messages.get(&packet_index) {
+    pub fn notify_packet_dropped(&mut self, dropped_packet_index: u16) {
+        if let Some(dropped_messages_list) = self.sent_messages.get(&dropped_packet_index) {
             for dropped_message in dropped_messages_list.into_iter() {
 
                 match dropped_message {
                     ServerEntityMessage::Create(_, _, _) | ServerEntityMessage::Delete(_, _) => {
                         self.queued_messages.push_back(dropped_message.clone());
                     },
-                    ServerEntityMessage::Update(_, _, _, _) => {
-                        //TODO: implement this logic.. go through state masks, ect.
+                    ServerEntityMessage::Update(global_key, local_key, state_mask, entity) => {
+
+                        let mut new_state_mask = state_mask.as_ref().borrow().clone();
+
+                        // walk from dropped packet up to most recently sent packet
+                        let mut packet_index = dropped_packet_index.wrapping_add(1);
+                        while packet_index != self.last_update_packet_index {
+                            if let Some(state_mask_map) = self.sent_updates.get(&packet_index) {
+                                if let Some(state_mask) = state_mask_map.get(global_key) {
+                                    let newer_state_mask = state_mask.as_ref().borrow();
+                                    new_state_mask.nand(newer_state_mask.borrow());
+                                }
+                            }
+
+                            packet_index = packet_index.wrapping_add(1);
+                        }
+
+                        if let Some(record) = self.entity_records.get_mut(*global_key) {
+//                            let new_state_mask = new_state_mask.borrow().to_str();
+//                            let is_clear_before = record.get_state_mask().as_ref().borrow().to_str();
+                            record.get_state_mask().as_ref().borrow_mut().or(new_state_mask.borrow());
+//                            let is_clear_after = record.get_state_mask().as_ref().borrow().to_str();
+//
+//                            info!("dropped packet", is_clear_before, is_clear_after)
+                            //TODO: do some logging here
+                            //log here yo
+                        }
+
+                        self.sent_updates.remove(&dropped_packet_index);
                     }
                 }
             }
 
-            self.sent_messages.remove(&packet_index);
+            self.sent_messages.remove(&dropped_packet_index);
         }
     }
 
@@ -149,6 +181,7 @@ impl<T: EntityType> ServerEntityManager<T> {
                         if !self.sent_updates.contains_key(&packet_index) {
                             let sent_updates_map: HashMap<EntityKey, Rc<RefCell<StateMask>>> = HashMap::new();
                             self.sent_updates.insert(packet_index, sent_updates_map);
+                            self.last_update_packet_index = packet_index;
                         }
 
                         if let Some(sent_updates_map) = self.sent_updates.get_mut(&packet_index) {
