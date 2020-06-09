@@ -1,6 +1,7 @@
 use std::ops::Index;
 use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
 use std::io::{Cursor};
+use std::fmt;
 
 #[derive(Clone)]
 pub struct StateMask {
@@ -88,7 +89,9 @@ impl StateMask {
 
     pub fn write(&mut self, out_bytes: &mut Vec<u8>) {
         out_bytes.write_u8(self.bytes);
-        out_bytes.append(&mut self.mask);
+        for x in 0..self.bytes {
+            out_bytes.write_u8(self.mask[x as usize]);
+        }
     }
 
     pub fn read(cursor: &mut Cursor<&[u8]>) -> StateMask {
@@ -103,6 +106,23 @@ impl StateMask {
         }
     }
 }
+
+impl fmt::Display for StateMask {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut out_string: String = String::new();
+        for y in 0..8 {
+            if let Some(bit) = self.get_bit(y) {
+                if bit {
+                    out_string.push('1');
+                } else {
+                    out_string.push('0');
+                }
+            }
+        }
+        write!(f, "{}", out_string)
+    }
+}
+
 
 #[cfg(test)]
 mod single_byte_tests {
@@ -203,6 +223,19 @@ mod single_byte_tests {
         assert!(mask_a.get_bit(2).unwrap() == true);
         assert!(mask_a.get_bit(3).unwrap() == true);
         assert!(mask_a.get_bit(4).unwrap() == false);
+    }
+
+    #[test]
+    fn clone() {
+        let mut mask_a = StateMask::new(1);
+        mask_a.set_bit(1, true);
+        mask_a.set_bit(4, true);
+
+        let mut mask_b = mask_a.clone();
+
+        assert!(mask_b.get_bit(1).unwrap() == true);
+        assert!(mask_b.get_bit(3).unwrap() == false);
+        assert!(mask_b.get_bit(4).unwrap() == true);
     }
 }
 
@@ -313,5 +346,19 @@ mod double_byte_tests {
         assert!(mask_a.get_bit(8).unwrap() == true);
         assert!(mask_a.get_bit(12).unwrap() == true);
         assert!(mask_a.get_bit(15).unwrap() == false);
+    }
+
+    #[test]
+    fn clone() {
+        let mut mask_a = StateMask::new(2);
+        mask_a.set_bit(2, true);
+        mask_a.set_bit(10, true);
+
+        let mut mask_b = mask_a.clone();
+
+        assert!(mask_b.get_bit(2).unwrap() == true);
+        assert!(mask_b.get_bit(4).unwrap() == false);
+        assert!(mask_b.get_bit(9).unwrap() == false);
+        assert!(mask_b.get_bit(10).unwrap() == true);
     }
 }
