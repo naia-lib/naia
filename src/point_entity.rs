@@ -57,13 +57,13 @@ impl PointEntity {
 
     pub fn set_x(&mut self, value: u8) {
         self.x = Some(value);
-        self.prop_mutated(PointEntityProp::X);
+        self.notify_mutation(PointEntityProp::X);
 
     }
 
     pub fn set_y(&mut self, value: u8) {
         self.y = Some(value);
-        self.prop_mutated(PointEntityProp::Y);
+        self.notify_mutation(PointEntityProp::Y);
     }
 
     pub fn step(&mut self) {
@@ -75,7 +75,7 @@ impl PointEntity {
         self.set_x(x);
     }
 
-    fn prop_mutated(&mut self, prop: PointEntityProp) {
+    fn notify_mutation(&mut self, prop: PointEntityProp) {
         if let Some(mut_handler) = &self.mut_handler {
             if let Some(key) = &self.key {
                 mut_handler.as_ref().borrow_mut().mutate(key, prop as u8);
