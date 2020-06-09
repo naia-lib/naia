@@ -69,8 +69,13 @@ impl PointEntity {
     pub fn step(&mut self) {
         let mut x = self.get_x();
         x += 1;
-        if x > 10 {
+        if x > 100 {
             x = 0;
+        }
+        if x % 3 == 0 {
+            let mut y = self.get_y();
+            y += 1;
+            self.set_y(y);
         }
         self.set_x(x);
     }
