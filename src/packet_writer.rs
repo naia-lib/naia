@@ -68,6 +68,7 @@ impl PacketWriter {
 
         match message {
             ServerEntityMessage::Create(global_key, local_key, entity) => {
+
                 //write entity payload
                 let mut entity_payload_bytes = Vec::<u8>::new();
                 entity.as_ref().borrow().write(&mut entity_payload_bytes);

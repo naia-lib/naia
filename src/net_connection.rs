@@ -2,11 +2,13 @@
 use std::{
     time::Duration,
     rc::Rc,
-    cell::RefCell,};
+    cell::RefCell,
+    net::SocketAddr,
+};
 
 use crate::{Timer, PacketType, NetEvent, EventManifest, EntityKey, ServerEntityManager, ClientEntityManager,
             EventManager, EntityManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
-            EventType, EntityType, EntityStore, NetEntity, ClientEntityMessage};
+            EventType, EntityType, EntityStore, NetEntity, ClientEntityMessage, MutHandler};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -16,6 +18,7 @@ use super::{
 
 pub struct NetConnection<T: EventType, U: EntityType> {
     pub connection_timestamp: Timestamp,
+    address: SocketAddr,
     heartbeat_manager: Timer,
     timeout_manager: Timer,
     ack_manager: AckManager,
@@ -24,14 +27,15 @@ pub struct NetConnection<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> NetConnection<T, U> {
-    pub fn new(host_type: HostType, heartbeat_interval: Duration, timeout_duration: Duration, connection_timestamp: Timestamp) -> Self {
+    pub fn new(host_type: HostType, address: SocketAddr, mut_handler: Option<&Rc<RefCell<MutHandler>>>, heartbeat_interval: Duration, timeout_duration: Duration, connection_timestamp: Timestamp) -> Self {
 
         let entity_manager = match host_type {
-            HostType:: Server => EntityManager::Server(ServerEntityManager::new()),
+            HostType:: Server => EntityManager::Server(ServerEntityManager::new(address, mut_handler.unwrap())),
             HostType:: Client => EntityManager::Client(ClientEntityManager::new()),
         };
 
         return NetConnection {
+            address,
             connection_timestamp,
             heartbeat_manager: Timer::new(heartbeat_interval),
             timeout_manager: Timer::new(timeout_duration),

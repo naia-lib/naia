@@ -1,9 +1,16 @@
-use std::any::{TypeId};
-use crate::{EntityType};
+use std::{
+    any::{TypeId},
+    rc::Rc,
+    cell::RefCell,
+};
+
+use crate::{EntityKey, EntityType, MutHandler};
 
 pub trait NetEntity<T: EntityType>: NetEntityType<T> {
     fn get_state_mask_size(&self) -> u8;
     fn to_type(&self) -> T;
+    fn set_mut_handler(&mut self, mut_handler: &Rc<RefCell<MutHandler>>);
+    fn set_entity_key(&mut self, key: EntityKey);
     fn write(&self, out_bytes: &mut Vec<u8>);
 //    fn write_create(&self, out_bytes: &mut Vec<u8>);
 //    fn write_update(&self, out_bytes: &mut Vec<u8>);

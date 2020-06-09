@@ -2,26 +2,32 @@
 use std::{
     collections::{VecDeque, HashMap},
     rc::Rc,
-    cell::RefCell};
+    cell::RefCell,
+    net::SocketAddr,
+};
 
 use slotmap::{SlotMap, SecondaryMap, SparseSecondaryMap};
 
-use crate::{EntityType, EntityKey, PacketReader, EntityManifest, LocalEntityStatus, NetEntity, EntityStore, LocalEntityKey, EntityRecord, ServerEntityMessage};
-use std::borrow::Borrow;
+use crate::{EntityType, EntityKey, PacketReader, EntityManifest, LocalEntityStatus, NetEntity,
+            EntityStore, LocalEntityKey, EntityRecord, ServerEntityMessage, MutHandler};
+use std::borrow::{Borrow, BorrowMut};
 
 pub struct ServerEntityManager<T: EntityType> {
+    address: SocketAddr,
     local_entity_store: SparseSecondaryMap<EntityKey, Rc<RefCell<dyn NetEntity<T>>>>,
     local_to_global_key_map: HashMap<LocalEntityKey, EntityKey>,
     recycled_local_keys: Vec<LocalEntityKey>,
     next_new_local_key: LocalEntityKey,
     entity_records: SparseSecondaryMap<EntityKey, EntityRecord>,
     queued_messages: VecDeque<ServerEntityMessage<T>>,
-    sent_messages: HashMap<u16, Vec<ServerEntityMessage<T>>>
+    sent_messages: HashMap<u16, Vec<ServerEntityMessage<T>>>,
+    mut_handler: Rc<RefCell<MutHandler>>,
 }
 
 impl<T: EntityType> ServerEntityManager<T> {
-    pub fn new() -> Self {
+    pub fn new(address: SocketAddr, mut_handler: &Rc<RefCell<MutHandler>>) -> Self {
         ServerEntityManager {
+            address,
             local_entity_store:  SparseSecondaryMap::new(),
             local_to_global_key_map: HashMap::new(),
             recycled_local_keys: Vec::new(),
@@ -29,6 +35,7 @@ impl<T: EntityType> ServerEntityManager<T> {
             entity_records: SparseSecondaryMap::new(),
             queued_messages: VecDeque::new(),
             sent_messages: HashMap::new(),
+            mut_handler: mut_handler.clone(),
         }
     }
 
@@ -47,6 +54,7 @@ impl<T: EntityType> ServerEntityManager<T> {
                         let global_key = *global_key_ref;
                         if let Some(entity_record) = self.entity_records.get(global_key) {
                             // actually delete the entity from local records
+                            self.mut_handler.as_ref().borrow_mut().deregister_mask(&self.address, global_key_ref);
                             self.local_entity_store.remove(global_key);
                             self.local_to_global_key_map.remove(local_key);
                             self.recycled_local_keys.push(*local_key);
@@ -91,9 +99,8 @@ impl<T: EntityType> ServerEntityManager<T> {
             self.local_to_global_key_map.insert(local_key, key);
             let state_mask_size = entity.as_ref().borrow().get_state_mask_size();
             let entity_record = EntityRecord::new(local_key, state_mask_size);
+            self.mut_handler.as_ref().borrow_mut().register_mask(&self.address, &key, entity_record.get_state_mask());
             self.entity_records.insert(key, entity_record);
-
-            //TODO: queue up create entity message
             self.queued_messages.push_back(ServerEntityMessage::Create(key, local_key, entity.clone()));
         }
     }
@@ -121,6 +128,11 @@ impl<T: EntityType> ServerEntityManager<T> {
 
                 if let Some(sent_messages_list) = self.sent_messages.get_mut(&packet_index) {
                     sent_messages_list.push(message.clone());
+                }
+
+                //clear state mask of entity if need be
+                if let ServerEntityMessage::Create(global_key, local_key, entity) = &message {
+                    self.mut_handler.as_ref().borrow_mut().clear_state(&self.address,global_key);
                 }
 
                 Some(message)
