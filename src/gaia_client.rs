@@ -17,6 +17,7 @@ use crate::{
 pub struct GaiaClient<T: EventType, U: EntityType> {
     event_manifest: EventManifest<T>,
     entity_manifest: EntityManifest<U>,
+    server_address: SocketAddr,
     config: Config,
     socket: ClientSocket,
     sender: MessageSender,
@@ -45,6 +46,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
         let message_sender = client_socket.get_sender();
 
         GaiaClient {
+            server_address: server_address.parse().unwrap(),
             event_manifest,
             entity_manifest,
             socket: client_socket,
@@ -153,6 +155,8 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                             else {
                                 if packet_type == PacketType::ServerHandshake {
                                     self.server_connection = Some(NetConnection::new(HostType::Client,
+                                                                                     self.server_address,
+                                                                                     None,
                                                                                      self.config.heartbeat_interval,
                                                                                      self.config.disconnection_timeout_duration,
                                                                                      self.pre_connection_timestamp.take().unwrap()));
