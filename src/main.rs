@@ -23,8 +23,8 @@ async fn main() {
     let current_socket_address = find_my_ip_address::get() + ":" + SERVER_PORT;
 
     let mut config = Config::default();
-    config.tick_interval = Duration::from_secs(2);
-    config.heartbeat_interval = Duration::from_secs(4);
+    config.tick_interval = Duration::from_secs(4);
+    config.heartbeat_interval = Duration::from_secs(1);
 
     let mut server = GaiaServer::listen(current_socket_address.as_str(),
                                         event_manifest_load(),
@@ -38,10 +38,12 @@ async fn main() {
         match entity {
             ExampleEntity::PointEntity(point_entity) => {
                 let x = point_entity.as_ref().borrow().get_x();
-                return x >= 3 && x <= 7;
+                return x >= 1 && x <= 99;
             }
         }
     })));
+
+    let mut no_step = 0;
 
     loop {
         match server.receive().await {
@@ -79,7 +81,13 @@ async fn main() {
 //                            server.send_event(addr, &string_event);
 //                        }
 
-                        point_entity.borrow_mut().step();
+                        no_step += 1;
+                        if no_step < 6 {
+                            point_entity.borrow_mut().step();
+                        }
+                        if no_step > 8 {
+                            no_step = 0;
+                        }
                     }
                 }
             }
