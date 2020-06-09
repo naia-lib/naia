@@ -31,7 +31,7 @@ async fn main() {
                                         entity_manifest_load(),
                                         Some(config)).await;
 
-    let mut point_entity = PointEntity::new(0, 0);
+    let point_entity = PointEntity::new(0, 0);
     server.add_entity(point_entity.clone());
 
     server.on_scope_entity(Rc::new(Box::new(|address, entity| {
