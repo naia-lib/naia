@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
     cell::RefCell,
 };
-use gaia_shared::{NetEntity, MutHandler, EntityKey};
+use gaia_shared::{NetEntity, MutHandler, EntityKey, StateMask};
 use crate::{ExampleEntity};
 use std::borrow::BorrowMut;
 
@@ -91,7 +91,7 @@ impl NetEntity<ExampleEntity> for PointEntity {
     }
 
     fn to_type(&self) -> ExampleEntity {
-        return ExampleEntity::PointEntity(self.clone());
+        return ExampleEntity::PointEntity(Rc::new(RefCell::new(self.clone())));
     }
 
     fn set_mut_handler(&mut self, mut_handler: &Rc<RefCell<MutHandler>>) {
@@ -107,8 +107,27 @@ impl NetEntity<ExampleEntity> for PointEntity {
         buffer.push(self.get_y());
     }
 
+    fn write_partial(&self, state_mask_ref: &Rc<RefCell<StateMask>>, buffer: &mut Vec<u8>) {
+        let state_mask = state_mask_ref.as_ref().borrow();
+        if let Some(true) = state_mask.get_bit(PointEntityProp::X as u8) {
+            buffer.push(self.get_x());
+        }
+        if let Some(true) = state_mask.get_bit(PointEntityProp::Y as u8) {
+            buffer.push(self.get_y());
+        }
+    }
+
     fn read(&mut self, buffer: &[u8])  {
         self.set_x(buffer[0]);
         self.set_y(buffer[1]);
+    }
+
+    fn read_partial(&mut self, state_mask: &StateMask, buffer: &[u8]) {
+        if let Some(true) = state_mask.get_bit(PointEntityProp::X as u8) {
+            self.set_x(buffer[0]);
+        }
+        if let Some(true) = state_mask.get_bit(PointEntityProp::Y as u8) {
+            self.set_y(buffer[1]);
+        }
     }
 }
