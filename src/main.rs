@@ -37,7 +37,7 @@ async fn main() {
     server.on_scope_entity(Rc::new(Box::new(|address, entity| {
         match entity {
             ExampleEntity::PointEntity(point_entity) => {
-                let x = point_entity.get_x();
+                let x = point_entity.as_ref().borrow().get_x();
                 return x >= 3 && x <= 7;
             }
         }
