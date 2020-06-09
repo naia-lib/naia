@@ -9,7 +9,7 @@ use std::{
 use slotmap::{SlotMap, SecondaryMap, SparseSecondaryMap};
 
 use crate::{EntityType, EntityKey, PacketReader, EntityManifest, LocalEntityStatus, NetEntity,
-            EntityStore, LocalEntityKey, EntityRecord, ServerEntityMessage, MutHandler};
+            EntityStore, LocalEntityKey, EntityRecord, ServerEntityMessage, MutHandler, StateMask};
 use std::borrow::{Borrow, BorrowMut};
 
 pub struct ServerEntityManager<T: EntityType> {
@@ -21,6 +21,7 @@ pub struct ServerEntityManager<T: EntityType> {
     entity_records: SparseSecondaryMap<EntityKey, EntityRecord>,
     queued_messages: VecDeque<ServerEntityMessage<T>>,
     sent_messages: HashMap<u16, Vec<ServerEntityMessage<T>>>,
+    sent_updates: HashMap<u16, HashMap<EntityKey, Rc<RefCell<StateMask>>>>,
     mut_handler: Rc<RefCell<MutHandler>>,
 }
 
@@ -35,6 +36,7 @@ impl<T: EntityType> ServerEntityManager<T> {
             entity_records: SparseSecondaryMap::new(),
             queued_messages: VecDeque::new(),
             sent_messages: HashMap::new(),
+            sent_updates: HashMap::<u16, HashMap<EntityKey, Rc<RefCell<StateMask>>>>::new(),
             mut_handler: mut_handler.clone(),
         }
     }
@@ -61,7 +63,9 @@ impl<T: EntityType> ServerEntityManager<T> {
                             self.entity_records.remove(global_key);
                         }
                     }
-                    ServerEntityMessage::Update(_, _) => {} //this is the right thing to do, yeah?
+                    ServerEntityMessage::Update(_, _, _, _) => {
+                        //TODO: clear out sent updates map
+                    }
                 }
             }
 
@@ -78,7 +82,7 @@ impl<T: EntityType> ServerEntityManager<T> {
                     ServerEntityMessage::Create(_, _, _) | ServerEntityMessage::Delete(_, _) => {
                         self.queued_messages.push_back(dropped_message.clone());
                     },
-                    ServerEntityMessage::Update(_, _) => {
+                    ServerEntityMessage::Update(_, _, _, _) => {
                         //TODO: implement this logic.. go through state masks, ect.
                     }
                 }
@@ -119,6 +123,7 @@ impl<T: EntityType> ServerEntityManager<T> {
     }
 
     pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<ServerEntityMessage<T>> {
+
         match self.queued_messages.pop_front() {
             Some(message) => {
                 if !self.sent_messages.contains_key(&packet_index) {
@@ -131,13 +136,38 @@ impl<T: EntityType> ServerEntityManager<T> {
                 }
 
                 //clear state mask of entity if need be
-                if let ServerEntityMessage::Create(global_key, local_key, entity) = &message {
-                    self.mut_handler.as_ref().borrow_mut().clear_state(&self.address,global_key);
+                match &message {
+                    ServerEntityMessage::Create(global_key, local_key, entity) => {
+                        self.mut_handler.as_ref().borrow_mut().clear_state(&self.address, global_key);
+                    }
+                    ServerEntityMessage::Update(global_key, local_key, state_mask, entity) => {
+                        // previously the state mask was the CURRENT state mask for the entity,
+                        // we want to lock that in so we know exactly what we're writing
+                        let locked_state_mask = Rc::new(RefCell::new(state_mask.as_ref().borrow().clone()));
+
+                        // place state mask in a special transmission record - like map
+                        if !self.sent_updates.contains_key(&packet_index) {
+                            let sent_updates_map: HashMap<EntityKey, Rc<RefCell<StateMask>>> = HashMap::new();
+                            self.sent_updates.insert(packet_index, sent_updates_map);
+                        }
+
+                        if let Some(sent_updates_map) = self.sent_updates.get_mut(&packet_index) {
+                            sent_updates_map.insert(*global_key, locked_state_mask.clone());
+                        }
+
+                        // having copied the state mask for this update, clear the state
+                        self.mut_handler.as_ref().borrow_mut().clear_state(&self.address, global_key);
+
+                        // return new Update message to be written
+                        return Some(ServerEntityMessage::Update(*global_key, *local_key, locked_state_mask, entity.clone()));
+                    }
+                    _ => {}
                 }
 
-                Some(message)
+                return Some(message);
             }
-            None => None
+            None => { return None; }
+
         }
     }
 
@@ -149,5 +179,28 @@ impl<T: EntityType> ServerEntityManager<T> {
         let output = self.next_new_local_key;
         self.next_new_local_key += 1;
         return output;
+    }
+
+    pub fn collect_entity_updates(&mut self) {
+        for (key, record) in self.entity_records.iter() {
+            if record.status == LocalEntityStatus::Created && !record.get_state_mask().as_ref().borrow().is_clear() {
+                if let Some(entity_ref) = self.local_entity_store.get(key) {
+                    self.queued_messages.push_back(ServerEntityMessage::Update(key,
+                                                                               record.local_key,
+                                                                               record.get_state_mask().clone(),
+                                                                               entity_ref.clone(),
+                    ));
+                }
+            }
+        }
+    }
+
+    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&Rc<RefCell<dyn NetEntity<T>>>> {
+        if let Some(global_key) = self.local_to_global_key_map.get(&key) {
+            if let Some(entity) = self.local_entity_store.get(*global_key) {
+                return Some(entity);
+            }
+        }
+        return None;
     }
 }

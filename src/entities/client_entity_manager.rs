@@ -1,13 +1,14 @@
 
-use crate::{EntityType, EntityKey, EntityStore, PacketReader, EntityManifest, NetEntity, LocalEntityKey, ClientEntityMessage};
+use crate::{EntityType, EntityKey, EntityStore, PacketReader, EntityManifest, NetEntity, LocalEntityKey, ClientEntityMessage, StateMask};
 use std::{
     rc::Rc,
+    cell::RefCell,
     collections::{VecDeque, HashMap}
 };
 use byteorder::{BigEndian, ReadBytesExt};
 
 pub struct ClientEntityManager<T: EntityType> {
-    local_entity_store: HashMap<LocalEntityKey, Rc<T>>,
+    local_entity_store: HashMap<LocalEntityKey, T>,
     queued_incoming_messages: VecDeque<ClientEntityMessage<T>>,
 }
 
@@ -41,19 +42,33 @@ impl<T: EntityType> ClientEntityManager<T> {
                     match manifest.create_entity(gaia_id) {
                         Some(mut new_entity) => {
                             new_entity.read(&entity_payload);
-                            let rc_new_entity = Rc::new(new_entity);
-                            self.local_entity_store.insert(local_key, rc_new_entity.clone()); //TODO, throw error if entity already exists using local key
-                            self.queued_incoming_messages.push_back(ClientEntityMessage::Create(local_key, rc_new_entity));
+                            self.local_entity_store.insert(local_key, new_entity.clone()); //TODO, throw error if entity already exists using local key
+                            self.queued_incoming_messages.push_back(ClientEntityMessage::Create(local_key, new_entity));
                         }
                         _ => {}
                     }
                 },
-                1 => { // Update
-                },
-                2 => { // Deletion
+                1 => { // Deletion
                     let local_key: LocalEntityKey = cursor.read_u16::<BigEndian>().unwrap().into();
                     self.local_entity_store.remove(&local_key);
                     self.queued_incoming_messages.push_back(ClientEntityMessage::Delete(local_key));
+                },
+                2 => { // Update
+                    let local_key: LocalEntityKey = cursor.read_u16::<BigEndian>().unwrap().into();
+
+                    if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
+                        let state_mask: StateMask = StateMask::read(cursor);
+                        let payload_length: u8 = cursor.read_u8().unwrap().into();
+                        let payload_start_position: usize = cursor.position() as usize;
+                        let payload_end_position: usize = payload_start_position + (payload_length as usize);
+
+                        let entity_payload = buffer[payload_start_position..payload_end_position]
+                            .to_vec()
+                            .into_boxed_slice();
+
+                        entity_ref.read_partial(&state_mask, &entity_payload);
+                        self.queued_incoming_messages.push_back(ClientEntityMessage::Update(local_key));
+                    }
                 },
                 _ => {}
             }
@@ -62,6 +77,10 @@ impl<T: EntityType> ClientEntityManager<T> {
 
     pub fn pop_incoming_message(&mut self) -> Option<ClientEntityMessage<T>> {
         return self.queued_incoming_messages.pop_front();
+    }
+
+    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&T> {
+        return self.local_entity_store.get(&key);
     }
 
 //    pub fn has_entity(&self, key: EntityKey) -> bool {

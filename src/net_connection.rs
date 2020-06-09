@@ -8,7 +8,7 @@ use std::{
 
 use crate::{Timer, PacketType, NetEvent, EventManifest, EntityKey, ServerEntityManager, ClientEntityManager,
             EventManager, EntityManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
-            EventType, EntityType, EntityStore, NetEntity, ClientEntityMessage, MutHandler};
+            EventType, EntityType, EntityStore, NetEntity, ClientEntityMessage, MutHandler, LocalEntityKey};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -154,6 +154,20 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
     pub fn remove_entity(&mut self, key: EntityKey) {
         return match &mut self.entity_manager {
             EntityManager::<U>::Server(entity_manager) => entity_manager.remove_entity(key),
+            EntityManager::<U>::Client(entity_manager) => {},
+        }
+    }
+
+    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&U> {
+        return match &self.entity_manager {
+            EntityManager::<U>::Server(entity_manager) => None,
+            EntityManager::<U>::Client(entity_manager) => entity_manager.get_local_entity(key),
+        }
+    }
+
+    pub fn collect_entity_updates(&mut self) {
+        match &mut self.entity_manager {
+            EntityManager::<U>::Server(entity_manager) => entity_manager.collect_entity_updates(),
             EntityManager::<U>::Client(entity_manager) => {},
         }
     }
