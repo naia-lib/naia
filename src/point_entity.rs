@@ -3,19 +3,30 @@ use std::{
     rc::Rc,
     cell::RefCell,
 };
-use gaia_shared::{NetEntity};
+use gaia_shared::{NetEntity, MutHandler, EntityKey};
 use crate::{ExampleEntity};
+use std::borrow::BorrowMut;
 
 #[derive(Clone)]
 pub struct PointEntity {
+    mut_handler: Option<Rc<RefCell<MutHandler>>>,
+    key: Option<EntityKey>,
     x: Option<u8>,
     y: Option<u8>,
+}
+
+#[repr(u8)]
+enum PointEntityProp {
+    X = 0,
+    Y = 1,
 }
 
 impl PointEntity {
     pub fn init() -> PointEntity {
         //info!("point entity init");
         PointEntity {
+            key: None,
+            mut_handler: None,
             x: None,
             y: None,
         }
@@ -24,6 +35,8 @@ impl PointEntity {
     pub fn new(x: u8, y: u8) -> Rc<RefCell<Self>> {
         //info!("point entity new");
         Rc::new(RefCell::new(PointEntity {
+            key: None,
+            mut_handler: None,
             x: Some(x),
             y: Some(y),
         }))
@@ -47,10 +60,20 @@ impl PointEntity {
     pub fn set_x(&mut self, value: u8) {
         //info!("point entity set x");
         self.x = Some(value);
+        if let Some(mut_handler) = &self.mut_handler {
+            if let Some(key) = &self.key {
+                mut_handler.as_ref().borrow_mut().mutate(key, PointEntityProp::X as u8);
+            }
+        }
     }
 
     pub fn set_y(&mut self, value: u8) {
         self.y = Some(value);
+        if let Some(mut_handler) = &mut self.mut_handler {
+            if let Some(key) = &self.key {
+                mut_handler.as_ref().borrow_mut().mutate(key, PointEntityProp::Y as u8);
+            }
+        }
     }
 
     pub fn step(&mut self) {
@@ -62,6 +85,8 @@ impl PointEntity {
         self.set_x(x);
         //info!("point entity step: {}", x);
     }
+
+
 }
 
 impl NetEntity<ExampleEntity> for PointEntity {
@@ -72,6 +97,14 @@ impl NetEntity<ExampleEntity> for PointEntity {
 
     fn to_type(&self) -> ExampleEntity {
         return ExampleEntity::PointEntity(self.clone());
+    }
+
+    fn set_mut_handler(&mut self, mut_handler: &Rc<RefCell<MutHandler>>) {
+        self.mut_handler = Some(mut_handler.clone());
+    }
+
+    fn set_entity_key(&mut self, key: EntityKey) {
+        self.key = Some(key);
     }
 
     fn write(&self, buffer: &mut Vec<u8>) {
