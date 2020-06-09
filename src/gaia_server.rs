@@ -9,9 +9,13 @@ use std::{
 use log::{info};
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
-pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, EventManifest, EntityManifest, EntityStore, EntityKey, NetEvent, NetEntity, ManagerType, HostType, EventType, EntityType};
+pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, EventManifest, EntityManifest,
+                      EntityStore, EntityKey, NetEvent, NetEntity, ManagerType, HostType, EventType, EntityType,
+                    MutHandler};
 
-use super::server_event::ServerEvent;
+use super::{
+    server_event::ServerEvent,
+};
 use crate::{
     Packet,
     error::GaiaServerError};
@@ -21,6 +25,7 @@ pub struct GaiaServer<T: EventType, U: EntityType> {
     entity_manifest: EntityManifest<U>,
     global_entity_store: EntityStore<U>,
     scope_entity_func: Option<Rc<Box<dyn Fn(&SocketAddr, U) -> bool>>>,
+    mut_handler: Rc<RefCell<MutHandler>>,
     config: Config,
     socket: ServerSocket,
     sender: MessageSender,
@@ -54,6 +59,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
             entity_manifest,
             global_entity_store: EntityStore::new(),
             scope_entity_func: None,
+            mut_handler: MutHandler::new(),
             socket: server_socket,
             sender,
             config,
@@ -89,7 +95,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
 
             // timeouts
             if let Some(addr) = self.outstanding_disconnects.pop_front() {
-                self.client_connections.remove(&addr);
+                self.remove_connection(&addr);
                 output = Some(Ok(ServerEvent::Disconnection(addr)));
                 continue;
             }
@@ -136,6 +142,8 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                     if !self.client_connections.contains_key(&address) {
                                         self.client_connections.insert(address,
                                                                        NetConnection::new(HostType::Server,
+                                                                                          address,
+                                                                                          Some(&self.mut_handler),
                                                                                           self.config.heartbeat_interval,
                                                                                           self.config.disconnection_timeout_duration,
                                                                                           timestamp));
@@ -151,7 +159,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                             } else {
                                                 // Incoming Timestamp is different than recorded.. must be the same client trying to connect..
                                                 // so disconnect them to provide continuity
-                                                self.client_connections.remove(&address);
+                                                self.remove_connection(&address);
                                                 output = Some(Ok(ServerEvent::Disconnection(address)));
                                                 continue;
                                             }
@@ -215,7 +223,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                 }
                 Err(error) => {
                     if let GaiaServerSocketError::SendError(address) = error {
-                        self.client_connections.remove(&address);
+                        self.remove_connection(&address);
                         output = Some(Ok(ServerEvent::Disconnection(address)));
                         continue;
                     }
@@ -249,10 +257,15 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
     }
 
     pub fn add_entity(&mut self, entity: Rc<RefCell<dyn NetEntity<U>>>) -> EntityKey {
-        return self.global_entity_store.add_entity(entity);
+        entity.borrow_mut().set_mut_handler(&self.mut_handler);
+        let entity_key = self.global_entity_store.add_entity(entity.clone());
+        entity.borrow_mut().set_entity_key(entity_key);
+        self.mut_handler.borrow_mut().register_entity(&entity_key);
+        return entity_key
     }
 
     pub fn remove_entity(&mut self, key: EntityKey) {
+        self.mut_handler.borrow_mut().deregister_entity(&key);
         return self.global_entity_store.remove_entity(key);
     }
 
@@ -295,5 +308,9 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                 }
             }
         }
+    }
+
+    fn remove_connection(&mut self, address: &SocketAddr) {
+        self.client_connections.remove(address);
     }
 }
