@@ -30,6 +30,7 @@ impl<T: EntityType> ClientEntityManager<T> {
         //info!("reading {} entity messages", entity_message_count);
         for _x in 0..entity_message_count {
             let message_type: u8 = cursor.read_u8().unwrap().into();
+
             match message_type {
                 0 => { // Creation
                     let gaia_id: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
@@ -47,10 +48,11 @@ impl<T: EntityType> ClientEntityManager<T> {
                             new_entity.read(&entity_payload);
                             if self.local_entity_store.contains_key(&local_key) {
                                 warn!("duplicate local key inserted");
+                            } else {
+                                //info!("creation of entity w/ key of {}", local_key);
+                                self.local_entity_store.insert(local_key, new_entity.clone());
+                                self.queued_incoming_messages.push_back(ClientEntityMessage::Create(local_key, new_entity));
                             }
-                            //info!("creation of entity w/ key of {}", local_key);
-                            self.local_entity_store.insert(local_key, new_entity.clone()); //TODO, throw error if entity already exists using local key
-                            self.queued_incoming_messages.push_back(ClientEntityMessage::Create(local_key, new_entity));
                         }
                         _ => {}
                     }
@@ -76,25 +78,15 @@ impl<T: EntityType> ClientEntityManager<T> {
                             .to_vec()
                             .into_boxed_slice();
 
-                        //info!("update of entity w/ key of {}", local_key);
                         entity_ref.read_partial(&state_mask, &entity_payload);
 
                         self.queued_incoming_messages.push_back(ClientEntityMessage::Update(local_key));
 
                         cursor.set_position(payload_end_position as u64);
                     }
-
-                    info!("in process_data():");
-                    self.print_entity(local_key);
                 },
                 _ => {}
             }
-        }
-    }
-
-    fn print_entity(&mut self, key: u16) {
-        if let Some(entity_ref) = self.local_entity_store.get(&key) {
-            entity_ref.print(key);
         }
     }
 
@@ -102,14 +94,7 @@ impl<T: EntityType> ClientEntityManager<T> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn get_local_entity(&mut self, key: u16) -> Option<&T> {
-        info!("in get_local_entity():");
-        self.print_entity(key);
-//        if let Some(entity_ref) = self.local_entity_store.get_mut(&key) {
-//            info!("in get():");
-//            entity_ref.print(key);
-//        }
-
+    pub fn get_local_entity(&self, key: u16) -> Option<&T> {
         return self.local_entity_store.get(&key);
     }
 }

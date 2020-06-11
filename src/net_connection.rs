@@ -164,8 +164,8 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
         }
     }
 
-    pub fn get_local_entity(&mut self, key: u16) -> Option<&U> {
-        return match &mut self.entity_manager {
+    pub fn get_local_entity(&self, key: u16) -> Option<&U> {
+        return match &self.entity_manager {
             EntityManager::<U>::Server(entity_manager) => None,
             EntityManager::<U>::Client(entity_manager) => entity_manager.get_local_entity(key),
         }
