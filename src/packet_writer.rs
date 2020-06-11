@@ -30,14 +30,21 @@ impl PacketWriter {
         let mut out_bytes = Vec::<u8>::new();
 
         //Write manager "header" (manager type & entity count)
-        out_bytes.write_u8(ManagerType::Event as u8).unwrap(); // write manager type //TODO this might be meaningless.. always a fixed order here
-        out_bytes.write_u8(self.event_count).unwrap(); // write number of events in the following message
-        out_bytes.append(&mut self.event_working_bytes); // write event payload
+        if self.event_count != 0 {
+            out_bytes.write_u8(ManagerType::Event as u8).unwrap(); // write manager type //TODO this might be meaningless.. always a fixed order here
+            out_bytes.write_u8(self.event_count).unwrap(); // write number of events in the following message
+            out_bytes.append(&mut self.event_working_bytes); // write event payload
+            self.event_count = 0;
+        }
 
         //Write manager "header" (manager type & entity count)
-        out_bytes.write_u8(ManagerType::Entity as u8).unwrap(); // write manager type //TODO this might be meaningless.. always a fixed order here
-        out_bytes.write_u8(self.entity_message_count).unwrap(); // write number of messages
-        out_bytes.append(&mut self.entity_working_bytes); // write event payload
+        if self.entity_message_count != 0 {
+            out_bytes.write_u8(ManagerType::Entity as u8).unwrap(); // write manager type //TODO this might be meaningless.. always a fixed order here
+            out_bytes.write_u8(self.entity_message_count).unwrap(); // write number of messages
+            out_bytes.append(&mut self.entity_working_bytes); // write event payload
+
+            self.entity_message_count = 0;
+        }
 
         out_bytes.into_boxed_slice()
     }
@@ -90,8 +97,6 @@ impl PacketWriter {
                 self.entity_message_count += 1;
 
                 self.entity_working_bytes.append(&mut entity_total_bytes);
-
-                info!("entity create message write");
             }
             ServerEntityMessage::Delete(global_key, local_key) => {
 
@@ -102,8 +107,6 @@ impl PacketWriter {
                 self.entity_message_count += 1;
 
                 self.entity_working_bytes.append(&mut entity_total_bytes);
-
-                info!("entity delete message write");
             }
             ServerEntityMessage::Update(global_key, local_key, state_mask, entity) => {
                 //write entity payload
@@ -125,8 +128,6 @@ impl PacketWriter {
                 self.entity_message_count += 1;
 
                 self.entity_working_bytes.append(&mut entity_total_bytes);
-
-                info!("entity update message write");
             }
         }
     }
