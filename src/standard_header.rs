@@ -31,6 +31,8 @@ impl StandardHeader {
         }
     }
 
+    pub const fn bytes_number() -> usize { return 9; }
+
     /// Returns the sequence number from this packet.
     #[allow(dead_code)]
     pub fn sequence(&self) -> u16 {

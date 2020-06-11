@@ -41,7 +41,7 @@ pub use {
     entities::{
         net_entity::{NetEntity, NetEntityType},
         entity_manifest::EntityManifest,
-        entity_manager::{EntityManager, LocalEntityKey, LocalEntityKeyIO},
+        entity_manager::{EntityManager},
         entity_type::EntityType,
         entity_store::{EntityKey, EntityStore},
         entity_record::{EntityRecord, LocalEntityStatus},

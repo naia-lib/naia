@@ -9,7 +9,7 @@ use std::{
 use slotmap::{SlotMap, SecondaryMap, SparseSecondaryMap};
 
 use crate::{EntityType, EntityKey, PacketReader, EntityManifest, LocalEntityStatus, NetEntity,
-            EntityStore, LocalEntityKey, EntityRecord, ServerEntityMessage, MutHandler, StateMask};
+            EntityStore, EntityRecord, ServerEntityMessage, MutHandler, StateMask};
 use std::borrow::{Borrow, BorrowMut};
 
 use crate::{
@@ -19,15 +19,17 @@ use crate::{
 pub struct ServerEntityManager<T: EntityType> {
     address: SocketAddr,
     local_entity_store: SparseSecondaryMap<EntityKey, Rc<RefCell<dyn NetEntity<T>>>>,
-    local_to_global_key_map: HashMap<LocalEntityKey, EntityKey>,
-    recycled_local_keys: Vec<LocalEntityKey>,
-    next_new_local_key: LocalEntityKey,
+    local_to_global_key_map: HashMap<u16, EntityKey>,
+    recycled_local_keys: Vec<u16>,
+    next_new_local_key: u16,
     entity_records: SparseSecondaryMap<EntityKey, EntityRecord>,
     queued_messages: VecDeque<ServerEntityMessage<T>>,
     sent_messages: HashMap<u16, Vec<ServerEntityMessage<T>>>,
     sent_updates: HashMap<u16, HashMap<EntityKey, Rc<RefCell<StateMask>>>>,
     last_update_packet_index: u16,
+    last_last_update_packet_index: u16,
     mut_handler: Rc<RefCell<MutHandler>>,
+    last_popped_state_mask: StateMask,
 }
 
 impl<T: EntityType> ServerEntityManager<T> {
@@ -37,13 +39,15 @@ impl<T: EntityType> ServerEntityManager<T> {
             local_entity_store:  SparseSecondaryMap::new(),
             local_to_global_key_map: HashMap::new(),
             recycled_local_keys: Vec::new(),
-            next_new_local_key: 0 as LocalEntityKey,
+            next_new_local_key: 0,
             entity_records: SparseSecondaryMap::new(),
             queued_messages: VecDeque::new(),
             sent_messages: HashMap::new(),
             sent_updates: HashMap::<u16, HashMap<EntityKey, Rc<RefCell<StateMask>>>>::new(),
             last_update_packet_index: 0,
+            last_last_update_packet_index: 0,
             mut_handler: mut_handler.clone(),
+            last_popped_state_mask: StateMask::new(0),
         }
     }
 
@@ -142,6 +146,9 @@ impl<T: EntityType> ServerEntityManager<T> {
                 //clear state mask of entity if need be
                 match &message {
                     ServerEntityMessage::Create(global_key, local_key, entity) => {
+                        if let Some(record) = self.entity_records.get(*global_key) {
+                            self.last_popped_state_mask = record.get_state_mask().as_ref().borrow().clone();
+                        }
                         self.mut_handler.as_ref().borrow_mut().clear_state(&self.address, global_key);
                     }
                     ServerEntityMessage::Update(global_key, local_key, state_mask, entity) => {
@@ -153,6 +160,7 @@ impl<T: EntityType> ServerEntityManager<T> {
                         if !self.sent_updates.contains_key(&packet_index) {
                             let sent_updates_map: HashMap<EntityKey, Rc<RefCell<StateMask>>> = HashMap::new();
                             self.sent_updates.insert(packet_index, sent_updates_map);
+                            self.last_last_update_packet_index = self.last_update_packet_index;
                             self.last_update_packet_index = packet_index;
                         }
 
@@ -161,6 +169,7 @@ impl<T: EntityType> ServerEntityManager<T> {
                         }
 
                         // having copied the state mask for this update, clear the state
+                        self.last_popped_state_mask = state_mask.as_ref().borrow().clone();
                         self.mut_handler.as_ref().borrow_mut().clear_state(&self.address, global_key);
 
                         // return new Update message to be written
@@ -174,6 +183,43 @@ impl<T: EntityType> ServerEntityManager<T> {
             None => { return None; }
 
         }
+    }
+
+    pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: &ServerEntityMessage<T>) {
+        info!("unpopping");
+        if let Some(sent_messages_list) = self.sent_messages.get_mut(&packet_index) {
+            sent_messages_list.pop();
+            if sent_messages_list.len() == 0 {
+                self.sent_messages.remove(&packet_index);
+            }
+        }
+
+        match &message {
+            ServerEntityMessage::Create(global_key, local_key, entity) => {
+                self.mut_handler.as_ref().borrow_mut().set_state(&self.address, global_key, &self.last_popped_state_mask);
+            },
+            ServerEntityMessage::Update(global_key, local_key, state_mask, entity) => {
+                if let Some(sent_updates_map) = self.sent_updates.get_mut(&packet_index) {
+                    sent_updates_map.remove(global_key);
+                    if sent_updates_map.len() == 0 {
+                        self.sent_updates.remove(&packet_index);
+                    }
+                }
+
+                self.last_update_packet_index = self.last_last_update_packet_index;
+                self.mut_handler.as_ref().borrow_mut().set_state(&self.address, global_key, &self.last_popped_state_mask);
+
+                let record = self.entity_records.get(*global_key)
+                    .expect("uh oh, we don't have enough info to unpop the message");
+                let original_state_mask = record.get_state_mask().clone();
+                let cloned_message = ServerEntityMessage::Update(*global_key, *local_key, original_state_mask, entity.clone());
+                self.queued_messages.push_front(cloned_message);
+                return;
+            },
+            _ => {}
+        }
+
+        self.queued_messages.push_front(message.clone());
     }
 
     pub fn has_entity(&self, key: EntityKey) -> bool {
@@ -202,7 +248,7 @@ impl<T: EntityType> ServerEntityManager<T> {
         }
     }
 
-    fn get_new_local_key(&mut self) -> LocalEntityKey {
+    fn get_new_local_key(&mut self) -> u16 {
         if let Some(local_key) = self.recycled_local_keys.pop() {
             return local_key;
         }
@@ -226,7 +272,7 @@ impl<T: EntityType> ServerEntityManager<T> {
         }
     }
 
-    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&Rc<RefCell<dyn NetEntity<T>>>> {
+    pub fn get_local_entity(&self, key: u16) -> Option<&Rc<RefCell<dyn NetEntity<T>>>> {
         if let Some(global_key) = self.local_to_global_key_map.get(&key) {
             if let Some(entity) = self.local_entity_store.get(*global_key) {
                 return Some(entity);

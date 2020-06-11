@@ -1,4 +1,4 @@
-use crate::{LocalEntityKey, EntityKey, NetEntity, EntityType, StateMask};
+use crate::{EntityKey, NetEntity, EntityType, StateMask};
 use std::{
     rc::Rc,
     cell::RefCell
@@ -6,9 +6,9 @@ use std::{
 
 #[derive(Clone)]
 pub enum ServerEntityMessage<T: EntityType> {
-    Create(EntityKey, LocalEntityKey, Rc<RefCell<dyn NetEntity<T>>>),
-    Update(EntityKey, LocalEntityKey, Rc<RefCell<StateMask>>, Rc<RefCell<dyn NetEntity<T>>>),
-    Delete(EntityKey, LocalEntityKey),
+    Create(EntityKey, u16, Rc<RefCell<dyn NetEntity<T>>>),
+    Update(EntityKey, u16, Rc<RefCell<StateMask>>, Rc<RefCell<dyn NetEntity<T>>>),
+    Delete(EntityKey, u16),
 }
 
 impl<T: EntityType> ServerEntityMessage<T> {
