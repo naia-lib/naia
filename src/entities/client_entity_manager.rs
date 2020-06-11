@@ -1,5 +1,5 @@
 
-use crate::{EntityType, EntityKey, EntityStore, PacketReader, EntityManifest, NetEntity, ClientEntityMessage, StateMask};
+use crate::{EntityType, LocalEntityKey, EntityKey, EntityStore, PacketReader, EntityManifest, NetEntity, ClientEntityMessage, StateMask};
 use std::{
     rc::Rc,
     cell::RefCell,
@@ -9,7 +9,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use log::warn;
 
 pub struct ClientEntityManager<T: EntityType> {
-    local_entity_store: HashMap<u16, T>,
+    local_entity_store: HashMap<LocalEntityKey, T>,
     queued_incoming_messages: VecDeque<ClientEntityMessage<T>>,
 }
 
@@ -94,7 +94,7 @@ impl<T: EntityType> ClientEntityManager<T> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn get_local_entity(&self, key: u16) -> Option<&T> {
+    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&T> {
         return self.local_entity_store.get(&key);
     }
 }

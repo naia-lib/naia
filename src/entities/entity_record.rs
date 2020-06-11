@@ -5,8 +5,10 @@ use std::{
 
 use crate::{StateMask};
 
+pub type LocalEntityKey = u16;
+
 pub struct EntityRecord {
-    pub local_key: u16,
+    pub local_key: LocalEntityKey,
     state_mask: Rc<RefCell<StateMask>>,
     pub status: LocalEntityStatus,
 }
@@ -19,7 +21,7 @@ pub enum LocalEntityStatus {
 }
 
 impl EntityRecord {
-    pub fn new(local_key: u16, state_mask_size: u8) -> EntityRecord {
+    pub fn new(local_key: LocalEntityKey, state_mask_size: u8) -> EntityRecord {
         EntityRecord {
             local_key,
             state_mask: Rc::new(RefCell::new(StateMask::new(state_mask_size))),

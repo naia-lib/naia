@@ -8,7 +8,7 @@ use std::{
 
 use crate::{Timer, PacketType, NetEvent, EventManifest, EntityKey, ServerEntityManager, ClientEntityManager,
             EventManager, EntityManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
-            EventType, EntityType, EntityStore, NetEntity, ClientEntityMessage, MutHandler};
+            EventType, EntityType, EntityStore, NetEntity, ClientEntityMessage, MutHandler, LocalEntityKey};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -164,7 +164,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
         }
     }
 
-    pub fn get_local_entity(&self, key: u16) -> Option<&U> {
+    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&U> {
         return match &self.entity_manager {
             EntityManager::<U>::Server(entity_manager) => None,
             EntityManager::<U>::Client(entity_manager) => entity_manager.get_local_entity(key),
