@@ -63,7 +63,8 @@ impl App {
                         match entity {
                             // keep in mind that the below values are clones of the original, used purely to determine the type
                             ExampleEntity::PointEntity(point_entity) => {
-                                info!("creation of point entity with x: {}, y: {}",
+                                info!("creation of point entity with key: {}, x: {}, y: {}",
+                                      local_key,
                                       point_entity.as_ref().borrow().get_x(),
                                       point_entity.as_ref().borrow().get_y());
                             }
@@ -77,7 +78,8 @@ impl App {
                             match entity {
                                 // keep in mind that the below values are clones of the original, used purely to determine the type
                                 ExampleEntity::PointEntity(point_entity) => {
-                                    info!("update of point entity with x: {}, y: {}",
+                                    info!("update of point entity with key: {}, x: {}, y: {}",
+                                          local_key,
                                           point_entity.as_ref().borrow().get_x(),
                                           point_entity.as_ref().borrow().get_y());
                                 }
@@ -86,7 +88,7 @@ impl App {
                         }
                     }
                     ClientEvent::DeleteEntity(local_key) => {
-                        info!("deletion of point entity");
+                        info!("deletion of point entity with key: {}", local_key);
                     }
                     ClientEvent::None => {
                         //info!("Client non-event");
