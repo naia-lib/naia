@@ -10,6 +10,7 @@ use gaia_example_shared::{event_manifest_load, entity_manifest_load, StringEvent
 
 use std::{
     rc::Rc,
+    cell::RefCell,
     net::SocketAddr,
     time::Duration};
 
@@ -31,14 +32,18 @@ async fn main() {
                                         entity_manifest_load(),
                                         Some(config)).await;
 
-    let point_entity = PointEntity::new(0, 0);
-    server.add_entity(point_entity.clone());
+    let mut point_entities: Vec<Rc<RefCell<PointEntity>>> = Vec::new();
+    for x in 0..20 {
+        let point_entity = PointEntity::new(x, 0);
+        server.add_entity(point_entity.clone());
+        point_entities.push(point_entity.clone());
+    }
 
     server.on_scope_entity(Rc::new(Box::new(|address, entity| {
         match entity {
             ExampleEntity::PointEntity(point_entity) => {
                 let x = point_entity.as_ref().borrow().get_x();
-                return x >= 1 && x <= 99;
+                return x >= 3 && x <= 17;
             }
         }
     })));
@@ -83,7 +88,9 @@ async fn main() {
 
                         no_step += 1;
                         if no_step < 6 {
-                            point_entity.borrow_mut().step();
+                            for point_entity in &point_entities {
+                                point_entity.borrow_mut().step();
+                            }
                         }
                         if no_step > 8 {
                             no_step = 0;
