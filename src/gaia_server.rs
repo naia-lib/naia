@@ -204,7 +204,10 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                             // loop through all connections, send packet
                             for (address, connection) in self.client_connections.iter_mut() {
                                 connection.collect_entity_updates();
+                                let mut packet_index = 1;
                                 while let Some(payload) = connection.get_outgoing_packet(&self.event_manifest, &self.entity_manifest) {
+                                    info!("sending packet {}", packet_index);
+                                    packet_index += 1;
                                     match self.sender.send(Packet::new_raw(*address, payload))
                                         .await {
                                         Ok(_) => {}
