@@ -29,4 +29,12 @@ impl EntityType for ExampleEntity {
             }
         }
     }
+
+    fn print(&self, key: u16) {
+        match self {
+            ExampleEntity::PointEntity(identity) => {
+                identity.as_ref().borrow().print(key);
+            }
+        }
+    }
 }
