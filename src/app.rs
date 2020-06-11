@@ -6,7 +6,7 @@ use std::ops::Deref;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use gaia_client::{GaiaClient, ClientEvent, Config};
+use gaia_client::{GaiaClient, ClientEvent, Config, EntityType};
 
 use gaia_example_shared::{event_manifest_load, entity_manifest_load, StringEvent, ExampleEvent, ExampleEntity};
 
@@ -72,6 +72,8 @@ impl App {
                     }
                     ClientEvent::UpdateEntity(local_key) => {
                         if let Some(entity) = self.client.get_entity(local_key) {
+                            //info!("in app.rs:");
+                            //entity.print(local_key);
                             match entity {
                                 // keep in mind that the below values are clones of the original, used purely to determine the type
                                 ExampleEntity::PointEntity(point_entity) => {
