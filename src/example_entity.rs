@@ -8,7 +8,6 @@ use gaia_shared::{EntityType, NetEntity, StateMask};
 
 use crate::{PointEntity};
 
-#[derive(Clone)]
 pub enum ExampleEntity {
     PointEntity(Rc<RefCell<PointEntity>>),
 }
@@ -34,6 +33,16 @@ impl EntityType for ExampleEntity {
         match self {
             ExampleEntity::PointEntity(identity) => {
                 identity.as_ref().borrow().print(key);
+            }
+        }
+    }
+}
+
+impl Clone for ExampleEntity {
+    fn clone(&self) -> Self {
+        match self {
+            ExampleEntity::PointEntity(identity) => {
+                return ExampleEntity::PointEntity(Rc::new(RefCell::new(identity.as_ref().borrow().clone())));
             }
         }
     }
