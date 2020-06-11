@@ -8,7 +8,7 @@ use std::{
 
 use crate::{Timer, PacketType, NetEvent, EventManifest, EntityKey, ServerEntityManager, ClientEntityManager,
             EventManager, EntityManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
-            EventType, EntityType, EntityStore, NetEntity, ClientEntityMessage, MutHandler, LocalEntityKey};
+            EventType, EntityType, EntityStore, NetEntity, ClientEntityMessage, MutHandler};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -86,13 +86,19 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
         if self.event_manager.has_outgoing_events() || entity_manager_has_outgoing_messages {
             let mut writer = PacketWriter::new();
 
-            let next_packet_index = self.get_next_packet_index();
+            let next_packet_index: u16 = self.get_next_packet_index();
             while let Some(popped_event) = self.event_manager.pop_outgoing_event(next_packet_index) {
-                writer.write_event(event_manifest, &popped_event);
+                if !writer.write_event(event_manifest, &popped_event) {
+                    self.event_manager.unpop_outgoing_event(next_packet_index, &popped_event);
+                    break;
+                }
             }
             if let EntityManager::Server(server_entity_manager) = &mut self.entity_manager {
                 while let Some(popped_entity_message) = server_entity_manager.pop_outgoing_message(next_packet_index) {
-                    writer.write_entity_message(entity_manifest, &popped_entity_message);
+                    if !writer.write_entity_message(entity_manifest, &popped_entity_message) {
+                        server_entity_manager.unpop_outgoing_message(next_packet_index, &popped_entity_message);
+                        break;
+                    }
                 }
             }
 
@@ -158,8 +164,8 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
         }
     }
 
-    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&U> {
-        return match &self.entity_manager {
+    pub fn get_local_entity(&mut self, key: u16) -> Option<&U> {
+        return match &mut self.entity_manager {
             EntityManager::<U>::Server(entity_manager) => None,
             EntityManager::<U>::Client(entity_manager) => entity_manager.get_local_entity(key),
         }

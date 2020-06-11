@@ -105,6 +105,20 @@ impl StateMask {
             mask,
         }
     }
+
+    pub fn copy_contents(&mut self, other: &StateMask) {
+        //if other state mask has different capacity, do nothing
+        if other.byte_number() != self.byte_number() {
+            return;
+        }
+
+        for n in 0..self.bytes {
+            if let Some(my_byte) = self.mask.get_mut(n as usize) {
+                let other_byte = other.get_byte(n as usize);
+                *my_byte = other_byte;
+            }
+        }
+    }
 }
 
 impl fmt::Display for StateMask {

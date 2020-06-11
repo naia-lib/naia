@@ -36,6 +36,14 @@ impl MutHandler {
         }
     }
 
+    pub fn set_state(&mut self, address: &SocketAddr, entity_key: &EntityKey, other_state: &StateMask) {
+        if let Some(state_mask_list) = self.entity_state_mask_list_map.get_mut(entity_key) {
+            if let Some(mask_ref) = state_mask_list.get(address) {
+                mask_ref.borrow_mut().copy_contents(other_state);
+            }
+        }
+    }
+
     pub fn register_entity(&mut self, entity_key: &EntityKey) {
         self.entity_state_mask_list_map.insert(*entity_key, IndexMap::new());
     }
