@@ -44,7 +44,7 @@ pub use {
         entity_manager::{EntityManager},
         entity_type::EntityType,
         entity_store::{EntityKey, EntityStore},
-        entity_record::{EntityRecord, LocalEntityStatus},
+        entity_record::{EntityRecord, LocalEntityStatus, LocalEntityKey},
         server_entity_message::ServerEntityMessage,
         client_entity_message::ClientEntityMessage,
         state_mask::StateMask,

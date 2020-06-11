@@ -8,7 +8,7 @@ use std::{
 
 use slotmap::{SlotMap, SecondaryMap, SparseSecondaryMap};
 
-use crate::{EntityType, EntityKey, PacketReader, EntityManifest, LocalEntityStatus, NetEntity,
+use crate::{EntityType, EntityKey, LocalEntityKey, PacketReader, EntityManifest, LocalEntityStatus, NetEntity,
             EntityStore, EntityRecord, ServerEntityMessage, MutHandler, StateMask};
 use std::borrow::{Borrow, BorrowMut};
 
@@ -19,9 +19,9 @@ use crate::{
 pub struct ServerEntityManager<T: EntityType> {
     address: SocketAddr,
     local_entity_store: SparseSecondaryMap<EntityKey, Rc<RefCell<dyn NetEntity<T>>>>,
-    local_to_global_key_map: HashMap<u16, EntityKey>,
-    recycled_local_keys: Vec<u16>,
-    next_new_local_key: u16,
+    local_to_global_key_map: HashMap<LocalEntityKey, EntityKey>,
+    recycled_local_keys: Vec<LocalEntityKey>,
+    next_new_local_key: LocalEntityKey,
     entity_records: SparseSecondaryMap<EntityKey, EntityRecord>,
     queued_messages: VecDeque<ServerEntityMessage<T>>,
     sent_messages: HashMap<u16, Vec<ServerEntityMessage<T>>>,
