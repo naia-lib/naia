@@ -69,7 +69,7 @@ impl PointEntity {
     pub fn step(&mut self) {
         let mut x = self.get_x();
         x += 1;
-        if x > 100 {
+        if x > 20 {
             x = 0;
         }
         if x % 3 == 0 {
@@ -125,6 +125,8 @@ impl NetEntity<ExampleEntity> for PointEntity {
     fn read(&mut self, buffer: &[u8])  {
         self.set_x(buffer[0]);
         self.set_y(buffer[1]);
+
+//        info!("entity read() with x: {}, y: {}", self.get_x(), self.get_y());
     }
 
     fn read_partial(&mut self, state_mask: &StateMask, buffer: &[u8]) {
@@ -134,5 +136,11 @@ impl NetEntity<ExampleEntity> for PointEntity {
         if let Some(true) = state_mask.get_bit(PointEntityProp::Y as u8) {
             self.set_y(buffer[1]);
         }
+
+//        info!("entity read_partial() with x: {}, y: {}", self.get_x(), self.get_y());
+    }
+
+    fn print(&self, key: u16) {
+        info!("entity print(), key: {}, x: {}, y: {}", key, self.get_x(), self.get_y());
     }
 }
