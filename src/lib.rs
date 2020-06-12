@@ -12,6 +12,5 @@ mod error;
 pub use {
     gaia_client::GaiaClient,
     client_event::ClientEvent,
-    server_connection::ServerConnection,
     gaia_client_socket::Packet
 };
