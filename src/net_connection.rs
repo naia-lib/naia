@@ -8,7 +8,7 @@ use std::{
 
 use crate::{Timer, PacketType, NetEvent, EventManifest, EntityKey, ServerEntityManager, ClientEntityManager,
             EventManager, EntityManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
-            EventType, EntityType, EntityStore, NetEntity, ClientEntityMessage, MutHandler, LocalEntityKey};
+            EventType, EntityType, NetEntity, ClientEntityMessage, MutHandler, LocalEntityKey};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -61,11 +61,11 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
         self.timeout_manager.ringing()
     }
 
-    pub fn process_incoming(&mut self, payload: &[u8]) -> Box<[u8]> {
+    pub fn process_incoming_header(&mut self, payload: &[u8]) -> Box<[u8]> {
         self.ack_manager.process_incoming(&mut self.event_manager, &mut self.entity_manager, payload)
     }
 
-    pub fn process_outgoing(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
+    pub fn process_outgoing_header(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
         self.ack_manager.process_outgoing(packet_type, payload)
     }
 
@@ -107,7 +107,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
                 let out_bytes = writer.get_bytes();
 
                 // Add header to it
-                let payload = self.process_outgoing(PacketType::Data, &out_bytes);
+                let payload = self.process_outgoing_header(PacketType::Data, &out_bytes);
                 return Some(payload);
             }
         }
@@ -126,7 +126,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
         return None;
     }
 
-    pub fn process_data(&mut self, event_manifest: &EventManifest<T>, entity_manifest: &EntityManifest<U>, data: &mut [u8]) {
+    pub fn process_incoming_data(&mut self, event_manifest: &EventManifest<T>, entity_manifest: &EntityManifest<U>, data: &mut [u8]) {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
             match reader.read_manager_type() {
@@ -146,27 +146,27 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
     pub fn has_entity(&self, key: EntityKey) -> bool {
         return match &self.entity_manager {
             EntityManager::<U>::Server(entity_manager) => entity_manager.has_entity(key),
-            EntityManager::<U>::Client(entity_manager) => false,
+            EntityManager::<U>::Client(_) => false,
         }
     }
 
     pub fn add_entity(&mut self, key: EntityKey, entity: &Rc<RefCell<dyn NetEntity<U>>>) {
         return match &mut self.entity_manager {
             EntityManager::<U>::Server(entity_manager) => entity_manager.add_entity(key, entity),
-            EntityManager::<U>::Client(entity_manager) => {},
+            EntityManager::<U>::Client(_) => {},
         }
     }
 
     pub fn remove_entity(&mut self, key: EntityKey) {
         return match &mut self.entity_manager {
             EntityManager::<U>::Server(entity_manager) => entity_manager.remove_entity(key),
-            EntityManager::<U>::Client(entity_manager) => {},
+            EntityManager::<U>::Client(_) => {},
         }
     }
 
     pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&U> {
         return match &self.entity_manager {
-            EntityManager::<U>::Server(entity_manager) => None,
+            EntityManager::<U>::Server(_) => None,
             EntityManager::<U>::Client(entity_manager) => entity_manager.get_local_entity(key),
         }
     }
@@ -174,7 +174,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
     pub fn collect_entity_updates(&mut self) {
         match &mut self.entity_manager {
             EntityManager::<U>::Server(entity_manager) => entity_manager.collect_entity_updates(),
-            EntityManager::<U>::Client(entity_manager) => {},
+            EntityManager::<U>::Client(_) => {},
         }
     }
 }

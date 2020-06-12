@@ -4,17 +4,13 @@ use std::{
     rc::Rc,
     cell::RefCell,
     net::SocketAddr,
+    borrow::{Borrow}
 };
 
-use slotmap::{SlotMap, SecondaryMap, SparseSecondaryMap};
+use slotmap::{SparseSecondaryMap};
 
-use crate::{EntityType, EntityKey, LocalEntityKey, PacketReader, EntityManifest, LocalEntityStatus, NetEntity,
-            EntityStore, EntityRecord, ServerEntityMessage, MutHandler, StateMask};
-use std::borrow::{Borrow, BorrowMut};
-
-use crate::{
-    sequence_buffer::{sequence_greater_than, sequence_less_than, SequenceNumber, SequenceBuffer},
-};
+use crate::{EntityType, EntityKey, LocalEntityKey, LocalEntityStatus, NetEntity,
+            EntityRecord, ServerEntityMessage, MutHandler, StateMask};
 
 pub struct ServerEntityManager<T: EntityType> {
     address: SocketAddr,
@@ -56,7 +52,7 @@ impl<T: EntityType> ServerEntityManager<T> {
             for delivered_message in delivered_messages_list.into_iter() {
 
                 match delivered_message {
-                    ServerEntityMessage::Create(global_key, local_key, entity) => {
+                    ServerEntityMessage::Create(global_key, _, _) => {
                         if let Some(entity_record) = self.entity_records.get_mut(*global_key) {
                             // update entity record status
                             entity_record.status = LocalEntityStatus::Created;
@@ -64,7 +60,7 @@ impl<T: EntityType> ServerEntityManager<T> {
                     },
                     ServerEntityMessage::Delete(global_key_ref, local_key) => {
                         let global_key = *global_key_ref;
-                        if let Some(entity_record) = self.entity_records.get(global_key) {
+                        if let Some(_) = self.entity_records.get(global_key) {
                             // actually delete the entity from local records
                             self.mut_handler.as_ref().borrow_mut().deregister_mask(&self.address, global_key_ref);
                             self.local_entity_store.remove(global_key);
@@ -73,7 +69,7 @@ impl<T: EntityType> ServerEntityManager<T> {
                             self.entity_records.remove(global_key);
                         }
                     }
-                    ServerEntityMessage::Update(global_key, local_key, state_mask, entity) => {
+                    ServerEntityMessage::Update(_, _, _, _) => {
                         self.sent_updates.remove(&packet_index);
                     }
                 }
@@ -146,7 +142,7 @@ impl<T: EntityType> ServerEntityManager<T> {
 
                 //clear state mask of entity if need be
                 match &message {
-                    ServerEntityMessage::Create(global_key, local_key, entity) => {
+                    ServerEntityMessage::Create(global_key, _, _) => {
                         if let Some(record) = self.entity_records.get(*global_key) {
                             self.last_popped_state_mask = record.get_state_mask().as_ref().borrow().clone();
                         }
@@ -196,10 +192,10 @@ impl<T: EntityType> ServerEntityManager<T> {
         }
 
         match &message {
-            ServerEntityMessage::Create(global_key, local_key, entity) => {
+            ServerEntityMessage::Create(global_key, _, _) => {
                 self.mut_handler.as_ref().borrow_mut().set_state(&self.address, global_key, &self.last_popped_state_mask);
             },
-            ServerEntityMessage::Update(global_key, local_key, state_mask, entity) => {
+            ServerEntityMessage::Update(global_key, local_key, _, entity) => {
                 if let Some(sent_updates_map) = self.sent_updates.get_mut(&packet_index) {
                     sent_updates_map.remove(global_key);
                     if sent_updates_map.len() == 0 {

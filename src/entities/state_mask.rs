@@ -1,5 +1,4 @@
-use std::ops::Index;
-use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
+use byteorder::{WriteBytesExt, ReadBytesExt};
 use std::io::{Cursor};
 use std::fmt;
 
@@ -88,16 +87,16 @@ impl StateMask {
     }
 
     pub fn write(&mut self, out_bytes: &mut Vec<u8>) {
-        out_bytes.write_u8(self.bytes);
+        out_bytes.write_u8(self.bytes).unwrap();
         for x in 0..self.bytes {
-            out_bytes.write_u8(self.mask[x as usize]);
+            out_bytes.write_u8(self.mask[x as usize]).unwrap();
         }
     }
 
     pub fn read(cursor: &mut Cursor<&[u8]>) -> StateMask {
         let bytes: u8 = cursor.read_u8().unwrap().into();
         let mut mask: Vec<u8> = Vec::new();
-        for x in 0..bytes {
+        for _ in 0..bytes {
             mask.push(cursor.read_u8().unwrap().into());
         }
         StateMask {
