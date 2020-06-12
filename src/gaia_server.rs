@@ -9,7 +9,7 @@ use std::{
 use log::{info};
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
-pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, EventManifest, EntityManifest,
+pub use gaia_shared::{Config, PacketType, Connection, Timer, Timestamp, EventManifest, EntityManifest,
                       EntityStore, EntityKey, NetEvent, NetEntity, ManagerType, HostType, EventType, EntityType,
                     MutHandler};
 
@@ -152,7 +152,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
 
                                     match self.client_connections.get_mut(&address) {
                                         Some(connection) => {
-                                            if timestamp == connection.connection_timestamp {
+                                            if timestamp == connection.get_connection_timestamp() {
                                                 self.send_internal(PacketType::ServerHandshake, Packet::new_raw(address, Box::new([])))
                                                     .await;
                                                 continue;
