@@ -4,9 +4,14 @@ use std::{
     net::SocketAddr,
 };
 
-use gaia_shared::{Timer, PacketType, NetEvent, EventManifest, ClientEntityManager,
-            EventManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType, ServerEntityManager,
-            EventType, EntityType, ClientEntityMessage, LocalEntityKey, AckManager, Timestamp, SequenceNumber, Connection};
+use gaia_shared::{Timer, PacketType, NetEvent, EventManifest,
+            EventManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
+            EventType, EntityType, LocalEntityKey, AckManager, Timestamp, SequenceNumber, Connection, EntityNotifiable};
+
+use super::{
+    ClientEntityManager,
+    ClientEntityMessage
+};
 
 pub struct ServerConnection<T: EventType, U: EntityType> {
     connection: Connection<T>,
@@ -97,7 +102,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     }
 
     pub fn process_incoming_header(&mut self, payload: &[u8]) -> Box<[u8]> {
-        return self.connection.process_incoming_header(&mut Option::<&mut ServerEntityManager<U>>::None, payload);
+        return self.connection.process_incoming_header(payload, &mut Option::<&mut dyn EntityNotifiable>::None);
     }
 
     pub fn process_outgoing_header(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {

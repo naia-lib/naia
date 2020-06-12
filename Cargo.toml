@@ -9,3 +9,4 @@ gaia-client-socket = { path = "../gaia-client-socket" } # { git = "https://githu
 gaia-shared = { path = "../gaia-shared" } # { git = "https://github.com/connorcarpenter/gaia-shared" } #
 cfg-if = "*"
 log = "0.4"
+byteorder = "1.3"

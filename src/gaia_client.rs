@@ -6,13 +6,14 @@ use std::{
 use log::info;
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{Config, LocalEntityKey, PacketType, Timer, ClientEntityMessage, Timestamp,
+pub use gaia_shared::{Config, LocalEntityKey, PacketType, Timer, Timestamp,
                       EventManifest, EntityManifest, ManagerType, HostType, PacketWriter, PacketReader,
                       NetEvent, EventType, EntityType};
 
 use super::{
     server_connection::ServerConnection,
     client_event::ClientEvent,
+    client_entity_message::ClientEntityMessage,
     error::GaiaClientError,
     Packet
 };
