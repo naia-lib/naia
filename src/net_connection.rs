@@ -62,7 +62,7 @@ impl<T: EventType, U: EntityType> NetConnection<T, U> {
     }
 
     pub fn process_incoming_header(&mut self, payload: &[u8]) -> Box<[u8]> {
-        self.ack_manager.process_incoming(&mut self.event_manager, &mut self.entity_manager, payload)
+        self.ack_manager.process_incoming(&mut self.event_manager, &mut Some(&mut self.entity_manager), payload)
     }
 
     pub fn process_outgoing_header(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {

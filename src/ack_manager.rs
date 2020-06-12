@@ -43,7 +43,7 @@ impl AckManager {
 
     pub fn process_incoming<T: EventType, U: EntityType>(&mut self,
                                                          event_manager: &mut EventManager<T>,
-                                                         entity_manager: &mut EntityManager<U>,
+                                                         entity_manager: &mut Option<&mut EntityManager<U>>,
                                                          payload: &[u8]) -> Box<[u8]> {
         let (header, stripped_message) = StandardHeader::read(payload);
         let remote_seq_num = header.sequence();
@@ -123,7 +123,7 @@ impl AckManager {
     }
 
     fn notify_packet_delivered<T: EventType, U: EntityType>(&self, event_manager: &mut EventManager<T>,
-                                                            entity_manager: &mut EntityManager<U>,
+                                                            entity_manager: &mut Option<&mut EntityManager<U>>,
                                                             packet_sequence_number: u16) {
         let host_type_string = match self.host_type {
             HostType::Server => "Server",
@@ -131,13 +131,13 @@ impl AckManager {
         };
         info!("-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------", host_type_string, packet_sequence_number);
         event_manager.notify_packet_delivered(packet_sequence_number);
-        if let EntityManager::Server(server_entity_manager) = entity_manager {
+        if let Some(EntityManager::Server(server_entity_manager)) = entity_manager {
             server_entity_manager.notify_packet_delivered(packet_sequence_number);
         }
     }
 
     fn notify_packet_dropped<T: EventType, U: EntityType>(&self, event_manager: &mut EventManager<T>,
-                                                          entity_manager: &mut EntityManager<U>,
+                                                          entity_manager: &mut Option<&mut EntityManager<U>>,
                                                           packet_sequence_number: u16) {
         let host_type_string = match self.host_type {
             HostType::Server => "Server",
@@ -145,7 +145,7 @@ impl AckManager {
         };
         info!("---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---", host_type_string, packet_sequence_number);
         event_manager.notify_packet_dropped(packet_sequence_number);
-        if let EntityManager::Server(server_entity_manager) = entity_manager {
+        if let Some(EntityManager::Server(server_entity_manager)) = entity_manager {
             server_entity_manager.notify_packet_dropped(packet_sequence_number);
         }
     }
