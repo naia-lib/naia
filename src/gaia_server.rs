@@ -14,11 +14,10 @@ pub use gaia_shared::{Config, PacketType, NetConnection, Timer, Timestamp, Event
                     MutHandler};
 
 use super::{
+    Packet,
+    error::GaiaServerError,
     server_event::ServerEvent,
 };
-use crate::{
-    Packet,
-    error::GaiaServerError};
 
 pub struct GaiaServer<T: EventType, U: EntityType> {
     event_manifest: EventManifest<T>,
@@ -84,7 +83,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                         self.outstanding_disconnects.push_back(*address);
                     } else if connection.should_send_heartbeat() {
                         // Don't try to refactor this to self.internal_send, doesn't seem to work cause of iter_mut()
-                        let payload = connection.process_outgoing(PacketType::Heartbeat, &[]);
+                        let payload = connection.process_outgoing_header(PacketType::Heartbeat, &[]);
                         self.sender.send(Packet::new_raw(*address, payload))
                             .await
                             .expect("send failed!");
@@ -171,8 +170,8 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
 
                                     match self.client_connections.get_mut(&address) {
                                         Some(connection) => {
-                                            let mut payload = connection.process_incoming(packet.payload());
-                                            connection.process_data(&self.event_manifest, &self.entity_manifest, &mut payload);
+                                            let mut payload = connection.process_incoming_header(packet.payload());
+                                            connection.process_incoming_data(&self.event_manifest, &self.entity_manifest, &mut payload);
                                             continue;
                                         }
                                         None => {
@@ -184,7 +183,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                     match self.client_connections.get_mut(&address) {
                                         Some(connection) => {
                                             // Still need to do this so that proper notify events fire based on the heartbeat header
-                                            connection.process_incoming(packet.payload());
+                                            connection.process_incoming_header(packet.payload());
                                             info!("<- c");
                                             continue;
                                         }
@@ -248,7 +247,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
 
     async fn send_internal(&mut self, packet_type: PacketType, packet: Packet) {
         if let Some(connection) = self.client_connections.get_mut(&packet.address()) {
-            let payload = connection.process_outgoing(packet_type, packet.payload());
+            let payload = connection.process_outgoing_header(packet_type, packet.payload());
             match self.sender.send(Packet::new_raw(packet.address(), payload))
                 .await {
                 Ok(_) => {}
