@@ -32,6 +32,8 @@ pub use {
     packet_reader::PacketReader,
     packet_writer::PacketWriter,
     host_type::HostType,
+    ack_manager::AckManager,
+    sequence_buffer::SequenceNumber,
     events::{
         net_event::{NetEvent, NetEventType, NetEventClone},
         event_manifest::EventManifest,
