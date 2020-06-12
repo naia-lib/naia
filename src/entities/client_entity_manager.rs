@@ -1,8 +1,6 @@
 
-use crate::{EntityType, LocalEntityKey, EntityKey, EntityStore, PacketReader, EntityManifest, NetEntity, ClientEntityMessage, StateMask};
+use crate::{EntityType, LocalEntityKey, PacketReader, EntityManifest, ClientEntityMessage, StateMask};
 use std::{
-    rc::Rc,
-    cell::RefCell,
     collections::{VecDeque, HashMap}
 };
 use byteorder::{BigEndian, ReadBytesExt};

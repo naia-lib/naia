@@ -4,10 +4,10 @@ use log::{info};
 
 use super::{
     standard_header::StandardHeader,
-    sequence_buffer::{sequence_greater_than, sequence_less_than, SequenceNumber, SequenceBuffer},
+    sequence_buffer::{sequence_greater_than, SequenceNumber, SequenceBuffer},
 };
 
-use crate::{PacketType, EventType, EntityType, HostType, EventManager, EntityManager, ServerEntityManager};
+use crate::{PacketType, EventType, EntityType, HostType, EventManager, EntityManager};
 
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
 const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
