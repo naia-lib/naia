@@ -6,9 +6,14 @@ use std::{
     net::SocketAddr,
 };
 
-use gaia_shared::{Timer, PacketType, NetEvent, EventManifest, EntityKey, ServerEntityManager,
+use gaia_shared::{Timer, PacketType, NetEvent, EventManifest, EntityKey,
             EventManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
             EventType, EntityType, NetEntity, MutHandler, SequenceNumber, Timestamp, AckManager, Connection};
+
+use super::{
+    ServerEntityManager,
+    EntityPacketWriter,
+};
 
 pub struct ClientConnection<T: EventType, U: EntityType> {
     connection: Connection<T>,
@@ -43,7 +48,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
                 }
             }
             while let Some(popped_entity_message) = self.entity_manager.pop_outgoing_message(next_packet_index) {
-                if !writer.write_entity_message(entity_manifest, &popped_entity_message) {
+                if !EntityPacketWriter::write_entity_message(&mut writer, entity_manifest, &popped_entity_message) {
                     self.entity_manager.unpop_outgoing_message(next_packet_index, &popped_entity_message);
                     break;
                 }
@@ -109,7 +114,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
     }
 
     pub fn process_incoming_header(&mut self, payload: &[u8]) -> Box<[u8]> {
-        return self.connection.process_incoming_header(&mut Some(&mut self.entity_manager), payload);
+        return self.connection.process_incoming_header(payload, &mut self.entity_manager);
     }
 
     pub fn process_outgoing_header(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
