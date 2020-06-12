@@ -99,15 +99,17 @@ impl<T: EntityType> ServerEntityManager<T> {
                                 let mut new_state_mask = state_mask.as_ref().borrow().clone();
 
                                 // walk from dropped packet up to most recently sent packet
-                                let mut packet_index = dropped_packet_index.wrapping_add(1);
-                                while packet_index != self.last_update_packet_index {
-                                    if let Some(state_mask_map) = self.sent_updates.get(&packet_index) {
-                                        if let Some(state_mask) = state_mask_map.get(global_key) {
-                                            new_state_mask.nand(state_mask.as_ref().borrow().borrow());
+                                if dropped_packet_index != self.last_update_packet_index {
+                                    let mut packet_index = dropped_packet_index.wrapping_add(1);
+                                    while packet_index != self.last_update_packet_index {
+                                        if let Some(state_mask_map) = self.sent_updates.get(&packet_index) {
+                                            if let Some(state_mask) = state_mask_map.get(global_key) {
+                                                new_state_mask.nand(state_mask.as_ref().borrow().borrow());
+                                            }
                                         }
-                                    }
 
-                                    packet_index = packet_index.wrapping_add(1);
+                                        packet_index = packet_index.wrapping_add(1);
+                                    }
                                 }
 
                                 if let Some(record) = self.entity_records.get_mut(*global_key) {
@@ -116,12 +118,11 @@ impl<T: EntityType> ServerEntityManager<T> {
                                 }
                             }
                         }
-
-                        self.sent_updates.remove(&dropped_packet_index);
                     }
                 }
             }
 
+            self.sent_updates.remove(&dropped_packet_index);
             self.sent_messages.remove(&dropped_packet_index);
         }
     }
