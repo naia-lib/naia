@@ -9,7 +9,7 @@ mod entities;
 mod events;
 mod ack_manager;
 mod config;
-mod net_connection;
+mod connection;
 mod packet_type;
 mod sequence_buffer;
 mod standard_header;
@@ -26,7 +26,7 @@ pub use {
     packet_type::PacketType,
     standard_header::StandardHeader,
     config::Config,
-    net_connection::{NetConnection},
+    connection::Connection,
     timestamp::Timestamp,
     manager_type::ManagerType,
     packet_reader::PacketReader,
