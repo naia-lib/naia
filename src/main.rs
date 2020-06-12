@@ -6,12 +6,11 @@ use simple_logger;
 
 use gaia_server::{GaiaServer, ServerEvent, find_my_ip_address, Config};
 
-use gaia_example_shared::{event_manifest_load, entity_manifest_load, StringEvent, PointEntity, ExampleEvent, ExampleEntity};
+use gaia_example_shared::{event_manifest_load, entity_manifest_load, PointEntity, ExampleEvent, ExampleEntity};
 
 use std::{
     rc::Rc,
     cell::RefCell,
-    net::SocketAddr,
     time::Duration};
 
 const SERVER_PORT: &str = "3179";
