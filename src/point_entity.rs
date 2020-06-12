@@ -3,9 +3,10 @@ use std::{
     rc::Rc,
     cell::RefCell,
 };
+
 use gaia_shared::{NetEntity, MutHandler, EntityKey, StateMask};
+
 use crate::{ExampleEntity};
-use std::borrow::BorrowMut;
 
 #[derive(Clone)]
 pub struct PointEntity {
