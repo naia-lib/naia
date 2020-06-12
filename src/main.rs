@@ -47,8 +47,6 @@ async fn main() {
         }
     })));
 
-    let mut no_step = 0;
-
     loop {
         match server.receive().await {
             Ok(event) => {
@@ -85,14 +83,8 @@ async fn main() {
 //                            server.send_event(addr, &string_event);
 //                        }
 
-                        no_step += 1;
-                        if no_step < 6 {
-                            for point_entity in &point_entities {
-                                point_entity.borrow_mut().step();
-                            }
-                        }
-                        if no_step > 8 {
-                            no_step = 0;
+                        for point_entity in &point_entities {
+                            point_entity.borrow_mut().step();
                         }
                     }
                 }
