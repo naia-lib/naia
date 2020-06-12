@@ -17,6 +17,7 @@ use super::{
     Packet,
     error::GaiaServerError,
     server_event::ServerEvent,
+    client_connection::ClientConnection,
 };
 
 pub struct GaiaServer<T: EventType, U: EntityType> {
@@ -28,7 +29,7 @@ pub struct GaiaServer<T: EventType, U: EntityType> {
     config: Config,
     socket: ServerSocket,
     sender: MessageSender,
-    client_connections: HashMap<SocketAddr, NetConnection<T, U>>,
+    client_connections: HashMap<SocketAddr, ClientConnection<T, U>>,
     outstanding_disconnects: VecDeque<SocketAddr>,
     heartbeat_timer: Timer,
     drop_counter: u8,
@@ -140,7 +141,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
 
                                     if !self.client_connections.contains_key(&address) {
                                         self.client_connections.insert(address,
-                                                                       NetConnection::new(HostType::Server,
+                                                                       ClientConnection::new(
                                                                                           address,
                                                                                           Some(&self.mut_handler),
                                                                                           self.config.heartbeat_interval,
@@ -171,7 +172,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                     match self.client_connections.get_mut(&address) {
                                         Some(connection) => {
                                             let mut payload = connection.process_incoming_header(packet.payload());
-                                            connection.process_incoming_data(&self.event_manifest, &self.entity_manifest, &mut payload);
+                                            connection.process_incoming_data(&self.event_manifest, &mut payload);
                                             continue;
                                         }
                                         None => {
