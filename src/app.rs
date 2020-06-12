@@ -2,11 +2,8 @@
 use log::{info};
 
 use std::time::Duration;
-use std::ops::Deref;
-use std::cell::RefCell;
-use std::rc::Rc;
 
-use gaia_client::{GaiaClient, ClientEvent, Config, EntityType};
+use gaia_client::{GaiaClient, ClientEvent, Config};
 
 use gaia_example_shared::{event_manifest_load, entity_manifest_load, StringEvent, ExampleEvent, ExampleEntity};
 
@@ -68,7 +65,6 @@ impl App {
                                       point_entity.as_ref().borrow().get_x(),
                                       point_entity.as_ref().borrow().get_y());
                             }
-                            _ => {}
                         }
                     }
                     ClientEvent::UpdateEntity(local_key) => {
@@ -83,7 +79,6 @@ impl App {
                                           point_entity.as_ref().borrow().get_x(),
                                           point_entity.as_ref().borrow().get_y());
                                 }
-                                _ => {}
                             }
                         }
                     }
@@ -93,7 +88,6 @@ impl App {
                     ClientEvent::None => {
                         //info!("Client non-event");
                     }
-                    _ => { }
                 }
             }
             Err(err) => {
