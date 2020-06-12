@@ -11,7 +11,7 @@ pub use gaia_shared::{Config, LocalEntityKey, PacketType, Timer, ClientEntityMes
                       NetEvent, EventType, EntityType};
 
 use super::{
-    client_connection::ClientConnection,
+    server_connection::ServerConnection,
     client_event::ClientEvent,
     error::GaiaClientError,
     Packet
@@ -24,7 +24,7 @@ pub struct GaiaClient<T: EventType, U: EntityType> {
     config: Config,
     socket: ClientSocket,
     sender: MessageSender,
-    server_connection: Option<ClientConnection<T, U>>,
+    server_connection: Option<ServerConnection<T, U>>,
     pre_connection_timestamp: Option<Timestamp>,
     handshake_timer: Timer,
     drop_counter: u8,
@@ -157,10 +157,10 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                             }
                             else {
                                 if packet_type == PacketType::ServerHandshake {
-                                    self.server_connection = Some(ClientConnection::new(self.server_address,
-                                                                                     self.config.heartbeat_interval,
-                                                                                     self.config.disconnection_timeout_duration,
-                                                                                     self.pre_connection_timestamp.take().unwrap()));
+                                    self.server_connection = Some(ServerConnection::new(self.server_address,
+                                                                                        self.config.heartbeat_interval,
+                                                                                        self.config.disconnection_timeout_duration,
+                                                                                        self.pre_connection_timestamp.take().unwrap()));
                                     output = Some(Ok(ClientEvent::Connection));
                                     continue;
                                 }
@@ -189,7 +189,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
         }
     }
 
-    fn internal_send_with_connection(sender: &mut MessageSender, connection: &mut ClientConnection<T, U>, packet_type: PacketType, packet: Packet) {
+    fn internal_send_with_connection(sender: &mut MessageSender, connection: &mut ServerConnection<T, U>, packet_type: PacketType, packet: Packet) {
         let new_payload = connection.process_outgoing_header(packet_type, packet.payload());
         sender.send(Packet::new_raw(new_payload))
             .expect("send failed!");
