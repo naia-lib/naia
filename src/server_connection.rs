@@ -8,7 +8,7 @@ use gaia_shared::{Timer, PacketType, NetEvent, EventManifest, ClientEntityManage
             EventManager, EntityManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
             EventType, EntityType, ClientEntityMessage, LocalEntityKey, AckManager, Timestamp, SequenceNumber};
 
-pub struct ClientConnection<T: EventType, U: EntityType> {
+pub struct ServerConnection<T: EventType, U: EntityType> {
     pub connection_timestamp: Timestamp,
     address: SocketAddr,
     heartbeat_manager: Timer,
@@ -18,10 +18,10 @@ pub struct ClientConnection<T: EventType, U: EntityType> {
     entity_manager: ClientEntityManager<U>,
 }
 
-impl<T: EventType, U: EntityType> ClientConnection<T, U> {
+impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     pub fn new(address: SocketAddr, heartbeat_interval: Duration, timeout_duration: Duration, connection_timestamp: Timestamp) -> Self {
 
-        return ClientConnection {
+        return ServerConnection {
             address,
             connection_timestamp,
             heartbeat_manager: Timer::new(heartbeat_interval),
