@@ -1,5 +1,5 @@
 
-use gaia_shared::{EntityType, LocalEntityKey, PacketReader, EntityManifest, StateMask};
+use gaia_shared::{EventType, EntityType, LocalEntityKey, PacketReader, Manifest, StateMask};
 use std::{
     collections::{VecDeque, HashMap}
 };
@@ -15,7 +15,7 @@ pub struct ClientEntityManager<T: EntityType> {
     queued_incoming_messages: VecDeque<ClientEntityMessage<T>>,
 }
 
-impl<T: EntityType> ClientEntityManager<T> {
+impl<U: EntityType> ClientEntityManager<U> {
     pub fn new() -> Self {
         info!("new client entity manager");
         ClientEntityManager {
@@ -24,7 +24,7 @@ impl<T: EntityType> ClientEntityManager<T> {
         }
     }
 
-    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &EntityManifest<T>) {
+    pub fn process_data<T: EventType>(&mut self, reader: &mut PacketReader, manifest: &Manifest<T, U>) {
         let buffer = reader.get_buffer();
         let cursor = reader.get_cursor();
 
@@ -92,11 +92,11 @@ impl<T: EntityType> ClientEntityManager<T> {
         }
     }
 
-    pub fn pop_incoming_message(&mut self) -> Option<ClientEntityMessage<T>> {
+    pub fn pop_incoming_message(&mut self) -> Option<ClientEntityMessage<U>> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&T> {
+    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&U> {
         return self.local_entity_store.get(&key);
     }
 }

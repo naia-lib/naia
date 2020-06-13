@@ -4,8 +4,8 @@ use std::{
     net::SocketAddr,
 };
 
-use gaia_shared::{Timer, PacketType, NetEvent, EventManifest,
-            EventManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
+use gaia_shared::{Timer, PacketType, NetEvent, Manifest,
+            EventManager, PacketWriter, PacketReader, ManagerType, HostType,
             EventType, EntityType, LocalEntityKey, AckManager, Timestamp, SequenceNumber, Connection, EntityNotifiable};
 
 use super::{
@@ -34,14 +34,14 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         };
     }
 
-    pub fn get_outgoing_packet(&mut self, event_manifest: &EventManifest<T>) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T, U>) -> Option<Box<[u8]>> {
 
         if self.connection.has_outgoing_events() {
             let mut writer = PacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
             while let Some(popped_event) = self.connection.pop_outgoing_event(next_packet_index) {
-                if !writer.write_event(event_manifest, &popped_event) {
+                if !writer.write_event(manifest, &popped_event) {
                     self.connection.unpop_outgoing_event(next_packet_index, &popped_event);
                     break;
                 }
@@ -64,15 +64,15 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.pop_incoming_message();
     }
 
-    pub fn process_incoming_data(&mut self, event_manifest: &EventManifest<T>, entity_manifest: &EntityManifest<U>, data: &mut [u8]) {
+    pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &mut [u8]) {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
             match reader.read_manager_type() {
                 ManagerType::Event => {
-                    self.connection.process_event_data(&mut reader, event_manifest);
+                    self.connection.process_event_data(&mut reader, manifest);
                 }
                 ManagerType::Entity => {
-                    self.entity_manager.process_data(&mut reader, entity_manifest);
+                    self.entity_manager.process_data(&mut reader, manifest);
                 }
                 _ => {}
             }
