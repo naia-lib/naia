@@ -36,13 +36,19 @@ impl EntityType for ExampleEntity {
             }
         }
     }
-}
 
-impl Clone for ExampleEntity {
-    fn clone(&self) -> Self {
+    fn init(&self) -> Self {
+        match self {
+            ExampleEntity::PointEntity(_) => {
+                return ExampleEntity::PointEntity(Rc::new(RefCell::new(PointEntity::init())));
+            }
+        }
+    }
+
+    fn clone_inner_rc(&self) -> Self {
         match self {
             ExampleEntity::PointEntity(identity) => {
-                return ExampleEntity::PointEntity(Rc::new(RefCell::new(identity.as_ref().borrow().clone())));
+                return ExampleEntity::PointEntity(identity.clone());
             }
         }
     }
