@@ -4,18 +4,17 @@ use std::{
     cell::RefCell,
 };
 
-use crate::{EntityKey, EntityType, MutHandler, StateMask};
+use crate::{EntityType, StateMask, EntityMutator};
 
 pub trait NetEntity<T: EntityType>: NetEntityType<T> {
     fn get_state_mask_size(&self) -> u8;
     fn to_type(&self) -> T;
-    fn set_mut_handler(&mut self, mut_handler: &Rc<RefCell<MutHandler>>);
-    fn set_entity_key(&mut self, key: EntityKey);
     fn write(&self, out_bytes: &mut Vec<u8>);
     fn write_partial(&self, state_mask: &Rc<RefCell<StateMask>>, out_bytes: &mut Vec<u8>);
     fn read(&mut self, in_bytes: &[u8]);
     fn read_partial(&mut self, state_mask: &StateMask, in_bytes: &[u8]);
     fn print(&self, key: u16);
+    fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>);
 }
 
 pub trait NetEntityType<T: EntityType> {

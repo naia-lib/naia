@@ -44,10 +44,9 @@ pub use {
         net_entity::{NetEntity, NetEntityType},
         entity_manifest::EntityManifest,
         entity_type::EntityType,
-        entity_store::{EntityKey, EntityStore},
-        entity_record::{EntityRecord, LocalEntityStatus, LocalEntityKey},
+        local_entity_key::LocalEntityKey,
         state_mask::StateMask,
-        mut_handler::MutHandler,
         entity_notifiable::EntityNotifiable,
+        entity_mutator::EntityMutator,
     },
 };
