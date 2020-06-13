@@ -4,9 +4,7 @@ use std::{
     net::SocketAddr,
 };
 
-use crate::{Timer, PacketType, NetEvent, EventManifest,
-            EventManager, PacketReader,
-            EventType, EntityNotifiable};
+use crate::{Timer, PacketType, NetEvent, Manifest, EventManager, PacketReader, EventType, EntityNotifiable, EntityType};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -89,7 +87,7 @@ impl<T: EventType> Connection<T> {
         return self.event_manager.unpop_outgoing_event(next_packet_index, event);
     }
 
-    pub fn process_event_data(&mut self, reader: &mut PacketReader, manifest: &EventManifest<T>) {
+    pub fn process_event_data<U: EntityType>(&mut self, reader: &mut PacketReader, manifest: &Manifest<T, U>) {
         return self.event_manager.process_data(reader, manifest);
     }
 

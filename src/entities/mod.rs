@@ -1,4 +1,3 @@
-pub(crate) mod entity_manifest;
 pub(crate) mod net_entity;
 pub(crate) mod entity_type;
 pub(crate) mod state_mask;
