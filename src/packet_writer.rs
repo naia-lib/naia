@@ -29,9 +29,12 @@ impl PacketWriter {
 
         let mut out_bytes = Vec::<u8>::new();
 
+        let mut wrote_manager_type = false;
+
         //Write manager "header" (manager type & entity count)
         if self.event_count != 0 {
-            out_bytes.write_u8(ManagerType::Event as u8).unwrap(); // write manager type //TODO this might be meaningless.. always a fixed order here
+            out_bytes.write_u8(ManagerType::Event as u8).unwrap(); // write manager type
+            wrote_manager_type = true;
             out_bytes.write_u8(self.event_count).unwrap(); // write number of events in the following message
             out_bytes.append(&mut self.event_working_bytes); // write event payload
             self.event_count = 0;
@@ -40,7 +43,9 @@ impl PacketWriter {
         //Write manager "header" (manager type & entity count)
         if self.entity_message_count != 0 {
             //info!("writing {} entity message, with {} bytes", self.entity_message_count, self.entity_working_bytes.len());
-            out_bytes.write_u8(ManagerType::Entity as u8).unwrap(); // write manager type //TODO this might be meaningless.. always a fixed order here
+            if !wrote_manager_type {
+                out_bytes.write_u8(ManagerType::Entity as u8).unwrap(); // write manager type
+            }
             out_bytes.write_u8(self.entity_message_count).unwrap(); // write number of messages
             out_bytes.append(&mut self.entity_working_bytes); // write event payload
 
