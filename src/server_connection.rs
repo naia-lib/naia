@@ -66,16 +66,12 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &mut [u8]) {
         let mut reader = PacketReader::new(data);
-        while reader.has_more() {
-            match reader.read_manager_type() {
-                ManagerType::Event => {
-                    self.connection.process_event_data(&mut reader, manifest);
-                }
-                ManagerType::Entity => {
-                    self.entity_manager.process_data(&mut reader, manifest);
-                }
-                _ => {}
-            }
+        let start_manager_type = reader.read_manager_type();
+        if start_manager_type == ManagerType::Event {
+            self.connection.process_event_data(&mut reader, manifest);
+        }
+        if reader.has_more() {
+            self.entity_manager.process_data(&mut reader, manifest);
         }
     }
 
