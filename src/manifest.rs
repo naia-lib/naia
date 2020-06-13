@@ -2,7 +2,7 @@
 use std::any::{TypeId};
 use std::collections::HashMap;
 
-use crate::{NetEvent, NetEventType, EventType, NetEntity, NetEntityType, EntityType};
+use crate::{Event, EventTypeGetter, EventType, Entity, EntityTypeGetter, EntityType};
 
 pub struct Manifest<T: EventType, U: EntityType> {
     event_gaia_id_count: u16,
@@ -27,11 +27,11 @@ impl<T: EventType, U: EntityType> Manifest<T, U> {
         }
     }
 
-    pub fn register_event<S: NetEvent<T>>(&mut self, some_type: &S) {
+    pub fn register_event<S: Event<T>>(&mut self, some_type: &S) {
         let new_gaia_id = self.event_gaia_id_count;
-        let type_id = NetEventType::get_type_id(some_type);
+        let type_id = EventTypeGetter::get_type_id(some_type);
         self.event_type_id_map.insert(type_id, new_gaia_id);
-        self.event_gaia_id_map.insert(new_gaia_id, NetEvent::<T>::to_type(some_type));
+        self.event_gaia_id_map.insert(new_gaia_id, Event::<T>::to_type(some_type));
         self.event_gaia_id_count += 1;
     }
 
@@ -52,11 +52,11 @@ impl<T: EventType, U: EntityType> Manifest<T, U> {
         return None;
     }
 
-    pub fn register_entity<S: NetEntity<U>>(&mut self, some_type: &S) {
+    pub fn register_entity<S: Entity<U>>(&mut self, some_type: &S) {
         let new_gaia_id = self.entity_gaia_id_count;
-        let type_id = NetEntityType::get_type_id(some_type);
+        let type_id = EntityTypeGetter::get_type_id(some_type);
         self.entity_type_id_map.insert(type_id, new_gaia_id);
-        self.entity_gaia_id_map.insert(new_gaia_id, NetEntity::<U>::to_type(some_type));
+        self.entity_gaia_id_map.insert(new_gaia_id, Entity::<U>::to_type(some_type));
         self.entity_gaia_id_count += 1;
     }
 

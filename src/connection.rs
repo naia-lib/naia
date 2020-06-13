@@ -4,7 +4,7 @@ use std::{
     net::SocketAddr,
 };
 
-use crate::{Timer, PacketType, NetEvent, Manifest, EventManager, PacketReader, EventType, EntityNotifiable, EntityType};
+use crate::{Timer, PacketType, Event, Manifest, EventManager, PacketReader, EventType, EntityNotifiable, EntityType};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -71,7 +71,7 @@ impl<T: EventType> Connection<T> {
         return self.ack_manager.local_sequence_num();
     }
 
-    pub fn queue_event(&mut self, event: &impl NetEvent<T>) {
+    pub fn queue_event(&mut self, event: &impl Event<T>) {
         return self.event_manager.queue_outgoing_event(event);
     }
 
@@ -79,11 +79,11 @@ impl<T: EventType> Connection<T> {
         return self.event_manager.has_outgoing_events();
     }
 
-    pub fn pop_outgoing_event(&mut self, next_packet_index: u16) -> Option<Rc<Box<dyn NetEvent<T>>>> {
+    pub fn pop_outgoing_event(&mut self, next_packet_index: u16) -> Option<Rc<Box<dyn Event<T>>>> {
         return self.event_manager.pop_outgoing_event(next_packet_index);
     }
 
-    pub fn unpop_outgoing_event(&mut self, next_packet_index: u16, event: &Rc<Box<dyn NetEvent<T>>>) {
+    pub fn unpop_outgoing_event(&mut self, next_packet_index: u16, event: &Rc<Box<dyn Event<T>>>) {
         return self.event_manager.unpop_outgoing_event(next_packet_index, event);
     }
 

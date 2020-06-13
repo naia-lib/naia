@@ -37,12 +37,12 @@ pub use {
     sequence_buffer::SequenceNumber,
     manifest::Manifest,
     events::{
-        net_event::{NetEvent, NetEventType, NetEventClone},
+        event::{Event, EventTypeGetter, EventClone},
         event_type::EventType,
         event_manager::EventManager,
     },
     entities::{
-        net_entity::{NetEntity, NetEntityType},
+        entity::{Entity, EntityTypeGetter},
         entity_type::EntityType,
         local_entity_key::LocalEntityKey,
         state_mask::StateMask,

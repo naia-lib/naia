@@ -6,7 +6,7 @@ use std::{
 
 use crate::{EntityType, StateMask, EntityMutator};
 
-pub trait NetEntity<T: EntityType>: NetEntityType<T> {
+pub trait Entity<T: EntityType>: EntityTypeGetter<T> {
     fn get_state_mask_size(&self) -> u8;
     fn to_type(&self) -> T;
     fn write(&self, out_bytes: &mut Vec<u8>);
@@ -17,10 +17,10 @@ pub trait NetEntity<T: EntityType>: NetEntityType<T> {
     fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>);
 }
 
-pub trait NetEntityType<T: EntityType> {
+pub trait EntityTypeGetter<T: EntityType> {
     fn get_type_id(&self) -> TypeId;
 }
 
-impl<Z: EntityType, T: 'static + NetEntity<Z>> NetEntityType<Z> for T {
+impl<Z: EntityType, T: 'static + Entity<Z>> EntityTypeGetter<Z> for T {
     fn get_type_id(&self) -> TypeId { return TypeId::of::<T>(); }
 }
