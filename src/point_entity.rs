@@ -4,7 +4,7 @@ use std::{
     cell::RefCell,
 };
 
-use gaia_shared::{NetEntity, StateMask, EntityMutator};
+use gaia_shared::{Entity, StateMask, EntityMutator};
 
 use crate::{ExampleEntity};
 
@@ -83,7 +83,7 @@ impl PointEntity {
     }
 }
 
-impl NetEntity<ExampleEntity> for PointEntity {
+impl Entity<ExampleEntity> for PointEntity {
 
     fn get_state_mask_size(&self) -> u8 {
         1

@@ -1,5 +1,5 @@
 
-use gaia_shared::{NetEvent};
+use gaia_shared::{Event};
 use crate::ExampleEvent;
 
 #[derive(Clone)]
@@ -30,7 +30,7 @@ impl StringEvent {
     }
 }
 
-impl NetEvent<ExampleEvent> for StringEvent {
+impl Event<ExampleEvent> for StringEvent {
     fn is_guaranteed(&self) -> bool {
         true
     }
