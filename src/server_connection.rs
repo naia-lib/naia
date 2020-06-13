@@ -4,7 +4,7 @@ use std::{
     net::SocketAddr,
 };
 
-use gaia_shared::{Timer, PacketType, NetEvent, Manifest,
+use gaia_shared::{Timer, PacketType, Event, Manifest,
             EventManager, PacketWriter, PacketReader, ManagerType, HostType,
             EventType, EntityType, LocalEntityKey, AckManager, Timestamp, SequenceNumber, Connection, EntityNotifiable};
 
@@ -113,7 +113,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_event(&mut self, event: &impl NetEvent<T>) {
+    pub fn queue_event(&mut self, event: &impl Event<T>) {
         return self.connection.queue_event(event);
     }
 
