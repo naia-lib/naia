@@ -4,7 +4,7 @@ extern crate log;
 
 use simple_logger;
 
-use gaia_server::{GaiaServer, ServerEvent, NetEntity, find_my_ip_address, Config};
+use gaia_server::{GaiaServer, ServerEvent, Entity, find_my_ip_address, Config};
 
 use gaia_example_shared::{manifest_load, PointEntity, ExampleEvent, ExampleEntity};
 
@@ -15,8 +15,8 @@ use std::{
 
 const SERVER_PORT: &str = "3179";
 
-pub fn get_server_point_entity(e: &Rc<RefCell<PointEntity>>) -> Rc<RefCell<dyn NetEntity<ExampleEntity>>> {
-    e.clone() as Rc<RefCell<dyn NetEntity<ExampleEntity>>>
+pub fn get_server_point_entity(e: &Rc<RefCell<PointEntity>>) -> Rc<RefCell<dyn Entity<ExampleEntity>>> {
+    e.clone() as Rc<RefCell<dyn Entity<ExampleEntity>>>
 }
 
 #[tokio::main]
@@ -37,7 +37,7 @@ async fn main() {
     let mut point_entities: Vec<Rc<RefCell<PointEntity>>> = Vec::new();
     for x in 0..20 {
         let point_entity = PointEntity::new(x, 0);
-        let server_point_entity: Rc<RefCell<dyn NetEntity<ExampleEntity>>> = get_server_point_entity(&point_entity);
+        let server_point_entity: Rc<RefCell<dyn Entity<ExampleEntity>>> = get_server_point_entity(&point_entity);
         server.add_entity(&server_point_entity);
         point_entities.push(point_entity.clone());
     }
