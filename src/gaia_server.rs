@@ -9,7 +9,7 @@ use std::{
 use log::{info};
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
-pub use gaia_shared::{Config, PacketType, Connection, Timer, Timestamp, EventManifest, EntityManifest,
+pub use gaia_shared::{Config, PacketType, Connection, Timer, Timestamp, Manifest,
                       NetEvent, NetEntity, ManagerType, HostType, EventType, EntityType, EntityMutator};
 
 use super::{
@@ -27,8 +27,7 @@ use super::{
 };
 
 pub struct GaiaServer<T: EventType, U: EntityType> {
-    event_manifest: EventManifest<T>,
-    entity_manifest: EntityManifest<U>,
+    manifest: Manifest<T, U>,
     global_entity_store: EntityStore<U>,
     scope_entity_func: Option<Rc<Box<dyn Fn(&SocketAddr, U) -> bool>>>,
     mut_handler: Rc<RefCell<MutHandler>>,
@@ -47,7 +46,7 @@ fn to_entity_mutator(eref: &Rc<RefCell<ServerEntityMutator>>) -> Rc<RefCell<dyn 
 }
 
 impl<T: EventType, U: EntityType> GaiaServer<T, U> {
-    pub async fn listen(address: &str, event_manifest: EventManifest<T>, entity_manifest: EntityManifest<U>, config: Option<Config>) -> Self {
+    pub async fn listen(address: &str, manifest: Manifest<T, U>, config: Option<Config>) -> Self {
 
         let mut config = match config {
             Some(config) => config,
@@ -65,8 +64,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         let heartbeat_timer = Timer::new(config.heartbeat_interval);
 
         GaiaServer {
-            event_manifest,
-            entity_manifest,
+            manifest,
             global_entity_store: EntityStore::new(),
             scope_entity_func: None,
             mut_handler: MutHandler::new(),
@@ -182,7 +180,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                     match self.client_connections.get_mut(&address) {
                                         Some(connection) => {
                                             let mut payload = connection.process_incoming_header(packet.payload());
-                                            connection.process_incoming_data(&self.event_manifest, &mut payload);
+                                            connection.process_incoming_data(&self.manifest, &mut payload);
                                             continue;
                                         }
                                         None => {
@@ -215,7 +213,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                             for (address, connection) in self.client_connections.iter_mut() {
                                 connection.collect_entity_updates();
                                 let mut packet_index = 1;
-                                while let Some(payload) = connection.get_outgoing_packet(&self.event_manifest, &self.entity_manifest) {
+                                while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
                                     info!("sending packet {}", packet_index);
                                     packet_index += 1;
                                     match self.sender.send(Packet::new_raw(*address, payload))

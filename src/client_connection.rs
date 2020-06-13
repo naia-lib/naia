@@ -6,8 +6,8 @@ use std::{
     net::SocketAddr,
 };
 
-use gaia_shared::{Timer, PacketType, NetEvent, EventManifest,
-            EventManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
+use gaia_shared::{Timer, PacketType, NetEvent, Manifest,
+            EventManager, PacketWriter, PacketReader, ManagerType, HostType,
             EventType, EntityType, NetEntity, SequenceNumber, Timestamp, AckManager, Connection};
 
 use super::{
@@ -16,15 +16,8 @@ use super::{
     entities::{
         entity_key::EntityKey,
         mut_handler::MutHandler,
-        //server_entity::{ServerEntity, ServerEntityRef},
     }
 };
-
-//impl<U: EntityType> ServerEntityRef<U> for Rc<RefCell<dyn ServerEntity<U>>> {
-//    fn as_entity_ref(&self) -> &Rc<RefCell<dyn NetEntity<U>>> {
-//        return self;
-//    }
-//}
 
 pub struct ClientConnection<T: EventType, U: EntityType> {
     connection: Connection<T>,
@@ -46,20 +39,20 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         };
     }
 
-    pub fn get_outgoing_packet(&mut self, event_manifest: &EventManifest<T>, entity_manifest: &EntityManifest<U>) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T, U>) -> Option<Box<[u8]>> {
 
         if self.connection.has_outgoing_events() || self.entity_manager.has_outgoing_messages() {
             let mut writer = PacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
             while let Some(popped_event) = self.connection.pop_outgoing_event(next_packet_index) {
-                if !writer.write_event(event_manifest, &popped_event) {
+                if !writer.write_event(manifest, &popped_event) {
                     self.connection.unpop_outgoing_event(next_packet_index, &popped_event);
                     break;
                 }
             }
             while let Some(popped_entity_message) = self.entity_manager.pop_outgoing_message(next_packet_index) {
-                if !EntityPacketWriter::write_entity_message(&mut writer, entity_manifest, &popped_entity_message) {
+                if !EntityPacketWriter::write_entity_message(&mut writer, manifest, &popped_entity_message) {
                     self.entity_manager.unpop_outgoing_message(next_packet_index, &popped_entity_message);
                     break;
                 }
@@ -78,12 +71,12 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return None;
     }
 
-    pub fn process_incoming_data(&mut self, event_manifest: &EventManifest<T>, data: &mut [u8]) {
+    pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &mut [u8]) {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
             match reader.read_manager_type() {
                 ManagerType::Event => {
-                    self.connection.process_event_data(&mut reader, event_manifest);
+                    self.connection.process_event_data(&mut reader, manifest);
                 }
                 _ => {}
             }

@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use gaia_shared::{
-    EntityType, PacketWriter, EntityManifest, MTU_SIZE,
+    EntityType, EventType, PacketWriter, Manifest, MTU_SIZE,
 };
 
 use super::{
@@ -11,7 +11,7 @@ use super::{
 pub struct EntityPacketWriter {}
 
 impl EntityPacketWriter {
-    pub fn write_entity_message<T: EntityType>(packet_writer: &mut PacketWriter, manifest: &EntityManifest<T>, message: &ServerEntityMessage<T>) -> bool {
+    pub fn write_entity_message<T: EventType, U: EntityType>(packet_writer: &mut PacketWriter, manifest: &Manifest<T, U>, message: &ServerEntityMessage<U>) -> bool {
 
         let mut entity_total_bytes = Vec::<u8>::new();
 
@@ -29,7 +29,7 @@ impl EntityPacketWriter {
                 entity_total_bytes.write_u8(message.write_message_type()).unwrap(); // write entity message type
 
                 let type_id = entity.as_ref().borrow().get_type_id();
-                let gaia_id = manifest.get_gaia_id(&type_id); // get gaia id
+                let gaia_id = manifest.get_entity_gaia_id(&type_id); // get gaia id
                 entity_total_bytes.write_u16::<BigEndian>(gaia_id).unwrap();// write gaia id
                 entity_total_bytes.write_u16::<BigEndian>(*local_key).unwrap();//write local key
                 entity_total_bytes.write_u8(entity_payload_bytes.len() as u8).unwrap(); // write payload length
