@@ -1,5 +1,5 @@
 
-use gaia_shared::{EventType, NetEvent};
+use gaia_shared::{EventType, Event};
 
 use crate::{StringEvent};
 

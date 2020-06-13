@@ -4,7 +4,7 @@ use std::{
     cell::RefCell,
 };
 
-use gaia_shared::{EntityType, NetEntity, StateMask};
+use gaia_shared::{EntityType, Entity, StateMask};
 
 use crate::{PointEntity};
 
