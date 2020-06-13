@@ -8,7 +8,7 @@ use log::info;
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
 pub use gaia_shared::{Config, LocalEntityKey, PacketType, Timer, Timestamp,
                       Manifest, ManagerType, HostType, PacketWriter, PacketReader,
-                      NetEvent, EventType, EntityType};
+                      Event, EventType, EntityType};
 
 use super::{
     server_connection::ServerConnection,
@@ -181,7 +181,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
         return output.unwrap();
     }
 
-    pub fn send_event(&mut self, event: &impl NetEvent<T>) {
+    pub fn send_event(&mut self, event: &impl Event<T>) {
 
         if let Some(connection) = &mut self.server_connection {
             connection.queue_event(event);
