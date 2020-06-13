@@ -14,3 +14,4 @@ gaia-shared = { path = "../gaia-shared" } # { git = "https://github.com/connorca
 log = "0.4"
 slotmap = { version = "0.4" }
 byteorder = "1.3"
+indexmap = "1.4.0"
