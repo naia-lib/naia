@@ -36,7 +36,7 @@ impl<T: EntityType> EntityManifest<T> {
     pub fn create_entity(&self, gaia_id: u16) -> Option<T> {
         match self.gaia_id_map.get(&gaia_id) {
             Some(entity_type) => {
-                return Some(entity_type.clone());
+                return Some(entity_type.init());
             }
             None => {}
         }
