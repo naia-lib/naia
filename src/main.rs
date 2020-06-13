@@ -6,7 +6,7 @@ use simple_logger;
 
 use gaia_server::{GaiaServer, ServerEvent, NetEntity, find_my_ip_address, Config};
 
-use gaia_example_shared::{event_manifest_load, entity_manifest_load, PointEntity, ExampleEvent, ExampleEntity};
+use gaia_example_shared::{manifest_load, PointEntity, ExampleEvent, ExampleEntity};
 
 use std::{
     rc::Rc,
@@ -31,8 +31,7 @@ async fn main() {
     config.heartbeat_interval = Duration::from_secs(1);
 
     let mut server = GaiaServer::listen(current_socket_address.as_str(),
-                                        event_manifest_load(),
-                                        entity_manifest_load(),
+                                        manifest_load(),
                                         Some(config)).await;
 
     let mut point_entities: Vec<Rc<RefCell<PointEntity>>> = Vec::new();
