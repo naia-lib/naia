@@ -6,9 +6,9 @@ use std::{
     net::SocketAddr,
 };
 
-use gaia_shared::{Timer, PacketType, NetEvent, Manifest,
+use gaia_shared::{Timer, PacketType, Event, Manifest,
             EventManager, PacketWriter, PacketReader, ManagerType, HostType,
-            EventType, EntityType, NetEntity, SequenceNumber, Timestamp, AckManager, Connection};
+            EventType, EntityType, Entity, SequenceNumber, Timestamp, AckManager, Connection};
 
 use super::{
     ServerEntityManager,
@@ -87,7 +87,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.entity_manager.has_entity(key);
     }
 
-    pub fn add_entity(&mut self, key: EntityKey, entity: &Rc<RefCell<dyn NetEntity<U>>>) {
+    pub fn add_entity(&mut self, key: EntityKey, entity: &Rc<RefCell<dyn Entity<U>>>) {
         self.entity_manager.add_entity(key, entity);
     }
 
@@ -129,7 +129,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_event(&mut self, event: &impl NetEvent<T>) {
+    pub fn queue_event(&mut self, event: &impl Event<T>) {
         return self.connection.queue_event(event);
     }
 

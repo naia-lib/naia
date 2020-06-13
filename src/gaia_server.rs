@@ -10,7 +10,7 @@ use log::{info};
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
 pub use gaia_shared::{Config, PacketType, Connection, Timer, Timestamp, Manifest,
-                      NetEvent, NetEntity, ManagerType, HostType, EventType, EntityType, EntityMutator};
+                      Event, Entity, ManagerType, HostType, EventType, EntityType, EntityMutator};
 
 use super::{
     Packet,
@@ -22,7 +22,6 @@ use super::{
         mut_handler::MutHandler,
         entity_key::EntityKey,
         server_entity_mutator::ServerEntityMutator,
-        //server_entity::ServerEntity,
     }
 };
 
@@ -248,7 +247,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         return output.unwrap();
     }
 
-    pub fn send_event(&mut self, addr: SocketAddr, event: &impl NetEvent<T>) {
+    pub fn send_event(&mut self, addr: SocketAddr, event: &impl Event<T>) {
         if let Some(connection) = self.client_connections.get_mut(&addr) {
             connection.queue_event(event);
         }
@@ -268,7 +267,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         }
     }
 
-    pub fn add_entity(&mut self, entity: &Rc<RefCell<dyn NetEntity<U>>>) -> EntityKey {
+    pub fn add_entity(&mut self, entity: &Rc<RefCell<dyn Entity<U>>>) -> EntityKey {
         let new_mutator_ref: Rc<RefCell<ServerEntityMutator>> = Rc::new(RefCell::new(ServerEntityMutator::new(&self.mut_handler)));
         entity.as_ref().borrow_mut().set_mutator(&to_entity_mutator(&new_mutator_ref));
         let entity_key = self.global_entity_store.add_entity(entity.clone());
@@ -282,7 +281,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         return self.global_entity_store.remove_entity(key);
     }
 
-    pub fn get_entity(&mut self, key: EntityKey) -> Option<&Rc<RefCell<dyn NetEntity<U>>>> {
+    pub fn get_entity(&mut self, key: EntityKey) -> Option<&Rc<RefCell<dyn Entity<U>>>> {
         return self.global_entity_store.get_entity(key);
     }
 

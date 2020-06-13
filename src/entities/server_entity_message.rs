@@ -1,4 +1,4 @@
-use gaia_shared::{LocalEntityKey, NetEntity, EntityType, StateMask};
+use gaia_shared::{LocalEntityKey, Entity, EntityType, StateMask};
 use std::{
     rc::Rc,
     cell::RefCell
@@ -10,8 +10,8 @@ use super::{
 };
 
 pub enum ServerEntityMessage<T: EntityType> {
-    Create(EntityKey, LocalEntityKey, Rc<RefCell<dyn NetEntity<T>>>),
-    Update(EntityKey, LocalEntityKey, Rc<RefCell<StateMask>>, Rc<RefCell<dyn NetEntity<T>>>),
+    Create(EntityKey, LocalEntityKey, Rc<RefCell<dyn Entity<T>>>),
+    Update(EntityKey, LocalEntityKey, Rc<RefCell<StateMask>>, Rc<RefCell<dyn Entity<T>>>),
     Delete(EntityKey, LocalEntityKey),
 }
 

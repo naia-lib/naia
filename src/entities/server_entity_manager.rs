@@ -10,7 +10,7 @@ use std::{
 
 use slotmap::{SparseSecondaryMap};
 
-use gaia_shared::{EntityType, LocalEntityKey, NetEntity, StateMask, EntityNotifiable};
+use gaia_shared::{EntityType, LocalEntityKey, Entity, StateMask, EntityNotifiable};
 use super::{
     server_entity_message::ServerEntityMessage,
     entity_record::{
@@ -24,7 +24,7 @@ use super::{
 
 pub struct ServerEntityManager<T: EntityType> {
     address: SocketAddr,
-    local_entity_store: SparseSecondaryMap<EntityKey, Rc<RefCell<dyn NetEntity<T>>>>,
+    local_entity_store: SparseSecondaryMap<EntityKey, Rc<RefCell<dyn Entity<T>>>>,
     local_to_global_key_map: HashMap<LocalEntityKey, EntityKey>,
     recycled_local_keys: Vec<LocalEntityKey>,
     next_new_local_key: LocalEntityKey,
@@ -157,7 +157,7 @@ impl<T: EntityType> ServerEntityManager<T> {
         return self.local_entity_store.contains_key(key);
     }
 
-    pub fn add_entity(&mut self, key: EntityKey, entity: &Rc<RefCell<dyn NetEntity<T>>>) {
+    pub fn add_entity(&mut self, key: EntityKey, entity: &Rc<RefCell<dyn Entity<T>>>) {
         if !self.local_entity_store.contains_key(key) {
             self.local_entity_store.insert(key, entity.clone());
             let local_key = self.get_new_local_key();
@@ -203,7 +203,7 @@ impl<T: EntityType> ServerEntityManager<T> {
         }
     }
 
-    pub fn get_local_entity(&self, key: u16) -> Option<&Rc<RefCell<dyn NetEntity<T>>>> {
+    pub fn get_local_entity(&self, key: u16) -> Option<&Rc<RefCell<dyn Entity<T>>>> {
         if let Some(global_key) = self.local_to_global_key_map.get(&key) {
             if let Some(entity) = self.local_entity_store.get(*global_key) {
                 return Some(entity);

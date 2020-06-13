@@ -5,7 +5,7 @@ extern crate log;
 #[macro_use]
 extern crate slotmap;
 
-pub use gaia_shared::{find_my_ip_address, Config, EntityType, NetEntity};
+pub use gaia_shared::{find_my_ip_address, Config, EntityType, Entity};
 
 mod gaia_server;
 mod client_connection;

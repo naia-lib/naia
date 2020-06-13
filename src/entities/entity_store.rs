@@ -3,7 +3,7 @@ use std::{
     cell::RefCell,
 };
 
-use gaia_shared::{EntityType, NetEntity};
+use gaia_shared::{EntityType, Entity};
 
 use super::{
     entity_key::EntityKey,
@@ -12,7 +12,7 @@ use super::{
 use slotmap::{DenseSlotMap};
 
 pub struct EntityStore<T: EntityType> {
-    map: DenseSlotMap<EntityKey, Rc<RefCell<dyn NetEntity<T>>>>,
+    map: DenseSlotMap<EntityKey, Rc<RefCell<dyn Entity<T>>>>,
 }
 
 impl<T: EntityType> EntityStore<T> {
@@ -22,7 +22,7 @@ impl<T: EntityType> EntityStore<T> {
         }
     }
 
-    pub fn add_entity(&mut self, entity: Rc<RefCell<dyn NetEntity<T>>>) -> EntityKey {
+    pub fn add_entity(&mut self, entity: Rc<RefCell<dyn Entity<T>>>) -> EntityKey {
         return self.map.insert(entity);
     }
 
@@ -30,7 +30,7 @@ impl<T: EntityType> EntityStore<T> {
         self.map.remove(key);
     }
 
-    pub fn get_entity(&mut self, key: EntityKey) -> Option<&Rc<RefCell<dyn NetEntity<T>>>> {
+    pub fn get_entity(&mut self, key: EntityKey) -> Option<&Rc<RefCell<dyn Entity<T>>>> {
         return self.map.get(key);
     }
 
@@ -38,7 +38,7 @@ impl<T: EntityType> EntityStore<T> {
         return self.map.contains_key(key);
     }
 
-    pub fn iter(&self) -> slotmap::dense::Iter<EntityKey, Rc<RefCell<dyn NetEntity<T>>>> {
+    pub fn iter(&self) -> slotmap::dense::Iter<EntityKey, Rc<RefCell<dyn Entity<T>>>> {
         return self.map.iter();
     }
 }
