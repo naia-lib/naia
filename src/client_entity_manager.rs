@@ -52,8 +52,8 @@ impl<T: EntityType> ClientEntityManager<T> {
                                 warn!("duplicate local key inserted");
                             } else {
                                 //info!("creation of entity w/ key of {}", local_key);
-                                self.local_entity_store.insert(local_key, new_entity.clone());
-                                self.queued_incoming_messages.push_back(ClientEntityMessage::Create(local_key, new_entity));
+                                self.local_entity_store.insert(local_key, new_entity.clone_inner_rc());
+                                self.queued_incoming_messages.push_back(ClientEntityMessage::Create(local_key, new_entity.clone_inner_rc()));
                             }
                         }
                         _ => {}
