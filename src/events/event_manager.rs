@@ -5,7 +5,7 @@ use std::{
     rc::Rc};
 use byteorder::{BigEndian, ReadBytesExt};
 
-use crate::{EventType, NetEvent, NetEventClone, PacketReader, EventManifest};
+use crate::{EventType, NetEvent, NetEventClone, PacketReader, Manifest, EntityType};
 
 pub struct EventManager<T: EventType> {
     queued_outgoing_events: VecDeque<Rc<Box<dyn NetEvent<T>>>>,
@@ -90,7 +90,7 @@ impl<T: EventType> EventManager<T> {
         return self.queued_incoming_events.pop_front();
     }
 
-    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &EventManifest<T>) {
+    pub fn process_data<U: EntityType>(&mut self, reader: &mut PacketReader, manifest: &Manifest<T, U>) {
         let buffer = reader.get_buffer();
         let cursor = reader.get_cursor();
 

@@ -18,6 +18,7 @@ mod manager_type;
 mod packet_reader;
 mod packet_writer;
 mod host_type;
+mod manifest;
 pub mod utils;
 
 pub use gaia_socket_shared::{find_my_ip_address, Timer};
@@ -34,15 +35,14 @@ pub use {
     host_type::HostType,
     ack_manager::AckManager,
     sequence_buffer::SequenceNumber,
+    manifest::Manifest,
     events::{
         net_event::{NetEvent, NetEventType, NetEventClone},
-        event_manifest::EventManifest,
         event_type::EventType,
         event_manager::EventManager,
     },
     entities::{
         net_entity::{NetEntity, NetEntityType},
-        entity_manifest::EntityManifest,
         entity_type::EntityType,
         local_entity_key::LocalEntityKey,
         state_mask::StateMask,
