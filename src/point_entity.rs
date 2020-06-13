@@ -4,14 +4,12 @@ use std::{
     cell::RefCell,
 };
 
-use gaia_shared::{NetEntity, MutHandler, EntityKey, StateMask};
+use gaia_shared::{NetEntity, StateMask, EntityMutator};
 
 use crate::{ExampleEntity};
 
-#[derive(Clone)]
 pub struct PointEntity {
-    mut_handler: Option<Rc<RefCell<MutHandler>>>,
-    key: Option<EntityKey>,
+    mutator: Option<Rc<RefCell<dyn EntityMutator>>>,
     x: Option<u8>,
     y: Option<u8>,
 }
@@ -26,8 +24,7 @@ impl PointEntity {
     pub fn init() -> PointEntity {
         //info!("point entity init");
         PointEntity {
-            key: None,
-            mut_handler: None,
+            mutator: None,
             x: None,
             y: None,
         }
@@ -35,8 +32,7 @@ impl PointEntity {
 
     pub fn new(x: u8, y: u8) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(PointEntity {
-            key: None,
-            mut_handler: None,
+            mutator: None,
             x: Some(x),
             y: Some(y),
         }))
@@ -59,7 +55,6 @@ impl PointEntity {
     pub fn set_x(&mut self, value: u8) {
         self.x = Some(value);
         self.notify_mutation(PointEntityProp::X);
-
     }
 
     pub fn set_y(&mut self, value: u8) {
@@ -82,10 +77,8 @@ impl PointEntity {
     }
 
     fn notify_mutation(&mut self, prop: PointEntityProp) {
-        if let Some(mut_handler) = &self.mut_handler {
-            if let Some(key) = &self.key {
-                mut_handler.as_ref().borrow_mut().mutate(key, prop as u8);
-            }
+        if let Some(mutator) = &self.mutator {
+            mutator.as_ref().borrow_mut().mutate(prop as u8);
         }
     }
 }
@@ -96,16 +89,10 @@ impl NetEntity<ExampleEntity> for PointEntity {
         1
     }
 
+    //to_type COPIES the current entity,
     fn to_type(&self) -> ExampleEntity {
-        return ExampleEntity::PointEntity(Rc::new(RefCell::new(self.clone())));
-    }
-
-    fn set_mut_handler(&mut self, mut_handler: &Rc<RefCell<MutHandler>>) {
-        self.mut_handler = Some(mut_handler.clone());
-    }
-
-    fn set_entity_key(&mut self, key: EntityKey) {
-        self.key = Some(key);
+        let copied_entity = PointEntity::new(self.get_x(), self.get_y());
+        return ExampleEntity::PointEntity(copied_entity);
     }
 
     fn write(&self, buffer: &mut Vec<u8>) {
@@ -126,8 +113,6 @@ impl NetEntity<ExampleEntity> for PointEntity {
     fn read(&mut self, buffer: &[u8])  {
         self.set_x(buffer[0]);
         self.set_y(buffer[1]);
-
-//        info!("entity read() with x: {}, y: {}", self.get_x(), self.get_y());
     }
 
     fn read_partial(&mut self, state_mask: &StateMask, buffer: &[u8]) {
@@ -137,11 +122,13 @@ impl NetEntity<ExampleEntity> for PointEntity {
         if let Some(true) = state_mask.get_bit(PointEntityProp::Y as u8) {
             self.set_y(buffer[1]);
         }
-
-//        info!("entity read_partial() with x: {}, y: {}", self.get_x(), self.get_y());
     }
 
     fn print(&self, key: u16) {
         info!("entity print(), key: {}, x: {}, y: {}", key, self.get_x(), self.get_y());
+    }
+
+    fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>) {
+        self.mutator = Some(mutator.clone());
     }
 }
