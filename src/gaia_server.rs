@@ -10,14 +10,20 @@ use log::{info};
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
 pub use gaia_shared::{Config, PacketType, Connection, Timer, Timestamp, EventManifest, EntityManifest,
-                      EntityStore, EntityKey, NetEvent, NetEntity, ManagerType, HostType, EventType, EntityType,
-                    MutHandler};
+                      NetEvent, NetEntity, ManagerType, HostType, EventType, EntityType, EntityMutator};
 
 use super::{
     Packet,
     error::GaiaServerError,
     server_event::ServerEvent,
     client_connection::ClientConnection,
+    entities::{
+        entity_store::EntityStore,
+        mut_handler::MutHandler,
+        entity_key::EntityKey,
+        server_entity_mutator::ServerEntityMutator,
+        //server_entity::ServerEntity,
+    }
 };
 
 pub struct GaiaServer<T: EventType, U: EntityType> {
@@ -34,6 +40,10 @@ pub struct GaiaServer<T: EventType, U: EntityType> {
     heartbeat_timer: Timer,
     drop_counter: u8,
     drop_max: u8,
+}
+
+fn to_entity_mutator(eref: &Rc<RefCell<ServerEntityMutator>>) -> Rc<RefCell<dyn EntityMutator>> {
+    eref.clone()
 }
 
 impl<T: EventType, U: EntityType> GaiaServer<T, U> {
@@ -260,10 +270,11 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         }
     }
 
-    pub fn add_entity(&mut self, entity: Rc<RefCell<dyn NetEntity<U>>>) -> EntityKey {
-        entity.borrow_mut().set_mut_handler(&self.mut_handler);
+    pub fn add_entity(&mut self, entity: &Rc<RefCell<dyn NetEntity<U>>>) -> EntityKey {
+        let new_mutator_ref: Rc<RefCell<ServerEntityMutator>> = Rc::new(RefCell::new(ServerEntityMutator::new(&self.mut_handler)));
+        entity.as_ref().borrow_mut().set_mutator(&to_entity_mutator(&new_mutator_ref));
         let entity_key = self.global_entity_store.add_entity(entity.clone());
-        entity.borrow_mut().set_entity_key(entity_key);
+        new_mutator_ref.as_ref().borrow_mut().set_entity_key(entity_key);
         self.mut_handler.borrow_mut().register_entity(&entity_key);
         return entity_key
     }

@@ -6,14 +6,25 @@ use std::{
     net::SocketAddr,
 };
 
-use gaia_shared::{Timer, PacketType, NetEvent, EventManifest, EntityKey,
+use gaia_shared::{Timer, PacketType, NetEvent, EventManifest,
             EventManager, EntityManifest, PacketWriter, PacketReader, ManagerType, HostType,
-            EventType, EntityType, NetEntity, MutHandler, SequenceNumber, Timestamp, AckManager, Connection};
+            EventType, EntityType, NetEntity, SequenceNumber, Timestamp, AckManager, Connection};
 
 use super::{
     ServerEntityManager,
     EntityPacketWriter,
+    entities::{
+        entity_key::EntityKey,
+        mut_handler::MutHandler,
+        //server_entity::{ServerEntity, ServerEntityRef},
+    }
 };
+
+//impl<U: EntityType> ServerEntityRef<U> for Rc<RefCell<dyn ServerEntity<U>>> {
+//    fn as_entity_ref(&self) -> &Rc<RefCell<dyn NetEntity<U>>> {
+//        return self;
+//    }
+//}
 
 pub struct ClientConnection<T: EventType, U: EntityType> {
     connection: Connection<T>,
@@ -114,7 +125,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
     }
 
     pub fn process_incoming_header(&mut self, payload: &[u8]) -> Box<[u8]> {
-        return self.connection.process_incoming_header(payload, &mut self.entity_manager);
+        return self.connection.process_incoming_header(payload, &mut Some(&mut self.entity_manager));
     }
 
     pub fn process_outgoing_header(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {

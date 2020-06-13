@@ -4,15 +4,22 @@ use std::{
     rc::Rc,
     cell::RefCell,
     net::SocketAddr,
-    borrow::{Borrow}
+    borrow::{Borrow},
+    clone::Clone
 };
 
 use slotmap::{SparseSecondaryMap};
 
-use gaia_shared::{EntityType, EntityKey, LocalEntityKey, LocalEntityStatus, NetEntity,
-            EntityRecord, MutHandler, StateMask, EntityNotifiable};
+use gaia_shared::{EntityType, LocalEntityKey, NetEntity, StateMask, EntityNotifiable};
 use super::{
-  ServerEntityMessage,
+    server_entity_message::ServerEntityMessage,
+    entity_record::{
+        LocalEntityStatus,
+        EntityRecord,
+    },
+    entity_key::EntityKey,
+    mut_handler::MutHandler,
+    //server_entity::ServerEntity,
 };
 
 pub struct ServerEntityManager<T: EntityType> {

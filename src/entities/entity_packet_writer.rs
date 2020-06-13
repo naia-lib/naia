@@ -5,7 +5,7 @@ use gaia_shared::{
 };
 
 use super::{
-    ServerEntityMessage
+    server_entity_message::ServerEntityMessage
 };
 
 pub struct EntityPacketWriter {}
