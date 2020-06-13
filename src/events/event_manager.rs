@@ -5,12 +5,12 @@ use std::{
     rc::Rc};
 use byteorder::{BigEndian, ReadBytesExt};
 
-use crate::{EventType, NetEvent, NetEventClone, PacketReader, Manifest, EntityType};
+use crate::{EventType, Event, EventClone, PacketReader, Manifest, EntityType};
 
 pub struct EventManager<T: EventType> {
-    queued_outgoing_events: VecDeque<Rc<Box<dyn NetEvent<T>>>>,
+    queued_outgoing_events: VecDeque<Rc<Box<dyn Event<T>>>>,
     queued_incoming_events: VecDeque<T>,
-    sent_events: HashMap<u16, Vec<Rc<Box<dyn NetEvent<T>>>>>
+    sent_events: HashMap<u16, Vec<Rc<Box<dyn Event<T>>>>>
 }
 
 impl<T: EventType> EventManager<T> {
@@ -40,14 +40,14 @@ impl<T: EventType> EventManager<T> {
         return self.queued_outgoing_events.len() != 0;
     }
 
-    pub fn pop_outgoing_event(&mut self, packet_index: u16) -> Option<Rc<Box<dyn NetEvent<T>>>> {
+    pub fn pop_outgoing_event(&mut self, packet_index: u16) -> Option<Rc<Box<dyn Event<T>>>> {
         match self.queued_outgoing_events.pop_front() {
             Some(event) => {
 
                 //place in transmission record if this is a gauranteed event
-                if NetEvent::is_guaranteed(event.as_ref().as_ref()) {
+                if Event::is_guaranteed(event.as_ref().as_ref()) {
                     if !self.sent_events.contains_key(&packet_index) {
-                        let sent_events_list: Vec<Rc<Box<dyn NetEvent<T>>>> = Vec::new();
+                        let sent_events_list: Vec<Rc<Box<dyn Event<T>>>> = Vec::new();
                         self.sent_events.insert(packet_index, sent_events_list);
                     }
 
@@ -62,10 +62,10 @@ impl<T: EventType> EventManager<T> {
         }
     }
 
-    pub fn unpop_outgoing_event(&mut self, packet_index: u16, event: &Rc<Box<dyn NetEvent<T>>>) {
+    pub fn unpop_outgoing_event(&mut self, packet_index: u16, event: &Rc<Box<dyn Event<T>>>) {
         let cloned_event = event.clone();
 
-        if NetEvent::is_guaranteed(event.as_ref().as_ref()) {
+        if Event::is_guaranteed(event.as_ref().as_ref()) {
             if let Some(sent_events_list) = self.sent_events.get_mut(&packet_index) {
                 sent_events_list.pop();
                 if sent_events_list.len() == 0 {
@@ -77,8 +77,8 @@ impl<T: EventType> EventManager<T> {
         self.queued_outgoing_events.push_front(cloned_event);
     }
 
-    pub fn queue_outgoing_event(&mut self, event: &impl NetEvent<T>) {
-        let clone = Rc::new(NetEventClone::clone_box(event));
+    pub fn queue_outgoing_event(&mut self, event: &impl Event<T>) {
+        let clone = Rc::new(EventClone::clone_box(event));
         self.queued_outgoing_events.push_back(clone);
     }
 
