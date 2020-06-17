@@ -47,6 +47,9 @@ impl MutHandler {
     }
 
     pub fn register_entity(&mut self, entity_key: &EntityKey) {
+        if self.entity_state_mask_list_map.contains_key(entity_key) {
+            panic!("Entity cannot register with server more than once!");
+        }
         self.entity_state_mask_list_map.insert(*entity_key, IndexMap::new());
     }
 

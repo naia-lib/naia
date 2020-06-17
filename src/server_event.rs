@@ -1,8 +1,11 @@
-use std::net::SocketAddr;
+
+use super::{
+    user::UserKey,
+};
 
 pub enum ServerEvent<T> {
-    Connection(SocketAddr),
-    Disconnection(SocketAddr),
-    Event(SocketAddr, T),
+    Connection(UserKey),
+    Disconnection(UserKey),
+    Event(UserKey, T),
     Tick,
 }

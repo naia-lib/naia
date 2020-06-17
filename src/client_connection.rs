@@ -83,15 +83,15 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         }
     }
 
-    pub fn has_entity(&self, key: EntityKey) -> bool {
+    pub fn has_entity(&self, key: &EntityKey) -> bool {
         return self.entity_manager.has_entity(key);
     }
 
-    pub fn add_entity(&mut self, key: EntityKey, entity: &Rc<RefCell<dyn Entity<U>>>) {
+    pub fn add_entity(&mut self, key: &EntityKey, entity: &Rc<RefCell<dyn Entity<U>>>) {
         self.entity_manager.add_entity(key, entity);
     }
 
-    pub fn remove_entity(&mut self, key: EntityKey) {
+    pub fn remove_entity(&mut self, key: &EntityKey) {
         self.entity_manager.remove_entity(key);
     }
 

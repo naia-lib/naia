@@ -7,6 +7,7 @@ use std::{
 };
 
 use log::{info};
+use slotmap::{DenseSlotMap};
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
 pub use gaia_shared::{Config, PacketType, Connection, Timer, Timestamp, Manifest,
@@ -18,30 +19,30 @@ use super::{
     server_event::ServerEvent,
     client_connection::ClientConnection,
     entities::{
-        entity_store::EntityStore,
         mut_handler::MutHandler,
         entity_key::EntityKey,
         server_entity_mutator::ServerEntityMutator,
-    }
+    },
+    room::{Room, RoomKey},
+    user::{User, UserKey},
 };
 
 pub struct GaiaServer<T: EventType, U: EntityType> {
-    manifest: Manifest<T, U>,
-    global_entity_store: EntityStore<U>,
-    scope_entity_func: Option<Rc<Box<dyn Fn(&SocketAddr, U) -> bool>>>,
-    mut_handler: Rc<RefCell<MutHandler>>,
     config: Config,
+    manifest: Manifest<T, U>,
     socket: ServerSocket,
     sender: MessageSender,
-    client_connections: HashMap<SocketAddr, ClientConnection<T, U>>,
-    outstanding_disconnects: VecDeque<SocketAddr>,
+    global_entity_store: DenseSlotMap<EntityKey, Rc<RefCell<dyn Entity<U>>>>,
+    scope_entity_func: Option<Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>>,
+    mut_handler: Rc<RefCell<MutHandler>>,
+    users: DenseSlotMap<UserKey, User>,
+    rooms: DenseSlotMap<RoomKey, Room>,
+    address_to_user_key_map: HashMap<SocketAddr, UserKey>,
+    client_connections: HashMap<UserKey, ClientConnection<T, U>>,
+    outstanding_disconnects: VecDeque<UserKey>,
     heartbeat_timer: Timer,
     drop_counter: u8,
     drop_max: u8,
-}
-
-fn to_entity_mutator(eref: &Rc<RefCell<ServerEntityMutator>>) -> Rc<RefCell<dyn EntityMutator>> {
-    eref.clone()
 }
 
 impl<T: EventType, U: EntityType> GaiaServer<T, U> {
@@ -64,13 +65,16 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
 
         GaiaServer {
             manifest,
-            global_entity_store: EntityStore::new(),
+            global_entity_store: DenseSlotMap::with_key(),
             scope_entity_func: None,
             mut_handler: MutHandler::new(),
             socket: server_socket,
             sender,
             config,
+            users: DenseSlotMap::with_key(),
+            rooms: DenseSlotMap::with_key(),
             client_connections: clients_map,
+            address_to_user_key_map: HashMap::new(),
             outstanding_disconnects: VecDeque::new(),
             heartbeat_timer,
             drop_counter: 1,
@@ -86,24 +90,26 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
             if self.heartbeat_timer.ringing() {
                 self.heartbeat_timer.reset();
 
-                for (address, connection) in self.client_connections.iter_mut() {
-                    if connection.should_drop() {
-                        self.outstanding_disconnects.push_back(*address);
-                    } else if connection.should_send_heartbeat() {
-                        // Don't try to refactor this to self.internal_send, doesn't seem to work cause of iter_mut()
-                        let payload = connection.process_outgoing_header(PacketType::Heartbeat, &[]);
-                        self.sender.send(Packet::new_raw(*address, payload))
-                            .await
-                            .expect("send failed!");
-                        connection.mark_sent();
+                for (user_key, connection) in self.client_connections.iter_mut() {
+                    if let Some(user) = self.users.get(*user_key) {
+                        if connection.should_drop() {
+                            self.outstanding_disconnects.push_back(*user_key);
+                        } else if connection.should_send_heartbeat() {
+                            // Don't try to refactor this to self.internal_send, doesn't seem to work cause of iter_mut()
+                            let payload = connection.process_outgoing_header(PacketType::Heartbeat, &[]);
+                            self.sender.send(Packet::new_raw(user.address, payload))
+                                .await
+                                .expect("send failed!");
+                            connection.mark_sent();
+                        }
                     }
                 }
             }
 
             // timeouts
-            if let Some(addr) = self.outstanding_disconnects.pop_front() {
-                self.remove_connection(&addr);
-                output = Some(Ok(ServerEvent::Disconnection(addr)));
+            if let Some(user_key) = self.outstanding_disconnects.pop_front() {
+                self.client_connections.remove(&user_key);
+                output = Some(Ok(ServerEvent::Disconnection(user_key)));
                 continue;
             }
 
@@ -122,11 +128,13 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                     match event {
                         SocketEvent::Packet(packet) => {
                             let address = packet.address();
-                            match self.client_connections.get_mut(&address) {
-                                Some(connection) => {
-                                    connection.mark_heard();
+                            if let Some(user_key) = self.address_to_user_key_map.get(&address) {
+                                match self.client_connections.get_mut(&user_key) {
+                                    Some(connection) => {
+                                        connection.mark_heard();
+                                    }
+                                    None => {} //not yet established connection
                                 }
-                                None => {} //not yet established connection
                             }
 
                             let packet_type = PacketType::get_from_packet(packet.payload());
@@ -146,57 +154,77 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                     let payload = gaia_shared::utils::read_headerless_payload(packet.payload());
                                     let timestamp = Timestamp::read(&payload);
 
-                                    if !self.client_connections.contains_key(&address) {
-                                        self.client_connections.insert(address,
-                                                                       ClientConnection::new(
-                                                                                          address,
-                                                                                          Some(&self.mut_handler),
-                                                                                          self.config.heartbeat_interval,
-                                                                                          self.config.disconnection_timeout_duration,
-                                                                                          timestamp));
-                                        output = Some(Ok(ServerEvent::Connection(address)));
+                                    if !self.address_to_user_key_map.contains_key(&address) {
+                                        let user = User::new(address);
+                                        let user_key = self.users.insert(user);
+                                        self.address_to_user_key_map.insert(address, user_key);
                                     }
 
-                                    match self.client_connections.get_mut(&address) {
-                                        Some(connection) => {
-                                            if timestamp == connection.get_connection_timestamp() {
-                                                self.send_internal(PacketType::ServerHandshake, Packet::new_raw(address, Box::new([])))
-                                                    .await;
-                                                continue;
-                                            } else {
-                                                // Incoming Timestamp is different than recorded.. must be the same client trying to connect..
-                                                // so disconnect them to provide continuity
-                                                self.remove_connection(&address);
-                                                output = Some(Ok(ServerEvent::Disconnection(address)));
-                                                continue;
-                                            }
+                                    if let Some(user_key) = self.address_to_user_key_map.get(&address) {
+                                        if !self.client_connections.contains_key(user_key) {
+                                            self.client_connections.insert(*user_key,
+                                                                           ClientConnection::new(
+                                                                               address,
+                                                                               Some(&self.mut_handler),
+                                                                               self.config.heartbeat_interval,
+                                                                               self.config.disconnection_timeout_duration,
+                                                                               timestamp));
+                                            output = Some(Ok(ServerEvent::Connection(*user_key)));
                                         }
-                                        None => {}
+
+                                        match self.client_connections.get_mut(user_key) {
+                                            Some(connection) => {
+                                                if timestamp == connection.get_connection_timestamp() {
+                                                    let payload = connection.process_outgoing_header(
+                                                        PacketType::ServerHandshake,
+                                                        &[]);
+                                                    match self.sender.send(Packet::new_raw(address, payload))
+                                                        .await {
+                                                        Ok(_) => {}
+                                                        Err(err) => {
+                                                            info!("send error! {}", err);
+                                                        }
+                                                    }
+                                                    connection.mark_sent();
+                                                    continue;
+                                                } else {
+                                                    // Incoming Timestamp is different than recorded.. must be the same client trying to connect..
+                                                    // so disconnect them to provide continuity
+                                                    self.client_connections.remove(user_key);
+                                                    output = Some(Ok(ServerEvent::Disconnection(*user_key)));
+                                                    continue;
+                                                }
+                                            }
+                                            None => {}
+                                        }
                                     }
                                 }
                                 PacketType::Data => {
-
-                                    match self.client_connections.get_mut(&address) {
-                                        Some(connection) => {
-                                            let mut payload = connection.process_incoming_header(packet.payload());
-                                            connection.process_incoming_data(&self.manifest, &mut payload);
-                                            continue;
-                                        }
-                                        None => {
-                                            warn!("received data from unauthenticated client: {}", address);
+                                    if let Some(user_key) = self.address_to_user_key_map.get(&address) {
+                                        match self.client_connections.get_mut(user_key) {
+                                            Some(connection) => {
+                                                let mut payload = connection.process_incoming_header(packet.payload());
+                                                connection.process_incoming_data(&self.manifest, &mut payload);
+                                                continue;
+                                            }
+                                            None => {
+                                                warn!("received data from unauthenticated client: {}", address);
+                                            }
                                         }
                                     }
                                 }
                                 PacketType::Heartbeat => {
-                                    match self.client_connections.get_mut(&address) {
-                                        Some(connection) => {
-                                            // Still need to do this so that proper notify events fire based on the heartbeat header
-                                            connection.process_incoming_header(packet.payload());
-                                            info!("<- c");
-                                            continue;
-                                        }
-                                        None => {
-                                            warn!("received heartbeat from unauthenticated client: {}", address);
+                                    if let Some(user_key) = self.address_to_user_key_map.get(&address) {
+                                        match self.client_connections.get_mut(user_key) {
+                                            Some(connection) => {
+                                                // Still need to do this so that proper notify events fire based on the heartbeat header
+                                                connection.process_incoming_header(packet.payload());
+                                                info!("<- c");
+                                                continue;
+                                            }
+                                            None => {
+                                                warn!("received heartbeat from unauthenticated client: {}", address);
+                                            }
                                         }
                                     }
                                 }
@@ -209,20 +237,22 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                             self.update_entity_scopes();
 
                             // loop through all connections, send packet
-                            for (address, connection) in self.client_connections.iter_mut() {
-                                connection.collect_entity_updates();
-                                let mut packet_index = 1;
-                                while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
-                                    info!("sending packet {}", packet_index);
-                                    packet_index += 1;
-                                    match self.sender.send(Packet::new_raw(*address, payload))
-                                        .await {
-                                        Ok(_) => {}
-                                        Err(err) => {
-                                            info!("send error! {}", err);
+                            for (user_key, connection) in self.client_connections.iter_mut() {
+                                if let Some(user) = self.users.get(*user_key) {
+                                    connection.collect_entity_updates();
+                                    let mut packet_index = 1;
+                                    while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
+                                        info!("sending packet {}", packet_index);
+                                        packet_index += 1;
+                                        match self.sender.send(Packet::new_raw(user.address, payload))
+                                            .await {
+                                            Ok(_) => {}
+                                            Err(err) => {
+                                                info!("send error! {}", err);
+                                            }
                                         }
+                                        connection.mark_sent();
                                     }
-                                    connection.mark_sent();
                                 }
                             }
 
@@ -234,9 +264,11 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                 }
                 Err(error) => {
                     if let GaiaServerSocketError::SendError(address) = error {
-                        self.remove_connection(&address);
-                        output = Some(Ok(ServerEvent::Disconnection(address)));
-                        continue;
+                        if let Some(user_key) = self.address_to_user_key_map.get(&address).copied() {
+                            self.client_connections.remove(&user_key);
+                            output = Some(Ok(ServerEvent::Disconnection(user_key)));
+                            continue;
+                        }
                     }
 
                     output = Some(Err(GaiaServerError::Wrapped(Box::new(error))));
@@ -247,82 +279,97 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         return output.unwrap();
     }
 
-    pub fn send_event(&mut self, addr: SocketAddr, event: &impl Event<T>) {
-        if let Some(connection) = self.client_connections.get_mut(&addr) {
+    pub fn send_event(&mut self, user_key: &UserKey, event: &impl Event<T>) {
+        if let Some(connection) = self.client_connections.get_mut(user_key) {
             connection.queue_event(event);
         }
     }
 
-    async fn send_internal(&mut self, packet_type: PacketType, packet: Packet) {
-        if let Some(connection) = self.client_connections.get_mut(&packet.address()) {
-            let payload = connection.process_outgoing_header(packet_type, packet.payload());
-            match self.sender.send(Packet::new_raw(packet.address(), payload))
-                .await {
-                Ok(_) => {}
-                Err(err) => {
-                    info!("send error! {}", err);
-                }
-            }
-            connection.mark_sent();
-        }
-    }
-
-    pub fn add_entity(&mut self, entity: &Rc<RefCell<dyn Entity<U>>>) -> EntityKey {
+    pub fn register_entity(&mut self, entity: &Rc<RefCell<dyn Entity<U>>>) -> EntityKey {
         let new_mutator_ref: Rc<RefCell<ServerEntityMutator>> = Rc::new(RefCell::new(ServerEntityMutator::new(&self.mut_handler)));
         entity.as_ref().borrow_mut().set_mutator(&to_entity_mutator(&new_mutator_ref));
-        let entity_key = self.global_entity_store.add_entity(entity.clone());
+        let entity_key = self.global_entity_store.insert(entity.clone());
         new_mutator_ref.as_ref().borrow_mut().set_entity_key(entity_key);
         self.mut_handler.borrow_mut().register_entity(&entity_key);
         return entity_key
     }
 
-    pub fn remove_entity(&mut self, key: EntityKey) {
+    pub fn deregister_entity(&mut self, key: EntityKey) {
         self.mut_handler.borrow_mut().deregister_entity(&key);
-        return self.global_entity_store.remove_entity(key);
+        self.global_entity_store.remove(key);
     }
 
     pub fn get_entity(&mut self, key: EntityKey) -> Option<&Rc<RefCell<dyn Entity<U>>>> {
-        return self.global_entity_store.get_entity(key);
+        return self.global_entity_store.get(key);
     }
 
-    pub fn on_scope_entity(&mut self, scope_func: Rc<Box<dyn Fn(&SocketAddr, U) -> bool>>) {
+    pub fn create_room(&mut self) -> RoomKey {
+        let new_room = Room::new();
+        return self.rooms.insert(new_room);
+    }
+
+    pub fn delete_room(&mut self, key: RoomKey) {
+        self.rooms.remove(key);
+    }
+
+    pub fn get_room(&self, key: RoomKey) -> Option<&Room> {
+        return self.rooms.get(key);
+    }
+
+    pub fn get_room_mut(&mut self, key: RoomKey) -> Option<&mut Room> {
+        return self.rooms.get_mut(key);
+    }
+
+    pub fn get_rooms(&self) -> slotmap::dense::Iter<RoomKey, Room> { // turn this to iterator
+        return self.rooms.iter();
+    }
+
+    pub fn on_scope_entity(&mut self, scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>) {
         self.scope_entity_func = Some(scope_func);
     }
 
-    pub fn get_clients(&mut self) -> Vec<SocketAddr> {
-        self.client_connections.keys().cloned().collect()
-    }
-
-    pub fn get_sequence_number(&mut self, addr: SocketAddr) -> Option<u16> {
-        if let Some(connection) = self.client_connections.get_mut(&addr) {
+    pub fn get_sequence_number(&mut self, user_key: &UserKey) -> Option<u16> {
+        if let Some(connection) = self.client_connections.get_mut(user_key) {
             return Some(connection.get_next_packet_index());
         }
         return None;
     }
 
+    pub fn get_user(&self, user_key: &UserKey) -> Option<&User> {
+        return self.users.get(*user_key);
+    }
+
     fn update_entity_scopes(&mut self) {
         if let Some(scope_func) = &self.scope_entity_func {
-            for (address, connection) in self.client_connections.iter_mut() {
-                for (key, entity) in self.global_entity_store.iter() {
-                    let currently_in_scope = connection.has_entity(key);
-                    let should_be_in_scope = (scope_func.as_ref().as_ref())(address, entity.as_ref().borrow().to_type());
-                    if should_be_in_scope {
-                        if !currently_in_scope {
-                            // add entity to the connections local scope
-                            connection.add_entity(key, entity);
-                        }
-                    } else {
-                        if currently_in_scope {
-                            // remove entity from the connections local scope
-                            connection.remove_entity(key);
+            for (room_key, room) in self.rooms.iter() {
+                for user_key in room.users_iter() {
+                    for entity_key in room.entities_iter() {
+                        if let Some(entity) = self.global_entity_store.get(*entity_key) {
+                            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                                let currently_in_scope = user_connection.has_entity(entity_key);
+                                let should_be_in_scope = (scope_func.as_ref().as_ref())(&room_key, user_key, entity_key, entity.as_ref().borrow().to_type());
+                                if should_be_in_scope {
+                                    if !currently_in_scope {
+                                        // add entity to the connections local scope
+                                        if let Some(entity) = self.global_entity_store.get(*entity_key) {
+                                            user_connection.add_entity(entity_key, entity);
+                                        }
+                                    }
+                                } else {
+                                    if currently_in_scope {
+                                        // remove entity from the connections local scope
+                                        user_connection.remove_entity(entity_key);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
 
-    fn remove_connection(&mut self, address: &SocketAddr) {
-        self.client_connections.remove(address);
-    }
+fn to_entity_mutator(eref: &Rc<RefCell<ServerEntityMutator>>) -> Rc<RefCell<dyn EntityMutator>> {
+    eref.clone()
 }
