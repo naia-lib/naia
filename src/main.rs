@@ -15,6 +15,7 @@ use std::{
 
 const SERVER_PORT: &str = "3179";
 
+//TODO: GET RID OF THIS...
 pub fn get_server_point_entity(e: &Rc<RefCell<PointEntity>>) -> Rc<RefCell<dyn Entity<ExampleEntity>>> {
     e.clone() as Rc<RefCell<dyn Entity<ExampleEntity>>>
 }
@@ -34,15 +35,18 @@ async fn main() {
                                         manifest_load(),
                                         Some(config)).await;
 
+    let main_room_key = server.create_room();
     let mut point_entities: Vec<Rc<RefCell<PointEntity>>> = Vec::new();
     for x in 0..20 {
         let point_entity = PointEntity::new(x, 0);
         let server_point_entity: Rc<RefCell<dyn Entity<ExampleEntity>>> = get_server_point_entity(&point_entity);
-        server.add_entity(&server_point_entity);
+        let entity_key = server.register_entity(&server_point_entity);
+        let main_room = server.get_room_mut(main_room_key).unwrap();
+        main_room.add_entity(&entity_key);
         point_entities.push(point_entity.clone());
     }
 
-    server.on_scope_entity(Rc::new(Box::new(|address, entity| {
+    server.on_scope_entity(Rc::new(Box::new(|_, _, _, entity| {
         match entity {
             ExampleEntity::PointEntity(point_entity) => {
                 let x = point_entity.as_ref().borrow().get_x();
@@ -55,21 +59,33 @@ async fn main() {
         match server.receive().await {
             Ok(event) => {
                 match event {
-                    ServerEvent::Connection(address) => {
-                        info!("Gaia Server connected to: {}", address);
+                    ServerEvent::Connection(user_key) => {
+                        if let Some(main_room) = server.get_room_mut(main_room_key) {
+                            main_room.subscribe_user(&user_key);
+                        }
+                        if let Some(user) = server.get_user(&user_key) {
+                            info!("Gaia Server connected to: {}", user.address);
+                        }
                     }
-                    ServerEvent::Disconnection(address) => {
-                        info!("Gaia Server disconnected from: {:?}", address);
+                    ServerEvent::Disconnection(user_key) => {
+                        if let Some(main_room) = server.get_room_mut(main_room_key) {
+                            main_room.unsubscribe_user(&user_key);
+                        }
+                        if let Some(user) = server.get_user(&user_key) {
+                            info!("Gaia Server disconnected from: {:?}", user.address);
+                        }
                     }
-                    ServerEvent::Event(address, event_type) => {
-                        match event_type {
-                            ExampleEvent::StringEvent(string_event) => {
-                                let message = string_event.get_message();
-                                match message {
-                                    Some(msg) => {
-                                        info!("Gaia Server recv <- {}: {}", address, msg);
+                    ServerEvent::Event(user_key, event_type) => {
+                        if let Some(user) = server.get_user(&user_key) {
+                            match event_type {
+                                ExampleEvent::StringEvent(string_event) => {
+                                    let message = string_event.get_message();
+                                    match message {
+                                        Some(msg) => {
+                                            info!("Gaia Server recv <- {}: {}", user.address, msg);
+                                        }
+                                        None => {}
                                     }
-                                    None => {}
                                 }
                             }
                         }
