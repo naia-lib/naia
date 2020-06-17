@@ -153,28 +153,28 @@ impl<T: EntityType> ServerEntityManager<T> {
         self.queued_messages.push_front(message.clone());
     }
 
-    pub fn has_entity(&self, key: EntityKey) -> bool {
-        return self.local_entity_store.contains_key(key);
+    pub fn has_entity(&self, key: &EntityKey) -> bool {
+        return self.local_entity_store.contains_key(*key);
     }
 
-    pub fn add_entity(&mut self, key: EntityKey, entity: &Rc<RefCell<dyn Entity<T>>>) {
-        if !self.local_entity_store.contains_key(key) {
-            self.local_entity_store.insert(key, entity.clone());
+    pub fn add_entity(&mut self, key: &EntityKey, entity: &Rc<RefCell<dyn Entity<T>>>) {
+        if !self.local_entity_store.contains_key(*key) {
+            self.local_entity_store.insert(*key, entity.clone());
             let local_key = self.get_new_local_key();
-            self.local_to_global_key_map.insert(local_key, key);
+            self.local_to_global_key_map.insert(local_key, *key);
             let state_mask_size = entity.as_ref().borrow().get_state_mask_size();
             let entity_record = EntityRecord::new(local_key, state_mask_size);
             self.mut_handler.as_ref().borrow_mut().register_mask(&self.address, &key, entity_record.get_state_mask());
-            self.entity_records.insert(key, entity_record);
-            self.queued_messages.push_back(ServerEntityMessage::Create(key, local_key, entity.clone()));
+            self.entity_records.insert(*key, entity_record);
+            self.queued_messages.push_back(ServerEntityMessage::Create(*key, local_key, entity.clone()));
         }
     }
 
-    pub fn remove_entity(&mut self, key: EntityKey) {
-        if let Some(entity_record) = self.entity_records.get_mut(key) {
+    pub fn remove_entity(&mut self, key: &EntityKey) {
+        if let Some(entity_record) = self.entity_records.get_mut(*key) {
             if entity_record.status != LocalEntityStatus::Deleting {
                 entity_record.status = LocalEntityStatus::Deleting;
-                self.queued_messages.push_back(ServerEntityMessage::Delete(key, entity_record.local_key));
+                self.queued_messages.push_back(ServerEntityMessage::Delete(*key, entity_record.local_key));
             }
         }
     }

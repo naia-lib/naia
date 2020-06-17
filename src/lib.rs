@@ -11,6 +11,8 @@ mod gaia_server;
 mod client_connection;
 mod server_event;
 mod entities;
+mod user;
+mod room;
 mod error;
 
 pub use {
@@ -21,8 +23,7 @@ pub use {
         server_entity_manager::ServerEntityManager,
         server_entity_message::ServerEntityMessage,
         entity_packet_writer::EntityPacketWriter,
-        entity_store::EntityStore,
         entity_key::EntityKey,
         server_entity_mutator::ServerEntityMutator,
-    }
+    },
 };
