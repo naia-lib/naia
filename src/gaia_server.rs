@@ -320,7 +320,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         return self.rooms.get_mut(key);
     }
 
-    pub fn get_rooms(&self) -> slotmap::dense::Iter<RoomKey, Room> { // turn this to iterator
+    pub fn rooms_iter(&self) -> slotmap::dense::Iter<RoomKey, Room> {
         return self.rooms.iter();
     }
 
@@ -335,13 +335,23 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         return None;
     }
 
+    pub fn users_iter(&self) -> slotmap::dense::Iter<UserKey, User> {
+        return self.users.iter();
+    }
+
     pub fn get_user(&self, user_key: &UserKey) -> Option<&User> {
         return self.users.get(*user_key);
     }
 
     fn update_entity_scopes(&mut self) {
-        if let Some(scope_func) = &self.scope_entity_func {
-            for (room_key, room) in self.rooms.iter() {
+        for (room_key, room) in self.rooms.iter_mut() {
+            while let Some((removed_user, removed_entity)) = room.pop_removal_queue() {
+                if let Some(user_connection) = self.client_connections.get_mut(&removed_user) {
+                    user_connection.remove_entity(&removed_entity);
+                }
+            }
+
+            if let Some(scope_func) = &self.scope_entity_func {
                 for user_key in room.users_iter() {
                     for entity_key in room.entities_iter() {
                         if let Some(entity) = self.global_entity_store.get(*entity_key) {
