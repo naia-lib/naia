@@ -6,7 +6,7 @@ use std::{
 
 use gaia_shared::{Timer, PacketType, Event, Manifest,
             EventManager, PacketWriter, PacketReader, ManagerType, HostType,
-            EventType, EntityType, LocalEntityKey, AckManager, Timestamp, SequenceNumber, Connection, EntityNotifiable};
+            EventType, EntityType, LocalEntityKey, AckManager, SequenceNumber, Connection, EntityNotifiable};
 
 use super::{
     ClientEntityManager,
@@ -19,7 +19,7 @@ pub struct ServerConnection<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> ServerConnection<T, U> {
-    pub fn new(address: SocketAddr, heartbeat_interval: Duration, timeout_duration: Duration, connection_timestamp: Timestamp) -> Self {
+    pub fn new(address: SocketAddr, heartbeat_interval: Duration, timeout_duration: Duration) -> Self {
 
         return ServerConnection {
             connection: Connection::new(
