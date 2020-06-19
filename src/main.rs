@@ -67,13 +67,8 @@ async fn main() {
                             info!("Gaia Server connected to: {}", user.address);
                         }
                     }
-                    ServerEvent::Disconnection(user_key) => {
-                        if let Some(main_room) = server.get_room_mut(main_room_key) {
-                            main_room.unsubscribe_user(&user_key);
-                        }
-                        if let Some(user) = server.get_user(&user_key) {
-                            info!("Gaia Server disconnected from: {:?}", user.address);
-                        }
+                    ServerEvent::Disconnection(user_key, user) => {
+                        info!("Gaia Server disconnected from: {:?}", user.address);
                     }
                     ServerEvent::Event(user_key, event_type) => {
                         if let Some(user) = server.get_user(&user_key) {
