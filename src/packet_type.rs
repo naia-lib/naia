@@ -6,8 +6,10 @@ use super::standard_header::StandardHeader;
 pub enum PacketType {
     Data = 1,
     Heartbeat = 2,
-    ServerHandshake = 3,
-    ClientHandshake = 4,
+    ClientChallengeRequest = 3,
+    ServerChallengeResponse = 4,
+    ClientConnectRequest = 5,
+    ServerConnectResponse = 6,
     Unknown = 255
 }
 
@@ -16,8 +18,10 @@ impl From<u8> for PacketType {
         match orig {
             1 => return PacketType::Data,
             2 => return PacketType::Heartbeat,
-            3 => return PacketType::ServerHandshake,
-            4 => return PacketType::ClientHandshake,
+            3 => return PacketType::ClientChallengeRequest,
+            4 => return PacketType::ServerChallengeResponse,
+            5 => return PacketType::ClientConnectRequest,
+            6 => return PacketType::ServerConnectResponse,
             _ => return PacketType::Unknown,
         };
     }

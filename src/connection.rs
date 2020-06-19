@@ -14,7 +14,6 @@ use super::{
 
 pub struct Connection<T: EventType> {
     address: SocketAddr,
-    pub connection_timestamp: Timestamp,
     heartbeat_manager: Timer,
     timeout_manager: Timer,
     ack_manager: AckManager,
@@ -23,7 +22,6 @@ pub struct Connection<T: EventType> {
 
 impl<T: EventType> Connection<T> {
     pub fn new(address: SocketAddr,
-               connection_timestamp: Timestamp,
                heartbeat_manager: Timer,
                timeout_manager: Timer,
                ack_manager: AckManager,
@@ -31,7 +29,6 @@ impl<T: EventType> Connection<T> {
 
         return Connection {
             address,
-            connection_timestamp,
             heartbeat_manager,
             timeout_manager,
             ack_manager,

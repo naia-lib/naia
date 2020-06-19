@@ -1,5 +1,6 @@
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use crate::PacketReader;
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
@@ -43,9 +44,10 @@ impl Timestamp {
         buffer.write_u64::<BigEndian>(self.time).unwrap();
     }
 
-    pub fn read(mut msg: &[u8]) -> Self {
+    pub fn read(reader: &mut PacketReader) -> Self {
 
-        let time = msg.read_u64::<BigEndian>().unwrap();
+        let cursor = reader.get_cursor();
+        let time = cursor.read_u64::<BigEndian>().unwrap();
 
         Timestamp {
             time
