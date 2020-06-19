@@ -8,7 +8,6 @@ use crate::{Timer, PacketType, Event, Manifest, EventManager, PacketReader, Even
 
 use super::{
     sequence_buffer::{SequenceNumber},
-    Timestamp,
     ack_manager::AckManager,
 };
 
