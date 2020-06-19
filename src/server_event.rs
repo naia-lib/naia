@@ -1,11 +1,11 @@
 
 use super::{
-    user::UserKey,
+    user::{User, UserKey},
 };
 
 pub enum ServerEvent<T> {
     Connection(UserKey),
-    Disconnection(UserKey),
+    Disconnection(UserKey, User),
     Event(UserKey, T),
     Tick,
 }
