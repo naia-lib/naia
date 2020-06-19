@@ -10,7 +10,7 @@ use log::{info};
 use slotmap::{DenseSlotMap};
 use ring::{hmac, rand};
 
-use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
+use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig};
 pub use gaia_shared::{Config, PacketType, Connection, Timer, Timestamp, Manifest, PacketReader,
                       Event, Entity, ManagerType, HostType, EventType, EntityType, EntityMutator};
 
@@ -113,6 +113,14 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
 
             // timeouts
             if let Some(user_key) = self.outstanding_disconnects.pop_front() {
+
+                for (_, room) in self.rooms.iter_mut() {
+                    room.unsubscribe_user(&user_key);
+                }
+
+                let address = self.users.get(user_key).unwrap().address;
+                self.address_to_user_key_map.remove(&address);
+                self.users.remove(user_key);
                 self.client_connections.remove(&user_key);
                 output = Some(Ok(ServerEvent::Disconnection(user_key)));
                 continue;
@@ -282,13 +290,14 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                     }
                 }
                 Err(error) => {
-                    if let GaiaServerSocketError::SendError(address) = error {
-                        if let Some(user_key) = self.address_to_user_key_map.get(&address).copied() {
-                            self.client_connections.remove(&user_key);
-                            output = Some(Ok(ServerEvent::Disconnection(user_key)));
-                            continue;
-                        }
-                    }
+//                    //TODO: Determine if disconnecting a user based on a send error is the right thing to do
+//                    if let GaiaServerSocketError::SendError(address) = error {
+//                        if let Some(user_key) = self.address_to_user_key_map.get(&address).copied() {
+//                            self.client_connections.remove(&user_key);
+//                            output = Some(Ok(ServerEvent::Disconnection(user_key)));
+//                            continue;
+//                        }
+//                    }
 
                     output = Some(Err(GaiaServerError::Wrapped(Box::new(error))));
                     continue;
