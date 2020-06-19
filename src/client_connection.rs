@@ -25,11 +25,10 @@ pub struct ClientConnection<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> ClientConnection<T, U> {
-    pub fn new(address: SocketAddr, mut_handler: Option<&Rc<RefCell<MutHandler>>>, heartbeat_interval: Duration, timeout_duration: Duration, connection_timestamp: Timestamp) -> Self {
+    pub fn new(address: SocketAddr, mut_handler: Option<&Rc<RefCell<MutHandler>>>, heartbeat_interval: Duration, timeout_duration: Duration) -> Self {
         return ClientConnection {
             connection: Connection::new(
                 address,
-                connection_timestamp,
                 Timer::new(heartbeat_interval),
                 Timer::new(timeout_duration),
                 AckManager::new(HostType::Server),
@@ -74,7 +73,8 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
     pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &mut [u8]) {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
-            match reader.read_manager_type() {
+            let manager_type: ManagerType = reader.read_u8().into();
+            match manager_type {
                 ManagerType::Event => {
                     self.connection.process_event_data(&mut reader, manifest);
                 }
@@ -137,7 +137,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.get_incoming_event();
     }
 
-    pub fn get_connection_timestamp(&self) -> Timestamp {
-        return self.connection.connection_timestamp;
-    }
+//    pub fn get_connection_timestamp(&self) -> Timestamp {
+//        return self.connection.connection_timestamp;
+//    }
 }

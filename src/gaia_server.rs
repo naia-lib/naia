@@ -8,9 +8,10 @@ use std::{
 
 use log::{info};
 use slotmap::{DenseSlotMap};
+use ring::{hmac, rand};
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig, GaiaServerSocketError};
-pub use gaia_shared::{Config, PacketType, Connection, Timer, Timestamp, Manifest,
+pub use gaia_shared::{Config, PacketType, Connection, Timer, Timestamp, Manifest, PacketReader,
                       Event, Entity, ManagerType, HostType, EventType, EntityType, EntityMutator};
 
 use super::{
@@ -41,6 +42,7 @@ pub struct GaiaServer<T: EventType, U: EntityType> {
     client_connections: HashMap<UserKey, ClientConnection<T, U>>,
     outstanding_disconnects: VecDeque<UserKey>,
     heartbeat_timer: Timer,
+    connection_hash_key: hmac::Key,
     drop_counter: u8,
     drop_max: u8,
 }
@@ -63,6 +65,8 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         let clients_map = HashMap::new();
         let heartbeat_timer = Timer::new(config.heartbeat_interval);
 
+        let connection_hash_key = hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
+
         GaiaServer {
             manifest,
             global_entity_store: DenseSlotMap::with_key(),
@@ -73,6 +77,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
             config,
             users: DenseSlotMap::with_key(),
             rooms: DenseSlotMap::with_key(),
+            connection_hash_key,
             client_connections: clients_map,
             address_to_user_key_map: HashMap::new(),
             outstanding_disconnects: VecDeque::new(),
@@ -150,52 +155,77 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                             }
 
                             match packet_type {
-                                PacketType::ClientHandshake => {
+                                PacketType::ClientChallengeRequest => {
                                     let payload = gaia_shared::utils::read_headerless_payload(packet.payload());
-                                    let timestamp = Timestamp::read(&payload);
+                                    let mut reader = PacketReader::new(&payload);
+                                    let timestamp = Timestamp::read(&mut reader);
 
                                     if !self.address_to_user_key_map.contains_key(&address) {
-                                        let user = User::new(address);
+                                        let user = User::new(address, timestamp);
                                         let user_key = self.users.insert(user);
                                         self.address_to_user_key_map.insert(address, user_key);
                                     }
 
-                                    if let Some(user_key) = self.address_to_user_key_map.get(&address) {
-                                        if !self.client_connections.contains_key(user_key) {
-                                            self.client_connections.insert(*user_key,
-                                                                           ClientConnection::new(
-                                                                               address,
-                                                                               Some(&self.mut_handler),
-                                                                               self.config.heartbeat_interval,
-                                                                               self.config.disconnection_timeout_duration,
-                                                                               timestamp));
-                                            output = Some(Ok(ServerEvent::Connection(*user_key)));
-                                        }
+                                    let mut timestamp_bytes = Vec::new();
+                                    timestamp.write(&mut timestamp_bytes);
+                                    let timestamp_hash: hmac::Tag = hmac::sign(&self.connection_hash_key, &timestamp_bytes);
 
-                                        match self.client_connections.get_mut(user_key) {
-                                            Some(connection) => {
-                                                if timestamp == connection.get_connection_timestamp() {
-                                                    let payload = connection.process_outgoing_header(
-                                                        PacketType::ServerHandshake,
-                                                        &[]);
-                                                    match self.sender.send(Packet::new_raw(address, payload))
-                                                        .await {
-                                                        Ok(_) => {}
-                                                        Err(err) => {
-                                                            info!("send error! {}", err);
-                                                        }
-                                                    }
-                                                    connection.mark_sent();
-                                                    continue;
-                                                } else {
-                                                    // Incoming Timestamp is different than recorded.. must be the same client trying to connect..
-                                                    // so disconnect them to provide continuity
-                                                    self.client_connections.remove(user_key);
-                                                    output = Some(Ok(ServerEvent::Disconnection(*user_key)));
-                                                    continue;
-                                                }
-                                            }
-                                            None => {}
+                                    let mut payload_bytes = Vec::new();
+                                    payload_bytes.append(&mut timestamp_bytes);
+                                    let hash_bytes: &[u8] = timestamp_hash.as_ref();
+                                    for hash_byte in hash_bytes {
+                                        payload_bytes.push(*hash_byte);
+                                    }
+
+                                    GaiaServer::<T,U>::internal_send_connectionless(
+                                        &mut self.sender,
+                                        PacketType::ServerChallengeResponse,
+                                        Packet::new(address, payload_bytes))
+                                        .await;
+                                }
+                                PacketType::ClientConnectRequest => {
+                                    let payload = gaia_shared::utils::read_headerless_payload(packet.payload());
+                                    let mut reader = PacketReader::new(&payload);
+                                    let timestamp = Timestamp::read(&mut reader);
+
+                                    if let Some(user_key) = self.address_to_user_key_map.get(&address) {
+                                        if let Some(user) = self.users.get(*user_key) {
+                                           if user.timestamp == timestamp {
+                                               if self.client_connections.contains_key(user_key) {
+                                                   let connection = self.client_connections.get_mut(user_key).unwrap();
+                                                   let payload = connection.process_outgoing_header(
+                                                       PacketType::ServerConnectResponse,
+                                                       &[]);
+                                                   match self.sender.send(Packet::new_raw(address, payload))
+                                                       .await {
+                                                       Ok(_) => {}
+                                                       Err(err) => {
+                                                           info!("send error! {}", err);
+                                                       }
+                                                   }
+                                                   connection.mark_sent();
+                                                   continue;
+                                               } else {
+                                                   //TODO: if we've already verified this user's digest, no need to calculate it again, just send a ServerConnectResponse back
+                                                   let mut timestamp_bytes: Vec<u8> = Vec::new();
+                                                   timestamp.write(&mut timestamp_bytes);
+                                                   let mut digest_bytes: Vec<u8> = Vec::new();
+                                                   for x in 0..32 {
+                                                       digest_bytes.push(reader.read_u8());
+                                                   }
+                                                   if hmac::verify(&self.connection_hash_key, &timestamp_bytes, &digest_bytes).is_ok() {
+                                                       // Success!
+                                                       self.client_connections.insert(*user_key,
+                                                                                      ClientConnection::new(
+                                                                                          address,
+                                                                                          Some(&self.mut_handler),
+                                                                                          self.config.heartbeat_interval,
+                                                                                          self.config.disconnection_timeout_duration));
+                                                       output = Some(Ok(ServerEvent::Connection(*user_key)));
+                                                       continue;
+                                                   }
+                                               }
+                                           }
                                         }
                                     }
                                 }
@@ -240,7 +270,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                             for (user_key, connection) in self.client_connections.iter_mut() {
                                 if let Some(user) = self.users.get(*user_key) {
                                     connection.collect_entity_updates();
-                                    let mut packet_index = 1;
+                                    let mut packet_index: u8 = 1;
                                     while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
                                         info!("sending packet {}", packet_index);
                                         packet_index += 1;
@@ -377,6 +407,13 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                 }
             }
         }
+    }
+
+    async fn internal_send_connectionless(sender: &mut MessageSender, packet_type: PacketType, packet: Packet) {
+        let new_payload = gaia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
+        sender.send(Packet::new_raw(packet.address(), new_payload))
+            .await
+            .expect("send failed!");
     }
 }
 
