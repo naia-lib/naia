@@ -137,7 +137,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.get_incoming_event();
     }
 
-//    pub fn get_connection_timestamp(&self) -> Timestamp {
-//        return self.connection.connection_timestamp;
-//    }
+    pub fn get_address(&self) -> SocketAddr {
+        return self.connection.get_address();
+    }
 }
