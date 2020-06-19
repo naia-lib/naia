@@ -4,6 +4,7 @@ use std::{
 };
 
 use log::info;
+use byteorder::{ReadBytesExt};
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
 pub use gaia_shared::{Config, LocalEntityKey, PacketType, Timer, Timestamp,
@@ -17,6 +18,8 @@ use super::{
     error::GaiaClientError,
     Packet
 };
+use crate::client_connection_state::ClientConnectionState::AwaitingChallengeResponse;
+use crate::client_connection_state::ClientConnectionState;
 
 pub struct GaiaClient<T: EventType, U: EntityType> {
     manifest: Manifest<T, U>,
@@ -26,9 +29,11 @@ pub struct GaiaClient<T: EventType, U: EntityType> {
     sender: MessageSender,
     server_connection: Option<ServerConnection<T, U>>,
     pre_connection_timestamp: Option<Timestamp>,
+    pre_connection_digest: Option<Box<[u8]>>,
     handshake_timer: Timer,
     drop_counter: u8,
     drop_max: u8,
+    connection_state: ClientConnectionState,
 }
 
 impl<T: EventType, U: EntityType> GaiaClient<T, U> {
@@ -59,6 +64,8 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
             handshake_timer,
             server_connection: None,
             pre_connection_timestamp: None,
+            pre_connection_digest: None,
+            connection_state: AwaitingChallengeResponse,
         }
     }
 
@@ -101,14 +108,34 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
             }
             None => {
                 if self.handshake_timer.ringing() {
+                    match self.connection_state {
+                        ClientConnectionState::AwaitingChallengeResponse => {
+                            if self.pre_connection_timestamp.is_none() {
+                                self.pre_connection_timestamp = Some(Timestamp::now());
+                            }
 
-                    if self.pre_connection_timestamp.is_none() {
-                        self.pre_connection_timestamp = Some(Timestamp::now());
+                            let mut timestamp_bytes = Vec::new();
+                            self.pre_connection_timestamp.as_mut().unwrap().write(&mut timestamp_bytes);
+                            GaiaClient::<T,U>::internal_send_connectionless(
+                                &mut self.sender,
+                                PacketType::ClientChallengeRequest,
+                                Packet::new(timestamp_bytes));
+                        }
+                        ClientConnectionState::AwaitingConnectResponse => {
+
+                            let mut payload_bytes = Vec::new();
+                            self.pre_connection_timestamp.as_mut().unwrap().write(&mut payload_bytes);
+                            for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref() {
+                                payload_bytes.push(*digest_byte);
+                            }
+                            GaiaClient::<T,U>::internal_send_connectionless(
+                                &mut self.sender,
+                                PacketType::ClientConnectRequest,
+                                Packet::new(payload_bytes));
+                        }
+                        _ => {}
                     }
 
-                    let mut timestamp_bytes = Vec::new();
-                    self.pre_connection_timestamp.as_mut().unwrap().write(&mut timestamp_bytes);
-                    GaiaClient::<T,U>::internal_send_connectionless(&mut self.sender, PacketType::ClientHandshake, Packet::new(timestamp_bytes));
                     self.handshake_timer.reset();
                 }
             }
@@ -155,13 +182,37 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                                 }
                             }
                             else {
-                                if packet_type == PacketType::ServerHandshake {
-                                    self.server_connection = Some(ServerConnection::new(self.server_address,
-                                                                                        self.config.heartbeat_interval,
-                                                                                        self.config.disconnection_timeout_duration,
-                                                                                        self.pre_connection_timestamp.take().unwrap()));
-                                    output = Some(Ok(ClientEvent::Connection));
-                                    continue;
+                                match packet_type {
+                                    PacketType::ServerChallengeResponse => {
+
+                                        if self.connection_state == ClientConnectionState::AwaitingChallengeResponse {
+                                            if let Some(my_timestamp) = self.pre_connection_timestamp {
+                                                let payload = gaia_shared::utils::read_headerless_payload(packet.payload());
+                                                let mut reader = PacketReader::new(&payload);
+                                                let payload_timestamp = Timestamp::read(&mut reader);
+
+                                                if my_timestamp == payload_timestamp {
+                                                    let mut digest_bytes: Vec<u8> = Vec::new();
+                                                    for i in 0..32 {
+                                                        digest_bytes.push(reader.read_u8());
+                                                    }
+                                                    self.pre_connection_digest = Some(digest_bytes.into_boxed_slice());
+                                                    self.connection_state = ClientConnectionState::AwaitingConnectResponse;
+                                                }
+                                            }
+                                        }
+
+                                        continue;
+                                    }
+                                    PacketType::ServerConnectResponse => {
+                                        self.server_connection = Some(ServerConnection::new(self.server_address,
+                                                                                            self.config.heartbeat_interval,
+                                                                                            self.config.disconnection_timeout_duration,
+                                                                                            self.pre_connection_timestamp.take().unwrap()));
+                                        output = Some(Ok(ClientEvent::Connection));
+                                        continue;
+                                    }
+                                    _ => {}
                                 }
                             }
                         }
