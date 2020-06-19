@@ -4,7 +4,6 @@ use std::{
 };
 
 use log::info;
-use byteorder::{ReadBytesExt};
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
 pub use gaia_shared::{Config, LocalEntityKey, PacketType, Timer, Timestamp,
@@ -193,7 +192,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
 
                                                 if my_timestamp == payload_timestamp {
                                                     let mut digest_bytes: Vec<u8> = Vec::new();
-                                                    for i in 0..32 {
+                                                    for _ in 0..32 {
                                                         digest_bytes.push(reader.read_u8());
                                                     }
                                                     self.pre_connection_digest = Some(digest_bytes.into_boxed_slice());
@@ -207,8 +206,8 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                                     PacketType::ServerConnectResponse => {
                                         self.server_connection = Some(ServerConnection::new(self.server_address,
                                                                                             self.config.heartbeat_interval,
-                                                                                            self.config.disconnection_timeout_duration,
-                                                                                            self.pre_connection_timestamp.take().unwrap()));
+                                                                                            self.config.disconnection_timeout_duration));
+                                        self.connection_state = ClientConnectionState::Connected;
                                         output = Some(Ok(ClientEvent::Connection));
                                         continue;
                                     }
