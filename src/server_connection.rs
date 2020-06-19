@@ -24,7 +24,6 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return ServerConnection {
             connection: Connection::new(
                 address,
-                connection_timestamp,
                 Timer::new(heartbeat_interval),
                 Timer::new(timeout_duration),
                 AckManager::new(HostType::Client),
@@ -66,7 +65,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &mut [u8]) {
         let mut reader = PacketReader::new(data);
-        let start_manager_type = reader.read_manager_type();
+        let start_manager_type: ManagerType = reader.read_u8().into();
         if start_manager_type == ManagerType::Event {
             self.connection.process_event_data(&mut reader, manifest);
         }

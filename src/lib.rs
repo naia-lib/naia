@@ -9,6 +9,7 @@ mod server_connection;
 mod client_event;
 mod client_entity_message;
 mod client_entity_manager;
+mod client_connection_state;
 mod error;
 
 pub use {
