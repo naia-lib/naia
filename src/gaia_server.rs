@@ -209,7 +209,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                                    let mut timestamp_bytes: Vec<u8> = Vec::new();
                                                    timestamp.write(&mut timestamp_bytes);
                                                    let mut digest_bytes: Vec<u8> = Vec::new();
-                                                   for x in 0..32 {
+                                                   for _ in 0..32 {
                                                        digest_bytes.push(reader.read_u8());
                                                    }
                                                    if hmac::verify(&self.connection_hash_key, &timestamp_bytes, &digest_bytes).is_ok() {
