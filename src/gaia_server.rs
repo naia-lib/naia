@@ -206,7 +206,6 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                                    connection.mark_sent();
                                                    continue;
                                                } else {
-                                                   //TODO: if we've already verified this user's digest, no need to calculate it again, just send a ServerConnectResponse back
                                                    let mut timestamp_bytes: Vec<u8> = Vec::new();
                                                    timestamp.write(&mut timestamp_bytes);
                                                    let mut digest_bytes: Vec<u8> = Vec::new();
@@ -222,6 +221,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                                                                           self.config.heartbeat_interval,
                                                                                           self.config.disconnection_timeout_duration));
                                                        output = Some(Ok(ServerEvent::Connection(*user_key)));
+                                                       //TODO: send a connect request here instead of relying on the client to send a second request..
                                                        continue;
                                                    }
                                                }
