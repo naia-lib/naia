@@ -8,7 +8,7 @@ use std::{
 
 use gaia_shared::{Timer, PacketType, Event, Manifest,
             EventManager, PacketWriter, PacketReader, ManagerType, HostType,
-            EventType, EntityType, Entity, SequenceNumber, Timestamp, AckManager, Connection};
+            EventType, EntityType, Entity, SequenceNumber, AckManager, Connection};
 
 use super::{
     ServerEntityManager,

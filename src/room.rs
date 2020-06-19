@@ -15,7 +15,6 @@ use super::{
         UserKey,
     }
 };
-use crate::user::User;
 
 new_key_type! { pub struct RoomKey; }
 
