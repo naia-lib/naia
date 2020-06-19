@@ -17,7 +17,6 @@ pub struct ClientEntityManager<T: EntityType> {
 
 impl<U: EntityType> ClientEntityManager<U> {
     pub fn new() -> Self {
-        info!("new client entity manager");
         ClientEntityManager {
             queued_incoming_messages: VecDeque::new(),
             local_entity_store: HashMap::new(),

@@ -75,6 +75,9 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
             Some(connection) => {
                 if connection.should_drop() {
                     self.server_connection = None;
+                    self.pre_connection_timestamp = None;
+                    self.pre_connection_digest = None;
+                    self.connection_state = AwaitingChallengeResponse;
                     return Ok(ClientEvent::Disconnection);
                 }
                 if connection.should_send_heartbeat() {
