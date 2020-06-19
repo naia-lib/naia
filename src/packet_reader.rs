@@ -1,6 +1,5 @@
 use std::io::{Cursor};
 use byteorder::{ReadBytesExt};
-use crate::{ManagerType};
 
 pub struct PacketReader<'s> {
     buffer: &'s [u8],
@@ -20,9 +19,8 @@ impl<'s> PacketReader<'s> {
         return (self.cursor.position() as usize) < self.buffer.len();
     }
 
-    // currently returns a gaia id & payload
-    pub fn read_manager_type(&mut self) -> ManagerType {
-        return self.cursor.read_u8().unwrap().into();
+    pub fn read_u8(&mut self) -> u8 {
+        return self.cursor.read_u8().unwrap();
     }
 
     pub fn get_cursor(&mut self) -> &mut Cursor<&'s [u8]> {
