@@ -90,4 +90,8 @@ impl<T: EventType> Connection<T> {
     pub fn get_incoming_event(&mut self) -> Option<T> {
         return self.event_manager.pop_incoming_event();
     }
+
+    pub fn get_address(&self) -> SocketAddr {
+        return self.address;
+    }
 }
