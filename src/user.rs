@@ -6,6 +6,7 @@ use crate::gaia_server::Timestamp;
 
 new_key_type! { pub struct UserKey; }
 
+#[derive(Clone)]
 pub struct User {
     pub address: SocketAddr,
     pub timestamp: Timestamp,

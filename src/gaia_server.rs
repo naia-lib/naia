@@ -120,9 +120,10 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
 
                 let address = self.users.get(user_key).unwrap().address;
                 self.address_to_user_key_map.remove(&address);
+                let user_clone = self.users.get(user_key).unwrap().clone();
                 self.users.remove(user_key);
                 self.client_connections.remove(&user_key);
-                output = Some(Ok(ServerEvent::Disconnection(user_key)));
+                output = Some(Ok(ServerEvent::Disconnection(user_key, user_clone)));
                 continue;
             }
 
@@ -184,6 +185,8 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                         PacketType::ServerChallengeResponse,
                                         Packet::new(address, payload_bytes))
                                         .await;
+
+                                    continue;
                                 }
                                 PacketType::ClientConnectRequest => {
                                     let payload = gaia_shared::utils::read_headerless_payload(packet.payload());
@@ -203,6 +206,9 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                        if user.timestamp == timestamp {
                                            let mut connection = self.client_connections.get_mut(user_key).unwrap();
                                            GaiaServer::<T,U>::send_connect_accept_message(&mut connection, &mut self.sender).await;
+                                           continue;
+                                       } else {
+                                           self.outstanding_disconnects.push_back(*user_key);
                                            continue;
                                        }
                                     } else {
