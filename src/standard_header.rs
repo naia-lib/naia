@@ -81,4 +81,10 @@ impl StandardHeader {
     pub fn get_packet_type(mut payload: &[u8]) -> PacketType {
         payload.read_u8().unwrap().into()
     }
+
+    pub fn get_sequence(mut payload: &[u8]) -> u16 {
+        let _ = payload.read_u8().unwrap();
+        let seq = payload.read_u16::<BigEndian>().unwrap();
+        return seq;
+    }
 }
