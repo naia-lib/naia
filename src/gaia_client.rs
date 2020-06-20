@@ -4,11 +4,12 @@ use std::{
 };
 
 use log::info;
+use byteorder::{BigEndian, WriteBytesExt};
 
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
 pub use gaia_shared::{Config, LocalEntityKey, PacketType, Timer, Timestamp,
                       Manifest, ManagerType, HostType, PacketWriter, PacketReader,
-                      Event, EventType, EntityType};
+                      Event, EventType, EntityType, EventTypeGetter};
 
 use super::{
     server_connection::ServerConnection,
@@ -33,10 +34,11 @@ pub struct GaiaClient<T: EventType, U: EntityType> {
     drop_counter: u8,
     drop_max: u8,
     connection_state: ClientConnectionState,
+    auth_event: Option<T>,
 }
 
 impl<T: EventType, U: EntityType> GaiaClient<T, U> {
-    pub fn connect(server_address: &str, manifest: Manifest<T, U>, config: Option<Config>) -> Self {
+    pub fn connect(server_address: &str, manifest: Manifest<T, U>, config: Option<Config>, auth: Option<T>) -> Self {
 
         let mut config = match config {
             Some(config) => config,
@@ -65,6 +67,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
             pre_connection_timestamp: None,
             pre_connection_digest: None,
             connection_state: AwaitingChallengeResponse,
+            auth_event: auth,
         }
     }
 
@@ -125,10 +128,18 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                         }
                         ClientConnectionState::AwaitingConnectResponse => {
 
+                            // write timestamp & digest into payload
                             let mut payload_bytes = Vec::new();
                             self.pre_connection_timestamp.as_mut().unwrap().write(&mut payload_bytes);
                             for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref() {
                                 payload_bytes.push(*digest_byte);
+                            }
+                            // write auth event object if there is one
+                            if let Some(auth_event) = &mut self.auth_event {
+                                let type_id = auth_event.get_type_id();
+                                let gaia_id = self.manifest.get_event_gaia_id(&type_id); // get gaia id
+                                payload_bytes.write_u16::<BigEndian>(gaia_id).unwrap();// write gaia id
+                                auth_event.write(&mut payload_bytes);
                             }
                             GaiaClient::<T,U>::internal_send_connectionless(
                                 &mut self.sender,
