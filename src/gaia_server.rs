@@ -36,7 +36,7 @@ pub struct GaiaServer<T: EventType, U: EntityType> {
     sender: MessageSender,
     global_entity_store: DenseSlotMap<EntityKey, Rc<RefCell<dyn Entity<U>>>>,
     scope_entity_func: Option<Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>>,
-    auth_func: Option<Rc<Box<dyn Fn(&T) -> bool>>>,
+    auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
     mut_handler: Rc<RefCell<MutHandler>>,
     users: DenseSlotMap<UserKey, User>,
     rooms: DenseSlotMap<RoomKey, Room>,
@@ -196,35 +196,45 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                     let mut reader = PacketReader::new(&payload);
                                     let timestamp = Timestamp::read(&mut reader);
 
-                                    if !self.address_to_user_key_map.contains_key(&address) {
-                                        let user = User::new(address, timestamp);
-                                        let user_key = self.users.insert(user);
-                                        self.address_to_user_key_map.insert(address, user_key);
-                                    }
+//                                    if !self.address_to_user_key_map.contains_key(&address) {
+//                                        let user = User::new(address, timestamp);
+//                                        let user_key = self.users.insert(user);
+//                                        self.address_to_user_key_map.insert(address, user_key);
+//                                    }
+//
+//                                    let user_key = self.address_to_user_key_map.get(&address).unwrap();
+//                                    let user = self.users.get(*user_key).unwrap();
 
-                                    let user_key = self.address_to_user_key_map.get(&address).unwrap();
-                                    let user = self.users.get(*user_key).unwrap();
-
-                                    if self.client_connections.contains_key(user_key) {
-                                       if user.timestamp == timestamp {
-                                           let mut connection = self.client_connections.get_mut(user_key).unwrap();
-                                           GaiaServer::<T,U>::send_connect_accept_message(&mut connection, &mut self.sender).await;
-                                           continue;
-                                       } else {
-                                           self.outstanding_disconnects.push_back(*user_key);
-                                           continue;
-                                       }
+                                    if let Some(user_key) = self.address_to_user_key_map.get(&address) {
+                                        if self.client_connections.contains_key(user_key) {
+                                            let user = self.users.get(*user_key).unwrap();
+                                            if user.timestamp == timestamp {
+                                                let mut connection = self.client_connections.get_mut(user_key).unwrap();
+                                                GaiaServer::<T, U>::send_connect_accept_message(&mut connection, &mut self.sender).await;
+                                                continue;
+                                            } else {
+                                                self.outstanding_disconnects.push_back(*user_key);
+                                                continue;
+                                            }
+                                        } else {
+                                            error!("if there's a user key associated with the address, should also have a client connection initiated");
+                                            continue;
+                                        }
                                     } else {
+
                                         //Verify that timestamp hash has been written by this server instance
                                         let mut timestamp_bytes: Vec<u8> = Vec::new();
                                         timestamp.write(&mut timestamp_bytes);
                                         let mut digest_bytes: Vec<u8> = Vec::new();
                                         for _ in 0..32 {
-                                           digest_bytes.push(reader.read_u8());
+                                            digest_bytes.push(reader.read_u8());
                                         }
                                         if !hmac::verify(&self.connection_hash_key, &timestamp_bytes, &digest_bytes).is_ok() {
-                                           continue;
+                                            continue;
                                         }
+
+                                        let user = User::new(address, timestamp);
+                                        let user_key = self.users.insert(user);
 
                                         // Call auth function if there is one
                                         if let Some(auth_func) = &self.auth_func {
@@ -232,6 +242,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                             let cursor = reader.get_cursor();
                                             let gaia_id_result = cursor.read_u16::<BigEndian>();
                                             if gaia_id_result.is_err() {
+                                                self.users.remove(user_key);
                                                 continue;
                                             }
                                             let gaia_id: u16 = gaia_id_result.unwrap().into();
@@ -242,25 +253,29 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                             match self.manifest.create_event(gaia_id) {
                                                 Some(mut new_entity) => {
                                                     new_entity.read(&event_payload);
-                                                    if !(auth_func.as_ref().as_ref())(&new_entity) {
+                                                    if !(auth_func.as_ref().as_ref())(&user_key, &new_entity) {
+                                                        self.users.remove(user_key);
                                                         continue;
                                                     }
                                                 }
                                                 _ => {
+                                                    self.users.remove(user_key);
                                                     continue;
                                                 }
                                             }
                                         }
 
+                                        self.address_to_user_key_map.insert(address, user_key);
+
                                         // Success! Create new connection
                                         let mut new_connection = ClientConnection::new(
-                                           address,
-                                           Some(&self.mut_handler),
-                                           self.config.heartbeat_interval,
-                                           self.config.disconnection_timeout_duration);
-                                        GaiaServer::<T,U>::send_connect_accept_message(&mut new_connection, &mut self.sender).await;
-                                        self.client_connections.insert(*user_key, new_connection);
-                                        output = Some(Ok(ServerEvent::Connection(*user_key)));
+                                            address,
+                                            Some(&self.mut_handler),
+                                            self.config.heartbeat_interval,
+                                            self.config.disconnection_timeout_duration);
+                                        GaiaServer::<T, U>::send_connect_accept_message(&mut new_connection, &mut self.sender).await;
+                                        self.client_connections.insert(user_key, new_connection);
+                                        output = Some(Ok(ServerEvent::Connection(user_key)));
                                         continue;
                                     }
                                 }
@@ -408,7 +423,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         self.scope_entity_func = Some(scope_func);
     }
 
-    pub fn on_auth(&mut self, auth_func: Rc<Box<dyn Fn(&T) -> bool>>) {
+    pub fn on_auth(&mut self, auth_func: Rc<Box<dyn Fn(&UserKey, &T) -> bool>>) {
         self.auth_func = Some(auth_func);
     }
 
