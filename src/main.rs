@@ -55,6 +55,15 @@ async fn main() {
         }
     })));
 
+    server.on_auth(Rc::new(Box::new(|auth_type| {
+        if let ExampleEvent::AuthEvent(auth_event) = auth_type {
+            let username = auth_event.get_username();
+            let password = auth_event.get_password();
+            return username == "charlie" && password == "12345";
+        }
+        return false;
+    })));
+
     loop {
         match server.receive().await {
             Ok(event) => {
@@ -67,7 +76,7 @@ async fn main() {
                             info!("Gaia Server connected to: {}", user.address);
                         }
                     }
-                    ServerEvent::Disconnection(user_key, user) => {
+                    ServerEvent::Disconnection(_, user) => {
                         info!("Gaia Server disconnected from: {:?}", user.address);
                     }
                     ServerEvent::Event(user_key, event_type) => {
@@ -82,6 +91,7 @@ async fn main() {
                                         None => {}
                                     }
                                 }
+                                _ => {}
                             }
                         }
                     }
