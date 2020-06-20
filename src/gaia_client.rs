@@ -219,8 +219,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                                     }
                                     PacketType::ServerConnectResponse => {
                                         self.server_connection = Some(ServerConnection::new(self.server_address,
-                                                                                            self.config.heartbeat_interval,
-                                                                                            self.config.disconnection_timeout_duration));
+                                                                                            &self.config));
                                         self.connection_state = ClientConnectionState::Connected;
                                         output = Some(Ok(ClientEvent::Connection));
                                         continue;
@@ -252,7 +251,10 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
         }
     }
 
-    fn internal_send_with_connection(sender: &mut MessageSender, connection: &mut ServerConnection<T, U>, packet_type: PacketType, packet: Packet) {
+    fn internal_send_with_connection(sender: &mut MessageSender,
+                                     connection: &mut ServerConnection<T, U>,
+                                     packet_type: PacketType,
+                                     packet: Packet) {
         let new_payload = connection.process_outgoing_header(packet_type, packet.payload());
         sender.send(Packet::new_raw(new_payload))
             .expect("send failed!");
@@ -278,5 +280,9 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
 
     pub fn get_entity(&self, key: LocalEntityKey) -> Option<&U> {
         return self.server_connection.as_ref().unwrap().get_local_entity(key);
+    }
+
+    pub fn get_rtt(&self) -> f32 {
+        return self.server_connection.as_ref().unwrap().get_rtt();
     }
 }

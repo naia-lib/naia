@@ -1,10 +1,9 @@
 
 use std::{
-    time::Duration,
     net::SocketAddr,
 };
 
-use gaia_shared::{Timer, PacketType, Event, Manifest,
+use gaia_shared::{Timer, PacketType, Event, Manifest, RttTracker, Config,
             EventManager, PacketWriter, PacketReader, ManagerType, HostType,
             EventType, EntityType, LocalEntityKey, AckManager, SequenceNumber, Connection, EntityNotifiable};
 
@@ -19,7 +18,12 @@ pub struct ServerConnection<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> ServerConnection<T, U> {
-    pub fn new(address: SocketAddr, heartbeat_interval: Duration, timeout_duration: Duration) -> Self {
+    pub fn new(address: SocketAddr, config: &Config) -> Self {
+
+        let heartbeat_interval = config.heartbeat_interval;
+        let timeout_duration = config.disconnection_timeout_duration;
+        let rtt_smoothing_factor = config.rtt_smoothing_factor;
+        let rtt_max_value = config.rtt_max_value;
 
         return ServerConnection {
             connection: Connection::new(
@@ -27,6 +31,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                 Timer::new(heartbeat_interval),
                 Timer::new(timeout_duration),
                 AckManager::new(HostType::Client),
+                RttTracker::new(rtt_smoothing_factor, rtt_max_value),
                 EventManager::new()
             ),
             entity_manager: ClientEntityManager::new(),
@@ -114,5 +119,9 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn get_incoming_event(&mut self) -> Option<T> {
         return self.connection.get_incoming_event();
+    }
+
+    pub fn get_rtt(&self) -> f32 {
+        return self.connection.get_rtt();
     }
 }
