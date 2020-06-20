@@ -4,7 +4,7 @@ use std::{
     net::SocketAddr,
 };
 
-use crate::{Timer, PacketType, Event, Manifest, EventManager, PacketReader, EventType, EntityNotifiable, EntityType};
+use crate::{Timer, PacketType, Event, Manifest, EventManager, PacketReader, EventType, EntityNotifiable, EntityType, RttTracker, StandardHeader};
 
 use super::{
     sequence_buffer::{SequenceNumber},
@@ -16,6 +16,7 @@ pub struct Connection<T: EventType> {
     heartbeat_manager: Timer,
     timeout_manager: Timer,
     ack_manager: AckManager,
+    rtt_tracker: RttTracker,
     event_manager: EventManager<T>,
 }
 
@@ -24,6 +25,7 @@ impl<T: EventType> Connection<T> {
                heartbeat_manager: Timer,
                timeout_manager: Timer,
                ack_manager: AckManager,
+               rtt_tracker: RttTracker,
                event_manager: EventManager<T>) -> Self {
 
         return Connection {
@@ -31,6 +33,7 @@ impl<T: EventType> Connection<T> {
             heartbeat_manager,
             timeout_manager,
             ack_manager,
+            rtt_tracker,
             event_manager,
         };
     }
@@ -54,12 +57,15 @@ impl<T: EventType> Connection<T> {
     pub fn process_incoming_header(&mut self,
                                    payload: &[u8],
                                    entity_notifiable: &mut Option<&mut dyn EntityNotifiable>) -> Box<[u8]> {
+        let incoming_sequence_number = StandardHeader::get_sequence(payload);
+        self.rtt_tracker.process_incoming(incoming_sequence_number);
         return self.ack_manager.process_incoming(payload,
                                                  &mut self.event_manager,
                                                  entity_notifiable);
     }
 
     pub fn process_outgoing_header(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
+        self.rtt_tracker.process_outgoing(self.ack_manager.local_sequence_num());
         return self.ack_manager.process_outgoing(packet_type, payload);
     }
 
@@ -93,5 +99,9 @@ impl<T: EventType> Connection<T> {
 
     pub fn get_address(&self) -> SocketAddr {
         return self.address;
+    }
+
+    pub fn get_rtt(&self) -> f32 {
+        return self.rtt_tracker.get_rtt();
     }
 }

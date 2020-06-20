@@ -7,6 +7,7 @@ extern crate cfg_if;
 
 mod entities;
 mod events;
+mod rtt;
 mod ack_manager;
 mod config;
 mod connection;
@@ -21,7 +22,7 @@ mod host_type;
 mod manifest;
 pub mod utils;
 
-pub use gaia_socket_shared::{find_my_ip_address, Timer};
+pub use gaia_socket_shared::{find_my_ip_address, Timer, Instant};
 
 pub use {
     packet_type::PacketType,
@@ -48,5 +49,10 @@ pub use {
         state_mask::StateMask,
         entity_notifiable::EntityNotifiable,
         entity_mutator::EntityMutator,
+    },
+    rtt::{
+        rtt_data::RttData,
+        rtt_measurer::RttMeasurer,
+        rtt_tracker::RttTracker,
     },
 };
