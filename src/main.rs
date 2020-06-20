@@ -55,7 +55,7 @@ async fn main() {
         }
     })));
 
-    server.on_auth(Rc::new(Box::new(|auth_type| {
+    server.on_auth(Rc::new(Box::new(|user_key, auth_type| {
         if let ExampleEvent::AuthEvent(auth_event) = auth_type {
             let username = auth_event.get_username();
             let password = auth_event.get_password();
