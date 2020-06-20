@@ -12,7 +12,7 @@ use ring::{hmac, rand};
 use byteorder::{BigEndian, ReadBytesExt};
 
 use gaia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{Config, PacketType, Connection, Timer, Timestamp, Manifest, PacketReader,
+pub use gaia_shared::{Config, PacketType, Connection, Timer, Timestamp, Manifest, PacketReader, Instant,
                       Event, Entity, ManagerType, HostType, EventType, EntityType, EntityMutator};
 
 use super::{
@@ -210,7 +210,8 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                             let user = self.users.get(*user_key).unwrap();
                                             if user.timestamp == timestamp {
                                                 let mut connection = self.client_connections.get_mut(user_key).unwrap();
-                                                GaiaServer::<T, U>::send_connect_accept_message(&mut connection, &mut self.sender).await;
+                                                GaiaServer::<T, U>::send_connect_accept_message(&mut connection, &mut self.sender)
+                                                    .await;
                                                 continue;
                                             } else {
                                                 self.outstanding_disconnects.push_back(*user_key);
@@ -271,9 +272,9 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                         let mut new_connection = ClientConnection::new(
                                             address,
                                             Some(&self.mut_handler),
-                                            self.config.heartbeat_interval,
-                                            self.config.disconnection_timeout_duration);
-                                        GaiaServer::<T, U>::send_connect_accept_message(&mut new_connection, &mut self.sender).await;
+                                            &self.config);
+                                        GaiaServer::<T, U>::send_connect_accept_message(&mut new_connection, &mut self.sender)
+                                            .await;
                                         self.client_connections.insert(user_key, new_connection);
                                         output = Some(Ok(ServerEvent::Connection(user_key)));
                                         continue;
@@ -430,6 +431,13 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
     pub fn get_sequence_number(&mut self, user_key: &UserKey) -> Option<u16> {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
             return Some(connection.get_next_packet_index());
+        }
+        return None;
+    }
+
+    pub fn get_rtt(&mut self, user_key: &UserKey) -> Option<f32> {
+        if let Some(connection) = self.client_connections.get_mut(user_key) {
+            return Some(connection.get_rtt());
         }
         return None;
     }
