@@ -20,6 +20,13 @@ enum PointEntityProp {
     Y = 1,
 }
 
+pub struct PointEntityBuilder {
+}
+
+impl PointEntityBuilder {
+
+}
+
 impl PointEntity {
     pub fn init() -> PointEntity {
         //info!("point entity init");
