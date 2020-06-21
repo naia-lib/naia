@@ -105,10 +105,10 @@ impl<T: EventType> EventManager<T> {
                 .to_vec()
                 .into_boxed_slice();
 
-            match manifest.create_event(gaia_id) {
-                Some(mut new_entity) => {
-                    new_entity.read(&event_payload);
-                    self.queued_incoming_events.push_back(new_entity);
+            match manifest.create_event(gaia_id, &event_payload) {
+                Some(new_event) => {
+                    //new_entity.read(&event_payload);
+                    self.queued_incoming_events.push_back(new_event);
                 }
                 _ => {}
             }

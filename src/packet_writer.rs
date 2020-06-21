@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use crate::{ManagerType, StandardHeader, Event, EventTypeGetter, Manifest, EventType, EntityType};
+use crate::{ManagerType, StandardHeader, Event, Manifest, EventType, EntityType};
 
 pub const MTU_SIZE: usize = 508 - StandardHeader::bytes_number();
 
@@ -70,7 +70,7 @@ impl PacketWriter {
         //Write event "header" (event id & payload length)
         let mut event_total_bytes = Vec::<u8>::new();
 
-        let type_id = EventTypeGetter::get_type_id(event.as_ref());
+        let type_id = event.as_ref().get_type_id();
         let gaia_id = manifest.get_event_gaia_id(&type_id); // get gaia id
         event_total_bytes.write_u16::<BigEndian>(gaia_id).unwrap();// write gaia id
         event_total_bytes.write_u8(event_payload_bytes.len() as u8).unwrap(); // write payload length

@@ -4,7 +4,7 @@ use std::{
 };
 
 pub trait EventType: Clone {
-    fn read(&mut self, bytes: &[u8]);
+    //fn read(&mut self, bytes: &[u8]);
     //write & get_type_id are ONLY currently used for reading/writing auth events.. maybe should do something different here
     fn write(&mut self, buffer: &mut Vec<u8>);
     fn get_type_id(&self) -> TypeId;
