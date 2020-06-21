@@ -6,5 +6,6 @@ edition = "2018"
 
 [dependencies]
 gaia-shared = { path = "../gaia-shared" } # { git = "https://github.com/connorcarpenter/gaia-shared" } #
+gaia-macros = { path = "../gaia-macros" }
 cfg-if = "*"
 log = "0.4"
