@@ -9,7 +9,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
 pub use gaia_shared::{Config, LocalEntityKey, PacketType, Timer, Timestamp,
                       Manifest, ManagerType, HostType, PacketWriter, PacketReader,
-                      Event, EventType, EntityType, EventTypeGetter};
+                      Event, EventType, EntityType};
 
 use super::{
     server_connection::ServerConnection,
