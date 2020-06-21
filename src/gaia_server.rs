@@ -251,9 +251,8 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                                 .to_vec()
                                                 .into_boxed_slice();
 
-                                            match self.manifest.create_event(gaia_id) {
-                                                Some(mut new_entity) => {
-                                                    new_entity.read(&event_payload);
+                                            match self.manifest.create_event(gaia_id, &event_payload) {
+                                                Some(new_entity) => {
                                                     if !(auth_func.as_ref().as_ref())(&user_key, &new_entity) {
                                                         self.users.remove(user_key);
                                                         continue;

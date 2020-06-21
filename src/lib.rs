@@ -26,4 +26,5 @@ pub use {
         entity_key::EntityKey,
         server_entity_mutator::ServerEntityMutator,
     },
+    user::{UserKey},
 };
