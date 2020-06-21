@@ -1,11 +1,11 @@
 use std::any::{TypeId};
 use crate::EventType;
 
-pub trait Event<T: EventType>: EventTypeGetter<T> + EventClone<T> {
+pub trait Event<T: EventType>: EventClone<T> {
     fn is_guaranteed(&self) -> bool;
     fn to_type(&self) -> T;
     fn write(&self, out_bytes: &mut Vec<u8>);
-    fn read(&mut self, in_bytes: &[u8]);
+    fn get_type_id(&self) -> TypeId;
 }
 
 pub trait EventClone<T: EventType> {
@@ -24,10 +24,10 @@ impl<T: EventType> Clone for Box<dyn Event<T>> {
     }
 }
 
-pub trait EventTypeGetter<T: EventType> {
-    fn get_type_id(&self) -> TypeId;
-}
-
-impl<Z: EventType, T: 'static + Event<Z>> EventTypeGetter<Z> for T {
-    fn get_type_id(&self) -> TypeId { return TypeId::of::<T>(); }
-}
+//pub trait EventTypeGetter<T: EventType> {
+//    fn get_type_id(&self) -> TypeId;
+//}
+//
+//impl<Z: EventType, T: 'static + Event<Z>> EventTypeGetter<Z> for T {
+//    fn get_type_id(&self) -> TypeId { return TypeId::of::<T>(); }
+//}

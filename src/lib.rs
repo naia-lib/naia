@@ -38,9 +38,10 @@ pub use {
     sequence_buffer::SequenceNumber,
     manifest::Manifest,
     events::{
-        event::{Event, EventTypeGetter, EventClone},
+        event::{Event, EventClone},
         event_type::EventType,
         event_manager::EventManager,
+        event_builder::{EventBuilder},
     },
     entities::{
         entity::{Entity, EntityTypeGetter},
