@@ -2,6 +2,9 @@
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate gaia_macros;
+
 mod manifest_load;
 mod point_entity;
 mod string_event;

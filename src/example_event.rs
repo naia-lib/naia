@@ -3,7 +3,7 @@ use std::{
     any::{TypeId},
 };
 
-use gaia_shared::{EventType, Event, EventTypeGetter};
+use gaia_shared::{EventType, Event};
 
 use crate::{StringEvent, AuthEvent};
 
@@ -14,16 +14,16 @@ pub enum ExampleEvent {
 }
 
 impl EventType for ExampleEvent {
-    fn read(&mut self, bytes: &[u8]) {
-        match self {
-            ExampleEvent::StringEvent(identity) => {
-                identity.read(bytes);
-            }
-            ExampleEvent::AuthEvent(identity) => {
-                identity.read(bytes);
-            }
-        }
-    }
+//    fn read(&mut self, bytes: &[u8]) {
+//        match self {
+//            ExampleEvent::StringEvent(identity) => {
+//                identity.read(bytes);
+//            }
+//            ExampleEvent::AuthEvent(identity) => {
+//                identity.read(bytes);
+//            }
+//        }
+//    }
 
     fn write(&mut self, buffer: &mut Vec<u8>) {
         match self {
