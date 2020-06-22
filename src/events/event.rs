@@ -3,9 +3,9 @@ use crate::EventType;
 
 pub trait Event<T: EventType>: EventClone<T> {
     fn is_guaranteed(&self) -> bool;
+    fn write(&self, out_bytes: &mut Vec<u8>);
     fn to_type(&self) -> T;
     fn get_type_id(&self) -> TypeId;
-    fn write(&self, out_bytes: &mut Vec<u8>);
 }
 
 pub trait EventClone<T: EventType> {
