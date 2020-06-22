@@ -41,19 +41,14 @@ impl App {
                         match event_type {
                             ExampleEvent::StringEvent(string_event) => {
                                 let message = string_event.get_message();
-                                match message {
-                                    Some(msg) => {
-                                        info!("Client received event: {}", msg);
+                                info!("Client received event: {}", message);
 
-                                        if let Some(count) = self.client.get_sequence_number() {
-                                            let new_message: String = "Client Packet (".to_string() + count.to_string().as_str() + ")";
-                                            info!("Client send: {}", new_message);
+                                if let Some(count) = self.client.get_sequence_number() {
+                                    let new_message: String = "Client Packet (".to_string() + count.to_string().as_str() + ")";
+                                    info!("Client send: {}", new_message);
 
-                                            let string_event = StringEvent::new(new_message);
-                                            self.client.send_event(&string_event);
-                                        }
-                                    }
-                                    None => {}
+                                    let string_event = StringEvent::new(new_message);
+                                    self.client.send_event(&string_event);
                                 }
                             }
                             _ => {}
