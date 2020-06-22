@@ -7,7 +7,7 @@ pub fn manifest_load() -> Manifest<ExampleEvent, ExampleEntity> {
 
     manifest.register_event(AuthEvent::get_builder());
     manifest.register_event(StringEvent::get_builder());
-    manifest.register_entity(&PointEntity::init());
+    manifest.register_entity(PointEntity::get_builder());
 
     manifest
 }

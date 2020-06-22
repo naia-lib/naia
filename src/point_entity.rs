@@ -4,14 +4,16 @@ use std::{
     cell::RefCell,
 };
 
-use gaia_shared::{Entity, StateMask, EntityMutator};
+use std::any::{TypeId};
+
+use gaia_shared::{Entity, StateMask, EntityBuilder, EntityMutator};
 
 use crate::{ExampleEntity};
 
 pub struct PointEntity {
     mutator: Option<Rc<RefCell<dyn EntityMutator>>>,
-    x: Option<u8>,
-    y: Option<u8>,
+    x: u8,
+    y: u8,
 }
 
 #[repr(u8)]
@@ -21,51 +23,50 @@ enum PointEntityProp {
 }
 
 pub struct PointEntityBuilder {
+    type_id: TypeId,
 }
 
-impl PointEntityBuilder {
+impl EntityBuilder<ExampleEntity> for PointEntityBuilder {
+    fn build(&self, buffer: &[u8]) -> ExampleEntity {
+        return PointEntity::new(buffer[0], buffer[1]).as_ref().borrow().to_type();
+    }
 
+    fn get_type_id(&self) -> TypeId {
+        return self.type_id;
+    }
 }
 
 impl PointEntity {
-    pub fn init() -> PointEntity {
-        //info!("point entity init");
-        PointEntity {
-            mutator: None,
-            x: None,
-            y: None,
-        }
+
+    pub fn get_builder() -> Box<dyn EntityBuilder<ExampleEntity>> {
+        return Box::new(PointEntityBuilder {
+            type_id: TypeId::of::<PointEntity>(),
+        });
     }
 
     pub fn new(x: u8, y: u8) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(PointEntity {
             mutator: None,
-            x: Some(x),
-            y: Some(y),
+            x,
+            y,
         }))
     }
 
     pub fn get_x(&self) -> u8 {
-        if let Some(x) = self.x {
-            return x;
-        }
-        return 0;
+        self.x
     }
 
     pub fn get_y(&self) -> u8 {
-        if let Some(y) = self.y {
-            return y;
-        }
-        return 0;
+        self.y
     }
 
     pub fn set_x(&mut self, value: u8) {
-        self.x = Some(value);
+        self.x = value;
         self.notify_mutation(PointEntityProp::X);
     }
 
     pub fn set_y(&mut self, value: u8) {
-        self.y = Some(value);
+        self.y = value;
         self.notify_mutation(PointEntityProp::Y);
     }
 
@@ -102,6 +103,10 @@ impl Entity<ExampleEntity> for PointEntity {
         return ExampleEntity::PointEntity(copied_entity);
     }
 
+    fn get_type_id(&self) -> TypeId {
+        return TypeId::of::<PointEntity>();
+    }
+
     fn write(&self, buffer: &mut Vec<u8>) {
         buffer.push(self.get_x());
         buffer.push(self.get_y());
@@ -115,11 +120,6 @@ impl Entity<ExampleEntity> for PointEntity {
         if let Some(true) = state_mask.get_bit(PointEntityProp::Y as u8) {
             buffer.push(self.get_y());
         }
-    }
-
-    fn read(&mut self, buffer: &[u8])  {
-        self.set_x(buffer[0]);
-        self.set_y(buffer[1]);
     }
 
     fn read_partial(&mut self, state_mask: &StateMask, buffer: &[u8]) {

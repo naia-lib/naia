@@ -14,13 +14,13 @@ pub struct StringEventBuilder {
 }
 
 impl EventBuilder<ExampleEvent> for StringEventBuilder {
-    fn get_type_id(&self) -> TypeId {
-        return self.type_id;
-    }
-
     fn build(&self, buffer: &[u8]) -> ExampleEvent {
         let msg = String::from_utf8_lossy(buffer).to_string();
         return StringEvent::new(msg).to_type();
+    }
+
+    fn get_type_id(&self) -> TypeId {
+        return self.type_id;
     }
 }
 
@@ -60,4 +60,6 @@ impl Event<ExampleEvent> for StringEvent {
         let mut bytes = self.msg.as_bytes().to_vec();
         buffer.append(&mut bytes);
     }
+
+
 }

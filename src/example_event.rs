@@ -14,16 +14,6 @@ pub enum ExampleEvent {
 }
 
 impl EventType for ExampleEvent {
-//    fn read(&mut self, bytes: &[u8]) {
-//        match self {
-//            ExampleEvent::StringEvent(identity) => {
-//                identity.read(bytes);
-//            }
-//            ExampleEvent::AuthEvent(identity) => {
-//                identity.read(bytes);
-//            }
-//        }
-//    }
 
     fn write(&mut self, buffer: &mut Vec<u8>) {
         match self {
