@@ -26,9 +26,10 @@ async fn main() {
     config.tick_interval = Duration::from_secs(4);
     config.heartbeat_interval = Duration::from_secs(1);
 
-    let mut server = GaiaServer::listen(current_socket_address.as_str(),
-                                        manifest_load(),
-                                        Some(config)).await;
+    let mut server = GaiaServer::new(current_socket_address.as_str(),
+                                     manifest_load(),
+                                     Some(config))
+        .await;
 
     let main_room_key = server.create_room();
     let mut point_entities: Vec<Rc<RefCell<PointEntity>>> = Vec::new();
@@ -36,9 +37,7 @@ async fn main() {
         let point_entity = PointEntity::new(x, 0);
         point_entities.push(point_entity.clone());
         let entity_key = server.register_entity(point_entity.clone() as Rc<RefCell<dyn Entity<ExampleEntity>>>);
-        let main_room = server.get_room_mut(main_room_key).unwrap();
-        main_room.add_entity(&entity_key);
-
+        server.room_add_entity(&main_room_key, &entity_key);
     }
 
     server.on_scope_entity(Rc::new(Box::new(|_, _, _, entity| {
@@ -64,9 +63,7 @@ async fn main() {
             Ok(event) => {
                 match event {
                     ServerEvent::Connection(user_key) => {
-                        if let Some(main_room) = server.get_room_mut(main_room_key) {
-                            main_room.subscribe_user(&user_key);
-                        }
+                        server.room_add_user(&main_room_key, &user_key);
                         if let Some(user) = server.get_user(&user_key) {
                             info!("Gaia Server connected to: {}", user.address);
                         }
@@ -89,19 +86,19 @@ async fn main() {
                         // This could be used for your non-network logic (game loop?)
 
                         // Event Sending
-//                        let mut iter_vec: Vec<UserKey> = Vec::new();
-//                        for (user_key, _) in server.users_iter() {
-//                            iter_vec.push(user_key);
-//                        }
-//                        for user_key in iter_vec {
-//                            let count = server.get_sequence_number(&user_key).expect("why don't we have a sequence number for this client?");
-//                            let user = server.get_user(&user_key).unwrap();
-//                            let new_message = "Server Packet (".to_string() + count.to_string().as_str() + ") to " + user.address.to_string().as_str();
-//                            info!("Gaia Server send -> {}: {}", user.address, new_message);
-//
-//                            let string_event = StringEvent::new(new_message);
-//                            server.send_event(&user_key, &string_event);
-//                        }
+                        let mut iter_vec: Vec<UserKey> = Vec::new();
+                        for (user_key, _) in server.users_iter() {
+                            iter_vec.push(user_key);
+                        }
+                        for user_key in iter_vec {
+                            let count = server.get_sequence_number(&user_key).expect("why don't we have a sequence number for this client?");
+                            let user = server.get_user(&user_key).unwrap();
+                            let new_message = "Server Packet (".to_string() + count.to_string().as_str() + ") to " + user.address.to_string().as_str();
+                            info!("Gaia Server send -> {}: {}", user.address, new_message);
+
+                            let string_event = StringEvent::new(new_message);
+                            server.send_event(&user_key, &string_event);
+                        }
 
                         for point_entity in &point_entities {
                             point_entity.borrow_mut().step();
