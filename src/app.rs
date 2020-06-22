@@ -22,7 +22,7 @@ impl App {
         let auth = ExampleEvent::AuthEvent(AuthEvent::new("charlie".to_string(), "12345".to_string()));
 
         App {
-            client: GaiaClient::connect(&server_socket_address, manifest_load(), Some(config), Some(auth)),
+            client: GaiaClient::new(&server_socket_address, manifest_load(), Some(config), Some(auth)),
         }
     }
 
