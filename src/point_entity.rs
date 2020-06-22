@@ -28,7 +28,12 @@ pub struct PointEntityBuilder {
 
 impl EntityBuilder<ExampleEntity> for PointEntityBuilder {
     fn build(&self, buffer: &[u8]) -> ExampleEntity {
-        return PointEntity::new(buffer[0], buffer[1]).as_ref().borrow().to_type();
+        let entity = PointEntity {
+            mutator: None,
+            x: buffer[0],
+            y: buffer[1],
+        };
+        return entity.to_type();
     }
 
     fn get_type_id(&self) -> TypeId {
@@ -44,7 +49,7 @@ impl PointEntity {
         });
     }
 
-    pub fn new(x: u8, y: u8) -> Rc<RefCell<Self>> {
+    pub fn new(x: u8, y: u8) -> Rc<RefCell<PointEntity>> {
         Rc::new(RefCell::new(PointEntity {
             mutator: None,
             x,
@@ -99,7 +104,11 @@ impl Entity<ExampleEntity> for PointEntity {
 
     //to_type COPIES the current entity,
     fn to_type(&self) -> ExampleEntity {
-        let copied_entity = PointEntity::new(self.get_x(), self.get_y());
+        let copied_entity = Rc::new(RefCell::new(PointEntity {
+            mutator: None,
+            x: self.get_x(),
+            y: self.get_y()
+        }));
         return ExampleEntity::PointEntity(copied_entity);
     }
 
