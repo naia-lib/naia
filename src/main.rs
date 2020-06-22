@@ -15,11 +15,6 @@ use std::{
 
 const SERVER_PORT: &str = "3179";
 
-//TODO: GET RID OF THIS...
-pub fn get_server_point_entity(e: &Rc<RefCell<PointEntity>>) -> Rc<RefCell<dyn Entity<ExampleEntity>>> {
-    e.clone() as Rc<RefCell<dyn Entity<ExampleEntity>>>
-}
-
 #[tokio::main]
 async fn main() {
 
@@ -39,11 +34,11 @@ async fn main() {
     let mut point_entities: Vec<Rc<RefCell<PointEntity>>> = Vec::new();
     for x in 0..20 {
         let point_entity = PointEntity::new(x, 0);
-        let server_point_entity: Rc<RefCell<dyn Entity<ExampleEntity>>> = get_server_point_entity(&point_entity);
-        let entity_key = server.register_entity(&server_point_entity);
+        point_entities.push(point_entity.clone());
+        let entity_key = server.register_entity(point_entity.clone() as Rc<RefCell<dyn Entity<ExampleEntity>>>);
         let main_room = server.get_room_mut(main_room_key).unwrap();
         main_room.add_entity(&entity_key);
-        point_entities.push(point_entity.clone());
+
     }
 
     server.on_scope_entity(Rc::new(Box::new(|_, _, _, entity| {
