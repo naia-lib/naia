@@ -38,7 +38,7 @@ pub struct GaiaClient<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> GaiaClient<T, U> {
-    pub fn connect(server_address: &str, manifest: Manifest<T, U>, config: Option<Config>, auth: Option<T>) -> Self {
+    pub fn new(server_address: &str, manifest: Manifest<T, U>, config: Option<Config>, auth: Option<T>) -> Self {
 
         let mut config = match config {
             Some(config) => config,
