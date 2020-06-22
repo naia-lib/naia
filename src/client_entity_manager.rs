@@ -44,9 +44,8 @@ impl<U: EntityType> ClientEntityManager<U> {
                         .to_vec()
                         .into_boxed_slice();
 
-                    match manifest.create_entity(gaia_id) {
-                        Some(mut new_entity) => {
-                            new_entity.read(&entity_payload);
+                    match manifest.create_entity(gaia_id, &entity_payload) {
+                        Some(new_entity) => {
                             if self.local_entity_store.contains_key(&local_key) {
                                 warn!("duplicate local key inserted");
                             } else {
