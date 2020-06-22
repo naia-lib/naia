@@ -4,9 +4,9 @@ extern crate log;
 
 use simple_logger;
 
-use gaia_server::{GaiaServer, ServerEvent, Entity, find_my_ip_address, Config};
+use gaia_server::{GaiaServer, ServerEvent, Entity, find_my_ip_address, Config, UserKey};
 
-use gaia_example_shared::{manifest_load, PointEntity, ExampleEvent, ExampleEntity};
+use gaia_example_shared::{manifest_load, PointEntity, ExampleEvent, ExampleEntity, StringEvent};
 
 use std::{
     rc::Rc,
@@ -84,12 +84,7 @@ async fn main() {
                             match event_type {
                                 ExampleEvent::StringEvent(string_event) => {
                                     let message = string_event.get_message();
-                                    match message {
-                                        Some(msg) => {
-                                            info!("Gaia Server recv <- {}: {}", user.address, msg);
-                                        }
-                                        None => {}
-                                    }
+                                    info!("Gaia Server recv <- {}: {}", user.address, message);
                                 }
                                 _ => {}
                             }
@@ -99,13 +94,18 @@ async fn main() {
                         // This could be used for your non-network logic (game loop?)
 
                         // Event Sending
-//                        for addr in server.get_clients() {
-//                            let count = server.get_sequence_number(addr).expect("why don't we have a sequence number for this client?");
-//                            let new_message = "Server Packet (".to_string() + count.to_string().as_str() + ") to " + addr.to_string().as_str();
-//                            info!("Gaia Server send -> {}: {}", addr, new_message);
+//                        let mut iter_vec: Vec<UserKey> = Vec::new();
+//                        for (user_key, _) in server.users_iter() {
+//                            iter_vec.push(user_key);
+//                        }
+//                        for user_key in iter_vec {
+//                            let count = server.get_sequence_number(&user_key).expect("why don't we have a sequence number for this client?");
+//                            let user = server.get_user(&user_key).unwrap();
+//                            let new_message = "Server Packet (".to_string() + count.to_string().as_str() + ") to " + user.address.to_string().as_str();
+//                            info!("Gaia Server send -> {}: {}", user.address, new_message);
 //
 //                            let string_event = StringEvent::new(new_message);
-//                            server.send_event(addr, &string_event);
+//                            server.send_event(&user_key, &string_event);
 //                        }
 
                         for point_entity in &point_entities {
