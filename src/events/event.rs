@@ -4,8 +4,8 @@ use crate::EventType;
 pub trait Event<T: EventType>: EventClone<T> {
     fn is_guaranteed(&self) -> bool;
     fn to_type(&self) -> T;
-    fn write(&self, out_bytes: &mut Vec<u8>);
     fn get_type_id(&self) -> TypeId;
+    fn write(&self, out_bytes: &mut Vec<u8>);
 }
 
 pub trait EventClone<T: EventType> {
@@ -23,11 +23,3 @@ impl<T: EventType> Clone for Box<dyn Event<T>> {
         EventClone::clone_box(self.as_ref())
     }
 }
-
-//pub trait EventTypeGetter<T: EventType> {
-//    fn get_type_id(&self) -> TypeId;
-//}
-//
-//impl<Z: EventType, T: 'static + Event<Z>> EventTypeGetter<Z> for T {
-//    fn get_type_id(&self) -> TypeId { return TypeId::of::<T>(); }
-//}

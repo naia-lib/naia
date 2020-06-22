@@ -44,12 +44,13 @@ pub use {
         event_builder::{EventBuilder},
     },
     entities::{
-        entity::{Entity, EntityTypeGetter},
+        entity::{Entity},
         entity_type::EntityType,
         local_entity_key::LocalEntityKey,
         state_mask::StateMask,
         entity_notifiable::EntityNotifiable,
         entity_mutator::EntityMutator,
+        entity_builder::EntityBuilder,
     },
     rtt::{
         rtt_data::RttData,

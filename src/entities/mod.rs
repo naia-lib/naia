@@ -4,3 +4,4 @@ pub(crate) mod state_mask;
 pub(crate) mod entity_notifiable;
 pub(crate) mod local_entity_key;
 pub(crate) mod entity_mutator;
+pub(crate) mod entity_builder;
