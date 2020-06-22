@@ -50,7 +50,7 @@ pub struct GaiaServer<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> GaiaServer<T, U> {
-    pub async fn listen(address: &str, manifest: Manifest<T, U>, config: Option<Config>) -> Self {
+    pub async fn new(address: &str, manifest: Manifest<T, U>, config: Option<Config>) -> Self {
 
         let mut config = match config {
             Some(config) => config,
@@ -195,15 +195,6 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                                     let payload = gaia_shared::utils::read_headerless_payload(packet.payload());
                                     let mut reader = PacketReader::new(&payload);
                                     let timestamp = Timestamp::read(&mut reader);
-
-//                                    if !self.address_to_user_key_map.contains_key(&address) {
-//                                        let user = User::new(address, timestamp);
-//                                        let user_key = self.users.insert(user);
-//                                        self.address_to_user_key_map.insert(address, user_key);
-//                                    }
-//
-//                                    let user_key = self.address_to_user_key_map.get(&address).unwrap();
-//                                    let user = self.users.get(*user_key).unwrap();
 
                                     if let Some(user_key) = self.address_to_user_key_map.get(&address) {
                                         if self.client_connections.contains_key(user_key) {
@@ -380,7 +371,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         }
     }
 
-    pub fn register_entity(&mut self, entity: &Rc<RefCell<dyn Entity<U>>>) -> EntityKey {
+    pub fn register_entity(&mut self, entity: Rc<RefCell<dyn Entity<U>>>) -> EntityKey {
         let new_mutator_ref: Rc<RefCell<ServerEntityMutator>> = Rc::new(RefCell::new(ServerEntityMutator::new(&self.mut_handler)));
         entity.as_ref().borrow_mut().set_mutator(&to_entity_mutator(&new_mutator_ref));
         let entity_key = self.global_entity_store.insert(entity.clone());
@@ -417,6 +408,18 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
 
     pub fn rooms_iter(&self) -> slotmap::dense::Iter<RoomKey, Room> {
         return self.rooms.iter();
+    }
+
+    pub fn room_add_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
+        if let Some(room) = self.rooms.get_mut(*room_key) {
+            room.add_entity(entity_key);
+        }
+    }
+
+    pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+        if let Some(room) = self.rooms.get_mut(*room_key) {
+            room.subscribe_user(user_key);
+        }
     }
 
     pub fn on_scope_entity(&mut self, scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>) {
