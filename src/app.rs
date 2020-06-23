@@ -19,7 +19,7 @@ impl App {
         let mut config = Config::default();
         config.heartbeat_interval = Duration::from_secs(4);
 
-        let auth = ExampleEvent::AuthEvent(AuthEvent::new("charlie".to_string(), "12345".to_string()));
+        let auth = ExampleEvent::AuthEvent(AuthEvent::new("charlie", "12345"));
 
         App {
             client: GaiaClient::new(&server_socket_address, manifest_load(), Some(config), Some(auth)),
@@ -54,23 +54,21 @@ impl App {
                             _ => {}
                         }
                     }
-                    ClientEvent::CreateEntity(local_key, entity) => {
-                        match entity {
-                            // keep in mind that the below values are clones of the original, used purely to determine the type
-                            ExampleEntity::PointEntity(point_entity) => {
-                                info!("creation of point entity with key: {}, x: {}, y: {}",
-                                      local_key,
-                                      point_entity.as_ref().borrow().get_x(),
-                                      point_entity.as_ref().borrow().get_y());
+                    ClientEvent::CreateEntity(local_key) => {
+                        if let Some(entity) = self.client.get_entity(local_key) {
+                            match entity {
+                                ExampleEntity::PointEntity(point_entity) => {
+                                    info!("creation of point entity with key: {}, x: {}, y: {}",
+                                          local_key,
+                                          point_entity.as_ref().borrow().get_x(),
+                                          point_entity.as_ref().borrow().get_y());
+                                }
                             }
                         }
                     }
                     ClientEvent::UpdateEntity(local_key) => {
                         if let Some(entity) = self.client.get_entity(local_key) {
-                            //info!("in app.rs:");
-                            //entity.print(local_key);
                             match entity {
-                                // keep in mind that the below values are clones of the original, used purely to determine the type
                                 ExampleEntity::PointEntity(point_entity) => {
                                     info!("update of point entity with key: {}, x: {}, y: {}",
                                           local_key,
