@@ -7,6 +7,7 @@ use gaia_shared::{EventType, Event};
 
 use crate::{StringEvent, AuthEvent};
 
+//TODO: Candidate for Macro (just list event struct names (ex. "StringEvent")
 #[derive(Clone)]
 pub enum ExampleEvent {
     StringEvent(StringEvent),
@@ -15,6 +16,7 @@ pub enum ExampleEvent {
 
 impl EventType for ExampleEvent {
 
+    //TODO: Candidate for Macro
     fn write(&mut self, buffer: &mut Vec<u8>) {
         match self {
             ExampleEvent::StringEvent(identity) => {
@@ -26,6 +28,7 @@ impl EventType for ExampleEvent {
         }
     }
 
+    //TODO: Candidate for Macro
     fn get_type_id(&self) -> TypeId {
         match self {
             ExampleEvent::StringEvent(identity) => {
