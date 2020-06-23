@@ -11,31 +11,30 @@ use gaia_shared::{Entity, StateMask, EntityBuilder, EntityMutator};
 use crate::{ExampleEntity};
 
 pub struct PointEntity {
-    mutator: Option<Rc<RefCell<dyn EntityMutator>>>,
+    mutator: Option<Rc<RefCell<dyn EntityMutator>>>, //TODO: Candidate for Macro
     x: u8,
     y: u8,
 }
 
+//TODO: Candidate for Macro
 #[repr(u8)]
 enum PointEntityProp {
     X = 0,
     Y = 1,
 }
 
+//TODO: Candidate for Macro
 pub struct PointEntityBuilder {
     type_id: TypeId,
 }
 
 impl EntityBuilder<ExampleEntity> for PointEntityBuilder {
     fn build(&self, buffer: &[u8]) -> ExampleEntity {
-        let entity = PointEntity {
-            mutator: None,
-            x: buffer[0],
-            y: buffer[1],
-        };
+        let entity = PointEntity::raw(buffer[0], buffer[1]);
         return entity.to_type();
     }
 
+    //TODO: Candidate for Macro
     fn get_type_id(&self) -> TypeId {
         return self.type_id;
     }
@@ -43,6 +42,7 @@ impl EntityBuilder<ExampleEntity> for PointEntityBuilder {
 
 impl PointEntity {
 
+    //TODO: Candidate for Macro
     pub fn get_builder() -> Box<dyn EntityBuilder<ExampleEntity>> {
         return Box::new(PointEntityBuilder {
             type_id: TypeId::of::<PointEntity>(),
@@ -50,11 +50,15 @@ impl PointEntity {
     }
 
     pub fn new(x: u8, y: u8) -> Rc<RefCell<PointEntity>> {
-        Rc::new(RefCell::new(PointEntity {
+        Rc::new(RefCell::new(PointEntity::raw(x, y)))
+    }
+
+    fn raw(x: u8, y: u8) -> PointEntity {
+        PointEntity {
             mutator: None,
             x,
             y,
-        }))
+        }
     }
 
     pub fn get_x(&self) -> u8 {
@@ -89,6 +93,7 @@ impl PointEntity {
         self.set_x(x);
     }
 
+    //TODO: Candidate for Macro
     fn notify_mutation(&mut self, prop: PointEntityProp) {
         if let Some(mutator) = &self.mutator {
             mutator.as_ref().borrow_mut().mutate(prop as u8);
@@ -102,16 +107,14 @@ impl Entity<ExampleEntity> for PointEntity {
         1
     }
 
+    //TODO: Candidate for Macro (if we refactor out some kind of copy() method
     //to_type COPIES the current entity,
     fn to_type(&self) -> ExampleEntity {
-        let copied_entity = Rc::new(RefCell::new(PointEntity {
-            mutator: None,
-            x: self.get_x(),
-            y: self.get_y()
-        }));
+        let copied_entity = Rc::new(RefCell::new(PointEntity::raw(self.get_x(), self.get_y())));//TODO: do we need to do this?
         return ExampleEntity::PointEntity(copied_entity);
     }
 
+    //TODO: Candidate for Macro
     fn get_type_id(&self) -> TypeId {
         return TypeId::of::<PointEntity>();
     }
@@ -140,10 +143,7 @@ impl Entity<ExampleEntity> for PointEntity {
         }
     }
 
-    fn print(&self, key: u16) {
-        info!("entity print(), key: {}, x: {}, y: {}", key, self.get_x(), self.get_y());
-    }
-
+    //TODO: Candidate for Macro
     fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>) {
         self.mutator = Some(mutator.clone());
     }

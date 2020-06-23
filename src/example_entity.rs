@@ -8,19 +8,14 @@ use gaia_shared::{EntityType, Entity, StateMask};
 
 use crate::{PointEntity};
 
+//TODO: Candidate for Macro (just list names of entity structs ("PointEntity")
 pub enum ExampleEntity {
     PointEntity(Rc<RefCell<PointEntity>>),
 }
 
 impl EntityType for ExampleEntity {
-//    fn read(&mut self, bytes: &[u8]) {
-//        match self {
-//            ExampleEntity::PointEntity(identity) => {
-//                identity.as_ref().borrow_mut().read(bytes);
-//            }
-//        }
-//    }
 
+    //TODO: Candidate for Macro
     fn read_partial(&mut self, state_mask: &StateMask, bytes: &[u8]) {
         match self {
             ExampleEntity::PointEntity(identity) => {
@@ -29,22 +24,7 @@ impl EntityType for ExampleEntity {
         }
     }
 
-    fn print(&self, key: u16) {
-        match self {
-            ExampleEntity::PointEntity(identity) => {
-                identity.as_ref().borrow().print(key);
-            }
-        }
-    }
-
-//    fn init(&self) -> Self {
-//        match self {
-//            ExampleEntity::PointEntity(_) => {
-//                return ExampleEntity::PointEntity(Rc::new(RefCell::new(PointEntity::init())));
-//            }
-//        }
-//    }
-
+    //TODO: Candidate for Macro
     fn clone_inner_rc(&self) -> Self {
         match self {
             ExampleEntity::PointEntity(identity) => {
