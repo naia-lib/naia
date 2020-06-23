@@ -64,7 +64,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return None;
     }
 
-    pub fn get_incoming_entity_message(&mut self) -> Option<ClientEntityMessage<U>> {
+    pub fn get_incoming_entity_message(&mut self) -> Option<ClientEntityMessage> {
         return self.entity_manager.pop_incoming_message();
     }
 
