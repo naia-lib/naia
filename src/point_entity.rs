@@ -124,8 +124,7 @@ impl Entity<ExampleEntity> for PointEntity {
         buffer.push(self.get_y());
     }
 
-    fn write_partial(&self, state_mask_ref: &Rc<RefCell<StateMask>>, buffer: &mut Vec<u8>) {
-        let state_mask = state_mask_ref.as_ref().borrow();
+    fn write_partial(&self, state_mask: &StateMask, buffer: &mut Vec<u8>) {
         if let Some(true) = state_mask.get_bit(PointEntityProp::X as u8) {
             buffer.push(self.get_x());
         }
