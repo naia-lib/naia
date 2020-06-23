@@ -12,7 +12,7 @@ use super::{
 
 pub struct ClientEntityManager<T: EntityType> {
     local_entity_store: HashMap<LocalEntityKey, T>,
-    queued_incoming_messages: VecDeque<ClientEntityMessage<T>>,
+    queued_incoming_messages: VecDeque<ClientEntityMessage>,
 }
 
 impl<U: EntityType> ClientEntityManager<U> {
@@ -51,7 +51,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                             } else {
                                 //info!("creation of entity w/ key of {}", local_key);
                                 self.local_entity_store.insert(local_key, new_entity.clone_inner_rc());
-                                self.queued_incoming_messages.push_back(ClientEntityMessage::Create(local_key, new_entity.clone_inner_rc()));
+                                self.queued_incoming_messages.push_back(ClientEntityMessage::Create(local_key));
                             }
                         }
                         _ => {}
@@ -90,7 +90,7 @@ impl<U: EntityType> ClientEntityManager<U> {
         }
     }
 
-    pub fn pop_incoming_message(&mut self) -> Option<ClientEntityMessage<U>> {
+    pub fn pop_incoming_message(&mut self) -> Option<ClientEntityMessage> {
         return self.queued_incoming_messages.pop_front();
     }
 

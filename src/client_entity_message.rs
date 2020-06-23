@@ -1,8 +1,8 @@
-use gaia_shared::{LocalEntityKey, EntityType};
+use gaia_shared::{LocalEntityKey};
 
 #[derive(Clone)]
-pub enum ClientEntityMessage<T: EntityType> {
-    Create(LocalEntityKey, T),
+pub enum ClientEntityMessage {
+    Create(LocalEntityKey),
     Update(LocalEntityKey),
     Delete(LocalEntityKey),
 }

@@ -71,7 +71,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
         }
     }
 
-    pub fn receive(&mut self) -> Result<ClientEvent<T, U>, GaiaClientError> {
+    pub fn receive(&mut self) -> Result<ClientEvent<T>, GaiaClientError> {
 
         // send handshakes, send heartbeats, timeout if need be
         match &mut self.server_connection {
@@ -99,8 +99,8 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                 // receive entity message
                 if let Some(message) = connection.get_incoming_entity_message() {
                     match message {
-                        ClientEntityMessage::Create(local_key, entity) => {
-                            return Ok(ClientEvent::CreateEntity(local_key, entity));
+                        ClientEntityMessage::Create(local_key) => {
+                            return Ok(ClientEvent::CreateEntity(local_key));
                         },
                         ClientEntityMessage::Delete(local_key) => {
                             return Ok(ClientEvent::DeleteEntity(local_key));
@@ -155,7 +155,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
         }
 
         // receive from socket
-        let mut output: Option<Result<ClientEvent<T, U>, GaiaClientError>> = None;
+        let mut output: Option<Result<ClientEvent<T>, GaiaClientError>> = None;
         while output.is_none() {
             match self.socket.receive() {
                 Ok(event) => {
