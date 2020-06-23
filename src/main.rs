@@ -4,7 +4,7 @@ extern crate log;
 
 use simple_logger;
 
-use gaia_server::{GaiaServer, ServerEvent, Entity, find_my_ip_address, Config, UserKey};
+use gaia_server::{GaiaServer, ServerEvent, find_my_ip_address, Config, UserKey};
 
 use gaia_example_shared::{manifest_load, PointEntity, ExampleEvent, ExampleEntity, StringEvent};
 
@@ -36,7 +36,7 @@ async fn main() {
     for x in 0..20 {
         let point_entity = PointEntity::new(x, 0);
         point_entities.push(point_entity.clone());
-        let entity_key = server.register_entity(point_entity.clone() as Rc<RefCell<dyn Entity<ExampleEntity>>>);
+        let entity_key = server.register_entity(point_entity);
         server.room_add_entity(&main_room_key, &entity_key);
     }
 
