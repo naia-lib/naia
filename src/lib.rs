@@ -1,8 +1,10 @@
 mod entity_type;
 mod event_type;
+mod event;
 
 use entity_type::entity_type_impl;
 use event_type::event_type_impl;
+use event::event_impl;
 
 #[proc_macro_derive(EntityType)]
 pub fn entity_type_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -12,4 +14,9 @@ pub fn entity_type_derive(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 #[proc_macro_derive(EventType)]
 pub fn event_type_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     event_type_impl(input)
+}
+
+#[proc_macro_derive(Event, attributes(type_name))]
+pub fn event_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    event_impl(input)
 }
