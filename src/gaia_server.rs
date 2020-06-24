@@ -377,7 +377,7 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         let entity_key = self.global_entity_store.insert(entity.clone());
         new_mutator_ref.as_ref().borrow_mut().set_entity_key(entity_key);
         self.mut_handler.borrow_mut().register_entity(&entity_key);
-        return entity_key
+        return entity_key;
     }
 
     pub fn deregister_entity(&mut self, key: EntityKey) {
@@ -466,7 +466,8 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                         if let Some(entity) = self.global_entity_store.get(*entity_key) {
                             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                                 let currently_in_scope = user_connection.has_entity(entity_key);
-                                let should_be_in_scope = (scope_func.as_ref().as_ref())(&room_key, user_key, entity_key, entity.as_ref().borrow().to_type());
+                                let should_be_in_scope = (scope_func.as_ref().as_ref())(&room_key, user_key, entity_key,
+                                                                                        entity.as_ref().borrow().get_typed_copy());
                                 if should_be_in_scope {
                                     if !currently_in_scope {
                                         // add entity to the connections local scope
