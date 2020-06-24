@@ -1,7 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{quote};
 use syn::{parse_macro_input, Data, DeriveInput, Ident};
-use syn::buffer::TokenBuffer;
 
 pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
@@ -12,6 +11,7 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let variants = get_variants(&type_name, &input.data);
 
     let gen = quote! {
+        use gaia_shared::{EntityType, Entity, StateMask};
         impl EntityType for #type_name {
             fn read_partial(&mut self, state_mask: &StateMask, bytes: &[u8]) {
                 match self {
@@ -58,8 +58,6 @@ fn get_variants(type_name: &Ident, data: &Data) -> TokenStream {
 
 ////TO THIS
 //impl EntityType for ExampleEntity {
-//
-//    //TODO: Candidate for Macro
 //    fn read_partial(&mut self, state_mask: &StateMask, bytes: &[u8]) {
 //        match self {
 //            ExampleEntity::PointEntity(identity) => {
