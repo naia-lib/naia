@@ -25,11 +25,11 @@ impl EntityType for ExampleEntity {
     }
 
     //TODO: Candidate for Macro
-    fn clone_inner_rc(&self) -> Self {
-        match self {
-            ExampleEntity::PointEntity(identity) => {
-                return ExampleEntity::PointEntity(identity.clone());
-            }
-        }
-    }
+//    fn clone_inner_rc(&self) -> Self {
+//        match self {
+//            ExampleEntity::PointEntity(identity) => {
+//                return ExampleEntity::PointEntity(identity.clone());
+//            }
+//        }
+//    }
 }

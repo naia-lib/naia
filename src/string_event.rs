@@ -1,12 +1,15 @@
 
-use std::any::{TypeId};
+use std::{
+    any::{TypeId},
+    io::{Cursor},
+};
 
-use gaia_shared::{Event, EventBuilder};
+use gaia_shared::{Event, EventBuilder, Property, PropertyIo};
 use crate::ExampleEvent;
 
 #[derive(Clone)]
 pub struct StringEvent {
-    msg: String,
+    pub message: Property<String>,//TODO: Candidate for Macro
 }
 
 //TODO: Candidate for Macro
@@ -20,13 +23,18 @@ impl EventBuilder<ExampleEvent> for StringEventBuilder {
         return self.type_id;
     }
 
+    //TODO: Candidate for Macro
     fn build(&self, buffer: &[u8]) -> ExampleEvent {
-        let msg = String::from_utf8_lossy(buffer).to_string();
-        return StringEvent::new(msg).to_type();
+        return StringEvent::read_to_type(buffer);
     }
 }
 
 impl StringEvent {
+
+    pub fn new(message: String) -> StringEvent {
+        return StringEvent::new_complete(message);
+    }
+
     //TODO: Candidate for Macro
     pub fn get_builder() -> Box<dyn EventBuilder<ExampleEvent>> {
         return Box::new(StringEventBuilder {
@@ -34,14 +42,22 @@ impl StringEvent {
         });
     }
 
-    pub fn new(msg: String) -> Self {
+    //TODO: Candidate for Macro
+    pub fn new_complete(message: String) -> StringEvent {
         StringEvent {
-            msg,
+            message: Property::<String>::new(message, 0),
         }
     }
 
-    pub fn get_message(&self) -> String {
-        self.msg.clone()
+    //TODO: Candidate for Macro
+    fn read_to_type(buffer: &[u8]) -> ExampleEvent {
+        let read_cursor = &mut Cursor::new(buffer);
+        let mut message = Property::<String>::new(Default::default(), 0);
+        message.read(read_cursor);
+
+        return ExampleEvent::StringEvent(StringEvent {
+            message,
+        });
     }
 }
 
@@ -50,13 +66,13 @@ impl Event<ExampleEvent> for StringEvent {
         true
     }
 
+    //TODO: Candidate for Macro
     fn write(&self, buffer: &mut Vec<u8>) {
-        let mut bytes = self.msg.as_bytes().to_vec();
-        buffer.append(&mut bytes);
+        PropertyIo::write(&self.message, buffer);
     }
 
     //TODO: Candidate for Macro
-    fn to_type(&self) -> ExampleEvent {
+    fn get_typed_copy(&self) -> ExampleEvent {
         return ExampleEvent::StringEvent(self.clone());
     }
 
