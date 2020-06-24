@@ -51,6 +51,7 @@ pub use {
         entity_notifiable::EntityNotifiable,
         entity_mutator::EntityMutator,
         entity_builder::EntityBuilder,
+        property::{Property, PropertyIo},
     },
     rtt::{
         rtt_data::RttData,
