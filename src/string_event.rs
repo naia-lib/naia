@@ -31,6 +31,8 @@ impl EventBuilder<ExampleEvent> for StringEventBuilder {
 
 impl StringEvent {
 
+    fn is_guaranteed() -> bool { true }
+
     pub fn new(message: String) -> StringEvent {
         return StringEvent::new_complete(message);
     }
@@ -63,7 +65,7 @@ impl StringEvent {
 
 impl Event<ExampleEvent> for StringEvent {
     fn is_guaranteed(&self) -> bool {
-        true
+        StringEvent::is_guaranteed()
     }
 
     //TODO: Candidate for Macro
