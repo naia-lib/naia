@@ -34,7 +34,7 @@ async fn main() {
     let main_room_key = server.create_room();
     let mut point_entities: Vec<Rc<RefCell<PointEntity>>> = Vec::new();
     for x in 0..20 {
-        let point_entity = PointEntity::new(x, 0);
+        let point_entity = PointEntity::new(x, 0).wrap();
         point_entities.push(point_entity.clone());
         let entity_key = server.register_entity(point_entity);
         server.room_add_entity(&main_room_key, &entity_key);
@@ -43,7 +43,7 @@ async fn main() {
     server.on_scope_entity(Rc::new(Box::new(|_, _, _, entity| {
         match entity {
             ExampleEntity::PointEntity(point_entity) => {
-                let x = point_entity.as_ref().borrow().get_x();
+                let x = *point_entity.as_ref().borrow().x.get();
                 return x >= 3 && x <= 17;
             }
         }
@@ -51,8 +51,8 @@ async fn main() {
 
     server.on_auth(Rc::new(Box::new(|user_key, auth_type| {
         if let ExampleEvent::AuthEvent(auth_event) = auth_type {
-            let username = auth_event.get_username();
-            let password = auth_event.get_password();
+            let username = auth_event.username.get();
+            let password = auth_event.password.get();
             return username == "charlie" && password == "12345";
         }
         return false;
@@ -75,7 +75,7 @@ async fn main() {
                         if let Some(user) = server.get_user(&user_key) {
                             match event_type {
                                 ExampleEvent::StringEvent(string_event) => {
-                                    let message = string_event.get_message();
+                                    let message = string_event.message.get();
                                     info!("Gaia Server recv <- {}: {}", user.address, message);
                                 }
                                 _ => {}
