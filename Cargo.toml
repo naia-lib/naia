@@ -10,3 +10,5 @@ proc-macro = true
 [features]
 
 [dependencies]
+syn = "1.0"
+quote = "1.0"
