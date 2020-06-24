@@ -40,7 +40,7 @@ impl App {
                     ClientEvent::Event(event_type) => {
                         match event_type {
                             ExampleEvent::StringEvent(string_event) => {
-                                let message = string_event.get_message();
+                                let message = string_event.message.get();
                                 info!("Client received event: {}", message);
 
                                 if let Some(count) = self.client.get_sequence_number() {
@@ -60,8 +60,8 @@ impl App {
                                 ExampleEntity::PointEntity(point_entity) => {
                                     info!("creation of point entity with key: {}, x: {}, y: {}",
                                           local_key,
-                                          point_entity.as_ref().borrow().get_x(),
-                                          point_entity.as_ref().borrow().get_y());
+                                          point_entity.as_ref().borrow().x.get(),
+                                          point_entity.as_ref().borrow().y.get());
                                 }
                             }
                         }
@@ -72,8 +72,8 @@ impl App {
                                 ExampleEntity::PointEntity(point_entity) => {
                                     info!("update of point entity with key: {}, x: {}, y: {}",
                                           local_key,
-                                          point_entity.as_ref().borrow().get_x(),
-                                          point_entity.as_ref().borrow().get_y());
+                                          point_entity.as_ref().borrow().x.get(),
+                                          point_entity.as_ref().borrow().y.get());
                                 }
                             }
                         }
