@@ -12,8 +12,8 @@ use gaia_shared::{Entity, StateMask, EntityBuilder, EntityMutator, Property, Pro
 use crate::{ExampleEntity};
 
 pub struct PointEntity {
-    pub x: Property<u8>, //TODO: Candidate for Macro
-    pub y: Property<u8>, //TODO: Candidate for Macro
+    pub x: Property<u8>,
+    pub y: Property<u8>,
 }
 
 //TODO: Candidate for Macro
