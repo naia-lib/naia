@@ -23,13 +23,6 @@ impl StringEvent {
     }
 
     //TODO: Candidate for Macro
-    pub fn new_complete(message: String) -> StringEvent {
-        StringEvent {
-            message: Property::<String>::new(message, 0),
-        }
-    }
-
-    //TODO: Candidate for Macro
     fn read_to_type(buffer: &[u8]) -> ExampleEvent {
         let read_cursor = &mut Cursor::new(buffer);
         let mut message = Property::<String>::new(Default::default(), 0);
@@ -40,10 +33,3 @@ impl StringEvent {
         });
     }
 }
-
-//impl Event<ExampleEvent> for StringEvent {
-//    //TODO: Candidate for Macro
-//    fn write(&self, buffer: &mut Vec<u8>) {
-//        PropertyIo::write(&self.message, buffer);
-//    }
-//}
