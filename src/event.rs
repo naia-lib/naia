@@ -1,6 +1,6 @@
 use proc_macro2::{TokenStream, Span};
 use quote::{quote};
-use syn::{parse_macro_input, Data, DeriveInput, Ident, Meta, Lit, MetaNameValue, Fields, Field, Type, PathArguments, GenericArgument};
+use syn::{parse_macro_input, Data, DeriveInput, Ident, Meta, Lit, Fields, Type, PathArguments, GenericArgument};
 
 pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
@@ -9,7 +9,7 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let event_name = &input.ident;
     let event_builder_name = Ident::new((event_name.to_string() + "Builder").as_str(), Span::call_site());
 
-    let mut type_name: Option<Ident> = None;
+    let mut type_name_option: Option<Ident> = None;
 
     let properties = get_properties(&input);
 
@@ -23,7 +23,7 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                     if ident == "type_name" {
                         if let Lit::Str(lit) = lit {
                             let ident = Ident::new(lit.value().as_str(), Span::call_site());
-                            type_name = Some(ident);
+                            type_name_option = Some(ident);
                         }
                     }
                 }
@@ -32,15 +32,17 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
     }
 
-    if type_name.is_none() {
-        panic!("#[derive(Event)] requires an accompanying #[type_name = \"{Event Type Name Here}\"] attribute");
-    }
+    let type_name = type_name_option
+        .expect("#[derive(Event)] requires an accompanying #[type_name = \"{Event Type Name Here}\"] attribute");
 
     let event_write_method = get_event_write_method(&properties);
 
     let new_complete_method = get_new_complete_method(event_name, &properties);
 
+    let read_to_type_method = get_read_to_type_method(&type_name, event_name, &properties);
+
     let gen = quote! {
+        use gaia_shared::{EventBuilder, PropertyIo};
         pub struct #event_builder_name {
             type_id: TypeId,
         }
@@ -59,6 +61,7 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 });
             }
             #new_complete_method
+            #read_to_type_method
         }
         impl Event<#type_name> for #event_name {
             fn is_guaranteed(&self) -> bool {
@@ -66,10 +69,10 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             }
             #event_write_method
             fn get_typed_copy(&self) -> ExampleEvent {
-                return ExampleEvent::StringEvent(self.clone());
+                return ExampleEvent::#event_name(self.clone());
             }
             fn get_type_id(&self) -> TypeId {
-                return TypeId::of::<StringEvent>();
+                return TypeId::of::<#event_name>();
             }
         }
     };
@@ -107,7 +110,7 @@ fn get_event_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
 
     let mut output = quote! {};
 
-    for (field_name, field_type) in properties.iter() {
+    for (field_name, _) in properties.iter() {
         let new_output_right = quote! {
             PropertyIo::write(&self.#field_name, buffer);
         };
@@ -158,6 +161,57 @@ fn get_new_complete_method(event_name: &Ident, properties: &Vec<(Ident, Type)>) 
         }
     }
 }
+
+fn get_read_to_type_method(type_name: &Ident, event_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+
+    let mut prop_names = quote! {};
+    for (field_name, _) in properties.iter() {
+        let new_output_right = quote! {
+            #field_name
+        };
+        let new_output_result = quote! {
+            #prop_names
+            #new_output_right,
+        };
+        prop_names = new_output_result;
+    }
+
+    let mut prop_reads = quote! {};
+    for (field_name, field_type) in properties.iter() {
+        let new_output_right = quote! {
+            let mut #field_name = Property::<#field_type>::new(Default::default(), 0);
+            #field_name.read(read_cursor);
+        };
+        let new_output_result = quote! {
+            #prop_reads
+            #new_output_right
+        };
+        prop_reads = new_output_result;
+    }
+
+    return quote! {
+        fn read_to_type(buffer: &[u8]) -> #type_name {
+            let read_cursor = &mut Cursor::new(buffer);
+            #prop_reads
+
+            return #type_name::#event_name(#event_name {
+                #prop_names
+            });
+        }
+    }
+}
+
+/*
+fn read_to_type(buffer: &[u8]) -> ExampleEvent {
+    let read_cursor = &mut Cursor::new(buffer);
+    let mut message = Property::<String>::new(Default::default(), 0);
+    message.read(read_cursor);
+
+    return ExampleEvent::StringEvent(StringEvent {
+        message,
+    });
+}
+*/
 
 ////FROM THIS
 //#[derive(Event, Clone)]
