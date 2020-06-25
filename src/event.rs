@@ -119,6 +119,7 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 //        });
 //    }
 //}
+//
 //impl Event<ExampleEvent> for StringEvent {
 //    fn is_guaranteed(&self) -> bool {
 //        StringEvent::is_guaranteed()
