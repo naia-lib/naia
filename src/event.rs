@@ -1,6 +1,6 @@
 use proc_macro2::{TokenStream, Span};
 use quote::{quote};
-use syn::{parse_macro_input, Data, DeriveInput, Ident, Meta, Lit, MetaNameValue, Fields, Field};
+use syn::{parse_macro_input, Data, DeriveInput, Ident, Meta, Lit, MetaNameValue, Fields, Field, Type, PathArguments, GenericArgument};
 
 pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
@@ -38,6 +38,8 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let event_write_method = get_event_write_method(&properties);
 
+    let new_complete_method = get_new_complete_method(event_name, &properties);
+
     let gen = quote! {
         pub struct #event_builder_name {
             type_id: TypeId,
@@ -56,6 +58,7 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                     type_id: TypeId::of::<#event_name>(),
                 });
             }
+            #new_complete_method
         }
         impl Event<#type_name> for #event_name {
             fn is_guaranteed(&self) -> bool {
@@ -74,13 +77,25 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(gen)
 }
 
-fn get_properties(input: &DeriveInput) -> Vec<Field> {
+fn get_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
     let mut fields = Vec::new();
 
     if let Data::Struct(data_struct) = &input.data {
         if let Fields::Named(fields_named) = &data_struct.fields {
             for field in fields_named.named.iter() {
-                fields.push(field.clone());
+                if let Some(property_name) = &field.ident {
+                    if let Type::Path(type_path) = &field.ty {
+                        if let PathArguments::AngleBracketed(angle_args) =
+                        &type_path.path.segments.first().unwrap().arguments {
+
+                            if let Some(GenericArgument::Type(property_type)) = angle_args.args.first() {
+
+                                fields.push((property_name.clone(), property_type.clone()));
+
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -88,32 +103,58 @@ fn get_properties(input: &DeriveInput) -> Vec<Field> {
     fields
 }
 
-fn get_event_write_method(properties: &Vec<Field>) -> TokenStream {
-
-    /* quote! {
-        fn write(&self, buffer: &mut Vec<u8>) {
-            PropertyIo::write(&self.message, buffer);
-        }
-    }; */
+fn get_event_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
 
     let mut output = quote! {};
 
-    for field in properties.iter() {
-        if let Some(property_name) = &field.ident {
-            let new_output_right = quote! {
-                PropertyIo::write(&self.#property_name, buffer);
-            };
-            let new_output_result = quote! {
-                #output
-                #new_output_right
-            };
-            output = new_output_result;
-        }
+    for (field_name, field_type) in properties.iter() {
+        let new_output_right = quote! {
+            PropertyIo::write(&self.#field_name, buffer);
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
     }
 
     return quote! {
         fn write(&self, buffer: &mut Vec<u8>) {
             #output
+        }
+    }
+}
+
+fn get_new_complete_method(event_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+
+    let mut args = quote! {};
+    for (field_name, field_type) in properties.iter() {
+        let new_output_right = quote! {
+            #field_name: #field_type
+        };
+        let new_output_result = quote! {
+            #args#new_output_right,
+        };
+        args = new_output_result;
+    }
+
+    let mut fields = quote! {};
+    for (field_name, field_type) in properties.iter() {
+        let new_output_right = quote! {
+            #field_name: Property::<#field_type>::new(#field_name, 0),
+        };
+        let new_output_result = quote! {
+            #fields
+            #new_output_right
+        };
+        fields = new_output_result;
+    }
+
+    return quote! {
+        pub fn new_complete(#args) -> #event_name {
+            #event_name {
+                #fields
+            }
         }
     }
 }
@@ -146,7 +187,7 @@ fn get_event_write_method(properties: &Vec<Field>) -> TokenStream {
 //            type_id: TypeId::of::<StringEvent>(),
 //        });
 //    }
-
+//
 //    pub fn new_complete(message: String) -> StringEvent {
 //        StringEvent {
 //            message: Property::<String>::new(message, 0),
