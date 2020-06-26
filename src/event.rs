@@ -1,6 +1,8 @@
 use proc_macro2::{TokenStream, Span};
 use quote::{quote};
-use syn::{parse_macro_input, Data, DeriveInput, Ident, Meta, Lit, Fields, Type, PathArguments, GenericArgument};
+use syn::{parse_macro_input, DeriveInput, Ident, Type};
+
+use super::utils;
 
 pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
@@ -9,31 +11,9 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let event_name = &input.ident;
     let event_builder_name = Ident::new((event_name.to_string() + "Builder").as_str(), Span::call_site());
 
-    let mut type_name_option: Option<Ident> = None;
+    let properties = utils::get_properties(&input);
 
-    let properties = get_properties(&input);
-
-    for option in input.attrs.into_iter() {
-        let option = option.parse_meta().unwrap();
-        match option {
-            Meta::NameValue(meta_name_value) => {
-                let path = meta_name_value.path;
-                let lit = meta_name_value.lit;
-                if let Some(ident) = path.get_ident() {
-                    if ident == "type_name" {
-                        if let Lit::Str(lit) = lit {
-                            let ident = Ident::new(lit.value().as_str(), Span::call_site());
-                            type_name_option = Some(ident);
-                        }
-                    }
-                }
-            },
-            _ => {}
-        }
-    }
-
-    let type_name = type_name_option
-        .expect("#[derive(Event)] requires an accompanying #[type_name = \"{Event Type Name Here}\"] attribute");
+    let type_name = utils::get_type_name(&input, "Event");
 
     let event_write_method = get_event_write_method(&properties);
 
@@ -78,32 +58,6 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     };
 
     proc_macro::TokenStream::from(gen)
-}
-
-fn get_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
-    let mut fields = Vec::new();
-
-    if let Data::Struct(data_struct) = &input.data {
-        if let Fields::Named(fields_named) = &data_struct.fields {
-            for field in fields_named.named.iter() {
-                if let Some(property_name) = &field.ident {
-                    if let Type::Path(type_path) = &field.ty {
-                        if let PathArguments::AngleBracketed(angle_args) =
-                        &type_path.path.segments.first().unwrap().arguments {
-
-                            if let Some(GenericArgument::Type(property_type)) = angle_args.args.first() {
-
-                                fields.push((property_name.clone(), property_type.clone()));
-
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fields
 }
 
 fn get_event_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
@@ -201,17 +155,7 @@ fn get_read_to_type_method(type_name: &Ident, event_name: &Ident, properties: &V
     }
 }
 
-/*
-fn read_to_type(buffer: &[u8]) -> ExampleEvent {
-    let read_cursor = &mut Cursor::new(buffer);
-    let mut message = Property::<String>::new(Default::default(), 0);
-    message.read(read_cursor);
 
-    return ExampleEvent::StringEvent(StringEvent {
-        message,
-    });
-}
-*/
 
 ////FROM THIS
 //#[derive(Event, Clone)]
