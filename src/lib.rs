@@ -5,7 +5,6 @@ extern crate cfg_if;
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
 
-        use log::{info};
         mod app;
         mod loop_wasm;
 
