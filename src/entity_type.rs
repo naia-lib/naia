@@ -11,7 +11,7 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let variants = get_variants(&type_name, &input.data);
 
     let gen = quote! {
-        use gaia_shared::{EntityType, Entity, StateMask};
+        use naia_shared::{EntityType, Entity, StateMask};
         impl EntityType for #type_name {
             fn read_partial(&mut self, state_mask: &StateMask, bytes: &[u8]) {
                 match self {
