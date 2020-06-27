@@ -1,4 +1,4 @@
-use gaia_socket_shared::{Instant};
+use naia_socket_shared::{Instant};
 
 use crate::SequenceNumber;
 

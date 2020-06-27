@@ -71,8 +71,8 @@ impl PacketWriter {
         let mut event_total_bytes = Vec::<u8>::new();
 
         let type_id = event.as_ref().get_type_id();
-        let gaia_id = manifest.get_event_gaia_id(&type_id); // get gaia id
-        event_total_bytes.write_u16::<BigEndian>(gaia_id).unwrap();// write gaia id
+        let naia_id = manifest.get_event_naia_id(&type_id); // get naia id
+        event_total_bytes.write_u16::<BigEndian>(naia_id).unwrap();// write naia id
         event_total_bytes.write_u8(event_payload_bytes.len() as u8).unwrap(); // write payload length
         event_total_bytes.append(&mut event_payload_bytes); // write payload
 

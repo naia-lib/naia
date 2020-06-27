@@ -1,5 +1,5 @@
 
-use gaia_socket_shared::{
+use naia_socket_shared::{
     Duration,
 };
 
