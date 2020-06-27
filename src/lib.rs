@@ -1,9 +1,9 @@
 
 extern crate log;
 
-pub use gaia_shared::{find_my_ip_address, Config, EntityType};
+pub use naia_shared::{find_my_ip_address, Config, EntityType};
 
-mod gaia_client;
+mod naia_client;
 mod server_connection;
 mod client_event;
 mod client_entity_message;
@@ -12,9 +12,9 @@ mod client_connection_state;
 mod error;
 
 pub use {
-    gaia_client::GaiaClient,
+    naia_client::NaiaClient,
     client_event::ClientEvent,
-    gaia_client_socket::Packet,
+    naia_client_socket::Packet,
     client_entity_message::ClientEntityMessage,
     client_entity_manager::ClientEntityManager,
 };

@@ -1,4 +1,4 @@
-use gaia_shared::{LocalEntityKey};
+use naia_shared::{LocalEntityKey};
 
 #[derive(Clone)]
 pub enum ClientEntityMessage {

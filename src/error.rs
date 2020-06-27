@@ -3,18 +3,18 @@ use std::error::Error;
 use std::fmt;
 
 #[derive(Debug)]
-pub enum GaiaClientError {
+pub enum NaiaClientError {
     Message(String),
     Wrapped(Box<dyn Error + Send>)
 }
 
-impl fmt::Display for GaiaClientError {
+impl fmt::Display for NaiaClientError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            GaiaClientError::Message(msg) => write!(f, "Gaia Client Error: {}", msg),
-            GaiaClientError::Wrapped(boxed_err) => fmt::Display::fmt(boxed_err.as_ref(), f),
+            NaiaClientError::Message(msg) => write!(f, "Naia Client Error: {}", msg),
+            NaiaClientError::Wrapped(boxed_err) => fmt::Display::fmt(boxed_err.as_ref(), f),
         }
     }
 }
 
-impl Error for GaiaClientError {}
+impl Error for NaiaClientError {}
