@@ -10,3 +10,8 @@ To test the application, run:
     `cargo web start`
 
     and then open the provided URL in the browser of your choice
+
+
+---
+
+    make sure to 'npm install' in directory
