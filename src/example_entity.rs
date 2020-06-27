@@ -4,7 +4,7 @@ use std::{
     cell::RefCell,
 };
 
-use gaia_derive::EntityType;
+use naia_derive::EntityType;
 
 use crate::{PointEntity};
 

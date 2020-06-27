@@ -1,5 +1,5 @@
 
-use gaia_derive::EventType;
+use naia_derive::EventType;
 
 use crate::{StringEvent, AuthEvent};
 

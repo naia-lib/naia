@@ -1,6 +1,6 @@
 
-use gaia_derive::Entity;
-use gaia_shared::{Entity, Property};
+use naia_derive::Entity;
+use naia_shared::{Entity, Property};
 
 use crate::{ExampleEntity};
 
