@@ -59,7 +59,6 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
         config.heartbeat_interval /= 2;
 
         let mut socket_config = SocketConfig::default();
-        socket_config.connectionless = true;
         socket_config.tick_interval = config.tick_interval;
         let mut server_socket = ServerSocket::listen(address, Some(socket_config)).await;
 
@@ -330,7 +329,6 @@ impl<T: EventType, U: EntityType> GaiaServer<T, U> {
                             output = Some(Ok(ServerEvent::Tick));
                             continue;
                         }
-                        _ => {} // We are not using Socket Connection/Disconnection Events
                     }
                 }
                 Err(error) => {
