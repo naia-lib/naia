@@ -9,13 +9,13 @@ use super::{
 };
 
 #[derive(Clone)]
-pub struct Property<T> {
+pub struct Property<T: Clone> {
     mutator: Option<Rc<RefCell<dyn EntityMutator>>>,
     mutator_index: u8,
     pub(crate) inner: T,
 }
 
-impl<T> Property<T> {
+impl<T: Clone> Property<T> {
     pub fn new(value: T, index: u8) -> Property<T> {
         return Property::<T> {
             inner: value,
