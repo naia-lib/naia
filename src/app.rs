@@ -3,20 +3,20 @@ use log::{info};
 
 use std::time::Duration;
 
-use gaia_client::{GaiaClient, ClientEvent, Config, find_my_ip_address};
+use naia_client::{NaiaClient, ClientEvent, Config, find_my_ip_address};
 
-use gaia_example_shared::{manifest_load, AuthEvent, StringEvent, ExampleEvent, ExampleEntity};
+use naia_example_shared::{manifest_load, AuthEvent, StringEvent, ExampleEvent, ExampleEntity};
 
 const SERVER_PORT: &str = "14191";
 
 pub struct App {
-    client: GaiaClient<ExampleEvent, ExampleEntity>,
+    client: NaiaClient<ExampleEvent, ExampleEntity>,
 }
 
 impl App {
     pub fn new() -> App {
 
-        info!("Gaia Client Example Started");
+        info!("Naia Client Example Started");
 
         let server_socket_address = find_my_ip_address::get() + ":" + SERVER_PORT;
 
@@ -26,7 +26,7 @@ impl App {
         let auth = ExampleEvent::AuthEvent(AuthEvent::new("charlie", "12345"));
 
         App {
-            client: GaiaClient::new(&server_socket_address, manifest_load(), Some(config), Some(auth)),
+            client: NaiaClient::new(&server_socket_address, manifest_load(), Some(config), Some(auth)),
         }
     }
 
