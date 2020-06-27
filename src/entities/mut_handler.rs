@@ -5,7 +5,7 @@ use std::{
     net::SocketAddr,
 };
 
-use gaia_shared::{StateMask};
+use naia_shared::{StateMask};
 
 use crate::{EntityKey};
 

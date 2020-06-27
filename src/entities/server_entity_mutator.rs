@@ -4,7 +4,7 @@ use std::{
     cell::RefCell,
 };
 
-use gaia_shared::{
+use naia_shared::{
     EntityMutator,
 };
 
