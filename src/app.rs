@@ -2,12 +2,21 @@
 use log::{info};
 
 use std::time::Duration;
+use std::format;
 
 use naia_client::{NaiaClient, ClientEvent, Config, find_my_ip_address};
 
 use naia_example_shared::{manifest_load, AuthEvent, StringEvent, ExampleEvent, ExampleEntity};
 
 const SERVER_PORT: &str = "14191";
+
+cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
+        const SERVER_IP_ADDRESS: &str = "192.168.1.9"; // Put your Server's IP Address here!, can't easily find this automatically from the browser
+    } else {
+        const SERVER_IP_ADDRESS: &str = find_my_ip_address::get();
+    }
+}
 
 pub struct App {
     client: NaiaClient<ExampleEvent, ExampleEntity>,
@@ -18,7 +27,7 @@ impl App {
 
         info!("Naia Client Example Started");
 
-        let server_socket_address = find_my_ip_address::get() + ":" + SERVER_PORT;
+        let server_socket_address = format!("{}:{}", SERVER_IP_ADDRESS, SERVER_PORT);
 
         let mut config = Config::default();
         config.heartbeat_interval = Duration::from_secs(4);
