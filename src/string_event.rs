@@ -1,6 +1,6 @@
 
-use gaia_derive::Event;
-use gaia_shared::{Event, Property};
+use naia_derive::Event;
+use naia_shared::{Event, Property};
 use crate::ExampleEvent;
 
 #[derive(Event, Clone)]

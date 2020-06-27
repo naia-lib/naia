@@ -1,6 +1,6 @@
 
 extern crate log;
-extern crate gaia_derive;
+extern crate naia_derive;
 
 mod manifest_load;
 mod point_entity;

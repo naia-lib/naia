@@ -1,5 +1,5 @@
 
-use gaia_shared::{Manifest};
+use naia_shared::{Manifest};
 use crate::{ExampleEvent, StringEvent, AuthEvent, ExampleEntity, PointEntity};
 
 pub fn manifest_load() -> Manifest<ExampleEvent, ExampleEntity> {
