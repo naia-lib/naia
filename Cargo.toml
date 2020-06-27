@@ -1,12 +1,12 @@
 [package]
-name = "gaia-client"
+name = "naia-client"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-gaia-client-socket = { path = "../gaia-client-socket" } # { git = "https://github.com/connorcarpenter/gaia-client-socket" } #
-gaia-shared = { path = "../gaia-shared" } # { git = "https://github.com/connorcarpenter/gaia-shared" } #
+naia-client-socket = { path = "../naia-client-socket" } # { git = "https://github.com/connorcarpenter/naia-client-socket" } #
+naia-shared = { path = "../naia-shared" } # { git = "https://github.com/connorcarpenter/naia-shared" } #
 cfg-if = "*"
 log = "0.4"
 byteorder = "1.3"

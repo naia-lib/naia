@@ -1,4 +1,4 @@
-use gaia_shared::{EventType, LocalEntityKey};
+use naia_shared::{EventType, LocalEntityKey};
 
 pub enum ClientEvent<T: EventType> {
     Connection,

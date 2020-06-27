@@ -6,8 +6,8 @@ use std::{
 use log::info;
 use byteorder::{BigEndian, WriteBytesExt};
 
-use gaia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use gaia_shared::{Config, LocalEntityKey, PacketType, Timer, Timestamp,
+use naia_client_socket::{ClientSocket, SocketEvent, MessageSender, Config as SocketConfig};
+pub use naia_shared::{Config, LocalEntityKey, PacketType, Timer, Timestamp,
                       Manifest, ManagerType, HostType, PacketWriter, PacketReader,
                       Event, EventType, EntityType};
 
@@ -15,13 +15,13 @@ use super::{
     server_connection::ServerConnection,
     client_event::ClientEvent,
     client_entity_message::ClientEntityMessage,
-    error::GaiaClientError,
+    error::NaiaClientError,
     Packet
 };
 use crate::client_connection_state::ClientConnectionState::AwaitingChallengeResponse;
 use crate::client_connection_state::ClientConnectionState;
 
-pub struct GaiaClient<T: EventType, U: EntityType> {
+pub struct NaiaClient<T: EventType, U: EntityType> {
     manifest: Manifest<T, U>,
     server_address: SocketAddr,
     config: Config,
@@ -37,7 +37,7 @@ pub struct GaiaClient<T: EventType, U: EntityType> {
     auth_event: Option<T>,
 }
 
-impl<T: EventType, U: EntityType> GaiaClient<T, U> {
+impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     pub fn new(server_address: &str, manifest: Manifest<T, U>, config: Option<Config>, auth: Option<T>) -> Self {
 
         let mut config = match config {
@@ -53,7 +53,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
         handshake_timer.ring_manual();
         let message_sender = client_socket.get_sender();
 
-        GaiaClient {
+        NaiaClient {
             server_address: server_address.parse().unwrap(),
             manifest,
             socket: client_socket,
@@ -70,7 +70,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
         }
     }
 
-    pub fn receive(&mut self) -> Result<ClientEvent<T>, GaiaClientError> {
+    pub fn receive(&mut self) -> Result<ClientEvent<T>, NaiaClientError> {
 
         // send handshakes, send heartbeats, timeout if need be
         match &mut self.server_connection {
@@ -83,7 +83,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                     return Ok(ClientEvent::Disconnection);
                 }
                 if connection.should_send_heartbeat() {
-                    GaiaClient::internal_send_with_connection(&mut self.sender, connection, PacketType::Heartbeat, Packet::empty());
+                    NaiaClient::internal_send_with_connection(&mut self.sender, connection, PacketType::Heartbeat, Packet::empty());
                 }
                 // send a packet
                 if let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
@@ -120,7 +120,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
 
                             let mut timestamp_bytes = Vec::new();
                             self.pre_connection_timestamp.as_mut().unwrap().write(&mut timestamp_bytes);
-                            GaiaClient::<T,U>::internal_send_connectionless(
+                            NaiaClient::<T,U>::internal_send_connectionless(
                                 &mut self.sender,
                                 PacketType::ClientChallengeRequest,
                                 Packet::new(timestamp_bytes));
@@ -136,11 +136,11 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                             // write auth event object if there is one
                             if let Some(auth_event) = &mut self.auth_event {
                                 let type_id = auth_event.get_type_id();
-                                let gaia_id = self.manifest.get_event_gaia_id(&type_id); // get gaia id
-                                payload_bytes.write_u16::<BigEndian>(gaia_id).unwrap();// write gaia id
+                                let naia_id = self.manifest.get_event_naia_id(&type_id); // get naia id
+                                payload_bytes.write_u16::<BigEndian>(naia_id).unwrap();// write naia id
                                 auth_event.write(&mut payload_bytes);
                             }
-                            GaiaClient::<T,U>::internal_send_connectionless(
+                            NaiaClient::<T,U>::internal_send_connectionless(
                                 &mut self.sender,
                                 PacketType::ClientConnectRequest,
                                 Packet::new(payload_bytes));
@@ -154,7 +154,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
         }
 
         // receive from socket
-        let mut output: Option<Result<ClientEvent<T>, GaiaClientError>> = None;
+        let mut output: Option<Result<ClientEvent<T>, NaiaClientError>> = None;
         while output.is_none() {
             match self.socket.receive() {
                 Ok(event) => {
@@ -199,7 +199,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
 
                                         if self.connection_state == ClientConnectionState::AwaitingChallengeResponse {
                                             if let Some(my_timestamp) = self.pre_connection_timestamp {
-                                                let payload = gaia_shared::utils::read_headerless_payload(packet.payload());
+                                                let payload = naia_shared::utils::read_headerless_payload(packet.payload());
                                                 let mut reader = PacketReader::new(&payload);
                                                 let payload_timestamp = Timestamp::read(&mut reader);
 
@@ -234,7 +234,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                     }
                 }
                 Err(error) => {
-                    output = Some(Err(GaiaClientError::Wrapped(Box::new(error))));
+                    output = Some(Err(NaiaClientError::Wrapped(Box::new(error))));
                     continue;
                 }
             }
@@ -260,7 +260,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
     }
 
     fn internal_send_connectionless(sender: &mut MessageSender, packet_type: PacketType, packet: Packet) {
-        let new_payload = gaia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
+        let new_payload = naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
         sender.send(Packet::new_raw(new_payload))
             .expect("send failed!");
     }

@@ -1,5 +1,5 @@
 
-use gaia_shared::{EventType, EntityType, LocalEntityKey, PacketReader, Manifest, StateMask};
+use naia_shared::{EventType, EntityType, LocalEntityKey, PacketReader, Manifest, StateMask};
 use std::{
     collections::{VecDeque, HashMap}
 };
@@ -34,7 +34,7 @@ impl<U: EntityType> ClientEntityManager<U> {
 
             match message_type {
                 0 => { // Creation
-                    let gaia_id: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
+                    let naia_id: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
                     let local_key: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
                     let payload_length: u8 = cursor.read_u8().unwrap().into();
                     let payload_start_position: usize = cursor.position() as usize;
@@ -44,7 +44,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                         .to_vec()
                         .into_boxed_slice();
 
-                    match manifest.create_entity(gaia_id, &entity_payload) {
+                    match manifest.create_entity(naia_id, &entity_payload) {
                         Some(new_entity) => {
                             if self.local_entity_store.contains_key(&local_key) {
                                 warn!("duplicate local key inserted");
