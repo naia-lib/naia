@@ -1,9 +1,5 @@
 
-use std::{
-    any::{TypeId},
-    io::{Cursor},
-};
-
+use gaia_derive::Event;
 use gaia_shared::{Event, Property};
 use crate::ExampleEvent;
 
@@ -15,7 +11,8 @@ pub struct AuthEvent {
 }
 
 impl AuthEvent {
-    fn is_guaranteed(&self) -> bool {
+
+    fn is_guaranteed() -> bool {
         false
     }
 

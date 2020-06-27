@@ -1,8 +1,5 @@
 
-#[macro_use]
 extern crate log;
-
-#[macro_use]
 extern crate gaia_derive;
 
 mod manifest_load;

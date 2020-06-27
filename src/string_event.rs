@@ -1,9 +1,4 @@
 
-use std::{
-    any::{TypeId},
-    io::{Cursor},
-};
-
 use gaia_derive::Event;
 use gaia_shared::{Event, Property};
 use crate::ExampleEvent;
