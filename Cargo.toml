@@ -1,16 +1,16 @@
 [package]
-name = "gaia-server-example"
+name = "naia-server-example"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 edition = "2018"
 
 [features]
-use-udp = [ "gaia-server/use-udp" ]
-use-webrtc = [ "gaia-server/use-webrtc" ]
+use-udp = [ "naia-server/use-udp" ]
+use-webrtc = [ "naia-server/use-webrtc" ]
 
 [dependencies]
-gaia-server = { path = "../gaia-server" } # { git = "https://github.com/connorcarpenter/gaia-server" } #
-gaia-example-shared = { path = "../gaia-example-shared" } # { git = "https://github.com/connorcarpenter/gaia-example-shared" } #
+naia-server = { path = "../naia-server" } # { git = "https://github.com/connorcarpenter/naia-server" } #
+naia-example-shared = { path = "../naia-example-shared" } # { git = "https://github.com/connorcarpenter/naia-example-shared" } #
 tokio = { version = "0.2", features = ["macros"] }
 log = "0.4"
 simple_logger = { version = "1.4" }

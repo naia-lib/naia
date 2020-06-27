@@ -4,9 +4,9 @@ extern crate log;
 
 use simple_logger;
 
-use gaia_server::{GaiaServer, ServerEvent, find_my_ip_address, Config, UserKey};
+use naia_server::{NaiaServer, ServerEvent, find_my_ip_address, Config, UserKey};
 
-use gaia_example_shared::{manifest_load, PointEntity, ExampleEvent, ExampleEntity, StringEvent};
+use naia_example_shared::{manifest_load, PointEntity, ExampleEvent, ExampleEntity, StringEvent};
 
 use std::{
     rc::Rc,
@@ -26,7 +26,7 @@ async fn main() {
     config.tick_interval = Duration::from_secs(4);
     config.heartbeat_interval = Duration::from_secs(1);
 
-    let mut server = GaiaServer::new(current_socket_address.as_str(),
+    let mut server = NaiaServer::new(current_socket_address.as_str(),
                                      manifest_load(),
                                      Some(config))
         .await;
@@ -65,18 +65,18 @@ async fn main() {
                     ServerEvent::Connection(user_key) => {
                         server.room_add_user(&main_room_key, &user_key);
                         if let Some(user) = server.get_user(&user_key) {
-                            info!("Gaia Server connected to: {}", user.address);
+                            info!("Naia Server connected to: {}", user.address);
                         }
                     }
                     ServerEvent::Disconnection(_, user) => {
-                        info!("Gaia Server disconnected from: {:?}", user.address);
+                        info!("Naia Server disconnected from: {:?}", user.address);
                     }
                     ServerEvent::Event(user_key, event_type) => {
                         if let Some(user) = server.get_user(&user_key) {
                             match event_type {
                                 ExampleEvent::StringEvent(string_event) => {
                                     let message = string_event.message.get();
-                                    info!("Gaia Server recv <- {}: {}", user.address, message);
+                                    info!("Naia Server recv <- {}: {}", user.address, message);
                                 }
                                 _ => {}
                             }
@@ -94,7 +94,7 @@ async fn main() {
                             let count = server.get_sequence_number(&user_key).expect("why don't we have a sequence number for this client?");
                             let user = server.get_user(&user_key).unwrap();
                             let new_message = "Server Packet (".to_string() + count.to_string().as_str() + ") to " + user.address.to_string().as_str();
-                            info!("Gaia Server send -> {}: {}", user.address, new_message);
+                            info!("Naia Server send -> {}: {}", user.address, new_message);
 
                             let string_event = StringEvent::new(new_message);
                             server.send_event(&user_key, &string_event);
@@ -107,7 +107,7 @@ async fn main() {
                 }
             }
             Err(error) => {
-                info!("Gaia Server Error: {}", error);
+                info!("Naia Server Error: {}", error);
             }
         }
     }
