@@ -1,16 +1,16 @@
 [package]
-name = "gaia-server"
+name = "naia-server"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 edition = "2018"
 
 [features]
-use-udp = [ "gaia-server-socket/use-udp" ]
-use-webrtc = [ "gaia-server-socket/use-webrtc" ]
+use-udp = [ "naia-server-socket/use-udp" ]
+use-webrtc = [ "naia-server-socket/use-webrtc" ]
 
 [dependencies]
-gaia-server-socket = { path = "../gaia-server-socket" } # { git = "https://github.com/connorcarpenter/gaia-server-socket" } #
-gaia-shared = { path = "../gaia-shared" } # { git = "https://github.com/connorcarpenter/gaia-shared" } #
+naia-server-socket = { path = "../naia-server-socket" } # { git = "https://github.com/connorcarpenter/naia-server-socket" } #
+naia-shared = { path = "../naia-shared" } # { git = "https://github.com/connorcarpenter/naia-shared" } #
 log = "0.4"
 slotmap = { version = "0.4" }
 byteorder = "1.3"

@@ -2,7 +2,7 @@
 use std::{
     net::SocketAddr,
 };
-use crate::gaia_server::Timestamp;
+use crate::naia_server::Timestamp;
 
 new_key_type! { pub struct UserKey; }
 

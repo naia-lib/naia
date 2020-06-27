@@ -5,7 +5,7 @@ use std::{
     net::SocketAddr,
 };
 
-use gaia_shared::{Timer, PacketType, Event, Manifest, RttTracker, Config,
+use naia_shared::{Timer, PacketType, Event, Manifest, RttTracker, Config,
             EventManager, PacketWriter, PacketReader, ManagerType, HostType,
             EventType, EntityType, Entity, SequenceNumber, AckManager, Connection};
 

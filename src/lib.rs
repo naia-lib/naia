@@ -5,9 +5,9 @@ extern crate log;
 #[macro_use]
 extern crate slotmap;
 
-pub use gaia_shared::{find_my_ip_address, Config, EntityType, Entity};
+pub use naia_shared::{find_my_ip_address, Config, EntityType, Entity};
 
-mod gaia_server;
+mod naia_server;
 mod client_connection;
 mod server_event;
 mod entities;
@@ -16,9 +16,9 @@ mod room;
 mod error;
 
 pub use {
-    gaia_server::GaiaServer,
+    naia_server::NaiaServer,
     server_event::ServerEvent,
-    gaia_server_socket::Packet,
+    naia_server_socket::Packet,
     entities::{
         server_entity_manager::ServerEntityManager,
         server_entity_message::ServerEntityMessage,

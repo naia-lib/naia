@@ -1,4 +1,4 @@
-use gaia_shared::{LocalEntityKey, Entity, EntityType, StateMask};
+use naia_shared::{LocalEntityKey, Entity, EntityType, StateMask};
 use std::{
     rc::Rc,
     cell::RefCell

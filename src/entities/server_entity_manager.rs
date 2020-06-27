@@ -10,7 +10,7 @@ use std::{
 
 use slotmap::{SparseSecondaryMap};
 
-use gaia_shared::{EntityType, LocalEntityKey, Entity, StateMask, EntityNotifiable};
+use naia_shared::{EntityType, LocalEntityKey, Entity, StateMask, EntityNotifiable};
 use super::{
     server_entity_message::ServerEntityMessage,
     entity_record::{

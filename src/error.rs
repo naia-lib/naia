@@ -2,16 +2,16 @@ use std::error::Error;
 use std::fmt;
 
 #[derive(Debug)]
-pub enum GaiaServerError {
+pub enum NaiaServerError {
     Wrapped(Box<dyn Error>)
 }
 
-impl fmt::Display for GaiaServerError {
+impl fmt::Display for NaiaServerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            GaiaServerError::Wrapped(boxed_err) => fmt::Display::fmt(boxed_err.as_ref(), f),
+            NaiaServerError::Wrapped(boxed_err) => fmt::Display::fmt(boxed_err.as_ref(), f),
         }
     }
 }
 
-impl Error for GaiaServerError {}
+impl Error for NaiaServerError {}

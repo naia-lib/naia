@@ -3,7 +3,7 @@ use std::{
     cell::RefCell,
 };
 
-use gaia_shared::{StateMask, LocalEntityKey};
+use naia_shared::{StateMask, LocalEntityKey};
 
 pub struct EntityRecord {
     pub local_key: LocalEntityKey,
