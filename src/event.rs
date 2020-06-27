@@ -23,7 +23,7 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let gen = quote! {
         use std::{any::TypeId, io::Cursor};
-        use gaia_shared::{EventBuilder, PropertyIo};
+        use naia_shared::{EventBuilder, PropertyIo};
         pub struct #event_builder_name {
             type_id: TypeId,
         }

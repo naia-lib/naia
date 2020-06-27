@@ -13,7 +13,7 @@ pub fn event_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
 
     let gen = quote! {
         use std::any::TypeId;
-        use gaia_shared::{EventType, Event};
+        use naia_shared::{EventType, Event};
         impl EventType for #type_name {
             fn write(&mut self, buffer: &mut Vec<u8>) {
                 match self {

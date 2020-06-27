@@ -1,5 +1,5 @@
 [package]
-name = "gaia-derive"
+name = "naia-derive"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 edition = "2018"
