@@ -3,18 +3,22 @@ use log::{info};
 
 use std::time::Duration;
 
-use gaia_client::{GaiaClient, ClientEvent, Config};
+use gaia_client::{GaiaClient, ClientEvent, Config, find_my_ip_address};
 
 use gaia_example_shared::{manifest_load, AuthEvent, StringEvent, ExampleEvent, ExampleEntity};
+
+const SERVER_PORT: &str = "14191";
 
 pub struct App {
     client: GaiaClient<ExampleEvent, ExampleEntity>,
 }
 
 impl App {
-    pub fn new(server_socket_address: &str) -> App {
+    pub fn new() -> App {
 
-        info!("App Start");
+        info!("Gaia Client Example Started");
+
+        let server_socket_address = find_my_ip_address::get() + ":" + SERVER_PORT;
 
         let mut config = Config::default();
         config.heartbeat_interval = Duration::from_secs(4);
