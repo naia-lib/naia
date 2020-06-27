@@ -15,13 +15,14 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let type_name = utils::get_type_name(&input, "Event");
 
-    let event_write_method = get_event_write_method(&properties);
+    let event_write_method = utils::get_write_method(&properties);
 
     let new_complete_method = get_new_complete_method(event_name, &properties);
 
     let read_to_type_method = get_read_to_type_method(&type_name, event_name, &properties);
 
     let gen = quote! {
+        use std::{any::TypeId, io::Cursor};
         use gaia_shared::{EventBuilder, PropertyIo};
         pub struct #event_builder_name {
             type_id: TypeId,
@@ -58,28 +59,6 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     };
 
     proc_macro::TokenStream::from(gen)
-}
-
-fn get_event_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
-
-    let mut output = quote! {};
-
-    for (field_name, _) in properties.iter() {
-        let new_output_right = quote! {
-            PropertyIo::write(&self.#field_name, buffer);
-        };
-        let new_output_result = quote! {
-            #output
-            #new_output_right
-        };
-        output = new_output_result;
-    }
-
-    return quote! {
-        fn write(&self, buffer: &mut Vec<u8>) {
-            #output
-        }
-    }
 }
 
 fn get_new_complete_method(event_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {

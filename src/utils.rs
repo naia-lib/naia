@@ -1,4 +1,5 @@
-use proc_macro2::{Span};
+use proc_macro2::{TokenStream, Span};
+use quote::{quote};
 use syn::{Data, DeriveInput, Ident, Fields, Type, Lit, PathArguments, GenericArgument, Meta};
 
 pub fn get_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
@@ -53,4 +54,26 @@ pub fn get_type_name(input: &DeriveInput, type_type: &str) -> Ident {
 
     return type_name_option
         .expect(format!("#[derive({})] requires an accompanying #[type_name = \"{} Type Name Here\"] attribute", type_type, type_type).as_str());
+}
+
+pub fn get_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
+
+    let mut output = quote! {};
+
+    for (field_name, _) in properties.iter() {
+        let new_output_right = quote! {
+            PropertyIo::write(&self.#field_name, buffer);
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    return quote! {
+        fn write(&self, buffer: &mut Vec<u8>) {
+            #output
+        }
+    }
 }
