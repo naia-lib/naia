@@ -1,1 +1,1 @@
-# gaia-client-example
+# naia-client-example
