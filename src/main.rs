@@ -13,7 +13,7 @@ use std::{
     cell::RefCell,
     time::Duration};
 
-const SERVER_PORT: &str = "3179";
+const SERVER_PORT: &str = "14191";
 
 #[tokio::main]
 async fn main() {
@@ -49,7 +49,7 @@ async fn main() {
         }
     })));
 
-    server.on_auth(Rc::new(Box::new(|user_key, auth_type| {
+    server.on_auth(Rc::new(Box::new(|_, auth_type| {
         if let ExampleEvent::AuthEvent(auth_event) = auth_type {
             let username = auth_event.username.get();
             let password = auth_event.password.get();
