@@ -46,8 +46,7 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
         };
         config.heartbeat_interval /= 2;
 
-        let mut socket_config = SocketConfig::default();
-        socket_config.connectionless = true;
+        let socket_config = SocketConfig::default();
         let mut client_socket = ClientSocket::connect(&server_address, Some(socket_config));
 
         let mut handshake_timer = Timer::new(config.send_handshake_interval);
@@ -232,7 +231,6 @@ impl<T: EventType, U: EntityType> GaiaClient<T, U> {
                             output = Some(Ok(ClientEvent::None));
                             continue;
                         }
-                        _ => {} // We are not using Socket Connection/Disconnection Events
                     }
                 }
                 Err(error) => {
