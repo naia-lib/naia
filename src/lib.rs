@@ -22,7 +22,7 @@ mod host_type;
 mod manifest;
 pub mod utils;
 
-pub use gaia_socket_shared::{find_my_ip_address, Timer, Instant};
+pub use naia_socket_shared::{find_my_ip_address, Timer, Instant};
 
 pub use {
     packet_type::PacketType,
