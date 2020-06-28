@@ -1,4 +1,3 @@
-
 // Because we hook into web_sys::RtcDataChannel in order to send/receive events from the server,
 // we can't just create a simple loop and receive events like in loop_native.rs - doing so would
 // block indefinitely and never allow the browser to do it's thing! The solution below is to hook
