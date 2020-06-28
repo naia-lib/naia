@@ -1,23 +1,18 @@
-
 #[macro_use]
 extern crate log;
 
 use simple_logger;
 
-use naia_server::{NaiaServer, ServerEvent, find_my_ip_address, Config, UserKey};
+use naia_server::{find_my_ip_address, Config, NaiaServer, ServerEvent, UserKey};
 
-use naia_example_shared::{manifest_load, PointEntity, ExampleEvent, ExampleEntity, StringEvent};
+use naia_example_shared::{manifest_load, ExampleEntity, ExampleEvent, PointEntity, StringEvent};
 
-use std::{
-    rc::Rc,
-    cell::RefCell,
-    time::Duration};
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 const SERVER_PORT: &str = "14191";
 
 #[tokio::main]
 async fn main() {
-
     simple_logger::init_with_level(log::Level::Info).expect("A logger was already initialized");
 
     let current_socket_address = find_my_ip_address::get() + ":" + SERVER_PORT;
@@ -26,10 +21,12 @@ async fn main() {
     config.tick_interval = Duration::from_secs(4);
     config.heartbeat_interval = Duration::from_secs(1);
 
-    let mut server = NaiaServer::new(current_socket_address.as_str(),
-                                     manifest_load(),
-                                     Some(config))
-        .await;
+    let mut server = NaiaServer::new(
+        current_socket_address.as_str(),
+        manifest_load(),
+        Some(config),
+    )
+    .await;
 
     let main_room_key = server.create_room();
     let mut point_entities: Vec<Rc<RefCell<PointEntity>>> = Vec::new();
@@ -40,12 +37,10 @@ async fn main() {
         server.room_add_entity(&main_room_key, &entity_key);
     }
 
-    server.on_scope_entity(Rc::new(Box::new(|_, _, _, entity| {
-        match entity {
-            ExampleEntity::PointEntity(point_entity) => {
-                let x = *point_entity.as_ref().borrow().x.get();
-                return x >= 3 && x <= 17;
-            }
+    server.on_scope_entity(Rc::new(Box::new(|_, _, _, entity| match entity {
+        ExampleEntity::PointEntity(point_entity) => {
+            let x = *point_entity.as_ref().borrow().x.get();
+            return x >= 3 && x <= 17;
         }
     })));
 
@@ -91,9 +86,14 @@ async fn main() {
                             iter_vec.push(user_key);
                         }
                         for user_key in iter_vec {
-                            let count = server.get_sequence_number(&user_key).expect("why don't we have a sequence number for this client?");
+                            let count = server
+                                .get_sequence_number(&user_key)
+                                .expect("why don't we have a sequence number for this client?");
                             let user = server.get_user(&user_key).unwrap();
-                            let new_message = "Server Packet (".to_string() + count.to_string().as_str() + ") to " + user.address.to_string().as_str();
+                            let new_message = "Server Packet (".to_string()
+                                + count.to_string().as_str()
+                                + ") to "
+                                + user.address.to_string().as_str();
                             info!("Naia Server send -> {}: {}", user.address, new_message);
 
                             let string_event = StringEvent::new(new_message);
