@@ -1,16 +1,16 @@
-
-use std::{
-    vec::Vec,
-    collections::{VecDeque, HashMap},
-    rc::Rc};
 use byteorder::{BigEndian, ReadBytesExt};
+use std::{
+    collections::{HashMap, VecDeque},
+    rc::Rc,
+    vec::Vec,
+};
 
-use crate::{EventType, Event, EventClone, PacketReader, Manifest, EntityType};
+use crate::{EntityType, Event, EventClone, EventType, Manifest, PacketReader};
 
 pub struct EventManager<T: EventType> {
     queued_outgoing_events: VecDeque<Rc<Box<dyn Event<T>>>>,
     queued_incoming_events: VecDeque<T>,
-    sent_events: HashMap<u16, Vec<Rc<Box<dyn Event<T>>>>>
+    sent_events: HashMap<u16, Vec<Rc<Box<dyn Event<T>>>>>,
 }
 
 impl<T: EventType> EventManager<T> {
@@ -43,7 +43,6 @@ impl<T: EventType> EventManager<T> {
     pub fn pop_outgoing_event(&mut self, packet_index: u16) -> Option<Rc<Box<dyn Event<T>>>> {
         match self.queued_outgoing_events.pop_front() {
             Some(event) => {
-
                 //place in transmission record if this is a gauranteed event
                 if Event::is_guaranteed(event.as_ref().as_ref()) {
                     if !self.sent_events.contains_key(&packet_index) {
@@ -58,7 +57,7 @@ impl<T: EventType> EventManager<T> {
 
                 Some(event)
             }
-            None => None
+            None => None,
         }
     }
 
@@ -90,7 +89,11 @@ impl<T: EventType> EventManager<T> {
         return self.queued_incoming_events.pop_front();
     }
 
-    pub fn process_data<U: EntityType>(&mut self, reader: &mut PacketReader, manifest: &Manifest<T, U>) {
+    pub fn process_data<U: EntityType>(
+        &mut self,
+        reader: &mut PacketReader,
+        manifest: &Manifest<T, U>,
+    ) {
         let buffer = reader.get_buffer();
         let cursor = reader.get_cursor();
 

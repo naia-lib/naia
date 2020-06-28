@@ -1,5 +1,5 @@
-use crate::{EventType};
-use std::any::{TypeId};
+use crate::EventType;
+use std::any::TypeId;
 
 pub trait EventBuilder<T: EventType> {
     fn get_type_id(&self) -> TypeId;

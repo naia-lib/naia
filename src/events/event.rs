@@ -1,5 +1,5 @@
-use std::any::{TypeId};
 use crate::EventType;
+use std::any::TypeId;
 
 pub trait Event<T: EventType>: EventClone<T> {
     fn is_guaranteed(&self) -> bool;

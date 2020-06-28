@@ -1,6 +1,6 @@
-use byteorder::{WriteBytesExt, ReadBytesExt};
-use std::io::{Cursor};
+use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::fmt;
+use std::io::Cursor;
 
 #[derive(Clone)]
 pub struct StateMask {
@@ -12,14 +12,14 @@ impl StateMask {
     pub fn new(capacity: u8) -> StateMask {
         StateMask {
             bytes: capacity,
-            mask: vec!(0; capacity as usize),
+            mask: vec![0; capacity as usize],
         }
     }
 
     pub fn get_bit(&self, index: u8) -> Option<bool> {
         if let Some(byte) = self.mask.get((index / 8) as usize) {
             let adjusted_index = index % 8;
-            return Some(byte & (1 << adjusted_index) != 0)
+            return Some(byte & (1 << adjusted_index) != 0);
         }
 
         return None;
@@ -38,7 +38,7 @@ impl StateMask {
     }
 
     pub fn clear(&mut self) {
-        self.mask = vec!(0; self.bytes as usize);
+        self.mask = vec![0; self.bytes as usize];
     }
 
     pub fn is_clear(&self) -> bool {
@@ -99,10 +99,7 @@ impl StateMask {
         for _ in 0..bytes {
             mask.push(cursor.read_u8().unwrap().into());
         }
-        StateMask {
-            bytes,
-            mask,
-        }
+        StateMask { bytes, mask }
     }
 
     pub fn copy_contents(&mut self, other: &StateMask) {
@@ -135,7 +132,6 @@ impl fmt::Display for StateMask {
         write!(f, "{}", out_string)
     }
 }
-
 
 #[cfg(test)]
 mod single_byte_tests {

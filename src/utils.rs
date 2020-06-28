@@ -1,10 +1,6 @@
 use crate::{PacketType, StandardHeader};
 
-pub fn write_connectionless_payload(
-    packet_type: PacketType,
-    payload: &[u8],
-) -> Box<[u8]> {
-
+pub fn write_connectionless_payload(packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
     // Add Ack Header onto message!
     let mut header_bytes = Vec::new();
 

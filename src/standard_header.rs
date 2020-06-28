@@ -1,4 +1,3 @@
-
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use std::io::Read;
@@ -8,7 +7,6 @@ use crate::PacketType;
 #[derive(Copy, Clone, Debug)]
 /// This header provides reliability information.
 pub struct StandardHeader {
-
     p_type: PacketType,
     // This is the sequence number so that we can know where in the sequence of packages this packet belongs.
     pub seq: u16,
@@ -31,7 +29,9 @@ impl StandardHeader {
         }
     }
 
-    pub const fn bytes_number() -> usize { return 9; }
+    pub const fn bytes_number() -> usize {
+        return 9;
+    }
 
     /// Returns the sequence number from this packet.
     #[allow(dead_code)]
@@ -49,7 +49,9 @@ impl StandardHeader {
         self.ack_seq
     }
 
-    pub fn packet_type(&self) -> PacketType { self.p_type }
+    pub fn packet_type(&self) -> PacketType {
+        self.p_type
+    }
 
     pub fn write(&self, buffer: &mut Vec<u8>) {
         buffer.write_u8(self.p_type as u8).unwrap();
@@ -59,7 +61,6 @@ impl StandardHeader {
     }
 
     pub fn read(mut msg: &[u8]) -> (Self, Box<[u8]>) {
-
         let p_type: PacketType = msg.read_u8().unwrap().into();
         let seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_seq = msg.read_u16::<BigEndian>().unwrap();
@@ -70,12 +71,15 @@ impl StandardHeader {
         let mut buffer = Vec::new();
         msg.read_to_end(&mut buffer).unwrap();
 
-        (StandardHeader {
-            p_type,
-            seq,
-            ack_seq,
-            ack_field,
-        }, buffer.into_boxed_slice())
+        (
+            StandardHeader {
+                p_type,
+                seq,
+                ack_seq,
+                ack_field,
+            },
+            buffer.into_boxed_slice(),
+        )
     }
 
     pub fn get_packet_type(mut payload: &[u8]) -> PacketType {

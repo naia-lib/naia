@@ -1,8 +1,7 @@
-
-use std::any::{TypeId};
+use std::any::TypeId;
 use std::collections::HashMap;
 
-use crate::{EventType, EntityBuilder, EntityType, EventBuilder};
+use crate::{EntityBuilder, EntityType, EventBuilder, EventType};
 
 pub struct Manifest<T: EventType, U: EntityType> {
     event_naia_id_count: u16,
@@ -23,7 +22,7 @@ impl<T: EventType, U: EntityType> Manifest<T, U> {
             ///
             entity_naia_id_count: 0,
             entity_builder_map: HashMap::new(),
-            entity_type_map: HashMap::new()
+            entity_type_map: HashMap::new(),
         }
     }
 
@@ -36,7 +35,9 @@ impl<T: EventType, U: EntityType> Manifest<T, U> {
     }
 
     pub fn get_event_naia_id(&self, type_id: &TypeId) -> u16 {
-        let naia_id = self.event_type_map.get(type_id)
+        let naia_id = self
+            .event_type_map
+            .get(type_id)
             .expect("hey I should get a TypeId here...");
         return *naia_id;
     }
@@ -61,7 +62,9 @@ impl<T: EventType, U: EntityType> Manifest<T, U> {
     }
 
     pub fn get_entity_naia_id(&self, type_id: &TypeId) -> u16 {
-        let naia_id = self.entity_type_map.get(type_id)
+        let naia_id = self
+            .entity_type_map
+            .get(type_id)
             .expect("hey I should get a TypeId here...");
         return *naia_id;
     }

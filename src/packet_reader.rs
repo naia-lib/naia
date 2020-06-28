@@ -1,5 +1,5 @@
-use std::io::{Cursor};
-use byteorder::{ReadBytesExt};
+use byteorder::ReadBytesExt;
+use std::io::Cursor;
 
 pub struct PacketReader<'s> {
     buffer: &'s [u8],

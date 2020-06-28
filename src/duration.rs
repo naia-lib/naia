@@ -1,4 +1,3 @@
-
 pub struct Duration {
     seconds: u64,
     nanos: u32,
@@ -6,10 +5,7 @@ pub struct Duration {
 
 impl Duration {
     pub fn new(seconds: u64, nanos: u32) -> Self {
-        Duration {
-            seconds,
-            nanos,
-        }
+        Duration { seconds, nanos }
     }
 
     pub fn as_secs(&self) -> u64 {
