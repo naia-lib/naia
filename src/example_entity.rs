@@ -1,12 +1,8 @@
-
-use std::{
-    rc::Rc,
-    cell::RefCell,
-};
+use std::{cell::RefCell, rc::Rc};
 
 use naia_derive::EntityType;
 
-use crate::{PointEntity};
+use crate::PointEntity;
 
 #[derive(EntityType)]
 pub enum ExampleEntity {

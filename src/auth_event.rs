@@ -1,7 +1,6 @@
-
+use crate::ExampleEvent;
 use naia_derive::Event;
 use naia_shared::{Event, Property};
-use crate::ExampleEvent;
 
 #[derive(Event, Clone)]
 #[type_name = "ExampleEvent"]
@@ -11,7 +10,6 @@ pub struct AuthEvent {
 }
 
 impl AuthEvent {
-
     fn is_guaranteed() -> bool {
         false
     }

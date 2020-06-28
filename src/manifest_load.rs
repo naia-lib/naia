@@ -1,6 +1,5 @@
-
-use naia_shared::{Manifest};
-use crate::{ExampleEvent, StringEvent, AuthEvent, ExampleEntity, PointEntity};
+use crate::{AuthEvent, ExampleEntity, ExampleEvent, PointEntity, StringEvent};
+use naia_shared::Manifest;
 
 pub fn manifest_load() -> Manifest<ExampleEvent, ExampleEntity> {
     let mut manifest = Manifest::<ExampleEvent, ExampleEntity>::new();
