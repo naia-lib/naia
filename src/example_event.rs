@@ -1,7 +1,6 @@
-
 use naia_derive::EventType;
 
-use crate::{StringEvent, AuthEvent};
+use crate::{AuthEvent, StringEvent};
 
 #[derive(EventType, Clone)]
 pub enum ExampleEvent {

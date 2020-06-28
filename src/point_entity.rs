@@ -1,8 +1,7 @@
-
 use naia_derive::Entity;
 use naia_shared::{Entity, Property};
 
-use crate::{ExampleEntity};
+use crate::ExampleEntity;
 
 #[derive(Entity)]
 #[type_name = "ExampleEntity"]
@@ -12,7 +11,6 @@ pub struct PointEntity {
 }
 
 impl PointEntity {
-
     pub fn new(x: u8, y: u8) -> PointEntity {
         return PointEntity::new_complete(x, y);
     }
