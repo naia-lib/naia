@@ -1,11 +1,10 @@
-
 use std::error::Error;
 use std::fmt;
 
 #[derive(Debug)]
 pub enum NaiaClientError {
     Message(String),
-    Wrapped(Box<dyn Error + Send>)
+    Wrapped(Box<dyn Error + Send>),
 }
 
 impl fmt::Display for NaiaClientError {

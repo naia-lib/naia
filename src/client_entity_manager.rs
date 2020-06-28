@@ -1,14 +1,9 @@
-
-use naia_shared::{EventType, EntityType, LocalEntityKey, PacketReader, Manifest, StateMask};
-use std::{
-    collections::{VecDeque, HashMap}
-};
 use byteorder::{BigEndian, ReadBytesExt};
 use log::warn;
+use naia_shared::{EntityType, EventType, LocalEntityKey, Manifest, PacketReader, StateMask};
+use std::collections::{HashMap, VecDeque};
 
-use super::{
-    ClientEntityMessage
-};
+use super::ClientEntityMessage;
 
 pub struct ClientEntityManager<T: EntityType> {
     local_entity_store: HashMap<LocalEntityKey, T>,
@@ -23,7 +18,11 @@ impl<U: EntityType> ClientEntityManager<U> {
         }
     }
 
-    pub fn process_data<T: EventType>(&mut self, reader: &mut PacketReader, manifest: &Manifest<T, U>) {
+    pub fn process_data<T: EventType>(
+        &mut self,
+        reader: &mut PacketReader,
+        manifest: &Manifest<T, U>,
+    ) {
         let buffer = reader.get_buffer();
         let cursor = reader.get_cursor();
 
@@ -33,12 +32,14 @@ impl<U: EntityType> ClientEntityManager<U> {
             let message_type: u8 = cursor.read_u8().unwrap().into();
 
             match message_type {
-                0 => { // Creation
+                0 => {
+                    // Creation
                     let naia_id: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
                     let local_key: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
                     let payload_length: u8 = cursor.read_u8().unwrap().into();
                     let payload_start_position: usize = cursor.position() as usize;
-                    let payload_end_position: usize = payload_start_position + (payload_length as usize);
+                    let payload_end_position: usize =
+                        payload_start_position + (payload_length as usize);
 
                     let entity_payload = buffer[payload_start_position..payload_end_position]
                         .to_vec()
@@ -51,28 +52,32 @@ impl<U: EntityType> ClientEntityManager<U> {
                             } else {
                                 //info!("creation of entity w/ key of {}", local_key);
                                 self.local_entity_store.insert(local_key, new_entity);
-                                self.queued_incoming_messages.push_back(ClientEntityMessage::Create(local_key));
+                                self.queued_incoming_messages
+                                    .push_back(ClientEntityMessage::Create(local_key));
                             }
                         }
                         _ => {}
                     }
 
                     cursor.set_position(payload_end_position as u64);
-                },
-                1 => { // Deletion
+                }
+                1 => {
+                    // Deletion
                     let local_key = cursor.read_u16::<BigEndian>().unwrap().into();
                     self.local_entity_store.remove(&local_key);
-                    self.queued_incoming_messages.push_back(ClientEntityMessage::Delete(local_key));
-                },
-                2 => { // Update
+                    self.queued_incoming_messages
+                        .push_back(ClientEntityMessage::Delete(local_key));
+                }
+                2 => {
+                    // Update
                     let local_key = cursor.read_u16::<BigEndian>().unwrap().into();
 
                     if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
-
                         let state_mask: StateMask = StateMask::read(cursor);
                         let payload_length: u8 = cursor.read_u8().unwrap().into();
                         let payload_start_position: usize = cursor.position() as usize;
-                        let payload_end_position: usize = payload_start_position + (payload_length as usize);
+                        let payload_end_position: usize =
+                            payload_start_position + (payload_length as usize);
 
                         let entity_payload = buffer[payload_start_position..payload_end_position]
                             .to_vec()
@@ -80,11 +85,12 @@ impl<U: EntityType> ClientEntityManager<U> {
 
                         entity_ref.read_partial(&state_mask, &entity_payload);
 
-                        self.queued_incoming_messages.push_back(ClientEntityMessage::Update(local_key));
+                        self.queued_incoming_messages
+                            .push_back(ClientEntityMessage::Update(local_key));
 
                         cursor.set_position(payload_end_position as u64);
                     }
-                },
+                }
                 _ => {}
             }
         }
