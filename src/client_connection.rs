@@ -1,21 +1,14 @@
+use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
-use std::{
-    rc::Rc,
-    cell::RefCell,
-    net::SocketAddr,
+use naia_shared::{
+    AckManager, Config, Connection, Entity, EntityType, Event, EventManager, EventType, HostType,
+    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, RttTracker, SequenceNumber,
+    Timer,
 };
 
-use naia_shared::{Timer, PacketType, Event, Manifest, RttTracker, Config,
-            EventManager, PacketWriter, PacketReader, ManagerType, HostType,
-            EventType, EntityType, Entity, SequenceNumber, AckManager, Connection};
-
 use super::{
-    ServerEntityManager,
-    EntityPacketWriter,
-    entities::{
-        entity_key::EntityKey,
-        mut_handler::MutHandler,
-    }
+    entities::{entity_key::EntityKey, mut_handler::MutHandler},
+    EntityPacketWriter, ServerEntityManager,
 };
 
 pub struct ClientConnection<T: EventType, U: EntityType> {
@@ -24,8 +17,11 @@ pub struct ClientConnection<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> ClientConnection<T, U> {
-    pub fn new(address: SocketAddr, mut_handler: Option<&Rc<RefCell<MutHandler>>>, config: &Config) -> Self {
-
+    pub fn new(
+        address: SocketAddr,
+        mut_handler: Option<&Rc<RefCell<MutHandler>>>,
+        config: &Config,
+    ) -> Self {
         let heartbeat_interval = config.heartbeat_interval;
         let timeout_duration = config.disconnection_timeout_duration;
         let rtt_smoothing_factor = config.rtt_smoothing_factor;
@@ -38,27 +34,34 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
                 Timer::new(timeout_duration),
                 AckManager::new(HostType::Server),
                 RttTracker::new(rtt_smoothing_factor, rtt_max_value),
-                EventManager::new()
+                EventManager::new(),
             ),
             entity_manager: ServerEntityManager::new(address, mut_handler.unwrap()),
         };
     }
 
     pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T, U>) -> Option<Box<[u8]>> {
-
         if self.connection.has_outgoing_events() || self.entity_manager.has_outgoing_messages() {
             let mut writer = PacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
             while let Some(popped_event) = self.connection.pop_outgoing_event(next_packet_index) {
                 if !writer.write_event(manifest, &popped_event) {
-                    self.connection.unpop_outgoing_event(next_packet_index, &popped_event);
+                    self.connection
+                        .unpop_outgoing_event(next_packet_index, &popped_event);
                     break;
                 }
             }
-            while let Some(popped_entity_message) = self.entity_manager.pop_outgoing_message(next_packet_index) {
-                if !EntityPacketWriter::write_entity_message(&mut writer, manifest, &popped_entity_message) {
-                    self.entity_manager.unpop_outgoing_message(next_packet_index, &popped_entity_message);
+            while let Some(popped_entity_message) =
+                self.entity_manager.pop_outgoing_message(next_packet_index)
+            {
+                if !EntityPacketWriter::write_entity_message(
+                    &mut writer,
+                    manifest,
+                    &popped_entity_message,
+                ) {
+                    self.entity_manager
+                        .unpop_outgoing_message(next_packet_index, &popped_entity_message);
                     break;
                 }
             }
@@ -124,11 +127,19 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
     }
 
     pub fn process_incoming_header(&mut self, payload: &[u8]) -> Box<[u8]> {
-        return self.connection.process_incoming_header(payload, &mut Some(&mut self.entity_manager));
+        return self
+            .connection
+            .process_incoming_header(payload, &mut Some(&mut self.entity_manager));
     }
 
-    pub fn process_outgoing_header(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
-        return self.connection.process_outgoing_header(packet_type, payload);
+    pub fn process_outgoing_header(
+        &mut self,
+        packet_type: PacketType,
+        payload: &[u8],
+    ) -> Box<[u8]> {
+        return self
+            .connection
+            .process_outgoing_header(packet_type, payload);
     }
 
     pub fn get_next_packet_index(&self) -> SequenceNumber {

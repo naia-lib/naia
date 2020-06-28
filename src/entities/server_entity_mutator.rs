@@ -1,17 +1,8 @@
+use std::{cell::RefCell, rc::Rc};
 
-use std::{
-    rc::Rc,
-    cell::RefCell,
-};
+use naia_shared::EntityMutator;
 
-use naia_shared::{
-    EntityMutator,
-};
-
-use super::{
-    entity_key::EntityKey,
-    mut_handler::MutHandler,
-};
+use super::{entity_key::EntityKey, mut_handler::MutHandler};
 
 pub struct ServerEntityMutator {
     key: Option<EntityKey>,
@@ -34,7 +25,10 @@ impl ServerEntityMutator {
 impl EntityMutator for ServerEntityMutator {
     fn mutate(&mut self, property_index: u8) {
         if let Some(key) = self.key {
-            self.mut_handler.as_ref().borrow_mut().mutate(&key, property_index);
+            self.mut_handler
+                .as_ref()
+                .borrow_mut()
+                .mutate(&key, property_index);
         }
     }
 }

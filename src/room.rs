@@ -1,20 +1,6 @@
+use std::collections::{hash_set::Iter, HashSet, VecDeque};
 
-use std::{
-    collections::{
-        HashSet,
-        hash_set::Iter,
-        VecDeque,
-    },
-};
-
-use super::{
-    entities::{
-      entity_key::EntityKey,
-    },
-    user::{
-        UserKey,
-    }
-};
+use super::{entities::entity_key::EntityKey, user::UserKey};
 
 new_key_type! { pub struct RoomKey; }
 

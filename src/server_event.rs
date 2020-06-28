@@ -1,7 +1,4 @@
-
-use super::{
-    user::{User, UserKey},
-};
+use super::user::{User, UserKey};
 
 pub enum ServerEvent<T> {
     Connection(UserKey),

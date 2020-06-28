@@ -1,32 +1,31 @@
-
 use std::{
-    net::SocketAddr,
-    collections::{VecDeque, HashMap},
-    rc::Rc,
     cell::RefCell,
+    collections::{HashMap, VecDeque},
+    net::SocketAddr,
+    rc::Rc,
 };
 
-use log::{info};
-use slotmap::{DenseSlotMap};
-use ring::{hmac, rand};
 use byteorder::{BigEndian, ReadBytesExt};
+use log::info;
+use ring::{hmac, rand};
+use slotmap::DenseSlotMap;
 
-use naia_server_socket::{ServerSocket, SocketEvent, MessageSender, Config as SocketConfig};
-pub use naia_shared::{Config, PacketType, Connection, Timer, Timestamp, Manifest, PacketReader, Instant,
-                      Event, Entity, ManagerType, HostType, EventType, EntityType, EntityMutator};
+use naia_server_socket::{Config as SocketConfig, MessageSender, ServerSocket, SocketEvent};
+pub use naia_shared::{
+    Config, Connection, Entity, EntityMutator, EntityType, Event, EventType, HostType, Instant,
+    ManagerType, Manifest, PacketReader, PacketType, Timer, Timestamp,
+};
 
 use super::{
-    Packet,
-    error::NaiaServerError,
-    server_event::ServerEvent,
     client_connection::ClientConnection,
     entities::{
-        mut_handler::MutHandler,
-        entity_key::EntityKey,
-        server_entity_mutator::ServerEntityMutator,
+        entity_key::EntityKey, mut_handler::MutHandler, server_entity_mutator::ServerEntityMutator,
     },
+    error::NaiaServerError,
     room::{Room, RoomKey},
+    server_event::ServerEvent,
     user::{User, UserKey},
+    Packet,
 };
 
 pub struct NaiaServer<T: EventType, U: EntityType> {
@@ -51,10 +50,9 @@ pub struct NaiaServer<T: EventType, U: EntityType> {
 
 impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     pub async fn new(address: &str, manifest: Manifest<T, U>, config: Option<Config>) -> Self {
-
         let mut config = match config {
             Some(config) => config,
-            None => Config::default()
+            None => Config::default(),
         };
         config.heartbeat_interval /= 2;
 
@@ -66,7 +64,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         let clients_map = HashMap::new();
         let heartbeat_timer = Timer::new(config.heartbeat_interval);
 
-        let connection_hash_key = hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
+        let connection_hash_key =
+            hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
 
         NaiaServer {
             manifest,
@@ -92,7 +91,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     pub async fn receive(&mut self) -> Result<ServerEvent<T>, NaiaServerError> {
         let mut output: Option<Result<ServerEvent<T>, NaiaServerError>> = None;
         while output.is_none() {
-
             // heartbeats
             if self.heartbeat_timer.ringing() {
                 self.heartbeat_timer.reset();
@@ -103,8 +101,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                             self.outstanding_disconnects.push_back(*user_key);
                         } else if connection.should_send_heartbeat() {
                             // Don't try to refactor this to self.internal_send, doesn't seem to work cause of iter_mut()
-                            let payload = connection.process_outgoing_header(PacketType::Heartbeat, &[]);
-                            self.sender.send(Packet::new_raw(user.address, payload))
+                            let payload =
+                                connection.process_outgoing_header(PacketType::Heartbeat, &[]);
+                            self.sender
+                                .send(Packet::new_raw(user.address, payload))
                                 .await
                                 .expect("send failed!");
                             connection.mark_sent();
@@ -115,7 +115,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
 
             // timeouts
             if let Some(user_key) = self.outstanding_disconnects.pop_front() {
-
                 for (_, room) in self.rooms.iter_mut() {
                     room.unsubscribe_user(&user_key);
                 }
@@ -128,7 +127,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                 output = Some(Ok(ServerEvent::Disconnection(user_key, user_clone)));
                 continue;
             }
-
 
             for (address, connection) in self.client_connections.iter_mut() {
                 //receive events from anyone
@@ -167,13 +165,16 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
 
                             match packet_type {
                                 PacketType::ClientChallengeRequest => {
-                                    let payload = naia_shared::utils::read_headerless_payload(packet.payload());
+                                    let payload = naia_shared::utils::read_headerless_payload(
+                                        packet.payload(),
+                                    );
                                     let mut reader = PacketReader::new(&payload);
                                     let timestamp = Timestamp::read(&mut reader);
 
                                     let mut timestamp_bytes = Vec::new();
                                     timestamp.write(&mut timestamp_bytes);
-                                    let timestamp_hash: hmac::Tag = hmac::sign(&self.connection_hash_key, &timestamp_bytes);
+                                    let timestamp_hash: hmac::Tag =
+                                        hmac::sign(&self.connection_hash_key, &timestamp_bytes);
 
                                     let mut payload_bytes = Vec::new();
                                     payload_bytes.append(&mut timestamp_bytes);
@@ -182,26 +183,37 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         payload_bytes.push(*hash_byte);
                                     }
 
-                                    NaiaServer::<T,U>::internal_send_connectionless(
+                                    NaiaServer::<T, U>::internal_send_connectionless(
                                         &mut self.sender,
                                         PacketType::ServerChallengeResponse,
-                                        Packet::new(address, payload_bytes))
-                                        .await;
+                                        Packet::new(address, payload_bytes),
+                                    )
+                                    .await;
 
                                     continue;
                                 }
                                 PacketType::ClientConnectRequest => {
-                                    let payload = naia_shared::utils::read_headerless_payload(packet.payload());
+                                    let payload = naia_shared::utils::read_headerless_payload(
+                                        packet.payload(),
+                                    );
                                     let mut reader = PacketReader::new(&payload);
                                     let timestamp = Timestamp::read(&mut reader);
 
-                                    if let Some(user_key) = self.address_to_user_key_map.get(&address) {
+                                    if let Some(user_key) =
+                                        self.address_to_user_key_map.get(&address)
+                                    {
                                         if self.client_connections.contains_key(user_key) {
                                             let user = self.users.get(*user_key).unwrap();
                                             if user.timestamp == timestamp {
-                                                let mut connection = self.client_connections.get_mut(user_key).unwrap();
-                                                NaiaServer::<T, U>::send_connect_accept_message(&mut connection, &mut self.sender)
-                                                    .await;
+                                                let mut connection = self
+                                                    .client_connections
+                                                    .get_mut(user_key)
+                                                    .unwrap();
+                                                NaiaServer::<T, U>::send_connect_accept_message(
+                                                    &mut connection,
+                                                    &mut self.sender,
+                                                )
+                                                .await;
                                                 continue;
                                             } else {
                                                 self.outstanding_disconnects.push_back(*user_key);
@@ -212,7 +224,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                             continue;
                                         }
                                     } else {
-
                                         //Verify that timestamp hash has been written by this server instance
                                         let mut timestamp_bytes: Vec<u8> = Vec::new();
                                         timestamp.write(&mut timestamp_bytes);
@@ -220,7 +231,13 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         for _ in 0..32 {
                                             digest_bytes.push(reader.read_u8());
                                         }
-                                        if !hmac::verify(&self.connection_hash_key, &timestamp_bytes, &digest_bytes).is_ok() {
+                                        if !hmac::verify(
+                                            &self.connection_hash_key,
+                                            &timestamp_bytes,
+                                            &digest_bytes,
+                                        )
+                                        .is_ok()
+                                        {
                                             continue;
                                         }
 
@@ -237,13 +254,20 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                                 continue;
                                             }
                                             let naia_id: u16 = naia_id_result.unwrap().into();
-                                            let event_payload = buffer[cursor.position() as usize..buffer.len()]
+                                            let event_payload = buffer
+                                                [cursor.position() as usize..buffer.len()]
                                                 .to_vec()
                                                 .into_boxed_slice();
 
-                                            match self.manifest.create_event(naia_id, &event_payload) {
+                                            match self
+                                                .manifest
+                                                .create_event(naia_id, &event_payload)
+                                            {
                                                 Some(new_entity) => {
-                                                    if !(auth_func.as_ref().as_ref())(&user_key, &new_entity) {
+                                                    if !(auth_func.as_ref().as_ref())(
+                                                        &user_key,
+                                                        &new_entity,
+                                                    ) {
                                                         self.users.remove(user_key);
                                                         continue;
                                                     }
@@ -261,34 +285,50 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         let mut new_connection = ClientConnection::new(
                                             address,
                                             Some(&self.mut_handler),
-                                            &self.config);
-                                        NaiaServer::<T, U>::send_connect_accept_message(&mut new_connection, &mut self.sender)
-                                            .await;
+                                            &self.config,
+                                        );
+                                        NaiaServer::<T, U>::send_connect_accept_message(
+                                            &mut new_connection,
+                                            &mut self.sender,
+                                        )
+                                        .await;
                                         self.client_connections.insert(user_key, new_connection);
                                         output = Some(Ok(ServerEvent::Connection(user_key)));
                                         continue;
                                     }
                                 }
                                 PacketType::Data => {
-                                    if let Some(user_key) = self.address_to_user_key_map.get(&address) {
+                                    if let Some(user_key) =
+                                        self.address_to_user_key_map.get(&address)
+                                    {
                                         match self.client_connections.get_mut(user_key) {
                                             Some(connection) => {
-                                                let mut payload = connection.process_incoming_header(packet.payload());
-                                                connection.process_incoming_data(&self.manifest, &mut payload);
+                                                let mut payload = connection
+                                                    .process_incoming_header(packet.payload());
+                                                connection.process_incoming_data(
+                                                    &self.manifest,
+                                                    &mut payload,
+                                                );
                                                 continue;
                                             }
                                             None => {
-                                                warn!("received data from unauthenticated client: {}", address);
+                                                warn!(
+                                                    "received data from unauthenticated client: {}",
+                                                    address
+                                                );
                                             }
                                         }
                                     }
                                 }
                                 PacketType::Heartbeat => {
-                                    if let Some(user_key) = self.address_to_user_key_map.get(&address) {
+                                    if let Some(user_key) =
+                                        self.address_to_user_key_map.get(&address)
+                                    {
                                         match self.client_connections.get_mut(user_key) {
                                             Some(connection) => {
                                                 // Still need to do this so that proper notify events fire based on the heartbeat header
-                                                connection.process_incoming_header(packet.payload());
+                                                connection
+                                                    .process_incoming_header(packet.payload());
                                                 info!("<- c");
                                                 continue;
                                             }
@@ -302,7 +342,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                             }
                         }
                         SocketEvent::Tick => {
-
                             // update entity scopes
                             self.update_entity_scopes();
 
@@ -311,11 +350,16 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                 if let Some(user) = self.users.get(*user_key) {
                                     connection.collect_entity_updates();
                                     let mut packet_index: u8 = 1;
-                                    while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
+                                    while let Some(payload) =
+                                        connection.get_outgoing_packet(&self.manifest)
+                                    {
                                         info!("sending packet {}", packet_index);
                                         packet_index += 1;
-                                        match self.sender.send(Packet::new_raw(user.address, payload))
-                                            .await {
+                                        match self
+                                            .sender
+                                            .send(Packet::new_raw(user.address, payload))
+                                            .await
+                                        {
                                             Ok(_) => {}
                                             Err(err) => {
                                                 info!("send error! {}", err);
@@ -332,14 +376,14 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                     }
                 }
                 Err(error) => {
-//                    //TODO: Determine if disconnecting a user based on a send error is the right thing to do
-//                    if let NaiaServerSocketError::SendError(address) = error {
-//                        if let Some(user_key) = self.address_to_user_key_map.get(&address).copied() {
-//                            self.client_connections.remove(&user_key);
-//                            output = Some(Ok(ServerEvent::Disconnection(user_key)));
-//                            continue;
-//                        }
-//                    }
+                    //                    //TODO: Determine if disconnecting a user based on a send error is the right thing to do
+                    //                    if let NaiaServerSocketError::SendError(address) = error {
+                    //                        if let Some(user_key) = self.address_to_user_key_map.get(&address).copied() {
+                    //                            self.client_connections.remove(&user_key);
+                    //                            output = Some(Ok(ServerEvent::Disconnection(user_key)));
+                    //                            continue;
+                    //                        }
+                    //                    }
 
                     output = Some(Err(NaiaServerError::Wrapped(Box::new(error))));
                     continue;
@@ -349,12 +393,15 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         return output.unwrap();
     }
 
-    async fn send_connect_accept_message(connection: &mut ClientConnection<T, U>, sender: &mut MessageSender) {
-        let payload = connection.process_outgoing_header(
-            PacketType::ServerConnectResponse,
-            &[]);
-        match sender.send(Packet::new_raw(connection.get_address(), payload))
-            .await {
+    async fn send_connect_accept_message(
+        connection: &mut ClientConnection<T, U>,
+        sender: &mut MessageSender,
+    ) {
+        let payload = connection.process_outgoing_header(PacketType::ServerConnectResponse, &[]);
+        match sender
+            .send(Packet::new_raw(connection.get_address(), payload))
+            .await
+        {
             Ok(_) => {}
             Err(err) => {
                 info!("send error! {}", err);
@@ -370,10 +417,17 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     }
 
     pub fn register_entity(&mut self, entity: Rc<RefCell<dyn Entity<U>>>) -> EntityKey {
-        let new_mutator_ref: Rc<RefCell<ServerEntityMutator>> = Rc::new(RefCell::new(ServerEntityMutator::new(&self.mut_handler)));
-        entity.as_ref().borrow_mut().set_mutator(&to_entity_mutator(&new_mutator_ref));
+        let new_mutator_ref: Rc<RefCell<ServerEntityMutator>> =
+            Rc::new(RefCell::new(ServerEntityMutator::new(&self.mut_handler)));
+        entity
+            .as_ref()
+            .borrow_mut()
+            .set_mutator(&to_entity_mutator(&new_mutator_ref));
         let entity_key = self.global_entity_store.insert(entity.clone());
-        new_mutator_ref.as_ref().borrow_mut().set_entity_key(entity_key);
+        new_mutator_ref
+            .as_ref()
+            .borrow_mut()
+            .set_entity_key(entity_key);
         self.mut_handler.borrow_mut().register_entity(&entity_key);
         return entity_key;
     }
@@ -420,7 +474,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         }
     }
 
-    pub fn on_scope_entity(&mut self, scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>) {
+    pub fn on_scope_entity(
+        &mut self,
+        scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>,
+    ) {
         self.scope_entity_func = Some(scope_func);
     }
 
@@ -462,14 +519,21 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                 for user_key in room.users_iter() {
                     for entity_key in room.entities_iter() {
                         if let Some(entity) = self.global_entity_store.get(*entity_key) {
-                            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                            if let Some(user_connection) = self.client_connections.get_mut(user_key)
+                            {
                                 let currently_in_scope = user_connection.has_entity(entity_key);
-                                let should_be_in_scope = (scope_func.as_ref().as_ref())(&room_key, user_key, entity_key,
-                                                                                        entity.as_ref().borrow().get_typed_copy());
+                                let should_be_in_scope = (scope_func.as_ref().as_ref())(
+                                    &room_key,
+                                    user_key,
+                                    entity_key,
+                                    entity.as_ref().borrow().get_typed_copy(),
+                                );
                                 if should_be_in_scope {
                                     if !currently_in_scope {
                                         // add entity to the connections local scope
-                                        if let Some(entity) = self.global_entity_store.get(*entity_key) {
+                                        if let Some(entity) =
+                                            self.global_entity_store.get(*entity_key)
+                                        {
                                             user_connection.add_entity(entity_key, entity);
                                         }
                                     }
@@ -487,9 +551,15 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         }
     }
 
-    async fn internal_send_connectionless(sender: &mut MessageSender, packet_type: PacketType, packet: Packet) {
-        let new_payload = naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
-        sender.send(Packet::new_raw(packet.address(), new_payload))
+    async fn internal_send_connectionless(
+        sender: &mut MessageSender,
+        packet_type: PacketType,
+        packet: Packet,
+    ) {
+        let new_payload =
+            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
+        sender
+            .send(Packet::new_raw(packet.address(), new_payload))
             .await
             .expect("send failed!");
     }
