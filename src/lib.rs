@@ -20,9 +20,11 @@ mod packet_reader;
 mod packet_writer;
 mod host_type;
 mod manifest;
+mod duration;
+mod instant;
 pub mod utils;
 
-pub use naia_socket_shared::{find_my_ip_address, Timer, Instant};
+pub use naia_socket_shared::{find_my_ip_address, Timer};
 
 pub use {
     packet_type::PacketType,
@@ -37,6 +39,8 @@ pub use {
     ack_manager::AckManager,
     sequence_buffer::SequenceNumber,
     manifest::Manifest,
+    duration::Duration,
+    instant::Instant,
     events::{
         event::{Event, EventClone},
         event_type::EventType,

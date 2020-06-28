@@ -1,10 +1,7 @@
 
-use naia_socket_shared::{
-    Duration,
-};
-
 use crate::{
     RttData,
+    Duration,
 };
 
 pub struct RttMeasurer {
