@@ -1,15 +1,17 @@
-use proc_macro2::{TokenStream, Span};
-use quote::{quote};
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
 use syn::{parse_macro_input, DeriveInput, Ident, Type};
 
 use super::utils;
 
 pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-
     let input = parse_macro_input!(input as DeriveInput);
 
     let event_name = &input.ident;
-    let event_builder_name = Ident::new((event_name.to_string() + "Builder").as_str(), Span::call_site());
+    let event_builder_name = Ident::new(
+        (event_name.to_string() + "Builder").as_str(),
+        Span::call_site(),
+    );
 
     let properties = utils::get_properties(&input);
 
@@ -62,7 +64,6 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 fn get_new_complete_method(event_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
-
     let mut args = quote! {};
     for (field_name, field_type) in properties.iter() {
         let new_output_right = quote! {
@@ -92,11 +93,14 @@ fn get_new_complete_method(event_name: &Ident, properties: &Vec<(Ident, Type)>) 
                 #fields
             }
         }
-    }
+    };
 }
 
-fn get_read_to_type_method(type_name: &Ident, event_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
-
+fn get_read_to_type_method(
+    type_name: &Ident,
+    event_name: &Ident,
+    properties: &Vec<(Ident, Type)>,
+) -> TokenStream {
     let mut prop_names = quote! {};
     for (field_name, _) in properties.iter() {
         let new_output_right = quote! {
@@ -131,10 +135,8 @@ fn get_read_to_type_method(type_name: &Ident, event_name: &Ident, properties: &V
                 #prop_names
             });
         }
-    }
+    };
 }
-
-
 
 ////FROM THIS
 //#[derive(Event, Clone)]

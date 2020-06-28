@@ -1,13 +1,13 @@
-mod entity_type;
-mod event_type;
-mod event;
 mod entity;
+mod entity_type;
+mod event;
+mod event_type;
 mod utils;
 
-use entity_type::entity_type_impl;
-use event_type::event_type_impl;
-use event::event_impl;
 use entity::entity_impl;
+use entity_type::entity_type_impl;
+use event::event_impl;
+use event_type::event_type_impl;
 
 #[proc_macro_derive(EntityType)]
 pub fn entity_type_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {

@@ -1,15 +1,17 @@
-use proc_macro2::{TokenStream, Span, Punct, Spacing};
-use quote::{quote, format_ident};
+use proc_macro2::{Punct, Spacing, Span, TokenStream};
+use quote::{format_ident, quote};
 use syn::{parse_macro_input, DeriveInput, Ident, Type};
 
 use super::utils;
 
 pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-
     let input = parse_macro_input!(input as DeriveInput);
 
     let entity_name = &input.ident;
-    let entity_builder_name = Ident::new((entity_name.to_string() + "Builder").as_str(), Span::call_site());
+    let entity_builder_name = Ident::new(
+        (entity_name.to_string() + "Builder").as_str(),
+        Span::call_site(),
+    );
     let type_name = utils::get_type_name(&input, "Entity");
 
     let properties = utils::get_properties(&input);
@@ -18,14 +20,15 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let property_enum = get_property_enum(&enum_name, &properties);
 
     let new_complete_method = get_new_complete_method(entity_name, &enum_name, &properties);
-    let read_to_type_method = get_read_to_type_method(&type_name, entity_name, &enum_name, &properties);
+    let read_to_type_method =
+        get_read_to_type_method(&type_name, entity_name, &enum_name, &properties);
     let entity_write_method = utils::get_write_method(&properties);
     let entity_write_partial_method = get_write_partial_method(&enum_name, &properties);
     let entity_read_partial_method = get_read_partial_method(&enum_name, &properties);
     let set_mutator_method = get_set_mutator_method(&properties);
     let get_typed_copy_method = get_get_typed_copy_method(&type_name, entity_name, &properties);
 
-    let state_mask_size: u8 = (((properties.len()-1) / 8) + 1) as u8;
+    let state_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
@@ -71,13 +74,11 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 fn get_property_enum(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
-
     let hashtag = Punct::new('#', Spacing::Alone);
 
     let mut variant_index = 0;
     let mut variant_list = quote! {};
     for (variant, _) in properties {
-
         let mut uppercase_variant_name = variant.to_string();
         uppercase_variant_name = uppercase_variant_name.to_uppercase();
 
@@ -103,7 +104,6 @@ fn get_property_enum(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> Toke
 }
 
 fn get_set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
-
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
@@ -121,11 +121,14 @@ fn get_set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
         fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>) {
             #output
         }
-    }
+    };
 }
 
-fn get_new_complete_method(entity_name: &Ident, enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
-
+fn get_new_complete_method(
+    entity_name: &Ident,
+    enum_name: &Ident,
+    properties: &Vec<(Ident, Type)>,
+) -> TokenStream {
     let mut args = quote! {};
     for (field_name, field_type) in properties.iter() {
         let new_output_right = quote! {
@@ -139,8 +142,10 @@ fn get_new_complete_method(entity_name: &Ident, enum_name: &Ident, properties: &
 
     let mut fields = quote! {};
     for (field_name, field_type) in properties.iter() {
-
-        let uppercase_variant_name = Ident::new(field_name.to_string().to_uppercase().as_str(), Span::call_site());
+        let uppercase_variant_name = Ident::new(
+            field_name.to_string().to_uppercase().as_str(),
+            Span::call_site(),
+        );
 
         let new_output_right = quote! {
             #field_name: Property::<#field_type>::new(#field_name, #enum_name::#uppercase_variant_name as u8)
@@ -158,11 +163,15 @@ fn get_new_complete_method(entity_name: &Ident, enum_name: &Ident, properties: &
                 #fields
             }
         }
-    }
+    };
 }
 
-fn get_read_to_type_method(type_name: &Ident, entity_name: &Ident, enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
-
+fn get_read_to_type_method(
+    type_name: &Ident,
+    entity_name: &Ident,
+    enum_name: &Ident,
+    properties: &Vec<(Ident, Type)>,
+) -> TokenStream {
     let mut prop_names = quote! {};
     for (field_name, _) in properties.iter() {
         let new_output_right = quote! {
@@ -177,8 +186,10 @@ fn get_read_to_type_method(type_name: &Ident, entity_name: &Ident, enum_name: &I
 
     let mut prop_reads = quote! {};
     for (field_name, field_type) in properties.iter() {
-
-        let uppercase_variant_name = Ident::new(field_name.to_string().to_uppercase().as_str(), Span::call_site());
+        let uppercase_variant_name = Ident::new(
+            field_name.to_string().to_uppercase().as_str(),
+            Span::call_site(),
+        );
 
         let new_output_right = quote! {
             let mut #field_name = Property::<#field_type>::new(Default::default(), #enum_name::#uppercase_variant_name as u8);
@@ -200,11 +211,14 @@ fn get_read_to_type_method(type_name: &Ident, entity_name: &Ident, enum_name: &I
                 #prop_names
             })));
         }
-    }
+    };
 }
 
-fn get_get_typed_copy_method(type_name: &Ident, entity_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
-
+fn get_get_typed_copy_method(
+    type_name: &Ident,
+    entity_name: &Ident,
+    properties: &Vec<(Ident, Type)>,
+) -> TokenStream {
     let mut args = quote! {};
     for (field_name, _) in properties.iter() {
         let new_output_right = quote! {
@@ -221,16 +235,17 @@ fn get_get_typed_copy_method(type_name: &Ident, entity_name: &Ident, properties:
             let copied_entity = #entity_name::new_complete(#args).wrap();
             return #type_name::#entity_name(copied_entity);
         }
-    }
+    };
 }
 
 fn get_write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
-
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
-
-        let uppercase_variant_name = Ident::new(field_name.to_string().to_uppercase().as_str(), Span::call_site());
+        let uppercase_variant_name = Ident::new(
+            field_name.to_string().to_uppercase().as_str(),
+            Span::call_site(),
+        );
 
         let new_output_right = quote! {
             if let Some(true) = state_mask.get_bit(#enum_name::#uppercase_variant_name as u8) {
@@ -249,16 +264,17 @@ fn get_write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) 
 
             #output
         }
-    }
+    };
 }
 
 fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
-
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
-
-        let uppercase_variant_name = Ident::new(field_name.to_string().to_uppercase().as_str(), Span::call_site());
+        let uppercase_variant_name = Ident::new(
+            field_name.to_string().to_uppercase().as_str(),
+            Span::call_site(),
+        );
 
         let new_output_right = quote! {
             if let Some(true) = state_mask.get_bit(#enum_name::#uppercase_variant_name as u8) {
@@ -277,7 +293,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
             let read_cursor = &mut Cursor::new(buffer);
             #output
         }
-    }
+    };
 }
 
 //FROM THIS:
