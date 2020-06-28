@@ -1,9 +1,8 @@
 use proc_macro2::TokenStream;
-use quote::{quote};
+use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Ident};
 
 pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-
     let input = parse_macro_input!(input as DeriveInput);
 
     let type_name = input.ident;
@@ -27,9 +26,7 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 fn get_variants(type_name: &Ident, data: &Data) -> TokenStream {
     match *data {
         Data::Enum(ref data) => {
-            let mut output = quote! {
-
-            };
+            let mut output = quote! {};
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
@@ -42,13 +39,12 @@ fn get_variants(type_name: &Ident, data: &Data) -> TokenStream {
                     #new_output_right
                 };
                 output = new_output_result;
-            };
+            }
             output
         }
-        _ => unimplemented!()
+        _ => unimplemented!(),
     }
 }
-
 
 ////FROM THIS
 //#[derive(EntityType)]

@@ -1,6 +1,6 @@
-use proc_macro2::{TokenStream, Span};
-use quote::{quote};
-use syn::{Data, DeriveInput, Ident, Fields, Type, Lit, PathArguments, GenericArgument, Meta};
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
+use syn::{Data, DeriveInput, Fields, GenericArgument, Ident, Lit, Meta, PathArguments, Type};
 
 pub fn get_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
     let mut fields = Vec::new();
@@ -11,12 +11,12 @@ pub fn get_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
                 if let Some(property_name) = &field.ident {
                     if let Type::Path(type_path) = &field.ty {
                         if let PathArguments::AngleBracketed(angle_args) =
-                        &type_path.path.segments.first().unwrap().arguments {
-
-                            if let Some(GenericArgument::Type(property_type)) = angle_args.args.first() {
-
+                            &type_path.path.segments.first().unwrap().arguments
+                        {
+                            if let Some(GenericArgument::Type(property_type)) =
+                                angle_args.args.first()
+                            {
                                 fields.push((property_name.clone(), property_type.clone()));
-
                             }
                         }
                     }
@@ -29,7 +29,6 @@ pub fn get_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
 }
 
 pub fn get_type_name(input: &DeriveInput, type_type: &str) -> Ident {
-
     let mut type_name_option: Option<Ident> = None;
 
     let attrs = &input.attrs;
@@ -47,17 +46,21 @@ pub fn get_type_name(input: &DeriveInput, type_type: &str) -> Ident {
                         }
                     }
                 }
-            },
+            }
             _ => {}
         }
     }
 
-    return type_name_option
-        .expect(format!("#[derive({})] requires an accompanying #[type_name = \"{} Type Name Here\"] attribute", type_type, type_type).as_str());
+    return type_name_option.expect(
+        format!(
+            "#[derive({})] requires an accompanying #[type_name = \"{} Type Name Here\"] attribute",
+            type_type, type_type
+        )
+        .as_str(),
+    );
 }
 
 pub fn get_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
-
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
@@ -75,5 +78,5 @@ pub fn get_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
         fn write(&self, buffer: &mut Vec<u8>) {
             #output
         }
-    }
+    };
 }
