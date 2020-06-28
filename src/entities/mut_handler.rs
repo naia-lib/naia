@@ -1,13 +1,8 @@
-use std::{
-    collections::{HashMap},
-    rc::Rc,
-    cell::RefCell,
-    net::SocketAddr,
-};
+use std::{cell::RefCell, collections::HashMap, net::SocketAddr, rc::Rc};
 
-use naia_shared::{StateMask};
+use naia_shared::StateMask;
 
-use crate::{EntityKey};
+use crate::EntityKey;
 
 use indexmap::IndexMap;
 
@@ -38,7 +33,12 @@ impl MutHandler {
         }
     }
 
-    pub fn set_state(&mut self, address: &SocketAddr, entity_key: &EntityKey, other_state: &StateMask) {
+    pub fn set_state(
+        &mut self,
+        address: &SocketAddr,
+        entity_key: &EntityKey,
+        other_state: &StateMask,
+    ) {
         if let Some(state_mask_list) = self.entity_state_mask_list_map.get_mut(entity_key) {
             if let Some(mask_ref) = state_mask_list.get(address) {
                 mask_ref.borrow_mut().copy_contents(other_state);
@@ -50,14 +50,20 @@ impl MutHandler {
         if self.entity_state_mask_list_map.contains_key(entity_key) {
             panic!("Entity cannot register with server more than once!");
         }
-        self.entity_state_mask_list_map.insert(*entity_key, IndexMap::new());
+        self.entity_state_mask_list_map
+            .insert(*entity_key, IndexMap::new());
     }
 
     pub fn deregister_entity(&mut self, entity_key: &EntityKey) {
         self.entity_state_mask_list_map.remove(entity_key);
     }
 
-    pub fn register_mask(&mut self, address: &SocketAddr, entity_key: &EntityKey, mask: &Rc<RefCell<StateMask>>) {
+    pub fn register_mask(
+        &mut self,
+        address: &SocketAddr,
+        entity_key: &EntityKey,
+        mask: &Rc<RefCell<StateMask>>,
+    ) {
         if let Some(state_mask_list) = self.entity_state_mask_list_map.get_mut(entity_key) {
             state_mask_list.insert(*address, mask.clone());
         }

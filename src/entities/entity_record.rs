@@ -1,9 +1,6 @@
-use std::{
-    rc::Rc,
-    cell::RefCell,
-};
+use std::{cell::RefCell, rc::Rc};
 
-use naia_shared::{StateMask, LocalEntityKey};
+use naia_shared::{LocalEntityKey, StateMask};
 
 pub struct EntityRecord {
     pub local_key: LocalEntityKey,

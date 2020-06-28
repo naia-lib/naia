@@ -3,7 +3,7 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum NaiaServerError {
-    Wrapped(Box<dyn Error>)
+    Wrapped(Box<dyn Error>),
 }
 
 impl fmt::Display for NaiaServerError {

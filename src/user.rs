@@ -1,8 +1,5 @@
-
-use std::{
-    net::SocketAddr,
-};
 use crate::naia_server::Timestamp;
+use std::net::SocketAddr;
 
 new_key_type! { pub struct UserKey; }
 
@@ -14,9 +11,6 @@ pub struct User {
 
 impl User {
     pub fn new(address: SocketAddr, timestamp: Timestamp) -> User {
-        User {
-            address,
-            timestamp,
-        }
+        User { address, timestamp }
     }
 }
