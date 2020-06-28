@@ -1,4 +1,3 @@
-
 extern crate log;
 
 mod app;
