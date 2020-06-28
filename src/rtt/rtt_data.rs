@@ -1,4 +1,4 @@
-use crate::{Instant};
+use crate::Instant;
 
 use crate::SequenceNumber;
 

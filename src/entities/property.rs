@@ -1,12 +1,6 @@
+use std::{cell::RefCell, rc::Rc};
 
-use std::{
-    rc::Rc,
-    cell::RefCell,
-};
-
-use super::{
-    entity_mutator::EntityMutator,
-};
+use super::entity_mutator::EntityMutator;
 
 #[derive(Clone)]
 pub struct Property<T: Clone> {

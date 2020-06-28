@@ -1,4 +1,3 @@
-
 use crate::Duration;
 
 cfg_if! {

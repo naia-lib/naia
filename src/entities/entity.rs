@@ -1,10 +1,6 @@
-use std::{
-    rc::Rc,
-    cell::RefCell,
-    any::{TypeId},
-};
+use std::{any::TypeId, cell::RefCell, rc::Rc};
 
-use crate::{EntityType, StateMask, EntityMutator};
+use crate::{EntityMutator, EntityType, StateMask};
 
 pub trait Entity<T: EntityType> {
     fn get_state_mask_size(&self) -> u8;

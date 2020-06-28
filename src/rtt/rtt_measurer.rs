@@ -1,8 +1,4 @@
-
-use crate::{
-    RttData,
-    Duration,
-};
+use crate::{Duration, RttData};
 
 pub struct RttMeasurer {
     rtt_smoothing_factor: f32,

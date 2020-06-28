@@ -1,9 +1,4 @@
-
-use crate::{
-    RttMeasurer,
-    RttData,
-    sequence_buffer::SequenceBuffer,
-};
+use crate::{sequence_buffer::SequenceBuffer, RttData, RttMeasurer};
 
 pub struct RttTracker {
     rtt_measurer: RttMeasurer,
@@ -24,8 +19,7 @@ impl RttTracker {
     }
 
     pub fn process_outgoing(&mut self, seq: u16) {
-        self.congestion_data
-            .insert(seq, RttData::new(seq));
+        self.congestion_data.insert(seq, RttData::new(seq));
     }
 
     pub fn get_rtt(&self) -> f32 {

@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use log::{info};
+use log::info;
 
 use super::{
+    sequence_buffer::{sequence_greater_than, SequenceBuffer, SequenceNumber},
     standard_header::StandardHeader,
-    sequence_buffer::{sequence_greater_than, SequenceNumber, SequenceBuffer},
 };
 
-use crate::{PacketType, EventType, HostType, EventManager, EntityNotifiable};
+use crate::{EntityNotifiable, EventManager, EventType, HostType, PacketType};
 
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
 const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
@@ -41,10 +41,12 @@ impl AckManager {
         self.sequence_number
     }
 
-    pub fn process_incoming<T: EventType>(&mut self,
-                                          payload: &[u8],
-                                          event_manager: &mut EventManager<T>,
-                                          entity_notifiable: &mut Option<&mut dyn EntityNotifiable>) -> Box<[u8]> {
+    pub fn process_incoming<T: EventType>(
+        &mut self,
+        payload: &[u8],
+        event_manager: &mut EventManager<T>,
+        entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
+    ) -> Box<[u8]> {
         let (header, stripped_message) = StandardHeader::read(payload);
         let remote_seq_num = header.sequence();
         let remote_ack_seq = header.ack_seq();
@@ -74,7 +76,11 @@ impl AckManager {
             if let Some(sent_packet) = self.sent_packets.get(&ack_sequence) {
                 if remote_ack_field & 1 == 1 {
                     if sent_packet.packet_type == PacketType::Data {
-                        self.notify_packet_delivered(ack_sequence, event_manager, entity_notifiable);
+                        self.notify_packet_delivered(
+                            ack_sequence,
+                            event_manager,
+                            entity_notifiable,
+                        );
                     }
 
                     self.sent_packets.remove(&ack_sequence);
@@ -93,7 +99,6 @@ impl AckManager {
     }
 
     pub fn process_outgoing(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
-
         // Add Ack Header onto message!
         let mut header_bytes = Vec::new();
 
@@ -122,30 +127,40 @@ impl AckManager {
             .into_boxed_slice()
     }
 
-    fn notify_packet_delivered<T: EventType>(&self,
-                                             packet_sequence_number: u16,
-                                             event_manager: &mut EventManager<T>,
-                                             entity_notifiable: &mut Option<&mut dyn EntityNotifiable>) {
+    fn notify_packet_delivered<T: EventType>(
+        &self,
+        packet_sequence_number: u16,
+        event_manager: &mut EventManager<T>,
+        entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
+    ) {
         let host_type_string = match self.host_type {
             HostType::Server => "Server",
             HostType::Client => "Client",
         };
-        info!("-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------", host_type_string, packet_sequence_number);
+        info!(
+            "-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------",
+            host_type_string, packet_sequence_number
+        );
         event_manager.notify_packet_delivered(packet_sequence_number);
         if let Some(notifiable) = entity_notifiable {
             notifiable.notify_packet_delivered(packet_sequence_number);
         }
     }
 
-    fn notify_packet_dropped<T: EventType>(&self,
-                                           packet_sequence_number: u16,
-                                           event_manager: &mut EventManager<T>,
-                                           entity_notifiable: &mut Option<&mut dyn EntityNotifiable>) {
+    fn notify_packet_dropped<T: EventType>(
+        &self,
+        packet_sequence_number: u16,
+        event_manager: &mut EventManager<T>,
+        entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
+    ) {
         let host_type_string = match self.host_type {
             HostType::Server => "Server",
             HostType::Client => "Client",
         };
-        info!("---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---", host_type_string, packet_sequence_number);
+        info!(
+            "---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---",
+            host_type_string, packet_sequence_number
+        );
         event_manager.notify_packet_dropped(packet_sequence_number);
         if let Some(notifiable) = entity_notifiable {
             notifiable.notify_packet_dropped(packet_sequence_number);

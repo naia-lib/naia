@@ -1,13 +1,8 @@
+use std::io::Cursor;
 
-use std::{
-    io::Cursor,
-};
+use byteorder::ReadBytesExt;
 
-use byteorder::{ReadBytesExt};
-
-use super::{
-    property::Property,
-};
+use super::property::Property;
 
 pub trait PropertyIo<T> {
     fn read(&mut self, cursor: &mut Cursor<&[u8]>);

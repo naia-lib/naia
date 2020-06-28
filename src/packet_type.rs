@@ -1,4 +1,3 @@
-
 use super::standard_header::StandardHeader;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -10,7 +9,7 @@ pub enum PacketType {
     ServerChallengeResponse = 4,
     ClientConnectRequest = 5,
     ServerConnectResponse = 6,
-    Unknown = 255
+    Unknown = 255,
 }
 
 impl From<u8> for PacketType {
