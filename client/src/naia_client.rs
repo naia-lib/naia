@@ -28,8 +28,6 @@ pub struct NaiaClient<T: EventType, U: EntityType> {
     pre_connection_timestamp: Option<Timestamp>,
     pre_connection_digest: Option<Box<[u8]>>,
     handshake_timer: Timer,
-    drop_counter: u8,
-    drop_max: u8,
     connection_state: ClientConnectionState,
     auth_event: Option<T>,
 }
@@ -60,8 +58,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             manifest,
             socket: client_socket,
             sender: message_sender,
-            drop_counter: 1,
-            drop_max: 2,
             config,
             handshake_timer,
             server_connection: None,
@@ -177,18 +173,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                     match event {
                         SocketEvent::Packet(packet) => {
                             let packet_type = PacketType::get_from_packet(packet.payload());
-
-                            // simulate dropping data packets //
-                            if packet_type == PacketType::Data {
-                                if self.drop_counter >= self.drop_max {
-                                    self.drop_counter = 0;
-                                    info!("~~~~~~~~~~  dropped packet from server  ~~~~~~~~~~");
-                                    continue;
-                                } else {
-                                    self.drop_counter += 1;
-                                }
-                            }
-                            /////////////////////////////////////
 
                             let server_connection_wrapper = self.server_connection.as_mut();
                             if let Some(server_connection) = server_connection_wrapper {
