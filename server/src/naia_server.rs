@@ -44,8 +44,6 @@ pub struct NaiaServer<T: EventType, U: EntityType> {
     outstanding_disconnects: VecDeque<UserKey>,
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
-    drop_counter: u8,
-    drop_max: u8,
 }
 
 impl<T: EventType, U: EntityType> NaiaServer<T, U> {
@@ -83,8 +81,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             address_to_user_key_map: HashMap::new(),
             outstanding_disconnects: VecDeque::new(),
             heartbeat_timer,
-            drop_counter: 1,
-            drop_max: 2,
         }
     }
 
@@ -152,16 +148,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                             }
 
                             let packet_type = PacketType::get_from_packet(packet.payload());
-                            if packet_type == PacketType::Data {
-                                //simulate dropping
-                                if self.drop_counter >= self.drop_max {
-                                    self.drop_counter = 0;
-                                    info!("~~~~~~~~~~  dropped packet from client  ~~~~~~~~~~");
-                                    continue;
-                                } else {
-                                    self.drop_counter += 1;
-                                }
-                            }
 
                             match packet_type {
                                 PacketType::ClientChallengeRequest => {
