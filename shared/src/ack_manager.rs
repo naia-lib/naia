@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use log::info;
-
 use super::{
     sequence_buffer::{sequence_greater_than, SequenceBuffer, SequenceNumber},
     standard_header::StandardHeader,
@@ -12,6 +10,7 @@ use crate::{EntityNotifiable, EventManager, EventType, HostType, PacketType};
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
 const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
 
+#[derive(Debug)]
 pub struct AckManager {
     host_type: HostType,
     // Local sequence number which we'll bump each time we send a new packet over the network.
@@ -133,14 +132,14 @@ impl AckManager {
         event_manager: &mut EventManager<T>,
         entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
     ) {
-        let host_type_string = match self.host_type {
-            HostType::Server => "Server",
-            HostType::Client => "Client",
-        };
-        info!(
-            "-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------",
-            host_type_string, packet_sequence_number
-        );
+//        let host_type_string = match self.host_type {
+//            HostType::Server => "Server",
+//            HostType::Client => "Client",
+//        };
+//        info!(
+//            "-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------",
+//            host_type_string, packet_sequence_number
+//        );
         event_manager.notify_packet_delivered(packet_sequence_number);
         if let Some(notifiable) = entity_notifiable {
             notifiable.notify_packet_delivered(packet_sequence_number);
@@ -153,14 +152,14 @@ impl AckManager {
         event_manager: &mut EventManager<T>,
         entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
     ) {
-        let host_type_string = match self.host_type {
-            HostType::Server => "Server",
-            HostType::Client => "Client",
-        };
-        info!(
-            "---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---",
-            host_type_string, packet_sequence_number
-        );
+//        let host_type_string = match self.host_type {
+//            HostType::Server => "Server",
+//            HostType::Client => "Client",
+//        };
+//        info!(
+//            "---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---",
+//            host_type_string, packet_sequence_number
+//        );
         event_manager.notify_packet_dropped(packet_sequence_number);
         if let Some(notifiable) = entity_notifiable {
             notifiable.notify_packet_dropped(packet_sequence_number);
@@ -196,5 +195,5 @@ pub struct SentPacket {
     pub packet_type: PacketType,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct ReceivedPacket;

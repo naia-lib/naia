@@ -1,5 +1,6 @@
 use crate::{Duration, RttData};
 
+#[derive(Debug)]
 pub struct RttMeasurer {
     rtt_smoothing_factor: f32,
     rtt_max_value: u16,

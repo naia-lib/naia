@@ -1,5 +1,6 @@
 use crate::{sequence_buffer::SequenceBuffer, RttData, RttMeasurer};
 
+#[derive(Debug)]
 pub struct RttTracker {
     rtt_measurer: RttMeasurer,
     congestion_data: SequenceBuffer<RttData>,

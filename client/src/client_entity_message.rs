@@ -1,6 +1,6 @@
 use naia_shared::LocalEntityKey;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum ClientEntityMessage {
     Create(LocalEntityKey),
     Update(LocalEntityKey),

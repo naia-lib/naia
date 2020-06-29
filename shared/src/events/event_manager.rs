@@ -7,6 +7,7 @@ use std::{
 
 use crate::{EntityType, Event, EventClone, EventType, Manifest, PacketReader};
 
+#[derive(Debug)]
 pub struct EventManager<T: EventType> {
     queued_outgoing_events: VecDeque<Rc<Box<dyn Event<T>>>>,
     queued_incoming_events: VecDeque<T>,

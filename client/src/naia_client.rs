@@ -16,6 +16,8 @@ use super::{
 use crate::client_connection_state::ClientConnectionState;
 use crate::client_connection_state::ClientConnectionState::AwaitingChallengeResponse;
 
+/// Client can send/receive events to/from a server, and has a pool of in-scope entities that are synced with the server
+#[derive(Debug)]
 pub struct NaiaClient<T: EventType, U: EntityType> {
     manifest: Manifest<T, U>,
     server_address: SocketAddr,
@@ -33,6 +35,7 @@ pub struct NaiaClient<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> NaiaClient<T, U> {
+    /// Create a new client, given the server's address, a shared manifest, an optional Config, and an optional Authentication event
     pub fn new(
         server_address: &str,
         manifest: Manifest<T, U>,
@@ -69,6 +72,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         }
     }
 
+    /// Must be called regularly, performs updates to the connection, and retrieves event/entity updates sent by the Server
     pub fn receive(&mut self) -> Result<ClientEvent<T>, NaiaClientError> {
         // send handshakes, send heartbeats, timeout if need be
         match &mut self.server_connection {
@@ -263,6 +267,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         return output.unwrap();
     }
 
+    /// Queues up an Event to be sent to the Server
     pub fn send_event(&mut self, event: &impl Event<T>) {
         if let Some(connection) = &mut self.server_connection {
             connection.queue_event(event);
@@ -294,17 +299,12 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .expect("send failed!");
     }
 
+    /// Get the address currently associated with the Server
     pub fn server_address(&self) -> SocketAddr {
         return self.socket.server_address();
     }
 
-    pub fn get_sequence_number(&mut self) -> Option<u16> {
-        if let Some(connection) = self.server_connection.as_mut() {
-            return Some(connection.get_next_packet_index());
-        }
-        return None;
-    }
-
+    /// Get a reference to an Entity currently in scope for the Client, given that Entity's Key
     pub fn get_entity(&self, key: LocalEntityKey) -> Option<&U> {
         return self
             .server_connection
@@ -313,6 +313,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .get_local_entity(key);
     }
 
+    /// Get the current measured Round Trip Time to the Server
     pub fn get_rtt(&self) -> f32 {
         return self.server_connection.as_ref().unwrap().get_rtt();
     }
