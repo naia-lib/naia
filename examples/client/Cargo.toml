@@ -2,7 +2,10 @@
 name = "naia-client-example"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../../"
+publish = false
 edition = "2018"
+license = "MIT OR Apache-2.0"
 
 [lib]
 crate-type = ["cdylib","rlib"]
@@ -12,8 +15,8 @@ name = "index" # This is because cargo-web also picks up the static assets folde
 path = "src/main.rs"
 
 [dependencies]
-naia-client = { path = "../naia-client" } # { git = "https://github.com/connorcarpenter/naia-client" } #
-naia-example-shared = { path = "../naia-example-shared" } # { git = "https://github.com/connorcarpenter/naia-example-shared" } #
+naia-client = { path = "../../client" }
+naia-example-shared = { path = "../shared" }
 log = "0.4"
 cfg-if = "*"
 
