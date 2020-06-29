@@ -2,7 +2,7 @@ use crate::Instant;
 
 use crate::SequenceNumber;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct RttData {
     pub sequence: SequenceNumber,
     pub sending_time: Instant,

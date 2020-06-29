@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use crate::{EntityBuilder, EntityType, EventBuilder, EventType};
 
+#[derive(Debug)]
 pub struct Manifest<T: EventType, U: EntityType> {
     event_naia_id_count: u16,
     event_builder_map: HashMap<u16, Box<dyn EventBuilder<T>>>,

@@ -1,5 +1,12 @@
 use crate::EventType;
-use std::any::TypeId;
+use std::{
+    fmt::{
+        Formatter,
+        Debug,
+        Result,
+    },
+    any::TypeId
+};
 
 pub trait Event<T: EventType>: EventClone<T> {
     fn is_guaranteed(&self) -> bool;
@@ -21,5 +28,11 @@ impl<Z: EventType, T: 'static + Event<Z> + Clone> EventClone<Z> for T {
 impl<T: EventType> Clone for Box<dyn Event<T>> {
     fn clone(&self) -> Box<dyn Event<T>> {
         EventClone::clone_box(self.as_ref())
+    }
+}
+
+impl<T: EventType> Debug for Box<dyn Event<T>> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        f.write_str("Boxed Event")
     }
 }

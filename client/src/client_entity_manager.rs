@@ -3,8 +3,9 @@ use log::warn;
 use naia_shared::{EntityType, EventType, LocalEntityKey, Manifest, PacketReader, StateMask};
 use std::collections::{HashMap, VecDeque};
 
-use super::ClientEntityMessage;
+use super::client_entity_message::ClientEntityMessage;
 
+#[derive(Debug)]
 pub struct ClientEntityManager<T: EntityType> {
     local_entity_store: HashMap<LocalEntityKey, T>,
     queued_incoming_messages: VecDeque<ClientEntityMessage>,

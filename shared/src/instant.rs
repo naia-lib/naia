@@ -6,7 +6,7 @@ cfg_if! {
 
         use js_sys::Date;
 
-        #[derive(Clone)]
+        #[derive(Debug, Clone)]
         pub struct Instant {
             inner: f64,
         }
@@ -29,7 +29,7 @@ cfg_if! {
     else {
         /// Linux ///
 
-        #[derive(Clone)]
+        #[derive(Debug, Clone)]
         pub struct Instant {
             inner: std::time::Instant,
         }

@@ -7,6 +7,7 @@ use crate::{
 
 use super::{ack_manager::AckManager, sequence_buffer::SequenceNumber};
 
+#[derive(Debug)]
 pub struct Connection<T: EventType> {
     address: SocketAddr,
     heartbeat_manager: Timer,
