@@ -2,7 +2,10 @@
 name = "naia-example-shared"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../../"
+publish = false
 edition = "2018"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 naia-shared = { path = "../../shared" }

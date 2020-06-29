@@ -2,7 +2,18 @@
 name = "naia-derive"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+description = "Procedural macros to simplify implementation of Naia Event & Entity traits"
+documentation = "https://docs.rs/naia-derive"
+homepage = "https://github.com/connorcarpenter/naia"
+repository = "https://github.com/connorcarpenter/naia"
+readme = "../README.md"
+keywords = ["webrtc", "udp", "wasm", "networking", "gamedev"]
+license = "MIT OR Apache-2.0"
+categories = ["network-programming", "game-development", "wasm", "web-programming"]
 edition = "2018"
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 [lib]
 proc-macro = true

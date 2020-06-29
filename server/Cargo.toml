@@ -2,7 +2,18 @@
 name = "naia-server"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+description = "A server that uses either UDP or WebRTC communication to send/receive events to/from connected clients, and syncs registered entities to clients to whom those entities are in-scope."
+documentation = "https://docs.rs/naia-server"
+homepage = "https://github.com/connorcarpenter/naia"
+repository = "https://github.com/connorcarpenter/naia"
+readme = "../README.md"
+keywords = ["webrtc", "udp", "server", "networking", "gamedev"]
+license = "MIT OR Apache-2.0"
+categories = ["network-programming", "game-development", "wasm", "web-programming"]
 edition = "2018"
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 [features]
 use-udp = [ "naia-server-socket/use-udp" ]

@@ -22,7 +22,7 @@ impl App {
 
         cfg_if! {
             if #[cfg(target_arch = "wasm32")] {
-                let server_ip_address: &str = "192.168.1.7"; // Put your Server's IP Address here!, can't easily find this automatically from the browser
+                let server_ip_address: &str = "192.168.1.9"; // Put your Server's IP Address here!, can't easily find this automatically from the browser
             } else {
                 let current_ip_address_string = find_my_ip_address().expect("can't find ip address").to_string();
                 let server_ip_address: &str = current_ip_address_string.as_str();
