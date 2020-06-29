@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "client",
+    "server",
+    "shared",
+    "derive",
+    "examples/server",
+    "examples/client",
+    "examples/shared",
+    ]
