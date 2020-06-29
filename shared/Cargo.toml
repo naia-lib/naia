@@ -8,7 +8,7 @@ edition = "2018"
 naia-socket-shared = { version = "0.1.0" }
 byteorder = "1.3"
 log = "0.4"
-cfg-if = "*"
+cfg-if = "0.1.10"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # wasm-bindgen = { version = "0.2.45", features = [ ] }

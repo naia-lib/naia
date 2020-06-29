@@ -18,7 +18,7 @@ path = "src/main.rs"
 naia-client = { path = "../../client" }
 naia-example-shared = { path = "../shared" }
 log = "0.4"
-cfg-if = "*"
+cfg-if = "0.1.10"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 simple_logger = { version = "1.4" }

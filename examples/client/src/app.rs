@@ -3,19 +3,14 @@ use log::info;
 use std::format;
 use std::time::Duration;
 
-use naia_client::{find_my_ip_address, ClientEvent, Config, NaiaClient};
+use naia_client::{ClientEvent, Config, NaiaClient};
 
 use naia_example_shared::{manifest_load, AuthEvent, ExampleEntity, ExampleEvent, StringEvent};
 
 const SERVER_PORT: &str = "14191";
 
-cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        const SERVER_IP_ADDRESS: &str = "192.168.1.9"; // Put your Server's IP Address here!, can't easily find this automatically from the browser
-    } else {
-        const SERVER_IP_ADDRESS: &str = find_my_ip_address::get();
-    }
-}
+#[cfg(not(target_arch = "wasm32"))]
+use naia_client::find_my_ip_address;
 
 pub struct App {
     client: NaiaClient<ExampleEvent, ExampleEntity>,
@@ -25,7 +20,16 @@ impl App {
     pub fn new() -> App {
         info!("Naia Client Example Started");
 
-        let server_socket_address = format!("{}:{}", SERVER_IP_ADDRESS, SERVER_PORT);
+        cfg_if! {
+            if #[cfg(target_arch = "wasm32")] {
+                let server_ip_address: &str = "192.168.1.7"; // Put your Server's IP Address here!, can't easily find this automatically from the browser
+            } else {
+                let current_ip_address_string = find_my_ip_address().expect("can't find ip address").to_string();
+                let server_ip_address: &str = current_ip_address_string.as_str();
+            }
+        }
+
+        let server_socket_address = format!("{}:{}", server_ip_address, SERVER_PORT);
 
         let mut config = Config::default();
         config.heartbeat_interval = Duration::from_secs(4);
