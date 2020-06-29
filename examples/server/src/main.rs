@@ -15,7 +15,10 @@ const SERVER_PORT: &str = "14191";
 async fn main() {
     simple_logger::init_with_level(log::Level::Info).expect("A logger was already initialized");
 
-    let current_socket_address = find_my_ip_address::get() + ":" + SERVER_PORT;
+    info!("Naia Server Example Started");
+
+    let current_ip_address = find_my_ip_address().expect("can't find ip address");
+    let current_socket_address = format!("{}:{}", current_ip_address, SERVER_PORT);
 
     let mut config = Config::default();
     config.tick_interval = Duration::from_secs(4);
