@@ -5,7 +5,7 @@ authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-naia-socket-shared = { path = "../naia-socket-shared" } # { git = "https://github.com/connorcarpenter/naia-socket-shared" } #
+naia-socket-shared = { version = "0.1.0" }
 byteorder = "1.3"
 log = "0.4"
 cfg-if = "*"

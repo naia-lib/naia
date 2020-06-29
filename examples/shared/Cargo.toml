@@ -5,7 +5,7 @@ authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-naia-shared = { path = "../naia-shared" } # { git = "https://github.com/connorcarpenter/naia-shared" } #
-naia-derive = { path = "../naia-derive" }
+naia-shared = { path = "../../shared" }
+naia-derive = { path = "../../derive" }
 cfg-if = "*"
 log = "0.4"
