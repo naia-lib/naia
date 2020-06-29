@@ -1,1 +1,0 @@
-# naia-example-shared
