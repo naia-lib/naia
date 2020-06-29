@@ -1,7 +1,5 @@
 /target
 **/*.rs.bk
-.idea/Cargo.lock
+.idea/*
 /Cargo.lock
-/.idea/
 node_modules
-/package-lock.json

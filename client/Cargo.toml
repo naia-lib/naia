@@ -2,7 +2,18 @@
 name = "naia-client"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+description = "Provides a cross-platform client that can send/receive events to/from a server, and has a pool of in-scope entities that is synced with the server."
+documentation = "https://docs.rs/naia-client"
+homepage = "https://github.com/connorcarpenter/naia"
+repository = "https://github.com/connorcarpenter/naia"
+readme = "../README.md"
+keywords = ["wasm", "webrtc", "udp", "networking", "gamedev"]
+license = "MIT OR Apache-2.0"
+categories = ["network-programming", "game-development", "wasm", "web-programming"]
 edition = "2018"
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 [dependencies]
 naia-client-socket = { version = "0.1.0" }
