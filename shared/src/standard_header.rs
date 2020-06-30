@@ -8,7 +8,8 @@ use crate::packet_type::PacketType;
 /// This header provides reliability information.
 pub struct StandardHeader {
     p_type: PacketType,
-    // This is the sequence number so that we can know where in the sequence of packages this packet belongs.
+    // This is the sequence number so that we can know where in the sequence of packages this
+    // packet belongs.
     pub seq: u16,
     // This is the last acknowledged sequence number.
     ack_seq: u16,
@@ -17,9 +18,12 @@ pub struct StandardHeader {
 }
 
 impl StandardHeader {
-    /// When we compose packet headers, the local sequence becomes the sequence number of the packet, and the remote sequence becomes the ack.
-    /// The ack bitfield is calculated by looking into a queue of up to 33 packets, containing sequence numbers in the range [remote sequence - 32, remote sequence].
-    /// We set bit n (in [1,32]) in ack bits to 1 if the sequence number remote sequence - n is in the received queue.
+    /// When we compose packet headers, the local sequence becomes the sequence
+    /// number of the packet, and the remote sequence becomes the ack.
+    /// The ack bitfield is calculated by looking into a queue of up to 33
+    /// packets, containing sequence numbers in the range [remote sequence - 32,
+    /// remote sequence]. We set bit n (in [1,32]) in ack bits to 1 if the
+    /// sequence number remote sequence - n is in the received queue.
     pub fn new(p_type: PacketType, seq_num: u16, last_seq: u16, bit_field: u32) -> StandardHeader {
         StandardHeader {
             p_type,
@@ -34,7 +38,6 @@ impl StandardHeader {
     }
 
     /// Returns the sequence number from this packet.
-    #[allow(dead_code)]
     pub fn sequence(&self) -> u16 {
         self.seq
     }
@@ -61,8 +64,6 @@ impl StandardHeader {
         let seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_field = msg.read_u32::<BigEndian>().unwrap();
-
-        //info!("READING HEADER {}, {}, {}", seq, ack_seq, ack_field);
 
         let mut buffer = Vec::new();
         msg.read_to_end(&mut buffer).unwrap();

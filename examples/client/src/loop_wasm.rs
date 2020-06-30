@@ -1,9 +1,11 @@
-// Because we hook into web_sys::RtcDataChannel in order to send/receive events from the server,
-// we can't just create a simple loop and receive events like in loop_native.rs - doing so would
-// block indefinitely and never allow the browser to do it's thing! The solution below is to hook
-// into the browser's requestAnimationFrame() method. This should trigger app.update whenever the
-// browser has any free cycles. I don't like the fact that the network IO is tied to a method
-// typically used for your draw loop though.. perhaps I should change this to use a setInterval() ?
+// Because we hook into web_sys::RtcDataChannel in order to send/receive events
+// from the server, we can't just create a simple loop and receive events like
+// in loop_native.rs - doing so would block indefinitely and never allow the
+// browser to do it's thing! The solution below is to hook into the browser's
+// requestAnimationFrame() method. This should trigger app.update whenever the
+// browser has any free cycles. I don't like the fact that the network IO is
+// tied to a method typically used for your draw loop though.. perhaps I should
+// change this to use a setInterval() ?
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {

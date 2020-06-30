@@ -13,10 +13,12 @@ use super::{
     client_entity_message::ClientEntityMessage, client_event::ClientEvent, error::NaiaClientError,
     server_connection::ServerConnection, Packet,
 };
-use crate::client_connection_state::ClientConnectionState;
-use crate::client_connection_state::ClientConnectionState::AwaitingChallengeResponse;
+use crate::client_connection_state::{
+    ClientConnectionState, ClientConnectionState::AwaitingChallengeResponse,
+};
 
-/// Client can send/receive events to/from a server, and has a pool of in-scope entities that are synced with the server
+/// Client can send/receive events to/from a server, and has a pool of in-scope
+/// entities that are synced with the server
 #[derive(Debug)]
 pub struct NaiaClient<T: EventType, U: EntityType> {
     manifest: Manifest<T, U>,
@@ -33,7 +35,8 @@ pub struct NaiaClient<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> NaiaClient<T, U> {
-    /// Create a new client, given the server's address, a shared manifest, an optional Config, and an optional Authentication event
+    /// Create a new client, given the server's address, a shared manifest, an
+    /// optional Config, and an optional Authentication event
     pub fn new(
         server_address: &str,
         manifest: Manifest<T, U>,
@@ -68,7 +71,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         }
     }
 
-    /// Must be called regularly, performs updates to the connection, and retrieves event/entity updates sent by the Server
+    /// Must be called regularly, performs updates to the connection, and
+    /// retrieves event/entity updates sent by the Server
     pub fn receive(&mut self) -> Result<ClientEvent<T>, NaiaClientError> {
         // send handshakes, send heartbeats, timeout if need be
         match &mut self.server_connection {
@@ -283,7 +287,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         return self.socket.server_address();
     }
 
-    /// Get a reference to an Entity currently in scope for the Client, given that Entity's Key
+    /// Get a reference to an Entity currently in scope for the Client, given
+    /// that Entity's Key
     pub fn get_entity(&self, key: LocalEntityKey) -> Option<&U> {
         return self
             .server_connection

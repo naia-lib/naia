@@ -1,7 +1,6 @@
 use log::info;
 
-use std::format;
-use std::time::Duration;
+use std::{format, time::Duration};
 
 use naia_client::{ClientEvent, Config, NaiaClient};
 

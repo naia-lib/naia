@@ -7,7 +7,8 @@ pub struct PacketReader<'s> {
 }
 
 impl<'s> PacketReader<'s> {
-    /// Construct a new instance of `PacketReader`, the given `buffer` will be used to read information from.
+    /// Construct a new instance of `PacketReader`, the given `buffer` will be
+    /// used to read information from.
     pub fn new(buffer: &'s [u8]) -> PacketReader<'s> {
         PacketReader {
             buffer,

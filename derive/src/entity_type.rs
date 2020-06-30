@@ -57,8 +57,8 @@ fn get_variants(type_name: &Ident, data: &Data) -> TokenStream {
 //    fn read_partial(&mut self, state_mask: &StateMask, bytes: &[u8]) {
 //        match self {
 //            ExampleEntity::PointEntity(identity) => {
-//                identity.as_ref().borrow_mut().read_partial(state_mask, bytes);
-//            }
+//                identity.as_ref().borrow_mut().read_partial(state_mask,
+// bytes);            }
 //        }
 //    }
 //}

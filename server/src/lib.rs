@@ -1,5 +1,7 @@
 //! # Naia Server
-//! A server that uses either UDP or WebRTC communication to send/receive events to/from connected clients, and syncs registered entities to clients to whom those entities are in-scope.
+//! A server that uses either UDP or WebRTC communication to send/receive events
+//! to/from connected clients, and syncs registered entities to clients to whom
+//! those entities are in-scope.
 
 #![deny(
     missing_docs,
@@ -32,7 +34,7 @@ mod room;
 mod server_event;
 mod user;
 
-pub use {
-    naia_server::NaiaServer, room::room_key::RoomKey, server_event::ServerEvent,
-    user::user_key::UserKey,
-};
+pub use naia_server::NaiaServer;
+pub use room::room_key::RoomKey;
+pub use server_event::ServerEvent;
+pub use user::user_key::UserKey;

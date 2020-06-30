@@ -338,10 +338,10 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
 //    }
 //    fn read_to_type(buffer: &[u8]) -> ExampleEntity {
 //        let read_cursor = &mut Cursor::new(buffer);
-//        let mut x = Property::<u8>::new(Default::default(), PointEntityProp::X as u8);
-//        x.read(read_cursor);
-//        let mut y = Property::<u8>::new(Default::default(), PointEntityProp::Y as u8);
-//        y.read(read_cursor);
+//        let mut x = Property::<u8>::new(Default::default(), PointEntityProp::X
+// as u8);        x.read(read_cursor);
+//        let mut y = Property::<u8>::new(Default::default(), PointEntityProp::Y
+// as u8);        y.read(read_cursor);
 //
 //        return ExampleEntity::PointEntity(Rc::new(RefCell::new(PointEntity {
 //            x,
@@ -354,9 +354,9 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
 //        1
 //    }
 //    fn get_typed_copy(&self) -> ExampleEntity {
-//        let copied_entity = PointEntity::new_complete(*self.x.get(), *self.y.get()).wrap();
-//        return ExampleEntity::PointEntity(copied_entity);
-//    }
+//        let copied_entity = PointEntity::new_complete(*self.x.get(),
+// *self.y.get()).wrap();        return
+// ExampleEntity::PointEntity(copied_entity);    }
 //    fn get_type_id(&self) -> TypeId {
 //        return TypeId::of::<PointEntity>();
 //    }

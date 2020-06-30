@@ -1,5 +1,4 @@
-use std::any::TypeId;
-use std::collections::HashMap;
+use std::{any::TypeId, collections::HashMap};
 
 use crate::{
     entities::{entity_builder::EntityBuilder, entity_type::EntityType},
