@@ -4,8 +4,8 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_client_socket::{ClientSocket, Config as SocketConfig, MessageSender, SocketEvent};
 pub use naia_shared::{
-    Config, EntityType, Event, EventType, HostType, LocalEntityKey, ManagerType, Manifest,
-    PacketReader, PacketType, PacketWriter, Timer, Timestamp,
+    Config, EntityType, Event, EventType, LocalEntityKey, ManagerType, Manifest, PacketReader,
+    PacketType, PacketWriter, Timer, Timestamp,
 };
 
 use super::{
@@ -37,7 +37,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     /// Create a new client, given the server's address, a shared manifest, an
     /// optional Config, and an optional Authentication event
     pub fn new(
-        server_address: &str,
+        server_address: SocketAddr,
         manifest: Manifest<T, U>,
         config: Option<Config>,
         auth: Option<T>,
@@ -49,14 +49,14 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         config.heartbeat_interval /= 2;
 
         let socket_config = SocketConfig::default();
-        let mut client_socket = ClientSocket::connect(&server_address, Some(socket_config));
+        let mut client_socket = ClientSocket::connect(server_address, Some(socket_config));
 
         let mut handshake_timer = Timer::new(config.send_handshake_interval);
         handshake_timer.ring_manual();
         let message_sender = client_socket.get_sender();
 
         NaiaClient {
-            server_address: server_address.parse().unwrap(),
+            server_address,
             manifest,
             socket: client_socket,
             sender: message_sender,

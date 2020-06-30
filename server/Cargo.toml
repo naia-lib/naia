@@ -23,7 +23,7 @@ use-udp = [ "naia-server-socket/use-udp" ]
 use-webrtc = [ "naia-server-socket/use-webrtc" ]
 
 [dependencies]
-naia-server-socket = { version = "0.1.1" }
+naia-server-socket = { version = "0.2.0" }
 naia-shared = { version = "0.1.0", path = "../shared" }
 log = "0.4"
 slotmap = { version = "0.4" }
