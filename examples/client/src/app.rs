@@ -14,6 +14,7 @@ use naia_client::find_my_ip_address;
 
 pub struct App {
     client: NaiaClient<ExampleEvent, ExampleEntity>,
+    server_event_count: u32,
 }
 
 impl App {
@@ -43,6 +44,7 @@ impl App {
                 Some(config),
                 Some(auth),
             ),
+            server_event_count: 0,
         }
     }
 
@@ -61,15 +63,14 @@ impl App {
                             let message = string_event.message.get();
                             info!("Client received event: {}", message);
 
-                            if let Some(count) = self.client.get_sequence_number() {
-                                let new_message: String = "Client Packet (".to_string()
-                                    + count.to_string().as_str()
-                                    + ")";
-                                info!("Client send: {}", new_message);
+                            let new_message: String = "Client Packet (".to_string()
+                                + self.server_event_count.to_string().as_str()
+                                + ")";
+                            info!("Client send: {}", new_message);
 
-                                let string_event = StringEvent::new(new_message);
-                                self.client.send_event(&string_event);
-                            }
+                            let string_event = StringEvent::new(new_message);
+                            self.client.send_event(&string_event);
+                            self.server_event_count += 1;
                         }
                         _ => {}
                     },

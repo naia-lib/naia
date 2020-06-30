@@ -169,79 +169,74 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         let mut output: Option<Result<ClientEvent<T>, NaiaClientError>> = None;
         while output.is_none() {
             match self.socket.receive() {
-                Ok(event) => {
-                    match event {
-                        SocketEvent::Packet(packet) => {
-                            let packet_type = PacketType::get_from_packet(packet.payload());
+                Ok(event) => match event {
+                    SocketEvent::Packet(packet) => {
+                        let packet_type = PacketType::get_from_packet(packet.payload());
 
-                            let server_connection_wrapper = self.server_connection.as_mut();
-                            if let Some(server_connection) = server_connection_wrapper {
-                                server_connection.mark_heard();
-                                let mut payload =
-                                    server_connection.process_incoming_header(packet.payload());
+                        let server_connection_wrapper = self.server_connection.as_mut();
+                        if let Some(server_connection) = server_connection_wrapper {
+                            server_connection.mark_heard();
+                            let mut payload =
+                                server_connection.process_incoming_header(packet.payload());
 
-                                match packet_type {
-                                    PacketType::Data => {
-                                        server_connection
-                                            .process_incoming_data(&self.manifest, &mut payload);
-                                        continue;
-                                    }
-                                    PacketType::Heartbeat => {
-                                        info!("<- s");
-                                        continue;
-                                    }
-                                    _ => {}
+                            match packet_type {
+                                PacketType::Data => {
+                                    server_connection
+                                        .process_incoming_data(&self.manifest, &mut payload);
+                                    continue;
                                 }
-                            } else {
-                                match packet_type {
-                                    PacketType::ServerChallengeResponse => {
-                                        if self.connection_state
-                                            == ClientConnectionState::AwaitingChallengeResponse
-                                        {
-                                            if let Some(my_timestamp) =
-                                                self.pre_connection_timestamp
-                                            {
-                                                let payload =
-                                                    naia_shared::utils::read_headerless_payload(
-                                                        packet.payload(),
-                                                    );
-                                                let mut reader = PacketReader::new(&payload);
-                                                let payload_timestamp =
-                                                    Timestamp::read(&mut reader);
+                                PacketType::Heartbeat => {
+                                    continue;
+                                }
+                                _ => {}
+                            }
+                        } else {
+                            match packet_type {
+                                PacketType::ServerChallengeResponse => {
+                                    if self.connection_state
+                                        == ClientConnectionState::AwaitingChallengeResponse
+                                    {
+                                        if let Some(my_timestamp) = self.pre_connection_timestamp {
+                                            let payload =
+                                                naia_shared::utils::read_headerless_payload(
+                                                    packet.payload(),
+                                                );
+                                            let mut reader = PacketReader::new(&payload);
+                                            let payload_timestamp = Timestamp::read(&mut reader);
 
-                                                if my_timestamp == payload_timestamp {
-                                                    let mut digest_bytes: Vec<u8> = Vec::new();
-                                                    for _ in 0..32 {
-                                                        digest_bytes.push(reader.read_u8());
-                                                    }
-                                                    self.pre_connection_digest =
-                                                        Some(digest_bytes.into_boxed_slice());
-                                                    self.connection_state = ClientConnectionState::AwaitingConnectResponse;
+                                            if my_timestamp == payload_timestamp {
+                                                let mut digest_bytes: Vec<u8> = Vec::new();
+                                                for _ in 0..32 {
+                                                    digest_bytes.push(reader.read_u8());
                                                 }
+                                                self.pre_connection_digest =
+                                                    Some(digest_bytes.into_boxed_slice());
+                                                self.connection_state =
+                                                    ClientConnectionState::AwaitingConnectResponse;
                                             }
                                         }
+                                    }
 
-                                        continue;
-                                    }
-                                    PacketType::ServerConnectResponse => {
-                                        self.server_connection = Some(ServerConnection::new(
-                                            self.server_address,
-                                            &self.config,
-                                        ));
-                                        self.connection_state = ClientConnectionState::Connected;
-                                        output = Some(Ok(ClientEvent::Connection));
-                                        continue;
-                                    }
-                                    _ => {}
+                                    continue;
                                 }
+                                PacketType::ServerConnectResponse => {
+                                    self.server_connection = Some(ServerConnection::new(
+                                        self.server_address,
+                                        &self.config,
+                                    ));
+                                    self.connection_state = ClientConnectionState::Connected;
+                                    output = Some(Ok(ClientEvent::Connection));
+                                    continue;
+                                }
+                                _ => {}
                             }
                         }
-                        SocketEvent::None => {
-                            output = Some(Ok(ClientEvent::None));
-                            continue;
-                        }
                     }
-                }
+                    SocketEvent::None => {
+                        output = Some(Ok(ClientEvent::None));
+                        continue;
+                    }
+                },
                 Err(error) => {
                     output = Some(Err(NaiaClientError::Wrapped(Box::new(error))));
                     continue;

@@ -10,7 +10,9 @@ use log::info;
 use ring::{hmac, rand};
 use slotmap::DenseSlotMap;
 
-use naia_server_socket::{Config as SocketConfig, MessageSender, ServerSocket, SocketEvent, Packet};
+use naia_server_socket::{
+    Config as SocketConfig, MessageSender, Packet, ServerSocket, SocketEvent,
+};
 pub use naia_shared::{
     Config, Connection, Entity, EntityMutator, EntityType, Event, EventType, HostType, Instant,
     ManagerType, Manifest, PacketReader, PacketType, Timer, Timestamp,
@@ -19,12 +21,13 @@ pub use naia_shared::{
 use super::{
     client_connection::ClientConnection,
     entities::{
-        entity_key::entity_key::EntityKey, mut_handler::MutHandler, server_entity_mutator::ServerEntityMutator,
+        entity_key::entity_key::EntityKey, mut_handler::MutHandler,
+        server_entity_mutator::ServerEntityMutator,
     },
     error::NaiaServerError,
-    room::{Room, room_key::RoomKey},
+    room::{room_key::RoomKey, Room},
     server_event::ServerEvent,
-    user::{User, user_key::UserKey},
+    user::{user_key::UserKey, User},
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive events to/from connected clients, and syncs registered entities to clients to whom those entities are in-scope
@@ -317,7 +320,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                                 // Still need to do this so that proper notify events fire based on the heartbeat header
                                                 connection
                                                     .process_incoming_header(packet.payload());
-                                                info!("<- c");
                                                 continue;
                                             }
                                             None => {

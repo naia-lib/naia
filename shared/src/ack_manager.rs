@@ -132,14 +132,14 @@ impl AckManager {
         event_manager: &mut EventManager<T>,
         entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
     ) {
-//        let host_type_string = match self.host_type {
-//            HostType::Server => "Server",
-//            HostType::Client => "Client",
-//        };
-//        info!(
-//            "-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------",
-//            host_type_string, packet_sequence_number
-//        );
+        //        let host_type_string = match self.host_type {
+        //            HostType::Server => "Server",
+        //            HostType::Client => "Client",
+        //        };
+        //        info!(
+        //            "-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------",
+        //            host_type_string, packet_sequence_number
+        //        );
         event_manager.notify_packet_delivered(packet_sequence_number);
         if let Some(notifiable) = entity_notifiable {
             notifiable.notify_packet_delivered(packet_sequence_number);
@@ -152,14 +152,14 @@ impl AckManager {
         event_manager: &mut EventManager<T>,
         entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
     ) {
-//        let host_type_string = match self.host_type {
-//            HostType::Server => "Server",
-//            HostType::Client => "Client",
-//        };
-//        info!(
-//            "---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---",
-//            host_type_string, packet_sequence_number
-//        );
+        //        let host_type_string = match self.host_type {
+        //            HostType::Server => "Server",
+        //            HostType::Client => "Client",
+        //        };
+        //        info!(
+        //            "---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---",
+        //            host_type_string, packet_sequence_number
+        //        );
         event_manager.notify_packet_dropped(packet_sequence_number);
         if let Some(notifiable) = entity_notifiable {
             notifiable.notify_packet_dropped(packet_sequence_number);

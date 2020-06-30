@@ -56,6 +56,8 @@ async fn main() {
         return false;
     })));
 
+    let mut tick_count: u32 = 0;
+
     loop {
         match server.receive().await {
             Ok(event) => {
@@ -89,12 +91,9 @@ async fn main() {
                             iter_vec.push(user_key);
                         }
                         for user_key in iter_vec {
-                            let count = server
-                                .get_sequence_number(&user_key)
-                                .expect("why don't we have a sequence number for this client?");
                             let user = server.get_user(&user_key).unwrap();
                             let new_message = "Server Packet (".to_string()
-                                + count.to_string().as_str()
+                                + tick_count.to_string().as_str()
                                 + ") to "
                                 + user.address.to_string().as_str();
                             info!("Naia Server send -> {}: {}", user.address, new_message);
@@ -106,6 +105,8 @@ async fn main() {
                         for point_entity in &point_entities {
                             point_entity.borrow_mut().step();
                         }
+
+                        tick_count += 1;
                     }
                 }
             }
