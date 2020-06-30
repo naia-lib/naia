@@ -4,8 +4,12 @@ use byteorder::ReadBytesExt;
 
 use super::property::Property;
 
+/// A Property that can read/write itself from/into incoming/outgoing packets
 pub trait PropertyIo<T> {
+    /// Given a cursor into incoming packet data, updates the Property with the
+    /// synced value
     fn read(&mut self, cursor: &mut Cursor<&[u8]>);
+    /// Writes contained value into outgoing byte stream
     fn write(&self, buffer: &mut Vec<u8>);
 }
 

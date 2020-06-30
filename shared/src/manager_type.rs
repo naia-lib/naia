@@ -1,9 +1,14 @@
+/// Every data packet transmitted has data specific to either the Event or
+/// Entity managers. This value is written to differentiate those parts of the
+/// payload.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum ManagerType {
-    //TODO this might be meaningless.. always a fixed order in the messages
+    /// An EventManager
     Event = 1,
+    /// An EntityManager
     Entity = 2,
+    /// Unknown Manager
     Unknown = 255,
 }
 
