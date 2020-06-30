@@ -37,8 +37,14 @@ impl App {
         let server_socket_address = SocketAddr::new(server_ip_address, SERVER_PORT);
 
         let mut config = Config::default();
-        config.heartbeat_interval = Duration::from_secs(4);
+        config.heartbeat_interval = Duration::from_secs(2);
+        // Keep in mind that the disconnect timeout duration should always be at least
+        // 2x greater than the heartbeat interval, to make it so at the worst case, the
+        // server would need to miss 2 heartbeat signals before disconnecting from a
+        // given client
+        config.disconnection_timeout_duration = Duration::from_secs(5);
 
+        // This will be evaluated in the Server's 'on_auth()' method
         let auth = ExampleEvent::AuthEvent(AuthEvent::new("charlie", "12345"));
 
         App {
@@ -52,6 +58,8 @@ impl App {
         }
     }
 
+    // Currently, this will call every frame. On Linux it's called in a loop. On Web
+    // it's called via request_animation_frame()
     pub fn update(&mut self) {
         match self.client.receive() {
             Ok(event) => {
@@ -67,9 +75,8 @@ impl App {
                             let message = string_event.message.get();
                             info!("Client received event: {}", message);
 
-                            let new_message: String = "Client Packet (".to_string()
-                                + self.server_event_count.to_string().as_str()
-                                + ")";
+                            let new_message =
+                                format!("Client Packet ({})", self.server_event_count);
                             info!("Client send: {}", new_message);
 
                             let string_event = StringEvent::new(new_message);
