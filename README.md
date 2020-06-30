@@ -3,7 +3,7 @@
 [![API Documentation](https://docs.rs/naia-server/badge.svg)](https://docs.rs/naia-server)
 
 # naia
-a _n_etworking _a_rchitecture for _i_nteractive _a_pplications
+a *n*etworking *a*rchitecture for *i*nteractive *a*pplications
 
 Naia intends to make cross-platform (Wasm included!) multiplayer game development in Rust dead simple and lightning fast.
 At the highest level, you register Event and Entity implementations in a module shared by Client & Server. Then, Naia will facilitate sending/receiving those Events between Client & Server, and also keep a pool of tracked Entities synced with each Client for whom they are "in-scope".
