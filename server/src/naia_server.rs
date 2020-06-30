@@ -350,12 +350,9 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                             for (user_key, connection) in self.client_connections.iter_mut() {
                                 if let Some(user) = self.users.get(*user_key) {
                                     connection.collect_entity_updates();
-                                    let mut packet_index: u8 = 1;
                                     while let Some(payload) =
                                         connection.get_outgoing_packet(&self.manifest)
                                     {
-                                        info!("sending packet {}", packet_index);
-                                        packet_index += 1;
                                         match self
                                             .sender
                                             .send(Packet::new_raw(user.address, payload))
