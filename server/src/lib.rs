@@ -1,3 +1,15 @@
+//! # Naia Server
+//! A server that uses either UDP or WebRTC communication to send/receive events to/from connected clients, and syncs registered entities to clients to whom those entities are in-scope.
+
+#![deny(
+    missing_docs,
+    trivial_casts,
+    trivial_numeric_casts,
+    unsafe_code,
+    unstable_features,
+    unused_import_braces,
+)]
+
 #[macro_use]
 extern crate log;
 
@@ -15,13 +27,8 @@ mod server_event;
 mod user;
 
 pub use {
-    entities::{
-        entity_key::EntityKey, entity_packet_writer::EntityPacketWriter,
-        server_entity_manager::ServerEntityManager, server_entity_message::ServerEntityMessage,
-        server_entity_mutator::ServerEntityMutator,
-    },
     naia_server::NaiaServer,
-    naia_server_socket::Packet,
     server_event::ServerEvent,
-    user::UserKey,
+    user::user_key::UserKey,
+    room::room_key::RoomKey,
 };

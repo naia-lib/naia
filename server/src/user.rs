@@ -1,7 +1,12 @@
 use crate::naia_server::Timestamp;
 use std::net::SocketAddr;
 
-new_key_type! { pub struct UserKey; }
+#[allow(missing_docs)]
+#[allow(unused_doc_comments)]
+pub mod user_key {
+    /// The Key used to get a reference of a User
+    new_key_type! { pub struct UserKey; }
+}
 
 #[derive(Clone)]
 pub struct User {

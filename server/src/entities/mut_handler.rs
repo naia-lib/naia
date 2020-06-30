@@ -2,10 +2,11 @@ use std::{cell::RefCell, collections::HashMap, net::SocketAddr, rc::Rc};
 
 use naia_shared::StateMask;
 
-use crate::EntityKey;
+use crate::entities::entity_key::entity_key::EntityKey;
 
 use indexmap::IndexMap;
 
+#[derive(Debug)]
 pub struct MutHandler {
     entity_state_mask_list_map: HashMap<EntityKey, IndexMap<SocketAddr, Rc<RefCell<StateMask>>>>,
 }

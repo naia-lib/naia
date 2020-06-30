@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use naia_shared::EntityMutator;
 
-use super::{entity_key::EntityKey, mut_handler::MutHandler};
+use super::{entity_key::entity_key::EntityKey, mut_handler::MutHandler};
 
 pub struct ServerEntityMutator {
     key: Option<EntityKey>,

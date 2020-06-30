@@ -10,7 +10,7 @@ use log::info;
 use ring::{hmac, rand};
 use slotmap::DenseSlotMap;
 
-use naia_server_socket::{Config as SocketConfig, MessageSender, ServerSocket, SocketEvent};
+use naia_server_socket::{Config as SocketConfig, MessageSender, ServerSocket, SocketEvent, Packet};
 pub use naia_shared::{
     Config, Connection, Entity, EntityMutator, EntityType, Event, EventType, HostType, Instant,
     ManagerType, Manifest, PacketReader, PacketType, Timer, Timestamp,
@@ -19,15 +19,15 @@ pub use naia_shared::{
 use super::{
     client_connection::ClientConnection,
     entities::{
-        entity_key::EntityKey, mut_handler::MutHandler, server_entity_mutator::ServerEntityMutator,
+        entity_key::entity_key::EntityKey, mut_handler::MutHandler, server_entity_mutator::ServerEntityMutator,
     },
     error::NaiaServerError,
-    room::{Room, RoomKey},
+    room::{Room, room_key::RoomKey},
     server_event::ServerEvent,
-    user::{User, UserKey},
-    Packet,
+    user::{User, user_key::UserKey},
 };
 
+/// A server that uses either UDP or WebRTC communication to send/receive events to/from connected clients, and syncs registered entities to clients to whom those entities are in-scope
 pub struct NaiaServer<T: EventType, U: EntityType> {
     config: Config,
     manifest: Manifest<T, U>,
@@ -47,6 +47,7 @@ pub struct NaiaServer<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> NaiaServer<T, U> {
+    /// Create a new Server, given an address to listen at, an Event/Entity manifest, and an optional Config
     pub async fn new(address: &str, manifest: Manifest<T, U>, config: Option<Config>) -> Self {
         let mut config = match config {
             Some(config) => config,
@@ -84,6 +85,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         }
     }
 
+    /// Must be called regularly, maintains connection to and receives messages from all Clients
     pub async fn receive(&mut self) -> Result<ServerEvent<T>, NaiaServerError> {
         let mut output: Option<Result<ServerEvent<T>, NaiaServerError>> = None;
         while output.is_none() {
@@ -396,12 +398,16 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         connection.mark_sent();
     }
 
+    /// Queues up an Event to be sent to the Client associated with a given UserKey
     pub fn send_event(&mut self, user_key: &UserKey, event: &impl Event<T>) {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
             connection.queue_event(event);
         }
     }
 
+    /// Register an Entity with the Server, whereby the Server will sync the state of the Entity to all connected
+    /// Clients for which the Entity is in scope. Gives back an EntityKey which can be used to get the reference
+    /// to the Entity from the Server once again
     pub fn register_entity(&mut self, entity: Rc<RefCell<dyn Entity<U>>>) -> EntityKey {
         let new_mutator_ref: Rc<RefCell<ServerEntityMutator>> =
             Rc::new(RefCell::new(ServerEntityMutator::new(&self.mut_handler)));
@@ -418,48 +424,65 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         return entity_key;
     }
 
+    /// Deregisters an Entity with the Server, deleting local copies of the Entity on each Client
     pub fn deregister_entity(&mut self, key: EntityKey) {
         self.mut_handler.borrow_mut().deregister_entity(&key);
         self.global_entity_store.remove(key);
     }
 
+    /// Given an EntityKey, get a reference to a registered Entity being tracked by the Server
     pub fn get_entity(&mut self, key: EntityKey) -> Option<&Rc<RefCell<dyn Entity<U>>>> {
         return self.global_entity_store.get(key);
     }
 
+    /// Creates a new Room on the Server, returns a Key which can be used to reference said Room
     pub fn create_room(&mut self) -> RoomKey {
         let new_room = Room::new();
         return self.rooms.insert(new_room);
     }
 
+    /// Deletes the Room associated with a given RoomKey on the Server
     pub fn delete_room(&mut self, key: RoomKey) {
         self.rooms.remove(key);
     }
 
+    /// Gets a Room given an associated RoomKey
     pub fn get_room(&self, key: RoomKey) -> Option<&Room> {
         return self.rooms.get(key);
     }
 
+    /// Gets a mutable Room given an associated RoomKey
     pub fn get_room_mut(&mut self, key: RoomKey) -> Option<&mut Room> {
         return self.rooms.get_mut(key);
     }
 
+    /// Iterate through all the Server's current Rooms
     pub fn rooms_iter(&self) -> slotmap::dense::Iter<RoomKey, Room> {
         return self.rooms.iter();
     }
 
+    /// Add an Entity to a Room, given the appropriate RoomKey & EntityKey
+    /// Entities will only ever be in-scope for Users which are in a Room with them
     pub fn room_add_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
             room.add_entity(entity_key);
         }
     }
 
+    /// Add an User to a Room, given the appropriate RoomKey & UserKey
+    /// Entities will only ever be in-scope for Users which are in a Room with them
     pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
             room.subscribe_user(user_key);
         }
     }
 
+    /// Registers a closure which is used to evaluate whether, given a User & Entity that are in the same Room,
+    /// said Entity should be in scope for the given User.
+    ///
+    /// While Rooms allow for a very simple scope to which an Entity can belong, this closure provides complete customization for advanced scopes.
+    ///
+    /// This closure will be called every Tick of the Server, for every User & Entity in a Room together, so try to keep it performant
     pub fn on_scope_entity(
         &mut self,
         scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>,
@@ -467,17 +490,14 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         self.scope_entity_func = Some(scope_func);
     }
 
+    /// Registers a closure which will be called during the handshake process with a new Client
+    ///
+    /// The Event evaluated in this closure should match the Event used client-side in the NaiaClient::new() method
     pub fn on_auth(&mut self, auth_func: Rc<Box<dyn Fn(&UserKey, &T) -> bool>>) {
         self.auth_func = Some(auth_func);
     }
 
-    pub fn get_sequence_number(&mut self, user_key: &UserKey) -> Option<u16> {
-        if let Some(connection) = self.client_connections.get_mut(user_key) {
-            return Some(connection.get_next_packet_index());
-        }
-        return None;
-    }
-
+    /// Get the current measured Round Trip Time to the Server
     pub fn get_rtt(&mut self, user_key: &UserKey) -> Option<f32> {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
             return Some(connection.get_rtt());
@@ -485,10 +505,12 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         return None;
     }
 
+    /// Iterate through all currently connected Users
     pub fn users_iter(&self) -> slotmap::dense::Iter<UserKey, User> {
         return self.users.iter();
     }
 
+    /// Get a User, given the associated UserKey
     pub fn get_user(&self, user_key: &UserKey) -> Option<&User> {
         return self.users.get(*user_key);
     }
