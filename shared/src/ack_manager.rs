@@ -5,7 +5,12 @@ use super::{
     standard_header::StandardHeader,
 };
 
-use crate::{EntityNotifiable, EventManager, EventType, HostType, PacketType};
+use super::{
+    entities::entity_notifiable::EntityNotifiable,
+    events::{event_manager::EventManager, event_type::EventType},
+    host_type::HostType,
+    packet_type::PacketType,
+};
 
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
 const DEFAULT_SEND_PACKETS_SIZE: usize = 256;

@@ -1,4 +1,4 @@
-use crate::Duration;
+use crate::duration::Duration;
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {

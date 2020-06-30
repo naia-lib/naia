@@ -1,5 +1,12 @@
-use crate::{EntityType, Event, EventType, ManagerType, Manifest, StandardHeader};
 use byteorder::{BigEndian, WriteBytesExt};
+
+use crate::{
+    entities::entity_type::EntityType,
+    events::{event::Event, event_type::EventType},
+    manager_type::ManagerType,
+    manifest::Manifest,
+    standard_header::StandardHeader,
+};
 
 pub const MTU_SIZE: usize = 508 - StandardHeader::bytes_number();
 

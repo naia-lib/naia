@@ -1,4 +1,4 @@
-use crate::{Duration, RttData};
+use crate::{duration::Duration, rtt::rtt_data::RttData};
 
 #[derive(Debug)]
 pub struct RttMeasurer {

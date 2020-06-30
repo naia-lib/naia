@@ -1,8 +1,9 @@
-use crate::EventType;
 use std::{
     any::TypeId,
     fmt::{Debug, Formatter, Result},
 };
+
+use super::event_type::EventType;
 
 pub trait EventBuilder<T: EventType> {
     fn get_type_id(&self) -> TypeId;

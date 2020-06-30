@@ -1,4 +1,5 @@
-use crate::EntityType;
+use super::entity_type::EntityType;
+
 use std::{
     any::TypeId,
     fmt::{Debug, Formatter, Result},

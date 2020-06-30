@@ -1,6 +1,4 @@
-use crate::Instant;
-
-use crate::SequenceNumber;
+use crate::{instant::Instant, sequence_buffer::SequenceNumber};
 
 #[derive(Debug, Clone)]
 pub struct RttData {

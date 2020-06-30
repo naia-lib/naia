@@ -1,5 +1,6 @@
-use crate::PacketReader;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+
+use crate::packet_reader::PacketReader;
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
