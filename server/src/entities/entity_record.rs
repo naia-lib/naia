@@ -2,13 +2,14 @@ use std::{cell::RefCell, rc::Rc};
 
 use naia_shared::{LocalEntityKey, StateMask};
 
+#[derive(Debug)]
 pub struct EntityRecord {
     pub local_key: LocalEntityKey,
     state_mask: Rc<RefCell<StateMask>>,
     pub status: LocalEntityStatus,
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum LocalEntityStatus {
     Creating,
     Created,

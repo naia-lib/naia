@@ -1,8 +1,13 @@
 use std::collections::{hash_set::Iter, HashSet, VecDeque};
 
-use super::{entities::entity_key::EntityKey, user::UserKey};
+use super::{entities::entity_key::entity_key::EntityKey, user::user_key::UserKey};
 
-new_key_type! { pub struct RoomKey; }
+#[allow(missing_docs)]
+#[allow(unused_doc_comments)]
+pub mod room_key {
+    /// The Key used to get a reference of a Room
+    new_key_type! { pub struct RoomKey; }
+}
 
 pub struct Room {
     users: HashSet<UserKey>,

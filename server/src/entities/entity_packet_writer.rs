@@ -4,9 +4,12 @@ use naia_shared::{EntityType, EventType, Manifest, PacketWriter, MTU_SIZE};
 
 use super::server_entity_message::ServerEntityMessage;
 
+/// Writes into a packet with Entity data
+#[derive(Debug)]
 pub struct EntityPacketWriter {}
 
 impl EntityPacketWriter {
+    /// Given a general PacketWriter, the manifest, and a buffered EntityMessage, actually write Entity data into the packet
     pub fn write_entity_message<T: EventType, U: EntityType>(
         packet_writer: &mut PacketWriter,
         manifest: &Manifest<T, U>,

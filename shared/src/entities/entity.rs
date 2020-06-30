@@ -1,4 +1,14 @@
-use std::{any::TypeId, cell::RefCell, rc::Rc};
+
+use std::{
+    any::TypeId,
+    cell::RefCell,
+    rc::Rc,
+    fmt::{
+        Formatter,
+        Debug,
+        Result,
+    },
+};
 
 use crate::{EntityMutator, EntityType, StateMask};
 
@@ -10,4 +20,10 @@ pub trait Entity<T: EntityType> {
     fn write_partial(&self, state_mask: &StateMask, out_bytes: &mut Vec<u8>);
     fn read_partial(&mut self, state_mask: &StateMask, in_bytes: &[u8]);
     fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>);
+}
+
+impl<T: EntityType> Debug for dyn Entity<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        f.write_str("Entity")
+    }
 }

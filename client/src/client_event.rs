@@ -1,6 +1,6 @@
 use naia_shared::{EventType, LocalEntityKey};
 
-/// An Event that can be emitted by the Client, usually as a result of some communicating with the Server
+/// An Event that is be emitted by the Client, usually as a result of some communication with the Server
 #[derive(Debug)]
 pub enum ClientEvent<T: EventType> {
     /// Occurs when the Client has successfully established a connection with the Server

@@ -2,7 +2,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::fmt;
 use std::io::Cursor;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct StateMask {
     mask: Vec<u8>,
     bytes: u8,

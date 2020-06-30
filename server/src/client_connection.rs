@@ -7,8 +7,12 @@ use naia_shared::{
 };
 
 use super::{
-    entities::{entity_key::EntityKey, mut_handler::MutHandler},
-    EntityPacketWriter, ServerEntityManager,
+    entities::{
+        entity_key::entity_key::EntityKey,
+        mut_handler::MutHandler,
+        entity_packet_writer::EntityPacketWriter,
+        server_entity_manager::ServerEntityManager,
+    },
 };
 
 pub struct ClientConnection<T: EventType, U: EntityType> {

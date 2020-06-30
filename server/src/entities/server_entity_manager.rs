@@ -10,14 +10,15 @@ use std::{
 use slotmap::SparseSecondaryMap;
 
 use super::{
-    entity_key::EntityKey,
+    entity_key::entity_key::EntityKey,
     entity_record::{EntityRecord, LocalEntityStatus},
     mut_handler::MutHandler,
-    //server_entity::ServerEntity,
     server_entity_message::ServerEntityMessage,
 };
 use naia_shared::{Entity, EntityNotifiable, EntityType, LocalEntityKey, StateMask};
 
+/// Manages Entities for a given Client connection and keeps them in sync on the Client
+#[derive(Debug)]
 pub struct ServerEntityManager<T: EntityType> {
     address: SocketAddr,
     local_entity_store: SparseSecondaryMap<EntityKey, Rc<RefCell<dyn Entity<T>>>>,
@@ -35,6 +36,7 @@ pub struct ServerEntityManager<T: EntityType> {
 }
 
 impl<T: EntityType> ServerEntityManager<T> {
+    /// Create a new ServerEntityManager, given the client's address and a reference to a MutHandler associated with the Client
     pub fn new(address: SocketAddr, mut_handler: &Rc<RefCell<MutHandler>>) -> Self {
         ServerEntityManager {
             address,
@@ -238,15 +240,6 @@ impl<T: EntityType> ServerEntityManager<T> {
                 }
             }
         }
-    }
-
-    pub fn get_local_entity(&self, key: u16) -> Option<&Rc<RefCell<dyn Entity<T>>>> {
-        if let Some(global_key) = self.local_to_global_key_map.get(&key) {
-            if let Some(entity) = self.local_entity_store.get(*global_key) {
-                return Some(entity);
-            }
-        }
-        return None;
     }
 }
 

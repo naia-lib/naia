@@ -1,8 +1,9 @@
 use naia_shared::{Entity, EntityType, LocalEntityKey, StateMask};
 use std::{cell::RefCell, rc::Rc};
 
-use super::entity_key::EntityKey;
+use super::entity_key::entity_key::EntityKey;
 
+#[derive(Debug)]
 pub enum ServerEntityMessage<T: EntityType> {
     Create(EntityKey, LocalEntityKey, Rc<RefCell<dyn Entity<T>>>),
     Update(
