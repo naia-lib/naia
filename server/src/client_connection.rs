@@ -1,7 +1,7 @@
 use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
-    AckManager, Config, Connection, Entity, EntityType, Event, EventManager, EventType, HostType,
+    AckManager, Config, Connection, Entity, EntityType, Event, EventManager, EventType,
     ManagerType, Manifest, PacketReader, PacketType, PacketWriter, RttTracker, SequenceNumber,
     Timer,
 };
@@ -32,7 +32,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
                 address,
                 Timer::new(heartbeat_interval),
                 Timer::new(timeout_duration),
-                AckManager::new(HostType::Server),
+                AckManager::new(),
                 RttTracker::new(rtt_smoothing_factor, rtt_max_value),
                 EventManager::new(),
             ),

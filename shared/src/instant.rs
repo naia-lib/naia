@@ -14,8 +14,8 @@ cfg_if! {
             inner: f64,
         }
 
-        /// Creates an Instant from the moment the method is called
         impl Instant {
+            /// Creates an Instant from the moment the method is called
             pub fn now() -> Self {
                 Instant {
                     inner: Date::now(),

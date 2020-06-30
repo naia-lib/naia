@@ -14,8 +14,8 @@ use naia_server_socket::{
     Config as SocketConfig, MessageSender, Packet, ServerSocket, SocketEvent,
 };
 pub use naia_shared::{
-    Config, Connection, Entity, EntityMutator, EntityType, Event, EventType, HostType, Instant,
-    ManagerType, Manifest, PacketReader, PacketType, Timer, Timestamp,
+    Config, Connection, Entity, EntityMutator, EntityType, Event, EventType, Instant, ManagerType,
+    Manifest, PacketReader, PacketType, Timer, Timestamp,
 };
 
 use super::{
@@ -54,7 +54,11 @@ pub struct NaiaServer<T: EventType, U: EntityType> {
 impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     /// Create a new Server, given an address to listen at, an Event/Entity
     /// manifest, and an optional Config
-    pub async fn new(address: &str, manifest: Manifest<T, U>, config: Option<Config>) -> Self {
+    pub async fn new(
+        address: SocketAddr,
+        manifest: Manifest<T, U>,
+        config: Option<Config>,
+    ) -> Self {
         let mut config = match config {
             Some(config) => config,
             None => Config::default(),

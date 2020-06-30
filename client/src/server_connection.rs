@@ -1,9 +1,9 @@
 use std::net::SocketAddr;
 
 use naia_shared::{
-    AckManager, Config, Connection, EntityType, Event, EventManager, EventType, HostType,
-    LocalEntityKey, ManagerType, Manifest, PacketReader, PacketType, PacketWriter, RttTracker,
-    SequenceNumber, Timer,
+    AckManager, Config, Connection, EntityType, Event, EventManager, EventType, LocalEntityKey,
+    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, RttTracker, SequenceNumber,
+    Timer,
 };
 
 use super::{
@@ -28,7 +28,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                 address,
                 Timer::new(heartbeat_interval),
                 Timer::new(timeout_duration),
-                AckManager::new(HostType::Client),
+                AckManager::new(),
                 RttTracker::new(rtt_smoothing_factor, rtt_max_value),
                 EventManager::new(),
             ),

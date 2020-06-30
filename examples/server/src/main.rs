@@ -7,9 +7,9 @@ use naia_server::{find_my_ip_address, Config, NaiaServer, ServerEvent, UserKey};
 
 use naia_example_shared::{manifest_load, ExampleEntity, ExampleEvent, PointEntity, StringEvent};
 
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{cell::RefCell, net::SocketAddr, rc::Rc, time::Duration};
 
-const SERVER_PORT: &str = "14191";
+const SERVER_PORT: u16 = 14191;
 
 #[tokio::main]
 async fn main() {
@@ -18,18 +18,13 @@ async fn main() {
     info!("Naia Server Example Started");
 
     let current_ip_address = find_my_ip_address().expect("can't find ip address");
-    let current_socket_address = format!("{}:{}", current_ip_address, SERVER_PORT);
+    let current_socket_address = SocketAddr::new(current_ip_address, SERVER_PORT);
 
     let mut config = Config::default();
     config.tick_interval = Duration::from_secs(4);
     config.heartbeat_interval = Duration::from_secs(1);
 
-    let mut server = NaiaServer::new(
-        current_socket_address.as_str(),
-        manifest_load(),
-        Some(config),
-    )
-    .await;
+    let mut server = NaiaServer::new(current_socket_address, manifest_load(), Some(config)).await;
 
     let main_room_key = server.create_room();
     let mut point_entities: Vec<Rc<RefCell<PointEntity>>> = Vec::new();
