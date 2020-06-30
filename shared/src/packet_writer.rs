@@ -8,12 +8,16 @@ use crate::{
     standard_header::StandardHeader,
 };
 
+/// The maximum of bytes that can be used for the payload of a given packet. (See #38 of http://ithare.com/64-network-dos-and-donts-for-game-engines-part-v-udp/)
 pub const MTU_SIZE: usize = 508 - StandardHeader::bytes_number();
 
+/// Handles writing of Event & Entity data into an outgoing packet
 pub struct PacketWriter {
     event_working_bytes: Vec<u8>,
     event_count: u8,
+    /// bytes representing outgoing Entity messages / updates
     pub entity_working_bytes: Vec<u8>,
+    /// number of Entity messages to be written
     pub entity_message_count: u8,
 }
 
@@ -29,10 +33,12 @@ impl PacketWriter {
         }
     }
 
+    /// Returns whether the writer has bytes to write into the outgoing packet
     pub fn has_bytes(&self) -> bool {
         return self.event_count != 0 || self.entity_message_count != 0;
     }
 
+    /// Gets the bytes to write into an outgoing packet
     pub fn get_bytes(&mut self) -> Box<[u8]> {
         let mut out_bytes = Vec::<u8>::new();
 
@@ -65,10 +71,14 @@ impl PacketWriter {
         out_bytes.into_boxed_slice()
     }
 
+    /// Get the number of bytes which is ready to be written into an outgoing
+    /// packet
     pub fn bytes_number(&self) -> usize {
         return self.event_working_bytes.len() + self.entity_working_bytes.len();
     }
 
+    /// Writes an Event into the Writer's internal buffer, which will eventually
+    /// be put into the outgoing packet
     pub fn write_event<T: EventType, U: EntityType>(
         &mut self,
         manifest: &Manifest<T, U>,
