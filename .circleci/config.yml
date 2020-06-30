@@ -29,8 +29,11 @@ jobs:
             rustfmt --version
             cargo fmt --all -- --check --color=auto
       - run:
-          name: Build all targets
-          command: cargo build --all --all-targets
+          name: Build UDP targets
+          command: cargo build --all --all-targets --features "use-udp"
+      - run:
+          name: Build WebRTC targets
+          command: cargo build --all --all-targets --features "use-webrtc"
       - save_cache:
           paths:
             - /usr/local/cargo/registry
