@@ -1,12 +1,11 @@
 [![Build Status](https://img.shields.io/circleci/project/github/connorcarpenter/naia.svg)](https://circleci.com/gh/connorcarpenter/naia)
 [![Latest Version](https://img.shields.io/crates/v/naia-server.svg)](https://crates.io/crates/naia-server)
 [![API Documentation](https://docs.rs/naia-server/badge.svg)](https://docs.rs/naia-server)
-![Lines of Code][s6]
+![](https://tokei.rs/b1/github/connorcarpenter/naia)
 [![MIT/Apache][s3]][l3]
 
 [s3]: https://img.shields.io/badge/license-MIT%2FApache-blue.svg
 [l3]: docs/LICENSE-MIT
-[s6]: https://tokei.rs/b1/github/connorcarpenter/naia?category=code
 
 # naia
 a *n*etworking *a*rchitecture for *i*nteractive *a*pplications
