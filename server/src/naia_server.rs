@@ -374,8 +374,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                     }
                 }
                 Err(error) => {
-                    //                    //TODO: Determine if disconnecting a user based on a send
-                    // error is the right thing to do                    if let
+                    //TODO: Determine if disconnecting a user based on a send error is the right
+                    // thing to do
+                    //
+                    // if let
                     // NaiaServerSocketError::SendError(address) = error {
                     //                        if let Some(user_key) =
                     // self.address_to_user_key_map.get(&address).copied() {
