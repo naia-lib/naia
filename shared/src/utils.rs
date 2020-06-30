@@ -1,5 +1,6 @@
-use crate::{PacketType, StandardHeader};
+use crate::{packet_type::PacketType, standard_header::StandardHeader};
 
+/// Write a connectionless packet, that is, one that does not rely on information normally retrieved from the connection
 pub fn write_connectionless_payload(packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
     // Add Ack Header onto message!
     let mut header_bytes = Vec::new();
@@ -12,6 +13,7 @@ pub fn write_connectionless_payload(packet_type: PacketType, payload: &[u8]) -> 
         .into_boxed_slice()
 }
 
+/// Strip the standard header off of a packet's payload and retrieve the payload bytes
 pub fn read_headerless_payload(payload: &[u8]) -> Box<[u8]> {
     let (_, stripped_message) = StandardHeader::read(payload);
     stripped_message

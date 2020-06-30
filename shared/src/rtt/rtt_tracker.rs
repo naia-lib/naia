@@ -1,4 +1,7 @@
-use crate::{sequence_buffer::SequenceBuffer, RttData, RttMeasurer};
+use crate::{
+    rtt::{rtt_data::RttData, rtt_measurer::RttMeasurer},
+    sequence_buffer::SequenceBuffer,
+};
 
 #[derive(Debug)]
 pub struct RttTracker {

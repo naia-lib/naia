@@ -2,7 +2,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use std::io::Read;
 
-use crate::PacketType;
+use crate::packet_type::PacketType;
 
 #[derive(Copy, Clone, Debug)]
 /// This header provides reliability information.
@@ -47,10 +47,6 @@ impl StandardHeader {
     /// Returns last acknowledged sequence number.
     pub fn ack_seq(&self) -> u16 {
         self.ack_seq
-    }
-
-    pub fn packet_type(&self) -> PacketType {
-        self.p_type
     }
 
     pub fn write(&self, buffer: &mut Vec<u8>) {

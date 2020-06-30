@@ -1,3 +1,14 @@
+//! # Naia Shared
+//! Common functionality shared between naia-server & naia-client crates.
+
+#![deny(
+    trivial_casts,
+    trivial_numeric_casts,
+    unsafe_code,
+    unstable_features,
+    unused_import_braces
+)]
+
 #[macro_use]
 extern crate log;
 
@@ -21,6 +32,8 @@ mod rtt;
 mod sequence_buffer;
 mod standard_header;
 mod timestamp;
+
+/// Commonly used utility methods to be used by naia-server & naia-client
 pub mod utils;
 
 pub use naia_socket_shared::{find_my_ip_address, Timer};
@@ -29,7 +42,6 @@ pub use {
     ack_manager::AckManager,
     config::Config,
     connection::Connection,
-    duration::Duration,
     entities::{
         entity::Entity, entity_builder::EntityBuilder, entity_mutator::EntityMutator,
         entity_notifiable::EntityNotifiable, entity_type::EntityType,
@@ -49,8 +61,7 @@ pub use {
     packet_reader::PacketReader,
     packet_type::PacketType,
     packet_writer::{PacketWriter, MTU_SIZE},
-    rtt::{rtt_data::RttData, rtt_measurer::RttMeasurer, rtt_tracker::RttTracker},
+    rtt::rtt_tracker::RttTracker,
     sequence_buffer::SequenceNumber,
-    standard_header::StandardHeader,
     timestamp::Timestamp,
 };

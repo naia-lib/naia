@@ -5,7 +5,15 @@ use std::{
     vec::Vec,
 };
 
-use crate::{EntityType, Event, EventClone, EventType, Manifest, PacketReader};
+use crate::{
+    entities::entity_type::EntityType,
+    events::{
+        event::{Event, EventClone},
+        event_type::EventType,
+    },
+    manifest::Manifest,
+    packet_reader::PacketReader,
+};
 
 #[derive(Debug)]
 pub struct EventManager<T: EventType> {

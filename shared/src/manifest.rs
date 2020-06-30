@@ -1,7 +1,10 @@
 use std::any::TypeId;
 use std::collections::HashMap;
 
-use crate::{EntityBuilder, EntityType, EventBuilder, EventType};
+use crate::{
+    entities::{entity_builder::EntityBuilder, entity_type::EntityType},
+    events::{event_builder::EventBuilder, event_type::EventType},
+};
 
 #[derive(Debug)]
 pub struct Manifest<T: EventType, U: EntityType> {

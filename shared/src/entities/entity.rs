@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{EntityMutator, EntityType, StateMask};
+use super::{entity_mutator::EntityMutator, entity_type::EntityType, state_mask::StateMask};
 
 pub trait Entity<T: EntityType> {
     fn get_state_mask_size(&self) -> u8;
