@@ -1,5 +1,6 @@
 use std::clone::Clone;
 
+/// Used to index packets that have been sent & received
 pub type SequenceNumber = u16;
 
 /// Collection to store data of any kind.

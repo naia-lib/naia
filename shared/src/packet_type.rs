@@ -37,6 +37,8 @@ impl From<u8> for PacketType {
 }
 
 impl PacketType {
+    /// Given all the bytes of an incoming packet, get the PacketType from the
+    /// header
     pub fn get_from_packet(payload: &[u8]) -> PacketType {
         StandardHeader::get_packet_type(payload)
     }

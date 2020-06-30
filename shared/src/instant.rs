@@ -1,5 +1,7 @@
 use crate::duration::Duration;
 
+//TODO: Timestamp & Instant implementations can probably be merged
+
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         // Wasm //
