@@ -34,8 +34,9 @@ impl<T: Clone + Default> SequenceBuffer<T> {
         None
     }
 
-    /// Inserts the entry data into the sequence buffer. If the requested sequence number is "too
-    /// old", the entry will not be inserted and no reference will be returned.
+    /// Inserts the entry data into the sequence buffer. If the requested
+    /// sequence number is "too old", the entry will not be inserted and no
+    /// reference will be returned.
     pub fn insert(&mut self, sequence_num: SequenceNumber, entry: T) -> Option<&mut T> {
         // sequence number is too old to insert into the buffer
         if sequence_less_than(
@@ -54,7 +55,8 @@ impl<T: Clone + Default> SequenceBuffer<T> {
         Some(&mut self.entries[index])
     }
 
-    /// Returns whether or not we have previously inserted an entry for the given sequence number.
+    /// Returns whether or not we have previously inserted an entry for the
+    /// given sequence number.
     pub fn exists(&self, sequence_num: SequenceNumber) -> bool {
         let index = self.index(sequence_num);
         if let Some(s) = self.entry_sequences[index] {

@@ -59,7 +59,8 @@ impl AckManager {
         self.received_packets
             .insert(remote_seq_num, ReceivedPacket {});
 
-        // ensure that `self.remote_ack_sequence_num` is always increasing (with wrapping)
+        // ensure that `self.remote_ack_sequence_num` is always increasing (with
+        // wrapping)
         if sequence_greater_than(remote_ack_seq, self.remote_ack_sequence_num) {
             self.remote_ack_sequence_num = remote_ack_seq;
         }
@@ -73,8 +74,9 @@ impl AckManager {
             self.sent_packets.remove(&remote_ack_seq);
         }
 
-        // The `remote_ack_field` is going to include whether or not the past 32 packets have been
-        // received successfully. If so, we have no need to resend old packets.
+        // The `remote_ack_field` is going to include whether or not the past 32 packets
+        // have been received successfully. If so, we have no need to resend old
+        // packets.
         for i in 1..=REDUNDANT_PACKET_ACKS_SIZE {
             let ack_sequence = remote_ack_seq.wrapping_sub(i);
             if let Some(sent_packet) = self.sent_packets.get(&ack_sequence) {
@@ -137,14 +139,6 @@ impl AckManager {
         event_manager: &mut EventManager<T>,
         entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
     ) {
-        //        let host_type_string = match self.host_type {
-        //            HostType::Server => "Server",
-        //            HostType::Client => "Client",
-        //        };
-        //        info!(
-        //            "-------------- notify -- [{} Packet ({})] -- DELIVERED! --------------",
-        //            host_type_string, packet_sequence_number
-        //        );
         event_manager.notify_packet_delivered(packet_sequence_number);
         if let Some(notifiable) = entity_notifiable {
             notifiable.notify_packet_delivered(packet_sequence_number);
@@ -157,14 +151,6 @@ impl AckManager {
         event_manager: &mut EventManager<T>,
         entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
     ) {
-        //        let host_type_string = match self.host_type {
-        //            HostType::Server => "Server",
-        //            HostType::Client => "Client",
-        //        };
-        //        info!(
-        //            "---XXXXXXXX--- notify -- [{} Packet ({})] -- DROPPED! ---XXXXXXXX---",
-        //            host_type_string, packet_sequence_number
-        //        );
         event_manager.notify_packet_dropped(packet_sequence_number);
         if let Some(notifiable) = entity_notifiable {
             notifiable.notify_packet_dropped(packet_sequence_number);
@@ -180,8 +166,8 @@ impl AckManager {
         let mut ack_bitfield: u32 = 0;
         let mut mask: u32 = 1;
 
-        // iterate the past `REDUNDANT_PACKET_ACKS_SIZE` received packets and set the corresponding
-        // bit for each packet which exists in the buffer.
+        // iterate the past `REDUNDANT_PACKET_ACKS_SIZE` received packets and set the
+        // corresponding bit for each packet which exists in the buffer.
         for i in 1..=REDUNDANT_PACKET_ACKS_SIZE {
             let sequence = most_recent_remote_seq_num.wrapping_sub(i);
             if self.received_packets.exists(sequence) {

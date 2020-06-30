@@ -1,6 +1,5 @@
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use std::fmt;
-use std::io::Cursor;
+use std::{fmt, io::Cursor};
 
 #[derive(Debug, Clone)]
 pub struct StateMask {

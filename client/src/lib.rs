@@ -1,5 +1,6 @@
 //! # Naia Client
-//! A cross-platform client that can send/receive events to/from a server, and has a pool of in-scope entities that are synced with the server.
+//! A cross-platform client that can send/receive events to/from a server, and
+//! has a pool of in-scope entities that are synced with the server.
 
 #![deny(
     missing_docs,
@@ -23,9 +24,6 @@ mod error;
 mod naia_client;
 mod server_connection;
 
-pub use {
-    //client_entity_manager::ClientEntityManager, client_entity_message::ClientEntityMessage,
-    client_event::ClientEvent,
-    naia_client::NaiaClient,
-    naia_client_socket::Packet,
-};
+pub use client_event::ClientEvent;
+pub use naia_client::NaiaClient;
+pub use naia_client_socket::Packet;

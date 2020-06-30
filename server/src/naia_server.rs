@@ -30,7 +30,9 @@ use super::{
     user::{user_key::UserKey, User},
 };
 
-/// A server that uses either UDP or WebRTC communication to send/receive events to/from connected clients, and syncs registered entities to clients to whom those entities are in-scope
+/// A server that uses either UDP or WebRTC communication to send/receive events
+/// to/from connected clients, and syncs registered entities to clients to whom
+/// those entities are in-scope
 pub struct NaiaServer<T: EventType, U: EntityType> {
     config: Config,
     manifest: Manifest<T, U>,
@@ -50,7 +52,8 @@ pub struct NaiaServer<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> NaiaServer<T, U> {
-    /// Create a new Server, given an address to listen at, an Event/Entity manifest, and an optional Config
+    /// Create a new Server, given an address to listen at, an Event/Entity
+    /// manifest, and an optional Config
     pub async fn new(address: &str, manifest: Manifest<T, U>, config: Option<Config>) -> Self {
         let mut config = match config {
             Some(config) => config,
@@ -88,7 +91,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         }
     }
 
-    /// Must be called regularly, maintains connection to and receives messages from all Clients
+    /// Must be called regularly, maintains connection to and receives messages
+    /// from all Clients
     pub async fn receive(&mut self) -> Result<ServerEvent<T>, NaiaServerError> {
         let mut output: Option<Result<ServerEvent<T>, NaiaServerError>> = None;
         while output.is_none() {
@@ -101,7 +105,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                         if connection.should_drop() {
                             self.outstanding_disconnects.push_back(*user_key);
                         } else if connection.should_send_heartbeat() {
-                            // Don't try to refactor this to self.internal_send, doesn't seem to work cause of iter_mut()
+                            // Don't try to refactor this to self.internal_send, doesn't seem to
+                            // work cause of iter_mut()
                             let payload =
                                 connection.process_outgoing_header(PacketType::Heartbeat, &[]);
                             self.sender
@@ -215,7 +220,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                             continue;
                                         }
                                     } else {
-                                        //Verify that timestamp hash has been written by this server instance
+                                        //Verify that timestamp hash has been written by this
+                                        // server instance
                                         let mut timestamp_bytes: Vec<u8> = Vec::new();
                                         timestamp.write(&mut timestamp_bytes);
                                         let mut digest_bytes: Vec<u8> = Vec::new();
@@ -317,7 +323,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                     {
                                         match self.client_connections.get_mut(user_key) {
                                             Some(connection) => {
-                                                // Still need to do this so that proper notify events fire based on the heartbeat header
+                                                // Still need to do this so that proper notify
+                                                // events fire based on the heartbeat header
                                                 connection
                                                     .process_incoming_header(packet.payload());
                                                 continue;
@@ -366,11 +373,14 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                     }
                 }
                 Err(error) => {
-                    //                    //TODO: Determine if disconnecting a user based on a send error is the right thing to do
-                    //                    if let NaiaServerSocketError::SendError(address) = error {
-                    //                        if let Some(user_key) = self.address_to_user_key_map.get(&address).copied() {
+                    //                    //TODO: Determine if disconnecting a user based on a send
+                    // error is the right thing to do                    if let
+                    // NaiaServerSocketError::SendError(address) = error {
+                    //                        if let Some(user_key) =
+                    // self.address_to_user_key_map.get(&address).copied() {
                     //                            self.client_connections.remove(&user_key);
-                    //                            output = Some(Ok(ServerEvent::Disconnection(user_key)));
+                    //                            output =
+                    // Some(Ok(ServerEvent::Disconnection(user_key)));
                     //                            continue;
                     //                        }
                     //                    }
@@ -400,15 +410,17 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         connection.mark_sent();
     }
 
-    /// Queues up an Event to be sent to the Client associated with a given UserKey
+    /// Queues up an Event to be sent to the Client associated with a given
+    /// UserKey
     pub fn send_event(&mut self, user_key: &UserKey, event: &impl Event<T>) {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
             connection.queue_event(event);
         }
     }
 
-    /// Register an Entity with the Server, whereby the Server will sync the state of the Entity to all connected
-    /// Clients for which the Entity is in scope. Gives back an EntityKey which can be used to get the reference
+    /// Register an Entity with the Server, whereby the Server will sync the
+    /// state of the Entity to all connected Clients for which the Entity is
+    /// in scope. Gives back an EntityKey which can be used to get the reference
     /// to the Entity from the Server once again
     pub fn register_entity(&mut self, entity: Rc<RefCell<dyn Entity<U>>>) -> EntityKey {
         let new_mutator_ref: Rc<RefCell<ServerEntityMutator>> =
@@ -426,18 +438,21 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         return entity_key;
     }
 
-    /// Deregisters an Entity with the Server, deleting local copies of the Entity on each Client
+    /// Deregisters an Entity with the Server, deleting local copies of the
+    /// Entity on each Client
     pub fn deregister_entity(&mut self, key: EntityKey) {
         self.mut_handler.borrow_mut().deregister_entity(&key);
         self.global_entity_store.remove(key);
     }
 
-    /// Given an EntityKey, get a reference to a registered Entity being tracked by the Server
+    /// Given an EntityKey, get a reference to a registered Entity being tracked
+    /// by the Server
     pub fn get_entity(&mut self, key: EntityKey) -> Option<&Rc<RefCell<dyn Entity<U>>>> {
         return self.global_entity_store.get(key);
     }
 
-    /// Creates a new Room on the Server, returns a Key which can be used to reference said Room
+    /// Creates a new Room on the Server, returns a Key which can be used to
+    /// reference said Room
     pub fn create_room(&mut self) -> RoomKey {
         let new_room = Room::new();
         return self.rooms.insert(new_room);
@@ -464,7 +479,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     }
 
     /// Add an Entity to a Room, given the appropriate RoomKey & EntityKey
-    /// Entities will only ever be in-scope for Users which are in a Room with them
+    /// Entities will only ever be in-scope for Users which are in a Room with
+    /// them
     pub fn room_add_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
             room.add_entity(entity_key);
@@ -472,19 +488,23 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     }
 
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
-    /// Entities will only ever be in-scope for Users which are in a Room with them
+    /// Entities will only ever be in-scope for Users which are in a Room with
+    /// them
     pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
             room.subscribe_user(user_key);
         }
     }
 
-    /// Registers a closure which is used to evaluate whether, given a User & Entity that are in the same Room,
-    /// said Entity should be in scope for the given User.
+    /// Registers a closure which is used to evaluate whether, given a User &
+    /// Entity that are in the same Room, said Entity should be in scope for
+    /// the given User.
     ///
-    /// While Rooms allow for a very simple scope to which an Entity can belong, this closure provides complete customization for advanced scopes.
+    /// While Rooms allow for a very simple scope to which an Entity can belong,
+    /// this closure provides complete customization for advanced scopes.
     ///
-    /// This closure will be called every Tick of the Server, for every User & Entity in a Room together, so try to keep it performant
+    /// This closure will be called every Tick of the Server, for every User &
+    /// Entity in a Room together, so try to keep it performant
     pub fn on_scope_entity(
         &mut self,
         scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>,
@@ -492,9 +512,11 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         self.scope_entity_func = Some(scope_func);
     }
 
-    /// Registers a closure which will be called during the handshake process with a new Client
+    /// Registers a closure which will be called during the handshake process
+    /// with a new Client
     ///
-    /// The Event evaluated in this closure should match the Event used client-side in the NaiaClient::new() method
+    /// The Event evaluated in this closure should match the Event used
+    /// client-side in the NaiaClient::new() method
     pub fn on_auth(&mut self, auth_func: Rc<Box<dyn Fn(&UserKey, &T) -> bool>>) {
         self.auth_func = Some(auth_func);
     }

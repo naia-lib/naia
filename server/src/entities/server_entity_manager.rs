@@ -17,7 +17,8 @@ use super::{
 };
 use naia_shared::{Entity, EntityNotifiable, EntityType, LocalEntityKey, StateMask};
 
-/// Manages Entities for a given Client connection and keeps them in sync on the Client
+/// Manages Entities for a given Client connection and keeps them in sync on the
+/// Client
 #[derive(Debug)]
 pub struct ServerEntityManager<T: EntityType> {
     address: SocketAddr,
@@ -36,7 +37,8 @@ pub struct ServerEntityManager<T: EntityType> {
 }
 
 impl<T: EntityType> ServerEntityManager<T> {
-    /// Create a new ServerEntityManager, given the client's address and a reference to a MutHandler associated with the Client
+    /// Create a new ServerEntityManager, given the client's address and a
+    /// reference to a MutHandler associated with the Client
     pub fn new(address: SocketAddr, mut_handler: &Rc<RefCell<MutHandler>>) -> Self {
         ServerEntityManager {
             address,

@@ -9,7 +9,8 @@ use super::server_entity_message::ServerEntityMessage;
 pub struct EntityPacketWriter {}
 
 impl EntityPacketWriter {
-    /// Given a general PacketWriter, the manifest, and a buffered EntityMessage, actually write Entity data into the packet
+    /// Given a general PacketWriter, the manifest, and a buffered
+    /// EntityMessage, actually write Entity data into the packet
     pub fn write_entity_message<T: EventType, U: EntityType>(
         packet_writer: &mut PacketWriter,
         manifest: &Manifest<T, U>,
