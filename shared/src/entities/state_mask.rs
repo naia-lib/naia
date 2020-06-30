@@ -1,6 +1,10 @@
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::{fmt, io::Cursor};
 
+/// The State Mask is a variable-length byte array, where each bit represents
+/// the current state of a Property owned by an Entity. The Property state
+/// tracked is whether it has been updated and needs to be synced with the
+/// remote Client
 #[derive(Debug, Clone)]
 pub struct StateMask {
     mask: Vec<u8>,
@@ -8,13 +12,15 @@ pub struct StateMask {
 }
 
 impl StateMask {
-    pub fn new(capacity: u8) -> StateMask {
+    /// Create a new StateMask with a given number of bytes
+    pub fn new(bytes: u8) -> StateMask {
         StateMask {
-            bytes: capacity,
-            mask: vec![0; capacity as usize],
+            bytes,
+            mask: vec![0; bytes as usize],
         }
     }
 
+    /// Gets the bit at the specified position within the StateMask
     pub fn get_bit(&self, index: u8) -> Option<bool> {
         if let Some(byte) = self.mask.get((index / 8) as usize) {
             let adjusted_index = index % 8;
@@ -24,6 +30,7 @@ impl StateMask {
         return None;
     }
 
+    /// Sets the bit at the specified position within the StateMask
     pub fn set_bit(&mut self, index: u8, value: bool) {
         if let Some(byte) = self.mask.get_mut((index / 8) as usize) {
             let adjusted_index = index % 8;
@@ -36,10 +43,12 @@ impl StateMask {
         }
     }
 
+    /// Clears the whole StateMask
     pub fn clear(&mut self) {
         self.mask = vec![0; self.bytes as usize];
     }
 
+    /// Returns whether any bit has been set in the StateMask
     pub fn is_clear(&self) -> bool {
         for byte in self.mask.iter() {
             if *byte != 0 {
@@ -49,14 +58,17 @@ impl StateMask {
         return true;
     }
 
+    /// Get the number of bytes required to represent the StateMask
     pub fn byte_number(&self) -> u8 {
         return self.bytes;
     }
 
+    /// Gets a byte at the specified index in the StateMask
     pub fn get_byte(&self, index: usize) -> u8 {
         return self.mask[index];
     }
 
+    /// Performs a NAND operation on the StateMask, with another StateMask
     pub fn nand(&mut self, other: &StateMask) {
         //if other state mask has different capacity, do nothing
         if other.byte_number() != self.byte_number() {
@@ -71,6 +83,7 @@ impl StateMask {
         }
     }
 
+    /// Performs an OR operation on the StateMask, with another StateMask
     pub fn or(&mut self, other: &StateMask) {
         //if other state mask has different capacity, do nothing
         if other.byte_number() != self.byte_number() {
@@ -85,6 +98,7 @@ impl StateMask {
         }
     }
 
+    /// Writes the StateMask into an outgoing byte stream
     pub fn write(&mut self, out_bytes: &mut Vec<u8>) {
         out_bytes.write_u8(self.bytes).unwrap();
         for x in 0..self.bytes {
@@ -92,6 +106,7 @@ impl StateMask {
         }
     }
 
+    /// Reads the StateMask from an incoming packet
     pub fn read(cursor: &mut Cursor<&[u8]>) -> StateMask {
         let bytes: u8 = cursor.read_u8().unwrap().into();
         let mut mask: Vec<u8> = Vec::new();
@@ -101,6 +116,7 @@ impl StateMask {
         StateMask { bytes, mask }
     }
 
+    /// Copies the StateMask into another StateMask
     pub fn copy_contents(&mut self, other: &StateMask) {
         //if other state mask has different capacity, do nothing
         if other.byte_number() != self.byte_number() {

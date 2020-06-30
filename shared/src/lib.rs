@@ -2,6 +2,7 @@
 //! Common functionality shared between naia-server & naia-client crates.
 
 #![deny(
+    missing_docs,
     trivial_casts,
     trivial_numeric_casts,
     unsafe_code,
@@ -21,7 +22,6 @@ mod connection;
 mod duration;
 mod entities;
 mod events;
-mod host_type;
 mod instant;
 mod manager_type;
 mod manifest;
@@ -52,7 +52,6 @@ pub use events::{
     event_manager::EventManager,
     event_type::EventType,
 };
-pub use host_type::HostType;
 pub use instant::Instant;
 pub use manager_type::ManagerType;
 pub use manifest::Manifest;

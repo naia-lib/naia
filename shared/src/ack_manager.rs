@@ -8,16 +8,16 @@ use super::{
 use super::{
     entities::entity_notifiable::EntityNotifiable,
     events::{event_manager::EventManager, event_type::EventType},
-    host_type::HostType,
     packet_type::PacketType,
 };
 
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
 const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
 
+/// Keeps track of sent & received packets, and contains ack information that is
+/// copied into the standard header on each outgoing packet
 #[derive(Debug)]
 pub struct AckManager {
-    host_type: HostType,
     // Local sequence number which we'll bump each time we send a new packet over the network.
     sequence_number: SequenceNumber,
     // The last acked sequence number of the packets we've sent to the remote host.
@@ -31,9 +31,9 @@ pub struct AckManager {
 }
 
 impl AckManager {
-    pub fn new(host_type: HostType) -> Self {
+    /// Create a new AckManager
+    pub fn new() -> Self {
         AckManager {
-            host_type,
             sequence_number: 0,
             remote_ack_sequence_num: u16::max_value(),
             sent_packets: HashMap::with_capacity(DEFAULT_SEND_PACKETS_SIZE),
@@ -41,10 +41,13 @@ impl AckManager {
         }
     }
 
+    /// Get the index of the next outgoing packet
     pub fn local_sequence_num(&self) -> SequenceNumber {
         self.sequence_number
     }
 
+    /// Process an incoming packet, handle notifications of delivered / dropped
+    /// packets
     pub fn process_incoming<T: EventType>(
         &mut self,
         payload: &[u8],
@@ -104,6 +107,8 @@ impl AckManager {
         stripped_message
     }
 
+    /// Process an outgoing packet, adding the correct header which includes ack
+    /// information, and returning the bytes needed to send over the wire
     pub fn process_outgoing(&mut self, packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
         // Add Ack Header onto message!
         let mut header_bytes = Vec::new();
