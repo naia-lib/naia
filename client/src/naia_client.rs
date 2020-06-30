@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 
 use byteorder::{BigEndian, WriteBytesExt};
-use log::info;
 
 use naia_client_socket::{ClientSocket, Config as SocketConfig, MessageSender, SocketEvent};
 pub use naia_shared::{

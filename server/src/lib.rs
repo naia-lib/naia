@@ -35,6 +35,5 @@ mod server_event;
 mod user;
 
 pub use naia_server::NaiaServer;
-pub use room::room_key::RoomKey;
 pub use server_event::ServerEvent;
 pub use user::user_key::UserKey;
