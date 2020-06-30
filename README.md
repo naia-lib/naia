@@ -14,13 +14,13 @@ Naia intends to make cross-platform (Wasm included!) multiplayer game developmen
 
 At the highest level, you register Event and Entity implementations in a module shared by Client & Server. Then, Naia will facilitate sending/receiving those Events between Client & Server, and also keep a pool of tracked Entities synced with each Client for whom they are "in-scope".
 
-It is built on top of [Naia Sockets][https://github.com/connorcarpenter/naia-socket], which provides cross-platform unreliable & unordered messaging (many thanks given to [Kyren's webrtc-unreliable project][https://github.com/kyren/webrtc-unreliable] there).
+It is built on top of [Naia Sockets](https://github.com/connorcarpenter/naia-socket), which provides cross-platform unreliable & unordered messaging (many thanks given to [Kyren's webrtc-unreliable project][https://github.com/kyren/webrtc-unreliable] there).
 
-The API is heavily inspired by the [Nengi.js][https://github.com/timetocode/nengi] & [Colyseus][https://github.com/colyseus/colyseus] Javascript multiplayer networking libraries.
+The API is heavily inspired by the [Nengi.js](https://github.com/timetocode/nengi) & [Colyseus](https://github.com/colyseus/colyseus) Javascript multiplayer networking libraries.
 
-The internals are heavily inspired by the [Tribes 2 Networking model][https://www.gamedevs.org/uploads/tribes-networking-model.pdf]
+The internals are heavily inspired by the [Tribes 2 Networking model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf)
 
-Thank you very much to the [Laminar][https://github.com/amethyst/laminar] authors, for the cannibalized code within.
+Thank you very much to the [Laminar](https://github.com/amethyst/laminar) authors, for the cannibalized code within.
 
 Any help is very welcome, please get in touch! I'm still very new to Rust and this project is overly ambitious, and I intend my ears very open to any criticism / feedback in order to better this project.
 
