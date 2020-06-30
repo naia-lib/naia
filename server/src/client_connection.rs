@@ -6,13 +6,9 @@ use naia_shared::{
     Timer,
 };
 
-use super::{
-    entities::{
-        entity_key::entity_key::EntityKey,
-        mut_handler::MutHandler,
-        entity_packet_writer::EntityPacketWriter,
-        server_entity_manager::ServerEntityManager,
-    },
+use super::entities::{
+    entity_key::entity_key::EntityKey, entity_packet_writer::EntityPacketWriter,
+    mut_handler::MutHandler, server_entity_manager::ServerEntityManager,
 };
 
 pub struct ClientConnection<T: EventType, U: EntityType> {

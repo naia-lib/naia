@@ -1,13 +1,8 @@
-
 use std::{
     any::TypeId,
     cell::RefCell,
+    fmt::{Debug, Formatter, Result},
     rc::Rc,
-    fmt::{
-        Formatter,
-        Debug,
-        Result,
-    },
 };
 
 use crate::{EntityMutator, EntityType, StateMask};

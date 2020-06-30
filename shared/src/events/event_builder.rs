@@ -1,11 +1,7 @@
 use crate::EventType;
 use std::{
-    fmt::{
-        Formatter,
-        Debug,
-        Result,
-    },
-    any::TypeId
+    any::TypeId,
+    fmt::{Debug, Formatter, Result},
 };
 
 pub trait EventBuilder<T: EventType> {

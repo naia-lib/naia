@@ -1,4 +1,4 @@
-use super::user::{User, user_key::UserKey};
+use super::user::{user_key::UserKey, User};
 
 /// An Event that is emitted as a result of some communication with a Client, or a Tick event
 pub enum ServerEvent<T> {

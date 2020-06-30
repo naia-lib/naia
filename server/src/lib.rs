@@ -7,7 +7,7 @@
     trivial_numeric_casts,
     unsafe_code,
     unstable_features,
-    unused_import_braces,
+    unused_import_braces
 )]
 
 #[macro_use]
@@ -27,8 +27,6 @@ mod server_event;
 mod user;
 
 pub use {
-    naia_server::NaiaServer,
-    server_event::ServerEvent,
+    naia_server::NaiaServer, room::room_key::RoomKey, server_event::ServerEvent,
     user::user_key::UserKey,
-    room::room_key::RoomKey,
 };
