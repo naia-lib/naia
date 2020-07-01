@@ -29,11 +29,21 @@ jobs:
             rustfmt --version
             cargo fmt --all -- --check --color=auto
       - run:
-          name: Build UDP targets
-          command: cargo build --all --all-targets --features "use-udp"
+          name: Build Server Example (UDP)
+          working_directory: ~/project/examples/server
+          command: cargo build --target x86_64-unknown-linux-gnu --features "use-udp"
       - run:
-          name: Build WebRTC targets
-          command: cargo build --all --all-targets --features "use-webrtc"
+          name: Build Server Example (WebRTC)
+          working_directory: ~/project/examples/server
+          command: cargo build --target x86_64-unknown-linux-gnu --features "use-webrtc"
+      - run:
+          name: Build Client Example (Linux)
+          working_directory: ~/project/examples/server
+          command: cargo build --target x86_64-unknown-linux-gnu
+      - run:
+          name: Build Client Example (Wasm)
+          working_directory: ~/project/examples/server
+          command: cargo build --target wasm32-unknown-unknown
       - save_cache:
           paths:
             - /usr/local/cargo/registry
