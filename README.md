@@ -12,7 +12,7 @@ a *n*etworking *a*rchitecture for *i*nteractive *a*pplications
 
 naia intends to make cross-platform (currently Linux & WebAssemby) multiplayer game development in Rust dead simple and lightning fast.
 
-At the highest level, you register Event and Entity implementations in a module shared by Client & Server. Then, Naia will facilitate sending/receiving those Events between Client & Server, and also keep a pool of tracked Entities synced with each Client for whom they are "in-scope".
+At the highest level, you register Event and Entity implementations in a module shared by Client & Server. Then, naia will facilitate sending/receiving those Events between Client & Server, and also keep a pool of tracked Entities synced with each Client for whom they are "in-scope". Entities are "scoped" to Clients with whom they share the same Room, as well as being sufficiently customizable to, for example, only keep Entities persisted & synced while within a Client's viewport or according to some other criteria. 
 
 It is built on top of [Naia Sockets](https://github.com/naia-rs/naia-socket), which provides cross-platform unreliable & unordered messaging.
 
