@@ -11,9 +11,6 @@ jobs:
           command: |
             rustup component add rustfmt
       - run:
-          name: Add Wasm Target
-          command: rustup target add wasm32-unknown-unknown
-      - run:
           name: Version information
           command: |
             rustc --version
@@ -43,10 +40,6 @@ jobs:
           name: Build Client Example (Linux)
           working_directory: ~/project/examples/client
           command: cargo build --target x86_64-unknown-linux-gnu
-      - run:
-          name: Build Client Example (Wasm)
-          working_directory: ~/project/examples/client
-          command: cargo build --target wasm32-unknown-unknown
       - save_cache:
           paths:
             - /usr/local/cargo/registry
