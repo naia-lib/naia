@@ -10,11 +10,11 @@
 # naia
 a *n*etworking *a*rchitecture for *i*nteractive *a*pplications
 
-Naia intends to make cross-platform (Wasm included!) multiplayer game development in Rust dead simple and lightning fast.
+A cross-platform (currently WebAssembly & Linux) networking engine that intends to make multiplayer game development in Rust dead simple and lightning fast.
 
-At the highest level, you register Event and Entity implementations in a module shared by Client & Server. Then, Naia will facilitate sending/receiving those Events between Client & Server, and also keep a pool of tracked Entities synced with each Client for whom they are "in-scope".
+At the highest level, you register Event and Entity implementations in a module shared by Client & Server. Then, naia will facilitate sending/receiving those Events between Client & Server, and also keep a pool of tracked Entities synced with each Client for whom they are "in-scope".
 
-It is built on top of [Naia Sockets](https://github.com/naia-rs/naia-socket), which provides cross-platform unreliable & unordered messaging.
+It is built on top of [naia-socket](https://github.com/naia-rs/naia-socket), which provides cross-platform unreliable & unordered messaging.
 
 The API is heavily inspired by the [Nengi.js](https://github.com/timetocode/nengi) & [Colyseus](https://github.com/colyseus/colyseus) Javascript multiplayer networking libraries. The internals follow the [Tribes 2 Networking model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf) fairly closely.
 
@@ -24,7 +24,7 @@ Any help is very welcome, please get in touch! I'm still very new to Rust and th
 
 ## Examples
 
-More comprehensive documentation / tutorials are on their way, but for now, the best way to get started with Naia is to go through the single example, which demonstrates most of the functionality.
+More comprehensive documentation / tutorials are on their way, but for now, the best way to get started with naia is to go through the single example, which demonstrates most of the functionality.
 
 ### Server:
 
