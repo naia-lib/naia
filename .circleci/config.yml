@@ -38,11 +38,11 @@ jobs:
           command: cargo build --target x86_64-unknown-linux-gnu --features "use-webrtc"
       - run:
           name: Build Client Example (Linux)
-          working_directory: ~/project/examples/server
+          working_directory: ~/project/examples/client
           command: cargo build --target x86_64-unknown-linux-gnu
       - run:
           name: Build Client Example (Wasm)
-          working_directory: ~/project/examples/server
+          working_directory: ~/project/examples/client
           command: cargo build --target wasm32-unknown-unknown
       - save_cache:
           paths:
