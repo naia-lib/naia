@@ -11,6 +11,9 @@ jobs:
           command: |
             rustup component add rustfmt
       - run:
+          name: Add Wasm Target
+          command: rustup target add wasm32-unknown-unknown
+      - run:
           name: Version information
           command: |
             rustc --version
