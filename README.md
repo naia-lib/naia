@@ -1,7 +1,7 @@
-[![Build Status](https://img.shields.io/circleci/project/github/connorcarpenter/naia.svg)](https://circleci.com/gh/connorcarpenter/naia)
+[![Build Status](https://img.shields.io/circleci/project/github/connorcarpenter/naia.svg)](https://circleci.com/gh/naia-rs/naia)
 [![Latest Version](https://img.shields.io/crates/v/naia-server.svg)](https://crates.io/crates/naia-server)
 [![API Documentation](https://docs.rs/naia-server/badge.svg)](https://docs.rs/naia-server)
-![](https://tokei.rs/b1/github/connorcarpenter/naia)
+![](https://tokei.rs/b1/github/naia-rs/naia)
 [![MIT/Apache][s3]][l3]
 
 [s3]: https://img.shields.io/badge/license-MIT%2FApache-blue.svg
@@ -14,7 +14,7 @@ Naia intends to make cross-platform (Wasm included!) multiplayer game developmen
 
 At the highest level, you register Event and Entity implementations in a module shared by Client & Server. Then, Naia will facilitate sending/receiving those Events between Client & Server, and also keep a pool of tracked Entities synced with each Client for whom they are "in-scope".
 
-It is built on top of [Naia Sockets](https://github.com/connorcarpenter/naia-socket), which provides cross-platform unreliable & unordered messaging.
+It is built on top of [Naia Sockets](https://github.com/naia-rs/naia-socket), which provides cross-platform unreliable & unordered messaging.
 
 The API is heavily inspired by the [Nengi.js](https://github.com/timetocode/nengi) & [Colyseus](https://github.com/colyseus/colyseus) Javascript multiplayer networking libraries. The internals follow the [Tribes 2 Networking model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf) fairly closely.
 
