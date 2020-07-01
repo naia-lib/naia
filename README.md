@@ -7,7 +7,7 @@
 [s3]: https://img.shields.io/badge/license-MIT%2FApache-blue.svg
 [l3]: docs/LICENSE-MIT
 
-# Naia
+# naia
 a *n*etworking *a*rchitecture for *i*nteractive *a*pplications
 
 Naia intends to make cross-platform (Wasm included!) multiplayer game development in Rust dead simple and lightning fast.
