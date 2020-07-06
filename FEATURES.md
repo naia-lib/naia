@@ -16,6 +16,7 @@
 * [x] Rtt estimations
 
 ## Planned
+This list is not sorted by order of priority
 
 * [ ] Integration & Unit Tests
 * [ ] Better error handling
@@ -34,6 +35,8 @@
 * [ ] Set independent Entity update rate
 * [ ] Horizontally scale Servers
 * [ ] Support Debugging / Logging / Metrics visualizations
+* [ ] Bitwise (as opposed to current "Bytewise") reading/writing of messages, to save bandwidth
+* [ ] File-like API for streaming assets / caching on client
 
 ## Planned for [naia-socket](https://github.com/naia-rs/naia-socket)
 
