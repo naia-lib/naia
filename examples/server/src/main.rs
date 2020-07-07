@@ -47,10 +47,19 @@ async fn main() {
     // can receive updates from
     let main_room_key = server.create_room();
 
-    // Create 10 PointEntities, with a range of X values
+    // Create 4 PointEntities, with a range of X values
     let mut point_entities: Vec<Rc<RefCell<PointEntity>>> = Vec::new();
-    for x in 0..10 {
-        let point_entity = PointEntity::new(x * 2, 0).wrap();
+
+    for (first, last) in [
+        ("alpha", "red"),
+        ("bravo", "blue"),
+        ("charlie", "green"),
+        ("delta", "yellow"),
+    ]
+    .iter()
+    {
+        let point_entity =
+            PointEntity::new((point_entities.len() * 4) as u8, 0, first, last).wrap();
         point_entities.push(point_entity.clone());
         let entity_key = server.register_entity(point_entity);
         server.room_add_entity(&main_room_key, &entity_key);
