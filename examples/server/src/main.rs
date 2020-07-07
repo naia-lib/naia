@@ -47,10 +47,19 @@ async fn main() {
     // can receive updates from
     let main_room_key = server.create_room();
 
-    // Create 10 PointEntities, with a range of X values
+    // Create 4 PointEntities, with a range of X values
     let mut point_entities: Vec<Rc<RefCell<PointEntity>>> = Vec::new();
-    for x in 0..10 {
-        let point_entity = PointEntity::new(x * 2, 0).wrap();
+
+    for (first, last) in [
+        ("alpha", "red"),
+        ("bravo", "blue"),
+        ("charlie", "green"),
+        ("delta", "yellow"),
+    ]
+    .iter()
+    {
+        let point_entity =
+            PointEntity::new((point_entities.len() * 4) as u8, 0, first, last).wrap();
         point_entities.push(point_entity.clone());
         let entity_key = server.register_entity(point_entity);
         server.room_add_entity(&main_room_key, &entity_key);
@@ -108,13 +117,18 @@ async fn main() {
                             info!("Naia Server send -> {}: {}", user.address, new_message);
 
                             let string_event = StringEvent::new(new_message);
-                            server.send_event(&user_key, &string_event);
+                            server.queue_event(&user_key, &string_event);
                         }
 
                         // Iterate through Point Entities, marching them from (0,0) to (20, N)
                         for point_entity in &point_entities {
                             point_entity.borrow_mut().step();
                         }
+
+                        // VERY IMPORTANT! Calling this actually sends all Entity/Event data packets
+                        // to all Clients that require it. If you don't call this method, the Server
+                        // will never communicate with it's connected Clients
+                        server.send_all_updates().await;
 
                         tick_count += 1;
                     }
