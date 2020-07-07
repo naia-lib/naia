@@ -343,31 +343,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                             }
                         }
                         SocketEvent::Tick => {
-                            // update entity scopes
-                            self.update_entity_scopes();
-
-                            // loop through all connections, send packet
-                            for (user_key, connection) in self.client_connections.iter_mut() {
-                                if let Some(user) = self.users.get(*user_key) {
-                                    connection.collect_entity_updates();
-                                    while let Some(payload) =
-                                        connection.get_outgoing_packet(&self.manifest)
-                                    {
-                                        match self
-                                            .sender
-                                            .send(Packet::new_raw(user.address, payload))
-                                            .await
-                                        {
-                                            Ok(_) => {}
-                                            Err(err) => {
-                                                info!("send error! {}", err);
-                                            }
-                                        }
-                                        connection.mark_sent();
-                                    }
-                                }
-                            }
-
                             output = Some(Ok(ServerEvent::Tick));
                             continue;
                         }
@@ -415,9 +390,37 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
 
     /// Queues up an Event to be sent to the Client associated with a given
     /// UserKey
-    pub fn send_event(&mut self, user_key: &UserKey, event: &impl Event<T>) {
+    pub fn queue_event(&mut self, user_key: &UserKey, event: &impl Event<T>) {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
             connection.queue_event(event);
+        }
+    }
+
+    /// Sends all Entity/Event messages to all Clients. If you don't call this
+    /// method, the Server will never communicate with it's connected
+    /// Clients
+    pub async fn send_all_updates(&mut self) {
+        // update entity scopes
+        self.update_entity_scopes();
+
+        // loop through all connections, send packet
+        for (user_key, connection) in self.client_connections.iter_mut() {
+            if let Some(user) = self.users.get(*user_key) {
+                connection.collect_entity_updates();
+                while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
+                    match self
+                        .sender
+                        .send(Packet::new_raw(user.address, payload))
+                        .await
+                    {
+                        Ok(_) => {}
+                        Err(err) => {
+                            info!("send error! {}", err);
+                        }
+                    }
+                    connection.mark_sent();
+                }
+            }
         }
     }
 
