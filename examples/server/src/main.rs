@@ -108,13 +108,18 @@ async fn main() {
                             info!("Naia Server send -> {}: {}", user.address, new_message);
 
                             let string_event = StringEvent::new(new_message);
-                            server.send_event(&user_key, &string_event);
+                            server.queue_event(&user_key, &string_event);
                         }
 
                         // Iterate through Point Entities, marching them from (0,0) to (20, N)
                         for point_entity in &point_entities {
                             point_entity.borrow_mut().step();
                         }
+
+                        // VERY IMPORTANT! Calling this actually sends all Entity/Event data packets
+                        // to all Clients that require it. If you don't call this method, the Server
+                        // will never communicate with it's connected Clients
+                        server.send_all_updates().await;
 
                         tick_count += 1;
                     }
