@@ -76,14 +76,16 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 fn get_property_enum(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let hashtag = Punct::new('#', Spacing::Alone);
 
-    let mut variant_index = 0;
+    let mut variant_index: u8 = 0;
     let mut variant_list = quote! {};
     for (variant, _) in properties {
-        let mut uppercase_variant_name = variant.to_string();
-        uppercase_variant_name = uppercase_variant_name.to_uppercase();
+        let uppercase_variant_name = Ident::new(
+            variant.to_string().to_uppercase().as_str(),
+            Span::call_site(),
+        );
 
         let new_output_right = quote! {
-            #uppercase_variant_name = #variant_index
+            #uppercase_variant_name = #variant_index,
         };
         let new_output_result = quote! {
             #variant_list
@@ -97,8 +99,7 @@ fn get_property_enum(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> Toke
     return quote! {
         #hashtag[repr(u8)]
         enum #enum_name {
-            X = 0,
-            Y = 1,
+            #variant_list
         }
     };
 }
