@@ -90,10 +90,12 @@ impl App {
                             match entity {
                                 ExampleEntity::PointEntity(point_entity) => {
                                     info!(
-                                        "creation of point entity with key: {}, x: {}, y: {}",
+                                        "creation of point entity with key: {}, x: {}, y: {}, name: {} {}",
                                         local_key,
                                         point_entity.as_ref().borrow().x.get(),
-                                        point_entity.as_ref().borrow().y.get()
+                                        point_entity.as_ref().borrow().y.get(),
+                                        point_entity.as_ref().borrow().name.get().first,
+                                        point_entity.as_ref().borrow().name.get().last,
                                     );
                                 }
                             }
@@ -104,10 +106,12 @@ impl App {
                             match entity {
                                 ExampleEntity::PointEntity(point_entity) => {
                                     info!(
-                                        "update of point entity with key: {}, x: {}, y: {}",
+                                        "update of point entity with key: {}, x: {}, y: {}, name: {} {}",
                                         local_key,
                                         point_entity.as_ref().borrow().x.get(),
-                                        point_entity.as_ref().borrow().y.get()
+                                        point_entity.as_ref().borrow().y.get(),
+                                        point_entity.as_ref().borrow().name.get().first,
+                                        point_entity.as_ref().borrow().name.get().last,
                                     );
                                 }
                             }
