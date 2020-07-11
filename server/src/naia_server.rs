@@ -626,11 +626,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         packet_type: PacketType,
         packet: Packet,
     ) {
-        let new_payload = naia_shared::utils::write_connectionless_payload(
-            current_tick,
-            packet_type,
-            packet.payload(),
-        );
+        let new_payload =
+            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
         sender
             .send(Packet::new_raw(packet.address(), new_payload))
             .await

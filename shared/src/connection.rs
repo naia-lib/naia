@@ -88,7 +88,7 @@ impl<T: EventType> Connection<T> {
             .process_incoming(&header, &mut self.event_manager, entity_notifiable);
         self.tick_manager
             .process_incoming(host_tick_manager.get_tick(), &header);
-        host_tick_manager.process_incoming(header.tick_diff());
+        host_tick_manager.process_incoming(header.tick_latency());
         return stripped_message;
     }
 

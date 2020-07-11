@@ -19,7 +19,7 @@ pub struct StandardHeader {
     current_tick: u16,
     // This is the difference between the tick of the host and the tick received from the remote
     // host
-    tick_latency: u8,
+    tick_latency: i8,
 }
 
 impl StandardHeader {
@@ -35,7 +35,7 @@ impl StandardHeader {
         last_remote_packet_index: u16,
         bit_field: u32,
         current_tick: u16,
-        tick_latency: u8,
+        tick_latency: i8,
     ) -> StandardHeader {
         StandardHeader {
             p_type,
@@ -72,7 +72,7 @@ impl StandardHeader {
     }
 
     /// Returns tick difference between hosts, associated with packet
-    pub fn tick_diff(&self) -> u8 {
+    pub fn tick_latency(&self) -> i8 {
         self.tick_latency
     }
 
@@ -86,7 +86,7 @@ impl StandardHeader {
             .unwrap();
         buffer.write_u32::<BigEndian>(self.ack_field).unwrap();
         buffer.write_u16::<BigEndian>(self.current_tick).unwrap();
-        buffer.write_u8(self.tick_latency).unwrap();
+        buffer.write_i8(self.tick_latency).unwrap();
     }
 
     pub fn read(mut msg: &[u8]) -> (Self, Box<[u8]>) {
@@ -95,7 +95,7 @@ impl StandardHeader {
         let ack_seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_field = msg.read_u32::<BigEndian>().unwrap();
         let tick = msg.read_u16::<BigEndian>().unwrap();
-        let tick_diff = msg.read_u8().unwrap();
+        let tick_diff = msg.read_i8().unwrap();
 
         let mut buffer = Vec::new();
         msg.read_to_end(&mut buffer).unwrap();
