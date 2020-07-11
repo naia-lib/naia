@@ -2,10 +2,7 @@ use std::{default::Default, time::Duration};
 
 /// Contains Config properties which will be used by a Server or Client
 #[derive(Clone, Debug)]
-pub struct Config {
-    /// The duration between each tick to be emitted by the Server (Client does
-    /// not emit Tick events just yet)
-    pub tick_interval: Duration,
+pub struct ServerConfig {
     /// The duration between the resend of certain connection handshake messages
     pub send_handshake_interval: Duration,
     /// The duration to wait for communication from a remote host before
@@ -23,10 +20,9 @@ pub struct Config {
     pub rtt_max_value: u16,
 }
 
-impl Default for Config {
+impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            tick_interval: Duration::from_secs(1),
             disconnection_timeout_duration: Duration::from_secs(10),
             heartbeat_interval: Duration::from_secs(4),
             send_handshake_interval: Duration::from_secs(1),

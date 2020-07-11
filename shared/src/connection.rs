@@ -4,6 +4,7 @@ use crate::Timer;
 
 use super::{
     ack_manager::AckManager,
+    connection_config::ConnectionConfig,
     entities::{entity_notifiable::EntityNotifiable, entity_type::EntityType},
     events::{event::Event, event_manager::EventManager, event_type::EventType},
     manifest::Manifest,
@@ -11,7 +12,9 @@ use super::{
     packet_type::PacketType,
     rtt::rtt_tracker::RttTracker,
     sequence_buffer::SequenceNumber,
+    shared_config::SharedConfig,
     standard_header::StandardHeader,
+    tick_manager::TickManager,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -19,9 +22,10 @@ use super::{
 #[derive(Debug)]
 pub struct Connection<T: EventType> {
     address: SocketAddr,
-    heartbeat_manager: Timer,
-    timeout_manager: Timer,
+    heartbeat_timer: Timer,
+    timeout_timer: Timer,
     ack_manager: AckManager,
+    tick_manager: TickManager,
     rtt_tracker: RttTracker,
     event_manager: EventManager<T>,
 }
@@ -30,43 +34,48 @@ impl<T: EventType> Connection<T> {
     /// Create a new Connection, given the appropriate underlying managers
     pub fn new(
         address: SocketAddr,
-        heartbeat_manager: Timer,
-        timeout_manager: Timer,
-        ack_manager: AckManager,
-        rtt_tracker: RttTracker,
-        event_manager: EventManager<T>,
+        config: &ConnectionConfig,
+        shared_config: &SharedConfig,
     ) -> Self {
+        let heartbeat_interval = config.heartbeat_interval;
+        let timeout_duration = config.disconnection_timeout_duration;
+        let rtt_smoothing_factor = config.rtt_smoothing_factor;
+        let rtt_max_value = config.rtt_max_value;
+
+        let tick_interval = shared_config.tick_interval;
+
         return Connection {
             address,
-            heartbeat_manager,
-            timeout_manager,
-            ack_manager,
-            rtt_tracker,
-            event_manager,
+            heartbeat_timer: Timer::new(heartbeat_interval),
+            timeout_timer: Timer::new(timeout_duration),
+            ack_manager: AckManager::new(),
+            rtt_tracker: RttTracker::new(rtt_smoothing_factor, rtt_max_value),
+            event_manager: EventManager::new(),
+            tick_manager: TickManager::new(tick_interval),
         };
     }
 
     /// Record that a message has been sent (to prevent needing to send a
     /// heartbeat)
     pub fn mark_sent(&mut self) {
-        return self.heartbeat_manager.reset();
+        return self.heartbeat_timer.reset();
     }
 
     /// Returns whether a heartbeat message should be sent
     pub fn should_send_heartbeat(&self) -> bool {
-        return self.heartbeat_manager.ringing();
+        return self.heartbeat_timer.ringing();
     }
 
     /// Record that a message has been received from a remote host (to prevent
     /// disconnecting from the remote host)
     pub fn mark_heard(&mut self) {
-        return self.timeout_manager.reset();
+        return self.timeout_timer.reset();
     }
 
     /// Returns whether this connection should be dropped as a result of a
     /// timeout
     pub fn should_drop(&self) -> bool {
-        return self.timeout_manager.ringing();
+        return self.timeout_timer.ringing();
     }
 
     /// Process an incoming packet, pulling out the packet index number to keep
@@ -95,13 +104,41 @@ impl<T: EventType> Connection<T> {
         payload: &[u8],
     ) -> Box<[u8]> {
         self.rtt_tracker
-            .process_outgoing(self.ack_manager.local_sequence_num());
-        return self.ack_manager.process_outgoing(packet_type, payload);
+            .process_outgoing(self.ack_manager.get_local_packet_index());
+
+        // Add header onto message!
+        let mut header_bytes = Vec::new();
+
+        let local_packet_index = self.ack_manager.get_local_packet_index();
+        let last_remote_packet_index = self.ack_manager.get_last_remote_packet_index();
+        let bit_field = self.ack_manager.get_ack_bitfield();
+        let current_tick = self.tick_manager.get_current_tick();
+        let tick_latency = self.tick_manager.get_tick_latency();
+
+        let header = StandardHeader::new(
+            packet_type,
+            local_packet_index,
+            last_remote_packet_index,
+            bit_field,
+            current_tick,
+            tick_latency,
+        );
+        header.write(&mut header_bytes);
+
+        // Ack stuff //
+        self.ack_manager
+            .track_packet(packet_type, local_packet_index);
+        self.ack_manager.increment_local_packet_index();
+        ///////////////
+
+        [header_bytes.as_slice(), &payload]
+            .concat()
+            .into_boxed_slice()
     }
 
     /// Get the next outgoing packet's index
     pub fn get_next_packet_index(&self) -> SequenceNumber {
-        return self.ack_manager.local_sequence_num();
+        return self.ack_manager.get_local_packet_index();
     }
 
     /// Queue up an event to be sent to the remote host
