@@ -14,8 +14,9 @@ use naia_server_socket::{
     Config as SocketConfig, MessageSender, Packet, ServerSocket, SocketEvent,
 };
 pub use naia_shared::{
-    Connection, ConnectionConfig, Entity, EntityMutator, EntityType, Event, EventType, Instant,
-    ManagerType, Manifest, PacketReader, PacketType, SharedConfig, Timer, Timestamp,
+    Connection, ConnectionConfig, Entity, EntityMutator, EntityType, Event, EventType,
+    HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType, SharedConfig, Timer,
+    Timestamp,
 };
 
 use super::{
@@ -322,7 +323,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         match self.client_connections.get_mut(user_key) {
                                             Some(connection) => {
                                                 let mut payload = connection
-                                                    .process_incoming_header(packet.payload());
+                                                    .process_incoming_header(
+                                                        &mut self.tick_manager,
+                                                        packet.payload(),
+                                                    );
                                                 connection.process_incoming_data(
                                                     &self.manifest,
                                                     &mut payload,
@@ -346,8 +350,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                             Some(connection) => {
                                                 // Still need to do this so that proper notify
                                                 // events fire based on the heartbeat header
-                                                connection
-                                                    .process_incoming_header(packet.payload());
+                                                connection.process_incoming_header(
+                                                    &mut self.tick_manager,
+                                                    packet.payload(),
+                                                );
                                                 continue;
                                             }
                                             None => {

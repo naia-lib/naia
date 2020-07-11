@@ -21,6 +21,7 @@ mod connection;
 mod connection_config;
 mod entities;
 mod events;
+mod host_tick_manager;
 mod instant;
 mod manager_type;
 mod manifest;
@@ -53,6 +54,7 @@ pub use events::{
     event_manager::EventManager,
     event_type::EventType,
 };
+pub use host_tick_manager::HostTickManager;
 pub use instant::Instant;
 pub use manager_type::ManagerType;
 pub use manifest::Manifest;

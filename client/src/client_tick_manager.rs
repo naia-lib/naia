@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use naia_shared::Instant;
+use naia_shared::{HostTickManager, Instant};
 
 /// Manages the current tick for the host
 #[derive(Debug)]
@@ -22,11 +22,6 @@ impl ClientTickManager {
         }
     }
 
-    /// Gets the current tick for the host
-    pub fn get_tick(&self) -> u16 {
-        self.current_tick
-    }
-
     /// If the tick interval duration has elapsed, increment the current tick
     pub fn update_frame(&mut self) {
         let mut time_elapsed = self.last_instant.elapsed() - self.last_leftover;
@@ -37,5 +32,15 @@ impl ClientTickManager {
 
         self.last_leftover = time_elapsed;
         self.last_instant = Instant::now();
+    }
+}
+
+impl HostTickManager for ClientTickManager {
+    fn get_tick(&self) -> u16 {
+        self.current_tick
+    }
+
+    fn process_incoming(&mut self, tick_latency: u8) {
+        unimplemented!()
     }
 }

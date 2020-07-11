@@ -50,13 +50,12 @@ impl AckManager {
     /// packets
     pub fn process_incoming<T: EventType>(
         &mut self,
-        payload: &[u8],
+        header: &StandardHeader,
         event_manager: &mut EventManager<T>,
         entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
-    ) -> Box<[u8]> {
-        let (header, stripped_message) = StandardHeader::read(payload);
-        let remote_seq_num = header.sequence();
-        let remote_ack_seq = header.ack_seq();
+    ) {
+        let remote_seq_num = header.local_packet_index();
+        let remote_ack_seq = header.last_remote_packet_index();
         let mut remote_ack_field = header.ack_field();
 
         self.received_packets
@@ -103,8 +102,6 @@ impl AckManager {
 
             remote_ack_field >>= 1;
         }
-
-        stripped_message
     }
 
     /// Records the packet with the given packet index
