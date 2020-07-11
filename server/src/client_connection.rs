@@ -1,8 +1,8 @@
 use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
-    Connection, ConnectionConfig, Entity, EntityType, Event, EventType, ManagerType, Manifest,
-    PacketReader, PacketType, PacketWriter, SequenceNumber,
+    Connection, ConnectionConfig, Entity, EntityType, Event, EventType, HostTickManager,
+    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber,
 };
 
 use super::entities::{
@@ -118,10 +118,16 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.should_drop();
     }
 
-    pub fn process_incoming_header(&mut self, payload: &[u8]) -> Box<[u8]> {
-        return self
-            .connection
-            .process_incoming_header(payload, &mut Some(&mut self.entity_manager));
+    pub fn process_incoming_header(
+        &mut self,
+        host_tick_manager: &mut dyn HostTickManager,
+        payload: &[u8],
+    ) -> Box<[u8]> {
+        return self.connection.process_incoming_header(
+            payload,
+            &mut Some(&mut self.entity_manager),
+            host_tick_manager,
+        );
     }
 
     pub fn process_outgoing_header(

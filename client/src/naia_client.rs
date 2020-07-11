@@ -4,8 +4,8 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_client_socket::{ClientSocket, Config as SocketConfig, MessageSender, SocketEvent};
 pub use naia_shared::{
-    ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType, Manifest,
-    PacketReader, PacketType, PacketWriter, SharedConfig, Timer, Timestamp,
+    ConnectionConfig, EntityType, Event, EventType, HostTickManager, LocalEntityKey, ManagerType,
+    Manifest, PacketReader, PacketType, PacketWriter, SharedConfig, Timer, Timestamp,
 };
 
 use super::{
@@ -197,8 +197,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                         let server_connection_wrapper = self.server_connection.as_mut();
                         if let Some(server_connection) = server_connection_wrapper {
                             server_connection.mark_heard();
-                            let mut payload =
-                                server_connection.process_incoming_header(packet.payload());
+                            let mut payload = server_connection
+                                .process_incoming_header(&mut self.tick_manager, packet.payload());
 
                             match packet_type {
                                 PacketType::Data => {
