@@ -10,7 +10,8 @@ pub use naia_shared::{
 
 use super::{
     client_config::ClientConfig, client_entity_message::ClientEntityMessage,
-    client_event::ClientEvent, error::NaiaClientError, server_connection::ServerConnection, Packet,
+    client_event::ClientEvent, client_tick_manager::ClientTickManager, error::NaiaClientError,
+    server_connection::ServerConnection, Packet,
 };
 use crate::client_connection_state::{
     ClientConnectionState, ClientConnectionState::AwaitingChallengeResponse,
@@ -23,7 +24,6 @@ pub struct NaiaClient<T: EventType, U: EntityType> {
     manifest: Manifest<T, U>,
     server_address: SocketAddr,
     connection_config: ConnectionConfig,
-    shared_config: SharedConfig,
     socket: ClientSocket,
     sender: MessageSender,
     server_connection: Option<ServerConnection<T, U>>,
@@ -32,6 +32,7 @@ pub struct NaiaClient<T: EventType, U: EntityType> {
     handshake_timer: Timer,
     connection_state: ClientConnectionState,
     auth_event: Option<T>,
+    tick_manager: ClientTickManager,
 }
 
 impl<T: EventType, U: EntityType> NaiaClient<T, U> {
@@ -69,19 +70,21 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             socket: client_socket,
             sender: message_sender,
             connection_config,
-            shared_config,
             handshake_timer,
             server_connection: None,
             pre_connection_timestamp: None,
             pre_connection_digest: None,
             connection_state: AwaitingChallengeResponse,
             auth_event: auth,
+            tick_manager: ClientTickManager::new(shared_config.tick_interval),
         }
     }
 
     /// Must be called regularly, performs updates to the connection, and
     /// retrieves event/entity updates sent by the Server
     pub fn receive(&mut self) -> Result<ClientEvent<T>, NaiaClientError> {
+        // update current tick
+        self.tick_manager.update_frame();
         // send handshakes, send heartbeats, timeout if need be
         match &mut self.server_connection {
             Some(connection) => {
@@ -96,12 +99,15 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                     NaiaClient::internal_send_with_connection(
                         &mut self.sender,
                         connection,
+                        self.tick_manager.get_tick(),
                         PacketType::Heartbeat,
                         Packet::empty(),
                     );
                 }
                 // send a packet
-                if let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
+                while let Some(payload) =
+                    connection.get_outgoing_packet(&self.manifest, self.tick_manager.get_tick())
+                {
                     self.sender
                         .send(Packet::new_raw(payload))
                         .expect("send failed!");
@@ -141,6 +147,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                 .write(&mut timestamp_bytes);
                             NaiaClient::<T, U>::internal_send_connectionless(
                                 &mut self.sender,
+                                self.tick_manager.get_tick(),
                                 PacketType::ClientChallengeRequest,
                                 Packet::new(timestamp_bytes),
                             );
@@ -165,6 +172,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                             }
                             NaiaClient::<T, U>::internal_send_connectionless(
                                 &mut self.sender,
+                                self.tick_manager.get_tick(),
                                 PacketType::ClientConnectRequest,
                                 Packet::new(payload_bytes),
                             );
@@ -235,7 +243,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                     self.server_connection = Some(ServerConnection::new(
                                         self.server_address,
                                         &self.connection_config,
-                                        &self.shared_config,
                                     ));
                                     self.connection_state = ClientConnectionState::Connected;
                                     output = Some(Ok(ClientEvent::Connection));
@@ -269,10 +276,12 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     fn internal_send_with_connection(
         sender: &mut MessageSender,
         connection: &mut ServerConnection<T, U>,
+        current_tick: u16,
         packet_type: PacketType,
         packet: Packet,
     ) {
-        let new_payload = connection.process_outgoing_header(packet_type, packet.payload());
+        let new_payload =
+            connection.process_outgoing_header(current_tick, packet_type, packet.payload());
         sender
             .send(Packet::new_raw(new_payload))
             .expect("send failed!");
@@ -281,11 +290,15 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
     fn internal_send_connectionless(
         sender: &mut MessageSender,
+        current_tick: u16,
         packet_type: PacketType,
         packet: Packet,
     ) {
-        let new_payload =
-            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
+        let new_payload = naia_shared::utils::write_connectionless_payload(
+            current_tick,
+            packet_type,
+            packet.payload(),
+        );
         sender
             .send(Packet::new_raw(new_payload))
             .expect("send failed!");

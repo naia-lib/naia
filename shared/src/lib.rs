@@ -28,11 +28,11 @@ mod manifest;
 mod packet_reader;
 mod packet_type;
 mod packet_writer;
+mod remote_tick_manager;
 mod rtt;
 mod sequence_buffer;
 mod shared_config;
 mod standard_header;
-mod tick_manager;
 mod timestamp;
 
 /// Commonly used utility methods to be used by naia-server & naia-client

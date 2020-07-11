@@ -2,7 +2,7 @@ use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
     Connection, ConnectionConfig, Entity, EntityType, Event, EventType, ManagerType, Manifest,
-    PacketReader, PacketType, PacketWriter, SequenceNumber, SharedConfig,
+    PacketReader, PacketType, PacketWriter, SequenceNumber,
 };
 
 use super::entities::{
@@ -20,15 +20,18 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         address: SocketAddr,
         mut_handler: Option<&Rc<RefCell<MutHandler>>>,
         connection_config: &ConnectionConfig,
-        shared_config: &SharedConfig,
     ) -> Self {
         ClientConnection {
-            connection: Connection::new(address, connection_config, shared_config),
+            connection: Connection::new(address, connection_config),
             entity_manager: ServerEntityManager::new(address, mut_handler.unwrap()),
         }
     }
 
-    pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T, U>) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(
+        &mut self,
+        manifest: &Manifest<T, U>,
+        current_tick: u16,
+    ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() || self.entity_manager.has_outgoing_messages() {
             let mut writer = PacketWriter::new();
 
@@ -59,7 +62,8 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
                 let out_bytes = writer.get_bytes();
 
                 // Add header to it
-                let payload = self.process_outgoing_header(PacketType::Data, &out_bytes);
+                let payload =
+                    self.process_outgoing_header(current_tick, PacketType::Data, &out_bytes);
                 return Some(payload);
             }
         }
@@ -122,12 +126,13 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
 
     pub fn process_outgoing_header(
         &mut self,
+        current_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
         return self
             .connection
-            .process_outgoing_header(packet_type, payload);
+            .process_outgoing_header(current_tick, packet_type, payload);
     }
 
     pub fn get_next_packet_index(&self) -> SequenceNumber {
