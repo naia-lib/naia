@@ -1,8 +1,8 @@
 use std::net::SocketAddr;
 
 use naia_shared::{
-    Connection, ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType,
-    Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber,
+    Connection, ConnectionConfig, EntityType, Event, EventType, HostTickManager, LocalEntityKey,
+    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber,
 };
 
 use super::{
@@ -91,8 +91,14 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.connection.should_drop();
     }
 
-    pub fn process_incoming_header(&mut self, payload: &[u8]) -> Box<[u8]> {
-        return self.connection.process_incoming_header(payload, &mut None);
+    pub fn process_incoming_header(
+        &mut self,
+        host_tick_manager: &mut dyn HostTickManager,
+        payload: &[u8],
+    ) -> Box<[u8]> {
+        return self
+            .connection
+            .process_incoming_header(payload, &mut None, host_tick_manager);
     }
 
     pub fn process_outgoing_header(

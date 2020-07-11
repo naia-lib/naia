@@ -7,6 +7,7 @@ use super::{
     connection_config::ConnectionConfig,
     entities::{entity_notifiable::EntityNotifiable, entity_type::EntityType},
     events::{event::Event, event_manager::EventManager, event_type::EventType},
+    host_tick_manager::HostTickManager,
     manifest::Manifest,
     packet_reader::PacketReader,
     packet_type::PacketType,
@@ -78,14 +79,17 @@ impl<T: EventType> Connection<T> {
         &mut self,
         payload: &[u8],
         entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
+        host_tick_manager: &mut dyn HostTickManager,
     ) -> Box<[u8]> {
-        let incoming_sequence_number = StandardHeader::get_sequence(payload);
-        self.rtt_tracker.process_incoming(incoming_sequence_number);
-        return self.ack_manager.process_incoming(
-            payload,
-            &mut self.event_manager,
-            entity_notifiable,
-        );
+        let (header, stripped_message) = StandardHeader::read(payload);
+        self.rtt_tracker
+            .process_incoming(header.local_packet_index());
+        self.ack_manager
+            .process_incoming(&header, &mut self.event_manager, entity_notifiable);
+        self.tick_manager
+            .process_incoming(host_tick_manager.get_tick(), &header);
+        host_tick_manager.process_incoming(header.tick_diff());
+        return stripped_message;
     }
 
     /// Given a packet payload, start tracking the packet via it's index, attach

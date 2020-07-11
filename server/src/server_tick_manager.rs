@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use naia_shared::HostTickManager;
+
 /// Manages the current tick for the host
 #[derive(Debug)]
 pub struct ServerTickManager {
@@ -16,13 +18,19 @@ impl ServerTickManager {
         }
     }
 
-    /// Gets the current tick for the host
-    pub fn get_tick(&self) -> u16 {
-        self.current_tick
-    }
-
     /// Increments the current tick
     pub fn increment_tick(&mut self) {
         self.current_tick = self.current_tick.wrapping_add(1);
+    }
+}
+
+impl HostTickManager for ServerTickManager {
+    fn get_tick(&self) -> u16 {
+        self.current_tick
+    }
+
+    fn process_incoming(&mut self, tick_latency: u8) {
+        // Should not ever arrive here
+        unimplemented!()
     }
 }
