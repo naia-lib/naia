@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{convert::TryInto, time::Duration};
 
 use naia_shared::{HostTickManager, Instant};
 
@@ -24,14 +24,16 @@ impl ClientTickManager {
 
     /// If the tick interval duration has elapsed, increment the current tick
     pub fn update_frame(&mut self) {
-        let mut time_elapsed = self.last_instant.elapsed() - self.last_leftover;
-        while time_elapsed > self.tick_interval {
-            self.current_tick += 1;
-            time_elapsed -= self.tick_interval;
-        }
+        let mut time_elapsed = self.last_instant.elapsed() + self.last_leftover;
+        if time_elapsed > self.tick_interval {
+            while time_elapsed > self.tick_interval {
+                self.current_tick += 1;
+                time_elapsed -= self.tick_interval;
+            }
 
-        self.last_leftover = time_elapsed;
-        self.last_instant = Instant::now();
+            self.last_leftover = time_elapsed;
+            self.last_instant = Instant::now();
+        }
     }
 }
 
@@ -40,7 +42,24 @@ impl HostTickManager for ClientTickManager {
         self.current_tick
     }
 
-    fn process_incoming(&mut self, tick_latency: u8) {
-        unimplemented!()
+    fn process_incoming(&mut self, tick_latency: i8) {
+        // The server has told us the latency, adjust current_tick accordingly
+        //unimplemented!()
+        if tick_latency == -1 {
+            return;
+        } else if tick_latency < 0 {
+            if let Ok(lat) = (tick_latency * -1).try_into() {
+                let diff: u16 = lat;
+                //println!("host tick should subtract {}", diff);
+                self.current_tick = self.current_tick.wrapping_sub(diff);
+            }
+        } else if tick_latency > 0 {
+            if let Ok(lat) = tick_latency.try_into() {
+                let diff: u16 = lat;
+                //println!("host tick should add {}", diff);
+                self.current_tick = self.current_tick.wrapping_add(diff);
+            }
+        }
+        self.current_tick = self.current_tick.wrapping_add(1);
     }
 }

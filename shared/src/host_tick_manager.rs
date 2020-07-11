@@ -4,5 +4,5 @@ pub trait HostTickManager {
     fn get_tick(&self) -> u16;
 
     /// Processes the tick latency resulting from an incoming packet header
-    fn process_incoming(&mut self, tick_latency: u8);
+    fn process_incoming(&mut self, tick_latency: i8);
 }
