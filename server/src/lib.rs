@@ -33,6 +33,7 @@ mod naia_server;
 mod room;
 mod server_config;
 mod server_event;
+mod server_tick_manager;
 mod user;
 
 pub use naia_server::NaiaServer;

@@ -10,11 +10,10 @@ use super::{
     manifest::Manifest,
     packet_reader::PacketReader,
     packet_type::PacketType,
+    remote_tick_manager::RemoteTickManager,
     rtt::rtt_tracker::RttTracker,
     sequence_buffer::SequenceNumber,
-    shared_config::SharedConfig,
     standard_header::StandardHeader,
-    tick_manager::TickManager,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -25,24 +24,18 @@ pub struct Connection<T: EventType> {
     heartbeat_timer: Timer,
     timeout_timer: Timer,
     ack_manager: AckManager,
-    tick_manager: TickManager,
+    tick_manager: RemoteTickManager,
     rtt_tracker: RttTracker,
     event_manager: EventManager<T>,
 }
 
 impl<T: EventType> Connection<T> {
     /// Create a new Connection, given the appropriate underlying managers
-    pub fn new(
-        address: SocketAddr,
-        config: &ConnectionConfig,
-        shared_config: &SharedConfig,
-    ) -> Self {
+    pub fn new(address: SocketAddr, config: &ConnectionConfig) -> Self {
         let heartbeat_interval = config.heartbeat_interval;
         let timeout_duration = config.disconnection_timeout_duration;
         let rtt_smoothing_factor = config.rtt_smoothing_factor;
         let rtt_max_value = config.rtt_max_value;
-
-        let tick_interval = shared_config.tick_interval;
 
         return Connection {
             address,
@@ -51,7 +44,7 @@ impl<T: EventType> Connection<T> {
             ack_manager: AckManager::new(),
             rtt_tracker: RttTracker::new(rtt_smoothing_factor, rtt_max_value),
             event_manager: EventManager::new(),
-            tick_manager: TickManager::new(tick_interval),
+            tick_manager: RemoteTickManager::new(),
         };
     }
 
@@ -100,6 +93,7 @@ impl<T: EventType> Connection<T> {
     /// bytes
     pub fn process_outgoing_header(
         &mut self,
+        current_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
@@ -112,7 +106,6 @@ impl<T: EventType> Connection<T> {
         let local_packet_index = self.ack_manager.get_local_packet_index();
         let last_remote_packet_index = self.ack_manager.get_last_remote_packet_index();
         let bit_field = self.ack_manager.get_ack_bitfield();
-        let current_tick = self.tick_manager.get_current_tick();
         let tick_latency = self.tick_manager.get_tick_latency();
 
         let header = StandardHeader::new(
