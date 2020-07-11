@@ -29,8 +29,8 @@ impl HostTickManager for ServerTickManager {
         self.current_tick
     }
 
-    fn process_incoming(&mut self, tick_latency: u8) {
+    fn process_incoming(&mut self, tick_latency: i8) {
         // Should not ever arrive here
-        unimplemented!()
+        // unimplemented!()
     }
 }

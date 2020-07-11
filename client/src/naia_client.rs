@@ -148,7 +148,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                 .write(&mut timestamp_bytes);
                             NaiaClient::<T, U>::internal_send_connectionless(
                                 &mut self.sender,
-                                self.tick_manager.get_tick(),
                                 PacketType::ClientChallengeRequest,
                                 Packet::new(timestamp_bytes),
                             );
@@ -173,7 +172,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                             }
                             NaiaClient::<T, U>::internal_send_connectionless(
                                 &mut self.sender,
-                                self.tick_manager.get_tick(),
                                 PacketType::ClientConnectRequest,
                                 Packet::new(payload_bytes),
                             );
@@ -291,15 +289,11 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
     fn internal_send_connectionless(
         sender: &mut MessageSender,
-        current_tick: u16,
         packet_type: PacketType,
         packet: Packet,
     ) {
-        let new_payload = naia_shared::utils::write_connectionless_payload(
-            current_tick,
-            packet_type,
-            packet.payload(),
-        );
+        let new_payload =
+            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
         sender
             .send(Packet::new_raw(new_payload))
             .expect("send failed!");
