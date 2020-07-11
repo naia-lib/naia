@@ -2,9 +2,11 @@ use log::info;
 
 use std::{net::SocketAddr, time::Duration};
 
-use naia_client::{ClientEvent, Config, NaiaClient};
+use naia_client::{ClientConfig, ClientEvent, NaiaClient};
 
-use naia_example_shared::{manifest_load, AuthEvent, ExampleEntity, ExampleEvent, StringEvent};
+use naia_example_shared::{
+    get_shared_config, manifest_load, AuthEvent, ExampleEntity, ExampleEvent, StringEvent,
+};
 
 const SERVER_PORT: u16 = 14191;
 
@@ -36,13 +38,13 @@ impl App {
 
         let server_socket_address = SocketAddr::new(server_ip_address, SERVER_PORT);
 
-        let mut config = Config::default();
-        config.heartbeat_interval = Duration::from_secs(2);
+        let mut client_config = ClientConfig::default();
+        client_config.heartbeat_interval = Duration::from_secs(2);
         // Keep in mind that the disconnect timeout duration should always be at least
         // 2x greater than the heartbeat interval, to make it so at the worst case, the
         // server would need to miss 2 heartbeat signals before disconnecting from a
         // given client
-        config.disconnection_timeout_duration = Duration::from_secs(5);
+        client_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         // This will be evaluated in the Server's 'on_auth()' method
         let auth = ExampleEvent::AuthEvent(AuthEvent::new("charlie", "12345"));
@@ -51,7 +53,8 @@ impl App {
             client: NaiaClient::new(
                 server_socket_address,
                 manifest_load(),
-                Some(config),
+                Some(client_config),
+                get_shared_config(),
                 Some(auth),
             ),
             server_event_count: 0,

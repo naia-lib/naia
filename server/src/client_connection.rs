@@ -1,9 +1,8 @@
 use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
-    AckManager, Config, Connection, Entity, EntityType, Event, EventManager, EventType,
-    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, RttTracker, SequenceNumber,
-    Timer,
+    Connection, ConnectionConfig, Entity, EntityType, Event, EventType, ManagerType, Manifest,
+    PacketReader, PacketType, PacketWriter, SequenceNumber, SharedConfig,
 };
 
 use super::entities::{
@@ -20,24 +19,13 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
     pub fn new(
         address: SocketAddr,
         mut_handler: Option<&Rc<RefCell<MutHandler>>>,
-        config: &Config,
+        connection_config: &ConnectionConfig,
+        shared_config: &SharedConfig,
     ) -> Self {
-        let heartbeat_interval = config.heartbeat_interval;
-        let timeout_duration = config.disconnection_timeout_duration;
-        let rtt_smoothing_factor = config.rtt_smoothing_factor;
-        let rtt_max_value = config.rtt_max_value;
-
-        return ClientConnection {
-            connection: Connection::new(
-                address,
-                Timer::new(heartbeat_interval),
-                Timer::new(timeout_duration),
-                AckManager::new(),
-                RttTracker::new(rtt_smoothing_factor, rtt_max_value),
-                EventManager::new(),
-            ),
+        ClientConnection {
+            connection: Connection::new(address, connection_config, shared_config),
             entity_manager: ServerEntityManager::new(address, mut_handler.unwrap()),
-        };
+        }
     }
 
     pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T, U>) -> Option<Box<[u8]>> {
