@@ -11,7 +11,7 @@ use ring::{hmac, rand};
 use slotmap::DenseSlotMap;
 
 use naia_server_socket::{
-    Config as SocketConfig, MessageSender, Packet, ServerSocket, SocketEvent,
+    Config as SocketConfig, MessageSender, Packet, ServerSocket, ServerSocketTrait, SocketEvent,
 };
 pub use naia_shared::{
     Connection, ConnectionConfig, Entity, EntityMutator, EntityType, Event, EventType,
@@ -39,7 +39,7 @@ use super::{
 pub struct NaiaServer<T: EventType, U: EntityType> {
     connection_config: ConnectionConfig,
     manifest: Manifest<T, U>,
-    socket: ServerSocket,
+    socket: Box<dyn ServerSocketTrait>,
     sender: MessageSender,
     global_entity_store: DenseSlotMap<EntityKey, Rc<RefCell<dyn Entity<U>>>>,
     scope_entity_func: Option<Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>>,
@@ -93,7 +93,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             scope_entity_func: None,
             auth_func: None,
             mut_handler: MutHandler::new(),
-            socket: server_socket,
+            socket: Box::new(server_socket),
             sender,
             connection_config,
             users: DenseSlotMap::with_key(),
