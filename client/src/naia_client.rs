@@ -85,6 +85,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     pub fn receive(&mut self) -> Result<ClientEvent<T>, NaiaClientError> {
         // update current tick
         self.tick_manager.update_frame();
+
         // send handshakes, send heartbeats, timeout if need be
         match &mut self.server_connection {
             Some(connection) => {

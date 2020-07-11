@@ -19,7 +19,6 @@ extern crate cfg_if;
 mod ack_manager;
 mod connection;
 mod connection_config;
-mod duration;
 mod entities;
 mod events;
 mod instant;
