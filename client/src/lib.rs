@@ -19,6 +19,7 @@ mod client_connection_state;
 mod client_entity_manager;
 mod client_entity_message;
 mod client_event;
+mod client_tick_manager;
 mod error;
 mod naia_client;
 mod server_connection;

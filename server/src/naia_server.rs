@@ -28,6 +28,7 @@ use super::{
     room::{room_key::RoomKey, Room},
     server_config::ServerConfig,
     server_event::ServerEvent,
+    server_tick_manager::ServerTickManager,
     user::{user_key::UserKey, User},
 };
 
@@ -36,7 +37,6 @@ use super::{
 /// those entities are in-scope
 pub struct NaiaServer<T: EventType, U: EntityType> {
     connection_config: ConnectionConfig,
-    shared_config: SharedConfig,
     manifest: Manifest<T, U>,
     socket: ServerSocket,
     sender: MessageSender,
@@ -51,6 +51,7 @@ pub struct NaiaServer<T: EventType, U: EntityType> {
     outstanding_disconnects: VecDeque<UserKey>,
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
+    tick_manager: ServerTickManager,
 }
 
 impl<T: EventType, U: EntityType> NaiaServer<T, U> {
@@ -94,7 +95,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             socket: server_socket,
             sender,
             connection_config,
-            shared_config,
             users: DenseSlotMap::with_key(),
             rooms: DenseSlotMap::with_key(),
             connection_hash_key,
@@ -102,6 +102,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             address_to_user_key_map: HashMap::new(),
             outstanding_disconnects: VecDeque::new(),
             heartbeat_timer,
+            tick_manager: ServerTickManager::new(shared_config.tick_interval),
         }
     }
 
@@ -121,8 +122,11 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                         } else if connection.should_send_heartbeat() {
                             // Don't try to refactor this to self.internal_send, doesn't seem to
                             // work cause of iter_mut()
-                            let payload =
-                                connection.process_outgoing_header(PacketType::Heartbeat, &[]);
+                            let payload = connection.process_outgoing_header(
+                                self.tick_manager.get_tick(),
+                                PacketType::Heartbeat,
+                                &[],
+                            );
                             self.sender
                                 .send(Packet::new_raw(user.address, payload))
                                 .await
@@ -195,6 +199,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
 
                                     NaiaServer::<T, U>::internal_send_connectionless(
                                         &mut self.sender,
+                                        self.tick_manager.get_tick(),
                                         PacketType::ServerChallengeResponse,
                                         Packet::new(address, payload_bytes),
                                     )
@@ -222,6 +227,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                                 NaiaServer::<T, U>::send_connect_accept_message(
                                                     &mut connection,
                                                     &mut self.sender,
+                                                    self.tick_manager.get_tick(),
                                                 )
                                                 .await;
                                                 continue;
@@ -297,11 +303,11 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                             address,
                                             Some(&self.mut_handler),
                                             &self.connection_config,
-                                            &self.shared_config,
                                         );
                                         NaiaServer::<T, U>::send_connect_accept_message(
                                             &mut new_connection,
                                             &mut self.sender,
+                                            self.tick_manager.get_tick(),
                                         )
                                         .await;
                                         self.client_connections.insert(user_key, new_connection);
@@ -354,6 +360,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                             }
                         }
                         SocketEvent::Tick => {
+                            self.tick_manager.increment_tick();
                             output = Some(Ok(ServerEvent::Tick));
                             continue;
                         }
@@ -385,8 +392,13 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     async fn send_connect_accept_message(
         connection: &mut ClientConnection<T, U>,
         sender: &mut MessageSender,
+        current_tick: u16,
     ) {
-        let payload = connection.process_outgoing_header(PacketType::ServerConnectResponse, &[]);
+        let payload = connection.process_outgoing_header(
+            current_tick,
+            PacketType::ServerConnectResponse,
+            &[],
+        );
         match sender
             .send(Packet::new_raw(connection.get_address(), payload))
             .await
@@ -418,7 +430,9 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
                 connection.collect_entity_updates();
-                while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
+                while let Some(payload) =
+                    connection.get_outgoing_packet(&self.manifest, self.tick_manager.get_tick())
+                {
                     match self
                         .sender
                         .send(Packet::new_raw(user.address, payload))
@@ -602,11 +616,15 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
 
     async fn internal_send_connectionless(
         sender: &mut MessageSender,
+        current_tick: u16,
         packet_type: PacketType,
         packet: Packet,
     ) {
-        let new_payload =
-            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
+        let new_payload = naia_shared::utils::write_connectionless_payload(
+            current_tick,
+            packet_type,
+            packet.payload(),
+        );
         sender
             .send(Packet::new_raw(packet.address(), new_payload))
             .await
