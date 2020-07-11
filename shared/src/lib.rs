@@ -17,8 +17,8 @@ extern crate log;
 extern crate cfg_if;
 
 mod ack_manager;
-mod config;
 mod connection;
+mod connection_config;
 mod duration;
 mod entities;
 mod events;
@@ -30,7 +30,9 @@ mod packet_type;
 mod packet_writer;
 mod rtt;
 mod sequence_buffer;
+mod shared_config;
 mod standard_header;
+mod tick_manager;
 mod timestamp;
 
 /// Commonly used utility methods to be used by naia-server & naia-client
@@ -39,8 +41,8 @@ pub mod utils;
 pub use naia_socket_shared::{find_my_ip_address, Timer};
 
 pub use ack_manager::AckManager;
-pub use config::Config;
 pub use connection::Connection;
+pub use connection_config::ConnectionConfig;
 pub use entities::{
     entity::Entity, entity_builder::EntityBuilder, entity_mutator::EntityMutator,
     entity_notifiable::EntityNotifiable, entity_type::EntityType, local_entity_key::LocalEntityKey,
@@ -60,4 +62,5 @@ pub use packet_type::PacketType;
 pub use packet_writer::{PacketWriter, MTU_SIZE};
 pub use rtt::rtt_tracker::RttTracker;
 pub use sequence_buffer::SequenceNumber;
+pub use shared_config::SharedConfig;
 pub use timestamp::Timestamp;

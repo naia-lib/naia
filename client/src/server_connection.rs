@@ -1,9 +1,8 @@
 use std::net::SocketAddr;
 
 use naia_shared::{
-    AckManager, Config, Connection, EntityType, Event, EventManager, EventType, LocalEntityKey,
-    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, RttTracker, SequenceNumber,
-    Timer,
+    Connection, ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType,
+    Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber, SharedConfig,
 };
 
 use super::{
@@ -17,21 +16,13 @@ pub struct ServerConnection<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> ServerConnection<T, U> {
-    pub fn new(address: SocketAddr, config: &Config) -> Self {
-        let heartbeat_interval = config.heartbeat_interval;
-        let timeout_duration = config.disconnection_timeout_duration;
-        let rtt_smoothing_factor = config.rtt_smoothing_factor;
-        let rtt_max_value = config.rtt_max_value;
-
+    pub fn new(
+        address: SocketAddr,
+        connection_config: &ConnectionConfig,
+        shared_config: &SharedConfig,
+    ) -> Self {
         return ServerConnection {
-            connection: Connection::new(
-                address,
-                Timer::new(heartbeat_interval),
-                Timer::new(timeout_duration),
-                AckManager::new(),
-                RttTracker::new(rtt_smoothing_factor, rtt_max_value),
-                EventManager::new(),
-            ),
+            connection: Connection::new(address, connection_config, shared_config),
             entity_manager: ClientEntityManager::new(),
         };
     }

@@ -4,13 +4,13 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_client_socket::{ClientSocket, Config as SocketConfig, MessageSender, SocketEvent};
 pub use naia_shared::{
-    Config, EntityType, Event, EventType, LocalEntityKey, ManagerType, Manifest, PacketReader,
-    PacketType, PacketWriter, Timer, Timestamp,
+    ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType, Manifest,
+    PacketReader, PacketType, PacketWriter, SharedConfig, Timer, Timestamp,
 };
 
 use super::{
-    client_entity_message::ClientEntityMessage, client_event::ClientEvent, error::NaiaClientError,
-    server_connection::ServerConnection, Packet,
+    client_config::ClientConfig, client_entity_message::ClientEntityMessage,
+    client_event::ClientEvent, error::NaiaClientError, server_connection::ServerConnection, Packet,
 };
 use crate::client_connection_state::{
     ClientConnectionState, ClientConnectionState::AwaitingChallengeResponse,
@@ -22,7 +22,8 @@ use crate::client_connection_state::{
 pub struct NaiaClient<T: EventType, U: EntityType> {
     manifest: Manifest<T, U>,
     server_address: SocketAddr,
-    config: Config,
+    connection_config: ConnectionConfig,
+    shared_config: SharedConfig,
     socket: ClientSocket,
     sender: MessageSender,
     server_connection: Option<ServerConnection<T, U>>,
@@ -39,19 +40,26 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     pub fn new(
         server_address: SocketAddr,
         manifest: Manifest<T, U>,
-        config: Option<Config>,
+        client_config: Option<ClientConfig>,
+        shared_config: SharedConfig,
         auth: Option<T>,
     ) -> Self {
-        let mut config = match config {
+        let client_config = match client_config {
             Some(config) => config,
-            None => Config::default(),
+            None => ClientConfig::default(),
         };
-        config.heartbeat_interval /= 2;
+
+        let connection_config = ConnectionConfig::new(
+            client_config.disconnection_timeout_duration,
+            client_config.heartbeat_interval,
+            client_config.rtt_smoothing_factor,
+            client_config.rtt_max_value,
+        );
 
         let socket_config = SocketConfig::default();
         let mut client_socket = ClientSocket::connect(server_address, Some(socket_config));
 
-        let mut handshake_timer = Timer::new(config.send_handshake_interval);
+        let mut handshake_timer = Timer::new(client_config.send_handshake_interval);
         handshake_timer.ring_manual();
         let message_sender = client_socket.get_sender();
 
@@ -60,7 +68,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             manifest,
             socket: client_socket,
             sender: message_sender,
-            config,
+            connection_config,
+            shared_config,
             handshake_timer,
             server_connection: None,
             pre_connection_timestamp: None,
@@ -225,7 +234,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                 PacketType::ServerConnectResponse => {
                                     self.server_connection = Some(ServerConnection::new(
                                         self.server_address,
-                                        &self.config,
+                                        &self.connection_config,
+                                        &self.shared_config,
                                     ));
                                     self.connection_state = ClientConnectionState::Connected;
                                     output = Some(Ok(ClientEvent::Connection));

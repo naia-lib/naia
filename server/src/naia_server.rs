@@ -14,8 +14,8 @@ use naia_server_socket::{
     Config as SocketConfig, MessageSender, Packet, ServerSocket, SocketEvent,
 };
 pub use naia_shared::{
-    Config, Connection, Entity, EntityMutator, EntityType, Event, EventType, Instant, ManagerType,
-    Manifest, PacketReader, PacketType, Timer, Timestamp,
+    Connection, ConnectionConfig, Entity, EntityMutator, EntityType, Event, EventType, Instant,
+    ManagerType, Manifest, PacketReader, PacketType, SharedConfig, Timer, Timestamp,
 };
 
 use super::{
@@ -26,6 +26,7 @@ use super::{
     },
     error::NaiaServerError,
     room::{room_key::RoomKey, Room},
+    server_config::ServerConfig,
     server_event::ServerEvent,
     user::{user_key::UserKey, User},
 };
@@ -34,7 +35,8 @@ use super::{
 /// to/from connected clients, and syncs registered entities to clients to whom
 /// those entities are in-scope
 pub struct NaiaServer<T: EventType, U: EntityType> {
-    config: Config,
+    connection_config: ConnectionConfig,
+    shared_config: SharedConfig,
     manifest: Manifest<T, U>,
     socket: ServerSocket,
     sender: MessageSender,
@@ -57,21 +59,28 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     pub async fn new(
         address: SocketAddr,
         manifest: Manifest<T, U>,
-        config: Option<Config>,
+        server_config: Option<ServerConfig>,
+        shared_config: SharedConfig,
     ) -> Self {
-        let mut config = match config {
+        let server_config = match server_config {
             Some(config) => config,
-            None => Config::default(),
+            None => ServerConfig::default(),
         };
-        config.heartbeat_interval /= 2;
+
+        let connection_config = ConnectionConfig::new(
+            server_config.disconnection_timeout_duration,
+            server_config.heartbeat_interval,
+            server_config.rtt_smoothing_factor,
+            server_config.rtt_max_value,
+        );
 
         let mut socket_config = SocketConfig::default();
-        socket_config.tick_interval = config.tick_interval;
+        socket_config.tick_interval = shared_config.tick_interval;
         let mut server_socket = ServerSocket::listen(address, Some(socket_config)).await;
 
         let sender = server_socket.get_sender();
         let clients_map = HashMap::new();
-        let heartbeat_timer = Timer::new(config.heartbeat_interval);
+        let heartbeat_timer = Timer::new(connection_config.heartbeat_interval);
 
         let connection_hash_key =
             hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
@@ -84,7 +93,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             mut_handler: MutHandler::new(),
             socket: server_socket,
             sender,
-            config,
+            connection_config,
+            shared_config,
             users: DenseSlotMap::with_key(),
             rooms: DenseSlotMap::with_key(),
             connection_hash_key,
@@ -286,7 +296,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         let mut new_connection = ClientConnection::new(
                                             address,
                                             Some(&self.mut_handler),
-                                            &self.config,
+                                            &self.connection_config,
+                                            &self.shared_config,
                                         );
                                         NaiaServer::<T, U>::send_connect_accept_message(
                                             &mut new_connection,

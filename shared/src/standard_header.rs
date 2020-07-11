@@ -10,11 +10,16 @@ pub struct StandardHeader {
     p_type: PacketType,
     // This is the sequence number so that we can know where in the sequence of packages this
     // packet belongs.
-    pub seq: u16,
+    local_packet_index: u16,
     // This is the last acknowledged sequence number.
-    ack_seq: u16,
+    last_remote_packet_index: u16,
     // This is an bitfield of all last 32 acknowledged packages
     ack_field: u32,
+    // This is the current tick of the host
+    current_tick: u16,
+    // This is the difference between the tick of the host and the tick received from the remote
+    // host
+    tick_latency: u8,
 }
 
 impl StandardHeader {
@@ -24,22 +29,31 @@ impl StandardHeader {
     /// packets, containing sequence numbers in the range [remote sequence - 32,
     /// remote sequence]. We set bit n (in [1,32]) in ack bits to 1 if the
     /// sequence number remote sequence - n is in the received queue.
-    pub fn new(p_type: PacketType, seq_num: u16, last_seq: u16, bit_field: u32) -> StandardHeader {
+    pub fn new(
+        p_type: PacketType,
+        local_packet_index: u16,
+        last_remote_packet_index: u16,
+        bit_field: u32,
+        current_tick: u16,
+        tick_latency: u8,
+    ) -> StandardHeader {
         StandardHeader {
             p_type,
-            seq: seq_num,
-            ack_seq: last_seq,
+            local_packet_index,
+            last_remote_packet_index,
             ack_field: bit_field,
+            current_tick,
+            tick_latency,
         }
     }
 
     pub const fn bytes_number() -> usize {
-        return 9;
+        return 12;
     }
 
     /// Returns the sequence number from this packet.
     pub fn sequence(&self) -> u16 {
-        self.seq
+        self.local_packet_index
     }
 
     /// Returns bit field of all last 32 acknowledged packages.
@@ -49,14 +63,30 @@ impl StandardHeader {
 
     /// Returns last acknowledged sequence number.
     pub fn ack_seq(&self) -> u16 {
-        self.ack_seq
+        self.last_remote_packet_index
+    }
+
+    /// Returns tick associated with packet
+    pub fn tick(&self) -> u16 {
+        self.current_tick
+    }
+
+    /// Returns tick difference between hosts, associated with packet
+    pub fn tick_diff(&self) -> u8 {
+        self.tick_latency
     }
 
     pub fn write(&self, buffer: &mut Vec<u8>) {
         buffer.write_u8(self.p_type as u8).unwrap();
-        buffer.write_u16::<BigEndian>(self.seq).unwrap();
-        buffer.write_u16::<BigEndian>(self.ack_seq).unwrap();
+        buffer
+            .write_u16::<BigEndian>(self.local_packet_index)
+            .unwrap();
+        buffer
+            .write_u16::<BigEndian>(self.last_remote_packet_index)
+            .unwrap();
         buffer.write_u32::<BigEndian>(self.ack_field).unwrap();
+        buffer.write_u16::<BigEndian>(self.current_tick).unwrap();
+        buffer.write_u8(self.tick_latency).unwrap();
     }
 
     pub fn read(mut msg: &[u8]) -> (Self, Box<[u8]>) {
@@ -64,6 +94,8 @@ impl StandardHeader {
         let seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_field = msg.read_u32::<BigEndian>().unwrap();
+        let tick = msg.read_u16::<BigEndian>().unwrap();
+        let tick_diff = msg.read_u8().unwrap();
 
         let mut buffer = Vec::new();
         msg.read_to_end(&mut buffer).unwrap();
@@ -71,9 +103,11 @@ impl StandardHeader {
         (
             StandardHeader {
                 p_type,
-                seq,
-                ack_seq,
+                local_packet_index: seq,
+                last_remote_packet_index: ack_seq,
                 ack_field,
+                current_tick: tick,
+                tick_latency: tick_diff,
             },
             buffer.into_boxed_slice(),
         )
