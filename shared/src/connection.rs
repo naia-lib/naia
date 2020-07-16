@@ -77,11 +77,10 @@ impl<T: EventType> Connection<T> {
     /// handle packet notification events
     pub fn process_incoming_header(
         &mut self,
-        payload: &[u8],
+        header: &StandardHeader,
         entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
         host_tick_manager: &mut dyn HostTickManager,
-    ) -> Box<[u8]> {
-        let (header, stripped_message) = StandardHeader::read(payload);
+    ) {
         self.rtt_tracker
             .process_incoming(header.local_packet_index());
         self.ack_manager
@@ -89,7 +88,6 @@ impl<T: EventType> Connection<T> {
         self.tick_manager
             .process_incoming(host_tick_manager.get_tick(), &header);
         host_tick_manager.process_incoming(header.tick_latency());
-        return stripped_message;
     }
 
     /// Given a packet payload, start tracking the packet via it's index, attach

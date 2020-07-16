@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, Event, EventType, HostTickManager, LocalEntityKey,
-    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber,
+    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber, StandardHeader,
 };
 
 use super::{
@@ -58,7 +58,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.pop_incoming_message();
     }
 
-    pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &mut [u8]) {
+    pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &[u8]) {
         let mut reader = PacketReader::new(data);
         let start_manager_type: ManagerType = reader.read_u8().into();
         if start_manager_type == ManagerType::Event {
@@ -94,11 +94,10 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     pub fn process_incoming_header(
         &mut self,
         host_tick_manager: &mut dyn HostTickManager,
-        payload: &[u8],
-    ) -> Box<[u8]> {
-        return self
-            .connection
-            .process_incoming_header(payload, &mut None, host_tick_manager);
+        header: &StandardHeader,
+    ) {
+        self.connection
+            .process_incoming_header(header, &mut None, host_tick_manager);
     }
 
     pub fn process_outgoing_header(

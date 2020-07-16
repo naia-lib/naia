@@ -64,4 +64,5 @@ pub use packet_writer::{PacketWriter, MTU_SIZE};
 pub use rtt::rtt_tracker::RttTracker;
 pub use sequence_buffer::SequenceNumber;
 pub use shared_config::SharedConfig;
+pub use standard_header::StandardHeader;
 pub use timestamp::Timestamp;

@@ -47,8 +47,14 @@ impl StandardHeader {
         }
     }
 
+    /// Returns the number of bytes in the header
     pub const fn bytes_number() -> usize {
         return 12;
+    }
+
+    /// Returns the packet type indicated by the header
+    pub fn packet_type(&self) -> PacketType {
+        self.p_type
     }
 
     /// Returns the sequence number from this packet.
@@ -76,6 +82,7 @@ impl StandardHeader {
         self.tick_latency
     }
 
+    /// Writes the header to an outgoing byte buffer
     pub fn write(&self, buffer: &mut Vec<u8>) {
         buffer.write_u8(self.p_type as u8).unwrap();
         buffer
@@ -89,6 +96,7 @@ impl StandardHeader {
         buffer.write_i8(self.tick_latency).unwrap();
     }
 
+    /// Reads the header from an incoming byte slice
     pub fn read(mut msg: &[u8]) -> (Self, Box<[u8]>) {
         let p_type: PacketType = msg.read_u8().unwrap().into();
         let seq = msg.read_u16::<BigEndian>().unwrap();
@@ -111,9 +119,5 @@ impl StandardHeader {
             },
             buffer.into_boxed_slice(),
         )
-    }
-
-    pub fn get_packet_type(mut payload: &[u8]) -> PacketType {
-        payload.read_u8().unwrap().into()
     }
 }

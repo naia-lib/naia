@@ -16,6 +16,7 @@ use super::{
 use crate::client_connection_state::{
     ClientConnectionState, ClientConnectionState::AwaitingChallengeResponse,
 };
+use naia_shared::StandardHeader;
 
 /// Client can send/receive events to/from a server, and has a pool of in-scope
 /// entities that are synced with the server
@@ -192,18 +193,19 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             match self.socket.receive() {
                 Ok(event) => match event {
                     Some(packet) => {
-                        let packet_type = PacketType::get_from_packet(packet.payload());
-
                         let server_connection_wrapper = self.server_connection.as_mut();
+
                         if let Some(server_connection) = server_connection_wrapper {
                             server_connection.mark_heard();
-                            let mut payload = server_connection
-                                .process_incoming_header(&mut self.tick_manager, packet.payload());
 
-                            match packet_type {
+                            let (header, payload) = StandardHeader::read(packet.payload());
+                            server_connection
+                                .process_incoming_header(&mut self.tick_manager, &header);
+
+                            match header.packet_type() {
                                 PacketType::Data => {
                                     server_connection
-                                        .process_incoming_data(&self.manifest, &mut payload);
+                                        .process_incoming_data(&self.manifest, &payload);
                                     continue;
                                 }
                                 PacketType::Heartbeat => {
@@ -212,16 +214,13 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                 _ => {}
                             }
                         } else {
-                            match packet_type {
+                            let (header, payload) = StandardHeader::read(packet.payload());
+                            match header.packet_type() {
                                 PacketType::ServerChallengeResponse => {
                                     if self.connection_state
                                         == ClientConnectionState::AwaitingChallengeResponse
                                     {
                                         if let Some(my_timestamp) = self.pre_connection_timestamp {
-                                            let payload =
-                                                naia_shared::utils::read_headerless_payload(
-                                                    packet.payload(),
-                                                );
                                             let mut reader = PacketReader::new(&payload);
                                             let payload_timestamp = Timestamp::read(&mut reader);
 
@@ -295,7 +294,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         packet: Packet,
     ) {
         let new_payload =
-            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
+            naia_shared::utils::write_connectionless_payload(0, packet_type, packet.payload());
         sender
             .send(Packet::new_raw(new_payload))
             .expect("send failed!");
