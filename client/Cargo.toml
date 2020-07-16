@@ -16,7 +16,7 @@ edition = "2018"
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-naia-client-socket = { version = "0.2.1" }
+naia-client-socket = { path = "../../naia-socket/client" } # version = "0.3.0" }
 naia-shared = { version = "0.1.1", path = "../shared" }
 cfg-if = "0.1.10"
 log = "0.4"

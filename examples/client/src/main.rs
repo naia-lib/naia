@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate cfg_if;
+
+#[macro_use]
 extern crate log;
 
 mod app;
