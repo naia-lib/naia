@@ -6,12 +6,14 @@ use std::{
 };
 
 use byteorder::{BigEndian, ReadBytesExt};
+use futures_util::{pin_mut, select, FutureExt};
 use log::info;
 use ring::{hmac, rand};
 use slotmap::DenseSlotMap;
+use tokio::time::Interval;
 
 use naia_server_socket::{
-    Config as SocketConfig, MessageSender, Packet, ServerSocket, ServerSocketTrait, SocketEvent,
+    MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
 };
 pub use naia_shared::{
     Connection, ConnectionConfig, Entity, EntityMutator, EntityType, Event, EventType,
@@ -53,6 +55,7 @@ pub struct NaiaServer<T: EventType, U: EntityType> {
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
     tick_manager: ServerTickManager,
+    tick_timer: Interval,
 }
 
 impl<T: EventType, U: EntityType> NaiaServer<T, U> {
@@ -76,9 +79,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             server_config.rtt_max_value,
         );
 
-        let mut socket_config = SocketConfig::default();
-        socket_config.tick_interval = shared_config.tick_interval;
-        let mut server_socket = ServerSocket::listen(address, Some(socket_config)).await;
+        let mut server_socket = ServerSocket::listen(address).await;
+        if let Some(config) = server_config.link_condition_config {
+            server_socket = server_socket.with_link_conditioner(&config);
+        }
 
         let sender = server_socket.get_sender();
         let clients_map = HashMap::new();
@@ -93,7 +97,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             scope_entity_func: None,
             auth_func: None,
             mut_handler: MutHandler::new(),
-            socket: Box::new(server_socket),
+            socket: server_socket,
             sender,
             connection_config,
             users: DenseSlotMap::with_key(),
@@ -104,6 +108,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             outstanding_disconnects: VecDeque::new(),
             heartbeat_timer,
             tick_manager: ServerTickManager::new(shared_config.tick_interval),
+            tick_timer: tokio::time::interval(shared_config.tick_interval),
         }
     }
 
@@ -162,10 +167,32 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             }
 
             //receive socket events
-            match self.socket.receive().await {
-                Ok(event) => {
-                    match event {
-                        SocketEvent::Packet(packet) => {
+            enum Next {
+                SocketResult(Result<Packet, NaiaServerSocketError>),
+                Tick,
+            }
+
+            let next = {
+                let timer_next = self.tick_timer.tick().fuse();
+                pin_mut!(timer_next);
+
+                let socket_next = self.socket.receive().fuse();
+                pin_mut!(socket_next);
+
+                select! {
+                    socket_result = socket_next => {
+                        Next::SocketResult(socket_result)
+                    }
+                    _ = timer_next => {
+                        Next::Tick
+                    }
+                }
+            };
+
+            match next {
+                Next::SocketResult(result) => {
+                    match result {
+                        Ok(packet) => {
                             let address = packet.address();
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
                                 match self.client_connections.get_mut(&user_key) {
@@ -357,7 +384,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                                 continue;
                                             }
                                             None => {
-                                                warn!("received heartbeat from unauthenticated client: {}", address);
+                                                warn!(
+                                                    "received heartbeat from unauthenticated client: {}",
+                                                    address
+                                                );
                                             }
                                         }
                                     }
@@ -365,29 +395,29 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                 _ => {}
                             }
                         }
-                        SocketEvent::Tick => {
-                            self.tick_manager.increment_tick();
-                            output = Some(Ok(ServerEvent::Tick));
+                        Err(error) => {
+                            //TODO: Determine if disconnecting a user based on a send error is the
+                            // right thing to do
+                            //
+                            // if let
+                            // NaiaServerSocketError::SendError(address) = error {
+                            //                        if let Some(user_key) =
+                            // self.address_to_user_key_map.get(&address).copied() {
+                            //                            self.client_connections.remove(&user_key);
+                            //                            output =
+                            // Some(Ok(ServerEvent::Disconnection(user_key)));
+                            //                            continue;
+                            //                        }
+                            //                    }
+
+                            output = Some(Err(NaiaServerError::Wrapped(Box::new(error))));
                             continue;
                         }
                     }
                 }
-                Err(error) => {
-                    //TODO: Determine if disconnecting a user based on a send error is the right
-                    // thing to do
-                    //
-                    // if let
-                    // NaiaServerSocketError::SendError(address) = error {
-                    //                        if let Some(user_key) =
-                    // self.address_to_user_key_map.get(&address).copied() {
-                    //                            self.client_connections.remove(&user_key);
-                    //                            output =
-                    // Some(Ok(ServerEvent::Disconnection(user_key)));
-                    //                            continue;
-                    //                        }
-                    //                    }
-
-                    output = Some(Err(NaiaServerError::Wrapped(Box::new(error))));
+                Next::Tick => {
+                    self.tick_manager.increment_tick();
+                    output = Some(Ok(ServerEvent::Tick));
                     continue;
                 }
             }

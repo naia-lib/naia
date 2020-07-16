@@ -2,7 +2,7 @@ use log::info;
 
 use std::{net::SocketAddr, time::Duration};
 
-use naia_client::{ClientConfig, ClientEvent, NaiaClient};
+use naia_client::{ClientConfig, ClientEvent, LinkConditionerConfig, NaiaClient};
 
 use naia_example_shared::{
     get_shared_config, manifest_load, AuthEvent, ExampleEntity, ExampleEvent, StringEvent,
@@ -45,6 +45,14 @@ impl App {
         // server would need to miss 2 heartbeat signals before disconnecting from a
         // given client
         client_config.disconnection_timeout_duration = Duration::from_secs(5);
+
+        // Simulate network conditions with this configuration property
+        client_config.link_condition_config = Some(LinkConditionerConfig {
+            incoming_latency: 1000,
+            incoming_jitter: 200,
+            incoming_loss: 0.01,
+            incoming_corruption: 0.0000015,
+        });
 
         // This will be evaluated in the Server's 'on_auth()' method
         let auth = ExampleEvent::AuthEvent(AuthEvent::new("charlie", "12345"));
