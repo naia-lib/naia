@@ -34,6 +34,7 @@ use super::{
     server_tick_manager::ServerTickManager,
     user::{user_key::UserKey, User},
 };
+use naia_shared::StandardHeader;
 
 /// A server that uses either UDP or WebRTC communication to send/receive events
 /// to/from connected clients, and syncs registered entities to clients to whom
@@ -203,13 +204,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                 }
                             }
 
-                            let packet_type = PacketType::get_from_packet(packet.payload());
+                            let (header, payload) = StandardHeader::read(packet.payload());
 
-                            match packet_type {
+                            match header.packet_type() {
                                 PacketType::ClientChallengeRequest => {
-                                    let payload = naia_shared::utils::read_headerless_payload(
-                                        packet.payload(),
-                                    );
                                     let mut reader = PacketReader::new(&payload);
                                     let timestamp = Timestamp::read(&mut reader);
 
@@ -236,9 +234,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                     continue;
                                 }
                                 PacketType::ClientConnectRequest => {
-                                    let payload = naia_shared::utils::read_headerless_payload(
-                                        packet.payload(),
-                                    );
                                     let mut reader = PacketReader::new(&payload);
                                     let timestamp = Timestamp::read(&mut reader);
 
@@ -349,14 +344,13 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                     {
                                         match self.client_connections.get_mut(user_key) {
                                             Some(connection) => {
-                                                let mut payload = connection
-                                                    .process_incoming_header(
-                                                        &mut self.tick_manager,
-                                                        packet.payload(),
-                                                    );
+                                                connection.process_incoming_header(
+                                                    &mut self.tick_manager,
+                                                    &header,
+                                                );
                                                 connection.process_incoming_data(
                                                     &self.manifest,
-                                                    &mut payload,
+                                                    &payload,
                                                 );
                                                 continue;
                                             }
@@ -379,7 +373,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                                 // events fire based on the heartbeat header
                                                 connection.process_incoming_header(
                                                     &mut self.tick_manager,
-                                                    packet.payload(),
+                                                    &header,
                                                 );
                                                 continue;
                                             }
@@ -656,8 +650,11 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         packet_type: PacketType,
         packet: Packet,
     ) {
-        let new_payload =
-            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
+        let new_payload = naia_shared::utils::write_connectionless_payload(
+            current_tick,
+            packet_type,
+            packet.payload(),
+        );
         sender
             .send(Packet::new_raw(packet.address(), new_payload))
             .await

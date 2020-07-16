@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate cfg_if;
 
-#[macro_use]
 extern crate log;
 
 cfg_if! {
