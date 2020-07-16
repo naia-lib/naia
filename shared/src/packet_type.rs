@@ -1,5 +1,3 @@
-use super::standard_header::StandardHeader;
-
 /// An enum representing the different types of packets that can be
 /// sent/received
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -33,13 +31,5 @@ impl From<u8> for PacketType {
             6 => return PacketType::ServerConnectResponse,
             _ => return PacketType::Unknown,
         };
-    }
-}
-
-impl PacketType {
-    /// Given all the bytes of an incoming packet, get the PacketType from the
-    /// header
-    pub fn get_from_packet(payload: &[u8]) -> PacketType {
-        StandardHeader::get_packet_type(payload)
     }
 }

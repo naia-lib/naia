@@ -2,7 +2,7 @@ use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
     Connection, ConnectionConfig, Entity, EntityType, Event, EventType, HostTickManager,
-    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber,
+    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber, StandardHeader,
 };
 
 use super::entities::{
@@ -71,7 +71,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return None;
     }
 
-    pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &mut [u8]) {
+    pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &[u8]) {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
             let manager_type: ManagerType = reader.read_u8().into();
@@ -121,10 +121,10 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
     pub fn process_incoming_header(
         &mut self,
         host_tick_manager: &mut dyn HostTickManager,
-        payload: &[u8],
-    ) -> Box<[u8]> {
-        return self.connection.process_incoming_header(
-            payload,
+        header: &StandardHeader,
+    ) {
+        self.connection.process_incoming_header(
+            header,
             &mut Some(&mut self.entity_manager),
             host_tick_manager,
         );
