@@ -24,8 +24,9 @@ mod error;
 mod naia_client;
 mod server_connection;
 
+pub use naia_shared::{find_my_ip_address, LinkConditionerConfig};
+
 pub use client_config::ClientConfig;
 pub use client_event::ClientEvent;
 pub use naia_client::NaiaClient;
 pub use naia_client_socket::Packet;
-pub use naia_shared::find_my_ip_address;

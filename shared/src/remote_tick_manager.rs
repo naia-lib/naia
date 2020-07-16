@@ -19,14 +19,25 @@ impl RemoteTickManager {
         let remote_tick = header.tick();
         let tick_latency = header.tick_latency();
 
-        if let Ok(diff) = i8::try_from(wrapping_diff(remote_tick, host_tick)) {
+        let mut tick_diff = wrapping_diff(remote_tick, host_tick);
+
+        let max_tick_diff: i16 = std::i8::MAX.into();
+        let min_tick_diff: i16 = (std::i8::MIN + 1).into();
+
+        if tick_diff > max_tick_diff {
+            tick_diff = max_tick_diff;
+        }
+        if tick_diff < min_tick_diff {
+            tick_diff = min_tick_diff;
+        }
+        if let Ok(diff) = i8::try_from(tick_diff) {
             // TODO: need to average these diffs out over time
             self.tick_latency = diff;
         }
 
         println!(
-            "Received Header. Host Tick: {}, To Host Latency: {}, Remote Tick: {}, To Remote Latency: {}",
-            host_tick, tick_latency.abs(), remote_tick, self.tick_latency.abs(),
+            "Received Header. Host Tick: {}, Remote->Host Latency: {}, Remote Tick: {}, Host->Remote Latency: {}",
+            host_tick, self.tick_latency, remote_tick, tick_latency
         )
     }
 }

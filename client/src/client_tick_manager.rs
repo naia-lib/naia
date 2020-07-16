@@ -27,7 +27,7 @@ impl ClientTickManager {
         let mut time_elapsed = self.last_instant.elapsed() + self.last_leftover;
         if time_elapsed > self.tick_interval {
             while time_elapsed > self.tick_interval {
-                self.current_tick += 1;
+                self.current_tick = self.current_tick.wrapping_add(1);
                 time_elapsed -= self.tick_interval;
             }
 
@@ -48,18 +48,13 @@ impl HostTickManager for ClientTickManager {
         if tick_latency == -1 {
             return;
         } else if tick_latency < 0 {
-            if let Ok(lat) = (tick_latency * -1).try_into() {
-                let diff: u16 = lat;
-                //println!("host tick should subtract {}", diff);
-                self.current_tick = self.current_tick.wrapping_sub(diff);
-            }
+            let diff: u16 = (tick_latency * -1).try_into().unwrap();
+            println!("host tick should subtract {}", diff);
+            self.current_tick = self.current_tick.wrapping_sub(diff);
         } else if tick_latency > 0 {
-            if let Ok(lat) = tick_latency.try_into() {
-                let diff: u16 = lat;
-                //println!("host tick should add {}", diff);
-                self.current_tick = self.current_tick.wrapping_add(diff);
-            }
+            let diff: u16 = tick_latency.try_into().unwrap();
+            println!("host tick should add {}", diff);
+            self.current_tick = self.current_tick.wrapping_add(diff);
         }
-        self.current_tick = self.current_tick.wrapping_add(1);
     }
 }

@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use byteorder::{BigEndian, WriteBytesExt};
 
-use naia_client_socket::{ClientSocket, Config as SocketConfig, MessageSender, SocketEvent};
+use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 pub use naia_shared::{
     ConnectionConfig, EntityType, Event, EventType, HostTickManager, LocalEntityKey, ManagerType,
     Manifest, PacketReader, PacketType, PacketWriter, SharedConfig, Timer, Timestamp,
@@ -24,7 +24,7 @@ pub struct NaiaClient<T: EventType, U: EntityType> {
     manifest: Manifest<T, U>,
     server_address: SocketAddr,
     connection_config: ConnectionConfig,
-    socket: ClientSocket,
+    socket: Box<dyn ClientSocketTrait>,
     sender: MessageSender,
     server_connection: Option<ServerConnection<T, U>>,
     pre_connection_timestamp: Option<Timestamp>,
@@ -57,8 +57,10 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             client_config.rtt_max_value,
         );
 
-        let socket_config = SocketConfig::default();
-        let mut client_socket = ClientSocket::connect(server_address, Some(socket_config));
+        let mut client_socket = ClientSocket::connect(server_address);
+        if let Some(config) = client_config.link_condition_config {
+            client_socket = client_socket.with_link_conditioner(&config);
+        }
 
         let mut handshake_timer = Timer::new(client_config.send_handshake_interval);
         handshake_timer.ring_manual();
@@ -189,7 +191,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         while output.is_none() {
             match self.socket.receive() {
                 Ok(event) => match event {
-                    SocketEvent::Packet(packet) => {
+                    Some(packet) => {
                         let packet_type = PacketType::get_from_packet(packet.payload());
 
                         let server_connection_wrapper = self.server_connection.as_mut();
@@ -251,7 +253,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                             }
                         }
                     }
-                    SocketEvent::None => {
+                    None => {
                         output = Some(Ok(ClientEvent::None));
                         continue;
                     }
@@ -301,7 +303,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
     /// Get the address currently associated with the Server
     pub fn server_address(&self) -> SocketAddr {
-        return self.socket.server_address();
+        return self.server_address;
     }
 
     /// Get a reference to an Entity currently in scope for the Client, given
