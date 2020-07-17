@@ -67,6 +67,10 @@ impl HostTickManager for ClientTickManager {
     }
 
     fn process_incoming(&mut self, header: &StandardHeader) {
+        let tick_latency = header.tick_latency();
+        if tick_latency == std::i8::MAX {
+            return;
+        }
         let remote_tick = header.tick();
         let remote_tick_diff = wrapping_diff(self.last_received_tick, remote_tick);
 
@@ -76,9 +80,8 @@ impl HostTickManager for ClientTickManager {
         self.last_received_tick = remote_tick;
 
         const RATIO: f32 = 40.0;
-        self.average_tick_latency = ((self.average_tick_latency * RATIO)
-            + f32::from(header.tick_latency()))
-            / (RATIO + 1.0);
+        self.average_tick_latency =
+            ((self.average_tick_latency * RATIO) + f32::from(tick_latency)) / (RATIO + 1.0);
         if self.average_tick_latency > -3.9 {
             if self.last_average_tick_latency - self.average_tick_latency < 0.0 {
                 // average tick latency is increasing

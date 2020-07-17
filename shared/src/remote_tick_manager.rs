@@ -27,7 +27,7 @@ impl RemoteTickManager {
                 if last_tick == current_tick {
                     return self.tick_latency;
                 } else {
-                    return -4;
+                    return std::i8::MAX;
                 }
             }
         }
