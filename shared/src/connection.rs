@@ -87,7 +87,7 @@ impl<T: EventType> Connection<T> {
             .process_incoming(&header, &mut self.event_manager, entity_notifiable);
         self.tick_manager
             .process_incoming(host_tick_manager.get_tick(), &header);
-        host_tick_manager.process_incoming(header.tick_latency());
+        host_tick_manager.process_incoming(header);
     }
 
     /// Given a packet payload, start tracking the packet via it's index, attach
@@ -108,7 +108,7 @@ impl<T: EventType> Connection<T> {
         let local_packet_index = self.ack_manager.get_local_packet_index();
         let last_remote_packet_index = self.ack_manager.get_last_remote_packet_index();
         let bit_field = self.ack_manager.get_ack_bitfield();
-        let tick_latency = self.tick_manager.get_tick_latency();
+        let tick_latency = self.tick_manager.get_tick_latency(current_tick);
 
         let header = StandardHeader::new(
             packet_type,

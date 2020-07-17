@@ -1,4 +1,3 @@
-use crate::LinkConditionerConfig;
 use std::{default::Default, time::Duration};
 
 /// Contains Config properties which will be used by a Server or Client
@@ -19,8 +18,6 @@ pub struct ClientConfig {
     /// Value which specifies the maximum round trip time before we consider it
     /// a problem. This is expressed in milliseconds.
     pub rtt_max_value: u16,
-    /// Configuration used to simulate network conditions
-    pub link_condition_config: Option<LinkConditionerConfig>,
 }
 
 impl Default for ClientConfig {
@@ -31,7 +28,6 @@ impl Default for ClientConfig {
             send_handshake_interval: Duration::from_secs(1),
             rtt_smoothing_factor: 0.10,
             rtt_max_value: 250,
-            link_condition_config: None,
         }
     }
 }
