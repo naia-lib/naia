@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use byteorder::{BigEndian, WriteBytesExt};
+use log::info;
 
 use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 pub use naia_shared::{
@@ -59,7 +60,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         );
 
         let mut client_socket = ClientSocket::connect(server_address);
-        if let Some(config) = client_config.link_condition_config {
+        if let Some(config) = shared_config.link_condition_config {
             client_socket = client_socket.with_link_conditioner(&config);
         }
 
@@ -150,6 +151,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                 .unwrap()
                                 .write(&mut timestamp_bytes);
                             NaiaClient::<T, U>::internal_send_connectionless(
+                                0,
                                 &mut self.sender,
                                 PacketType::ClientChallengeRequest,
                                 Packet::new(timestamp_bytes),
@@ -173,7 +175,12 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                 payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                                 auth_event.write(&mut payload_bytes);
                             }
+                            info!(
+                                "sending ClientConnectRequest with tick: {}",
+                                self.tick_manager.get_tick()
+                            );
                             NaiaClient::<T, U>::internal_send_connectionless(
+                                self.tick_manager.get_tick(),
                                 &mut self.sender,
                                 PacketType::ClientConnectRequest,
                                 Packet::new(payload_bytes),
@@ -231,6 +238,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                                 }
                                                 self.pre_connection_digest =
                                                     Some(digest_bytes.into_boxed_slice());
+                                                info!("receiving ServerChallengeResponse with tick: {}", header.tick());
+                                                self.tick_manager.set_tick(header.tick());
                                                 self.connection_state =
                                                     ClientConnectionState::AwaitingConnectResponse;
                                             }
@@ -240,10 +249,15 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                     continue;
                                 }
                                 PacketType::ServerConnectResponse => {
-                                    self.server_connection = Some(ServerConnection::new(
+                                    let server_connection = ServerConnection::new(
                                         self.server_address,
                                         &self.connection_config,
-                                    ));
+                                    );
+
+                                    let (header, _) = StandardHeader::read(packet.payload());
+                                    self.tick_manager.process_incoming(&header);
+
+                                    self.server_connection = Some(server_connection);
                                     self.connection_state = ClientConnectionState::Connected;
                                     output = Some(Ok(ClientEvent::Connection));
                                     continue;
@@ -289,12 +303,16 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     }
 
     fn internal_send_connectionless(
+        current_tick: u16,
         sender: &mut MessageSender,
         packet_type: PacketType,
         packet: Packet,
     ) {
-        let new_payload =
-            naia_shared::utils::write_connectionless_payload(0, packet_type, packet.payload());
+        let new_payload = naia_shared::utils::write_connectionless_payload(
+            current_tick,
+            packet_type,
+            packet.payload(),
+        );
         sender
             .send(Packet::new_raw(new_payload))
             .expect("send failed!");

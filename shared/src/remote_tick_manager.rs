@@ -4,19 +4,44 @@ use std::convert::TryFrom;
 #[derive(Debug)]
 pub struct RemoteTickManager {
     tick_latency: i8,
+    last_sent_tick: Option<u16>,
+    last_received_tick: u16,
 }
 
 impl RemoteTickManager {
     pub fn new() -> Self {
-        RemoteTickManager { tick_latency: 0 }
+        RemoteTickManager {
+            tick_latency: 0,
+            last_sent_tick: None,
+            last_received_tick: 0,
+        }
     }
 
-    pub fn get_tick_latency(&self) -> i8 {
-        self.tick_latency
+    pub fn get_tick_latency(&mut self, current_tick: u16) -> i8 {
+        match self.last_sent_tick {
+            None => {
+                self.last_sent_tick = Some(current_tick);
+                return self.tick_latency;
+            }
+            Some(last_tick) => {
+                if last_tick == current_tick {
+                    return self.tick_latency;
+                } else {
+                    return -4;
+                }
+            }
+        }
     }
 
     pub fn process_incoming(&mut self, host_tick: u16, header: &StandardHeader) {
         let remote_tick = header.tick();
+        let remote_tick_diff = wrapping_diff(self.last_received_tick, remote_tick);
+
+        if remote_tick_diff <= 0 {
+            return;
+        }
+        self.last_received_tick = remote_tick;
+
         let tick_latency = header.tick_latency();
 
         let mut tick_diff = wrapping_diff(remote_tick, host_tick);
@@ -33,16 +58,20 @@ impl RemoteTickManager {
         if let Ok(diff) = i8::try_from(tick_diff) {
             // TODO: need to average these diffs out over time
             self.tick_latency = diff;
+            self.last_sent_tick = None;
         }
 
+        println!("---");
         println!(
             "Received Header. Host Tick: {}, Remote->Host Latency: {}, Remote Tick: {}, Host->Remote Latency: {}",
             host_tick, self.tick_latency, remote_tick, tick_latency
-        )
+        );
+        println!("---");
     }
 }
 
-fn wrapping_diff(a: u16, b: u16) -> i16 {
+/// Retrieves the wrapping difference between 2 u16 values
+pub fn wrapping_diff(a: u16, b: u16) -> i16 {
     const MAX: i32 = std::i16::MAX as i32;
     const MIN: i32 = std::i16::MIN as i32;
     const ADJUST: i32 = (std::u16::MAX as i32) + 1;
