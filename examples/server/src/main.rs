@@ -3,9 +3,7 @@ extern crate log;
 
 use simple_logger;
 
-use naia_server::{
-    find_my_ip_address, LinkConditionerConfig, NaiaServer, ServerConfig, ServerEvent, UserKey,
-};
+use naia_server::{find_my_ip_address, NaiaServer, ServerConfig, ServerEvent, UserKey};
 
 use naia_example_shared::{
     get_shared_config, manifest_load, ExampleEntity, ExampleEvent, PointEntity, StringEvent,
@@ -31,14 +29,6 @@ async fn main() {
     // server would need to miss 2 heartbeat signals before disconnecting from a
     // given client
     server_config.disconnection_timeout_duration = Duration::from_secs(5);
-
-    // Simulate network conditions with this configuration property
-    server_config.link_condition_config = Some(LinkConditionerConfig {
-        incoming_latency: 1000,
-        incoming_jitter: 200,
-        incoming_loss: 0.01,
-        incoming_corruption: 0.0000015,
-    });
 
     let mut server = NaiaServer::new(
         current_socket_address,

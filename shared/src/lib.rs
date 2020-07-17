@@ -61,6 +61,7 @@ pub use manifest::Manifest;
 pub use packet_reader::PacketReader;
 pub use packet_type::PacketType;
 pub use packet_writer::{PacketWriter, MTU_SIZE};
+pub use remote_tick_manager::wrapping_diff;
 pub use rtt::rtt_tracker::RttTracker;
 pub use sequence_buffer::SequenceNumber;
 pub use shared_config::SharedConfig;

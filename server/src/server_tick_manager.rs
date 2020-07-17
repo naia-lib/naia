@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use naia_shared::HostTickManager;
+use naia_shared::{HostTickManager, StandardHeader};
 
 /// Manages the current tick for the host
 #[derive(Debug)]
@@ -29,7 +29,7 @@ impl HostTickManager for ServerTickManager {
         self.current_tick
     }
 
-    fn process_incoming(&mut self, tick_latency: i8) {
+    fn process_incoming(&mut self, _: &StandardHeader) {
         // Should not ever arrive here
         // unimplemented!()
     }
