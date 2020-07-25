@@ -1,4 +1,4 @@
-use crate::standard_header::StandardHeader;
+use crate::{standard_header::StandardHeader, HostType};
 use std::convert::TryFrom;
 
 #[derive(Debug)]
@@ -33,7 +33,12 @@ impl RemoteTickManager {
         }
     }
 
-    pub fn process_incoming(&mut self, host_tick: u16, header: &StandardHeader) {
+    pub fn process_incoming(
+        &mut self,
+        host_tick: u16,
+        header: &StandardHeader,
+        host_type: HostType,
+    ) {
         let remote_tick = header.tick();
         let remote_tick_diff = wrapping_diff(self.last_received_tick, remote_tick);
 
@@ -61,12 +66,12 @@ impl RemoteTickManager {
             self.last_sent_tick = None;
         }
 
-        println!("---");
-        println!(
-            "Received Header. Host Tick: {}, Remote->Host Latency: {}, Remote Tick: {}, Host->Remote Latency: {}",
-            host_tick, self.tick_latency, remote_tick, tick_latency
-        );
-        println!("---");
+        if HostType::Server == host_type {
+            println!(
+                "Received Header. Host Tick: {}, Remote->Host Latency: {}, Remote Tick: {}, Host->Remote Latency: {}",
+                host_tick, self.tick_latency, remote_tick, tick_latency
+            );
+        }
     }
 }
 

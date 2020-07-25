@@ -18,6 +18,7 @@ pub struct ClientTickManager {
     intended_tick: u16,
     processed_first: bool,
     average_pool_size: f32,
+    min_target_latency: f32,
 }
 
 const NANOS_PER_SEC: u32 = 1_000_000_000;
@@ -39,6 +40,7 @@ impl ClientTickManager {
             last_average_tick_latency: 0.0,
             average_pool_size: 1.0,
             processed_first: false,
+            min_target_latency: -1000.0 / (tick_interval.as_millis() as f32),
         }
     }
 
@@ -47,10 +49,10 @@ impl ClientTickManager {
         let mut time_elapsed = self.last_instant.elapsed() + self.last_leftover;
 
         let intended_diff = wrapping_diff(self.current_tick, self.intended_tick)
-            .min(4)
+            .min(16)
             .max(-8);
         let tick_factor = 2.0_f64.powf(-0.2_f64 * f64::from(intended_diff));
-        let adjusted_interval = self.get_adjusted_duration(tick_factor, intended_diff);
+        let adjusted_interval = self.get_adjusted_duration(tick_factor);
 
         if time_elapsed > adjusted_interval {
             while time_elapsed > adjusted_interval {
@@ -63,7 +65,7 @@ impl ClientTickManager {
         }
     }
 
-    fn get_adjusted_duration(&self, tick_factor: f64, intended_diff: i16) -> Duration {
+    fn get_adjusted_duration(&self, tick_factor: f64) -> Duration {
         const MAX_NANOS_F64: f64 = ((std::u64::MAX as u128 + 1) * (NANOS_PER_SEC as u128)) as f64;
         let nanos = tick_factor * self.tick_interval.as_secs_f64() * (NANOS_PER_SEC as f64);
         if !nanos.is_finite() {
@@ -100,10 +102,11 @@ impl HostTickManager for ClientTickManager {
             let remote_tick = header.tick();
             let tick_latency = f32::from(header.tick_latency());
 
-            self.last_received_tick = remote_tick;
-            self.tick_latency_average = tick_latency;
+            self.tick_adjust = (tick_latency + 3.0).max(0.0);
+            self.tick_latency_average = tick_latency - self.tick_adjust;
             self.last_average_tick_latency = self.tick_latency_average;
-            self.tick_adjust = (self.tick_latency_average + 3.0).max(0.0);
+
+            self.last_received_tick = remote_tick;
             let diff: u16 = self.tick_adjust as u16;
             self.intended_tick = self.last_received_tick.wrapping_add(diff);
             self.current_tick = self.intended_tick;
@@ -137,6 +140,17 @@ impl HostTickManager for ClientTickManager {
             self.last_received_tick = remote_tick;
 
             let tick_latency = f32::from(header.tick_latency());
+            if tick_latency > 0.0 {
+                self.tick_adjust += tick_latency;
+
+                self.intended_tick = self.last_received_tick;
+                if self.tick_adjust > 0.0 {
+                    let diff: u16 = self.tick_adjust as u16; //risky..
+                    self.intended_tick = self.intended_tick.wrapping_add(diff);
+                }
+
+                return;
+            }
 
             if self.average_pool_size < 20.0 {
                 self.average_pool_size += 1.0;
@@ -152,18 +166,22 @@ impl HostTickManager for ClientTickManager {
                 / (self.average_pool_size + 1.0);
 
             let tick_latency_deviation = self.tick_latency_variance.sqrt();
-            let target_latency = -1.0 - (tick_latency_deviation * 3.0).ceil();
+            let target_latency =
+                (-1.0 - (tick_latency_deviation * 3.0).ceil()).max(self.min_target_latency);
 
             if self.tick_latency_average > target_latency + 0.1 {
-                if self.last_average_tick_latency - self.tick_latency_average < 0.0 {
+                let tick_adjust_speed = 0.05 * (self.tick_latency_average - target_latency);
+                if self.last_average_tick_latency - self.tick_latency_average < 0.05 {
                     // average tick latency is increasing
-                    self.tick_adjust += 1.0 / self.average_pool_size;
+                    self.tick_adjust += tick_adjust_speed;
                 }
-            }
-            if self.tick_latency_average < target_latency - 0.1 && self.tick_adjust > 0.0 {
-                if self.last_average_tick_latency - self.tick_latency_average > 0.0 {
+            } else if self.tick_latency_average < target_latency - 0.1 && self.tick_adjust > 0.0 {
+                let tick_adjust_speed = 0.05 * (self.tick_latency_average - target_latency);
+                if self.last_average_tick_latency - self.tick_latency_average > -0.05 {
                     // average tick latency is decreasing
-                    self.tick_adjust -= 1.0 / self.average_pool_size;
+                    self.tick_adjust += tick_adjust_speed; //tick_adjust_speed
+                                                           // will be negative
+                                                           // here
                 }
             }
             self.last_average_tick_latency = self.tick_latency_average;
@@ -173,9 +191,6 @@ impl HostTickManager for ClientTickManager {
                 self.intended_tick = self.intended_tick.wrapping_add(diff);
             }
 
-            println!("******************************");
-            println!("******************************");
-            println!("******************************");
             println!(
                 "TickLat: {}, AvgTickLat: {}, NewVariance: {}, AvgVariance: {}, Deviation: {}, TargetLatency: {}, TickAdj: {}, IntendedTick: {}, CurrentTick: {}",
                 tick_latency,
@@ -188,9 +203,6 @@ impl HostTickManager for ClientTickManager {
                 self.intended_tick,
                 self.current_tick
             );
-            println!("******************************");
-            println!("******************************");
-            println!("******************************");
         }
     }
 }
