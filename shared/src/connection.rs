@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, rc::Rc};
 
-use crate::Timer;
+use crate::{HostType, Timer};
 
 use super::{
     ack_manager::AckManager,
@@ -80,13 +80,14 @@ impl<T: EventType> Connection<T> {
         header: &StandardHeader,
         entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
         host_tick_manager: &mut dyn HostTickManager,
+        host_type: HostType,
     ) {
         self.rtt_tracker
             .process_incoming(header.local_packet_index());
         self.ack_manager
             .process_incoming(&header, &mut self.event_manager, entity_notifiable);
         self.tick_manager
-            .process_incoming(host_tick_manager.get_tick(), &header);
+            .process_incoming(host_tick_manager.get_tick(), &header, host_type);
         host_tick_manager.process_incoming(header);
     }
 

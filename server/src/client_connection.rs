@@ -1,7 +1,7 @@
 use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
-    Connection, ConnectionConfig, Entity, EntityType, Event, EventType, HostTickManager,
+    Connection, ConnectionConfig, Entity, EntityType, Event, EventType, HostTickManager, HostType,
     ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber, StandardHeader,
 };
 
@@ -127,6 +127,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
             header,
             &mut Some(&mut self.entity_manager),
             host_tick_manager,
+            HostType::Server,
         );
     }
 
