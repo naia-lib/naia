@@ -11,7 +11,7 @@ use ring::{hmac, rand};
 use slotmap::DenseSlotMap;
 
 use naia_server_socket::{
-    Config as SocketConfig, MessageSender, Packet, ServerSocket, SocketEvent,
+    Config as SocketConfig, MessageSender, Packet, ServerSocket, ServerSocketTrait, SocketEvent,
 };
 pub use naia_shared::{
     Config, Connection, Entity, EntityMutator, EntityType, Event, EventType, Instant, ManagerType,
