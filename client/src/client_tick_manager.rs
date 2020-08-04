@@ -13,12 +13,24 @@ pub struct ClientTickManager {
     last_received_tick: u16,
     tick_latency_average: f32,
     tick_latency_variance: f32,
-    last_average_tick_latency: f32,
+    last_tick_latency_average: f32,
     tick_adjust: f32,
     intended_tick: u16,
     processed_first: bool,
     average_pool_size: f32,
     min_target_latency: f32,
+    average_adjust: f32,
+    sync_config: SyncConfig,
+}
+
+/// Holds configuration values that determine factors in how to converge towards
+/// the appropriate tick offset
+#[derive(Debug)]
+pub struct SyncConfig {
+    measurement_pool_size: f32,
+    target_latency_deviation_multiple: f32,
+    adjust_trigger_sensitivity: f32,
+    maximum_tick_adjustment: f32,
 }
 
 const NANOS_PER_SEC: u32 = 1_000_000_000;
@@ -37,10 +49,17 @@ impl ClientTickManager {
             tick_adjust: 0.0,
             tick_latency_average: 0.0,
             tick_latency_variance: 0.0,
-            last_average_tick_latency: 0.0,
+            last_tick_latency_average: 0.0,
             average_pool_size: 1.0,
             processed_first: false,
             min_target_latency: -1000.0 / (tick_interval.as_millis() as f32),
+            average_adjust: 0.0,
+            sync_config: SyncConfig {
+                measurement_pool_size: 20.0,
+                target_latency_deviation_multiple: 3.0,
+                adjust_trigger_sensitivity: 0.1,
+                maximum_tick_adjustment: 5000.0 / (tick_interval.as_millis() as f32),
+            },
         }
     }
 
@@ -104,7 +123,7 @@ impl HostTickManager for ClientTickManager {
 
             self.tick_adjust = (tick_latency + 3.0).max(0.0);
             self.tick_latency_average = tick_latency - self.tick_adjust;
-            self.last_average_tick_latency = self.tick_latency_average;
+            self.last_tick_latency_average = self.tick_latency_average;
 
             self.last_received_tick = remote_tick;
             let diff: u16 = self.tick_adjust as u16;
@@ -141,7 +160,12 @@ impl HostTickManager for ClientTickManager {
 
             let tick_latency = f32::from(header.tick_latency());
             if tick_latency > 0.0 {
+                // If the incoming tick latency is positive, that indicates the server must've
+                // dropped the packet because it came in too late. This is extremely unwanted,
+                // so just bump tick_adjust by the received difference, and do not record the
+                // latency for other measurements
                 self.tick_adjust += tick_latency;
+                self.average_adjust += tick_latency;
 
                 self.intended_tick = self.last_received_tick;
                 if self.tick_adjust > 0.0 {
@@ -152,39 +176,46 @@ impl HostTickManager for ClientTickManager {
                 return;
             }
 
-            if self.average_pool_size < 20.0 {
+            if self.average_pool_size < self.sync_config.measurement_pool_size {
                 self.average_pool_size += 1.0;
             }
 
             self.tick_latency_average = ((self.tick_latency_average * self.average_pool_size)
-                + tick_latency)
+                + (tick_latency))
                 / (self.average_pool_size + 1.0);
 
-            let new_variance = (tick_latency - self.tick_latency_average).powi(2);
+            let new_variance = ((tick_latency) - self.tick_latency_average).powi(2);
             self.tick_latency_variance = ((self.tick_latency_variance * self.average_pool_size)
                 + new_variance)
                 / (self.average_pool_size + 1.0);
 
             let tick_latency_deviation = self.tick_latency_variance.sqrt();
-            let target_latency =
-                (-1.0 - (tick_latency_deviation * 3.0).ceil()).max(self.min_target_latency);
+            //            let target_latency = (-1.0
+            //                - (tick_latency_deviation *
+            //                  self.sync_config.target_latency_deviation_multiple) .ceil())
+            //            .max(self.min_target_latency);
+            let target_latency = -5.0;
 
-            if self.tick_latency_average > target_latency + 0.1 {
-                let tick_adjust_speed = 0.05 * (self.tick_latency_average - target_latency);
-                if self.last_average_tick_latency - self.tick_latency_average < 0.05 {
+            if self.tick_adjust < self.sync_config.maximum_tick_adjustment
+                && self.tick_latency_average
+                    > target_latency + self.sync_config.adjust_trigger_sensitivity
+            {
+                let tick_adjust_speed = 0.03 * (self.tick_latency_average - target_latency);
+                if self.last_tick_latency_average - self.tick_latency_average < tick_adjust_speed {
                     // average tick latency is increasing
                     self.tick_adjust += tick_adjust_speed;
                 }
-            } else if self.tick_latency_average < target_latency - 0.1 && self.tick_adjust > 0.0 {
-                let tick_adjust_speed = 0.05 * (self.tick_latency_average - target_latency);
-                if self.last_average_tick_latency - self.tick_latency_average > -0.05 {
+            } else if self.tick_adjust > 0.0
+                && self.tick_latency_average
+                    < target_latency - self.sync_config.adjust_trigger_sensitivity
+            {
+                let tick_adjust_speed = 0.03 * (self.tick_latency_average - target_latency);
+                if self.last_tick_latency_average - self.tick_latency_average > tick_adjust_speed {
                     // average tick latency is decreasing
-                    self.tick_adjust += tick_adjust_speed; //tick_adjust_speed
-                                                           // will be negative
-                                                           // here
+                    self.tick_adjust += tick_adjust_speed;
                 }
             }
-            self.last_average_tick_latency = self.tick_latency_average;
+            self.last_tick_latency_average = self.tick_latency_average;
             self.intended_tick = self.last_received_tick;
             if self.tick_adjust > 0.0 {
                 let diff: u16 = self.tick_adjust as u16; //risky..
