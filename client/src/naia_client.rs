@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use log::info;
 
 use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
@@ -104,15 +104,12 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                     NaiaClient::internal_send_with_connection(
                         &mut self.sender,
                         connection,
-                        self.tick_manager.get_tick(),
                         PacketType::Heartbeat,
                         Packet::empty(),
                     );
                 }
                 // send a packet
-                while let Some(payload) =
-                    connection.get_outgoing_packet(&self.manifest, self.tick_manager.get_tick())
-                {
+                while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
                     self.sender
                         .send(Packet::new_raw(payload))
                         .expect("send failed!");
@@ -151,7 +148,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                 .unwrap()
                                 .write(&mut timestamp_bytes);
                             NaiaClient::<T, U>::internal_send_connectionless(
-                                0,
                                 &mut self.sender,
                                 PacketType::ClientChallengeRequest,
                                 Packet::new(timestamp_bytes),
@@ -180,7 +176,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                 self.tick_manager.get_tick()
                             );
                             NaiaClient::<T, U>::internal_send_connectionless(
-                                self.tick_manager.get_tick(),
                                 &mut self.sender,
                                 PacketType::ClientConnectRequest,
                                 Packet::new(payload_bytes),
@@ -206,8 +201,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                             server_connection.mark_heard();
 
                             let (header, payload) = StandardHeader::read(packet.payload());
-                            server_connection
-                                .process_incoming_header(&mut self.tick_manager, &header);
+                            server_connection.process_incoming_header(&header);
 
                             match header.packet_type() {
                                 PacketType::Data => {
@@ -229,6 +223,10 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                     {
                                         if let Some(my_timestamp) = self.pre_connection_timestamp {
                                             let mut reader = PacketReader::new(&payload);
+                                            let server_tick = reader
+                                                .get_cursor()
+                                                .read_u16::<BigEndian>()
+                                                .unwrap();
                                             let payload_timestamp = Timestamp::read(&mut reader);
 
                                             if my_timestamp == payload_timestamp {
@@ -238,8 +236,10 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                                 }
                                                 self.pre_connection_digest =
                                                     Some(digest_bytes.into_boxed_slice());
-                                                info!("receiving ServerChallengeResponse with tick: {}", header.tick());
-                                                self.tick_manager.set_tick(header.tick());
+                                                info!("receiving ServerChallengeResponse");
+
+                                                self.tick_manager.set_tick(server_tick);
+
                                                 self.connection_state =
                                                     ClientConnectionState::AwaitingConnectResponse;
                                             }
@@ -253,9 +253,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                         self.server_address,
                                         &self.connection_config,
                                     );
-
-                                    let (header, _) = StandardHeader::read(packet.payload());
-                                    self.tick_manager.process_incoming(&header);
 
                                     self.server_connection = Some(server_connection);
                                     self.connection_state = ClientConnectionState::Connected;
@@ -290,12 +287,10 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     fn internal_send_with_connection(
         sender: &mut MessageSender,
         connection: &mut ServerConnection<T, U>,
-        current_tick: u16,
         packet_type: PacketType,
         packet: Packet,
     ) {
-        let new_payload =
-            connection.process_outgoing_header(current_tick, packet_type, packet.payload());
+        let new_payload = connection.process_outgoing_header(packet_type, packet.payload());
         sender
             .send(Packet::new_raw(new_payload))
             .expect("send failed!");
@@ -303,16 +298,12 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     }
 
     fn internal_send_connectionless(
-        current_tick: u16,
         sender: &mut MessageSender,
         packet_type: PacketType,
         packet: Packet,
     ) {
-        let new_payload = naia_shared::utils::write_connectionless_payload(
-            current_tick,
-            packet_type,
-            packet.payload(),
-        );
+        let new_payload =
+            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
         sender
             .send(Packet::new_raw(new_payload))
             .expect("send failed!");
@@ -331,10 +322,5 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .as_ref()
             .unwrap()
             .get_local_entity(key);
-    }
-
-    /// Get the current measured Round Trip Time to the Server
-    pub fn get_rtt(&self) -> f32 {
-        return self.server_connection.as_ref().unwrap().get_rtt();
     }
 }

@@ -1,9 +1,8 @@
 use std::net::SocketAddr;
 
 use naia_shared::{
-    Connection, ConnectionConfig, EntityType, Event, EventType, HostTickManager, HostType,
-    LocalEntityKey, ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber,
-    StandardHeader,
+    Connection, ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType,
+    Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber, StandardHeader,
 };
 
 use super::{
@@ -24,11 +23,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         };
     }
 
-    pub fn get_outgoing_packet(
-        &mut self,
-        manifest: &Manifest<T, U>,
-        current_tick: u16,
-    ) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T, U>) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() {
             let mut writer = PacketWriter::new();
 
@@ -46,8 +41,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                 let out_bytes = writer.get_bytes();
 
                 // Add header to it
-                let payload =
-                    self.process_outgoing_header(current_tick, PacketType::Data, &out_bytes);
+                let payload = self.process_outgoing_header(PacketType::Data, &out_bytes);
                 return Some(payload);
             }
         }
@@ -92,28 +86,18 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.connection.should_drop();
     }
 
-    pub fn process_incoming_header(
-        &mut self,
-        host_tick_manager: &mut dyn HostTickManager,
-        header: &StandardHeader,
-    ) {
-        self.connection.process_incoming_header(
-            header,
-            &mut None,
-            host_tick_manager,
-            HostType::Client,
-        );
+    pub fn process_incoming_header(&mut self, header: &StandardHeader) {
+        self.connection.process_incoming_header(header, &mut None);
     }
 
     pub fn process_outgoing_header(
         &mut self,
-        current_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
         return self
             .connection
-            .process_outgoing_header(current_tick, packet_type, payload);
+            .process_outgoing_header(packet_type, payload);
     }
 
     pub fn get_next_packet_index(&self) -> SequenceNumber {
@@ -126,9 +110,5 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn get_incoming_event(&mut self) -> Option<T> {
         return self.connection.get_incoming_event();
-    }
-
-    pub fn get_rtt(&self) -> f32 {
-        return self.connection.get_rtt();
     }
 }
