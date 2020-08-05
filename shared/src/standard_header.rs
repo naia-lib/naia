@@ -15,11 +15,6 @@ pub struct StandardHeader {
     last_remote_packet_index: u16,
     // This is an bitfield of all last 32 acknowledged packages
     ack_field: u32,
-    // This is the current tick of the host
-    current_tick: u16,
-    // This is the difference between the tick of the host and the tick received from the remote
-    // host
-    tick_latency: i8,
 }
 
 impl StandardHeader {
@@ -34,22 +29,18 @@ impl StandardHeader {
         local_packet_index: u16,
         last_remote_packet_index: u16,
         bit_field: u32,
-        current_tick: u16,
-        tick_latency: i8,
     ) -> StandardHeader {
         StandardHeader {
             p_type,
             local_packet_index,
             last_remote_packet_index,
             ack_field: bit_field,
-            current_tick,
-            tick_latency,
         }
     }
 
     /// Returns the number of bytes in the header
     pub const fn bytes_number() -> usize {
-        return 12;
+        return 9;
     }
 
     /// Returns the packet type indicated by the header
@@ -72,16 +63,6 @@ impl StandardHeader {
         self.last_remote_packet_index
     }
 
-    /// Returns tick associated with packet
-    pub fn tick(&self) -> u16 {
-        self.current_tick
-    }
-
-    /// Returns tick difference between hosts, associated with packet
-    pub fn tick_latency(&self) -> i8 {
-        self.tick_latency
-    }
-
     /// Writes the header to an outgoing byte buffer
     pub fn write(&self, buffer: &mut Vec<u8>) {
         buffer.write_u8(self.p_type as u8).unwrap();
@@ -92,8 +73,6 @@ impl StandardHeader {
             .write_u16::<BigEndian>(self.last_remote_packet_index)
             .unwrap();
         buffer.write_u32::<BigEndian>(self.ack_field).unwrap();
-        buffer.write_u16::<BigEndian>(self.current_tick).unwrap();
-        buffer.write_i8(self.tick_latency).unwrap();
     }
 
     /// Reads the header from an incoming byte slice
@@ -102,8 +81,6 @@ impl StandardHeader {
         let seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_field = msg.read_u32::<BigEndian>().unwrap();
-        let tick = msg.read_u16::<BigEndian>().unwrap();
-        let tick_diff = msg.read_i8().unwrap();
 
         let mut buffer = Vec::new();
         msg.read_to_end(&mut buffer).unwrap();
@@ -114,8 +91,6 @@ impl StandardHeader {
                 local_packet_index: seq,
                 last_remote_packet_index: ack_seq,
                 ack_field,
-                current_tick: tick,
-                tick_latency: tick_diff,
             },
             buffer.into_boxed_slice(),
         )
