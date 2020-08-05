@@ -1,18 +1,15 @@
 use std::{net::SocketAddr, rc::Rc};
 
-use crate::{HostType, Timer};
+use crate::Timer;
 
 use super::{
     ack_manager::AckManager,
     connection_config::ConnectionConfig,
     entities::{entity_notifiable::EntityNotifiable, entity_type::EntityType},
     events::{event::Event, event_manager::EventManager, event_type::EventType},
-    host_tick_manager::HostTickManager,
     manifest::Manifest,
     packet_reader::PacketReader,
     packet_type::PacketType,
-    remote_tick_manager::RemoteTickManager,
-    rtt::rtt_tracker::RttTracker,
     sequence_buffer::SequenceNumber,
     standard_header::StandardHeader,
 };
@@ -25,8 +22,6 @@ pub struct Connection<T: EventType> {
     heartbeat_timer: Timer,
     timeout_timer: Timer,
     ack_manager: AckManager,
-    tick_manager: RemoteTickManager,
-    rtt_tracker: RttTracker,
     event_manager: EventManager<T>,
 }
 
@@ -35,17 +30,13 @@ impl<T: EventType> Connection<T> {
     pub fn new(address: SocketAddr, config: &ConnectionConfig) -> Self {
         let heartbeat_interval = config.heartbeat_interval;
         let timeout_duration = config.disconnection_timeout_duration;
-        let rtt_smoothing_factor = config.rtt_smoothing_factor;
-        let rtt_max_value = config.rtt_max_value;
 
         return Connection {
             address,
             heartbeat_timer: Timer::new(heartbeat_interval),
             timeout_timer: Timer::new(timeout_duration),
             ack_manager: AckManager::new(),
-            rtt_tracker: RttTracker::new(rtt_smoothing_factor, rtt_max_value),
             event_manager: EventManager::new(),
-            tick_manager: RemoteTickManager::new(),
         };
     }
 
@@ -79,16 +70,9 @@ impl<T: EventType> Connection<T> {
         &mut self,
         header: &StandardHeader,
         entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
-        host_tick_manager: &mut dyn HostTickManager,
-        host_type: HostType,
     ) {
-        self.rtt_tracker
-            .process_incoming(header.local_packet_index());
         self.ack_manager
             .process_incoming(&header, &mut self.event_manager, entity_notifiable);
-        self.tick_manager
-            .process_incoming(host_tick_manager.get_tick(), &header, host_type);
-        host_tick_manager.process_incoming(header);
     }
 
     /// Given a packet payload, start tracking the packet via it's index, attach
@@ -96,28 +80,21 @@ impl<T: EventType> Connection<T> {
     /// bytes
     pub fn process_outgoing_header(
         &mut self,
-        current_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
-        self.rtt_tracker
-            .process_outgoing(self.ack_manager.get_local_packet_index());
-
         // Add header onto message!
         let mut header_bytes = Vec::new();
 
         let local_packet_index = self.ack_manager.get_local_packet_index();
         let last_remote_packet_index = self.ack_manager.get_last_remote_packet_index();
         let bit_field = self.ack_manager.get_ack_bitfield();
-        let tick_latency = self.tick_manager.get_tick_latency(current_tick);
 
         let header = StandardHeader::new(
             packet_type,
             local_packet_index,
             last_remote_packet_index,
             bit_field,
-            current_tick,
-            tick_latency,
         );
         header.write(&mut header_bytes);
 
@@ -178,10 +155,5 @@ impl<T: EventType> Connection<T> {
     /// Get the address of the remote host
     pub fn get_address(&self) -> SocketAddr {
         return self.address;
-    }
-
-    /// Get the Round Trip Time to the remote host
-    pub fn get_rtt(&self) -> f32 {
-        return self.rtt_tracker.get_rtt();
     }
 }

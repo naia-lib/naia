@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use futures_util::{pin_mut, select, FutureExt};
 use log::info;
 use ring::{hmac, rand};
@@ -129,11 +129,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                         } else if connection.should_send_heartbeat() {
                             // Don't try to refactor this to self.internal_send, doesn't seem to
                             // work cause of iter_mut()
-                            let payload = connection.process_outgoing_header(
-                                self.tick_manager.get_tick(),
-                                PacketType::Heartbeat,
-                                &[],
-                            );
+                            let payload =
+                                connection.process_outgoing_header(PacketType::Heartbeat, &[]);
                             self.sender
                                 .send(Packet::new_raw(user.address, payload))
                                 .await
@@ -217,7 +214,15 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         hmac::sign(&self.connection_hash_key, &timestamp_bytes);
 
                                     let mut payload_bytes = Vec::new();
+                                    // write current tick
+                                    payload_bytes
+                                        .write_u16::<BigEndian>(self.tick_manager.get_tick())
+                                        .unwrap();
+
+                                    //write timestamp
                                     payload_bytes.append(&mut timestamp_bytes);
+
+                                    //write timestamp digest
                                     let hash_bytes: &[u8] = timestamp_hash.as_ref();
                                     for hash_byte in hash_bytes {
                                         payload_bytes.push(*hash_byte);
@@ -230,7 +235,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
 
                                     NaiaServer::<T, U>::internal_send_connectionless(
                                         &mut self.sender,
-                                        self.tick_manager.get_tick(),
                                         PacketType::ServerChallengeResponse,
                                         Packet::new(address, payload_bytes),
                                     )
@@ -252,14 +256,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                                     .client_connections
                                                     .get_mut(user_key)
                                                     .unwrap();
-                                                connection.process_incoming_header(
-                                                    &mut self.tick_manager,
-                                                    &header,
-                                                );
+                                                connection.process_incoming_header(&header);
                                                 NaiaServer::<T, U>::send_connect_accept_message(
                                                     &mut connection,
                                                     &mut self.sender,
-                                                    self.tick_manager.get_tick(),
                                                 )
                                                 .await;
                                                 continue;
@@ -336,14 +336,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                             Some(&self.mut_handler),
                                             &self.connection_config,
                                         );
-                                        new_connection.process_incoming_header(
-                                            &mut self.tick_manager,
-                                            &header,
-                                        );
+                                        new_connection.process_incoming_header(&header);
                                         NaiaServer::<T, U>::send_connect_accept_message(
                                             &mut new_connection,
                                             &mut self.sender,
-                                            self.tick_manager.get_tick(),
                                         )
                                         .await;
                                         self.client_connections.insert(user_key, new_connection);
@@ -357,10 +353,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                     {
                                         match self.client_connections.get_mut(user_key) {
                                             Some(connection) => {
-                                                connection.process_incoming_header(
-                                                    &mut self.tick_manager,
-                                                    &header,
-                                                );
+                                                connection.process_incoming_header(&header);
                                                 connection.process_incoming_data(
                                                     &self.manifest,
                                                     &payload,
@@ -384,10 +377,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                             Some(connection) => {
                                                 // Still need to do this so that proper notify
                                                 // events fire based on the heartbeat header
-                                                connection.process_incoming_header(
-                                                    &mut self.tick_manager,
-                                                    &header,
-                                                );
+                                                connection.process_incoming_header(&header);
                                                 continue;
                                             }
                                             None => {
@@ -435,13 +425,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     async fn send_connect_accept_message(
         connection: &mut ClientConnection<T, U>,
         sender: &mut MessageSender,
-        current_tick: u16,
     ) {
-        let payload = connection.process_outgoing_header(
-            current_tick,
-            PacketType::ServerConnectResponse,
-            &[],
-        );
+        let payload = connection.process_outgoing_header(PacketType::ServerConnectResponse, &[]);
         match sender
             .send(Packet::new_raw(connection.get_address(), payload))
             .await
@@ -473,9 +458,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
                 connection.collect_entity_updates();
-                while let Some(payload) =
-                    connection.get_outgoing_packet(&self.manifest, self.tick_manager.get_tick())
-                {
+                while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
                     match self
                         .sender
                         .send(Packet::new_raw(user.address, payload))
@@ -595,14 +578,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         self.auth_func = Some(auth_func);
     }
 
-    /// Get the current measured Round Trip Time to the Server
-    pub fn get_rtt(&mut self, user_key: &UserKey) -> Option<f32> {
-        if let Some(connection) = self.client_connections.get_mut(user_key) {
-            return Some(connection.get_rtt());
-        }
-        return None;
-    }
-
     /// Iterate through all currently connected Users
     pub fn users_iter(&self) -> slotmap::dense::Iter<UserKey, User> {
         return self.users.iter();
@@ -659,15 +634,11 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
 
     async fn internal_send_connectionless(
         sender: &mut MessageSender,
-        current_tick: u16,
         packet_type: PacketType,
         packet: Packet,
     ) {
-        let new_payload = naia_shared::utils::write_connectionless_payload(
-            current_tick,
-            packet_type,
-            packet.payload(),
-        );
+        let new_payload =
+            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
         sender
             .send(Packet::new_raw(packet.address(), new_payload))
             .await

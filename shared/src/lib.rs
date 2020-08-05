@@ -29,12 +29,11 @@ mod manifest;
 mod packet_reader;
 mod packet_type;
 mod packet_writer;
-mod remote_tick_manager;
-mod rtt;
 mod sequence_buffer;
 mod shared_config;
 mod standard_header;
 mod timestamp;
+mod wrapping_number;
 
 /// Commonly used utility methods to be used by naia-server & naia-client
 pub mod utils;
@@ -63,9 +62,8 @@ pub use manifest::Manifest;
 pub use packet_reader::PacketReader;
 pub use packet_type::PacketType;
 pub use packet_writer::{PacketWriter, MTU_SIZE};
-pub use remote_tick_manager::wrapping_diff;
-pub use rtt::rtt_tracker::RttTracker;
 pub use sequence_buffer::SequenceNumber;
 pub use shared_config::SharedConfig;
 pub use standard_header::StandardHeader;
 pub use timestamp::Timestamp;
+pub use wrapping_number::wrapping_diff;

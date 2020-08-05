@@ -2,15 +2,11 @@ use crate::{packet_type::PacketType, standard_header::StandardHeader};
 
 /// Write a connectionless packet, that is, one that does not rely on
 /// information normally retrieved from the connection
-pub fn write_connectionless_payload(
-    local_tick: u16,
-    packet_type: PacketType,
-    payload: &[u8],
-) -> Box<[u8]> {
+pub fn write_connectionless_payload(packet_type: PacketType, payload: &[u8]) -> Box<[u8]> {
     // Add Ack Header onto message!
     let mut header_bytes = Vec::new();
 
-    let header = StandardHeader::new(packet_type, 0, 0, 0, local_tick, 0);
+    let header = StandardHeader::new(packet_type, 0, 0, 0);
     header.write(&mut header_bytes);
 
     [header_bytes.as_slice(), &payload]

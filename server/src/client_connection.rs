@@ -1,8 +1,8 @@
 use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
-    Connection, ConnectionConfig, Entity, EntityType, Event, EventType, HostTickManager, HostType,
-    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber, StandardHeader,
+    Connection, ConnectionConfig, Entity, EntityType, Event, EventType, ManagerType, Manifest,
+    PacketReader, PacketType, PacketWriter, SequenceNumber, StandardHeader,
 };
 
 use super::entities::{
@@ -27,11 +27,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         }
     }
 
-    pub fn get_outgoing_packet(
-        &mut self,
-        manifest: &Manifest<T, U>,
-        current_tick: u16,
-    ) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T, U>) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() || self.entity_manager.has_outgoing_messages() {
             let mut writer = PacketWriter::new();
 
@@ -62,8 +58,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
                 let out_bytes = writer.get_bytes();
 
                 // Add header to it
-                let payload =
-                    self.process_outgoing_header(current_tick, PacketType::Data, &out_bytes);
+                let payload = self.process_outgoing_header(PacketType::Data, &out_bytes);
                 return Some(payload);
             }
         }
@@ -118,28 +113,19 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.should_drop();
     }
 
-    pub fn process_incoming_header(
-        &mut self,
-        host_tick_manager: &mut dyn HostTickManager,
-        header: &StandardHeader,
-    ) {
-        self.connection.process_incoming_header(
-            header,
-            &mut Some(&mut self.entity_manager),
-            host_tick_manager,
-            HostType::Server,
-        );
+    pub fn process_incoming_header(&mut self, header: &StandardHeader) {
+        self.connection
+            .process_incoming_header(header, &mut Some(&mut self.entity_manager));
     }
 
     pub fn process_outgoing_header(
         &mut self,
-        current_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
         return self
             .connection
-            .process_outgoing_header(current_tick, packet_type, payload);
+            .process_outgoing_header(packet_type, payload);
     }
 
     pub fn get_next_packet_index(&self) -> SequenceNumber {
@@ -156,9 +142,5 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
 
     pub fn get_address(&self) -> SocketAddr {
         return self.connection.get_address();
-    }
-
-    pub fn get_rtt(&self) -> f32 {
-        return self.connection.get_rtt();
     }
 }
