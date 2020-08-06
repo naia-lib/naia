@@ -55,8 +55,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         let connection_config = ConnectionConfig::new(
             client_config.disconnection_timeout_duration,
             client_config.heartbeat_interval,
-            client_config.rtt_smoothing_factor,
-            client_config.rtt_max_value,
+            client_config.ping_interval,
+            client_config.ping_sample_size,
         );
 
         let mut client_socket = ClientSocket::connect(server_address);

@@ -76,8 +76,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         let connection_config = ConnectionConfig::new(
             server_config.disconnection_timeout_duration,
             server_config.heartbeat_interval,
-            server_config.rtt_smoothing_factor,
-            server_config.rtt_max_value,
+            server_config.ping_interval,
+            server_config.ping_sample_size,
         );
 
         let mut server_socket = ServerSocket::listen(address).await;

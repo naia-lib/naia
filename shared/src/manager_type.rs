@@ -8,6 +8,8 @@ pub enum ManagerType {
     Event = 1,
     /// An EntityManager
     Entity = 2,
+    /// A PingManager
+    Ping = 3,
     /// Unknown Manager
     Unknown = 255,
 }
@@ -17,6 +19,7 @@ impl From<u8> for ManagerType {
         match orig {
             1 => return ManagerType::Event,
             2 => return ManagerType::Entity,
+            3 => return ManagerType::Ping,
             _ => return ManagerType::Unknown,
         };
     }

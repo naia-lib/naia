@@ -10,7 +10,8 @@ pub struct EntityPacketWriter {}
 
 impl EntityPacketWriter {
     /// Given a general PacketWriter, the manifest, and a buffered
-    /// EntityMessage, actually write Entity data into the packet
+    /// EntityMessage, actually write Entity data into the packet.
+    /// Returns true if it was able to write a message
     pub fn write_entity_message<T: EventType, U: EntityType>(
         packet_writer: &mut PacketWriter,
         manifest: &Manifest<T, U>,

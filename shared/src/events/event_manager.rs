@@ -1,4 +1,4 @@
-use byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
@@ -126,7 +126,9 @@ impl<T: EventType> EventManager<T> {
 
         let event_count = cursor.read_u8().unwrap();
         for _x in 0..event_count {
-            let naia_id: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
+            let mut error_str: String = "not parsing? ".to_string();
+            error_str += event_count.to_string().as_str();
+            let naia_id: u16 = cursor.read_u16::<BigEndian>().expect(error_str.as_str());
             let payload_length: u8 = cursor.read_u8().unwrap().into();
             let payload_start_position: usize = cursor.position() as usize;
             let payload_end_position: usize = payload_start_position + (payload_length as usize);
@@ -145,5 +147,31 @@ impl<T: EventType> EventManager<T> {
 
             cursor.set_position(payload_end_position as u64);
         }
+    }
+
+    /// Write data into outgoing buffer
+    pub fn write_data<U: EntityType>(
+        manifest: &Manifest<T, U>,
+        event: &Box<dyn Event<T>>,
+    ) -> Vec<u8> {
+        //Write event payload
+        let mut event_payload_bytes = Vec::<u8>::new();
+        event.as_ref().write(&mut event_payload_bytes);
+        if event_payload_bytes.len() > 255 {
+            error!("cannot encode an event with more than 255 bytes, need to implement this");
+        }
+
+        //Write event "header" (event id & payload length)
+        let mut event_total_bytes = Vec::<u8>::new();
+
+        let type_id = event.as_ref().get_type_id();
+        let naia_id = manifest.get_event_naia_id(&type_id); // get naia id
+        event_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
+        event_total_bytes
+            .write_u8(event_payload_bytes.len() as u8)
+            .unwrap(); // write payload length
+        event_total_bytes.append(&mut event_payload_bytes); // write payload
+
+        return event_total_bytes;
     }
 }

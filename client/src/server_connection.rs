@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType,
-    Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber, StandardHeader,
+    Manifest, PacketReader, PacketType, PacketWriter, PingManager, SequenceNumber, StandardHeader,
 };
 
 use super::{
@@ -13,6 +13,7 @@ use super::{
 pub struct ServerConnection<T: EventType, U: EntityType> {
     connection: Connection<T>,
     entity_manager: ClientEntityManager<U>,
+    ping_manager: PingManager,
 }
 
 impl<T: EventType, U: EntityType> ServerConnection<T, U> {
@@ -20,14 +21,21 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
             entity_manager: ClientEntityManager::new(),
+            ping_manager: PingManager::new(
+                connection_config.ping_interval,
+                connection_config.ping_sample_size,
+            ),
         };
     }
 
     pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T, U>) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_events() {
+        if self.connection.has_outgoing_events() || self.ping_manager.should_write() {
             let mut writer = PacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
+            if self.ping_manager.should_write() {
+                self.ping_manager.write_data(&mut writer);
+            }
             while let Some(popped_event) = self.connection.pop_outgoing_event(next_packet_index) {
                 if !writer.write_event(manifest, &popped_event) {
                     self.connection
@@ -55,12 +63,20 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &[u8]) {
         let mut reader = PacketReader::new(data);
-        let start_manager_type: ManagerType = reader.read_u8().into();
-        if start_manager_type == ManagerType::Event {
-            self.connection.process_event_data(&mut reader, manifest);
-        }
-        if reader.has_more() {
-            self.entity_manager.process_data(&mut reader, manifest);
+        while reader.has_more() {
+            let manager_type: ManagerType = reader.read_u8().into();
+            match manager_type {
+                ManagerType::Event => {
+                    self.connection.process_event_data(&mut reader, manifest);
+                }
+                ManagerType::Entity => {
+                    self.entity_manager.process_data(&mut reader, manifest);
+                }
+                ManagerType::Ping => {
+                    self.ping_manager.read_data(&mut reader);
+                }
+                _ => {}
+            }
         }
     }
 

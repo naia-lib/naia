@@ -2,7 +2,7 @@ use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
     Connection, ConnectionConfig, Entity, EntityType, Event, EventType, ManagerType, Manifest,
-    PacketReader, PacketType, PacketWriter, SequenceNumber, StandardHeader,
+    PacketReader, PacketType, PacketWriter, PingManager, SequenceNumber, StandardHeader,
 };
 
 use super::entities::{
@@ -13,6 +13,7 @@ use super::entities::{
 pub struct ClientConnection<T: EventType, U: EntityType> {
     connection: Connection<T>,
     entity_manager: ServerEntityManager<U>,
+    ping_manager: PingManager,
 }
 
 impl<T: EventType, U: EntityType> ClientConnection<T, U> {
@@ -24,14 +25,24 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         ClientConnection {
             connection: Connection::new(address, connection_config),
             entity_manager: ServerEntityManager::new(address, mut_handler.unwrap()),
+            ping_manager: PingManager::new(
+                connection_config.ping_interval,
+                connection_config.ping_sample_size,
+            ),
         }
     }
 
     pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T, U>) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_events() || self.entity_manager.has_outgoing_messages() {
+        if self.connection.has_outgoing_events()
+            || self.entity_manager.has_outgoing_messages()
+            || self.ping_manager.should_write()
+        {
             let mut writer = PacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
+            if self.ping_manager.should_write() {
+                self.ping_manager.write_data(&mut writer);
+            }
             while let Some(popped_event) = self.connection.pop_outgoing_event(next_packet_index) {
                 if !writer.write_event(manifest, &popped_event) {
                     self.connection
@@ -73,6 +84,9 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
             match manager_type {
                 ManagerType::Event => {
                     self.connection.process_event_data(&mut reader, manifest);
+                }
+                ManagerType::Ping => {
+                    self.ping_manager.read_data(&mut reader);
                 }
                 _ => {}
             }

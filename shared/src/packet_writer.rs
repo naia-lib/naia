@@ -2,7 +2,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use crate::{
     entities::entity_type::EntityType,
-    events::{event::Event, event_type::EventType},
+    events::{event::Event, event_manager::EventManager, event_type::EventType},
     manager_type::ManagerType,
     manifest::Manifest,
     standard_header::StandardHeader,
@@ -19,17 +19,19 @@ pub struct PacketWriter {
     pub entity_working_bytes: Vec<u8>,
     /// number of Entity messages to be written
     pub entity_message_count: u8,
+    /// bytes representing outgoing Ping messages
+    pub ping_working_bytes: Vec<u8>,
 }
 
 impl PacketWriter {
-    /// Construct a new instance of `PacketReader`, the given `buffer` will be
-    /// used to read information from.
+    /// Construct a new instance of PacketWriter
     pub fn new() -> PacketWriter {
         PacketWriter {
             event_working_bytes: Vec::<u8>::new(),
             event_count: 0,
             entity_working_bytes: Vec::<u8>::new(),
             entity_message_count: 0,
+            ping_working_bytes: Vec::<u8>::new(),
         }
     }
 
@@ -42,29 +44,22 @@ impl PacketWriter {
     pub fn get_bytes(&mut self) -> Box<[u8]> {
         let mut out_bytes = Vec::<u8>::new();
 
-        let mut wrote_manager_type = false;
+        if self.ping_working_bytes.len() != 0 {
+            out_bytes.write_u8(ManagerType::Ping as u8).unwrap(); // write manager type
+            out_bytes.append(&mut self.ping_working_bytes); // write ping data
+        }
 
-        //Write manager "header" (manager type & entity count)
         if self.event_count != 0 {
             out_bytes.write_u8(ManagerType::Event as u8).unwrap(); // write manager type
-            wrote_manager_type = true;
             out_bytes.write_u8(self.event_count).unwrap(); // write number of events in the following message
             out_bytes.append(&mut self.event_working_bytes); // write event payload
             self.event_count = 0;
         }
 
-        //Write manager "header" (manager type & entity count)
         if self.entity_message_count != 0 {
-            //info!("writing {} entity message, with {} bytes", self.entity_message_count,
-            // self.entity_working_bytes.len());
-            if !wrote_manager_type {
-                out_bytes.write_u8(ManagerType::Entity as u8).unwrap(); // write
-                                                                        // manager
-                                                                        // type
-            }
+            out_bytes.write_u8(ManagerType::Entity as u8).unwrap(); // write manager type
             out_bytes.write_u8(self.entity_message_count).unwrap(); // write number of messages
             out_bytes.append(&mut self.entity_working_bytes); // write event payload
-
             self.entity_message_count = 0;
         }
 
@@ -74,34 +69,20 @@ impl PacketWriter {
     /// Get the number of bytes which is ready to be written into an outgoing
     /// packet
     pub fn bytes_number(&self) -> usize {
-        return self.event_working_bytes.len() + self.entity_working_bytes.len();
+        return self.ping_working_bytes.len()
+            + self.event_working_bytes.len()
+            + self.entity_working_bytes.len();
     }
 
     /// Writes an Event into the Writer's internal buffer, which will eventually
-    /// be put into the outgoing packet
+    /// be put into the outgoing packet.
+    /// Returns whether or not the event was able to be written
     pub fn write_event<T: EventType, U: EntityType>(
         &mut self,
         manifest: &Manifest<T, U>,
         event: &Box<dyn Event<T>>,
     ) -> bool {
-        //Write event payload
-        let mut event_payload_bytes = Vec::<u8>::new();
-        event.as_ref().write(&mut event_payload_bytes);
-        if event_payload_bytes.len() > 255 {
-            error!("cannot encode an event with more than 255 bytes, need to implement this");
-        }
-
-        //Write event "header" (event id & payload length)
-        let mut event_total_bytes = Vec::<u8>::new();
-
-        let type_id = event.as_ref().get_type_id();
-        let naia_id = manifest.get_event_naia_id(&type_id); // get naia id
-        event_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-        event_total_bytes
-            .write_u8(event_payload_bytes.len() as u8)
-            .unwrap(); // write payload length
-        event_total_bytes.append(&mut event_payload_bytes); // write payload
-
+        let mut event_total_bytes = EventManager::write_data(manifest, event);
         let mut hypothetical_next_payload_size = self.bytes_number() + event_total_bytes.len();
         if self.event_count == 0 {
             hypothetical_next_payload_size += 2;
