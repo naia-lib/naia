@@ -76,11 +76,11 @@ impl App {
                     ClientEvent::Event(event_type) => match event_type {
                         ExampleEvent::StringEvent(string_event) => {
                             let message = string_event.message.get();
-                            //info!("Client received event: {}", message);
+                            info!("Client received event: {}", message);
 
                             let new_message =
                                 format!("Client Packet ({})", self.server_event_count);
-                            //info!("Client send: {}", new_message);
+                            info!("Client send: {}", new_message);
 
                             let string_event = StringEvent::new(new_message);
                             self.client.send_event(&string_event);
@@ -92,23 +92,13 @@ impl App {
                         if let Some(entity) = self.client.get_entity(local_key) {
                             match entity {
                                 ExampleEntity::PointEntity(point_entity) => {
-                                    //                                    info!(
-                                    //                                        
-                                    // "creation of point entity with key: {},
-                                    // x: {}, y: {}, name: {} {}",
-                                    //                                        
-                                    // local_key,
-                                    //                                        
-                                    // point_entity.as_ref().borrow().x.get(),
-                                    //                                        
-                                    // point_entity.as_ref().borrow().y.get(),
-                                    //                                        
-                                    // point_entity.as_ref().borrow().name.
-                                    // get().first,
-                                    //                                        
-                                    // point_entity.as_ref().borrow().name.
-                                    // get().last,
-                                    //                                    );
+                                    info!("creation of point entity with key: {}, x: {}, y: {}, name: {} {}",
+                                          local_key,
+                                          point_entity.as_ref().borrow().x.get(),
+                                          point_entity.as_ref().borrow().y.get(),
+                                          point_entity.as_ref().borrow().name.get().first,
+                                          point_entity.as_ref().borrow().name.get().last,
+                                    );
                                 }
                             }
                         }
@@ -117,30 +107,18 @@ impl App {
                         if let Some(entity) = self.client.get_entity(local_key) {
                             match entity {
                                 ExampleEntity::PointEntity(point_entity) => {
-                                    //                                    info!(
-                                    //                                        
-                                    // "update of point entity with key: {}, x:
-                                    // {}, y: {}, name: {} {}",
-                                    //                                        
-                                    // local_key,
-                                    //                                        
-                                    // point_entity.as_ref().borrow().x.get(),
-                                    //                                        
-                                    // point_entity.as_ref().borrow().y.get(),
-                                    //                                        
-                                    // point_entity.as_ref().borrow().name.
-                                    // get().first,
-                                    //                                        
-                                    // point_entity.as_ref().borrow().name.
-                                    // get().last,
-                                    //                                    );
+                                    info!("update of point entity with key: {}, x:{}, y: {}, name: {} {}",
+                                          local_key,
+                                          point_entity.as_ref().borrow().x.get(),
+                                          point_entity.as_ref().borrow().y.get(),
+                                          point_entity.as_ref().borrow().name.get().first,
+                                          point_entity.as_ref().borrow().name.get().last);
                                 }
                             }
                         }
                     }
                     ClientEvent::DeleteEntity(local_key) => {
-                        //                        info!("deletion of point
-                        // entity with key: {}", local_key);
+                        info!("deletion of point entity with key: {}", local_key);
                     }
                     ClientEvent::None => {
                         //info!("Client non-event");
