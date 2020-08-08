@@ -7,30 +7,9 @@ use naia_shared::{wrapping_diff, HostTickManager, Instant};
 pub struct ClientTickManager {
     tick_interval: Duration,
     current_tick: u16,
+    intended_tick: u16,
     last_instant: Instant,
     last_leftover: Duration,
-    paused: bool,
-    last_received_tick: u16,
-    tick_latency_average: f32,
-    tick_latency_variance: f32,
-    last_tick_latency_average: f32,
-    tick_adjust: f32,
-    intended_tick: u16,
-    processed_first: bool,
-    average_pool_size: f32,
-    min_target_latency: f32,
-    average_adjust: f32,
-    sync_config: SyncConfig,
-}
-
-/// Holds configuration values that determine factors in how to converge towards
-/// the appropriate tick offset
-#[derive(Debug)]
-pub struct SyncConfig {
-    measurement_pool_size: f32,
-    target_latency_deviation_multiple: f32,
-    adjust_trigger_sensitivity: f32,
-    maximum_tick_adjustment: f32,
 }
 
 const NANOS_PER_SEC: u32 = 1_000_000_000;
@@ -44,22 +23,6 @@ impl ClientTickManager {
             intended_tick: 1,
             last_instant: Instant::now(),
             last_leftover: Duration::new(0, 0),
-            paused: false,
-            last_received_tick: 0,
-            tick_adjust: 0.0,
-            tick_latency_average: 0.0,
-            tick_latency_variance: 0.0,
-            last_tick_latency_average: 0.0,
-            average_pool_size: 1.0,
-            processed_first: false,
-            min_target_latency: -1000.0 / (tick_interval.as_millis() as f32),
-            average_adjust: 0.0,
-            sync_config: SyncConfig {
-                measurement_pool_size: 20.0,
-                target_latency_deviation_multiple: 3.0,
-                adjust_trigger_sensitivity: 0.1,
-                maximum_tick_adjustment: 5000.0 / (tick_interval.as_millis() as f32),
-            },
         }
     }
 
