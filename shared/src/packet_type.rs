@@ -16,6 +16,12 @@ pub enum PacketType {
     /// The final handshake message sent by the Server, indicating that the
     /// connection has been established
     ServerConnectResponse = 6,
+    /// A Ping message, used to calculate RTT. Must be responded to with a Pong
+    /// message
+    Ping = 7,
+    /// A Pong message, used to calculate RTT. Must be the response to all Ping
+    /// messages
+    Pong = 8,
     /// An unknown packet type
     Unknown = 255,
 }
@@ -29,6 +35,8 @@ impl From<u8> for PacketType {
             4 => return PacketType::ServerChallengeResponse,
             5 => return PacketType::ClientConnectRequest,
             6 => return PacketType::ServerConnectResponse,
+            7 => return PacketType::Ping,
+            8 => return PacketType::Pong,
             _ => return PacketType::Unknown,
         };
     }

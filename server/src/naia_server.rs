@@ -76,8 +76,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         let connection_config = ConnectionConfig::new(
             server_config.disconnection_timeout_duration,
             server_config.heartbeat_interval,
+            server_config.ping_interval,
             server_config.rtt_smoothing_factor,
-            server_config.rtt_max_value,
         );
 
         let mut server_socket = ServerSocket::listen(address).await;
@@ -126,16 +126,28 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                     if let Some(user) = self.users.get(*user_key) {
                         if connection.should_drop() {
                             self.outstanding_disconnects.push_back(*user_key);
-                        } else if connection.should_send_heartbeat() {
-                            // Don't try to refactor this to self.internal_send, doesn't seem to
-                            // work cause of iter_mut()
-                            let payload =
-                                connection.process_outgoing_header(PacketType::Heartbeat, &[]);
-                            self.sender
-                                .send(Packet::new_raw(user.address, payload))
-                                .await
-                                .expect("send failed!");
-                            connection.mark_sent();
+                        } else {
+                            if connection.should_send_heartbeat() {
+                                // Don't try to refactor this to self.internal_send, doesn't seem to
+                                // work cause of iter_mut()
+                                let payload =
+                                    connection.process_outgoing_header(PacketType::Heartbeat, &[]);
+                                self.sender
+                                    .send(Packet::new_raw(user.address, payload))
+                                    .await
+                                    .expect("send failed!");
+                                connection.mark_sent();
+                            }
+                            if connection.should_send_ping() {
+                                let ping_payload = connection.get_ping_payload();
+                                let payload_with_header = connection
+                                    .process_outgoing_header(PacketType::Ping, &ping_payload);
+                                self.sender
+                                    .send(Packet::new_raw(user.address, payload_with_header))
+                                    .await
+                                    .expect("send failed!");
+                                connection.mark_sent();
+                            }
                         }
                     }
                 }
@@ -378,6 +390,39 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                                 // Still need to do this so that proper notify
                                                 // events fire based on the heartbeat header
                                                 connection.process_incoming_header(&header);
+                                                continue;
+                                            }
+                                            None => {
+                                                warn!(
+                                                    "received heartbeat from unauthenticated client: {}",
+                                                    address
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                                PacketType::Ping => {
+                                    if let Some(user_key) =
+                                        self.address_to_user_key_map.get(&address)
+                                    {
+                                        match self.client_connections.get_mut(user_key) {
+                                            Some(connection) => {
+                                                connection.process_incoming_header(&header);
+                                                let ping_payload =
+                                                    connection.process_ping(&payload);
+                                                let payload_with_header = connection
+                                                    .process_outgoing_header(
+                                                        PacketType::Pong,
+                                                        &ping_payload,
+                                                    );
+                                                self.sender
+                                                    .send(Packet::new_raw(
+                                                        connection.get_address(),
+                                                        payload_with_header,
+                                                    ))
+                                                    .await
+                                                    .expect("send failed!");
+                                                connection.mark_sent();
                                                 continue;
                                             }
                                             None => {

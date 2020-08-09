@@ -143,4 +143,16 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
     pub fn get_address(&self) -> SocketAddr {
         return self.connection.get_address();
     }
+
+    pub fn should_send_ping(&self) -> bool {
+        return self.connection.should_send_ping();
+    }
+
+    pub fn get_ping_payload(&self) -> Box<[u8]> {
+        return self.connection.get_ping_payload();
+    }
+
+    pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
+        return self.connection.process_ping(ping_payload);
+    }
 }

@@ -29,6 +29,7 @@ mod manifest;
 mod packet_reader;
 mod packet_type;
 mod packet_writer;
+mod ping_manager;
 mod sequence_buffer;
 mod shared_config;
 mod standard_header;
