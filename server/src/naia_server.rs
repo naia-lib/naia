@@ -77,7 +77,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             server_config.disconnection_timeout_duration,
             server_config.heartbeat_interval,
             server_config.ping_interval,
-            server_config.rtt_smoothing_factor,
+            server_config.rtt_sample_size,
         );
 
         let mut server_socket = ServerSocket::listen(address).await;
@@ -402,6 +402,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                     }
                                 }
                                 PacketType::Ping => {
+                                    println!("Received Ping");
                                     if let Some(user_key) =
                                         self.address_to_user_key_map.get(&address)
                                     {
@@ -427,7 +428,27 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                             }
                                             None => {
                                                 warn!(
-                                                    "received heartbeat from unauthenticated client: {}",
+                                                    "received ping from unauthenticated client: {}",
+                                                    address
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                                PacketType::Pong => {
+                                    println!("Received Pong");
+                                    if let Some(user_key) =
+                                        self.address_to_user_key_map.get(&address)
+                                    {
+                                        match self.client_connections.get_mut(user_key) {
+                                            Some(connection) => {
+                                                connection.process_incoming_header(&header);
+                                                connection.process_pong(&payload);
+                                                continue;
+                                            }
+                                            None => {
+                                                warn!(
+                                                    "received pong from unauthenticated client: {}",
                                                     address
                                                 );
                                             }
