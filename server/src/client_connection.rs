@@ -148,11 +148,15 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.should_send_ping();
     }
 
-    pub fn get_ping_payload(&self) -> Box<[u8]> {
+    pub fn get_ping_payload(&mut self) -> Box<[u8]> {
         return self.connection.get_ping_payload();
     }
 
     pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
         return self.connection.process_ping(ping_payload);
+    }
+
+    pub fn process_pong(&mut self, pong_payload: &[u8]) {
+        return self.connection.process_pong(pong_payload);
     }
 }

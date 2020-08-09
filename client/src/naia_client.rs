@@ -56,7 +56,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             client_config.disconnection_timeout_duration,
             client_config.heartbeat_interval,
             client_config.ping_interval,
-            client_config.rtt_smoothing_factor,
+            client_config.rtt_sample_size,
         );
 
         let mut client_socket = ClientSocket::connect(server_address);
@@ -109,11 +109,12 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                         );
                     }
                     if connection.should_send_ping() {
+                        let ping_payload = connection.get_ping_payload();
                         NaiaClient::internal_send_with_connection(
                             &mut self.sender,
                             connection,
                             PacketType::Ping,
-                            connection.get_ping_payload(),
+                            ping_payload,
                         );
                     }
                     // send a packet
@@ -222,6 +223,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                     continue;
                                 }
                                 PacketType::Ping => {
+                                    println!("Received Ping");
                                     let ping_response = server_connection.process_ping(&payload);
                                     NaiaClient::internal_send_with_connection(
                                         &mut self.sender,
@@ -229,6 +231,11 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                         PacketType::Pong,
                                         ping_response,
                                     );
+                                    continue;
+                                }
+                                PacketType::Pong => {
+                                    println!("Received Pong");
+                                    server_connection.process_pong(&payload);
                                     continue;
                                 }
                                 _ => {}
