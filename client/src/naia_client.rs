@@ -55,8 +55,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         let connection_config = ConnectionConfig::new(
             client_config.disconnection_timeout_duration,
             client_config.heartbeat_interval,
+            client_config.ping_interval,
             client_config.rtt_smoothing_factor,
-            client_config.rtt_max_value,
         );
 
         let mut client_socket = ClientSocket::connect(server_address);
@@ -90,7 +90,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         // update current tick
         self.tick_manager.update_frame();
 
-        // send handshakes, send heartbeats, timeout if need be
+        // send handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
             Some(connection) => {
                 if connection.should_drop() {
@@ -99,37 +99,46 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                     self.pre_connection_digest = None;
                     self.connection_state = AwaitingChallengeResponse;
                     return Ok(ClientEvent::Disconnection);
-                }
-                if connection.should_send_heartbeat() {
-                    NaiaClient::internal_send_with_connection(
-                        &mut self.sender,
-                        connection,
-                        PacketType::Heartbeat,
-                        Packet::empty(),
-                    );
-                }
-                // send a packet
-                while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
-                    self.sender
-                        .send(Packet::new_raw(payload))
-                        .expect("send failed!");
-                    connection.mark_sent();
-                }
-                // receive event
-                if let Some(event) = connection.get_incoming_event() {
-                    return Ok(ClientEvent::Event(event));
-                }
-                // receive entity message
-                if let Some(message) = connection.get_incoming_entity_message() {
-                    match message {
-                        ClientEntityMessage::Create(local_key) => {
-                            return Ok(ClientEvent::CreateEntity(local_key));
-                        }
-                        ClientEntityMessage::Delete(local_key) => {
-                            return Ok(ClientEvent::DeleteEntity(local_key));
-                        }
-                        ClientEntityMessage::Update(local_key) => {
-                            return Ok(ClientEvent::UpdateEntity(local_key));
+                } else {
+                    if connection.should_send_heartbeat() {
+                        NaiaClient::internal_send_with_connection(
+                            &mut self.sender,
+                            connection,
+                            PacketType::Heartbeat,
+                            Packet::empty(),
+                        );
+                    }
+                    if connection.should_send_ping() {
+                        NaiaClient::internal_send_with_connection(
+                            &mut self.sender,
+                            connection,
+                            PacketType::Ping,
+                            connection.get_ping_payload(),
+                        );
+                    }
+                    // send a packet
+                    while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
+                        self.sender
+                            .send(Packet::new_raw(payload))
+                            .expect("send failed!");
+                        connection.mark_sent();
+                    }
+                    // receive event
+                    if let Some(event) = connection.get_incoming_event() {
+                        return Ok(ClientEvent::Event(event));
+                    }
+                    // receive entity message
+                    if let Some(message) = connection.get_incoming_entity_message() {
+                        match message {
+                            ClientEntityMessage::Create(local_key) => {
+                                return Ok(ClientEvent::CreateEntity(local_key));
+                            }
+                            ClientEntityMessage::Delete(local_key) => {
+                                return Ok(ClientEvent::DeleteEntity(local_key));
+                            }
+                            ClientEntityMessage::Update(local_key) => {
+                                return Ok(ClientEvent::UpdateEntity(local_key));
+                            }
                         }
                     }
                 }
@@ -210,6 +219,16 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                     continue;
                                 }
                                 PacketType::Heartbeat => {
+                                    continue;
+                                }
+                                PacketType::Ping => {
+                                    let ping_response = server_connection.process_ping(&payload);
+                                    NaiaClient::internal_send_with_connection(
+                                        &mut self.sender,
+                                        server_connection,
+                                        PacketType::Pong,
+                                        ping_response,
+                                    );
                                     continue;
                                 }
                                 _ => {}

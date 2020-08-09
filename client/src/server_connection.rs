@@ -8,6 +8,7 @@ use naia_shared::{
 use super::{
     client_entity_manager::ClientEntityManager, client_entity_message::ClientEntityMessage,
 };
+use crate::Packet;
 
 #[derive(Debug)]
 pub struct ServerConnection<T: EventType, U: EntityType> {
@@ -110,5 +111,19 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn get_incoming_event(&mut self) -> Option<T> {
         return self.connection.get_incoming_event();
+    }
+
+    pub fn should_send_ping(&self) -> bool {
+        return self.connection.should_send_ping();
+    }
+
+    pub fn get_ping_payload(&self) -> Packet {
+        let payload = self.connection.get_ping_payload();
+        return Packet::new_raw(payload);
+    }
+
+    pub fn process_ping(&self, ping_payload: &[u8]) -> Packet {
+        let response_payload = self.connection.process_ping(ping_payload);
+        return Packet::new_raw(response_payload);
     }
 }
