@@ -117,7 +117,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.connection.should_send_ping();
     }
 
-    pub fn get_ping_payload(&self) -> Packet {
+    pub fn get_ping_payload(&mut self) -> Packet {
         let payload = self.connection.get_ping_payload();
         return Packet::new_raw(payload);
     }
@@ -125,5 +125,9 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     pub fn process_ping(&self, ping_payload: &[u8]) -> Packet {
         let response_payload = self.connection.process_ping(ping_payload);
         return Packet::new_raw(response_payload);
+    }
+
+    pub fn process_pong(&mut self, pong_payload: &[u8]) {
+        self.connection.process_pong(pong_payload);
     }
 }

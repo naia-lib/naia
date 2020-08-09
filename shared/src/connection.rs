@@ -30,14 +30,11 @@ pub struct Connection<T: EventType> {
 impl<T: EventType> Connection<T> {
     /// Create a new Connection, given the appropriate underlying managers
     pub fn new(address: SocketAddr, config: &ConnectionConfig) -> Self {
-        let heartbeat_interval = config.heartbeat_interval;
-        let timeout_duration = config.disconnection_timeout_duration;
-
         return Connection {
             address,
-            heartbeat_timer: Timer::new(heartbeat_interval),
-            timeout_timer: Timer::new(timeout_duration),
-            ping_manager: PingManager::new(config.ping_interval),
+            heartbeat_timer: Timer::new(config.heartbeat_interval),
+            timeout_timer: Timer::new(config.disconnection_timeout_duration),
+            ping_manager: PingManager::new(config.ping_interval, config.rtt_sample_size),
             ack_manager: AckManager::new(),
             event_manager: EventManager::new(),
         };
@@ -166,12 +163,17 @@ impl<T: EventType> Connection<T> {
     }
 
     /// Get an outgoing ping payload
-    pub fn get_ping_payload(&self) -> Box<[u8]> {
+    pub fn get_ping_payload(&mut self) -> Box<[u8]> {
         return self.ping_manager.get_ping_payload();
     }
 
     /// Process an incoming ping payload
     pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
         return self.ping_manager.process_ping(ping_payload);
+    }
+
+    /// Process an incoming pong payload
+    pub fn process_pong(&mut self, pong_payload: &[u8]) {
+        return self.ping_manager.process_pong(pong_payload);
     }
 }
