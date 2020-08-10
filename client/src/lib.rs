@@ -22,6 +22,7 @@ mod client_event;
 mod client_tick_manager;
 mod error;
 mod naia_client;
+mod ping_manager;
 mod server_connection;
 
 pub use naia_shared::{find_my_ip_address, LinkConditionerConfig};

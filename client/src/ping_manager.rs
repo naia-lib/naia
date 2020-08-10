@@ -2,12 +2,7 @@ use std::time::Duration;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use crate::{PacketReader, Timer};
-
-use super::{
-    instant::Instant,
-    sequence_buffer::{SequenceBuffer, SequenceNumber},
-};
+use naia_shared::{Instant, PacketReader, SequenceBuffer, SequenceNumber, Timer};
 
 const REDUNDANT_PINGS_NUMBER: u16 = 32;
 
@@ -33,7 +28,7 @@ impl PingManager {
         PingManager {
             ping_index: 0,
             ping_timer: Timer::new(ping_interval),
-            sent_pings: SequenceBuffer::with_capacity(REDUNDANT_PINGS_NUMBER),
+            sent_pings: SequenceBuffer::with_capacity(rtt_sample_size),
             samples: 0.0,
             max_samples: f32::from(rtt_sample_size),
             rtt_average: 0.0,

@@ -7,6 +7,7 @@ use naia_shared::{
 
 use super::{
     client_entity_manager::ClientEntityManager, client_entity_message::ClientEntityMessage,
+    ping_manager::PingManager,
 };
 use crate::Packet;
 
@@ -14,6 +15,7 @@ use crate::Packet;
 pub struct ServerConnection<T: EventType, U: EntityType> {
     connection: Connection<T>,
     entity_manager: ClientEntityManager<U>,
+    ping_manager: PingManager,
 }
 
 impl<T: EventType, U: EntityType> ServerConnection<T, U> {
@@ -21,6 +23,10 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
             entity_manager: ClientEntityManager::new(),
+            ping_manager: PingManager::new(
+                connection_config.ping_interval,
+                connection_config.rtt_sample_size,
+            ),
         };
     }
 
@@ -114,20 +120,15 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     }
 
     pub fn should_send_ping(&self) -> bool {
-        return self.connection.should_send_ping();
+        return self.ping_manager.should_send_ping();
     }
 
     pub fn get_ping_payload(&mut self) -> Packet {
-        let payload = self.connection.get_ping_payload();
+        let payload = self.ping_manager.get_ping_payload();
         return Packet::new_raw(payload);
     }
 
-    pub fn process_ping(&self, ping_payload: &[u8]) -> Packet {
-        let response_payload = self.connection.process_ping(ping_payload);
-        return Packet::new_raw(response_payload);
-    }
-
     pub fn process_pong(&mut self, pong_payload: &[u8]) {
-        self.connection.process_pong(pong_payload);
+        self.ping_manager.process_pong(pong_payload);
     }
 }
