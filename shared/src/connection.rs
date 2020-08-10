@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, rc::Rc};
 
-use crate::Timer;
+use crate::{wrapping_diff, Timer};
 
 use super::{
     ack_manager::AckManager,
@@ -23,6 +23,7 @@ pub struct Connection<T: EventType> {
     timeout_timer: Timer,
     ack_manager: AckManager,
     event_manager: EventManager<T>,
+    last_received_tick: u16,
 }
 
 impl<T: EventType> Connection<T> {
@@ -34,6 +35,7 @@ impl<T: EventType> Connection<T> {
             timeout_timer: Timer::new(config.disconnection_timeout_duration),
             ack_manager: AckManager::new(),
             event_manager: EventManager::new(),
+            last_received_tick: 0,
         };
     }
 
@@ -68,6 +70,9 @@ impl<T: EventType> Connection<T> {
         header: &StandardHeader,
         entity_notifiable: &mut Option<&mut dyn EntityNotifiable>,
     ) {
+        if wrapping_diff(self.last_received_tick, header.host_tick()) > 0 {
+            self.last_received_tick = header.host_tick();
+        }
         self.ack_manager
             .process_incoming(&header, &mut self.event_manager, entity_notifiable);
     }
@@ -77,6 +82,8 @@ impl<T: EventType> Connection<T> {
     /// bytes
     pub fn process_outgoing_header(
         &mut self,
+        host_tick: u16,
+        last_received_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
@@ -92,6 +99,8 @@ impl<T: EventType> Connection<T> {
             local_packet_index,
             last_remote_packet_index,
             bit_field,
+            host_tick,
+            last_received_tick,
         );
         header.write(&mut header_bytes);
 
@@ -152,5 +161,10 @@ impl<T: EventType> Connection<T> {
     /// Get the address of the remote host
     pub fn get_address(&self) -> SocketAddr {
         return self.address;
+    }
+
+    /// Get the latest received tick from the remote host
+    pub fn get_last_received_tick(&self) -> u16 {
+        return self.last_received_tick;
     }
 }
