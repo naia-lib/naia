@@ -5,14 +5,18 @@ use naia_shared::{
     PacketReader, PacketType, PacketWriter, SequenceNumber, StandardHeader,
 };
 
-use super::entities::{
-    entity_key::entity_key::EntityKey, entity_packet_writer::EntityPacketWriter,
-    mut_handler::MutHandler, server_entity_manager::ServerEntityManager,
+use super::{
+    entities::{
+        entity_key::entity_key::EntityKey, entity_packet_writer::EntityPacketWriter,
+        mut_handler::MutHandler, server_entity_manager::ServerEntityManager,
+    },
+    ping_manager::PingManager,
 };
 
 pub struct ClientConnection<T: EventType, U: EntityType> {
     connection: Connection<T>,
     entity_manager: ServerEntityManager<U>,
+    ping_manager: PingManager,
 }
 
 impl<T: EventType, U: EntityType> ClientConnection<T, U> {
@@ -24,6 +28,10 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         ClientConnection {
             connection: Connection::new(address, connection_config),
             entity_manager: ServerEntityManager::new(address, mut_handler.unwrap()),
+            ping_manager: PingManager::new(
+                connection_config.ping_interval,
+                connection_config.rtt_sample_size,
+            ),
         }
     }
 
@@ -144,19 +152,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.get_address();
     }
 
-    pub fn should_send_ping(&self) -> bool {
-        return self.connection.should_send_ping();
-    }
-
-    pub fn get_ping_payload(&mut self) -> Box<[u8]> {
-        return self.connection.get_ping_payload();
-    }
-
     pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
-        return self.connection.process_ping(ping_payload);
-    }
-
-    pub fn process_pong(&mut self, pong_payload: &[u8]) {
-        return self.connection.process_pong(pong_payload);
+        return self.ping_manager.process_ping(ping_payload);
     }
 }

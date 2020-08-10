@@ -10,7 +10,6 @@ use super::{
     manifest::Manifest,
     packet_reader::PacketReader,
     packet_type::PacketType,
-    ping_manager::PingManager,
     sequence_buffer::SequenceNumber,
     standard_header::StandardHeader,
 };
@@ -24,7 +23,6 @@ pub struct Connection<T: EventType> {
     timeout_timer: Timer,
     ack_manager: AckManager,
     event_manager: EventManager<T>,
-    ping_manager: PingManager,
 }
 
 impl<T: EventType> Connection<T> {
@@ -34,7 +32,6 @@ impl<T: EventType> Connection<T> {
             address,
             heartbeat_timer: Timer::new(config.heartbeat_interval),
             timeout_timer: Timer::new(config.disconnection_timeout_duration),
-            ping_manager: PingManager::new(config.ping_interval, config.rtt_sample_size),
             ack_manager: AckManager::new(),
             event_manager: EventManager::new(),
         };
@@ -155,25 +152,5 @@ impl<T: EventType> Connection<T> {
     /// Get the address of the remote host
     pub fn get_address(&self) -> SocketAddr {
         return self.address;
-    }
-
-    /// Returns whether a ping message should be sent
-    pub fn should_send_ping(&self) -> bool {
-        return self.ping_manager.should_send_ping();
-    }
-
-    /// Get an outgoing ping payload
-    pub fn get_ping_payload(&mut self) -> Box<[u8]> {
-        return self.ping_manager.get_ping_payload();
-    }
-
-    /// Process an incoming ping payload
-    pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
-        return self.ping_manager.process_ping(ping_payload);
-    }
-
-    /// Process an incoming pong payload
-    pub fn process_pong(&mut self, pong_payload: &[u8]) {
-        return self.ping_manager.process_pong(pong_payload);
     }
 }

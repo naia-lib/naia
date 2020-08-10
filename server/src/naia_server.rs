@@ -138,16 +138,22 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                     .expect("send failed!");
                                 connection.mark_sent();
                             }
-                            if connection.should_send_ping() {
-                                let ping_payload = connection.get_ping_payload();
-                                let payload_with_header = connection
-                                    .process_outgoing_header(PacketType::Ping, &ping_payload);
-                                self.sender
-                                    .send(Packet::new_raw(user.address, payload_with_header))
-                                    .await
-                                    .expect("send failed!");
-                                connection.mark_sent();
-                            }
+                            //TODO: if the server needs to determine RTT for
+                            // each client, uncomment the below
+
+                            //if connection.should_send_ping() {
+                            //    let ping_payload =
+                            // connection.get_ping_payload();
+                            //    let payload_with_header = connection
+                            //        .process_outgoing_header(PacketType::Ping,
+                            // &ping_payload);
+                            //    self.sender
+                            //        .send(Packet::new_raw(user.address,
+                            // payload_with_header))
+                            //        .await
+                            //        .expect("send failed!");
+                            //    connection.mark_sent();
+                            //}
                         }
                     }
                 }
@@ -436,24 +442,34 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                     }
                                 }
                                 PacketType::Pong => {
-                                    println!("Received Pong");
-                                    if let Some(user_key) =
-                                        self.address_to_user_key_map.get(&address)
-                                    {
-                                        match self.client_connections.get_mut(user_key) {
-                                            Some(connection) => {
-                                                connection.process_incoming_header(&header);
-                                                connection.process_pong(&payload);
-                                                continue;
-                                            }
-                                            None => {
-                                                warn!(
-                                                    "received pong from unauthenticated client: {}",
-                                                    address
-                                                );
-                                            }
-                                        }
-                                    }
+                                    //TODO: if the Server needs to determine
+                                    // Client RTT at some point, uncomment the
+                                    // below
+
+                                    //println!("Received Pong");
+                                    //if let Some(user_key) =
+                                    //    self.address_to_user_key_map.get(&
+                                    // address)
+                                    //{
+                                    //    match self.client_connections.
+                                    // get_mut(user_key) {
+                                    //        Some(connection) => {
+                                    //
+                                    // connection.process_incoming_header(&
+                                    // header);
+                                    //
+                                    // connection.process_pong(&payload);
+                                    //            continue;
+                                    //        }
+                                    //        None => {
+                                    //            warn!(
+                                    //                "received pong from
+                                    // unauthenticated client: {}",
+                                    //                address
+                                    //            );
+                                    //        }
+                                    //    }
+                                    //}
                                 }
                                 _ => {}
                             }
