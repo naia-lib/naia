@@ -102,6 +102,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                 } else {
                     if connection.should_send_heartbeat() {
                         NaiaClient::internal_send_with_connection(
+                            self.tick_manager.get_tick(),
                             &mut self.sender,
                             connection,
                             PacketType::Heartbeat,
@@ -111,6 +112,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                     if connection.should_send_ping() {
                         let ping_payload = connection.get_ping_payload();
                         NaiaClient::internal_send_with_connection(
+                            self.tick_manager.get_tick(),
                             &mut self.sender,
                             connection,
                             PacketType::Ping,
@@ -118,7 +120,9 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                         );
                     }
                     // send a packet
-                    while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
+                    while let Some(payload) =
+                        connection.get_outgoing_packet(self.tick_manager.get_tick(), &self.manifest)
+                    {
                         self.sender
                             .send(Packet::new_raw(payload))
                             .expect("send failed!");
@@ -211,7 +215,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                             server_connection.mark_heard();
 
                             let (header, payload) = StandardHeader::read(packet.payload());
-                            server_connection.process_incoming_header(&header);
+                            server_connection
+                                .process_incoming_header(&header, &mut self.tick_manager);
 
                             match header.packet_type() {
                                 PacketType::Data => {
@@ -224,8 +229,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                 }
                                 PacketType::Pong => {
                                     println!("Received Pong");
-                                    server_connection
-                                        .process_pong(&mut self.tick_manager, &payload);
+                                    server_connection.process_pong(&payload);
                                     continue;
                                 }
                                 _ => {}
@@ -254,8 +258,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                                     Some(digest_bytes.into_boxed_slice());
                                                 info!("receiving ServerChallengeResponse");
 
-                                                self.tick_manager.set_current_tick(server_tick);
-                                                self.tick_manager.set_intended_tick(server_tick);
+                                                self.tick_manager.set_initial_tick(server_tick);
 
                                                 self.connection_state =
                                                     ClientConnectionState::AwaitingConnectResponse;
@@ -302,12 +305,18 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     }
 
     fn internal_send_with_connection(
+        host_tick: u16,
         sender: &mut MessageSender,
         connection: &mut ServerConnection<T, U>,
         packet_type: PacketType,
         packet: Packet,
     ) {
-        let new_payload = connection.process_outgoing_header(packet_type, packet.payload());
+        let new_payload = connection.process_outgoing_header(
+            host_tick,
+            connection.get_last_received_tick(),
+            packet_type,
+            packet.payload(),
+        );
         sender
             .send(Packet::new_raw(new_payload))
             .expect("send failed!");

@@ -16,9 +16,9 @@ use naia_server_socket::{
     MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
 };
 pub use naia_shared::{
-    Connection, ConnectionConfig, Entity, EntityMutator, EntityType, Event, EventType,
-    HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType, SharedConfig, Timer,
-    Timestamp,
+    wrapping_diff, Connection, ConnectionConfig, Entity, EntityMutator, EntityType, Event,
+    EventType, HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType,
+    SharedConfig, Timer, Timestamp,
 };
 
 use super::{
@@ -130,8 +130,12 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                             if connection.should_send_heartbeat() {
                                 // Don't try to refactor this to self.internal_send, doesn't seem to
                                 // work cause of iter_mut()
-                                let payload =
-                                    connection.process_outgoing_header(PacketType::Heartbeat, &[]);
+                                let payload = connection.process_outgoing_header(
+                                    self.tick_manager.get_tick(),
+                                    connection.get_last_received_tick(),
+                                    PacketType::Heartbeat,
+                                    &[],
+                                );
                                 self.sender
                                     .send(Packet::new_raw(user.address, payload))
                                     .await
@@ -355,6 +359,24 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                     {
                                         match self.client_connections.get_mut(user_key) {
                                             Some(connection) => {
+                                                if wrapping_diff(
+                                                    self.tick_manager.get_tick(),
+                                                    header.host_tick(),
+                                                ) > 0
+                                                {
+                                                    println!(
+                                                        "------------> Server Tick: {}, Client Tick: {}",
+                                                        self.tick_manager.get_tick(),
+                                                        header.host_tick()
+                                                    );
+                                                } else {
+                                                    println!(
+                                                        "----ERROR---> Server Tick: {}, Client Tick: {}",
+                                                        self.tick_manager.get_tick(),
+                                                        header.host_tick()
+                                                    );
+                                                }
+
                                                 connection.process_incoming_header(&header);
                                                 connection.process_incoming_data(
                                                     &self.manifest,
@@ -399,12 +421,12 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         match self.client_connections.get_mut(user_key) {
                                             Some(connection) => {
                                                 connection.process_incoming_header(&header);
-                                                let ping_payload = connection.process_ping(
-                                                    self.tick_manager.get_tick(),
-                                                    &payload,
-                                                );
+                                                let ping_payload =
+                                                    connection.process_ping(&payload);
                                                 let payload_with_header = connection
                                                     .process_outgoing_header(
+                                                        self.tick_manager.get_tick(),
+                                                        connection.get_last_received_tick(),
                                                         PacketType::Pong,
                                                         &ping_payload,
                                                     );
@@ -464,7 +486,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         connection: &mut ClientConnection<T, U>,
         sender: &mut MessageSender,
     ) {
-        let payload = connection.process_outgoing_header(PacketType::ServerConnectResponse, &[]);
+        let payload =
+            connection.process_outgoing_header(0, 0, PacketType::ServerConnectResponse, &[]);
         match sender
             .send(Packet::new_raw(connection.get_address(), payload))
             .await
@@ -496,7 +519,9 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
                 connection.collect_entity_updates();
-                while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
+                while let Some(payload) =
+                    connection.get_outgoing_packet(self.tick_manager.get_tick(), &self.manifest)
+                {
                     match self
                         .sender
                         .send(Packet::new_raw(user.address, payload))

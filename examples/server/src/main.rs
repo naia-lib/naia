@@ -104,7 +104,8 @@ async fn main() {
                             match event_type {
                                 ExampleEvent::StringEvent(string_event) => {
                                     let message = string_event.message.get();
-                                    info!("Naia Server recv <- {}: {}", user.address, message);
+                                    //info!("Naia Server recv <- {}: {}",
+                                    // user.address, message);
                                 }
                                 _ => {}
                             }
@@ -121,7 +122,7 @@ async fn main() {
                         for user_key in iter_vec {
                             let user = server.get_user(&user_key).unwrap();
                             let new_message = format!("Server Packet ({})", tick_count);
-                            info!("Naia Server send -> {}: {}", user.address, new_message);
+                            //info!("Naia Server send -> {}: {}", user.address, new_message);
 
                             let string_event = StringEvent::new(new_message);
                             server.queue_event(&user_key, &string_event);

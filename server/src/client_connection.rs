@@ -32,7 +32,11 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         }
     }
 
-    pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T, U>) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(
+        &mut self,
+        host_tick: u16,
+        manifest: &Manifest<T, U>,
+    ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() || self.entity_manager.has_outgoing_messages() {
             let mut writer = PacketWriter::new();
 
@@ -63,7 +67,12 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
                 let out_bytes = writer.get_bytes();
 
                 // Add header to it
-                let payload = self.process_outgoing_header(PacketType::Data, &out_bytes);
+                let payload = self.process_outgoing_header(
+                    host_tick,
+                    self.connection.get_last_received_tick(),
+                    PacketType::Data,
+                    &out_bytes,
+                );
                 return Some(payload);
             }
         }
@@ -125,12 +134,17 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
 
     pub fn process_outgoing_header(
         &mut self,
+        host_tick: u16,
+        last_received_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
-        return self
-            .connection
-            .process_outgoing_header(packet_type, payload);
+        return self.connection.process_outgoing_header(
+            host_tick,
+            last_received_tick,
+            packet_type,
+            payload,
+        );
     }
 
     pub fn get_next_packet_index(&self) -> SequenceNumber {
@@ -149,7 +163,11 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.get_address();
     }
 
-    pub fn process_ping(&self, current_tick: u16, ping_payload: &[u8]) -> Box<[u8]> {
-        return self.ping_manager.process_ping(current_tick, ping_payload);
+    pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
+        return self.ping_manager.process_ping(ping_payload);
+    }
+
+    pub fn get_last_received_tick(&self) -> u16 {
+        return self.connection.get_last_received_tick();
     }
 }

@@ -53,8 +53,8 @@ impl ClientTickManager {
             let mut time_elapsed = self.current_tick_instant.elapsed() + self.current_tick_leftover;
 
             let intended_diff = wrapping_diff(self.current_tick, self.intended_tick)
-                .min(16)
-                .max(-8);
+                .min(20)
+                .max(-20);
             let tick_factor = 2.0_f64.powf(-0.2_f64 * f64::from(intended_diff));
             let adjusted_interval = self.get_adjusted_duration(tick_factor);
 
@@ -89,14 +89,11 @@ impl ClientTickManager {
         )
     }
 
-    /// Set current tick
-    pub fn set_current_tick(&mut self, tick: u16) {
-        self.current_tick = tick;
-    }
-
-    /// Set intended tick
-    pub fn set_intended_tick(&mut self, tick: u16) {
-        self.intended_tick = tick;
+    /// Use tick data from initial server handshake to set the initial tick
+    pub fn set_initial_tick(&mut self, tick: u16) {
+        let tick_adjust: u16 = ((3000 / (self.tick_interval.as_millis())) + 1) as u16;
+        self.current_tick = tick + tick_adjust;
+        self.intended_tick = tick + tick_adjust;
     }
 
     /// Using information from the Server and RTT/Jitter measurements, determine
@@ -107,8 +104,9 @@ impl ClientTickManager {
         rtt_average: f32,
         jitter_deviation: f32,
     ) {
-        let tick_adjust = ((rtt_average + (jitter_deviation * 3.0) / 2.0)
+        let tick_adjust = (((rtt_average + (jitter_deviation * 3.0) / 2.0)
             / (self.tick_interval.as_millis() as f32))
+            + 1.0)
             .ceil() as u16;
         self.intended_tick = server_tick + tick_adjust;
     }

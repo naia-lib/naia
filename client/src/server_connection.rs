@@ -30,7 +30,11 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         };
     }
 
-    pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T, U>) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(
+        &mut self,
+        host_tick: u16,
+        manifest: &Manifest<T, U>,
+    ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() {
             let mut writer = PacketWriter::new();
 
@@ -48,7 +52,12 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                 let out_bytes = writer.get_bytes();
 
                 // Add header to it
-                let payload = self.process_outgoing_header(PacketType::Data, &out_bytes);
+                let payload = self.process_outgoing_header(
+                    host_tick,
+                    self.connection.get_last_received_tick(),
+                    PacketType::Data,
+                    &out_bytes,
+                );
                 return Some(payload);
             }
         }
@@ -93,18 +102,32 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.connection.should_drop();
     }
 
-    pub fn process_incoming_header(&mut self, header: &StandardHeader) {
+    pub fn process_incoming_header(
+        &mut self,
+        header: &StandardHeader,
+        tick_manager: &mut ClientTickManager,
+    ) {
+        tick_manager.project_intended_tick(
+            header.host_tick(),
+            self.ping_manager.get_rtt(),
+            self.ping_manager.get_jitter(),
+        );
         self.connection.process_incoming_header(header, &mut None);
     }
 
     pub fn process_outgoing_header(
         &mut self,
+        host_tick: u16,
+        last_received_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
-        return self
-            .connection
-            .process_outgoing_header(packet_type, payload);
+        return self.connection.process_outgoing_header(
+            host_tick,
+            last_received_tick,
+            packet_type,
+            payload,
+        );
     }
 
     pub fn get_next_packet_index(&self) -> SequenceNumber {
@@ -128,7 +151,11 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return Packet::new_raw(payload);
     }
 
-    pub fn process_pong(&mut self, tick_manager: &mut ClientTickManager, pong_payload: &[u8]) {
-        self.ping_manager.process_pong(tick_manager, pong_payload);
+    pub fn process_pong(&mut self, pong_payload: &[u8]) {
+        self.ping_manager.process_pong(pong_payload);
+    }
+
+    pub fn get_last_received_tick(&self) -> u16 {
+        self.connection.get_last_received_tick()
     }
 }
