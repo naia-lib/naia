@@ -224,7 +224,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                 }
                                 PacketType::Pong => {
                                     println!("Received Pong");
-                                    server_connection.process_pong(&payload);
+                                    server_connection
+                                        .process_pong(&mut self.tick_manager, &payload);
                                     continue;
                                 }
                                 _ => {}
@@ -253,7 +254,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                                     Some(digest_bytes.into_boxed_slice());
                                                 info!("receiving ServerChallengeResponse");
 
-                                                self.tick_manager.set_tick(server_tick);
+                                                self.tick_manager.set_current_tick(server_tick);
+                                                self.tick_manager.set_intended_tick(server_tick);
 
                                                 self.connection_state =
                                                     ClientConnectionState::AwaitingConnectResponse;
