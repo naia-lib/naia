@@ -9,7 +9,7 @@ use super::{
     client_entity_manager::ClientEntityManager, client_entity_message::ClientEntityMessage,
     ping_manager::PingManager,
 };
-use crate::Packet;
+use crate::{client_tick_manager::ClientTickManager, Packet};
 
 #[derive(Debug)]
 pub struct ServerConnection<T: EventType, U: EntityType> {
@@ -128,7 +128,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return Packet::new_raw(payload);
     }
 
-    pub fn process_pong(&mut self, pong_payload: &[u8]) {
-        self.ping_manager.process_pong(pong_payload);
+    pub fn process_pong(&mut self, tick_manager: &mut ClientTickManager, pong_payload: &[u8]) {
+        self.ping_manager.process_pong(tick_manager, pong_payload);
     }
 }
