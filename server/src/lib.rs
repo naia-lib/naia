@@ -32,6 +32,7 @@ mod client_connection;
 mod entities;
 mod error;
 mod naia_server;
+mod ping_manager;
 mod room;
 mod server_config;
 mod server_event;

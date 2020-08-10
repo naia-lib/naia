@@ -223,15 +223,21 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                     continue;
                                 }
                                 PacketType::Ping => {
-                                    println!("Received Ping");
-                                    let ping_response = server_connection.process_ping(&payload);
-                                    NaiaClient::internal_send_with_connection(
-                                        &mut self.sender,
-                                        server_connection,
-                                        PacketType::Pong,
-                                        ping_response,
-                                    );
-                                    continue;
+                                    //TODO: if the Server needs to measure
+                                    // Client RTT at some point, uncomment the
+                                    // below
+
+                                    // println!("Received Ping");
+                                    //let ping_response =
+                                    // server_connection.process_ping(&payload);
+                                    // NaiaClient::
+                                    // internal_send_with_connection(
+                                    //    &mut self.sender,
+                                    //    server_connection,
+                                    //    PacketType::Pong,
+                                    //    ping_response,
+                                    //);
+                                    //continue;
                                 }
                                 PacketType::Pong => {
                                     println!("Received Pong");
