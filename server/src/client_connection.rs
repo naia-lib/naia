@@ -149,7 +149,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.get_address();
     }
 
-    pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
-        return self.ping_manager.process_ping(ping_payload);
+    pub fn process_ping(&self, current_tick: u16, ping_payload: &[u8]) -> Box<[u8]> {
+        return self.ping_manager.process_ping(current_tick, ping_payload);
     }
 }

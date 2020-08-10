@@ -399,8 +399,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         match self.client_connections.get_mut(user_key) {
                                             Some(connection) => {
                                                 connection.process_incoming_header(&header);
-                                                let ping_payload =
-                                                    connection.process_ping(&payload);
+                                                let ping_payload = connection.process_ping(
+                                                    self.tick_manager.get_tick(),
+                                                    &payload,
+                                                );
                                                 let payload_with_header = connection
                                                     .process_outgoing_header(
                                                         PacketType::Pong,
