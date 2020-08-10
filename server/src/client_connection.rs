@@ -28,10 +28,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         ClientConnection {
             connection: Connection::new(address, connection_config),
             entity_manager: ServerEntityManager::new(address, mut_handler.unwrap()),
-            ping_manager: PingManager::new(
-                connection_config.ping_interval,
-                connection_config.rtt_sample_size,
-            ),
+            ping_manager: PingManager::new(),
         }
     }
 
