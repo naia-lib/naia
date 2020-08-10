@@ -11,7 +11,7 @@ impl PingManager {
     }
 
     /// Process an incoming ping payload
-    pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
+    pub fn process_ping(&self, current_tick: u16, ping_payload: &[u8]) -> Box<[u8]> {
         // read incoming ping index
         let mut reader = PacketReader::new(&ping_payload);
         let ping_index = reader.get_cursor().read_u16::<BigEndian>().unwrap();
@@ -19,6 +19,7 @@ impl PingManager {
         // write pong payload
         let mut out_bytes = Vec::<u8>::new();
         out_bytes.write_u16::<BigEndian>(ping_index).unwrap(); // write index
+        out_bytes.write_u16::<BigEndian>(current_tick).unwrap(); // write current tick
         out_bytes.into_boxed_slice()
     }
 }
