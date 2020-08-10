@@ -2,10 +2,7 @@ use std::time::Duration;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use crate::client_tick_manager::ClientTickManager;
 use naia_shared::{Instant, PacketReader, SequenceBuffer, SequenceNumber, Timer};
-
-const REDUNDANT_PINGS_NUMBER: u16 = 32;
 
 #[derive(Clone, Debug)]
 struct SentPing {
@@ -64,20 +61,14 @@ impl PingManager {
     }
 
     /// Process an incoming pong payload
-    pub fn process_pong(&mut self, tick_manager: &mut ClientTickManager, pong_payload: &[u8]) {
+    pub fn process_pong(&mut self, pong_payload: &[u8]) {
         let mut reader = PacketReader::new(&pong_payload);
         let ping_index = reader.get_cursor().read_u16::<BigEndian>().unwrap();
-        let server_tick = reader.get_cursor().read_u16::<BigEndian>().unwrap();
 
         match self.sent_pings.remove(ping_index) {
             None => {}
             Some(ping) => {
                 self.process_new_rtt(&ping.time_sent.elapsed().as_secs_f32() * 1000.0);
-                tick_manager.project_intended_tick(
-                    server_tick,
-                    self.rtt_average,
-                    self.rtt_deviation,
-                );
             }
         }
     }
