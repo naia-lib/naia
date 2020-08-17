@@ -342,4 +342,14 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .unwrap()
             .get_local_entity(key);
     }
+
+    /// Gets the average Round Trip Time measured to the Server
+    pub fn get_rtt(&self) -> f32 {
+        return self.server_connection.as_ref().unwrap().get_rtt();
+    }
+
+    /// Gets the average Jitter measured in connection to the Server
+    pub fn get_jitter(&self) -> f32 {
+        return self.server_connection.as_ref().unwrap().get_jitter();
+    }
 }
