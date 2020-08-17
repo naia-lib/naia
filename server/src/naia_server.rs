@@ -13,7 +13,7 @@ use slotmap::DenseSlotMap;
 use tokio::time::Interval;
 
 use naia_server_socket::{
-    Config as SocketConfig, MessageSender, Packet, ServerSocket, ServerSocketTrait, SocketEvent,
+    MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
 };
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, Entity, EntityMutator, EntityType, Event,
@@ -81,8 +81,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         );
 
         let mut server_socket = ServerSocket::listen(address).await;
-        if let Some(config) = shared_config.link_condition_config {
-            server_socket = server_socket.with_link_conditioner(&config);
+        if let Some(config) = &shared_config.link_condition_config {
+            server_socket = server_socket.with_link_conditioner(config);
         }
 
         let sender = server_socket.get_sender();
@@ -234,11 +234,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         payload_bytes.push(*hash_byte);
                                     }
 
-                                    info!(
-                                        "sending ServerChallengeResponse with tick: {}",
-                                        self.tick_manager.get_tick()
-                                    );
-
                                     NaiaServer::<T, U>::internal_send_connectionless(
                                         &mut self.sender,
                                         PacketType::ServerChallengeResponse,
@@ -359,24 +354,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                     {
                                         match self.client_connections.get_mut(user_key) {
                                             Some(connection) => {
-                                                if wrapping_diff(
-                                                    self.tick_manager.get_tick(),
-                                                    header.host_tick(),
-                                                ) > 0
-                                                {
-                                                    println!(
-                                                        "------------> Server Tick: {}, Client Tick: {}",
-                                                        self.tick_manager.get_tick(),
-                                                        header.host_tick()
-                                                    );
-                                                } else {
-                                                    println!(
-                                                        "----ERROR---> Server Tick: {}, Client Tick: {}",
-                                                        self.tick_manager.get_tick(),
-                                                        header.host_tick()
-                                                    );
-                                                }
-
                                                 connection.process_incoming_header(&header);
                                                 connection.process_incoming_data(
                                                     &self.manifest,
@@ -414,7 +391,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                     }
                                 }
                                 PacketType::Ping => {
-                                    println!("Received Ping");
                                     if let Some(user_key) =
                                         self.address_to_user_key_map.get(&address)
                                     {
