@@ -91,8 +91,6 @@ impl PingManager {
                 ((self.rtt_variance * self.samples) + new_variance) / (self.samples + 1.0);
 
             self.rtt_deviation = self.rtt_variance.sqrt();
-
-            println!("RTT: {}, Jitter: {}", self.rtt_average, self.rtt_deviation);
         }
     }
 
