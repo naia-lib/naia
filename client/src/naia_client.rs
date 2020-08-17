@@ -352,4 +352,18 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     pub fn get_jitter(&self) -> f32 {
         return self.server_connection.as_ref().unwrap().get_jitter();
     }
+
+    /// Gets the current tick of the Client
+    pub fn get_client_tick(&self) -> u16 {
+        return self.tick_manager.get_tick();
+    }
+
+    /// Gets the the last received tick from the Server
+    pub fn get_server_tick(&self) -> u16 {
+        return self
+            .server_connection
+            .as_ref()
+            .unwrap()
+            .get_last_received_tick();
+    }
 }
