@@ -5,17 +5,20 @@ use std::{
     rc::Rc,
 };
 
-use byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use futures_util::{pin_mut, select, FutureExt};
 use log::info;
 use ring::{hmac, rand};
 use slotmap::DenseSlotMap;
+use tokio::time::Interval;
 
 use naia_server_socket::{
-    Config as SocketConfig, MessageSender, Packet, ServerSocket, ServerSocketTrait, SocketEvent,
+    MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
 };
 pub use naia_shared::{
-    Config, Connection, Entity, EntityMutator, EntityType, Event, EventType, Instant, ManagerType,
-    Manifest, PacketReader, PacketType, Timer, Timestamp,
+    wrapping_diff, Connection, ConnectionConfig, Entity, EntityMutator, EntityType, Event,
+    EventType, HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType,
+    SharedConfig, Timer, Timestamp,
 };
 
 use super::{
@@ -26,17 +29,20 @@ use super::{
     },
     error::NaiaServerError,
     room::{room_key::RoomKey, Room},
+    server_config::ServerConfig,
     server_event::ServerEvent,
+    server_tick_manager::ServerTickManager,
     user::{user_key::UserKey, User},
 };
+use naia_shared::StandardHeader;
 
 /// A server that uses either UDP or WebRTC communication to send/receive events
 /// to/from connected clients, and syncs registered entities to clients to whom
 /// those entities are in-scope
 pub struct NaiaServer<T: EventType, U: EntityType> {
-    config: Config,
+    connection_config: ConnectionConfig,
     manifest: Manifest<T, U>,
-    socket: ServerSocket,
+    socket: Box<dyn ServerSocketTrait>,
     sender: MessageSender,
     global_entity_store: DenseSlotMap<EntityKey, Rc<RefCell<dyn Entity<U>>>>,
     scope_entity_func: Option<Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>>,
@@ -49,6 +55,8 @@ pub struct NaiaServer<T: EventType, U: EntityType> {
     outstanding_disconnects: VecDeque<UserKey>,
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
+    tick_manager: ServerTickManager,
+    tick_timer: Interval,
 }
 
 impl<T: EventType, U: EntityType> NaiaServer<T, U> {
@@ -57,21 +65,29 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     pub async fn new(
         address: SocketAddr,
         manifest: Manifest<T, U>,
-        config: Option<Config>,
+        server_config: Option<ServerConfig>,
+        shared_config: SharedConfig,
     ) -> Self {
-        let mut config = match config {
+        let server_config = match server_config {
             Some(config) => config,
-            None => Config::default(),
+            None => ServerConfig::default(),
         };
-        config.heartbeat_interval /= 2;
 
-        let mut socket_config = SocketConfig::default();
-        socket_config.tick_interval = config.tick_interval;
-        let mut server_socket = ServerSocket::listen(address, Some(socket_config)).await;
+        let connection_config = ConnectionConfig::new(
+            server_config.disconnection_timeout_duration,
+            server_config.heartbeat_interval,
+            server_config.ping_interval,
+            server_config.rtt_sample_size,
+        );
+
+        let mut server_socket = ServerSocket::listen(address).await;
+        if let Some(config) = &shared_config.link_condition_config {
+            server_socket = server_socket.with_link_conditioner(config);
+        }
 
         let sender = server_socket.get_sender();
         let clients_map = HashMap::new();
-        let heartbeat_timer = Timer::new(config.heartbeat_interval);
+        let heartbeat_timer = Timer::new(connection_config.heartbeat_interval);
 
         let connection_hash_key =
             hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
@@ -84,7 +100,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             mut_handler: MutHandler::new(),
             socket: server_socket,
             sender,
-            config,
+            connection_config,
             users: DenseSlotMap::with_key(),
             rooms: DenseSlotMap::with_key(),
             connection_hash_key,
@@ -92,6 +108,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             address_to_user_key_map: HashMap::new(),
             outstanding_disconnects: VecDeque::new(),
             heartbeat_timer,
+            tick_manager: ServerTickManager::new(shared_config.tick_interval),
+            tick_timer: tokio::time::interval(shared_config.tick_interval),
         }
     }
 
@@ -108,16 +126,22 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                     if let Some(user) = self.users.get(*user_key) {
                         if connection.should_drop() {
                             self.outstanding_disconnects.push_back(*user_key);
-                        } else if connection.should_send_heartbeat() {
-                            // Don't try to refactor this to self.internal_send, doesn't seem to
-                            // work cause of iter_mut()
-                            let payload =
-                                connection.process_outgoing_header(PacketType::Heartbeat, &[]);
-                            self.sender
-                                .send(Packet::new_raw(user.address, payload))
-                                .await
-                                .expect("send failed!");
-                            connection.mark_sent();
+                        } else {
+                            if connection.should_send_heartbeat() {
+                                // Don't try to refactor this to self.internal_send, doesn't seem to
+                                // work cause of iter_mut()
+                                let payload = connection.process_outgoing_header(
+                                    self.tick_manager.get_tick(),
+                                    connection.get_last_received_tick(),
+                                    PacketType::Heartbeat,
+                                    &[],
+                                );
+                                self.sender
+                                    .send(Packet::new_raw(user.address, payload))
+                                    .await
+                                    .expect("send failed!");
+                                connection.mark_sent();
+                            }
                         }
                     }
                 }
@@ -147,10 +171,32 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             }
 
             //receive socket events
-            match self.socket.receive().await {
-                Ok(event) => {
-                    match event {
-                        SocketEvent::Packet(packet) => {
+            enum Next {
+                SocketResult(Result<Packet, NaiaServerSocketError>),
+                Tick,
+            }
+
+            let next = {
+                let timer_next = self.tick_timer.tick().fuse();
+                pin_mut!(timer_next);
+
+                let socket_next = self.socket.receive().fuse();
+                pin_mut!(socket_next);
+
+                select! {
+                    socket_result = socket_next => {
+                        Next::SocketResult(socket_result)
+                    }
+                    _ = timer_next => {
+                        Next::Tick
+                    }
+                }
+            };
+
+            match next {
+                Next::SocketResult(result) => {
+                    match result {
+                        Ok(packet) => {
                             let address = packet.address();
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
                                 match self.client_connections.get_mut(&user_key) {
@@ -161,13 +207,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                 }
                             }
 
-                            let packet_type = PacketType::get_from_packet(packet.payload());
+                            let (header, payload) = StandardHeader::read(packet.payload());
 
-                            match packet_type {
+                            match header.packet_type() {
                                 PacketType::ClientChallengeRequest => {
-                                    let payload = naia_shared::utils::read_headerless_payload(
-                                        packet.payload(),
-                                    );
                                     let mut reader = PacketReader::new(&payload);
                                     let timestamp = Timestamp::read(&mut reader);
 
@@ -177,7 +220,15 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         hmac::sign(&self.connection_hash_key, &timestamp_bytes);
 
                                     let mut payload_bytes = Vec::new();
+                                    // write current tick
+                                    payload_bytes
+                                        .write_u16::<BigEndian>(self.tick_manager.get_tick())
+                                        .unwrap();
+
+                                    //write timestamp
                                     payload_bytes.append(&mut timestamp_bytes);
+
+                                    //write timestamp digest
                                     let hash_bytes: &[u8] = timestamp_hash.as_ref();
                                     for hash_byte in hash_bytes {
                                         payload_bytes.push(*hash_byte);
@@ -193,9 +244,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                     continue;
                                 }
                                 PacketType::ClientConnectRequest => {
-                                    let payload = naia_shared::utils::read_headerless_payload(
-                                        packet.payload(),
-                                    );
                                     let mut reader = PacketReader::new(&payload);
                                     let timestamp = Timestamp::read(&mut reader);
 
@@ -209,6 +257,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                                     .client_connections
                                                     .get_mut(user_key)
                                                     .unwrap();
+                                                connection.process_incoming_header(&header);
                                                 NaiaServer::<T, U>::send_connect_accept_message(
                                                     &mut connection,
                                                     &mut self.sender,
@@ -286,8 +335,9 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         let mut new_connection = ClientConnection::new(
                                             address,
                                             Some(&self.mut_handler),
-                                            &self.config,
+                                            &self.connection_config,
                                         );
+                                        new_connection.process_incoming_header(&header);
                                         NaiaServer::<T, U>::send_connect_accept_message(
                                             &mut new_connection,
                                             &mut self.sender,
@@ -304,11 +354,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                     {
                                         match self.client_connections.get_mut(user_key) {
                                             Some(connection) => {
-                                                let mut payload = connection
-                                                    .process_incoming_header(packet.payload());
+                                                connection.process_incoming_header(&header);
                                                 connection.process_incoming_data(
                                                     &self.manifest,
-                                                    &mut payload,
+                                                    &payload,
                                                 );
                                                 continue;
                                             }
@@ -329,12 +378,49 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                             Some(connection) => {
                                                 // Still need to do this so that proper notify
                                                 // events fire based on the heartbeat header
-                                                connection
-                                                    .process_incoming_header(packet.payload());
+                                                connection.process_incoming_header(&header);
                                                 continue;
                                             }
                                             None => {
-                                                warn!("received heartbeat from unauthenticated client: {}", address);
+                                                warn!(
+                                                    "received heartbeat from unauthenticated client: {}",
+                                                    address
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                                PacketType::Ping => {
+                                    if let Some(user_key) =
+                                        self.address_to_user_key_map.get(&address)
+                                    {
+                                        match self.client_connections.get_mut(user_key) {
+                                            Some(connection) => {
+                                                connection.process_incoming_header(&header);
+                                                let ping_payload =
+                                                    connection.process_ping(&payload);
+                                                let payload_with_header = connection
+                                                    .process_outgoing_header(
+                                                        self.tick_manager.get_tick(),
+                                                        connection.get_last_received_tick(),
+                                                        PacketType::Pong,
+                                                        &ping_payload,
+                                                    );
+                                                self.sender
+                                                    .send(Packet::new_raw(
+                                                        connection.get_address(),
+                                                        payload_with_header,
+                                                    ))
+                                                    .await
+                                                    .expect("send failed!");
+                                                connection.mark_sent();
+                                                continue;
+                                            }
+                                            None => {
+                                                warn!(
+                                                    "received ping from unauthenticated client: {}",
+                                                    address
+                                                );
                                             }
                                         }
                                     }
@@ -342,28 +428,29 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                 _ => {}
                             }
                         }
-                        SocketEvent::Tick => {
-                            output = Some(Ok(ServerEvent::Tick));
+                        Err(error) => {
+                            //TODO: Determine if disconnecting a user based on a send error is the
+                            // right thing to do
+                            //
+                            // if let
+                            // NaiaServerSocketError::SendError(address) = error {
+                            //                        if let Some(user_key) =
+                            // self.address_to_user_key_map.get(&address).copied() {
+                            //                            self.client_connections.remove(&user_key);
+                            //                            output =
+                            // Some(Ok(ServerEvent::Disconnection(user_key)));
+                            //                            continue;
+                            //                        }
+                            //                    }
+
+                            output = Some(Err(NaiaServerError::Wrapped(Box::new(error))));
                             continue;
                         }
                     }
                 }
-                Err(error) => {
-                    //TODO: Determine if disconnecting a user based on a send error is the right
-                    // thing to do
-                    //
-                    // if let
-                    // NaiaServerSocketError::SendError(address) = error {
-                    //                        if let Some(user_key) =
-                    // self.address_to_user_key_map.get(&address).copied() {
-                    //                            self.client_connections.remove(&user_key);
-                    //                            output =
-                    // Some(Ok(ServerEvent::Disconnection(user_key)));
-                    //                            continue;
-                    //                        }
-                    //                    }
-
-                    output = Some(Err(NaiaServerError::Wrapped(Box::new(error))));
+                Next::Tick => {
+                    self.tick_manager.increment_tick();
+                    output = Some(Ok(ServerEvent::Tick));
                     continue;
                 }
             }
@@ -375,7 +462,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         connection: &mut ClientConnection<T, U>,
         sender: &mut MessageSender,
     ) {
-        let payload = connection.process_outgoing_header(PacketType::ServerConnectResponse, &[]);
+        let payload =
+            connection.process_outgoing_header(0, 0, PacketType::ServerConnectResponse, &[]);
         match sender
             .send(Packet::new_raw(connection.get_address(), payload))
             .await
@@ -407,7 +495,9 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
                 connection.collect_entity_updates();
-                while let Some(payload) = connection.get_outgoing_packet(&self.manifest) {
+                while let Some(payload) =
+                    connection.get_outgoing_packet(self.tick_manager.get_tick(), &self.manifest)
+                {
                     match self
                         .sender
                         .send(Packet::new_raw(user.address, payload))
@@ -525,14 +615,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     /// client-side in the NaiaClient::new() method
     pub fn on_auth(&mut self, auth_func: Rc<Box<dyn Fn(&UserKey, &T) -> bool>>) {
         self.auth_func = Some(auth_func);
-    }
-
-    /// Get the current measured Round Trip Time to the Server
-    pub fn get_rtt(&mut self, user_key: &UserKey) -> Option<f32> {
-        if let Some(connection) = self.client_connections.get_mut(user_key) {
-            return Some(connection.get_rtt());
-        }
-        return None;
     }
 
     /// Iterate through all currently connected Users
