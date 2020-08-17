@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use log::info;
 
 use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 pub use naia_shared::{
@@ -185,10 +184,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                 payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                                 auth_event.write(&mut payload_bytes);
                             }
-                            info!(
-                                "sending ClientConnectRequest with tick: {}",
-                                self.tick_manager.get_tick()
-                            );
                             NaiaClient::<T, U>::internal_send_connectionless(
                                 &mut self.sender,
                                 PacketType::ClientConnectRequest,
@@ -228,7 +223,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                     continue;
                                 }
                                 PacketType::Pong => {
-                                    println!("Received Pong");
                                     server_connection.process_pong(&payload);
                                     continue;
                                 }
@@ -256,7 +250,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                                 }
                                                 self.pre_connection_digest =
                                                     Some(digest_bytes.into_boxed_slice());
-                                                info!("receiving ServerChallengeResponse");
 
                                                 self.tick_manager.set_initial_tick(server_tick);
 
