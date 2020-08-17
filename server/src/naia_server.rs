@@ -13,7 +13,7 @@ use slotmap::DenseSlotMap;
 use tokio::time::Interval;
 
 use naia_server_socket::{
-    MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
+    Config as SocketConfig, MessageSender, Packet, ServerSocket, ServerSocketTrait, SocketEvent,
 };
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, Entity, EntityMutator, EntityType, Event,
