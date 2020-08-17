@@ -1,4 +1,4 @@
-use crate::duration::Duration;
+use std::time::Duration;
 
 //TODO: Timestamp & Instant implementations can probably be merged
 

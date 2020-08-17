@@ -5,19 +5,19 @@ pub type SequenceNumber = u16;
 
 /// Collection to store data of any kind.
 #[derive(Debug)]
-pub struct SequenceBuffer<T: Clone + Default> {
+pub struct SequenceBuffer<T: Clone> {
     sequence_num: SequenceNumber,
     entry_sequences: Box<[Option<SequenceNumber>]>,
-    entries: Box<[T]>,
+    entries: Box<[Option<T>]>,
 }
 
-impl<T: Clone + Default> SequenceBuffer<T> {
+impl<T: Clone> SequenceBuffer<T> {
     /// Creates a SequenceBuffer with a desired capacity.
     pub fn with_capacity(size: u16) -> Self {
         Self {
             sequence_num: 0,
             entry_sequences: vec![None; size as usize].into_boxed_slice(),
-            entries: vec![T::default(); size as usize].into_boxed_slice(),
+            entries: vec![None; size as usize].into_boxed_slice(),
         }
     }
 
@@ -26,34 +26,26 @@ impl<T: Clone + Default> SequenceBuffer<T> {
         self.sequence_num
     }
 
-    /// Returns a mutable reference to the entry with the given sequence number.
-    pub fn get_mut(&mut self, sequence_num: SequenceNumber) -> Option<&mut T> {
-        if self.exists(sequence_num) {
-            let index = self.index(sequence_num);
-            return Some(&mut self.entries[index]);
-        }
-        None
-    }
-
     /// Inserts the entry data into the sequence buffer. If the requested
-    /// sequence number is "too old", the entry will not be inserted and no
-    /// reference will be returned.
-    pub fn insert(&mut self, sequence_num: SequenceNumber, entry: T) -> Option<&mut T> {
+    /// sequence number is "too old", the entry will not be inserted and will
+    /// return false
+    pub fn insert(&mut self, sequence_num: SequenceNumber, entry: T) -> bool {
         // sequence number is too old to insert into the buffer
         if sequence_less_than(
             sequence_num,
             self.sequence_num
                 .wrapping_sub(self.entry_sequences.len() as u16),
         ) {
-            return None;
+            return false;
         }
 
         self.advance_sequence(sequence_num);
 
         let index = self.index(sequence_num);
         self.entry_sequences[index] = Some(sequence_num);
-        self.entries[index] = entry;
-        Some(&mut self.entries[index])
+        self.entries[index] = Some(entry);
+
+        return true;
     }
 
     /// Returns whether or not we have previously inserted an entry for the
@@ -70,9 +62,9 @@ impl<T: Clone + Default> SequenceBuffer<T> {
     pub fn remove(&mut self, sequence_num: SequenceNumber) -> Option<T> {
         if self.exists(sequence_num) {
             let index = self.index(sequence_num);
-            let value = std::mem::replace(&mut self.entries[index], T::default());
+            let value = std::mem::replace(&mut self.entries[index], None);
             self.entry_sequences[index] = None;
-            return Some(value);
+            return value;
         }
         None
     }
@@ -97,7 +89,7 @@ impl<T: Clone + Default> SequenceBuffer<T> {
             }
         } else {
             for index in 0..self.entry_sequences.len() {
-                self.entries[index] = T::default();
+                self.entries[index] = None;
                 self.entry_sequences[index] = None;
             }
         }

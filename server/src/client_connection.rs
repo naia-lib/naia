@@ -1,46 +1,42 @@
 use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
-    AckManager, Config, Connection, Entity, EntityType, Event, EventManager, EventType,
-    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, RttTracker, SequenceNumber,
-    Timer,
+    Connection, ConnectionConfig, Entity, EntityType, Event, EventType, ManagerType, Manifest,
+    PacketReader, PacketType, PacketWriter, SequenceNumber, StandardHeader,
 };
 
-use super::entities::{
-    entity_key::entity_key::EntityKey, entity_packet_writer::EntityPacketWriter,
-    mut_handler::MutHandler, server_entity_manager::ServerEntityManager,
+use super::{
+    entities::{
+        entity_key::entity_key::EntityKey, entity_packet_writer::EntityPacketWriter,
+        mut_handler::MutHandler, server_entity_manager::ServerEntityManager,
+    },
+    ping_manager::PingManager,
 };
 
 pub struct ClientConnection<T: EventType, U: EntityType> {
     connection: Connection<T>,
     entity_manager: ServerEntityManager<U>,
+    ping_manager: PingManager,
 }
 
 impl<T: EventType, U: EntityType> ClientConnection<T, U> {
     pub fn new(
         address: SocketAddr,
         mut_handler: Option<&Rc<RefCell<MutHandler>>>,
-        config: &Config,
+        connection_config: &ConnectionConfig,
     ) -> Self {
-        let heartbeat_interval = config.heartbeat_interval;
-        let timeout_duration = config.disconnection_timeout_duration;
-        let rtt_smoothing_factor = config.rtt_smoothing_factor;
-        let rtt_max_value = config.rtt_max_value;
-
-        return ClientConnection {
-            connection: Connection::new(
-                address,
-                Timer::new(heartbeat_interval),
-                Timer::new(timeout_duration),
-                AckManager::new(),
-                RttTracker::new(rtt_smoothing_factor, rtt_max_value),
-                EventManager::new(),
-            ),
+        ClientConnection {
+            connection: Connection::new(address, connection_config),
             entity_manager: ServerEntityManager::new(address, mut_handler.unwrap()),
-        };
+            ping_manager: PingManager::new(),
+        }
     }
 
-    pub fn get_outgoing_packet(&mut self, manifest: &Manifest<T, U>) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(
+        &mut self,
+        host_tick: u16,
+        manifest: &Manifest<T, U>,
+    ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() || self.entity_manager.has_outgoing_messages() {
             let mut writer = PacketWriter::new();
 
@@ -71,7 +67,12 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
                 let out_bytes = writer.get_bytes();
 
                 // Add header to it
-                let payload = self.process_outgoing_header(PacketType::Data, &out_bytes);
+                let payload = self.process_outgoing_header(
+                    host_tick,
+                    self.connection.get_last_received_tick(),
+                    PacketType::Data,
+                    &out_bytes,
+                );
                 return Some(payload);
             }
         }
@@ -79,7 +80,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return None;
     }
 
-    pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &mut [u8]) {
+    pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &[u8]) {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
             let manager_type: ManagerType = reader.read_u8().into();
@@ -126,20 +127,24 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.should_drop();
     }
 
-    pub fn process_incoming_header(&mut self, payload: &[u8]) -> Box<[u8]> {
-        return self
-            .connection
-            .process_incoming_header(payload, &mut Some(&mut self.entity_manager));
+    pub fn process_incoming_header(&mut self, header: &StandardHeader) {
+        self.connection
+            .process_incoming_header(header, &mut Some(&mut self.entity_manager));
     }
 
     pub fn process_outgoing_header(
         &mut self,
+        host_tick: u16,
+        last_received_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
-        return self
-            .connection
-            .process_outgoing_header(packet_type, payload);
+        return self.connection.process_outgoing_header(
+            host_tick,
+            last_received_tick,
+            packet_type,
+            payload,
+        );
     }
 
     pub fn get_next_packet_index(&self) -> SequenceNumber {
@@ -158,7 +163,11 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.get_address();
     }
 
-    pub fn get_rtt(&self) -> f32 {
-        return self.connection.get_rtt();
+    pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
+        return self.ping_manager.process_ping(ping_payload);
+    }
+
+    pub fn get_last_received_tick(&self) -> u16 {
+        return self.connection.get_last_received_tick();
     }
 }
