@@ -1,6 +1,6 @@
 [package]
 name = "naia-server"
-version = "0.1.4"
+version = "0.2.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "A server that uses either UDP or WebRTC communication to send/receive events to/from connected clients, and syncs registered entities to clients to whom those entities are in-scope."
 documentation = "https://docs.rs/naia-server"
@@ -24,7 +24,7 @@ use-webrtc = [ "naia-server-socket/use-webrtc" ]
 
 [dependencies]
 naia-server-socket = { version = "0.3.1" }
-naia-shared = { version = "0.1.2", path = "../shared" }
+naia-shared = { version = "0.2.0", path = "../shared" }
 log = "0.4"
 slotmap = { version = "0.4" }
 byteorder = "1.3"

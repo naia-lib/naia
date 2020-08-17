@@ -627,6 +627,19 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         return self.users.get(*user_key);
     }
 
+    /// Gets the last received tick from the Client
+    pub fn get_client_tick(&self, user_key: &UserKey) -> Option<u16> {
+        if let Some(user_connection) = self.client_connections.get(user_key) {
+            return Some(user_connection.get_last_received_tick());
+        }
+        return None;
+    }
+
+    /// Gets the current tick of the Server
+    pub fn get_server_tick(&self) -> u16 {
+        self.tick_manager.get_tick()
+    }
+
     fn update_entity_scopes(&mut self) {
         for (room_key, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_removal_queue() {
