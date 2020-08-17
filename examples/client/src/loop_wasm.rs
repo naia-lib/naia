@@ -1,11 +1,8 @@
 // Because we hook into web_sys::RtcDataChannel in order to send/receive events
 // from the server, we can't just create a simple loop and receive events like
 // in loop_native.rs - doing so would block indefinitely and never allow the
-// browser to do it's thing! The solution below is to hook into the browser's
-// requestAnimationFrame() method. This should trigger app.update whenever the
-// browser has any free cycles. I don't like the fact that the network IO is
-// tied to a method typically used for your draw loop though.. perhaps I should
-// change this to use a setInterval() ?
+// browser to do it's thing! The solution below is to setup a set_timeout() on
+// the browser with a callback to the update method below
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
@@ -18,9 +15,9 @@ cfg_if! {
         use crate::app::App;
 
         pub fn start_loop(app: App) {
-            fn request_animation_frame(f: &Closure<dyn FnMut()>) {
+            fn set_timeout(f: &Closure<dyn FnMut()>) {
                 web_sys::window().unwrap()
-                    .request_animation_frame(f.as_ref().unchecked_ref())
+                    .set_timeout_with_callback_and_timeout_and_arguments_0(f.as_ref().unchecked_ref(), 1)
                     .expect("should register `requestAnimationFrame` OK");
             }
 
@@ -32,12 +29,12 @@ cfg_if! {
                 if let Some(the_app) = Rc::get_mut(&mut rc) {
                     the_app.update();
                 };
-                request_animation_frame(f.borrow().as_ref().unwrap());
+                set_timeout(f.borrow().as_ref().unwrap());
             };
 
             *g.borrow_mut() = Some(Closure::wrap(Box::new(c) as Box<dyn FnMut()>));
 
-            request_animation_frame(g.borrow().as_ref().unwrap());
+            set_timeout(g.borrow().as_ref().unwrap());
         }
     } else {}
 }

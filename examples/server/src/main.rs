@@ -3,9 +3,11 @@ extern crate log;
 
 use simple_logger;
 
-use naia_server::{find_my_ip_address, Config, NaiaServer, ServerEvent, UserKey};
+use naia_server::{find_my_ip_address, NaiaServer, ServerConfig, ServerEvent, UserKey};
 
-use naia_example_shared::{manifest_load, ExampleEntity, ExampleEvent, PointEntity, StringEvent};
+use naia_example_shared::{
+    get_shared_config, manifest_load, ExampleEntity, ExampleEvent, PointEntity, StringEvent,
+};
 
 use std::{cell::RefCell, net::SocketAddr, rc::Rc, time::Duration};
 
@@ -20,16 +22,21 @@ async fn main() {
     let current_ip_address = find_my_ip_address().expect("can't find ip address");
     let current_socket_address = SocketAddr::new(current_ip_address, SERVER_PORT);
 
-    let mut config = Config::default();
-    config.tick_interval = Duration::from_secs(4);
-    config.heartbeat_interval = Duration::from_secs(2);
+    let mut server_config = ServerConfig::default();
+    server_config.heartbeat_interval = Duration::from_secs(2);
     // Keep in mind that the disconnect timeout duration should always be at least
     // 2x greater than the heartbeat interval, to make it so at the worst case, the
     // server would need to miss 2 heartbeat signals before disconnecting from a
     // given client
-    config.disconnection_timeout_duration = Duration::from_secs(5);
+    server_config.disconnection_timeout_duration = Duration::from_secs(5);
 
-    let mut server = NaiaServer::new(current_socket_address, manifest_load(), Some(config)).await;
+    let mut server = NaiaServer::new(
+        current_socket_address,
+        manifest_load(),
+        Some(server_config),
+        get_shared_config(),
+    )
+    .await;
 
     // This method is called during the connection handshake process, and can be
     // used to reject a new connection if the correct credentials have not been
@@ -130,7 +137,7 @@ async fn main() {
                         // will never communicate with it's connected Clients
                         server.send_all_updates().await;
 
-                        tick_count += 1;
+                        tick_count = tick_count.wrapping_add(1);
                     }
                 }
             }

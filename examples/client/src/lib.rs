@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate cfg_if;
 
+extern crate log;
+
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
 
