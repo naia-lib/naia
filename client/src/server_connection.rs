@@ -158,4 +158,12 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     pub fn get_last_received_tick(&self) -> u16 {
         self.connection.get_last_received_tick()
     }
+
+    pub fn get_rtt(&self) -> f32 {
+        return self.ping_manager.get_rtt();
+    }
+
+    pub fn get_jitter(&self) -> f32 {
+        return self.ping_manager.get_jitter();
+    }
 }
