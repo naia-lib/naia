@@ -40,7 +40,7 @@ impl PointEntity {
         }
         if x % 3 == 0 {
             let mut y = *self.y.get();
-            y += 1;
+            y = y.wrapping_add(1);
             self.y.set(y);
         }
         self.x.set(x);

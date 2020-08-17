@@ -10,11 +10,15 @@ pub struct StandardHeader {
     p_type: PacketType,
     // This is the sequence number so that we can know where in the sequence of packages this
     // packet belongs.
-    pub seq: u16,
+    local_packet_index: u16,
     // This is the last acknowledged sequence number.
-    ack_seq: u16,
+    last_remote_packet_index: u16,
     // This is an bitfield of all last 32 acknowledged packages
     ack_field: u32,
+    // This the the current Tick of the host,
+    host_tick: u16,
+    // This is the last received Tick of the remote host
+    last_received_tick: u16,
 }
 
 impl StandardHeader {
@@ -24,22 +28,37 @@ impl StandardHeader {
     /// packets, containing sequence numbers in the range [remote sequence - 32,
     /// remote sequence]. We set bit n (in [1,32]) in ack bits to 1 if the
     /// sequence number remote sequence - n is in the received queue.
-    pub fn new(p_type: PacketType, seq_num: u16, last_seq: u16, bit_field: u32) -> StandardHeader {
+    pub fn new(
+        p_type: PacketType,
+        local_packet_index: u16,
+        last_remote_packet_index: u16,
+        bit_field: u32,
+        host_tick: u16,
+        last_received_tick: u16,
+    ) -> StandardHeader {
         StandardHeader {
             p_type,
-            seq: seq_num,
-            ack_seq: last_seq,
+            local_packet_index,
+            last_remote_packet_index,
             ack_field: bit_field,
+            host_tick,
+            last_received_tick,
         }
     }
 
+    /// Returns the number of bytes in the header
     pub const fn bytes_number() -> usize {
-        return 9;
+        return 13;
+    }
+
+    /// Returns the packet type indicated by the header
+    pub fn packet_type(&self) -> PacketType {
+        self.p_type
     }
 
     /// Returns the sequence number from this packet.
-    pub fn sequence(&self) -> u16 {
-        self.seq
+    pub fn local_packet_index(&self) -> u16 {
+        self.local_packet_index
     }
 
     /// Returns bit field of all last 32 acknowledged packages.
@@ -48,22 +67,44 @@ impl StandardHeader {
     }
 
     /// Returns last acknowledged sequence number.
-    pub fn ack_seq(&self) -> u16 {
-        self.ack_seq
+    pub fn last_remote_packet_index(&self) -> u16 {
+        self.last_remote_packet_index
     }
 
+    /// Returns the current tick of the sending Host
+    pub fn host_tick(&self) -> u16 {
+        self.host_tick
+    }
+
+    /// Returns the last received tick from the remote Host
+    pub fn last_received_tick(&self) -> u16 {
+        self.last_received_tick
+    }
+
+    /// Writes the header to an outgoing byte buffer
     pub fn write(&self, buffer: &mut Vec<u8>) {
         buffer.write_u8(self.p_type as u8).unwrap();
-        buffer.write_u16::<BigEndian>(self.seq).unwrap();
-        buffer.write_u16::<BigEndian>(self.ack_seq).unwrap();
+        buffer
+            .write_u16::<BigEndian>(self.local_packet_index)
+            .unwrap();
+        buffer
+            .write_u16::<BigEndian>(self.last_remote_packet_index)
+            .unwrap();
         buffer.write_u32::<BigEndian>(self.ack_field).unwrap();
+        buffer.write_u16::<BigEndian>(self.host_tick).unwrap();
+        buffer
+            .write_u16::<BigEndian>(self.last_received_tick)
+            .unwrap();
     }
 
+    /// Reads the header from an incoming byte slice
     pub fn read(mut msg: &[u8]) -> (Self, Box<[u8]>) {
         let p_type: PacketType = msg.read_u8().unwrap().into();
         let seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_field = msg.read_u32::<BigEndian>().unwrap();
+        let host_tick = msg.read_u16::<BigEndian>().unwrap();
+        let last_received_tick = msg.read_u16::<BigEndian>().unwrap();
 
         let mut buffer = Vec::new();
         msg.read_to_end(&mut buffer).unwrap();
@@ -71,21 +112,13 @@ impl StandardHeader {
         (
             StandardHeader {
                 p_type,
-                seq,
-                ack_seq,
+                local_packet_index: seq,
+                last_remote_packet_index: ack_seq,
                 ack_field,
+                host_tick,
+                last_received_tick,
             },
             buffer.into_boxed_slice(),
         )
-    }
-
-    pub fn get_packet_type(mut payload: &[u8]) -> PacketType {
-        payload.read_u8().unwrap().into()
-    }
-
-    pub fn get_sequence(mut payload: &[u8]) -> u16 {
-        let _ = payload.read_u8().unwrap();
-        let seq = payload.read_u16::<BigEndian>().unwrap();
-        return seq;
     }
 }
