@@ -1,6 +1,6 @@
 [package]
 name = "naia-client"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Provides a cross-platform client that can send/receive events to/from a server, and has a pool of in-scope entities that is synced with the server."
 documentation = "https://docs.rs/naia-client"
@@ -17,7 +17,7 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 naia-client-socket = { version = "0.3.1" }
-naia-shared = { version = "0.1.2", path = "../shared" }
+naia-shared = { version = "0.2.0", path = "../shared" }
 cfg-if = "0.1.10"
 log = "0.4"
 byteorder = "1.3"

@@ -1,6 +1,6 @@
 [package]
 name = "naia-shared"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Common functionality shared between naia-server & naia-client crates"
 documentation = "https://docs.rs/naia-shared"
