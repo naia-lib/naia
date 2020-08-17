@@ -138,7 +138,7 @@ async fn main() {
                         // will never communicate with it's connected Clients
                         server.send_all_updates().await;
 
-                        tick_count += 1;
+                        tick_count = tick_count.wrapping_add(1);
                     }
                 }
             }
