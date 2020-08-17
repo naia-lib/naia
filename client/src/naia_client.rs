@@ -358,7 +358,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         return self.tick_manager.get_tick();
     }
 
-    /// Gets the the last received tick from the Server
+    /// Gets the last received tick from the Server
     pub fn get_server_tick(&self) -> u16 {
         return self
             .server_connection
