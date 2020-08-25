@@ -1,11 +1,13 @@
-use std::net::SocketAddr;
+use std::{collections::hash_map::Iter, net::SocketAddr};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
+
 pub use naia_shared::{
     ConnectionConfig, EntityType, Event, EventType, HostTickManager, LocalEntityKey, ManagerType,
-    Manifest, PacketReader, PacketType, PacketWriter, SharedConfig, Timer, Timestamp,
+    Manifest, PacketReader, PacketType, PacketWriter, SharedConfig, StandardHeader, Timer,
+    Timestamp,
 };
 
 use super::{
@@ -16,7 +18,6 @@ use super::{
 use crate::client_connection_state::{
     ClientConnectionState, ClientConnectionState::AwaitingChallengeResponse,
 };
-use naia_shared::StandardHeader;
 
 /// Client can send/receive events to/from a server, and has a pool of in-scope
 /// entities that are synced with the server
@@ -297,40 +298,18 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         }
     }
 
-    fn internal_send_with_connection(
-        host_tick: u16,
-        sender: &mut MessageSender,
-        connection: &mut ServerConnection<T, U>,
-        packet_type: PacketType,
-        packet: Packet,
-    ) {
-        let new_payload = connection.process_outgoing_header(
-            host_tick,
-            connection.get_last_received_tick(),
-            packet_type,
-            packet.payload(),
-        );
-        sender
-            .send(Packet::new_raw(new_payload))
-            .expect("send failed!");
-        connection.mark_sent();
-    }
-
-    fn internal_send_connectionless(
-        sender: &mut MessageSender,
-        packet_type: PacketType,
-        packet: Packet,
-    ) {
-        let new_payload =
-            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
-        sender
-            .send(Packet::new_raw(new_payload))
-            .expect("send failed!");
-    }
-
     /// Get the address currently associated with the Server
     pub fn server_address(&self) -> SocketAddr {
         return self.server_address;
+    }
+
+    /// Return an iterator to the collection of local entities tracked by the
+    /// Client
+    pub fn entities_iter(&self) -> Option<Iter<LocalEntityKey, U>> {
+        if let Some(connection) = &self.server_connection {
+            return Some(connection.entities_iter());
+        }
+        return None;
     }
 
     /// Get a reference to an Entity currently in scope for the Client, given
@@ -365,5 +344,36 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .as_ref()
             .unwrap()
             .get_last_received_tick();
+    }
+
+    fn internal_send_with_connection(
+        host_tick: u16,
+        sender: &mut MessageSender,
+        connection: &mut ServerConnection<T, U>,
+        packet_type: PacketType,
+        packet: Packet,
+    ) {
+        let new_payload = connection.process_outgoing_header(
+            host_tick,
+            connection.get_last_received_tick(),
+            packet_type,
+            packet.payload(),
+        );
+        sender
+            .send(Packet::new_raw(new_payload))
+            .expect("send failed!");
+        connection.mark_sent();
+    }
+
+    fn internal_send_connectionless(
+        sender: &mut MessageSender,
+        packet_type: PacketType,
+        packet: Packet,
+    ) {
+        let new_payload =
+            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
+        sender
+            .send(Packet::new_raw(new_payload))
+            .expect("send failed!");
     }
 }

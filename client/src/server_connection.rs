@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{collections::hash_map::Iter, net::SocketAddr};
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType,
@@ -82,6 +82,10 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&U> {
         return self.entity_manager.get_local_entity(key);
+    }
+
+    pub fn entities_iter(&self) -> Iter<LocalEntityKey, U> {
+        return self.entity_manager.entities_iter();
     }
 
     // Pass-through methods to underlying common connection
