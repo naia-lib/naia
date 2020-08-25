@@ -1,13 +1,13 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use log::warn;
 use naia_shared::{EntityType, EventType, LocalEntityKey, Manifest, PacketReader, StateMask};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{hash_map::Iter, HashMap, VecDeque};
 
 use super::client_entity_message::ClientEntityMessage;
 
 #[derive(Debug)]
-pub struct ClientEntityManager<T: EntityType> {
-    local_entity_store: HashMap<LocalEntityKey, T>,
+pub struct ClientEntityManager<U: EntityType> {
+    local_entity_store: HashMap<LocalEntityKey, U>,
     queued_incoming_messages: VecDeque<ClientEntityMessage>,
 }
 
@@ -103,5 +103,9 @@ impl<U: EntityType> ClientEntityManager<U> {
 
     pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&U> {
         return self.local_entity_store.get(&key);
+    }
+
+    pub fn entities_iter(&self) -> Iter<'_, LocalEntityKey, U> {
+        return self.local_entity_store.iter();
     }
 }
