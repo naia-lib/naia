@@ -60,6 +60,8 @@ impl ClientTickManager {
 
             if time_elapsed > adjusted_interval {
                 while time_elapsed > adjusted_interval {
+                    // Find a way to trigger a Tick event here, for the user to get a chance to give
+                    // some input
                     self.current_tick = self.current_tick.wrapping_add(1);
                     time_elapsed -= adjusted_interval;
                 }
