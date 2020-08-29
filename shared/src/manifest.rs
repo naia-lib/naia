@@ -97,4 +97,17 @@ impl<T: EventType, U: EntityType> Manifest<T, U> {
 
         return None;
     }
+
+    /// Register both an EntityBuilder and an EventBuilder to handle the
+    /// creation of both as a Pawn & Command, respectively. Pawns & Commands
+    /// should be used for any player-controlled entity that requires clientside
+    /// prediction
+    pub fn register_pawn(
+        &mut self,
+        entity_builder: Box<dyn EntityBuilder<U>>,
+        event_builder: Box<dyn EventBuilder<T>>,
+    ) {
+        self.register_entity(entity_builder);
+        self.register_event(event_builder);
+    }
 }
