@@ -51,8 +51,8 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 #event_name::is_guaranteed()
             }
             #event_write_method
-            fn get_typed_copy(&self) -> ExampleEvent {
-                return ExampleEvent::#event_name(self.clone());
+            fn get_typed_copy(&self) -> #type_name {
+                return #type_name::#event_name(self.clone());
             }
             fn get_type_id(&self) -> TypeId {
                 return TypeId::of::<#event_name>();
