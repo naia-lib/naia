@@ -26,7 +26,7 @@ pub trait Entity<T: EntityType> {
     fn write_partial(&self, state_mask: &StateMask, out_bytes: &mut Vec<u8>);
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Entity with it's state on the Server
-    fn read_partial(&mut self, state_mask: &StateMask, in_bytes: &[u8]);
+    fn read_partial(&mut self, state_mask: &StateMask, in_bytes: &[u8], packet_index: u16);
     /// Set the Entity's EntityMutator, which keeps track of which Properties
     /// have been mutated, necessary to sync only the Properties that have
     /// changed with the client

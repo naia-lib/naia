@@ -21,6 +21,7 @@ impl<U: EntityType> ClientEntityManager<U> {
 
     pub fn process_data<T: EventType>(
         &mut self,
+        packet_index: u16,
         reader: &mut PacketReader,
         manifest: &Manifest<T, U>,
     ) {
@@ -84,7 +85,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                             .to_vec()
                             .into_boxed_slice();
 
-                        entity_ref.read_partial(&state_mask, &entity_payload);
+                        entity_ref.read_partial(&state_mask, &entity_payload, packet_index);
 
                         self.queued_incoming_messages
                             .push_back(ClientEntityMessage::Update(local_key));
