@@ -86,9 +86,11 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
     /// Must be called regularly, performs updates to the connection, and
     /// retrieves event/entity updates sent by the Server
-    pub fn receive(&mut self) -> Result<ClientEvent<T>, NaiaClientError> {
+    pub fn receive(&mut self) -> Option<Result<ClientEvent<T>, NaiaClientError>> {
         // update current tick
-        self.tick_manager.update_frame();
+        if self.tick_manager.tick() {
+            return Some(Ok(ClientEvent::Tick));
+        }
 
         // send handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
@@ -98,7 +100,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                     self.pre_connection_timestamp = None;
                     self.pre_connection_digest = None;
                     self.connection_state = AwaitingChallengeResponse;
-                    return Ok(ClientEvent::Disconnection);
+                    return Some(Ok(ClientEvent::Disconnection));
                 } else {
                     if connection.should_send_heartbeat() {
                         NaiaClient::internal_send_with_connection(
@@ -130,19 +132,19 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                     }
                     // receive event
                     if let Some(event) = connection.get_incoming_event() {
-                        return Ok(ClientEvent::Event(event));
+                        return Some(Ok(ClientEvent::Event(event)));
                     }
                     // receive entity message
                     if let Some(message) = connection.get_incoming_entity_message() {
                         match message {
                             ClientEntityMessage::Create(local_key) => {
-                                return Ok(ClientEvent::CreateEntity(local_key));
+                                return Some(Ok(ClientEvent::CreateEntity(local_key)));
                             }
                             ClientEntityMessage::Delete(local_key) => {
-                                return Ok(ClientEvent::DeleteEntity(local_key));
+                                return Some(Ok(ClientEvent::DeleteEntity(local_key)));
                             }
                             ClientEntityMessage::Update(local_key) => {
-                                return Ok(ClientEvent::UpdateEntity(local_key));
+                                return Some(Ok(ClientEvent::UpdateEntity(local_key)));
                             }
                         }
                     }
@@ -200,8 +202,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         }
 
         // receive from socket
-        let mut output: Option<Result<ClientEvent<T>, NaiaClientError>> = None;
-        while output.is_none() {
+        loop {
             match self.socket.receive() {
                 Ok(event) => match event {
                     Some(packet) => {
@@ -270,25 +271,21 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
                                     self.server_connection = Some(server_connection);
                                     self.connection_state = ClientConnectionState::Connected;
-                                    output = Some(Ok(ClientEvent::Connection));
-                                    continue;
+                                    return Some(Ok(ClientEvent::Connection));
                                 }
                                 _ => {}
                             }
                         }
                     }
                     None => {
-                        output = Some(Ok(ClientEvent::None));
-                        continue;
+                        return None;
                     }
                 },
                 Err(error) => {
-                    output = Some(Err(NaiaClientError::Wrapped(Box::new(error))));
-                    continue;
+                    return Some(Err(NaiaClientError::Wrapped(Box::new(error))));
                 }
             }
         }
-        return output.unwrap();
     }
 
     /// Queues up an Event to be sent to the Server

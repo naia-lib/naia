@@ -19,6 +19,7 @@ pub enum ClientEvent<T: EventType> {
     UpdateEntity(LocalEntityKey),
     /// Occurs when an Entity on the Server has left the Client's scope
     DeleteEntity(LocalEntityKey),
-    /// The Client has no new event from the Server
-    None,
+    /// A Tick Event, the duration between Tick events is defined in the Config
+    /// object passed to the Client on initialization
+    Tick,
 }
