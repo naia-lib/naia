@@ -26,6 +26,15 @@ impl<T: Clone> SequenceBuffer<T> {
         self.sequence_num
     }
 
+    /// Returns a mutable reference to the entry with the given sequence number.
+    pub fn get_mut(&mut self, sequence_num: SequenceNumber) -> Option<&mut T> {
+        if self.exists(sequence_num) {
+            let index = self.index(sequence_num);
+            return self.entries[index].as_mut();
+        }
+        None
+    }
+
     /// Inserts the entry data into the sequence buffer. If the requested
     /// sequence number is "too old", the entry will not be inserted and will
     /// return false
