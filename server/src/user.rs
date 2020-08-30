@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
 pub mod user_key {
-    /// The Key used to get a reference of a User
+    // The Key used to get a reference of a User
     new_key_type! { pub struct UserKey; }
 }
 
