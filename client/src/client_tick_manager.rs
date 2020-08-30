@@ -31,7 +31,7 @@ impl ClientTickManager {
     }
 
     /// If the tick interval duration has elapsed, increment the current tick
-    pub fn update_frame(&mut self) {
+    pub fn tick(&mut self) -> bool {
         // Intended Tick
         {
             let mut time_elapsed =
@@ -59,15 +59,15 @@ impl ClientTickManager {
             let adjusted_interval = self.get_adjusted_duration(tick_factor);
 
             if time_elapsed > adjusted_interval {
-                while time_elapsed > adjusted_interval {
-                    // Find a way to trigger a Tick event here, for the user to get a chance to give
-                    // some input
-                    self.current_tick = self.current_tick.wrapping_add(1);
-                    time_elapsed -= adjusted_interval;
-                }
+                self.current_tick = self.current_tick.wrapping_add(1);
+                time_elapsed -= adjusted_interval;
 
                 self.current_tick_leftover = time_elapsed;
                 self.current_tick_instant = Instant::now();
+
+                return true;
+            } else {
+                return false;
             }
         }
     }

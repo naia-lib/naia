@@ -17,6 +17,11 @@ impl<T: EventType> CommandSender<T> {
     }
 
     /// Gets the next queued Command to be transmitted
+    pub fn has_command(&self) -> bool {
+        self.queued_outgoing_events.len() != 0
+    }
+
+    /// Gets the next queued Command to be transmitted
     pub fn pop_command(&mut self) -> Option<Rc<Box<dyn Event<T>>>> {
         self.queued_outgoing_events.pop_front()
     }

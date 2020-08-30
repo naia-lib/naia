@@ -116,8 +116,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
     pub async fn receive(&mut self) -> Result<ServerEvent<T>, NaiaServerError> {
-        let mut output: Option<Result<ServerEvent<T>, NaiaServerError>> = None;
-        while output.is_none() {
+        loop {
             // heartbeats
             if self.heartbeat_timer.ringing() {
                 self.heartbeat_timer.reset();
@@ -158,20 +157,17 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                 let user_clone = self.users.get(user_key).unwrap().clone();
                 self.users.remove(user_key);
                 self.client_connections.remove(&user_key);
-                output = Some(Ok(ServerEvent::Disconnection(user_key, user_clone)));
-                continue;
+                return Ok(ServerEvent::Disconnection(user_key, user_clone));
             }
 
             for (address, connection) in self.client_connections.iter_mut() {
                 //receive commands from anyone
                 if let Some(command) = connection.get_incoming_command() {
-                    output = Some(Ok(ServerEvent::Command(*address, command)));
-                    continue;
+                    return Ok(ServerEvent::Command(*address, command));
                 }
                 //receive events from anyone
                 if let Some(event) = connection.get_incoming_event() {
-                    output = Some(Ok(ServerEvent::Event(*address, event)));
-                    continue;
+                    return Ok(ServerEvent::Event(*address, event));
                 }
             }
 
@@ -349,8 +345,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         )
                                         .await;
                                         self.client_connections.insert(user_key, new_connection);
-                                        output = Some(Ok(ServerEvent::Connection(user_key)));
-                                        continue;
+                                        return Ok(ServerEvent::Connection(user_key));
                                     }
                                 }
                                 PacketType::Data => {
@@ -448,19 +443,16 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                             //                        }
                             //                    }
 
-                            output = Some(Err(NaiaServerError::Wrapped(Box::new(error))));
-                            continue;
+                            return Err(NaiaServerError::Wrapped(Box::new(error)));
                         }
                     }
                 }
                 Next::Tick => {
                     self.tick_manager.increment_tick();
-                    output = Some(Ok(ServerEvent::Tick));
-                    continue;
+                    return Ok(ServerEvent::Tick);
                 }
             }
         }
-        return output.unwrap();
     }
 
     async fn send_connect_accept_message(

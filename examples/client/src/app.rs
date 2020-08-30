@@ -64,69 +64,75 @@ impl App {
     // Currently, this will call every frame. On Linux it's called in a loop. On Web
     // it's called via request_animation_frame()
     pub fn update(&mut self) {
-        match self.client.receive() {
-            Ok(event) => {
-                match event {
-                    ClientEvent::Connection => {
-                        info!("Client connected to: {}", self.client.server_address());
-                    }
-                    ClientEvent::Disconnection => {
-                        info!("Client disconnected from: {}", self.client.server_address());
-                    }
-                    ClientEvent::Event(event_type) => match event_type {
-                        ExampleEvent::StringEvent(string_event) => {
-                            let message = string_event.message.get();
-                            info!("Client received event: {}", message);
-
-                            let new_message =
-                                format!("Client Packet ({})", self.server_event_count);
-                            info!("Client send: {}", new_message);
-
-                            let string_event = StringEvent::new(new_message);
-                            self.client.send_event(&string_event);
-                            self.server_event_count += 1;
+        loop {
+            match self.client.receive() {
+                Some(result) => match result {
+                    Ok(event) => match event {
+                        ClientEvent::Connection => {
+                            info!("Client connected to: {}", self.client.server_address());
                         }
-                        _ => {}
+                        ClientEvent::Disconnection => {
+                            info!("Client disconnected from: {}", self.client.server_address());
+                        }
+                        ClientEvent::Event(event_type) => match event_type {
+                            ExampleEvent::StringEvent(string_event) => {
+                                let message = string_event.message.get();
+                                info!("Client received event: {}", message);
+
+                                let new_message =
+                                    format!("Client Packet ({})", self.server_event_count);
+                                info!("Client send: {}", new_message);
+
+                                let string_event = StringEvent::new(new_message);
+                                self.client.send_event(&string_event);
+                                self.server_event_count += 1;
+                            }
+                            _ => {}
+                        },
+                        ClientEvent::CreateEntity(local_key) => {
+                            if let Some(entity) = self.client.get_entity(local_key) {
+                                match entity {
+                                    ExampleEntity::PointEntity(point_entity) => {
+                                        info!("creation of point entity with key: {}, x: {}, y: {}, name: {} {}",
+                                              local_key,
+                                              point_entity.as_ref().borrow().x.get(),
+                                              point_entity.as_ref().borrow().y.get(),
+                                              point_entity.as_ref().borrow().name.get().first,
+                                              point_entity.as_ref().borrow().name.get().last,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        ClientEvent::UpdateEntity(local_key) => {
+                            if let Some(entity) = self.client.get_entity(local_key) {
+                                match entity {
+                                    ExampleEntity::PointEntity(point_entity) => {
+                                        info!("update of point entity with key: {}, x:{}, y: {}, name: {} {}",
+                                              local_key,
+                                              point_entity.as_ref().borrow().x.get(),
+                                              point_entity.as_ref().borrow().y.get(),
+                                              point_entity.as_ref().borrow().name.get().first,
+                                              point_entity.as_ref().borrow().name.get().last);
+                                    }
+                                }
+                            }
+                        }
+                        ClientEvent::DeleteEntity(local_key) => {
+                            info!("deletion of point entity with key: {}", local_key);
+                        }
+                        ClientEvent::Tick => {
+                            info!("tick event");
+                        }
                     },
-                    ClientEvent::CreateEntity(local_key) => {
-                        if let Some(entity) = self.client.get_entity(local_key) {
-                            match entity {
-                                ExampleEntity::PointEntity(point_entity) => {
-                                    info!("creation of point entity with key: {}, x: {}, y: {}, name: {} {}",
-                                          local_key,
-                                          point_entity.as_ref().borrow().x.get(),
-                                          point_entity.as_ref().borrow().y.get(),
-                                          point_entity.as_ref().borrow().name.get().first,
-                                          point_entity.as_ref().borrow().name.get().last,
-                                    );
-                                }
-                            }
-                        }
+                    Err(err) => {
+                        info!("Client Error: {}", err);
+                        return;
                     }
-                    ClientEvent::UpdateEntity(local_key) => {
-                        if let Some(entity) = self.client.get_entity(local_key) {
-                            match entity {
-                                ExampleEntity::PointEntity(point_entity) => {
-                                    info!("update of point entity with key: {}, x:{}, y: {}, name: {} {}",
-                                          local_key,
-                                          point_entity.as_ref().borrow().x.get(),
-                                          point_entity.as_ref().borrow().y.get(),
-                                          point_entity.as_ref().borrow().name.get().first,
-                                          point_entity.as_ref().borrow().name.get().last);
-                                }
-                            }
-                        }
-                    }
-                    ClientEvent::DeleteEntity(local_key) => {
-                        info!("deletion of point entity with key: {}", local_key);
-                    }
-                    ClientEvent::None => {
-                        //info!("Client non-event");
-                    }
+                },
+                None => {
+                    return;
                 }
-            }
-            Err(err) => {
-                info!("Client Error: {}", err);
             }
         }
     }
