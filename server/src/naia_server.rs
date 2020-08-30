@@ -163,9 +163,14 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
             }
 
             for (address, connection) in self.client_connections.iter_mut() {
+                //receive commands from anyone
+                if let Some(command) = connection.get_incoming_command() {
+                    output = Some(Ok(ServerEvent::Command(*address, command)));
+                    continue;
+                }
                 //receive events from anyone
-                if let Some(something) = connection.get_incoming_event() {
-                    output = Some(Ok(ServerEvent::Event(*address, something)));
+                if let Some(event) = connection.get_incoming_event() {
+                    output = Some(Ok(ServerEvent::Event(*address, event)));
                     continue;
                 }
             }

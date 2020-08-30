@@ -11,6 +11,8 @@ pub enum ServerEvent<T> {
     Disconnection(UserKey, User),
     /// An Event emitted to the Server from a Client
     Event(UserKey, T),
+    /// An Command emitted to the Server from a Client
+    Command(UserKey, T),
     /// A Tick Event, the duration between Tick events is defined in the Config
     /// object passed to the Server on initialization
     Tick,
