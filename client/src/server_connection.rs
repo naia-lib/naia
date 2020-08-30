@@ -37,7 +37,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         host_tick: u16,
         manifest: &Manifest<T, U>,
     ) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_events() {
+        if self.connection.has_outgoing_events() || self.command_sender.has_command() {
             let mut writer = PacketWriter::new();
 
             while let Some(popped_command) = self.command_sender.pop_command() {
