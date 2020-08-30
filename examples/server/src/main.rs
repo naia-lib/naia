@@ -139,6 +139,7 @@ async fn main() {
 
                         tick_count = tick_count.wrapping_add(1);
                     }
+                    _ => {}
                 }
             }
             Err(error) => {
