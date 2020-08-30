@@ -6,6 +6,7 @@ use naia_shared::{
 };
 
 use super::{
+    command_receiver::CommandReceiver,
     entities::{
         entity_key::entity_key::EntityKey, entity_packet_writer::EntityPacketWriter,
         mut_handler::MutHandler, server_entity_manager::ServerEntityManager,
@@ -17,6 +18,7 @@ pub struct ClientConnection<T: EventType, U: EntityType> {
     connection: Connection<T>,
     entity_manager: ServerEntityManager<U>,
     ping_manager: PingManager,
+    command_receiver: CommandReceiver<T>,
 }
 
 impl<T: EventType, U: EntityType> ClientConnection<T, U> {
@@ -29,6 +31,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
             connection: Connection::new(address, connection_config),
             entity_manager: ServerEntityManager::new(address, mut_handler.unwrap()),
             ping_manager: PingManager::new(),
+            command_receiver: CommandReceiver::new(),
         }
     }
 
@@ -85,6 +88,9 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         while reader.has_more() {
             let manager_type: ManagerType = reader.read_u8().into();
             match manager_type {
+                ManagerType::Command => {
+                    self.command_receiver.process_data(&mut reader, manifest);
+                }
                 ManagerType::Event => {
                     self.connection.process_event_data(&mut reader, manifest);
                 }
@@ -157,6 +163,10 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
 
     pub fn get_incoming_event(&mut self) -> Option<T> {
         return self.connection.get_incoming_event();
+    }
+
+    pub fn get_incoming_command(&mut self) -> Option<T> {
+        return self.command_receiver.pop_incoming_command();
     }
 
     pub fn get_address(&self) -> SocketAddr {

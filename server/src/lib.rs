@@ -29,6 +29,7 @@ pub use naia_shared::{
 };
 
 mod client_connection;
+mod command_receiver;
 mod entities;
 mod error;
 mod naia_server;

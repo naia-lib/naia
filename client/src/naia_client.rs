@@ -298,6 +298,14 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         }
     }
 
+    /// Queues up an Command to be sent to the Server
+    pub fn send_command(&mut self, command: &impl Event<T>) {
+        //TODO: don't use Event trait here
+        if let Some(connection) = &mut self.server_connection {
+            connection.queue_command(command);
+        }
+    }
+
     /// Get the address currently associated with the Server
     pub fn server_address(&self) -> SocketAddr {
         return self.server_address;
