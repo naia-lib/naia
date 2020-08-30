@@ -162,7 +162,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
 
             for (address, connection) in self.client_connections.iter_mut() {
                 //receive commands from anyone
-                if let Some(command) = connection.get_incoming_command() {
+                if let Some(command) = connection.get_incoming_command(self.tick_manager.get_tick())
+                {
                     return Ok(ServerEvent::Command(*address, command));
                 }
                 //receive events from anyone
@@ -356,6 +357,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                             Some(connection) => {
                                                 connection.process_incoming_header(&header);
                                                 connection.process_incoming_data(
+                                                    header.host_tick(),
                                                     &self.manifest,
                                                     &payload,
                                                 );
