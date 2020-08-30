@@ -78,7 +78,12 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.pop_incoming_message();
     }
 
-    pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &[u8]) {
+    pub fn process_incoming_data(
+        &mut self,
+        packet_index: u16,
+        manifest: &Manifest<T, U>,
+        data: &[u8],
+    ) {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
             let manager_type: ManagerType = reader.read_u8().into();
@@ -87,7 +92,8 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                     self.connection.process_event_data(&mut reader, manifest);
                 }
                 ManagerType::Entity => {
-                    self.entity_manager.process_data(&mut reader, manifest);
+                    self.entity_manager
+                        .process_data(packet_index, &mut reader, manifest);
                 }
                 _ => {}
             }

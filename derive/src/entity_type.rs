@@ -12,7 +12,7 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let gen = quote! {
         use naia_shared::{EntityType, Entity, StateMask};
         impl EntityType for #type_name {
-            fn read_partial(&mut self, state_mask: &StateMask, bytes: &[u8]) {
+            fn read_partial(&mut self, state_mask: &StateMask, bytes: &[u8], packet_index: u16) {
                 match self {
                     #variants
                 }
@@ -31,7 +31,7 @@ fn get_variants(type_name: &Ident, data: &Data) -> TokenStream {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
                     #type_name::#variant_name(identity) => {
-                        identity.as_ref().borrow_mut().read_partial(state_mask, bytes);
+                        identity.as_ref().borrow_mut().read_partial(state_mask, bytes, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -54,11 +54,11 @@ fn get_variants(type_name: &Ident, data: &Data) -> TokenStream {
 
 ////TO THIS
 //impl EntityType for ExampleEntity {
-//    fn read_partial(&mut self, state_mask: &StateMask, bytes: &[u8]) {
-//        match self {
+//    fn read_partial(&mut self, state_mask: &StateMask, bytes: &[u8],
+// packet_index: u16) {        match self {
 //            ExampleEntity::PointEntity(identity) => {
 //                identity.as_ref().borrow_mut().read_partial(state_mask,
-// bytes);            }
+// bytes, packet_index);            }
 //        }
 //    }
 //}
