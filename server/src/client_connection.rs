@@ -83,13 +83,19 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return None;
     }
 
-    pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &[u8]) {
+    pub fn process_incoming_data(
+        &mut self,
+        client_tick: u16,
+        manifest: &Manifest<T, U>,
+        data: &[u8],
+    ) {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
             let manager_type: ManagerType = reader.read_u8().into();
             match manager_type {
                 ManagerType::Command => {
-                    self.command_receiver.process_data(&mut reader, manifest);
+                    self.command_receiver
+                        .process_data(client_tick, &mut reader, manifest);
                 }
                 ManagerType::Event => {
                     self.connection.process_event_data(&mut reader, manifest);
@@ -165,8 +171,8 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.get_incoming_event();
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<T> {
-        return self.command_receiver.pop_incoming_command();
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<T> {
+        return self.command_receiver.pop_incoming_command(server_tick);
     }
 
     pub fn get_address(&self) -> SocketAddr {
