@@ -9,6 +9,7 @@ pub struct Property<T: Clone> {
     mutator: Option<Rc<RefCell<dyn EntityMutator>>>,
     mutator_index: u8,
     pub(crate) inner: T,
+    pub(crate) last_recv_index: u16,
 }
 
 impl<T: Clone> Property<T> {
@@ -18,6 +19,7 @@ impl<T: Clone> Property<T> {
             inner: value,
             mutator_index: index,
             mutator: None,
+            last_recv_index: 0,
         };
     }
 

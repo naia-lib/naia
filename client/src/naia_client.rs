@@ -217,8 +217,11 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
                             match header.packet_type() {
                                 PacketType::Data => {
-                                    server_connection
-                                        .process_incoming_data(&self.manifest, &payload);
+                                    server_connection.process_incoming_data(
+                                        header.local_packet_index(),
+                                        &self.manifest,
+                                        &payload,
+                                    );
                                     continue;
                                 }
                                 PacketType::Heartbeat => {
