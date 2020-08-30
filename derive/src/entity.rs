@@ -279,7 +279,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
 
         let new_output_right = quote! {
             if let Some(true) = state_mask.get_bit(#enum_name::#uppercase_variant_name as u8) {
-                PropertyIo::read(&mut self.#field_name, read_cursor);
+                PropertyIo::read_seq(&mut self.#field_name, read_cursor, packet_index);
             }
         };
         let new_output_result = quote! {
@@ -290,7 +290,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
     }
 
     return quote! {
-        fn read_partial(&mut self, state_mask: &StateMask, buffer: &[u8]) {
+        fn read_partial(&mut self, state_mask: &StateMask, buffer: &[u8], packet_index: u16) {
             let read_cursor = &mut Cursor::new(buffer);
             #output
         }
@@ -373,13 +373,13 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
 //            PropertyIo::write(&self.y, buffer);
 //        }
 //    }
-//    fn read_partial(&mut self, state_mask: &StateMask, buffer: &[u8]) {
-//        let read_cursor = &mut Cursor::new(buffer);
+//    fn read_partial(&mut self, state_mask: &StateMask, buffer: &[u8],
+// packet_index: u16) {        let read_cursor = &mut Cursor::new(buffer);
 //        if let Some(true) = state_mask.get_bit(PointEntityProp::X as u8) {
-//            PropertyIo::read(&mut self.x, read_cursor);
+//            PropertyIo::read_seq(&mut self.x, read_cursor, packet_index);
 //        }
 //        if let Some(true) = state_mask.get_bit(PointEntityProp::Y as u8) {
-//            PropertyIo::read(&mut self.y, read_cursor);
+//            PropertyIo::read_seq(&mut self.y, read_cursor, packet_index);
 //        }
 //    }
 //    fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>) {

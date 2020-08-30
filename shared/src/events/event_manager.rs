@@ -137,7 +137,6 @@ impl<T: EventType> EventManager<T> {
 
             match manifest.create_event(naia_id, &event_payload) {
                 Some(new_event) => {
-                    //new_entity.read(&event_payload);
                     self.queued_incoming_events.push_back(new_event);
                 }
                 _ => {}
