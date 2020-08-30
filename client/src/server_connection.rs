@@ -7,7 +7,7 @@ use naia_shared::{
 
 use super::{
     client_entity_manager::ClientEntityManager, client_entity_message::ClientEntityMessage,
-    ping_manager::PingManager,
+    command_sender::CommandSender, ping_manager::PingManager,
 };
 use crate::{client_tick_manager::ClientTickManager, Packet};
 
@@ -16,6 +16,7 @@ pub struct ServerConnection<T: EventType, U: EntityType> {
     connection: Connection<T>,
     entity_manager: ClientEntityManager<U>,
     ping_manager: PingManager,
+    command_sender: CommandSender<T>,
 }
 
 impl<T: EventType, U: EntityType> ServerConnection<T, U> {
@@ -27,6 +28,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
             ),
+            command_sender: CommandSender::new(),
         };
     }
 
@@ -37,6 +39,13 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() {
             let mut writer = PacketWriter::new();
+
+            while let Some(popped_command) = self.command_sender.pop_command() {
+                if !writer.write_command(manifest, &popped_command) {
+                    self.command_sender.unpop_command(&popped_command);
+                    break;
+                }
+            }
 
             let next_packet_index: u16 = self.get_next_packet_index();
             while let Some(popped_event) = self.connection.pop_outgoing_event(next_packet_index) {
@@ -71,12 +80,17 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn process_incoming_data(&mut self, manifest: &Manifest<T, U>, data: &[u8]) {
         let mut reader = PacketReader::new(data);
-        let start_manager_type: ManagerType = reader.read_u8().into();
-        if start_manager_type == ManagerType::Event {
-            self.connection.process_event_data(&mut reader, manifest);
-        }
-        if reader.has_more() {
-            self.entity_manager.process_data(&mut reader, manifest);
+        while reader.has_more() {
+            let manager_type: ManagerType = reader.read_u8().into();
+            match manager_type {
+                ManagerType::Event => {
+                    self.connection.process_event_data(&mut reader, manifest);
+                }
+                ManagerType::Entity => {
+                    self.entity_manager.process_data(&mut reader, manifest);
+                }
+                _ => {}
+            }
         }
     }
 
@@ -140,6 +154,10 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn queue_event(&mut self, event: &impl Event<T>) {
         return self.connection.queue_event(event);
+    }
+
+    pub fn queue_command(&mut self, command: &impl Event<T>) {
+        return self.command_sender.queue_command(command);
     }
 
     pub fn get_incoming_event(&mut self) -> Option<T> {
