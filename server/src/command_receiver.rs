@@ -1,14 +1,14 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use std::collections::VecDeque;
 
-use naia_shared::{EntityType, EventType, Manifest, PacketReader, SequenceBuffer};
+use naia_shared::{EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer};
 
 const COMMAND_BUFFER_MAX_SIZE: u16 = 64;
 
 /// Handles incoming commands, buffering them to be received on the correct tick
 #[derive(Debug)]
 pub struct CommandReceiver<T: EventType> {
-    queued_incoming_commands: SequenceBuffer<VecDeque<T>>,
+    queued_incoming_commands: SequenceBuffer<VecDeque<(u16, T)>>,
 }
 
 impl<T: EventType> CommandReceiver<T> {
@@ -20,7 +20,7 @@ impl<T: EventType> CommandReceiver<T> {
     }
 
     /// Get the most recently received Command
-    pub fn pop_incoming_command(&mut self, server_tick: u16) -> Option<T> {
+    pub fn pop_incoming_command(&mut self, server_tick: u16) -> Option<(LocalEntityKey, T)> {
         if let Some(queue) = self.queued_incoming_commands.get_mut(server_tick) {
             return queue.pop_front();
         }
@@ -40,6 +40,7 @@ impl<T: EventType> CommandReceiver<T> {
 
         let command_count = cursor.read_u8().unwrap();
         for _x in 0..command_count {
+            let local_entity_key: LocalEntityKey = cursor.read_u16::<BigEndian>().unwrap().into();
             let naia_id: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
             let payload_length: u8 = cursor.read_u8().unwrap().into();
             let payload_start_position: usize = cursor.position() as usize;
@@ -56,7 +57,7 @@ impl<T: EventType> CommandReceiver<T> {
                             .insert(client_tick, VecDeque::new());
                     }
                     if let Some(queue) = self.queued_incoming_commands.get_mut(client_tick) {
-                        queue.push_back(new_command);
+                        queue.push_back((local_entity_key, new_command));
                     }
                 }
                 _ => {}

@@ -40,9 +40,9 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         if self.connection.has_outgoing_events() || self.command_sender.has_command() {
             let mut writer = PacketWriter::new();
 
-            while let Some(popped_command) = self.command_sender.pop_command() {
-                if !writer.write_command(manifest, &popped_command) {
-                    self.command_sender.unpop_command(&popped_command);
+            while let Some((pawn_key, command)) = self.command_sender.pop_command() {
+                if !writer.write_command(manifest, pawn_key, &command) {
+                    self.command_sender.unpop_command(pawn_key, &command);
                     break;
                 }
             }
@@ -162,8 +162,8 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.connection.queue_event(event);
     }
 
-    pub fn queue_command(&mut self, command: &impl Event<T>) {
-        return self.command_sender.queue_command(command);
+    pub fn queue_command(&mut self, pawn_key: LocalEntityKey, command: &impl Event<T>) {
+        return self.command_sender.queue_command(pawn_key, command);
     }
 
     pub fn get_incoming_event(&mut self) -> Option<T> {

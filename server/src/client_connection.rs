@@ -121,6 +121,18 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         self.entity_manager.collect_entity_updates();
     }
 
+    pub fn has_pawn(&self, key: &EntityKey) -> bool {
+        return self.entity_manager.has_pawn(key);
+    }
+
+    pub fn add_pawn(&mut self, key: &EntityKey) {
+        self.entity_manager.add_pawn(key);
+    }
+
+    pub fn remove_pawn(&mut self, key: &EntityKey) {
+        self.entity_manager.remove_pawn(key);
+    }
+
     // Pass-through methods to underlying common connection
 
     pub fn mark_sent(&mut self) {
@@ -171,8 +183,18 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.get_incoming_event();
     }
 
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<T> {
-        return self.command_receiver.pop_incoming_command(server_tick);
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(EntityKey, T)> {
+        if let Some((local_pawn_key, command)) =
+            self.command_receiver.pop_incoming_command(server_tick)
+        {
+            if let Some(global_pawn_key) = self
+                .entity_manager
+                .get_global_key_from_local(local_pawn_key)
+            {
+                return Some((*global_pawn_key, command));
+            }
+        }
+        return None;
     }
 
     pub fn get_address(&self) -> SocketAddr {

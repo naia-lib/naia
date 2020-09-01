@@ -6,6 +6,7 @@ use crate::{
     manager_type::ManagerType,
     manifest::Manifest,
     standard_header::StandardHeader,
+    LocalEntityKey,
 };
 
 /// The maximum of bytes that can be used for the payload of a given packet. (See #38 of http://ithare.com/64-network-dos-and-donts-for-game-engines-part-v-udp/)
@@ -89,6 +90,7 @@ impl PacketWriter {
     pub fn write_command<T: EventType, U: EntityType>(
         &mut self,
         manifest: &Manifest<T, U>,
+        pawn_key: LocalEntityKey,
         command: &Box<dyn Event<T>>,
     ) -> bool {
         //Write command payload
@@ -102,6 +104,9 @@ impl PacketWriter {
         let mut command_total_bytes = Vec::<u8>::new();
 
         let type_id = command.as_ref().get_type_id();
+        command_total_bytes
+            .write_u16::<BigEndian>(pawn_key)
+            .unwrap(); // write pawn key
         let naia_id = manifest.get_event_naia_id(&type_id); // get naia id
         command_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
         command_total_bytes
