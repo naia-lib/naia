@@ -9,7 +9,7 @@ use naia_example_shared::{
     get_shared_config, manifest_load, ExampleEntity, ExampleEvent, PointEntity, StringEvent,
 };
 
-use std::{cell::RefCell, net::SocketAddr, rc::Rc, time::Duration};
+use std::{net::SocketAddr, rc::Rc, time::Duration};
 
 const SERVER_PORT: u16 = 14191;
 
@@ -55,21 +55,21 @@ async fn main() {
     let main_room_key = server.create_room();
 
     // Create 4 PointEntities, with a range of X values
-    let mut point_entities: Vec<Rc<RefCell<PointEntity>>> = Vec::new();
-
-    for (first, last) in [
-        ("alpha", "red"),
-        ("bravo", "blue"),
-        ("charlie", "green"),
-        ("delta", "yellow"),
-    ]
-    .iter()
     {
-        let point_entity =
-            PointEntity::new((point_entities.len() * 4) as u8, 0, first, last).wrap();
-        point_entities.push(point_entity.clone());
-        let entity_key = server.register_entity(point_entity);
-        server.room_add_entity(&main_room_key, &entity_key);
+        let mut count = 0;
+        for (first, last) in [
+            ("alpha", "red"),
+            ("bravo", "blue"),
+            ("charlie", "green"),
+            ("delta", "yellow"),
+        ]
+        .iter()
+        {
+            count += 1;
+            let point_entity = PointEntity::new((count * 4) as u8, 0, first, last).wrap();
+            let entity_key = server.register_entity(ExampleEntity::PointEntity(point_entity));
+            server.room_add_entity(&main_room_key, &entity_key);
+        }
     }
 
     // This method will be called every step to determine whether a given Entity
@@ -128,8 +128,12 @@ async fn main() {
                         }
 
                         // Iterate through Point Entities, marching them from (0,0) to (20, N)
-                        for point_entity in &point_entities {
-                            point_entity.borrow_mut().step();
+                        for (_, entity) in server.entities_iter() {
+                            match entity {
+                                ExampleEntity::PointEntity(point_entity) => {
+                                    point_entity.borrow_mut().step();
+                                }
+                            }
                         }
 
                         // VERY IMPORTANT! Calling this actually sends all Entity/Event data packets
