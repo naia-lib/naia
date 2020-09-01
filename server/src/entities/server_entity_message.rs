@@ -5,22 +5,26 @@ use super::entity_key::entity_key::EntityKey;
 
 #[derive(Debug)]
 pub enum ServerEntityMessage<T: EntityType> {
-    Create(EntityKey, LocalEntityKey, Rc<RefCell<dyn Entity<T>>>),
-    Update(
+    CreateEntity(EntityKey, LocalEntityKey, Rc<RefCell<dyn Entity<T>>>),
+    UpdateEntity(
         EntityKey,
         LocalEntityKey,
         Rc<RefCell<StateMask>>,
         Rc<RefCell<dyn Entity<T>>>,
     ),
-    Delete(EntityKey, LocalEntityKey),
+    DeleteEntity(EntityKey, LocalEntityKey),
+    AssignPawn(EntityKey, LocalEntityKey),
+    UnassignPawn(EntityKey, LocalEntityKey),
 }
 
 impl<T: EntityType> ServerEntityMessage<T> {
     pub fn write_message_type(&self) -> u8 {
         match self {
-            ServerEntityMessage::Create(_, _, _) => 0,
-            ServerEntityMessage::Delete(_, _) => 1,
-            ServerEntityMessage::Update(_, _, _, _) => 2,
+            ServerEntityMessage::CreateEntity(_, _, _) => 0,
+            ServerEntityMessage::DeleteEntity(_, _) => 1,
+            ServerEntityMessage::UpdateEntity(_, _, _, _) => 2,
+            ServerEntityMessage::AssignPawn(_, _) => 3,
+            ServerEntityMessage::UnassignPawn(_, _) => 4,
         }
     }
 }
@@ -28,14 +32,20 @@ impl<T: EntityType> ServerEntityMessage<T> {
 impl<T: EntityType> Clone for ServerEntityMessage<T> {
     fn clone(&self) -> Self {
         match self {
-            ServerEntityMessage::Create(gk, lk, e) => {
-                ServerEntityMessage::Create(gk.clone(), lk.clone(), e.clone())
+            ServerEntityMessage::CreateEntity(gk, lk, e) => {
+                ServerEntityMessage::CreateEntity(gk.clone(), lk.clone(), e.clone())
             }
-            ServerEntityMessage::Delete(gk, lk) => {
-                ServerEntityMessage::Delete(gk.clone(), lk.clone())
+            ServerEntityMessage::DeleteEntity(gk, lk) => {
+                ServerEntityMessage::DeleteEntity(gk.clone(), lk.clone())
             }
-            ServerEntityMessage::Update(gk, lk, sm, e) => {
-                ServerEntityMessage::Update(gk.clone(), lk.clone(), sm.clone(), e.clone())
+            ServerEntityMessage::UpdateEntity(gk, lk, sm, e) => {
+                ServerEntityMessage::UpdateEntity(gk.clone(), lk.clone(), sm.clone(), e.clone())
+            }
+            ServerEntityMessage::AssignPawn(gk, lk) => {
+                ServerEntityMessage::AssignPawn(gk.clone(), lk.clone())
+            }
+            ServerEntityMessage::UnassignPawn(gk, lk) => {
+                ServerEntityMessage::UnassignPawn(gk.clone(), lk.clone())
             }
         }
     }

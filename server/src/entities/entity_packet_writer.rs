@@ -19,7 +19,7 @@ impl EntityPacketWriter {
         let mut entity_total_bytes = Vec::<u8>::new();
 
         match message {
-            ServerEntityMessage::Create(_, local_key, entity) => {
+            ServerEntityMessage::CreateEntity(_, local_key, entity) => {
                 //write entity payload
                 let mut entity_payload_bytes = Vec::<u8>::new();
                 entity.as_ref().borrow().write(&mut entity_payload_bytes);
@@ -45,7 +45,7 @@ impl EntityPacketWriter {
                     .unwrap(); // write payload length
                 entity_total_bytes.append(&mut entity_payload_bytes); // write payload
             }
-            ServerEntityMessage::Delete(_, local_key) => {
+            ServerEntityMessage::DeleteEntity(_, local_key) => {
                 entity_total_bytes
                     .write_u8(message.write_message_type())
                     .unwrap(); //Write entity message type
@@ -53,7 +53,7 @@ impl EntityPacketWriter {
                     .write_u16::<BigEndian>(*local_key)
                     .unwrap(); //write local key
             }
-            ServerEntityMessage::Update(_, local_key, state_mask, entity) => {
+            ServerEntityMessage::UpdateEntity(_, local_key, state_mask, entity) => {
                 //write entity payload
                 let mut entity_payload_bytes = Vec::<u8>::new();
                 entity
@@ -82,6 +82,22 @@ impl EntityPacketWriter {
                     .write_u8(entity_payload_bytes.len() as u8)
                     .unwrap(); // write payload length
                 entity_total_bytes.append(&mut entity_payload_bytes); // write payload
+            }
+            ServerEntityMessage::AssignPawn(_, local_key) => {
+                entity_total_bytes
+                    .write_u8(message.write_message_type())
+                    .unwrap(); //Write entity message type
+                entity_total_bytes
+                    .write_u16::<BigEndian>(*local_key)
+                    .unwrap(); //write local key
+            }
+            ServerEntityMessage::UnassignPawn(_, local_key) => {
+                entity_total_bytes
+                    .write_u8(message.write_message_type())
+                    .unwrap(); //Write entity message type
+                entity_total_bytes
+                    .write_u16::<BigEndian>(*local_key)
+                    .unwrap(); //write local key
             }
         }
 
