@@ -4,7 +4,7 @@ use naia_derive::EntityType;
 
 use crate::PointEntity;
 
-#[derive(EntityType)]
+#[derive(EntityType, Clone)]
 pub enum ExampleEntity {
     PointEntity(Rc<RefCell<PointEntity>>),
 }

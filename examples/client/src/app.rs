@@ -122,7 +122,7 @@ impl App {
                             info!("deletion of point entity with key: {}", local_key);
                         }
                         ClientEvent::Tick => {
-                            info!("tick event");
+                            //info!("tick event");
                         }
                     },
                     Err(err) => {
