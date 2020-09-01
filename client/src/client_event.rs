@@ -22,4 +22,10 @@ pub enum ClientEvent<T: EventType> {
     /// A Tick Event, the duration between Tick events is defined in the Config
     /// object passed to the Client on initialization
     Tick,
+    /// Occurs when an Entity has been assigned to the local host as a Pawn,
+    /// meaning it can receive Commands from the Client
+    AssignPawn(LocalEntityKey),
+    /// Occurs when a Pawn has been unassigned from the local host, meaning it
+    /// cannot receive Commands from this Client
+    UnassignPawn(LocalEntityKey),
 }

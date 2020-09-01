@@ -146,6 +146,12 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                             ClientEntityMessage::Update(local_key) => {
                                 return Some(Ok(ClientEvent::UpdateEntity(local_key)));
                             }
+                            ClientEntityMessage::AssignPawn(local_key) => {
+                                return Some(Ok(ClientEvent::AssignPawn(local_key)));
+                            }
+                            ClientEntityMessage::UnassignPawn(local_key) => {
+                                return Some(Ok(ClientEvent::UnassignPawn(local_key)));
+                            }
                         }
                     }
                 }
