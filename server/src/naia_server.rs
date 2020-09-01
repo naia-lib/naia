@@ -44,7 +44,7 @@ pub struct NaiaServer<T: EventType, U: EntityType> {
     manifest: Manifest<T, U>,
     socket: Box<dyn ServerSocketTrait>,
     sender: MessageSender,
-    global_entity_store: DenseSlotMap<EntityKey, Rc<RefCell<dyn Entity<U>>>>,
+    global_entity_store: DenseSlotMap<EntityKey, U>,
     scope_entity_func: Option<Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>>,
     auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
     mut_handler: Rc<RefCell<MutHandler>>,
@@ -518,14 +518,15 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     /// state of the Entity to all connected Clients for which the Entity is
     /// in scope. Gives back an EntityKey which can be used to get the reference
     /// to the Entity from the Server once again
-    pub fn register_entity(&mut self, entity: Rc<RefCell<dyn Entity<U>>>) -> EntityKey {
+    pub fn register_entity(&mut self, entity: U) -> EntityKey {
         let new_mutator_ref: Rc<RefCell<ServerEntityMutator>> =
             Rc::new(RefCell::new(ServerEntityMutator::new(&self.mut_handler)));
         entity
+            .inner_ref()
             .as_ref()
             .borrow_mut()
             .set_mutator(&to_entity_mutator(&new_mutator_ref));
-        let entity_key = self.global_entity_store.insert(entity.clone());
+        let entity_key = self.global_entity_store.insert(entity);
         new_mutator_ref
             .as_ref()
             .borrow_mut()
@@ -550,8 +551,13 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
 
     /// Given an EntityKey, get a reference to a registered Entity being tracked
     /// by the Server
-    pub fn get_entity(&mut self, key: EntityKey) -> Option<&Rc<RefCell<dyn Entity<U>>>> {
+    pub fn get_entity(&mut self, key: EntityKey) -> Option<&U> {
         return self.global_entity_store.get(key);
+    }
+
+    /// Iterate through all the Server's Entities
+    pub fn entities_iter(&self) -> slotmap::dense::Iter<EntityKey, U> {
+        return self.global_entity_store.iter();
     }
 
     /// Creates a new Room on the Server, returns a Key which can be used to
@@ -701,7 +707,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         &room_key,
                                         user_key,
                                         entity_key,
-                                        entity.as_ref().borrow().get_typed_copy(),
+                                        (*entity).clone(),
                                     );
                                 if should_be_in_scope {
                                     if !currently_in_scope {
@@ -709,7 +715,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         if let Some(entity) =
                                             self.global_entity_store.get(*entity_key)
                                         {
-                                            user_connection.add_entity(entity_key, entity);
+                                            user_connection
+                                                .add_entity(entity_key, &entity.inner_ref());
                                         }
                                     }
                                 } else {
