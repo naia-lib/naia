@@ -160,15 +160,16 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                 return Ok(ServerEvent::Disconnection(user_key, user_clone));
             }
 
-            for (address, connection) in self.client_connections.iter_mut() {
+            for (user_key, connection) in self.client_connections.iter_mut() {
                 //receive commands from anyone
-                if let Some(command) = connection.get_incoming_command(self.tick_manager.get_tick())
+                if let Some((pawn_key, command)) =
+                    connection.get_incoming_command(self.tick_manager.get_tick())
                 {
-                    return Ok(ServerEvent::Command(*address, command));
+                    return Ok(ServerEvent::Command(*user_key, pawn_key, command));
                 }
                 //receive events from anyone
                 if let Some(event) = connection.get_incoming_event() {
-                    return Ok(ServerEvent::Event(*address, event));
+                    return Ok(ServerEvent::Event(*user_key, event));
                 }
             }
 
@@ -536,6 +537,13 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     /// Deregisters an Entity with the Server, deleting local copies of the
     /// Entity on each Client
     pub fn deregister_entity(&mut self, key: EntityKey) {
+        for (user_key, _) in self.users.iter() {
+            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+                user_connection.remove_pawn(&key);
+                user_connection.remove_entity(&key);
+            }
+        }
+
         self.mut_handler.borrow_mut().deregister_entity(&key);
         self.global_entity_store.remove(key);
     }
@@ -582,12 +590,26 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         }
     }
 
+    /// Remove an Entity from a Room, given the appropriate RoomKey & EntityKey
+    pub fn room_remove_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
+        if let Some(room) = self.rooms.get_mut(*room_key) {
+            room.remove_entity(entity_key);
+        }
+    }
+
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
     /// Entities will only ever be in-scope for Users which are in a Room with
     /// them
     pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
             room.subscribe_user(user_key);
+        }
+    }
+
+    /// Removes a User from a Room
+    pub fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+        if let Some(room) = self.rooms.get_mut(*room_key) {
+            room.unsubscribe_user(user_key);
         }
     }
 
@@ -639,6 +661,26 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         self.tick_manager.get_tick()
     }
 
+    /// Assigns an Entity to a specific User, making it a Pawn for that User
+    /// (meaning that the User will be able to issue Commands to that Pawn)
+    pub fn assign_pawn(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
+        if self.global_entity_store.contains_key(*entity_key) {
+            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                user_connection.add_pawn(entity_key);
+            }
+        }
+    }
+
+    /// Unassigns a Pawn from a specific User (meaning that the User will be
+    /// unable to issue Commands to that Pawn)
+    pub fn unassign_pawn(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
+        if self.global_entity_store.contains_key(*entity_key) {
+            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                user_connection.remove_pawn(entity_key);
+            }
+        }
+    }
+
     fn update_entity_scopes(&mut self) {
         for (room_key, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_removal_queue() {
@@ -654,12 +696,13 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                             if let Some(user_connection) = self.client_connections.get_mut(user_key)
                             {
                                 let currently_in_scope = user_connection.has_entity(entity_key);
-                                let should_be_in_scope = (scope_func.as_ref().as_ref())(
-                                    &room_key,
-                                    user_key,
-                                    entity_key,
-                                    entity.as_ref().borrow().get_typed_copy(),
-                                );
+                                let should_be_in_scope = user_connection.has_pawn(entity_key)
+                                    || (scope_func.as_ref().as_ref())(
+                                        &room_key,
+                                        user_key,
+                                        entity_key,
+                                        entity.as_ref().borrow().get_typed_copy(),
+                                    );
                                 if should_be_in_scope {
                                     if !currently_in_scope {
                                         // add entity to the connections local scope
