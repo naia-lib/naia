@@ -5,4 +5,6 @@ pub enum ClientEntityMessage {
     Create(LocalEntityKey),
     Update(LocalEntityKey),
     Delete(LocalEntityKey),
+    AssignPawn(LocalEntityKey),
+    UnassignPawn(LocalEntityKey),
 }
