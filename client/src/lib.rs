@@ -20,6 +20,7 @@ mod client_entity_manager;
 mod client_entity_message;
 mod client_event;
 mod client_tick_manager;
+mod command_receiver;
 mod command_sender;
 mod error;
 mod naia_client;
