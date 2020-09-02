@@ -1,4 +1,4 @@
-use std::{collections::hash_map::Iter, net::SocketAddr};
+use std::{collections::hash_map::Iter, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType,
@@ -9,7 +9,7 @@ use super::{
     client_entity_manager::ClientEntityManager, client_entity_message::ClientEntityMessage,
     command_sender::CommandSender, ping_manager::PingManager,
 };
-use crate::{client_tick_manager::ClientTickManager, Packet};
+use crate::{client_tick_manager::ClientTickManager, command_receiver::CommandReceiver, Packet};
 
 #[derive(Debug)]
 pub struct ServerConnection<T: EventType, U: EntityType> {
@@ -17,6 +17,7 @@ pub struct ServerConnection<T: EventType, U: EntityType> {
     entity_manager: ClientEntityManager<U>,
     ping_manager: PingManager,
     command_sender: CommandSender<T>,
+    command_receiver: CommandReceiver<T>,
 }
 
 impl<T: EventType, U: EntityType> ServerConnection<T, U> {
@@ -29,6 +30,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                 connection_config.rtt_sample_size,
             ),
             command_sender: CommandSender::new(),
+            command_receiver: CommandReceiver::new(),
         };
     }
 
@@ -44,6 +46,8 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                 if !writer.write_command(manifest, pawn_key, &command) {
                     self.command_sender.unpop_command(pawn_key, &command);
                     break;
+                } else {
+                    self.command_receiver.queue_command(pawn_key, &command);
                 }
             }
 
@@ -168,6 +172,10 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn get_incoming_event(&mut self) -> Option<T> {
         return self.connection.get_incoming_event();
+    }
+
+    pub fn get_incoming_command(&mut self) -> Option<(LocalEntityKey, Rc<Box<dyn Event<T>>>)> {
+        return self.command_receiver.pop_command();
     }
 
     pub fn should_send_ping(&self) -> bool {

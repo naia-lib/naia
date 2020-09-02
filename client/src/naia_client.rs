@@ -130,6 +130,13 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                             .expect("send failed!");
                         connection.mark_sent();
                     }
+                    // receive command
+                    if let Some((pawn_key, command)) = connection.get_incoming_command() {
+                        return Some(Ok(ClientEvent::Command(
+                            pawn_key,
+                            command.as_ref().get_typed_copy(),
+                        )));
+                    }
                     // receive event
                     if let Some(event) = connection.get_incoming_event() {
                         return Some(Ok(ClientEvent::Event(event)));
