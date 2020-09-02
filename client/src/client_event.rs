@@ -28,4 +28,7 @@ pub enum ClientEvent<T: EventType> {
     /// Occurs when a Pawn has been unassigned from the local host, meaning it
     /// cannot receive Commands from this Client
     UnassignPawn(LocalEntityKey),
+    /// A Command received which is to be simulated on the Client as well as on
+    /// the Server
+    Command(LocalEntityKey, T),
 }
