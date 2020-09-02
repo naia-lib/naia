@@ -17,6 +17,7 @@ impl<U: EntityType> ClientEntityManager<U> {
         ClientEntityManager {
             queued_incoming_messages: VecDeque::new(),
             local_entity_store: HashMap::new(),
+            pawn_store: HashSet::new(),
         }
     }
 
@@ -96,15 +97,15 @@ impl<U: EntityType> ClientEntityManager<U> {
                 }
                 3 => {
                     // Assign Pawn
-                    let local_key = cursor.read_u16::<BigEndian>().unwrap().into();
+                    let local_key: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
                     self.pawn_store.insert(local_key);
                     self.queued_incoming_messages
                         .push_back(ClientEntityMessage::AssignPawn(local_key));
                 }
                 4 => {
                     // Unassign Pawn
-                    let local_key = cursor.read_u16::<BigEndian>().unwrap().into();
-                    self.pawn_store.remove(local_key);
+                    let local_key: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
+                    self.pawn_store.remove(&local_key);
                     self.queued_incoming_messages
                         .push_back(ClientEntityMessage::UnassignPawn(local_key));
                 }
