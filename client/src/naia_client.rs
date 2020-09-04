@@ -232,6 +232,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                             match header.packet_type() {
                                 PacketType::Data => {
                                     server_connection.process_incoming_data(
+                                        header.host_tick(),
                                         header.local_packet_index(),
                                         &self.manifest,
                                         &payload,

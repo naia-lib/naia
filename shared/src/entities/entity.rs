@@ -33,6 +33,13 @@ pub trait Entity<T: EntityType> {
     fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>);
 }
 
+/// Handles equality of Entities.. can't just derive PartialEq because we want
+/// to only compare Properties
+pub trait EntityEq<T: EntityType, Impl = Self>: Entity<T> {
+    /// Compare properties in another Entity
+    fn equals(&self, other: &Impl) -> bool;
+}
+
 impl<T: EntityType> Debug for dyn Entity<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str("Entity")
