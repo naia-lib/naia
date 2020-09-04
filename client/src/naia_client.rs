@@ -324,8 +324,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         return self.server_address;
     }
 
-    /// Return an iterator to the collection of local entities tracked by the
-    /// Client
+    /// Return an iterator to the collection of all local entities tracked by
+    /// the Client
     pub fn entities_iter(&self) -> Option<Iter<LocalEntityKey, U>> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.entities_iter());
@@ -341,6 +341,20 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .as_ref()
             .unwrap()
             .get_local_entity(key);
+    }
+
+    /// Return an iterator to the collection of all pawns tracked by the
+    /// Client
+    pub fn pawns_iter(&self) -> Option<Iter<LocalEntityKey, U>> {
+        if let Some(connection) = &self.server_connection {
+            return Some(connection.pawns_iter());
+        }
+        return None;
+    }
+
+    /// Get a reference to a Pawn
+    pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
+        return self.server_connection.as_ref().unwrap().get_pawn(key);
     }
 
     /// Gets the average Round Trip Time measured to the Server

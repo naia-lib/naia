@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, rc::Rc};
 
 use crate::naia_client::LocalEntityKey;
-use naia_shared::{Event, EventClone, EventType};
+use naia_shared::{Event, EventType};
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
@@ -15,11 +15,6 @@ impl<T: EventType> CommandReceiver<T> {
         CommandReceiver {
             queued_incoming_commands: VecDeque::new(),
         }
-    }
-
-    /// Returns whether there is a queued Command
-    pub fn has_command(&self) -> bool {
-        self.queued_incoming_commands.len() != 0
     }
 
     /// Gets the next queued Command
