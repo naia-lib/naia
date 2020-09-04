@@ -31,7 +31,7 @@ impl ClientTickManager {
     }
 
     /// If the tick interval duration has elapsed, increment the current tick
-    pub fn tick(&mut self) -> bool {
+    pub fn has_ticked(&mut self) -> bool {
         // Intended Tick
         {
             let mut time_elapsed =
