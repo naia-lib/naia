@@ -12,7 +12,7 @@ pub struct Property<T: Clone> {
     pub(crate) last_recv_index: u16,
 }
 
-impl<T: Clone> Property<T> {
+impl<T: Clone + PartialEq> Property<T> {
     /// Create a new Property
     pub fn new(value: T, index: u8) -> Property<T> {
         return Property::<T> {
@@ -39,5 +39,10 @@ impl<T: Clone> Property<T> {
     /// Set an EntityMutator object to track changes to the Property
     pub fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>) {
         self.mutator = Some(mutator.clone());
+    }
+
+    /// Compare to another property
+    pub fn equals(&self, other: &Property<T>) -> bool {
+        return self.inner == other.inner;
     }
 }
