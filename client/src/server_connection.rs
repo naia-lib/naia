@@ -81,6 +81,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn process_incoming_data(
         &mut self,
+        packet_tick: u16,
         packet_index: u16,
         manifest: &Manifest<T, U>,
         data: &[u8],
@@ -93,8 +94,12 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                     self.connection.process_event_data(&mut reader, manifest);
                 }
                 ManagerType::Entity => {
-                    self.entity_manager
-                        .process_data(packet_index, &mut reader, manifest);
+                    self.entity_manager.process_data(
+                        packet_tick,
+                        packet_index,
+                        &mut reader,
+                        manifest,
+                    );
                 }
                 _ => {}
             }

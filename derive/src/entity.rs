@@ -27,12 +27,13 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let entity_read_partial_method = get_read_partial_method(&enum_name, &properties);
     let set_mutator_method = get_set_mutator_method(&properties);
     let get_typed_copy_method = get_get_typed_copy_method(&type_name, entity_name, &properties);
+    let equals_method = get_equals_method(entity_name, &properties);
 
     let state_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{StateMask, EntityBuilder, EntityMutator, PropertyIo};
+        use naia_shared::{StateMask, EntityBuilder, EntityMutator, PropertyIo, EntityEq};
         #property_enum
         pub struct #entity_builder_name {
             type_id: TypeId,
@@ -67,6 +68,9 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             #entity_write_partial_method
             #entity_read_partial_method
             #get_typed_copy_method
+        }
+        impl EntityEq<#type_name> for #entity_name {
+            #equals_method
         }
     };
 
@@ -293,6 +297,33 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
         fn read_partial(&mut self, state_mask: &StateMask, buffer: &[u8], packet_index: u16) {
             let read_cursor = &mut Cursor::new(buffer);
             #output
+        }
+    };
+}
+
+fn get_equals_method(entity_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+    let mut output = quote! {};
+
+    for (field_name, _) in properties.iter() {
+        let uppercase_variant_name = Ident::new(
+            field_name.to_string().to_uppercase().as_str(),
+            Span::call_site(),
+        );
+
+        let new_output_right = quote! {
+            if !Property::equals(&self.#field_name, &other.#field_name) { return false; }
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    return quote! {
+        fn equals(&self, other: &#entity_name) -> bool {
+            #output
+            return true;
         }
     };
 }
