@@ -1,15 +1,20 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use log::warn;
-use naia_shared::{EntityType, EventType, LocalEntityKey, Manifest, PacketReader, StateMask};
+use naia_shared::{
+    EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer, StateMask,
+};
 use std::collections::{hash_map::Iter, HashMap, VecDeque};
 
 use super::client_entity_message::ClientEntityMessage;
+
+const PAWN_HISTORY_SIZE: u16 = 64;
 
 #[derive(Debug)]
 pub struct ClientEntityManager<U: EntityType> {
     local_entity_store: HashMap<LocalEntityKey, U>,
     queued_incoming_messages: VecDeque<ClientEntityMessage>,
     pawn_store: HashMap<LocalEntityKey, U>,
+    pawn_history: SequenceBuffer<HashMap<LocalEntityKey, U>>,
 }
 
 impl<U: EntityType> ClientEntityManager<U> {
@@ -18,6 +23,7 @@ impl<U: EntityType> ClientEntityManager<U> {
             queued_incoming_messages: VecDeque::new(),
             local_entity_store: HashMap::new(),
             pawn_store: HashMap::new(),
+            pawn_history: SequenceBuffer::with_capacity(PAWN_HISTORY_SIZE),
         }
     }
 
@@ -139,5 +145,14 @@ impl<U: EntityType> ClientEntityManager<U> {
 
     pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
         return self.pawn_store.get(&key);
+    }
+
+    pub fn save_pawn_snapshots(&mut self, host_tick: u16) {
+        let mut history_map = HashMap::new();
+        for (key, pawn) in self.pawns_iter() {
+            history_map.insert(*key, pawn.inner_ref().as_ref().borrow().get_typed_copy());
+        }
+
+        self.pawn_history.insert(host_tick, history_map);
     }
 }

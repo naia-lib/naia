@@ -47,7 +47,8 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                     self.command_sender.unpop_command(pawn_key, &command);
                     break;
                 } else {
-                    self.command_receiver.queue_command(pawn_key, &command);
+                    self.command_receiver
+                        .queue_command(host_tick, pawn_key, &command);
                 }
             }
 
@@ -119,6 +120,10 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
         return self.entity_manager.get_pawn(key);
+    }
+
+    pub fn save_pawn_snapshots(&mut self, tick: u16) {
+        return self.entity_manager.save_pawn_snapshots(tick);
     }
 
     // Pass-through methods to underlying common connection

@@ -87,14 +87,15 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     /// Must be called regularly, performs updates to the connection, and
     /// retrieves event/entity updates sent by the Server
     pub fn receive(&mut self) -> Option<Result<ClientEvent<T>, NaiaClientError>> {
-        // update current tick
-        if self.tick_manager.tick() {
-            return Some(Ok(ClientEvent::Tick));
-        }
-
-        // send handshakes, heartbeats, pings, timeout if need be
+        // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
             Some(connection) => {
+                // update current tick
+                if self.tick_manager.has_ticked() {
+                    // store pawn states
+                    connection.save_pawn_snapshots(self.tick_manager.get_tick());
+                    return Some(Ok(ClientEvent::Tick));
+                }
                 if connection.should_drop() {
                     self.server_connection = None;
                     self.pre_connection_timestamp = None;
