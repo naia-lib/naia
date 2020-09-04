@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use log::warn;
 use naia_shared::{EntityType, EventType, LocalEntityKey, Manifest, PacketReader, StateMask};
-use std::collections::{hash_map::Iter, HashMap, HashSet, VecDeque};
+use std::collections::{hash_map::Iter, HashMap, VecDeque};
 
 use super::client_entity_message::ClientEntityMessage;
 
@@ -9,7 +9,7 @@ use super::client_entity_message::ClientEntityMessage;
 pub struct ClientEntityManager<U: EntityType> {
     local_entity_store: HashMap<LocalEntityKey, U>,
     queued_incoming_messages: VecDeque<ClientEntityMessage>,
-    pawn_store: HashSet<LocalEntityKey>,
+    pawn_store: HashMap<LocalEntityKey, U>,
 }
 
 impl<U: EntityType> ClientEntityManager<U> {
@@ -17,7 +17,7 @@ impl<U: EntityType> ClientEntityManager<U> {
         ClientEntityManager {
             queued_incoming_messages: VecDeque::new(),
             local_entity_store: HashMap::new(),
-            pawn_store: HashSet::new(),
+            pawn_store: HashMap::new(),
         }
     }
 
@@ -98,9 +98,16 @@ impl<U: EntityType> ClientEntityManager<U> {
                 3 => {
                     // Assign Pawn
                     let local_key: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
-                    self.pawn_store.insert(local_key);
-                    self.queued_incoming_messages
-                        .push_back(ClientEntityMessage::AssignPawn(local_key));
+
+                    if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
+                        self.pawn_store.insert(
+                            local_key,
+                            entity_ref.inner_ref().as_ref().borrow().get_typed_copy(),
+                        );
+
+                        self.queued_incoming_messages
+                            .push_back(ClientEntityMessage::AssignPawn(local_key));
+                    }
                 }
                 4 => {
                     // Unassign Pawn
@@ -118,11 +125,19 @@ impl<U: EntityType> ClientEntityManager<U> {
         return self.queued_incoming_messages.pop_front();
     }
 
+    pub fn entities_iter(&self) -> Iter<'_, LocalEntityKey, U> {
+        return self.local_entity_store.iter();
+    }
+
     pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&U> {
         return self.local_entity_store.get(&key);
     }
 
-    pub fn entities_iter(&self) -> Iter<'_, LocalEntityKey, U> {
-        return self.local_entity_store.iter();
+    pub fn pawns_iter(&self) -> Iter<'_, LocalEntityKey, U> {
+        return self.pawn_store.iter();
+    }
+
+    pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
+        return self.pawn_store.get(&key);
     }
 }
