@@ -44,9 +44,15 @@ pub use ack_manager::AckManager;
 pub use connection::Connection;
 pub use connection_config::ConnectionConfig;
 pub use entities::{
-    entity::Entity, entity_builder::EntityBuilder, entity_mutator::EntityMutator,
-    entity_notifiable::EntityNotifiable, entity_type::EntityType, local_entity_key::LocalEntityKey,
-    property::Property, property_io::PropertyIo, state_mask::StateMask,
+    entity::{Entity, EntityEq},
+    entity_builder::EntityBuilder,
+    entity_mutator::EntityMutator,
+    entity_notifiable::EntityNotifiable,
+    entity_type::EntityType,
+    local_entity_key::LocalEntityKey,
+    property::Property,
+    property_io::PropertyIo,
+    state_mask::StateMask,
 };
 pub use events::{
     event::{Event, EventClone},

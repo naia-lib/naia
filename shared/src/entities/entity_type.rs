@@ -10,4 +10,6 @@ pub trait EntityType<Impl = Self>: Clone {
     fn read_partial(&mut self, state_mask: &StateMask, bytes: &[u8], packet_index: u16);
     /// Convert EntityType to an inner reference to the Entity
     fn inner_ref(&self) -> Rc<RefCell<dyn Entity<Impl>>>;
+    /// Compare properties in another EntityType
+    fn equals(&self, other: &Impl) -> bool;
 }

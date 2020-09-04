@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, ReadBytesExt};
-use log::warn;
+use log::{info, warn};
 use naia_shared::{
     EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer, StateMask,
 };
@@ -29,10 +29,13 @@ impl<U: EntityType> ClientEntityManager<U> {
 
     pub fn process_data<T: EventType>(
         &mut self,
+        packet_tick: u16,
         packet_index: u16,
         reader: &mut PacketReader,
         manifest: &Manifest<T, U>,
     ) {
+        let mut pawn_history = self.pawn_history.get_mut(packet_tick);
+
         let buffer = reader.get_buffer();
         let cursor = reader.get_cursor();
 
@@ -94,6 +97,15 @@ impl<U: EntityType> ClientEntityManager<U> {
                             .into_boxed_slice();
 
                         entity_ref.read_partial(&state_mask, &entity_payload, packet_index);
+
+                        // if entity is a pawn, check it against it's history
+                        if let Some(history_map) = &mut pawn_history {
+                            if let Some(historical_pawn) = history_map.get_mut(&local_key) {
+                                if !entity_ref.equals(historical_pawn) {
+                                    info!("XXXXXXXXXXXXXXXX entities aint right XXXXXXXXXXXXXXXX");
+                                }
+                            }
+                        }
 
                         self.queued_incoming_messages
                             .push_back(ClientEntityMessage::Update(local_key));
