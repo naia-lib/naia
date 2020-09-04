@@ -78,10 +78,6 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return None;
     }
 
-    pub fn get_incoming_entity_message(&mut self) -> Option<ClientEntityMessage> {
-        return self.entity_manager.pop_incoming_message();
-    }
-
     pub fn process_incoming_data(
         &mut self,
         packet_index: u16,
@@ -104,12 +100,25 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         }
     }
 
-    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&U> {
-        return self.entity_manager.get_local_entity(key);
+    // Pass-through methods to underlying entity manager
+    pub fn get_incoming_entity_message(&mut self) -> Option<ClientEntityMessage> {
+        return self.entity_manager.pop_incoming_message();
     }
 
     pub fn entities_iter(&self) -> Iter<LocalEntityKey, U> {
         return self.entity_manager.entities_iter();
+    }
+
+    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&U> {
+        return self.entity_manager.get_local_entity(key);
+    }
+
+    pub fn pawns_iter(&self) -> Iter<LocalEntityKey, U> {
+        return self.entity_manager.pawns_iter();
+    }
+
+    pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
+        return self.entity_manager.get_pawn(key);
     }
 
     // Pass-through methods to underlying common connection
@@ -166,18 +175,24 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.connection.queue_event(event);
     }
 
-    pub fn queue_command(&mut self, pawn_key: LocalEntityKey, command: &impl Event<T>) {
-        return self.command_sender.queue_command(pawn_key, command);
-    }
-
     pub fn get_incoming_event(&mut self) -> Option<T> {
         return self.connection.get_incoming_event();
+    }
+
+    pub fn get_last_received_tick(&self) -> u16 {
+        self.connection.get_last_received_tick()
+    }
+
+    // command related
+    pub fn queue_command(&mut self, pawn_key: LocalEntityKey, command: &impl Event<T>) {
+        return self.command_sender.queue_command(pawn_key, command);
     }
 
     pub fn get_incoming_command(&mut self) -> Option<(LocalEntityKey, Rc<Box<dyn Event<T>>>)> {
         return self.command_receiver.pop_command();
     }
 
+    // ping related
     pub fn should_send_ping(&self) -> bool {
         return self.ping_manager.should_send_ping();
     }
@@ -189,10 +204,6 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn process_pong(&mut self, pong_payload: &[u8]) {
         self.ping_manager.process_pong(pong_payload);
-    }
-
-    pub fn get_last_received_tick(&self) -> u16 {
-        self.connection.get_last_received_tick()
     }
 
     pub fn get_rtt(&self) -> f32 {
