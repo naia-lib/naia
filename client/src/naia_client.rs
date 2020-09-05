@@ -348,6 +348,17 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .get_local_entity(key);
     }
 
+    ///TESTING
+    pub fn fill_history(&self, buffer: &mut Vec<U>) -> bool {
+        if let Some(connection) = &self.server_connection {
+            connection.fill_history(buffer);
+            return true;
+        }
+        return false;
+    }
+
+    /////TESTING
+
     /// Return an iterator to the collection of all pawns tracked by the
     /// Client
     pub fn pawns_iter(&self) -> Option<Iter<LocalEntityKey, U>> {

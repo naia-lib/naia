@@ -15,7 +15,7 @@ pub struct ClientEntityManager<U: EntityType> {
     local_entity_store: HashMap<LocalEntityKey, U>,
     queued_incoming_messages: VecDeque<ClientEntityMessage>,
     pawn_store: HashMap<LocalEntityKey, U>,
-    pawn_history: SequenceBuffer<HashMap<LocalEntityKey, U>>,
+    pawn_history: HashMap<LocalEntityKey, SequenceBuffer<U>>,
 }
 
 impl<U: EntityType> ClientEntityManager<U> {
@@ -24,7 +24,7 @@ impl<U: EntityType> ClientEntityManager<U> {
             queued_incoming_messages: VecDeque::new(),
             local_entity_store: HashMap::new(),
             pawn_store: HashMap::new(),
-            pawn_history: SequenceBuffer::with_capacity(PAWN_HISTORY_SIZE),
+            pawn_history: HashMap::new(),
         }
     }
 
@@ -36,8 +36,6 @@ impl<U: EntityType> ClientEntityManager<U> {
         packet_index: u16,
         reader: &mut PacketReader,
     ) {
-        let mut pawn_history = self.pawn_history.get_mut(packet_tick);
-
         let buffer = reader.get_buffer();
         let cursor = reader.get_cursor();
 
@@ -101,12 +99,14 @@ impl<U: EntityType> ClientEntityManager<U> {
                         entity_ref.read_partial(&state_mask, &entity_payload, packet_index);
 
                         // if entity is a pawn, check it against it's history
-                        if let Some(history_map) = &mut pawn_history {
-                            if let Some(historical_pawn) = history_map.get_mut(&local_key) {
+                        if let Some(pawn_history) = self.pawn_history.get_mut(&local_key) {
+                            if let Some(historical_pawn) = pawn_history.get(packet_tick) {
                                 if !entity_ref.equals(historical_pawn) {
                                     // prediction error encountered!
                                     info!("XXXXX prediction error encountered XXXXX ");
                                     command_receiver.replay_commands(packet_tick, local_key);
+                                } else {
+                                    pawn_history.remove_until(packet_tick);
                                 }
                             }
                         }
@@ -127,6 +127,9 @@ impl<U: EntityType> ClientEntityManager<U> {
                             entity_ref.inner_ref().as_ref().borrow().get_typed_copy(),
                         );
 
+                        self.pawn_history
+                            .insert(local_key, SequenceBuffer::with_capacity(PAWN_HISTORY_SIZE));
+
                         self.queued_incoming_messages
                             .push_back(ClientEntityMessage::AssignPawn(local_key));
                     }
@@ -135,6 +138,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                     // Unassign Pawn
                     let local_key: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
                     self.pawn_store.remove(&local_key);
+                    self.pawn_history.remove(&local_key);
                     self.queued_incoming_messages
                         .push_back(ClientEntityMessage::UnassignPawn(local_key));
                 }
@@ -173,27 +177,38 @@ impl<U: EntityType> ClientEntityManager<U> {
         }
     }
 
-    pub fn save_pawn_snapshots(&mut self, host_tick: u16) {
-        let mut history_map = HashMap::new();
-        for (key, pawn) in self.pawns_iter() {
-            history_map.insert(*key, pawn.inner_ref().as_ref().borrow().get_typed_copy());
+    pub fn pawn_clear_history(&mut self, key: LocalEntityKey) {
+        if let Some(pawn_history) = self.pawn_history.get_mut(&key) {
+            pawn_history.clear();
         }
-
-        self.pawn_history.insert(host_tick, history_map);
     }
 
-    pub fn save_replay_snapshot(&mut self, history_tick: u16, pawn_key: LocalEntityKey) {
-        if !self.pawn_history.exists(history_tick) {
-            self.pawn_history.insert(history_tick, HashMap::new());
+    pub fn save_pawn_snapshots(&mut self, host_tick: u16) {
+        let mut pawn_keys = Vec::new();
+        pawn_keys.extend(self.pawns_iter().map(|(key, _)| key));
+        for key in &pawn_keys {
+            self.save_replay_snapshot(host_tick, key);
         }
+    }
 
-        if let Some(pawn_map) = self.pawn_history.get_mut(history_tick) {
-            pawn_map.remove(&pawn_key);
-            if let Some(pawn_ref) = self.pawn_store.get(&pawn_key) {
-                pawn_map.insert(
-                    pawn_key,
+    pub fn save_replay_snapshot(&mut self, history_tick: u16, pawn_key: &LocalEntityKey) {
+        if let Some(pawn_ref) = self.pawn_store.get(pawn_key) {
+            if let Some(pawn_history) = self.pawn_history.get_mut(pawn_key) {
+                pawn_history.insert(
+                    history_tick,
                     pawn_ref.inner_ref().as_ref().borrow().get_typed_copy(),
                 );
+            }
+        }
+    }
+
+    pub fn fill_history(&self, buffer: &mut Vec<U>) {
+        for (key, sequence) in self.pawn_history.iter() {
+            let oldest = sequence.oldest();
+            for seq in oldest..sequence.sequence_num() {
+                if let Some(pawn_ref) = sequence.get(seq) {
+                    buffer.push(pawn_ref.inner_ref().as_ref().borrow().get_typed_copy());
+                }
             }
         }
     }
