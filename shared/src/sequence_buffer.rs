@@ -36,7 +36,7 @@ impl<T: Clone> SequenceBuffer<T> {
     }
 
     /// Returns a reference to the entry with the given sequence number.
-    pub fn get(&mut self, sequence_num: SequenceNumber) -> Option<&T> {
+    pub fn get(&self, sequence_num: SequenceNumber) -> Option<&T> {
         if self.exists(sequence_num) {
             let index = self.index(sequence_num);
             return self.entries[index].as_ref();
@@ -95,8 +95,7 @@ impl<T: Clone> SequenceBuffer<T> {
         }
     }
 
-    /// Removes entries up to a specific sequence number
-    pub fn remove_entries(&mut self, mut finish_sequence: u32) {
+    fn remove_entries(&mut self, mut finish_sequence: u32) {
         let start_sequence = u32::from(self.sequence_num);
         if finish_sequence < start_sequence {
             finish_sequence += 65536;
@@ -117,6 +116,29 @@ impl<T: Clone> SequenceBuffer<T> {
     // Generates an index for use in `entry_sequences` and `entries`.
     fn index(&self, sequence: SequenceNumber) -> usize {
         sequence as usize % self.entry_sequences.len()
+    }
+
+    /// Gets the oldest stored sequence number
+    pub fn oldest(&self) -> u16 {
+        return self
+            .sequence_num
+            .wrapping_sub(self.entry_sequences.len() as u16);
+    }
+
+    /// Clear sequence buffer completely
+    pub fn clear(&mut self) {
+        let size = self.entry_sequences.len();
+        self.sequence_num = 0;
+        self.entry_sequences = vec![None; size].into_boxed_slice();
+        self.entries = vec![None; size].into_boxed_slice();
+    }
+
+    /// Remove entries up until a specific sequence number
+    pub fn remove_until(&mut self, finish_sequence: u16) {
+        let oldest = self.oldest();
+        for seq in oldest..finish_sequence {
+            self.remove(seq);
+        }
     }
 }
 
