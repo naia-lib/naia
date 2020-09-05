@@ -6,6 +6,7 @@ use naia_shared::{
 use std::collections::{hash_map::Iter, HashMap, VecDeque};
 
 use super::client_entity_message::ClientEntityMessage;
+use crate::command_receiver::CommandReceiver;
 
 const PAWN_HISTORY_SIZE: u16 = 64;
 
@@ -29,10 +30,11 @@ impl<U: EntityType> ClientEntityManager<U> {
 
     pub fn process_data<T: EventType>(
         &mut self,
+        manifest: &Manifest<T, U>,
+        command_receiver: &mut CommandReceiver<T>,
         packet_tick: u16,
         packet_index: u16,
         reader: &mut PacketReader,
-        manifest: &Manifest<T, U>,
     ) {
         let mut pawn_history = self.pawn_history.get_mut(packet_tick);
 
@@ -102,7 +104,9 @@ impl<U: EntityType> ClientEntityManager<U> {
                         if let Some(history_map) = &mut pawn_history {
                             if let Some(historical_pawn) = history_map.get_mut(&local_key) {
                                 if !entity_ref.equals(historical_pawn) {
-                                    info!("XXXXXXXXXXXXXXXX entities aint right XXXXXXXXXXXXXXXX");
+                                    // prediction error encountered!
+                                    info!("XXXXX prediction error encountered XXXXX ");
+                                    command_receiver.replay_commands(packet_tick, local_key);
                                 }
                             }
                         }
@@ -159,6 +163,16 @@ impl<U: EntityType> ClientEntityManager<U> {
         return self.pawn_store.get(&key);
     }
 
+    pub fn pawn_reset(&mut self, key: LocalEntityKey) {
+        if let Some(entity_ref) = self.local_entity_store.get_mut(&key) {
+            self.pawn_store.remove(&key);
+            self.pawn_store.insert(
+                key,
+                entity_ref.inner_ref().as_ref().borrow().get_typed_copy(),
+            );
+        }
+    }
+
     pub fn save_pawn_snapshots(&mut self, host_tick: u16) {
         let mut history_map = HashMap::new();
         for (key, pawn) in self.pawns_iter() {
@@ -166,5 +180,21 @@ impl<U: EntityType> ClientEntityManager<U> {
         }
 
         self.pawn_history.insert(host_tick, history_map);
+    }
+
+    pub fn save_replay_snapshot(&mut self, history_tick: u16, pawn_key: LocalEntityKey) {
+        if !self.pawn_history.exists(history_tick) {
+            self.pawn_history.insert(history_tick, HashMap::new());
+        }
+
+        if let Some(pawn_map) = self.pawn_history.get_mut(history_tick) {
+            pawn_map.remove(&pawn_key);
+            if let Some(pawn_ref) = self.pawn_store.get(&pawn_key) {
+                pawn_map.insert(
+                    pawn_key,
+                    pawn_ref.inner_ref().as_ref().borrow().get_typed_copy(),
+                );
+            }
+        }
     }
 }
