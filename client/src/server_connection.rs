@@ -132,6 +132,10 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.save_pawn_snapshots(tick);
     }
 
+    pub fn fill_history(&self, buffer: &mut Vec<U>) {
+        self.entity_manager.fill_history(buffer);
+    }
+
     // Pass-through methods to underlying common connection
 
     pub fn mark_sent(&mut self) {
@@ -205,7 +209,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
             .pop_command_replay::<U>(&mut self.entity_manager)
         {
             self.entity_manager
-                .save_replay_snapshot(history_tick - 1, pawn_key);
+                .save_replay_snapshot(history_tick - 1, &pawn_key);
             return Some((pawn_key, command));
         }
         return self.command_receiver.pop_command();

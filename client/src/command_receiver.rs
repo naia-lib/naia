@@ -1,8 +1,12 @@
-use std::{collections::VecDeque, rc::Rc};
+use log::{info, warn};
+
+use std::{
+    collections::{HashMap, VecDeque},
+    rc::Rc,
+};
 
 use crate::{client_entity_manager::ClientEntityManager, naia_client::LocalEntityKey};
 use naia_shared::{EntityType, Event, EventType, SequenceBuffer};
-use std::collections::HashMap;
 
 const COMMAND_HISTORY_SIZE: u16 = 64;
 
@@ -40,6 +44,9 @@ impl<T: EventType> CommandReceiver<T> {
             if let Some((history_tick, pawn_key)) = self.replay_trigger {
                 // set pawn to server authoritative state
                 entity_manager.pawn_reset(pawn_key);
+
+                // clear all
+                entity_manager.pawn_clear_history(pawn_key);
 
                 // trigger replay of historical commands
                 if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
@@ -94,6 +101,11 @@ impl<T: EventType> CommandReceiver<T> {
 
     /// Queues commands to be replayed from a given tick
     pub fn replay_commands(&mut self, history_tick: u16, pawn_key: LocalEntityKey) {
+        //TODO: replay trigger should really be a queue, in the case that 2 Pawns both
+        // have prediction errors on the same tick
+        if self.replay_trigger.is_some() {
+            warn!("prediction error triggered more than once in a tick..");
+        }
         self.replay_trigger = Some((history_tick, pawn_key));
     }
 }
