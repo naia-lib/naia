@@ -95,10 +95,11 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                 }
                 ManagerType::Entity => {
                     self.entity_manager.process_data(
+                        manifest,
+                        &mut self.command_receiver,
                         packet_tick,
                         packet_index,
                         &mut reader,
-                        manifest,
                     );
                 }
                 _ => {}
@@ -199,6 +200,14 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     }
 
     pub fn get_incoming_command(&mut self) -> Option<(LocalEntityKey, Rc<Box<dyn Event<T>>>)> {
+        if let Some((history_tick, pawn_key, command)) = self
+            .command_receiver
+            .pop_command_replay::<U>(&mut self.entity_manager)
+        {
+            self.entity_manager
+                .save_replay_snapshot(history_tick - 1, pawn_key);
+            return Some((pawn_key, command));
+        }
         return self.command_receiver.pop_command();
     }
 

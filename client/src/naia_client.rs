@@ -90,12 +90,44 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
             Some(connection) => {
+                // receive command
+                if let Some((pawn_key, command)) = connection.get_incoming_command() {
+                    return Some(Ok(ClientEvent::Command(
+                        pawn_key,
+                        command.as_ref().get_typed_copy(),
+                    )));
+                }
+                // receive event
+                if let Some(event) = connection.get_incoming_event() {
+                    return Some(Ok(ClientEvent::Event(event)));
+                }
+                // receive entity message
+                if let Some(message) = connection.get_incoming_entity_message() {
+                    match message {
+                        ClientEntityMessage::Create(local_key) => {
+                            return Some(Ok(ClientEvent::CreateEntity(local_key)));
+                        }
+                        ClientEntityMessage::Delete(local_key) => {
+                            return Some(Ok(ClientEvent::DeleteEntity(local_key)));
+                        }
+                        ClientEntityMessage::Update(local_key) => {
+                            return Some(Ok(ClientEvent::UpdateEntity(local_key)));
+                        }
+                        ClientEntityMessage::AssignPawn(local_key) => {
+                            return Some(Ok(ClientEvent::AssignPawn(local_key)));
+                        }
+                        ClientEntityMessage::UnassignPawn(local_key) => {
+                            return Some(Ok(ClientEvent::UnassignPawn(local_key)));
+                        }
+                    }
+                }
                 // update current tick
                 if self.tick_manager.has_ticked() {
                     // store pawn states
                     connection.save_pawn_snapshots(self.tick_manager.get_tick());
                     return Some(Ok(ClientEvent::Tick));
                 }
+                // drop connection if necessary
                 if connection.should_drop() {
                     self.server_connection = None;
                     self.pre_connection_timestamp = None;
@@ -103,6 +135,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                     self.connection_state = AwaitingChallengeResponse;
                     return Some(Ok(ClientEvent::Disconnection));
                 } else {
+                    // send heartbeats
                     if connection.should_send_heartbeat() {
                         NaiaClient::internal_send_with_connection(
                             self.tick_manager.get_tick(),
@@ -112,6 +145,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                             Packet::empty(),
                         );
                     }
+                    // send pings
                     if connection.should_send_ping() {
                         let ping_payload = connection.get_ping_payload();
                         NaiaClient::internal_send_with_connection(
@@ -130,37 +164,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                             .send(Packet::new_raw(payload))
                             .expect("send failed!");
                         connection.mark_sent();
-                    }
-                    // receive command
-                    if let Some((pawn_key, command)) = connection.get_incoming_command() {
-                        return Some(Ok(ClientEvent::Command(
-                            pawn_key,
-                            command.as_ref().get_typed_copy(),
-                        )));
-                    }
-                    // receive event
-                    if let Some(event) = connection.get_incoming_event() {
-                        return Some(Ok(ClientEvent::Event(event)));
-                    }
-                    // receive entity message
-                    if let Some(message) = connection.get_incoming_entity_message() {
-                        match message {
-                            ClientEntityMessage::Create(local_key) => {
-                                return Some(Ok(ClientEvent::CreateEntity(local_key)));
-                            }
-                            ClientEntityMessage::Delete(local_key) => {
-                                return Some(Ok(ClientEvent::DeleteEntity(local_key)));
-                            }
-                            ClientEntityMessage::Update(local_key) => {
-                                return Some(Ok(ClientEvent::UpdateEntity(local_key)));
-                            }
-                            ClientEntityMessage::AssignPawn(local_key) => {
-                                return Some(Ok(ClientEvent::AssignPawn(local_key)));
-                            }
-                            ClientEntityMessage::UnassignPawn(local_key) => {
-                                return Some(Ok(ClientEvent::UnassignPawn(local_key)));
-                            }
-                        }
                     }
                 }
             }
