@@ -7,6 +7,7 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 
     let type_name = input.ident;
 
+    let read_full_method = get_read_full_method(&type_name, &input.data);
     let read_partial_method = get_read_partial_method(&type_name, &input.data);
     let inner_ref_method = get_inner_ref_method(&type_name, &input.data);
     let conversion_methods = get_conversion_methods(&type_name, &input.data);
@@ -15,6 +16,7 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let gen = quote! {
         use naia_shared::{EntityType, Entity, EntityEq, StateMask};
         impl EntityType for #type_name {
+            #read_full_method
             #read_partial_method
             #inner_ref_method
             #equals_method
@@ -23,6 +25,37 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     };
 
     proc_macro::TokenStream::from(gen)
+}
+
+fn get_read_full_method(type_name: &Ident, data: &Data) -> TokenStream {
+    let variants = match *data {
+        Data::Enum(ref data) => {
+            let mut output = quote! {};
+            for variant in data.variants.iter() {
+                let variant_name = &variant.ident;
+                let new_output_right = quote! {
+                    #type_name::#variant_name(identity) => {
+                        identity.as_ref().borrow_mut().read_full(bytes, packet_index);
+                    }
+                };
+                let new_output_result = quote! {
+                    #output
+                    #new_output_right
+                };
+                output = new_output_result;
+            }
+            output
+        }
+        _ => unimplemented!(),
+    };
+
+    return quote! {
+        fn read_full(&mut self, bytes: &[u8], packet_index: u16) {
+            match self {
+                #variants
+            }
+        }
+    };
 }
 
 fn get_read_partial_method(type_name: &Ident, data: &Data) -> TokenStream {

@@ -124,7 +124,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                 // update current tick
                 if self.tick_manager.has_ticked() {
                     // store pawn states
-                    connection.save_pawn_snapshots(self.tick_manager.get_tick());
+                    // connection.save_pawn_snapshots(self.tick_manager.get_tick());
                     return Some(Ok(ClientEvent::Tick));
                 }
                 // drop connection if necessary

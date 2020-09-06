@@ -18,6 +18,7 @@ pub struct ServerConnection<T: EventType, U: EntityType> {
     ping_manager: PingManager,
     command_sender: CommandSender<T>,
     command_receiver: CommandReceiver<T>,
+    last_replay_tick: Option<(u16, LocalEntityKey)>,
 }
 
 impl<T: EventType, U: EntityType> ServerConnection<T, U> {
@@ -31,6 +32,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
             ),
             command_sender: CommandSender::new(),
             command_receiver: CommandReceiver::new(),
+            last_replay_tick: None,
         };
     }
 
@@ -43,12 +45,12 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
             let mut writer = PacketWriter::new();
 
             while let Some((pawn_key, command)) = self.command_sender.pop_command() {
-                if !writer.write_command(manifest, pawn_key, &command) {
-                    self.command_sender.unpop_command(pawn_key, &command);
-                    break;
-                } else {
+                if writer.write_command(manifest, pawn_key, &command) {
                     self.command_receiver
                         .queue_command(host_tick, pawn_key, &command);
+                } else {
+                    self.command_sender.unpop_command(pawn_key, &command);
+                    break;
                 }
             }
 
@@ -128,10 +130,6 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.get_pawn(key);
     }
 
-    pub fn save_pawn_snapshots(&mut self, tick: u16) {
-        return self.entity_manager.save_pawn_snapshots(tick);
-    }
-
     pub fn fill_history(&self, buffer: &mut Vec<U>) {
         self.entity_manager.fill_history(buffer);
     }
@@ -204,15 +202,24 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     }
 
     pub fn get_incoming_command(&mut self) -> Option<(LocalEntityKey, Rc<Box<dyn Event<T>>>)> {
-        if let Some((history_tick, pawn_key, command)) = self
+        if let Some((last_replay_tick, pawn_key)) = self.last_replay_tick {
+            self.entity_manager
+                .save_replay_snapshot(last_replay_tick.wrapping_add(1), &pawn_key);
+            self.last_replay_tick = None;
+        }
+
+        if let Some((tick, pawn_key, command)) = self
             .command_receiver
             .pop_command_replay::<U>(&mut self.entity_manager)
         {
-            self.entity_manager
-                .save_replay_snapshot(history_tick - 1, &pawn_key);
+            self.last_replay_tick = Some((tick, pawn_key));
             return Some((pawn_key, command));
         }
-        return self.command_receiver.pop_command();
+        if let Some((tick, pawn_key, command)) = self.command_receiver.pop_command() {
+            self.last_replay_tick = Some((tick, pawn_key));
+            return Some((pawn_key, command));
+        }
+        return None;
     }
 
     // ping related

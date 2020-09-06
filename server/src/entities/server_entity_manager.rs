@@ -294,13 +294,24 @@ impl<T: EntityType> ServerEntityManager<T> {
                 && !record.get_state_mask().as_ref().borrow().is_clear()
             {
                 if let Some(entity_ref) = self.local_entity_store.get(key) {
-                    self.queued_messages
-                        .push_back(ServerEntityMessage::UpdateEntity(
-                            key,
-                            record.local_key,
-                            record.get_state_mask().clone(),
-                            entity_ref.clone(),
-                        ));
+                    if self.pawn_store.contains(&key) {
+                        // handle as a pawn
+                        self.queued_messages
+                            .push_back(ServerEntityMessage::UpdatePawn(
+                                key,
+                                record.local_key,
+                                entity_ref.clone(),
+                            ));
+                    } else {
+                        // handle as an entity
+                        self.queued_messages
+                            .push_back(ServerEntityMessage::UpdateEntity(
+                                key,
+                                record.local_key,
+                                record.get_state_mask().clone(),
+                                entity_ref.clone(),
+                            ));
+                    }
                 }
             }
         }
@@ -337,6 +348,7 @@ impl<T: EntityType> EntityNotifiable for ServerEntityManager<T> {
                     }
                     ServerEntityMessage::AssignPawn(_, _) => {}
                     ServerEntityMessage::UnassignPawn(_, _) => {}
+                    ServerEntityMessage::UpdatePawn(_, _, _) => {}
                 }
             }
 
@@ -385,6 +397,9 @@ impl<T: EntityType> EntityNotifiable for ServerEntityManager<T> {
                             }
                         }
                     }
+                    ServerEntityMessage::UpdatePawn(_, _, _) => {} /* Pawns send entire state
+                                                                    * every packet, no need to
+                                                                    * resend */
                 }
             }
 

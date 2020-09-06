@@ -99,6 +99,29 @@ impl EntityPacketWriter {
                     .write_u16::<BigEndian>(*local_key)
                     .unwrap(); //write local key
             }
+            ServerEntityMessage::UpdatePawn(_, local_key, entity) => {
+                //write entity payload
+                let mut entity_payload_bytes = Vec::<u8>::new();
+                entity.as_ref().borrow().write(&mut entity_payload_bytes);
+                if entity_payload_bytes.len() > 255 {
+                    error!(
+                        "cannot encode an entity with more than 255 bytes, need to implement this"
+                    );
+                }
+
+                //Write entity "header" (entity id & payload length)
+                entity_total_bytes
+                    .write_u8(message.write_message_type())
+                    .unwrap(); // write entity message type
+
+                entity_total_bytes
+                    .write_u16::<BigEndian>(*local_key)
+                    .unwrap(); //write local key
+                entity_total_bytes
+                    .write_u8(entity_payload_bytes.len() as u8)
+                    .unwrap(); // write payload length
+                entity_total_bytes.append(&mut entity_payload_bytes); // write payload
+            }
         }
 
         let mut hypothetical_next_payload_size =
