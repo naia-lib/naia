@@ -82,10 +82,11 @@ impl<U: EntityType> ClientEntityManager<U> {
                         .push_back(ClientEntityMessage::Delete(local_key));
                 }
                 2 => {
-                    // Update
+                    // Update Entity
                     let local_key = cursor.read_u16::<BigEndian>().unwrap().into();
 
                     if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
+                        // Entity is not a Pawn
                         let state_mask: StateMask = StateMask::read(cursor);
                         let payload_length: u8 = cursor.read_u8().unwrap().into();
                         let payload_start_position: usize = cursor.position() as usize;
@@ -97,19 +98,6 @@ impl<U: EntityType> ClientEntityManager<U> {
                             .into_boxed_slice();
 
                         entity_ref.read_partial(&state_mask, &entity_payload, packet_index);
-
-                        // if entity is a pawn, check it against it's history
-                        if let Some(pawn_history) = self.pawn_history.get_mut(&local_key) {
-                            if let Some(historical_pawn) = pawn_history.get(packet_tick) {
-                                if !entity_ref.equals(historical_pawn) {
-                                    // prediction error encountered!
-                                    info!("XXXXX prediction error encountered XXXXX ");
-                                    command_receiver.replay_commands(packet_tick, local_key);
-                                } else {
-                                    pawn_history.remove_until(packet_tick);
-                                }
-                            }
-                        }
 
                         self.queued_incoming_messages
                             .push_back(ClientEntityMessage::Update(local_key));
@@ -141,6 +129,41 @@ impl<U: EntityType> ClientEntityManager<U> {
                     self.pawn_history.remove(&local_key);
                     self.queued_incoming_messages
                         .push_back(ClientEntityMessage::UnassignPawn(local_key));
+                }
+                5 => {
+                    // Update Pawn
+                    let local_key = cursor.read_u16::<BigEndian>().unwrap().into();
+
+                    if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
+                        let payload_length: u8 = cursor.read_u8().unwrap().into();
+                        let payload_start_position: usize = cursor.position() as usize;
+                        let payload_end_position: usize =
+                            payload_start_position + (payload_length as usize);
+
+                        let entity_payload = buffer[payload_start_position..payload_end_position]
+                            .to_vec()
+                            .into_boxed_slice();
+
+                        entity_ref.read_full(&entity_payload, packet_index);
+
+                        // check it against it's history
+                        if let Some(pawn_history) = self.pawn_history.get_mut(&local_key) {
+                            if let Some(historical_pawn) = pawn_history.get(packet_tick) {
+                                if !entity_ref.equals(historical_pawn) {
+                                    // prediction error encountered!
+                                    info!("XXXXX prediction error encountered XXXXX ");
+                                    command_receiver.replay_commands(packet_tick, local_key);
+                                } else {
+                                    pawn_history.remove_until(packet_tick);
+                                }
+                            }
+                        }
+
+                        self.queued_incoming_messages
+                            .push_back(ClientEntityMessage::Update(local_key));
+
+                        cursor.set_position(payload_end_position as u64);
+                    }
                 }
                 _ => {}
             }
@@ -180,14 +203,6 @@ impl<U: EntityType> ClientEntityManager<U> {
     pub fn pawn_clear_history(&mut self, key: LocalEntityKey) {
         if let Some(pawn_history) = self.pawn_history.get_mut(&key) {
             pawn_history.clear();
-        }
-    }
-
-    pub fn save_pawn_snapshots(&mut self, host_tick: u16) {
-        let mut pawn_keys = Vec::new();
-        pawn_keys.extend(self.pawns_iter().map(|(key, _)| key));
-        for key in &pawn_keys {
-            self.save_replay_snapshot(host_tick, key);
         }
     }
 

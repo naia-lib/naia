@@ -6,17 +6,17 @@ use std::{
 };
 
 use crate::{client_entity_manager::ClientEntityManager, naia_client::LocalEntityKey};
-use naia_shared::{EntityType, Event, EventType, SequenceBuffer};
+use naia_shared::{wrapping_diff, EntityType, Event, EventType, SequenceBuffer};
 
 const COMMAND_HISTORY_SIZE: u16 = 64;
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
 pub struct CommandReceiver<T: EventType> {
-    queued_incoming_commands: VecDeque<(LocalEntityKey, Rc<Box<dyn Event<T>>>)>,
+    queued_incoming_commands: VecDeque<(u16, LocalEntityKey, Rc<Box<dyn Event<T>>>)>,
     command_history: HashMap<LocalEntityKey, SequenceBuffer<Vec<Rc<Box<dyn Event<T>>>>>>,
     queued_command_replays: VecDeque<(u16, LocalEntityKey, Rc<Box<dyn Event<T>>>)>,
-    replay_trigger: Option<(u16, LocalEntityKey)>,
+    replay_trigger: HashMap<LocalEntityKey, u16>,
 }
 
 impl<T: EventType> CommandReceiver<T> {
@@ -26,12 +26,12 @@ impl<T: EventType> CommandReceiver<T> {
             queued_incoming_commands: VecDeque::new(),
             command_history: HashMap::new(),
             queued_command_replays: VecDeque::new(),
-            replay_trigger: None,
+            replay_trigger: HashMap::new(),
         }
     }
 
     /// Gets the next queued Command
-    pub fn pop_command(&mut self) -> Option<(LocalEntityKey, Rc<Box<dyn Event<T>>>)> {
+    pub fn pop_command(&mut self) -> Option<(u16, LocalEntityKey, Rc<Box<dyn Event<T>>>)> {
         self.queued_incoming_commands.pop_front()
     }
 
@@ -40,34 +40,34 @@ impl<T: EventType> CommandReceiver<T> {
         &mut self,
         entity_manager: &mut ClientEntityManager<U>,
     ) -> Option<(u16, LocalEntityKey, Rc<Box<dyn Event<T>>>)> {
-        if self.replay_trigger.is_some() {
-            if let Some((history_tick, pawn_key)) = self.replay_trigger {
-                // set pawn to server authoritative state
-                entity_manager.pawn_reset(pawn_key);
+        for (pawn_key, history_tick) in self.replay_trigger.iter() {
+            // set pawn to server authoritative state
+            entity_manager.pawn_reset(*pawn_key);
 
-                // clear all
-                entity_manager.pawn_clear_history(pawn_key);
+            // clear all
+            entity_manager.pawn_clear_history(*pawn_key);
 
-                // trigger replay of historical commands
-                if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
-                    self.queued_command_replays.clear();
+            // trigger replay of historical commands
+            if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
+                self.queued_incoming_commands.clear();
+                self.queued_command_replays.clear();
 
-                    let current_tick = command_buffer.sequence_num();
-                    for tick in (history_tick + 1)..current_tick {
-                        if let Some(commands) = command_buffer.get_mut(tick) {
-                            for command in commands {
-                                self.queued_command_replays.push_back((
-                                    tick,
-                                    pawn_key,
-                                    command.clone(),
-                                ));
-                            }
+                let current_tick = command_buffer.sequence_num();
+                for tick in *history_tick..=current_tick {
+                    if let Some(commands) = command_buffer.get_mut(tick) {
+                        for command in commands {
+                            self.queued_command_replays.push_back((
+                                tick,
+                                *pawn_key,
+                                command.clone(),
+                            ));
                         }
                     }
                 }
             }
-            self.replay_trigger = None;
         }
+
+        self.replay_trigger.clear();
 
         self.queued_command_replays.pop_front()
     }
@@ -80,7 +80,7 @@ impl<T: EventType> CommandReceiver<T> {
         command: &Rc<Box<dyn Event<T>>>,
     ) {
         self.queued_incoming_commands
-            .push_back((local_entity_key, command.clone()));
+            .push_back((host_tick, local_entity_key, command.clone()));
 
         if !self.command_history.contains_key(&local_entity_key) {
             self.command_history.insert(
@@ -101,11 +101,12 @@ impl<T: EventType> CommandReceiver<T> {
 
     /// Queues commands to be replayed from a given tick
     pub fn replay_commands(&mut self, history_tick: u16, pawn_key: LocalEntityKey) {
-        //TODO: replay trigger should really be a queue, in the case that 2 Pawns both
-        // have prediction errors on the same tick
-        if self.replay_trigger.is_some() {
-            warn!("prediction error triggered more than once in a tick..");
+        if let Some(tick) = self.replay_trigger.get_mut(&pawn_key) {
+            if wrapping_diff(*tick, history_tick) > 0 {
+                *tick = history_tick;
+            }
+        } else {
+            self.replay_trigger.insert(pawn_key, history_tick);
         }
-        self.replay_trigger = Some((history_tick, pawn_key));
     }
 }

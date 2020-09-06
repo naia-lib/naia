@@ -24,6 +24,7 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         get_read_to_type_method(&type_name, entity_name, &enum_name, &properties);
     let entity_write_method = utils::get_write_method(&properties);
     let entity_write_partial_method = get_write_partial_method(&enum_name, &properties);
+    let entity_read_full_method = get_read_full_method(&enum_name, &properties);
     let entity_read_partial_method = get_read_partial_method(&enum_name, &properties);
     let set_mutator_method = get_set_mutator_method(&properties);
     let get_typed_copy_method = get_get_typed_copy_method(&type_name, entity_name, &properties);
@@ -66,6 +67,7 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             #set_mutator_method
             #entity_write_method
             #entity_write_partial_method
+            #entity_read_full_method
             #entity_read_partial_method
             #get_typed_copy_method
         }
@@ -267,6 +269,33 @@ fn get_write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) 
     return quote! {
         fn write_partial(&self, state_mask: &StateMask, buffer: &mut Vec<u8>) {
 
+            #output
+        }
+    };
+}
+
+fn get_read_full_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+    let mut output = quote! {};
+
+    for (field_name, _) in properties.iter() {
+        let uppercase_variant_name = Ident::new(
+            field_name.to_string().to_uppercase().as_str(),
+            Span::call_site(),
+        );
+
+        let new_output_right = quote! {
+            PropertyIo::read_seq(&mut self.#field_name, read_cursor, packet_index);
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    return quote! {
+        fn read_full(&mut self, buffer: &[u8], packet_index: u16) {
+            let read_cursor = &mut Cursor::new(buffer);
             #output
         }
     };
