@@ -15,6 +15,7 @@ pub enum ServerEntityMessage<T: EntityType> {
     DeleteEntity(EntityKey, LocalEntityKey),
     AssignPawn(EntityKey, LocalEntityKey),
     UnassignPawn(EntityKey, LocalEntityKey),
+    UpdatePawn(EntityKey, LocalEntityKey, Rc<RefCell<dyn Entity<T>>>),
 }
 
 impl<T: EntityType> ServerEntityMessage<T> {
@@ -25,6 +26,7 @@ impl<T: EntityType> ServerEntityMessage<T> {
             ServerEntityMessage::UpdateEntity(_, _, _, _) => 2,
             ServerEntityMessage::AssignPawn(_, _) => 3,
             ServerEntityMessage::UnassignPawn(_, _) => 4,
+            ServerEntityMessage::UpdatePawn(_, _, _) => 5,
         }
     }
 }
@@ -46,6 +48,9 @@ impl<T: EntityType> Clone for ServerEntityMessage<T> {
             }
             ServerEntityMessage::UnassignPawn(gk, lk) => {
                 ServerEntityMessage::UnassignPawn(gk.clone(), lk.clone())
+            }
+            ServerEntityMessage::UpdatePawn(gk, lk, e) => {
+                ServerEntityMessage::UpdatePawn(gk.clone(), lk.clone(), e.clone())
             }
         }
     }
