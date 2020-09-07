@@ -99,7 +99,7 @@ impl EntityPacketWriter {
                     .write_u16::<BigEndian>(*local_key)
                     .unwrap(); //write local key
             }
-            ServerEntityMessage::UpdatePawn(_, local_key, entity) => {
+            ServerEntityMessage::UpdatePawn(_, local_key, _, entity) => {
                 //write entity payload
                 let mut entity_payload_bytes = Vec::<u8>::new();
                 entity.as_ref().borrow().write(&mut entity_payload_bytes);
