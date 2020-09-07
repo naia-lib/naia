@@ -93,33 +93,21 @@ impl<T: EntityType> ServerEntityManager<T> {
                         state_mask,
                         entity,
                     ) => {
-                        // previously the state mask was the CURRENT state mask for the entity,
-                        // we want to lock that in so we know exactly what we're writing
                         let locked_state_mask =
-                            Rc::new(RefCell::new(state_mask.as_ref().borrow().clone()));
-
-                        // place state mask in a special transmission record - like map
-                        if !self.sent_updates.contains_key(&packet_index) {
-                            let sent_updates_map: HashMap<EntityKey, Rc<RefCell<StateMask>>> =
-                                HashMap::new();
-                            self.sent_updates.insert(packet_index, sent_updates_map);
-                            self.last_last_update_packet_index = self.last_update_packet_index;
-                            self.last_update_packet_index = packet_index;
-                        }
-
-                        if let Some(sent_updates_map) = self.sent_updates.get_mut(&packet_index) {
-                            sent_updates_map.insert(*global_key, locked_state_mask.clone());
-                        }
-
-                        // having copied the state mask for this update, clear the state
-                        self.last_popped_state_mask = state_mask.as_ref().borrow().clone();
-                        self.mut_handler
-                            .as_ref()
-                            .borrow_mut()
-                            .clear_state(&self.address, global_key);
-
+                            self.process_entity_update(packet_index, global_key, state_mask);
                         // return new Update message to be written
                         return Some(ServerEntityMessage::UpdateEntity(
+                            *global_key,
+                            *local_key,
+                            locked_state_mask,
+                            entity.clone(),
+                        ));
+                    }
+                    ServerEntityMessage::UpdatePawn(global_key, local_key, state_mask, entity) => {
+                        let locked_state_mask =
+                            self.process_entity_update(packet_index, global_key, state_mask);
+                        // return new Update message to be written
+                        return Some(ServerEntityMessage::UpdatePawn(
                             *global_key,
                             *local_key,
                             locked_state_mask,
@@ -135,6 +123,38 @@ impl<T: EntityType> ServerEntityManager<T> {
                 return None;
             }
         }
+    }
+
+    fn process_entity_update(
+        &mut self,
+        packet_index: u16,
+        global_key: &EntityKey,
+        state_mask: &Rc<RefCell<StateMask>>,
+    ) -> Rc<RefCell<StateMask>> {
+        // previously the state mask was the CURRENT state mask for the entity,
+        // we want to lock that in so we know exactly what we're writing
+        let locked_state_mask = Rc::new(RefCell::new(state_mask.as_ref().borrow().clone()));
+
+        // place state mask in a special transmission record - like map
+        if !self.sent_updates.contains_key(&packet_index) {
+            let sent_updates_map: HashMap<EntityKey, Rc<RefCell<StateMask>>> = HashMap::new();
+            self.sent_updates.insert(packet_index, sent_updates_map);
+            self.last_last_update_packet_index = self.last_update_packet_index;
+            self.last_update_packet_index = packet_index;
+        }
+
+        if let Some(sent_updates_map) = self.sent_updates.get_mut(&packet_index) {
+            sent_updates_map.insert(*global_key, locked_state_mask.clone());
+        }
+
+        // having copied the state mask for this update, clear the state
+        self.last_popped_state_mask = state_mask.as_ref().borrow().clone();
+        self.mut_handler
+            .as_ref()
+            .borrow_mut()
+            .clear_state(&self.address, global_key);
+
+        locked_state_mask
     }
 
     pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: &ServerEntityMessage<T>) {
@@ -155,26 +175,19 @@ impl<T: EntityType> ServerEntityManager<T> {
                 );
             }
             ServerEntityMessage::UpdateEntity(global_key, local_key, _, entity) => {
-                if let Some(sent_updates_map) = self.sent_updates.get_mut(&packet_index) {
-                    sent_updates_map.remove(global_key);
-                    if sent_updates_map.len() == 0 {
-                        self.sent_updates.remove(&packet_index);
-                    }
-                }
-
-                self.last_update_packet_index = self.last_last_update_packet_index;
-                self.mut_handler.as_ref().borrow_mut().set_state(
-                    &self.address,
-                    global_key,
-                    &self.last_popped_state_mask,
-                );
-
-                let record = self
-                    .entity_records
-                    .get(*global_key)
-                    .expect("uh oh, we don't have enough info to unpop the message");
-                let original_state_mask = record.get_state_mask().clone();
+                let original_state_mask = self.undo_entity_update(&packet_index, &global_key);
                 let cloned_message = ServerEntityMessage::UpdateEntity(
+                    *global_key,
+                    *local_key,
+                    original_state_mask,
+                    entity.clone(),
+                );
+                self.queued_messages.push_front(cloned_message);
+                return;
+            }
+            ServerEntityMessage::UpdatePawn(global_key, local_key, _, entity) => {
+                let original_state_mask = self.undo_entity_update(&packet_index, &global_key);
+                let cloned_message = ServerEntityMessage::UpdatePawn(
                     *global_key,
                     *local_key,
                     original_state_mask,
@@ -187,6 +200,32 @@ impl<T: EntityType> ServerEntityManager<T> {
         }
 
         self.queued_messages.push_front(message.clone());
+    }
+
+    fn undo_entity_update(
+        &mut self,
+        packet_index: &u16,
+        global_key: &EntityKey,
+    ) -> Rc<RefCell<StateMask>> {
+        if let Some(sent_updates_map) = self.sent_updates.get_mut(packet_index) {
+            sent_updates_map.remove(global_key);
+            if sent_updates_map.len() == 0 {
+                self.sent_updates.remove(&packet_index);
+            }
+        }
+
+        self.last_update_packet_index = self.last_last_update_packet_index;
+        self.mut_handler.as_ref().borrow_mut().set_state(
+            &self.address,
+            global_key,
+            &self.last_popped_state_mask,
+        );
+
+        self.entity_records
+            .get(*global_key)
+            .expect("uh oh, we don't have enough info to unpop the message")
+            .get_state_mask()
+            .clone()
     }
 
     pub fn has_entity(&self, key: &EntityKey) -> bool {
@@ -300,6 +339,7 @@ impl<T: EntityType> ServerEntityManager<T> {
                             .push_back(ServerEntityMessage::UpdatePawn(
                                 key,
                                 record.local_key,
+                                record.get_state_mask().clone(),
                                 entity_ref.clone(),
                             ));
                     } else {
@@ -343,12 +383,12 @@ impl<T: EntityType> EntityNotifiable for ServerEntityManager<T> {
                             self.entity_records.remove(global_key);
                         }
                     }
-                    ServerEntityMessage::UpdateEntity(_, _, _, _) => {
+                    ServerEntityMessage::UpdateEntity(_, _, _, _)
+                    | ServerEntityMessage::UpdatePawn(_, _, _, _) => {
                         self.sent_updates.remove(&packet_index);
                     }
                     ServerEntityMessage::AssignPawn(_, _) => {}
                     ServerEntityMessage::UnassignPawn(_, _) => {}
-                    ServerEntityMessage::UpdatePawn(_, _, _) => {}
                 }
             }
 
@@ -366,7 +406,8 @@ impl<T: EntityType> EntityNotifiable for ServerEntityManager<T> {
                     | ServerEntityMessage::UnassignPawn(_, _) => {
                         self.queued_messages.push_back(dropped_message.clone());
                     }
-                    ServerEntityMessage::UpdateEntity(global_key, _, _, _) => {
+                    ServerEntityMessage::UpdateEntity(global_key, _, _, _)
+                    | ServerEntityMessage::UpdatePawn(global_key, _, _, _) => {
                         if let Some(state_mask_map) = self.sent_updates.get(&dropped_packet_index) {
                             if let Some(state_mask) = state_mask_map.get(global_key) {
                                 let mut new_state_mask = state_mask.as_ref().borrow().clone();
@@ -397,9 +438,6 @@ impl<T: EntityType> EntityNotifiable for ServerEntityManager<T> {
                             }
                         }
                     }
-                    ServerEntityMessage::UpdatePawn(_, _, _) => {} /* Pawns send entire state
-                                                                    * every packet, no need to
-                                                                    * resend */
                 }
             }
 
