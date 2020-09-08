@@ -6,8 +6,8 @@ use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 
 pub use naia_shared::{
     ConnectionConfig, EntityType, Event, EventType, HostTickManager, LocalEntityKey, ManagerType,
-    Manifest, PacketReader, PacketType, PacketWriter, SharedConfig, StandardHeader, Timer,
-    Timestamp,
+    Manifest, PacketReader, PacketType, PacketWriter, SequenceIterator, SharedConfig,
+    StandardHeader, Timer, Timestamp,
 };
 
 use super::{
@@ -348,22 +348,19 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .get_local_entity(key);
     }
 
-    ///TESTING
-    pub fn fill_history(&self, buffer: &mut Vec<U>) -> bool {
-        if let Some(connection) = &self.server_connection {
-            connection.fill_history(buffer);
-            return true;
-        }
-        return false;
-    }
-
-    /////TESTING
-
-    /// Return an iterator to the collection of all pawns tracked by the
+    /// Return an iterator to the collection of all Pawns tracked by the
     /// Client
     pub fn pawns_iter(&self) -> Option<Iter<LocalEntityKey, U>> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.pawns_iter());
+        }
+        return None;
+    }
+
+    /// Return an iterator to all historical snapshots of a particular Pawn
+    pub fn pawn_history_iter(&self, pawn_key: &LocalEntityKey) -> Option<SequenceIterator<U>> {
+        if let Some(connection) = &self.server_connection {
+            return connection.pawn_history_iter(pawn_key);
         }
         return None;
     }

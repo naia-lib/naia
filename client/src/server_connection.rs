@@ -2,7 +2,8 @@ use std::{collections::hash_map::Iter, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType,
-    Manifest, PacketReader, PacketType, PacketWriter, SequenceNumber, StandardHeader,
+    Manifest, PacketReader, PacketType, PacketWriter, SequenceIterator, SequenceNumber,
+    StandardHeader,
 };
 
 use super::{
@@ -126,12 +127,12 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.pawns_iter();
     }
 
-    pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
-        return self.entity_manager.get_pawn(key);
+    pub fn pawn_history_iter(&self, pawn_key: &LocalEntityKey) -> Option<SequenceIterator<U>> {
+        return self.entity_manager.pawn_history_iter(pawn_key);
     }
 
-    pub fn fill_history(&self, buffer: &mut Vec<U>) {
-        self.entity_manager.fill_history(buffer);
+    pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
+        return self.entity_manager.get_pawn(key);
     }
 
     // Pass-through methods to underlying common connection
