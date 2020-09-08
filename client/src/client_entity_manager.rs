@@ -79,6 +79,8 @@ impl<U: EntityType> ClientEntityManager<U> {
                     // Deletion
                     let local_key = cursor.read_u16::<BigEndian>().unwrap().into();
                     self.local_entity_store.remove(&local_key);
+                    self.pawn_store.remove(&local_key);
+                    self.pawn_history.remove(&local_key);
                     self.queued_incoming_messages
                         .push_back(ClientEntityMessage::Delete(local_key));
                 }

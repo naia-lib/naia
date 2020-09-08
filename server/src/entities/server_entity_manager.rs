@@ -381,6 +381,7 @@ impl<T: EntityType> EntityNotifiable for ServerEntityManager<T> {
                             self.local_to_global_key_map.remove(local_key);
                             self.recycled_local_keys.push(*local_key);
                             self.entity_records.remove(global_key);
+                            self.pawn_store.remove(&global_key);
                         }
                     }
                     ServerEntityMessage::UpdateEntity(_, _, _, _)
