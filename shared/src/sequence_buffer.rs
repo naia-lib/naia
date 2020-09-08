@@ -140,6 +140,54 @@ impl<T: Clone> SequenceBuffer<T> {
             self.remove(seq);
         }
     }
+
+    /// Get an iterator into the sequence
+    pub fn iter(&self) -> SequenceIterator<T> {
+        return SequenceIterator::new(self.oldest(), self.entry_sequences.len(), self);
+    }
+}
+
+/// Iterator for a Sequence
+pub struct SequenceIterator<'s, T>
+where
+    T: 's + Clone,
+{
+    index: u16,
+    count: usize,
+    buffer: &'s SequenceBuffer<T>,
+}
+
+impl<'s, T: Clone> SequenceIterator<'s, T> {
+    /// Create a new iterator for a sequence
+    pub fn new(
+        start: u16,
+        count: usize,
+        seq_buf: &'s SequenceBuffer<T>,
+    ) -> SequenceIterator<'s, T> {
+        SequenceIterator::<T> {
+            index: start,
+            count,
+            buffer: seq_buf,
+        }
+    }
+}
+
+impl<'s, T: Clone> Iterator for SequenceIterator<'s, T> {
+    type Item = &'s T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if self.count == 0 {
+                return None;
+            }
+            let current_item = self.buffer.get(self.index);
+            self.index = self.index.wrapping_add(1);
+            self.count -= 1;
+            if current_item.is_some() {
+                return current_item;
+            }
+        }
+    }
 }
 
 pub fn sequence_greater_than(s1: u16, s2: u16) -> bool {

@@ -1,7 +1,8 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use log::{info, warn};
 use naia_shared::{
-    EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer, StateMask,
+    EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer,
+    SequenceIterator, StateMask,
 };
 use std::collections::{hash_map::Iter, HashMap, VecDeque};
 
@@ -159,6 +160,9 @@ impl<U: EntityType> ClientEntityManager<U> {
                             }
                         }
 
+                        // remove command history until the tick that has already been checked
+                        command_receiver.remove_history_until(packet_tick, local_key);
+
                         self.queued_incoming_messages
                             .push_back(ClientEntityMessage::Update(local_key));
 
@@ -184,6 +188,13 @@ impl<U: EntityType> ClientEntityManager<U> {
 
     pub fn pawns_iter(&self) -> Iter<'_, LocalEntityKey, U> {
         return self.pawn_store.iter();
+    }
+
+    pub fn pawn_history_iter(&self, key: &LocalEntityKey) -> Option<SequenceIterator<'_, U>> {
+        if let Some(pawn_history) = self.pawn_history.get(&key) {
+            return Some(pawn_history.iter());
+        }
+        return None;
     }
 
     pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
@@ -213,17 +224,6 @@ impl<U: EntityType> ClientEntityManager<U> {
                     history_tick,
                     pawn_ref.inner_ref().as_ref().borrow().get_typed_copy(),
                 );
-            }
-        }
-    }
-
-    pub fn fill_history(&self, buffer: &mut Vec<U>) {
-        for (key, sequence) in self.pawn_history.iter() {
-            let oldest = sequence.oldest();
-            for seq in oldest..sequence.sequence_num() {
-                if let Some(pawn_ref) = sequence.get(seq) {
-                    buffer.push(pawn_ref.inner_ref().as_ref().borrow().get_typed_copy());
-                }
             }
         }
     }

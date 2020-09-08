@@ -68,7 +68,7 @@ pub use manifest::Manifest;
 pub use packet_reader::PacketReader;
 pub use packet_type::PacketType;
 pub use packet_writer::{PacketWriter, MTU_SIZE};
-pub use sequence_buffer::{SequenceBuffer, SequenceNumber};
+pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
 pub use shared_config::SharedConfig;
 pub use standard_header::StandardHeader;
 pub use timestamp::Timestamp;
