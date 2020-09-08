@@ -1,5 +1,3 @@
-use log::{info, warn};
-
 use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
@@ -107,6 +105,13 @@ impl<T: EventType> CommandReceiver<T> {
             }
         } else {
             self.replay_trigger.insert(pawn_key, history_tick);
+        }
+    }
+
+    /// Removes command history for a given pawn until a specific tick
+    pub fn remove_history_until(&mut self, history_tick: u16, pawn_key: LocalEntityKey) {
+        if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
+            command_buffer.remove_until(history_tick);
         }
     }
 }
