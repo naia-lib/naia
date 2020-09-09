@@ -79,8 +79,13 @@ impl<U: EntityType> ClientEntityManager<U> {
                     // Deletion
                     let local_key = cursor.read_u16::<BigEndian>().unwrap().into();
                     self.local_entity_store.remove(&local_key);
-                    self.pawn_store.remove(&local_key);
-                    self.pawn_history.remove(&local_key);
+
+                    if self.pawn_store.contains_key(&local_key) {
+                        self.pawn_store.remove(&local_key);
+                        self.pawn_history.remove(&local_key);
+                        command_receiver.pawn_cleanup(&local_key);
+                    }
+
                     self.queued_incoming_messages
                         .push_back(ClientEntityMessage::Delete(local_key));
                 }
@@ -121,6 +126,8 @@ impl<U: EntityType> ClientEntityManager<U> {
                         self.pawn_history
                             .insert(local_key, SequenceBuffer::with_capacity(PAWN_HISTORY_SIZE));
 
+                        command_receiver.pawn_init(&local_key);
+
                         self.queued_incoming_messages
                             .push_back(ClientEntityMessage::AssignPawn(local_key));
                     }
@@ -128,8 +135,11 @@ impl<U: EntityType> ClientEntityManager<U> {
                 4 => {
                     // Unassign Pawn
                     let local_key: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
-                    self.pawn_store.remove(&local_key);
-                    self.pawn_history.remove(&local_key);
+                    if self.pawn_store.contains_key(&local_key) {
+                        self.pawn_store.remove(&local_key);
+                        self.pawn_history.remove(&local_key);
+                        command_receiver.pawn_cleanup(&local_key);
+                    }
                     self.queued_incoming_messages
                         .push_back(ClientEntityMessage::UnassignPawn(local_key));
                 }

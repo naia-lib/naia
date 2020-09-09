@@ -3,6 +3,8 @@ use std::{
     rc::Rc,
 };
 
+use log::warn;
+
 use crate::{client_entity_manager::ClientEntityManager, naia_client::LocalEntityKey};
 use naia_shared::{wrapping_diff, EntityType, Event, EventType, SequenceBuffer};
 
@@ -12,7 +14,7 @@ const COMMAND_HISTORY_SIZE: u16 = 64;
 #[derive(Debug)]
 pub struct CommandReceiver<T: EventType> {
     queued_incoming_commands: VecDeque<(u16, LocalEntityKey, Rc<Box<dyn Event<T>>>)>,
-    command_history: HashMap<LocalEntityKey, SequenceBuffer<Vec<Rc<Box<dyn Event<T>>>>>>,
+    command_history: HashMap<LocalEntityKey, SequenceBuffer<Rc<Box<dyn Event<T>>>>>,
     queued_command_replays: VecDeque<(u16, LocalEntityKey, Rc<Box<dyn Event<T>>>)>,
     replay_trigger: HashMap<LocalEntityKey, u16>,
 }
@@ -52,14 +54,9 @@ impl<T: EventType> CommandReceiver<T> {
 
                 let current_tick = command_buffer.sequence_num();
                 for tick in *history_tick..=current_tick {
-                    if let Some(commands) = command_buffer.get_mut(tick) {
-                        for command in commands {
-                            self.queued_command_replays.push_back((
-                                tick,
-                                *pawn_key,
-                                command.clone(),
-                            ));
-                        }
+                    if let Some(command) = command_buffer.get_mut(tick) {
+                        self.queued_command_replays
+                            .push_back((tick, *pawn_key, command.clone()));
                     }
                 }
             }
@@ -74,26 +71,14 @@ impl<T: EventType> CommandReceiver<T> {
     pub fn queue_command(
         &mut self,
         host_tick: u16,
-        local_entity_key: LocalEntityKey,
+        pawn_key: LocalEntityKey,
         command: &Rc<Box<dyn Event<T>>>,
     ) {
         self.queued_incoming_commands
-            .push_back((host_tick, local_entity_key, command.clone()));
+            .push_back((host_tick, pawn_key, command.clone()));
 
-        if !self.command_history.contains_key(&local_entity_key) {
-            self.command_history.insert(
-                local_entity_key,
-                SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE),
-            );
-        }
-
-        if let Some(command_buffer) = self.command_history.get_mut(&local_entity_key) {
-            if !command_buffer.exists(host_tick) {
-                command_buffer.insert(host_tick, Vec::new());
-            }
-            if let Some(queue) = command_buffer.get_mut(host_tick) {
-                queue.push(command.clone());
-            }
+        if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
+            command_buffer.insert(host_tick, command.clone());
         }
     }
 
@@ -113,5 +98,18 @@ impl<T: EventType> CommandReceiver<T> {
         if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
             command_buffer.remove_until(history_tick);
         }
+    }
+
+    /// Perform initialization on pawn creation
+    pub fn pawn_init(&mut self, pawn_key: &LocalEntityKey) {
+        self.command_history.insert(
+            *pawn_key,
+            SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE),
+        );
+    }
+
+    /// Perform cleanup on pawn deletion
+    pub fn pawn_cleanup(&mut self, pawn_key: &LocalEntityKey) {
+        self.command_history.remove(pawn_key);
     }
 }
