@@ -177,7 +177,7 @@ impl<'s, T: Clone> Iterator for SequenceIterator<'s, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if self.count < 0 {
+            if self.count == 0 {
                 return None;
             }
             let current_item = self.buffer.get(self.index);
