@@ -27,7 +27,7 @@ mod naia_client;
 mod ping_manager;
 mod server_connection;
 
-pub use naia_shared::{find_my_ip_address, LinkConditionerConfig};
+pub use naia_shared::{find_my_ip_address, random, LinkConditionerConfig};
 
 pub use client_config::ClientConfig;
 pub use client_event::ClientEvent;
