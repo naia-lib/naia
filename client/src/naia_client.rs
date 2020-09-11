@@ -329,14 +329,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         return self.server_address;
     }
 
-    /// Return an iterator to the collection of all local entities tracked by
-    /// the Client
-    pub fn entities_iter(&self) -> Option<Iter<LocalEntityKey, U>> {
-        if let Some(connection) = &self.server_connection {
-            return Some(connection.entities_iter());
-        }
-        return None;
-    }
+    // entities
 
     /// Get a reference to an Entity currently in scope for the Client, given
     /// that Entity's Key
@@ -346,6 +339,22 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .as_ref()
             .unwrap()
             .get_local_entity(key);
+    }
+
+    /// Return an iterator to the collection of all local entities tracked by
+    /// the Client
+    pub fn entities_iter(&self) -> Option<Iter<LocalEntityKey, U>> {
+        if let Some(connection) = &self.server_connection {
+            return Some(connection.entities_iter());
+        }
+        return None;
+    }
+
+    // pawns
+
+    /// Get a reference to a Pawn
+    pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
+        return self.server_connection.as_ref().unwrap().get_pawn(key);
     }
 
     /// Return an iterator to the collection of all Pawns tracked by the
@@ -365,10 +374,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         return None;
     }
 
-    /// Get a reference to a Pawn
-    pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
-        return self.server_connection.as_ref().unwrap().get_pawn(key);
-    }
+    // connection metrics
 
     /// Gets the average Round Trip Time measured to the Server
     pub fn get_rtt(&self) -> f32 {
@@ -379,6 +385,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     pub fn get_jitter(&self) -> f32 {
         return self.server_connection.as_ref().unwrap().get_jitter();
     }
+
+    // ticks
 
     /// Gets the current tick of the Client
     pub fn get_client_tick(&self) -> u16 {
@@ -393,6 +401,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .unwrap()
             .get_last_received_tick();
     }
+
+    // internal functions
 
     fn internal_send_with_connection(
         host_tick: u16,
