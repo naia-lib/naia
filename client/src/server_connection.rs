@@ -1,14 +1,15 @@
 use std::{collections::hash_map::Iter, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
-    Connection, ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType,
-    Manifest, PacketReader, PacketType, PacketWriter, SequenceIterator, SequenceNumber,
-    StandardHeader,
+    Connection, ConnectionConfig, EntityType, Event, EventType, Instant, LocalEntityKey,
+    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceIterator,
+    SequenceNumber, StandardHeader,
 };
 
 use super::{
     client_entity_manager::ClientEntityManager, client_entity_message::ClientEntityMessage,
-    command_sender::CommandSender, ping_manager::PingManager,
+    command_sender::CommandSender, interpolation_manager::InterpolationManager,
+    ping_manager::PingManager,
 };
 use crate::{client_tick_manager::ClientTickManager, command_receiver::CommandReceiver, Packet};
 
@@ -20,6 +21,7 @@ pub struct ServerConnection<T: EventType, U: EntityType> {
     command_sender: CommandSender<T>,
     command_receiver: CommandReceiver<T>,
     last_replay_tick: Option<(u16, LocalEntityKey)>,
+    interpolation_manager: InterpolationManager<U>,
 }
 
 impl<T: EventType, U: EntityType> ServerConnection<T, U> {
@@ -27,6 +29,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
             entity_manager: ClientEntityManager::new(),
+            interpolation_manager: InterpolationManager::new(),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
@@ -133,6 +136,32 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
         return self.entity_manager.get_pawn(key);
+    }
+
+    // Pass-through methods to underlying interpolation manager
+
+    pub fn create_interpolation(&mut self, key: &LocalEntityKey) {
+        return self.interpolation_manager.create_interpolation(key);
+    }
+
+    pub fn delete_interpolation(&mut self, key: &LocalEntityKey) {
+        return self.interpolation_manager.delete_interpolation(key);
+    }
+
+    pub fn get_interpolation(&self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
+        return self.interpolation_manager.get_interpolation(key, now);
+    }
+
+    pub fn create_pawn_interpolation(&mut self, key: &LocalEntityKey) {
+        return self.interpolation_manager.create_pawn_interpolation(key);
+    }
+
+    pub fn delete_pawn_interpolation(&mut self, key: &LocalEntityKey) {
+        return self.interpolation_manager.delete_pawn_interpolation(key);
+    }
+
+    pub fn get_pawn_interpolation(&self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
+        return self.interpolation_manager.get_pawn_interpolation(key, now);
     }
 
     // Pass-through methods to underlying common connection

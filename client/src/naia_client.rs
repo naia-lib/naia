@@ -5,8 +5,8 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 
 pub use naia_shared::{
-    ConnectionConfig, EntityType, Event, EventType, HostTickManager, LocalEntityKey, ManagerType,
-    Manifest, PacketReader, PacketType, PacketWriter, SequenceIterator, SharedConfig,
+    ConnectionConfig, EntityType, Event, EventType, HostTickManager, Instant, LocalEntityKey,
+    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceIterator, SharedConfig,
     StandardHeader, Timer, Timestamp,
 };
 
@@ -400,6 +400,64 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .as_ref()
             .unwrap()
             .get_last_received_tick();
+    }
+
+    // interpolation
+
+    /// Create an interpolation of the Entity with the given key
+    pub fn create_interpolation(&mut self, key: &LocalEntityKey) {
+        return self
+            .server_connection
+            .as_mut()
+            .unwrap()
+            .create_interpolation(key);
+    }
+
+    /// Delete an interpolation associated with the given key
+    pub fn delete_interpolation(&mut self, key: &LocalEntityKey) {
+        return self
+            .server_connection
+            .as_mut()
+            .unwrap()
+            .delete_interpolation(key);
+    }
+
+    /// Gets the interpolation of the Entity associated with the given key, for
+    /// a specific Instant in time
+    pub fn get_interpolation(&self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
+        return self
+            .server_connection
+            .as_ref()
+            .unwrap()
+            .get_interpolation(key, now);
+    }
+
+    /// Create an interpolation of the Pawn with the given key
+    pub fn create_pawn_interpolation(&mut self, key: &LocalEntityKey) {
+        return self
+            .server_connection
+            .as_mut()
+            .unwrap()
+            .create_pawn_interpolation(key);
+    }
+
+    /// Delete an interpolation associated with the given key
+    pub fn delete_pawn_interpolation(&mut self, key: &LocalEntityKey) {
+        return self
+            .server_connection
+            .as_mut()
+            .unwrap()
+            .delete_pawn_interpolation(key);
+    }
+
+    /// Gets the interpolation of the Pawn associated with the given key, for
+    /// a specific Instant in time
+    pub fn get_pawn_interpolation(&self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
+        return self
+            .server_connection
+            .as_ref()
+            .unwrap()
+            .get_pawn_interpolation(key, now);
     }
 
     // internal functions
