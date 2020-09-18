@@ -333,7 +333,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
     /// Get a reference to an Entity currently in scope for the Client, given
     /// that Entity's Key
-    pub fn get_entity(&self, key: LocalEntityKey) -> Option<&U> {
+    pub fn get_entity(&self, key: &LocalEntityKey) -> Option<&U> {
         return self
             .server_connection
             .as_ref()
@@ -353,7 +353,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     // pawns
 
     /// Get a reference to a Pawn
-    pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
+    pub fn get_pawn(&self, key: &LocalEntityKey) -> Option<&U> {
         return self.server_connection.as_ref().unwrap().get_pawn(key);
     }
 
@@ -424,10 +424,10 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
     /// Gets the interpolation of the Entity associated with the given key, for
     /// a specific Instant in time
-    pub fn get_interpolation(&self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
+    pub fn get_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
         return self
             .server_connection
-            .as_ref()
+            .as_mut()
             .unwrap()
             .get_interpolation(key, now);
     }
@@ -452,10 +452,10 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
     /// Gets the interpolation of the Pawn associated with the given key, for
     /// a specific Instant in time
-    pub fn get_pawn_interpolation(&self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
+    pub fn get_pawn_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
         return self
             .server_connection
-            .as_ref()
+            .as_mut()
             .unwrap()
             .get_pawn_interpolation(key, now);
     }

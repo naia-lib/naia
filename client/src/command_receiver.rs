@@ -42,10 +42,10 @@ impl<T: EventType> CommandReceiver<T> {
     ) -> Option<(u16, LocalEntityKey, Rc<Box<dyn Event<T>>>)> {
         for (pawn_key, history_tick) in self.replay_trigger.iter() {
             // set pawn to server authoritative state
-            entity_manager.pawn_reset(*pawn_key);
+            entity_manager.pawn_reset(pawn_key);
 
             // clear all
-            entity_manager.pawn_clear_history(*pawn_key);
+            entity_manager.pawn_clear_history(pawn_key);
 
             // trigger replay of historical commands
             if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {

@@ -122,7 +122,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.entities_iter();
     }
 
-    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&U> {
+    pub fn get_local_entity(&self, key: &LocalEntityKey) -> Option<&U> {
         return self.entity_manager.get_local_entity(key);
     }
 
@@ -134,34 +134,41 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.pawn_history_iter(pawn_key);
     }
 
-    pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
+    pub fn get_pawn(&self, key: &LocalEntityKey) -> Option<&U> {
         return self.entity_manager.get_pawn(key);
     }
 
     // Pass-through methods to underlying interpolation manager
 
     pub fn create_interpolation(&mut self, key: &LocalEntityKey) {
-        return self.interpolation_manager.create_interpolation(key);
+        self.interpolation_manager
+            .create_interpolation(&self.entity_manager, key);
     }
 
     pub fn delete_interpolation(&mut self, key: &LocalEntityKey) {
         return self.interpolation_manager.delete_interpolation(key);
     }
 
-    pub fn get_interpolation(&self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
-        return self.interpolation_manager.get_interpolation(key, now);
+    pub fn get_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
+        return self
+            .interpolation_manager
+            .get_interpolation(&self.entity_manager, now, key);
     }
 
     pub fn create_pawn_interpolation(&mut self, key: &LocalEntityKey) {
-        return self.interpolation_manager.create_pawn_interpolation(key);
+        return self
+            .interpolation_manager
+            .create_pawn_interpolation(&self.entity_manager, key);
     }
 
     pub fn delete_pawn_interpolation(&mut self, key: &LocalEntityKey) {
         return self.interpolation_manager.delete_pawn_interpolation(key);
     }
 
-    pub fn get_pawn_interpolation(&self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
-        return self.interpolation_manager.get_pawn_interpolation(key, now);
+    pub fn get_pawn_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
+        return self
+            .interpolation_manager
+            .get_pawn_interpolation(&self.entity_manager, now, key);
     }
 
     // Pass-through methods to underlying common connection
