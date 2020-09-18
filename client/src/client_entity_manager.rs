@@ -194,8 +194,8 @@ impl<U: EntityType> ClientEntityManager<U> {
         return self.local_entity_store.iter();
     }
 
-    pub fn get_local_entity(&self, key: LocalEntityKey) -> Option<&U> {
-        return self.local_entity_store.get(&key);
+    pub fn get_local_entity(&self, key: &LocalEntityKey) -> Option<&U> {
+        return self.local_entity_store.get(key);
     }
 
     pub fn pawns_iter(&self) -> Iter<'_, LocalEntityKey, U> {
@@ -209,21 +209,21 @@ impl<U: EntityType> ClientEntityManager<U> {
         return None;
     }
 
-    pub fn get_pawn(&self, key: LocalEntityKey) -> Option<&U> {
-        return self.pawn_store.get(&key);
+    pub fn get_pawn(&self, key: &LocalEntityKey) -> Option<&U> {
+        return self.pawn_store.get(key);
     }
 
-    pub fn pawn_reset(&mut self, key: LocalEntityKey) {
-        if let Some(entity_ref) = self.local_entity_store.get_mut(&key) {
-            self.pawn_store.remove(&key);
+    pub fn pawn_reset(&mut self, key: &LocalEntityKey) {
+        if let Some(entity_ref) = self.local_entity_store.get_mut(key) {
+            self.pawn_store.remove(key);
             self.pawn_store.insert(
-                key,
+                *key,
                 entity_ref.inner_ref().as_ref().borrow().get_typed_copy(),
             );
         }
     }
 
-    pub fn pawn_clear_history(&mut self, key: LocalEntityKey) {
+    pub fn pawn_clear_history(&mut self, key: &LocalEntityKey) {
         if let Some(pawn_history) = self.pawn_history.get_mut(&key) {
             pawn_history.clear();
         }
