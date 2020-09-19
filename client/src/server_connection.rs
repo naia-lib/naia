@@ -25,11 +25,15 @@ pub struct ServerConnection<T: EventType, U: EntityType> {
 }
 
 impl<T: EventType, U: EntityType> ServerConnection<T, U> {
-    pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
+    pub fn new(
+        address: SocketAddr,
+        connection_config: &ConnectionConfig,
+        tick_manager: &ClientTickManager,
+    ) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
             entity_manager: ClientEntityManager::new(),
-            interpolation_manager: InterpolationManager::new(),
+            interpolation_manager: InterpolationManager::new(tick_manager.get),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,

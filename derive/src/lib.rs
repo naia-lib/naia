@@ -40,7 +40,7 @@ pub fn event_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /// Derives the Entity trait for a given struct
-#[proc_macro_derive(Entity, attributes(type_name))]
+#[proc_macro_derive(Entity, attributes(type_name, interpolate))]
 pub fn entity_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     entity_impl(input)
 }

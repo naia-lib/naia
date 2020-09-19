@@ -288,6 +288,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                     let server_connection = ServerConnection::new(
                                         self.server_address,
                                         &self.connection_config,
+                                        &self.tick_manager,
                                     );
 
                                     self.server_connection = Some(server_connection);
