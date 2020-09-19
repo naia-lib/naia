@@ -3,6 +3,7 @@ pub(crate) mod entity_builder;
 pub(crate) mod entity_mutator;
 pub(crate) mod entity_notifiable;
 pub(crate) mod entity_type;
+pub(crate) mod interp_lerp;
 pub(crate) mod local_entity_key;
 pub(crate) mod property;
 pub(crate) mod property_io;
