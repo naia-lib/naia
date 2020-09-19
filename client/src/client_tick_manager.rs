@@ -112,6 +112,11 @@ impl ClientTickManager {
             .ceil() as u16;
         self.intended_tick = server_tick + tick_adjust;
     }
+
+    /// Gets a reference to the tick interval used
+    pub fn get_tick_interval(&self) -> &u128 {
+        return &self.tick_interval.as_millis();
+    }
 }
 
 impl HostTickManager for ClientTickManager {

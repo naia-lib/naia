@@ -33,7 +33,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
             entity_manager: ClientEntityManager::new(),
-            interpolation_manager: InterpolationManager::new(tick_manager.get),
+            interpolation_manager: InterpolationManager::new(tick_manager.get_tick_interval()),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,

@@ -9,7 +9,7 @@ use super::{entity_mutator::EntityMutator, entity_type::EntityType, state_mask::
 
 /// An Entity is a container of Properties that can be scoped, tracked, and
 /// synced, with a remote host
-pub trait Entity<T: EntityType, Impl = Self> {
+pub trait Entity<T: EntityType> {
     /// Gets the number of bytes of the Entity's State Mask
     fn get_state_mask_size(&self) -> u8;
     /// Gets a copy of the Entity, wrapped in an EntityType enum (which is the
@@ -34,8 +34,6 @@ pub trait Entity<T: EntityType, Impl = Self> {
     /// have been mutated, necessary to sync only the Properties that have
     /// changed with the client
     fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>);
-    /// Interpolates Entity toward another Entity of the same type
-    fn interpolate_with(&mut self, other: &Impl, fraction: f32);
 }
 
 //TODO: do we really need another trait here?
@@ -44,6 +42,8 @@ pub trait Entity<T: EntityType, Impl = Self> {
 pub trait EntityEq<T: EntityType, Impl = Self>: Entity<T> {
     /// Compare properties in another Entity
     fn equals(&self, other: &Impl) -> bool;
+    /// Interpolates Entity toward another Entity of the same type
+    fn interpolate_with(&mut self, other: &Impl, fraction: f32);
 }
 
 impl<T: EntityType> Debug for dyn Entity<T> {

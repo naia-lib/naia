@@ -49,6 +49,7 @@ pub use entities::{
     entity_mutator::EntityMutator,
     entity_notifiable::EntityNotifiable,
     entity_type::EntityType,
+    interp_lerp::interp_lerp,
     local_entity_key::LocalEntityKey,
     property::Property,
     property_io::PropertyIo,
