@@ -7,13 +7,15 @@ use naia_shared::{EntityType, Instant, LocalEntityKey};
 pub struct InterpolationManager<U: EntityType> {
     entity_store: HashMap<LocalEntityKey, (Instant, U)>,
     pawn_store: HashMap<LocalEntityKey, (Instant, U)>,
+    interp_duration: f32,
 }
 
 impl<U: EntityType> InterpolationManager<U> {
-    pub fn new() -> Self {
+    pub fn new(tick_duration: &u128) -> Self {
         InterpolationManager {
             entity_store: HashMap::new(),
             pawn_store: HashMap::new(),
+            interp_duration: (*tick_duration) as f32,
         }
     }
 
@@ -45,7 +47,7 @@ impl<U: EntityType> InterpolationManager<U> {
     ) -> Option<&U> {
         if let Some(tracked_entity) = entity_manager.get_local_entity(key) {
             if let Some((updated, entity)) = self.entity_store.get_mut(key) {
-                set_smooth::<U>(entity, &updated, tracked_entity, now);
+                self.set_smooth(entity, &updated, tracked_entity, now);
                 return Some(entity);
             }
         }
@@ -82,7 +84,7 @@ impl<U: EntityType> InterpolationManager<U> {
     ) -> Option<&U> {
         if let Some(tracked_pawn) = entity_manager.get_pawn(key) {
             if let Some((updated, pawn)) = self.pawn_store.get_mut(key) {
-                set_smooth::<U>(pawn, &updated, tracked_pawn, now);
+                self.set_smooth(pawn, &updated, tracked_pawn, now);
                 return Some(pawn);
             }
         }
@@ -90,9 +92,14 @@ impl<U: EntityType> InterpolationManager<U> {
     }
 
     pub fn sync_pawn_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) {}
-}
 
-fn set_smooth<U: EntityType>(old_entity: &mut U, earlier: &Instant, now_entity: &U, now: &Instant) {
-    // TODO: set old_entity's values to smooth from earlier -> now,
-    // current_value -> now_entity
+    fn set_smooth(&self, old_entity: &mut U, earlier: &Instant, now_entity: &U, now: &Instant) {
+        // TODO: set old_entity's values to smooth from earlier -> now,
+        // current_value -> now_entity
+
+        let fraction = (now.duration_since(earlier).as_millis() as f32).min(self.interp_duration)
+            / (self.interp_duration);
+
+        old_entity.interpolate_with(now_entity, fraction);
+    }
 }
