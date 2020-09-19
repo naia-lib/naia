@@ -39,7 +39,7 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{StateMask, EntityBuilder, EntityMutator, PropertyIo, EntityEq};
+        use naia_shared::{StateMask, EntityBuilder, EntityMutator, PropertyIo, EntityEq, interp_lerp};
         #property_enum
         pub struct #entity_builder_name {
             type_id: TypeId,
@@ -78,6 +78,7 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
         impl EntityEq<#type_name> for #entity_name {
             #equals_method
+            #interpolate_with_method
         }
     };
 
@@ -358,9 +359,11 @@ fn get_interpolate_with_method(
 ) -> TokenStream {
     let mut output = quote! {};
 
-    for (field_name, _) in properties.iter() {
+    for (field_name, field_type) in properties.iter() {
         let new_output_right = quote! {
-            if !Property::equals(&self.#field_name, &other.#field_name) { return false; }
+            if !Property::equals(&self.field_name, &other.&field_name) {
+                self.#field_name.set(interp_lerp::<#field_type>(self.#field_name, other.#field_name, fraction));
+            }
         };
         let new_output_result = quote! {
             #output
@@ -377,7 +380,7 @@ fn get_interpolate_with_method(
 }
 
 fn get_interpolated_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
-    let mut fields = Vec::new();
+    let mut fields: Vec<(Ident, Type)> = Vec::new();
 
     if let Data::Struct(data_struct) = &input.data {
         if let Fields::Named(fields_named) = &data_struct.fields {
@@ -397,7 +400,7 @@ fn get_interpolated_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
                                         {
                                             fields.push((
                                                 property_name.clone(),
-                                                property_type.clone(),
+                                                (*property_type).clone(),
                                             ));
                                         }
                                     }
