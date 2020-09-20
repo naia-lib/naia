@@ -170,6 +170,10 @@ impl<U: EntityType> ClientEntityManager<U> {
                             if let Some(historical_pawn) = pawn_history.get(packet_tick) {
                                 if !entity_ref.equals(historical_pawn) {
                                     // prediction error encountered!
+                                    if let Some(pawn_ref) = self.pawn_store.get(&local_key) {
+                                        interpolator
+                                            .sync_pawn_interpolation(&local_key, pawn_ref, now);
+                                    }
                                     info!("XXXXX prediction error encountered XXXXX ");
                                     command_receiver.replay_commands(packet_tick, local_key);
                                 } else {

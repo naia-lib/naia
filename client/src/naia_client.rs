@@ -87,11 +87,13 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     /// Must be called regularly, performs updates to the connection, and
     /// retrieves event/entity updates sent by the Server
     pub fn receive(&mut self) -> Option<Result<ClientEvent<T>, NaiaClientError>> {
+        let now = Instant::now();
+
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
             Some(connection) => {
                 // receive command
-                if let Some((pawn_key, command)) = connection.get_incoming_command() {
+                if let Some((pawn_key, command)) = connection.get_incoming_command(&now) {
                     return Some(Ok(ClientEvent::Command(
                         pawn_key,
                         command.as_ref().get_typed_copy(),
@@ -218,7 +220,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             }
         }
 
-        let now = Instant::now();
         // receive from socket
         loop {
             match self.socket.receive() {
@@ -461,15 +462,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .as_mut()
             .unwrap()
             .get_pawn_interpolation(key, now);
-    }
-
-    /// Sync pawn interpolation
-    pub fn sync_pawn_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) {
-        return self
-            .server_connection
-            .as_mut()
-            .unwrap()
-            .sync_pawn_interpolation(key, now);
     }
 
     // internal functions
