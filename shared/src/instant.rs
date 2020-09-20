@@ -37,6 +37,11 @@ cfg_if! {
                 let nanos: u32 = ((inner_duration as u32) % 1000) * 1000000;
                 return Duration::new(seconds, nanos);
             }
+
+            /// Sets the Instant to the value of another
+            pub fn set_to(&mut self, other: &Instant) {
+                self.inner = other.inner.clone();
+            }
         }
     }
     else {
@@ -65,6 +70,11 @@ cfg_if! {
             pub fn duration_since(&self, earlier: &Instant) -> Duration {
                 let inner_duration = self.inner.duration_since(earlier.inner);
                 return Duration::new(inner_duration.as_secs(), inner_duration.subsec_nanos());
+            }
+
+            /// Sets the Instant to the value of another
+            pub fn set_to(&mut self, other: &Instant) {
+                self.inner = other.inner.clone();
             }
         }
     }
