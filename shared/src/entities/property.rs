@@ -30,10 +30,10 @@ impl<T: Clone + PartialEq> Property<T> {
 
     /// Set the Property's contained value
     pub fn set(&mut self, value: T) {
-        self.inner = value;
         if let Some(mutator) = &self.mutator {
             mutator.as_ref().borrow_mut().mutate(self.mutator_index);
         }
+        self.inner = value;
     }
 
     /// Set an EntityMutator object to track changes to the Property
