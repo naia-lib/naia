@@ -1,13 +1,13 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use log::{info, warn};
 use naia_shared::{
-    EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer,
+    EntityType, EventType, Instant, LocalEntityKey, Manifest, PacketReader, SequenceBuffer,
     SequenceIterator, StateMask,
 };
 use std::collections::{hash_map::Iter, HashMap, VecDeque};
 
 use super::client_entity_message::ClientEntityMessage;
-use crate::command_receiver::CommandReceiver;
+use crate::{command_receiver::CommandReceiver, interpolation_manager::InterpolationManager};
 
 const PAWN_HISTORY_SIZE: u16 = 64;
 
@@ -33,9 +33,11 @@ impl<U: EntityType> ClientEntityManager<U> {
         &mut self,
         manifest: &Manifest<T, U>,
         command_receiver: &mut CommandReceiver<T>,
+        interpolator: &mut InterpolationManager<U>,
         packet_tick: u16,
         packet_index: u16,
         reader: &mut PacketReader,
+        now: &Instant,
     ) {
         let buffer = reader.get_buffer();
         let cursor = reader.get_cursor();
@@ -105,6 +107,8 @@ impl<U: EntityType> ClientEntityManager<U> {
                             .to_vec()
                             .into_boxed_slice();
 
+                        interpolator.sync_interpolation(&local_key, entity_ref, now);
+
                         entity_ref.read_partial(&state_mask, &entity_payload, packet_index);
 
                         self.queued_incoming_messages
@@ -156,6 +160,8 @@ impl<U: EntityType> ClientEntityManager<U> {
                         let entity_payload = buffer[payload_start_position..payload_end_position]
                             .to_vec()
                             .into_boxed_slice();
+
+                        interpolator.sync_interpolation(&local_key, entity_ref, now);
 
                         entity_ref.read_full(&entity_payload, packet_index);
 
