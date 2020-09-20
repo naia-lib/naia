@@ -128,17 +128,16 @@ impl<U: EntityType> InterpolationManager<U> {
         return None;
     }
 
-    pub fn sync_pawn_interpolation(
-        &mut self,
-        entity_manager: &ClientEntityManager<U>,
-        now: &Instant,
-        key: &LocalEntityKey,
-    ) {
-        if let Some(now_pawn) = entity_manager.get_pawn(key) {
-            if let Some((updated, _, old_pawn)) = self.pawn_store.get_mut(key) {
-                sync_smooth(&updated, now, self.interp_duration, old_pawn, now_pawn);
-                updated.set_to(now);
-            }
+    pub fn sync_pawn_interpolation(&mut self, key: &u16, local_entity: &U, now: &Instant) {
+        if let Some((updated, _, old_entity)) = self.pawn_store.get_mut(key) {
+            sync_smooth(
+                &updated,
+                now,
+                self.interp_duration,
+                old_entity,
+                local_entity,
+            );
+            updated.set_to(now);
         }
     }
 }
