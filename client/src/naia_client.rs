@@ -218,6 +218,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             }
         }
 
+        let now = Instant::now();
         // receive from socket
         loop {
             match self.socket.receive() {
@@ -239,6 +240,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                                         header.local_packet_index(),
                                         &self.manifest,
                                         &payload,
+                                        &now,
                                     );
                                     continue;
                                 }
@@ -431,15 +433,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .as_mut()
             .unwrap()
             .get_interpolation(key, now);
-    }
-
-    /// Sync pawn interpolation
-    pub fn sync_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) {
-        return self
-            .server_connection
-            .as_mut()
-            .unwrap()
-            .sync_interpolation(key, now);
     }
 
     /// Create an interpolation of the Pawn with the given key

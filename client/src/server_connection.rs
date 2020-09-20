@@ -95,6 +95,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         packet_index: u16,
         manifest: &Manifest<T, U>,
         data: &[u8],
+        now: &Instant,
     ) {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
@@ -107,9 +108,11 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                     self.entity_manager.process_data(
                         manifest,
                         &mut self.command_receiver,
+                        &mut self.interpolation_manager,
                         packet_tick,
                         packet_index,
                         &mut reader,
+                        now,
                     );
                 }
                 _ => {}
@@ -157,12 +160,6 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self
             .interpolation_manager
             .get_interpolation(&self.entity_manager, now, key);
-    }
-
-    pub fn sync_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) {
-        return self
-            .interpolation_manager
-            .sync_interpolation(&self.entity_manager, now, key);
     }
 
     pub fn create_pawn_interpolation(&mut self, key: &LocalEntityKey) {
