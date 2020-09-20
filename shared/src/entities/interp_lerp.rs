@@ -17,12 +17,6 @@ pub fn interp_lerp<T: InterpLerpable>(old_value: &T, new_value: &T, fraction: f3
     let new_float: f32 = new_value.to_f32();
     let output_f32 = ((new_float - old_float) * fraction) + old_float;
     let output: T = T::from_f32(output_f32);
-    if fraction != 1.0 {
-        println!(
-            "interplerp: old: {}, new: {}, frac: {}, result: {}",
-            old_float, new_float, fraction, output_f32
-        );
-    }
     output
 }
 
