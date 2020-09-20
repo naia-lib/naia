@@ -108,18 +108,15 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                             return Some(Ok(ClientEvent::CreateEntity(local_key)));
                         }
                         ClientEntityMessage::Delete(local_key) => {
-                            self.delete_interpolation(&local_key);
                             return Some(Ok(ClientEvent::DeleteEntity(local_key)));
                         }
                         ClientEntityMessage::Update(local_key) => {
                             return Some(Ok(ClientEvent::UpdateEntity(local_key)));
                         }
                         ClientEntityMessage::AssignPawn(local_key) => {
-                            self.create_pawn_interpolation(&local_key);
                             return Some(Ok(ClientEvent::AssignPawn(local_key)));
                         }
                         ClientEntityMessage::UnassignPawn(local_key) => {
-                            self.delete_pawn_interpolation(&local_key);
                             return Some(Ok(ClientEvent::UnassignPawn(local_key)));
                         }
                     }

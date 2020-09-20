@@ -85,11 +85,13 @@ impl<U: EntityType> ClientEntityManager<U> {
                     // Deletion
                     let local_key = cursor.read_u16::<BigEndian>().unwrap().into();
                     self.local_entity_store.remove(&local_key);
+                    interpolator.delete_interpolation(&local_key);
 
                     if self.pawn_store.contains_key(&local_key) {
                         self.pawn_store.remove(&local_key);
                         self.pawn_history.remove(&local_key);
                         command_receiver.pawn_cleanup(&local_key);
+                        interpolator.delete_pawn_interpolation(&local_key);
                     }
 
                     self.queued_incoming_messages
@@ -136,6 +138,10 @@ impl<U: EntityType> ClientEntityManager<U> {
 
                         command_receiver.pawn_init(&local_key);
 
+                        if entity_ref.is_interpolated() {
+                            interpolator.create_pawn_interpolation(&self, &local_key);
+                        }
+
                         self.queued_incoming_messages
                             .push_back(ClientEntityMessage::AssignPawn(local_key));
                     }
@@ -147,6 +153,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                         self.pawn_store.remove(&local_key);
                         self.pawn_history.remove(&local_key);
                         command_receiver.pawn_cleanup(&local_key);
+                        interpolator.delete_pawn_interpolation(&local_key);
                     }
                     self.queued_incoming_messages
                         .push_back(ClientEntityMessage::UnassignPawn(local_key));
