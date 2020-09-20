@@ -42,7 +42,11 @@ pub trait Entity<T: EntityType> {
 pub trait EntityEq<T: EntityType, Impl = Self>: Entity<T> {
     /// Compare properties in another Entity
     fn equals(&self, other: &Impl) -> bool;
-    /// Interpolates Entity toward another Entity of the same type
+    /// Sets the current Entity to an interpolated state between two other
+    /// Entities of the same type
+    fn set_to_interpolation(&mut self, old: &Impl, new: &Impl, fraction: f32);
+    /// Sets the current Entity to an interpolated state between itself and
+    /// another Entity of the same type
     fn interpolate_with(&mut self, other: &Impl, fraction: f32);
 }
 

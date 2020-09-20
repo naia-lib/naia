@@ -3,8 +3,6 @@ use std::{
     rc::Rc,
 };
 
-use log::warn;
-
 use crate::{client_entity_manager::ClientEntityManager, naia_client::LocalEntityKey};
 use naia_shared::{wrapping_diff, EntityType, Event, EventType, SequenceBuffer};
 
