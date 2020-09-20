@@ -32,6 +32,8 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let set_mutator_method = get_set_mutator_method(&properties);
     let get_typed_copy_method = get_get_typed_copy_method(&type_name, entity_name, &properties);
     let equals_method = get_equals_method(entity_name, &properties);
+    let set_to_interpolation_method =
+        get_set_to_interpolation_method(entity_name, &interpolated_properties);
     let interpolate_with_method =
         get_interpolate_with_method(entity_name, &interpolated_properties);
 
@@ -78,6 +80,7 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
         impl EntityEq<#type_name> for #entity_name {
             #equals_method
+            #set_to_interpolation_method
             #interpolate_with_method
         }
     };
@@ -353,6 +356,30 @@ fn get_equals_method(entity_name: &Ident, properties: &Vec<(Ident, Type)>) -> To
     };
 }
 
+fn get_set_to_interpolation_method(
+    entity_name: &Ident,
+    properties: &Vec<(Ident, Type)>,
+) -> TokenStream {
+    let mut output = quote! {};
+
+    for (field_name, field_type) in properties.iter() {
+        let new_output_right = quote! {
+            self.#field_name.set(interp_lerp::<#field_type>(old.#field_name.get(), new.#field_name.get(), fraction));
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    return quote! {
+        fn set_to_interpolation(&mut self, old: &#entity_name, new: &#entity_name, fraction: f32) {
+            #output
+        }
+    };
+}
+
 fn get_interpolate_with_method(
     entity_name: &Ident,
     properties: &Vec<(Ident, Type)>,
@@ -361,9 +388,7 @@ fn get_interpolate_with_method(
 
     for (field_name, field_type) in properties.iter() {
         let new_output_right = quote! {
-            if !Property::equals(&self.#field_name, &other.#field_name) {
-                self.#field_name.set(interp_lerp::<#field_type>(self.#field_name.get(), other.#field_name.get(), fraction));
-            }
+            self.#field_name.set(interp_lerp::<#field_type>(self.#field_name.get(), other.#field_name.get(), fraction));
         };
         let new_output_result = quote! {
             #output

@@ -14,6 +14,10 @@ pub trait EntityType<Impl = Self>: Clone {
     fn inner_ref(&self) -> Rc<RefCell<dyn Entity<Impl>>>;
     /// Compare properties in another EntityType
     fn equals(&self, other: &Impl) -> bool;
-    /// Interpolates Entity toward another Entity of the same type
+    /// Sets the current Entity to an interpolated state between two other
+    /// Entities of the same type
+    fn set_to_interpolation(&mut self, old: &Impl, new: &Impl, fraction: f32);
+    /// Sets the current Entity to an interpolated state between itself and
+    /// another Entity of the same type
     fn interpolate_with(&mut self, other: &Impl, fraction: f32);
 }
