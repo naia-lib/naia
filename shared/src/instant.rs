@@ -29,6 +29,14 @@ cfg_if! {
                 let nanos: u32 = ((inner_duration as u32) % 1000) * 1000000;
                 return Duration::new(seconds, nanos);
             }
+
+            /// Returns the duration since a previous Instant
+            pub fn duration_since(&self, earlier: &Instant) -> Duration {
+                let inner_duration = self.inner - earlier.inner;
+                let seconds: u64 = (inner_duration as u64) / 1000;
+                let nanos: u32 = ((inner_duration as u32) % 1000) * 1000000;
+                return Duration::new(seconds, nanos);
+            }
         }
     }
     else {
@@ -47,9 +55,15 @@ cfg_if! {
                 }
             }
 
-            /// Returns time elapsed since the Instant
+            /// Returns current time elapsed since the Instant
             pub fn elapsed(&self) -> Duration {
                 let inner_duration = self.inner.elapsed();
+                return Duration::new(inner_duration.as_secs(), inner_duration.subsec_nanos());
+            }
+
+            /// Returns the duration since a previous Instant
+            pub fn duration_since(&self, earlier: &Instant) -> Duration {
+                let inner_duration = self.inner.duration_since(earlier.inner);
                 return Duration::new(inner_duration.as_secs(), inner_duration.subsec_nanos());
             }
         }

@@ -361,8 +361,8 @@ fn get_interpolate_with_method(
 
     for (field_name, field_type) in properties.iter() {
         let new_output_right = quote! {
-            if !Property::equals(&self.field_name, &other.&field_name) {
-                self.#field_name.set(interp_lerp::<#field_type>(self.#field_name, other.#field_name, fraction));
+            if !Property::equals(&self.#field_name, &other.#field_name) {
+                self.#field_name.set(interp_lerp::<#field_type>(self.#field_name.get(), other.#field_name.get(), fraction));
             }
         };
         let new_output_result = quote! {
