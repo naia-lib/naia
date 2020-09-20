@@ -114,8 +114,8 @@ impl ClientTickManager {
     }
 
     /// Gets a reference to the tick interval used
-    pub fn get_tick_interval(&self) -> &u128 {
-        return &self.tick_interval.as_millis();
+    pub fn get_tick_interval(&self) -> u128 {
+        return self.tick_interval.as_millis();
     }
 }
 
