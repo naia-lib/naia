@@ -86,9 +86,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
     /// Must be called regularly, performs updates to the connection, and
     /// retrieves event/entity updates sent by the Server
-    pub fn receive(&mut self) -> Option<Result<ClientEvent<T>, NaiaClientError>> {
-        let now = Instant::now();
-
+    pub fn receive(&mut self, now: &Instant) -> Option<Result<ClientEvent<T>, NaiaClientError>> {
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
             Some(connection) => {
@@ -110,15 +108,18 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                             return Some(Ok(ClientEvent::CreateEntity(local_key)));
                         }
                         ClientEntityMessage::Delete(local_key) => {
+                            self.delete_interpolation(&local_key);
                             return Some(Ok(ClientEvent::DeleteEntity(local_key)));
                         }
                         ClientEntityMessage::Update(local_key) => {
                             return Some(Ok(ClientEvent::UpdateEntity(local_key)));
                         }
                         ClientEntityMessage::AssignPawn(local_key) => {
+                            self.create_pawn_interpolation(&local_key);
                             return Some(Ok(ClientEvent::AssignPawn(local_key)));
                         }
                         ClientEntityMessage::UnassignPawn(local_key) => {
+                            self.delete_pawn_interpolation(&local_key);
                             return Some(Ok(ClientEvent::UnassignPawn(local_key)));
                         }
                     }

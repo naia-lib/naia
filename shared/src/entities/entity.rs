@@ -34,6 +34,8 @@ pub trait Entity<T: EntityType> {
     /// have been mutated, necessary to sync only the Properties that have
     /// changed with the client
     fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>);
+    /// Returns whether or not the Entity has any interpolated properties
+    fn is_interpolated(&self) -> bool;
 }
 
 //TODO: do we really need another trait here?
