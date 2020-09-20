@@ -36,6 +36,7 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         get_set_to_interpolation_method(entity_name, &interpolated_properties);
     let interpolate_with_method =
         get_interpolate_with_method(entity_name, &interpolated_properties);
+    let is_interpolated_method = get_is_interpolated_method(entity_name, &interpolated_properties);
 
     let state_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
 
@@ -77,6 +78,7 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             #entity_read_full_method
             #entity_read_partial_method
             #get_typed_copy_method
+            #is_interpolated_method
         }
         impl EntityEq<#type_name> for #entity_name {
             #equals_method
@@ -400,6 +402,22 @@ fn get_interpolate_with_method(
     return quote! {
         fn interpolate_with(&mut self, other: &#entity_name, fraction: f32) {
             #output
+        }
+    };
+}
+
+fn get_is_interpolated_method(entity_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+    let mut output = {
+        if properties.len() > 0 {
+            quote! { true }
+        } else {
+            quote! { false }
+        }
+    };
+
+    return quote! {
+        fn is_interpolated(&self) -> bool {
+            return #output;
         }
     };
 }
