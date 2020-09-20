@@ -67,7 +67,11 @@ impl<U: EntityType> ClientEntityManager<U> {
                                 warn!("duplicate local key inserted");
                             } else {
                                 //info!("creation of entity w/ key of {}", local_key);
+                                let is_interpolated = new_entity.is_interpolated();
                                 self.local_entity_store.insert(local_key, new_entity);
+                                if is_interpolated {
+                                    interpolator.create_interpolation(&self, &local_key);
+                                }
                                 self.queued_incoming_messages
                                     .push_back(ClientEntityMessage::Create(local_key));
                             }
