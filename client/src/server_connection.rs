@@ -159,6 +159,12 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
             .get_interpolation(&self.entity_manager, now, key);
     }
 
+    pub fn sync_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) {
+        return self
+            .interpolation_manager
+            .sync_interpolation(&self.entity_manager, now, key);
+    }
+
     pub fn create_pawn_interpolation(&mut self, key: &LocalEntityKey) {
         return self
             .interpolation_manager
@@ -173,6 +179,12 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self
             .interpolation_manager
             .get_pawn_interpolation(&self.entity_manager, now, key);
+    }
+
+    pub fn sync_pawn_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) {
+        return self
+            .interpolation_manager
+            .sync_pawn_interpolation(&self.entity_manager, now, key);
     }
 
     // Pass-through methods to underlying common connection

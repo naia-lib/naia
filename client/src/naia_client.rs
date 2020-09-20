@@ -433,6 +433,15 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .get_interpolation(key, now);
     }
 
+    /// Sync pawn interpolation
+    pub fn sync_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) {
+        return self
+            .server_connection
+            .as_mut()
+            .unwrap()
+            .sync_interpolation(key, now);
+    }
+
     /// Create an interpolation of the Pawn with the given key
     pub fn create_pawn_interpolation(&mut self, key: &LocalEntityKey) {
         return self
@@ -459,6 +468,15 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .as_mut()
             .unwrap()
             .get_pawn_interpolation(key, now);
+    }
+
+    /// Sync pawn interpolation
+    pub fn sync_pawn_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) {
+        return self
+            .server_connection
+            .as_mut()
+            .unwrap()
+            .sync_pawn_interpolation(key, now);
     }
 
     // internal functions
