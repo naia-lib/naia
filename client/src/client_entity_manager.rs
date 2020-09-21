@@ -4,10 +4,11 @@ use naia_shared::{
     EntityType, EventType, Instant, LocalEntityKey, Manifest, PacketReader, SequenceBuffer,
     SequenceIterator, StateMask,
 };
-use std::collections::{hash_map::Iter, HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque};
 
 use super::client_entity_message::ClientEntityMessage;
 use crate::{command_receiver::CommandReceiver, interpolation_manager::InterpolationManager};
+use std::collections::hash_map::Keys;
 
 const PAWN_HISTORY_SIZE: u16 = 64;
 
@@ -211,16 +212,16 @@ impl<U: EntityType> ClientEntityManager<U> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn entities_iter(&self) -> Iter<'_, LocalEntityKey, U> {
-        return self.local_entity_store.iter();
+    pub fn entity_keys(&self) -> Keys<LocalEntityKey, U> {
+        return self.local_entity_store.keys();
     }
 
-    pub fn get_local_entity(&self, key: &LocalEntityKey) -> Option<&U> {
+    pub fn get_entity(&self, key: &LocalEntityKey) -> Option<&U> {
         return self.local_entity_store.get(key);
     }
 
-    pub fn pawns_iter(&self) -> Iter<'_, LocalEntityKey, U> {
-        return self.pawn_store.iter();
+    pub fn pawn_keys(&self) -> Keys<LocalEntityKey, U> {
+        return self.pawn_store.keys();
     }
 
     pub fn pawn_history_iter(&self, key: &LocalEntityKey) -> Option<SequenceIterator<'_, U>> {

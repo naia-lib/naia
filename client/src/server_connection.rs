@@ -1,4 +1,4 @@
-use std::{collections::hash_map::Iter, net::SocketAddr, rc::Rc};
+use std::{net::SocketAddr, rc::Rc};
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, Event, EventType, Instant, LocalEntityKey,
@@ -12,6 +12,7 @@ use super::{
     ping_manager::PingManager,
 };
 use crate::{client_tick_manager::ClientTickManager, command_receiver::CommandReceiver, Packet};
+use std::collections::hash_map::Keys;
 
 #[derive(Debug)]
 pub struct ServerConnection<T: EventType, U: EntityType> {
@@ -125,58 +126,43 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.pop_incoming_message();
     }
 
-    pub fn entities_iter(&self) -> Iter<LocalEntityKey, U> {
-        return self.entity_manager.entities_iter();
+    pub fn entity_keys(&self) -> Keys<LocalEntityKey, U> {
+        return self.entity_manager.entity_keys();
     }
 
-    pub fn get_local_entity(&self, key: &LocalEntityKey) -> Option<&U> {
-        return self.entity_manager.get_local_entity(key);
+    pub fn get_entity(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
+        if let Some(interpolated_entity) =
+            self.interpolation_manager
+                .get_interpolation(&self.entity_manager, now, key)
+        {
+            return Some(interpolated_entity);
+        }
+        return self.entity_manager.get_entity(key);
     }
 
-    pub fn pawns_iter(&self) -> Iter<LocalEntityKey, U> {
-        return self.entity_manager.pawns_iter();
+    pub fn pawn_keys(&self) -> Keys<LocalEntityKey, U> {
+        return self.entity_manager.pawn_keys();
     }
 
     pub fn pawn_history_iter(&self, pawn_key: &LocalEntityKey) -> Option<SequenceIterator<U>> {
         return self.entity_manager.pawn_history_iter(pawn_key);
     }
 
-    pub fn get_pawn(&self, key: &LocalEntityKey) -> Option<&U> {
+    pub fn get_pawn(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
+        if let Some(interpolated_pawn) =
+            self.interpolation_manager
+                .get_pawn_interpolation(&self.entity_manager, now, key)
+        {
+            return Some(interpolated_pawn);
+        }
+        return self.entity_manager.get_pawn(key);
+    }
+
+    pub fn get_pawn_mut(&mut self, key: &LocalEntityKey) -> Option<&U> {
         return self.entity_manager.get_pawn(key);
     }
 
     // Pass-through methods to underlying interpolation manager
-
-    pub fn create_interpolation(&mut self, key: &LocalEntityKey) {
-        self.interpolation_manager
-            .create_interpolation(&self.entity_manager, key);
-    }
-
-    pub fn delete_interpolation(&mut self, key: &LocalEntityKey) {
-        return self.interpolation_manager.delete_interpolation(key);
-    }
-
-    pub fn get_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
-        return self
-            .interpolation_manager
-            .get_interpolation(&self.entity_manager, now, key);
-    }
-
-    pub fn create_pawn_interpolation(&mut self, key: &LocalEntityKey) {
-        return self
-            .interpolation_manager
-            .create_pawn_interpolation(&self.entity_manager, key);
-    }
-
-    pub fn delete_pawn_interpolation(&mut self, key: &LocalEntityKey) {
-        return self.interpolation_manager.delete_pawn_interpolation(key);
-    }
-
-    pub fn get_pawn_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
-        return self
-            .interpolation_manager
-            .get_pawn_interpolation(&self.entity_manager, now, key);
-    }
 
     pub fn sync_pawn_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) {
         if let Some(entity_ref) = self.entity_manager.get_pawn(key) {
