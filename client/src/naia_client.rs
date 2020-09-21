@@ -1,4 +1,4 @@
-use std::{collections::hash_map::Iter, net::SocketAddr};
+use std::net::SocketAddr;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
@@ -331,23 +331,33 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         return self.server_address;
     }
 
+    /// Return whether or not a connection has been established with the Server
+    pub fn has_connection(&self) -> bool {
+        return self.server_connection.is_some();
+    }
+
     // entities
 
     /// Get a reference to an Entity currently in scope for the Client, given
     /// that Entity's Key
-    pub fn get_entity(&self, key: &LocalEntityKey) -> Option<&U> {
+    pub fn get_entity(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
         return self
             .server_connection
-            .as_ref()
+            .as_mut()
             .unwrap()
-            .get_local_entity(key);
+            .get_entity(key, now);
     }
 
-    /// Return an iterator to the collection of all local entities tracked by
+    /// Return an iterator to the collection of keys to all entities tracked by
     /// the Client
-    pub fn entities_iter(&self) -> Option<Iter<LocalEntityKey, U>> {
+    pub fn entity_keys(&self) -> Option<Vec<LocalEntityKey>> {
         if let Some(connection) = &self.server_connection {
-            return Some(connection.entities_iter());
+            return Some(
+                connection
+                    .entity_keys()
+                    .cloned()
+                    .collect::<Vec<LocalEntityKey>>(),
+            );
         }
         return None;
     }
@@ -355,15 +365,25 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     // pawns
 
     /// Get a reference to a Pawn
-    pub fn get_pawn(&self, key: &LocalEntityKey) -> Option<&U> {
-        return self.server_connection.as_ref().unwrap().get_pawn(key);
+    pub fn get_pawn(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
+        return self.server_connection.as_mut().unwrap().get_pawn(key, now);
     }
 
-    /// Return an iterator to the collection of all Pawns tracked by the
-    /// Client
-    pub fn pawns_iter(&self) -> Option<Iter<LocalEntityKey, U>> {
+    /// Get a reference to a Pawn, used for setting it's state
+    pub fn get_pawn_mut(&mut self, key: &LocalEntityKey) -> Option<&U> {
+        return self.server_connection.as_mut().unwrap().get_pawn_mut(key);
+    }
+
+    /// Return an iterator to the collection of keys to all Pawns tracked by
+    /// the Client
+    pub fn pawn_keys(&self) -> Option<Vec<LocalEntityKey>> {
         if let Some(connection) = &self.server_connection {
-            return Some(connection.pawns_iter());
+            return Some(
+                connection
+                    .pawn_keys()
+                    .cloned()
+                    .collect::<Vec<LocalEntityKey>>(),
+            );
         }
         return None;
     }
@@ -402,64 +422,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
             .as_ref()
             .unwrap()
             .get_last_received_tick();
-    }
-
-    // interpolation
-
-    /// Create an interpolation of the Entity with the given key
-    pub fn create_interpolation(&mut self, key: &LocalEntityKey) {
-        return self
-            .server_connection
-            .as_mut()
-            .unwrap()
-            .create_interpolation(key);
-    }
-
-    /// Delete an interpolation associated with the given key
-    pub fn delete_interpolation(&mut self, key: &LocalEntityKey) {
-        return self
-            .server_connection
-            .as_mut()
-            .unwrap()
-            .delete_interpolation(key);
-    }
-
-    /// Gets the interpolation of the Entity associated with the given key, for
-    /// a specific Instant in time
-    pub fn get_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
-        return self
-            .server_connection
-            .as_mut()
-            .unwrap()
-            .get_interpolation(key, now);
-    }
-
-    /// Create an interpolation of the Pawn with the given key
-    pub fn create_pawn_interpolation(&mut self, key: &LocalEntityKey) {
-        return self
-            .server_connection
-            .as_mut()
-            .unwrap()
-            .create_pawn_interpolation(key);
-    }
-
-    /// Delete an interpolation associated with the given key
-    pub fn delete_pawn_interpolation(&mut self, key: &LocalEntityKey) {
-        return self
-            .server_connection
-            .as_mut()
-            .unwrap()
-            .delete_pawn_interpolation(key);
-    }
-
-    /// Gets the interpolation of the Pawn associated with the given key, for
-    /// a specific Instant in time
-    pub fn get_pawn_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
-        return self
-            .server_connection
-            .as_mut()
-            .unwrap()
-            .get_pawn_interpolation(key, now);
     }
 
     // internal functions

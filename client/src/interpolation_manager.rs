@@ -25,7 +25,7 @@ impl<U: EntityType> InterpolationManager<U> {
         entity_manager: &ClientEntityManager<U>,
         key: &LocalEntityKey,
     ) {
-        if let Some(existing_entity) = entity_manager.get_local_entity(key) {
+        if let Some(existing_entity) = entity_manager.get_entity(key) {
             let temp_entity = existing_entity
                 .inner_ref()
                 .as_ref()
@@ -51,7 +51,7 @@ impl<U: EntityType> InterpolationManager<U> {
         now: &Instant,
         key: &LocalEntityKey,
     ) -> Option<&U> {
-        if let Some(now_pawn) = entity_manager.get_local_entity(key) {
+        if let Some(now_pawn) = entity_manager.get_entity(key) {
             if let Some((updated, temp_pawn, old_pawn)) = self.entity_store.get_mut(key) {
                 set_smooth(
                     &updated,
