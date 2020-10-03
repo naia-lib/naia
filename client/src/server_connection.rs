@@ -195,7 +195,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         header: &StandardHeader,
         tick_manager: &mut ClientTickManager,
     ) {
-        tick_manager.project_intended_tick(
+        tick_manager.record_server_tick(
             header.host_tick(),
             self.ping_manager.get_rtt(),
             self.ping_manager.get_jitter(),
