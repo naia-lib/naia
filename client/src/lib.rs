@@ -27,6 +27,7 @@ mod interpolation_manager;
 mod naia_client;
 mod ping_manager;
 mod server_connection;
+mod tick_queue;
 
 pub use naia_shared::{find_my_ip_address, random, Instant, LinkConditionerConfig};
 

@@ -73,4 +73,4 @@ pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
 pub use shared_config::SharedConfig;
 pub use standard_header::StandardHeader;
 pub use timestamp::Timestamp;
-pub use wrapping_number::wrapping_diff;
+pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};

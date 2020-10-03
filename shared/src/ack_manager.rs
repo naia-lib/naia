@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use super::{
-    sequence_buffer::{sequence_greater_than, SequenceBuffer, SequenceNumber},
+    sequence_buffer::{SequenceBuffer, SequenceNumber},
     standard_header::StandardHeader,
+    wrapping_number::sequence_greater_than,
 };
 
 use super::{

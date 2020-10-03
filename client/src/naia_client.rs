@@ -126,6 +126,19 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                     // store pawn states
                     return Some(Ok(ClientEvent::Tick));
                 }
+                // process incoming data based on current tick
+                let buffered_server_tick = self.tick_manager.get_buffered_server_tick();
+                while let Some((tick, data_packet)) =
+                    connection.get_buffered_data_packet(buffered_server_tick)
+                {
+                    connection.process_incoming_data(
+                        tick,
+                        tick,
+                        &self.manifest,
+                        &data_packet,
+                        &now,
+                    );
+                }
                 // drop connection if necessary
                 if connection.should_drop() {
                     self.server_connection = None;
@@ -233,13 +246,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
                             match header.packet_type() {
                                 PacketType::Data => {
-                                    server_connection.process_incoming_data(
-                                        header.host_tick(),
-                                        header.local_packet_index(),
-                                        &self.manifest,
-                                        &payload,
-                                        &now,
-                                    );
+                                    server_connection
+                                        .buffer_data_packet(header.host_tick(), &payload);
                                     continue;
                                 }
                                 PacketType::Heartbeat => {
