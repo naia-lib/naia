@@ -6,7 +6,7 @@ use byteorder::ReadBytesExt;
 
 use super::property::Property;
 
-use crate::sequence_buffer::sequence_greater_than;
+use crate::wrapping_number::sequence_greater_than;
 
 /// A Property that can read/write itself from/into incoming/outgoing packets
 pub trait PropertyIo<T> {

@@ -9,7 +9,7 @@ use naia_shared::{
 use super::{
     client_entity_manager::ClientEntityManager, client_entity_message::ClientEntityMessage,
     command_sender::CommandSender, interpolation_manager::InterpolationManager,
-    ping_manager::PingManager,
+    ping_manager::PingManager, tick_queue::TickQueue,
 };
 use crate::{client_tick_manager::ClientTickManager, command_receiver::CommandReceiver, Packet};
 use std::collections::hash_map::Keys;
@@ -23,6 +23,7 @@ pub struct ServerConnection<T: EventType, U: EntityType> {
     command_receiver: CommandReceiver<T>,
     last_replay_tick: Option<(u16, LocalEntityKey)>,
     interpolation_manager: InterpolationManager<U>,
+    jitter_buffer: TickQueue<Box<[u8]>>,
 }
 
 impl<T: EventType, U: EntityType> ServerConnection<T, U> {
@@ -42,6 +43,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
             command_sender: CommandSender::new(),
             command_receiver: CommandReceiver::new(),
             last_replay_tick: None,
+            jitter_buffer: TickQueue::new(),
         };
     }
 
@@ -119,6 +121,15 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                 _ => {}
             }
         }
+    }
+
+    pub fn buffer_data_packet(&mut self, incoming_tick: u16, incoming_payload: &Box<[u8]>) {
+        self.jitter_buffer
+            .add_item(incoming_tick, incoming_payload.clone());
+    }
+
+    pub fn get_buffered_data_packet(&mut self, current_tick: u16) -> Option<(u16, Box<[u8]>)> {
+        self.jitter_buffer.pop_item(current_tick)
     }
 
     // Pass-through methods to underlying entity manager
