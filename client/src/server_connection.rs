@@ -23,7 +23,7 @@ pub struct ServerConnection<T: EventType, U: EntityType> {
     command_receiver: CommandReceiver<T>,
     last_replay_tick: Option<(u16, LocalEntityKey)>,
     interpolation_manager: InterpolationManager<U>,
-    jitter_buffer: TickQueue<Box<[u8]>>,
+    jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
 impl<T: EventType, U: EntityType> ServerConnection<T, U> {
@@ -123,13 +123,23 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         }
     }
 
-    pub fn buffer_data_packet(&mut self, incoming_tick: u16, incoming_payload: &Box<[u8]>) {
-        self.jitter_buffer
-            .add_item(incoming_tick, incoming_payload.clone());
+    pub fn buffer_data_packet(
+        &mut self,
+        incoming_tick: u16,
+        incoming_packet_index: u16,
+        incoming_payload: &Box<[u8]>,
+    ) {
+        self.jitter_buffer.add_item(
+            incoming_tick,
+            (incoming_packet_index, incoming_payload.clone()),
+        );
     }
 
-    pub fn get_buffered_data_packet(&mut self, current_tick: u16) -> Option<(u16, Box<[u8]>)> {
-        self.jitter_buffer.pop_item(current_tick)
+    pub fn get_buffered_data_packet(&mut self, current_tick: u16) -> Option<(u16, u16, Box<[u8]>)> {
+        if let Some((tick, (index, payload))) = self.jitter_buffer.pop_item(current_tick) {
+            return Some((tick, index, payload));
+        }
+        return None;
     }
 
     // Pass-through methods to underlying entity manager
