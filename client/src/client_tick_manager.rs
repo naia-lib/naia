@@ -9,6 +9,7 @@ pub struct ClientTickManager {
     client_tick: u16,
     server_tick: u16,
     client_tick_adjust: u16,
+    server_tick_adjust: u16,
     last_client_tick_instant: Instant,
     last_client_tick_leftover: Duration,
     last_server_tick_instant: Instant,
@@ -29,6 +30,7 @@ impl ClientTickManager {
             last_server_tick_instant: Instant::now(),
             last_server_tick_leftover: Duration::new(0, 0),
             client_tick_adjust: 0,
+            server_tick_adjust: 0,
         }
     }
 
@@ -99,9 +101,11 @@ impl ClientTickManager {
 
     /// Use tick data from initial server handshake to set the initial tick
     pub fn set_initial_tick(&mut self, server_tick: u16) {
+        self.server_tick = server_tick;
+        self.server_tick_adjust = ((1000 / (self.tick_interval.as_millis())) + 1) as u16;
+
         self.client_tick_adjust = ((3000 / (self.tick_interval.as_millis())) + 1) as u16;
         self.client_tick = server_tick.wrapping_add(self.client_tick_adjust);
-        self.server_tick = server_tick;
     }
 
     /// Using information from the Server and RTT/Jitter measurements, determine
@@ -112,16 +116,24 @@ impl ClientTickManager {
         rtt_average: f32,
         jitter_deviation: f32,
     ) {
+        self.server_tick = server_tick;
+        self.server_tick_adjust =
+            ((((jitter_deviation * 3.0) / 2.0) / self.tick_interval.as_millis() as f32) + 1.0)
+                .ceil() as u16;
         self.client_tick_adjust = (((rtt_average + (jitter_deviation * 3.0) / 2.0)
             / (self.tick_interval.as_millis() as f32))
             + 1.0)
             .ceil() as u16;
-        self.server_tick = server_tick;
     }
 
     /// Gets a reference to the tick interval used
     pub fn get_tick_interval(&self) -> u128 {
         return self.tick_interval.as_millis();
+    }
+
+    /// Gets the server tick with the jitter buffer offset applied
+    pub fn get_buffered_server_tick(&self) -> u16 {
+        return self.server_tick.wrapping_sub(self.server_tick_adjust);
     }
 }
 

@@ -1,5 +1,7 @@
 use std::clone::Clone;
 
+use super::wrapping_number::{sequence_greater_than, sequence_less_than};
+
 /// Used to index packets that have been sent & received
 pub type SequenceNumber = u16;
 
@@ -188,12 +190,4 @@ impl<'s, T: Clone> Iterator for SequenceIterator<'s, T> {
             }
         }
     }
-}
-
-pub fn sequence_greater_than(s1: u16, s2: u16) -> bool {
-    ((s1 > s2) && (s1 - s2 <= 32768)) || ((s1 < s2) && (s2 - s1 > 32768))
-}
-
-pub fn sequence_less_than(s1: u16, s2: u16) -> bool {
-    sequence_greater_than(s2, s1)
 }
