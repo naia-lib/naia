@@ -42,16 +42,6 @@ impl<T: Eq + PartialEq> TickQueue<T> {
         }
         return None;
     }
-
-    /// Peeks at the top level item container on the queue
-    fn peek_entry(&self) -> Option<&ItemContainer<T>> {
-        return self.queue.peek();
-    }
-
-    /// Returns the length of the underlying queue
-    fn len(&self) -> usize {
-        return self.queue.len();
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]

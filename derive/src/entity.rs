@@ -37,6 +37,7 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let interpolate_with_method =
         get_interpolate_with_method(entity_name, &interpolated_properties);
     let is_interpolated_method = get_is_interpolated_method(&interpolated_properties);
+    let mirror_method = get_mirror_method(entity_name, &interpolated_properties);
 
     let state_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
 
@@ -84,6 +85,7 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             #equals_method
             #set_to_interpolation_method
             #interpolate_with_method
+            #mirror_method
         }
     };
 
@@ -401,6 +403,27 @@ fn get_interpolate_with_method(
 
     return quote! {
         fn interpolate_with(&mut self, other: &#entity_name, fraction: f32) {
+            #output
+        }
+    };
+}
+
+fn get_mirror_method(entity_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+    let mut output = quote! {};
+
+    for (field_name, _) in properties.iter() {
+        let new_output_right = quote! {
+            self.#field_name.set(*other.#field_name.get());
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    return quote! {
+        fn mirror(&mut self, other: &#entity_name) {
             #output
         }
     };

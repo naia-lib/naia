@@ -15,6 +15,7 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let set_to_interpolation_method = get_set_to_interpolation_method(&type_name, &input.data);
     let interpolate_with_method = get_interpolate_with_method(&type_name, &input.data);
     let is_interpolated_method = get_is_interpolated_method(&type_name, &input.data);
+    let mirror_method = get_mirror_method(&type_name, &input.data);
 
     let gen = quote! {
         use naia_shared::{EntityType, Entity, EntityEq, StateMask};
@@ -26,6 +27,7 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
             #set_to_interpolation_method
             #interpolate_with_method
             #is_interpolated_method
+            #mirror_method
         }
         #conversion_methods
     };
@@ -267,6 +269,42 @@ fn get_interpolate_with_method(type_name: &Ident, data: &Data) -> TokenStream {
 
     return quote! {
         fn interpolate_with(&mut self, other: &#type_name, fraction: f32) {
+            match self {
+                #variants
+            }
+        }
+    };
+}
+
+fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
+    let variants = match *data {
+        Data::Enum(ref data) => {
+            let mut output = quote! {};
+            for variant in data.variants.iter() {
+                let variant_name = &variant.ident;
+                let new_output_right = quote! {
+                    #type_name::#variant_name(identity) => {
+                        match other {
+                            #type_name::#variant_name(other_identity) => {
+                                        return identity.borrow_mut().mirror(&other_identity.as_ref().borrow());
+                                    }
+                            _ => {}
+                        }
+                    }
+                };
+                let new_output_result = quote! {
+                    #output
+                    #new_output_right
+                };
+                output = new_output_result;
+            }
+            output
+        }
+        _ => unimplemented!(),
+    };
+
+    return quote! {
+        fn mirror(&mut self, other: &#type_name) {
             match self {
                 #variants
             }
