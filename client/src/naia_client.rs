@@ -86,12 +86,12 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
     /// Must be called regularly, performs updates to the connection, and
     /// retrieves event/entity updates sent by the Server
-    pub fn receive(&mut self, now: &Instant) -> Option<Result<ClientEvent<T>, NaiaClientError>> {
+    pub fn receive(&mut self) -> Option<Result<ClientEvent<T>, NaiaClientError>> {
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
             Some(connection) => {
                 // receive command
-                if let Some((pawn_key, command)) = connection.get_incoming_command(&now) {
+                if let Some((pawn_key, command)) = connection.get_incoming_command() {
                     return Some(Ok(ClientEvent::Command(
                         pawn_key,
                         command.as_ref().get_typed_copy(),
@@ -136,7 +136,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                         packet_index,
                         &self.manifest,
                         &data_packet,
-                        &now,
                     );
                 }
                 // drop connection if necessary
@@ -380,8 +379,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     // pawns
 
     /// Get a reference to a Pawn
-    pub fn get_pawn(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
-        return self.server_connection.as_mut().unwrap().get_pawn(key, now);
+    pub fn get_pawn(&mut self, key: &LocalEntityKey) -> Option<&U> {
+        return self.server_connection.as_mut().unwrap().get_pawn(key);
     }
 
     /// Get a reference to a Pawn, used for setting it's state
