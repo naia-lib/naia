@@ -81,31 +81,26 @@ impl ClientTickManager {
         jitter_deviation: f32,
     ) {
         self.server_tick_running_diff += wrapping_diff(self.server_tick, server_tick);
-        if self.server_tick_running_diff > 0 {
-            if self.server_tick_running_diff > 8 {
-                println!(
-                    "Adding! Client: {}, Server: {}",
-                    self.server_tick, server_tick,
-                );
-                self.server_tick = server_tick;
-                self.server_tick_running_diff = 0;
-            }
 
+        // Decay the diff so that small fluctuations are acceptable
+        if self.server_tick_running_diff > 0 {
             self.server_tick_running_diff = self.server_tick_running_diff.wrapping_sub(1);
         }
         if self.server_tick_running_diff < 0 {
-            if self.server_tick_running_diff < -8 {
-                println!(
-                    "Subing! Client: {}, Server: {}",
-                    self.server_tick, server_tick,
-                );
-                self.server_tick = server_tick;
-                self.server_tick_running_diff = 0;
-            }
-
             self.server_tick_running_diff = self.server_tick_running_diff.wrapping_add(1);
         }
 
+        // If the server tick is far off enough, reset to the received server tick
+        if self.server_tick_running_diff.abs() > 8 {
+            println!(
+                "Force setting to Server Tick! Client: {}, Server: {}",
+                self.server_tick, server_tick,
+            );
+            self.server_tick = server_tick;
+            self.server_tick_running_diff = 0;
+        }
+
+        // Calculate incoming & outgoing jitter buffer tick offsets
         self.server_tick_adjust =
             ((((jitter_deviation * 3.0) / 2.0) / self.tick_interval.as_millis() as f32) + 1.0)
                 .ceil() as u16;
