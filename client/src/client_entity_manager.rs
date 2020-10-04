@@ -70,11 +70,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                                 let is_interpolated = new_entity.is_interpolated();
                                 self.local_entity_store.insert(local_key, new_entity);
                                 if is_interpolated {
-                                    interpolator.create_interpolation(
-                                        &self,
-                                        &local_key,
-                                        &packet_tick,
-                                    );
+                                    interpolator.create_interpolation(&self, &local_key);
                                 }
                                 self.queued_incoming_messages
                                     .push_back(ClientEntityMessage::Create(local_key));
@@ -117,8 +113,6 @@ impl<U: EntityType> ClientEntityManager<U> {
                             .to_vec()
                             .into_boxed_slice();
 
-                        interpolator.entity_snapshot(&local_key, packet_tick, entity_ref);
-
                         entity_ref.read_partial(&state_mask, &entity_payload, packet_index);
 
                         self.queued_incoming_messages
@@ -143,7 +137,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                         command_receiver.pawn_init(&local_key);
 
                         if entity_ref.is_interpolated() {
-                            interpolator.create_pawn_interpolation(&self, &local_key, &packet_tick);
+                            interpolator.create_pawn_interpolation(&self, &local_key);
                         }
 
                         self.queued_incoming_messages
@@ -176,8 +170,6 @@ impl<U: EntityType> ClientEntityManager<U> {
                             .to_vec()
                             .into_boxed_slice();
 
-                        interpolator.entity_snapshot(&local_key, packet_tick, entity_ref);
-
                         entity_ref.read_full(&entity_payload, packet_index);
 
                         // check it against it's history
@@ -185,13 +177,6 @@ impl<U: EntityType> ClientEntityManager<U> {
                             if let Some(historical_pawn) = pawn_history.get(packet_tick) {
                                 if !entity_ref.equals(historical_pawn) {
                                     // prediction error encountered!
-                                    if let Some(pawn_ref) = self.pawn_store.get(&local_key) {
-                                        interpolator.pawn_snapshot(
-                                            &local_key,
-                                            packet_tick,
-                                            pawn_ref,
-                                        );
-                                    }
                                     info!("XXXXX prediction error encountered XXXXX ");
                                     command_receiver.replay_commands(packet_tick, local_key);
                                 } else {
