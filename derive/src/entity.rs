@@ -34,8 +34,6 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let equals_method = get_equals_method(entity_name, &properties);
     let set_to_interpolation_method =
         get_set_to_interpolation_method(entity_name, &interpolated_properties);
-    let interpolate_with_method =
-        get_interpolate_with_method(entity_name, &interpolated_properties);
     let is_interpolated_method = get_is_interpolated_method(&interpolated_properties);
     let mirror_method = get_mirror_method(entity_name, &interpolated_properties);
 
@@ -84,7 +82,6 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         impl EntityEq<#type_name> for #entity_name {
             #equals_method
             #set_to_interpolation_method
-            #interpolate_with_method
             #mirror_method
         }
     };
@@ -379,30 +376,6 @@ fn get_set_to_interpolation_method(
 
     return quote! {
         fn set_to_interpolation(&mut self, old: &#entity_name, new: &#entity_name, fraction: f32) {
-            #output
-        }
-    };
-}
-
-fn get_interpolate_with_method(
-    entity_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
-) -> TokenStream {
-    let mut output = quote! {};
-
-    for (field_name, field_type) in properties.iter() {
-        let new_output_right = quote! {
-            self.#field_name.set(interp_lerp::<#field_type>(self.#field_name.get(), other.#field_name.get(), fraction));
-        };
-        let new_output_result = quote! {
-            #output
-            #new_output_right
-        };
-        output = new_output_result;
-    }
-
-    return quote! {
-        fn interpolate_with(&mut self, other: &#entity_name, fraction: f32) {
             #output
         }
     };

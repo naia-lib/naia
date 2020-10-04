@@ -13,7 +13,6 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let conversion_methods = get_conversion_methods(&type_name, &input.data);
     let equals_method = get_equals_method(&type_name, &input.data);
     let set_to_interpolation_method = get_set_to_interpolation_method(&type_name, &input.data);
-    let interpolate_with_method = get_interpolate_with_method(&type_name, &input.data);
     let is_interpolated_method = get_is_interpolated_method(&type_name, &input.data);
     let mirror_method = get_mirror_method(&type_name, &input.data);
 
@@ -25,7 +24,6 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
             #inner_ref_method
             #equals_method
             #set_to_interpolation_method
-            #interpolate_with_method
             #is_interpolated_method
             #mirror_method
         }
@@ -233,42 +231,6 @@ fn get_set_to_interpolation_method(type_name: &Ident, data: &Data) -> TokenStrea
 
     return quote! {
         fn set_to_interpolation(&mut self, old: &#type_name, new: &#type_name, fraction: f32) {
-            match self {
-                #variants
-            }
-        }
-    };
-}
-
-fn get_interpolate_with_method(type_name: &Ident, data: &Data) -> TokenStream {
-    let variants = match *data {
-        Data::Enum(ref data) => {
-            let mut output = quote! {};
-            for variant in data.variants.iter() {
-                let variant_name = &variant.ident;
-                let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
-                        match other {
-                            #type_name::#variant_name(other_identity) => {
-                                        return identity.borrow_mut().interpolate_with(&other_identity.as_ref().borrow(), fraction);
-                                    }
-                            _ => {}
-                        }
-                    }
-                };
-                let new_output_result = quote! {
-                    #output
-                    #new_output_right
-                };
-                output = new_output_result;
-            }
-            output
-        }
-        _ => unimplemented!(),
-    };
-
-    return quote! {
-        fn interpolate_with(&mut self, other: &#type_name, fraction: f32) {
             match self {
                 #variants
             }
