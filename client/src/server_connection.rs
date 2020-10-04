@@ -180,14 +180,6 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     // Pass-through methods to underlying interpolation manager
 
-    pub fn sync_pawn_interpolation(&mut self, key: &LocalEntityKey, current_tick: u16) {
-        if let Some(entity_ref) = self.entity_manager.get_pawn(key) {
-            return self
-                .interpolation_manager
-                .pawn_snapshot(key, current_tick, entity_ref);
-        }
-    }
-
     /// This doesn't actually interpolate all entities, but rather it marks the
     /// current time & tick in order to later present interpolated entities
     /// correctly. Call this at the beginning of any frame
@@ -278,7 +270,6 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         }
         if let Some((tick, pawn_key, command)) = self.command_receiver.pop_command() {
             self.last_replay_tick = Some((tick, pawn_key));
-            self.sync_pawn_interpolation(&pawn_key, tick);
             return Some((pawn_key, command));
         }
         return None;
