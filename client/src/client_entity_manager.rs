@@ -177,7 +177,6 @@ impl<U: EntityType> ClientEntityManager<U> {
                             if let Some(historical_pawn) = pawn_history.get(packet_tick) {
                                 if !entity_ref.equals(historical_pawn) {
                                     // prediction error encountered!
-                                    info!("XXXXX prediction error encountered XXXXX ");
                                     command_receiver.replay_commands(packet_tick, local_key);
                                 } else {
                                     pawn_history.remove_until(packet_tick);
