@@ -92,10 +92,6 @@ impl ClientTickManager {
 
         // If the server tick is far off enough, reset to the received server tick
         if self.server_tick_running_diff.abs() > 8 {
-            println!(
-                "Force setting to Server Tick! Client: {}, Server: {}",
-                self.server_tick, server_tick,
-            );
             self.server_tick = server_tick;
             self.server_tick_running_diff = 0;
         }
