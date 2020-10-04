@@ -50,6 +50,8 @@ pub trait EntityEq<T: EntityType, Impl = Self>: Entity<T> {
     /// Sets the current Entity to an interpolated state between itself and
     /// another Entity of the same type
     fn interpolate_with(&mut self, other: &Impl, fraction: f32);
+    /// Sets the current Entity to the state of another Entity of the same type
+    fn mirror(&mut self, other: &Impl);
 }
 
 impl<T: EntityType> Debug for dyn Entity<T> {

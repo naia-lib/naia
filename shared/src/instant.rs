@@ -68,13 +68,27 @@ cfg_if! {
 
             /// Returns the duration since a previous Instant
             pub fn duration_since(&self, earlier: &Instant) -> Duration {
-                let inner_duration = self.inner.duration_since(earlier.inner);
+                let inner_duration = self.inner.saturating_duration_since(earlier.inner);
                 return Duration::new(inner_duration.as_secs(), inner_duration.subsec_nanos());
             }
 
             /// Sets the Instant to the value of another
             pub fn set_to(&mut self, other: &Instant) {
                 self.inner = other.inner.clone();
+            }
+
+            /// Adds a Duration to the Instant, if allowed
+            pub fn add(&mut self, duration: &Duration) {
+                if let Some(result) = self.inner.checked_add(*duration) {
+                    self.inner = result;
+                }
+            }
+
+            /// Adds a Duration to the Instant, if allowed
+            pub fn sub(&mut self, duration: &Duration) {
+                if let Some(result) = self.inner.checked_sub(*duration) {
+                    self.inner = result;
+                }
             }
         }
     }
