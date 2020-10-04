@@ -154,9 +154,9 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         tick_manager: &ClientTickManager,
         key: &LocalEntityKey,
     ) -> Option<&U> {
-        if let Some(interpolated_entity) = self
-            .interpolation_manager
-            .get_interpolation(tick_manager, key)
+        if let Some(interpolated_entity) =
+            self.interpolation_manager
+                .get_interpolation(tick_manager, &self.entity_manager, key)
         {
             return Some(interpolated_entity);
         }
@@ -196,6 +196,11 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     /// correctly. Call this at the beginning of any frame
     pub fn frame_begin(&mut self, manifest: &Manifest<T, U>, tick_manager: &mut ClientTickManager) {
         if tick_manager.mark_frame() {
+            // interpolation manager snapshots current state of all entities
+            self.interpolation_manager
+                .snapshot_entities(&self.entity_manager);
+
+            // then we apply all received updates to entities at once
             let target_tick = tick_manager.get_server_tick();
             while let Some((tick, packet_index, data_packet)) =
                 self.get_buffered_data_packet(target_tick)
@@ -203,7 +208,9 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                 self.process_incoming_data(tick, packet_index, manifest, &data_packet);
             }
 
-            self.interpolation_manager.tick(&self.entity_manager);
+            // finally, we must update pawns since they may have been reconciled
+            self.interpolation_manager
+                .update_pawns(&self.entity_manager);
         }
     }
 
