@@ -19,9 +19,6 @@ pub trait EntityType<Impl = Self>: Clone {
     fn set_to_interpolation(&mut self, old: &Impl, new: &Impl, fraction: f32);
     /// Sets the current Entity to an interpolated state between itself and
     /// another Entity of the same type
-    fn interpolate_with(&mut self, other: &Impl, fraction: f32);
-    /// Sets the current Entity to an interpolated state between itself and
-    /// another Entity of the same type
     fn mirror(&mut self, other: &Impl);
     /// Returns whether or not the Entity has any interpolated properties
     fn is_interpolated(&self) -> bool;
