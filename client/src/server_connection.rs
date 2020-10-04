@@ -1,9 +1,9 @@
 use std::{net::SocketAddr, rc::Rc};
 
 use naia_shared::{
-    Connection, ConnectionConfig, EntityType, Event, EventType, Instant, LocalEntityKey,
-    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceIterator,
-    SequenceNumber, StandardHeader,
+    Connection, ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType,
+    Manifest, PacketReader, PacketType, PacketWriter, SequenceIterator, SequenceNumber,
+    StandardHeader,
 };
 
 use super::{
@@ -101,7 +101,6 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         packet_index: u16,
         manifest: &Manifest<T, U>,
         data: &[u8],
-        now: &Instant,
     ) {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
@@ -118,7 +117,6 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                         packet_tick,
                         packet_index,
                         &mut reader,
-                        now,
                     );
                 }
                 _ => {}
@@ -169,11 +167,8 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.pawn_history_iter(pawn_key);
     }
 
-    pub fn get_pawn(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
-        if let Some(interpolated_pawn) =
-            self.interpolation_manager
-                .get_pawn_interpolation(&self.entity_manager, now, key)
-        {
+    pub fn get_pawn(&mut self, key: &LocalEntityKey) -> Option<&U> {
+        if let Some(interpolated_pawn) = self.interpolation_manager.get_pawn_interpolation(key) {
             return Some(interpolated_pawn);
         }
         return self.entity_manager.get_pawn(key);
@@ -185,11 +180,11 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     // Pass-through methods to underlying interpolation manager
 
-    pub fn sync_pawn_interpolation(&mut self, key: &LocalEntityKey, now: &Instant) {
+    pub fn sync_pawn_interpolation(&mut self, key: &LocalEntityKey, current_tick: u16) {
         if let Some(entity_ref) = self.entity_manager.get_pawn(key) {
             return self
                 .interpolation_manager
-                .sync_pawn_interpolation(key, entity_ref, now);
+                .pawn_snapshot(key, current_tick, entity_ref);
         }
     }
 
@@ -267,10 +262,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.command_sender.queue_command(pawn_key, command);
     }
 
-    pub fn get_incoming_command(
-        &mut self,
-        now: &Instant,
-    ) -> Option<(LocalEntityKey, Rc<Box<dyn Event<T>>>)> {
+    pub fn get_incoming_command(&mut self) -> Option<(LocalEntityKey, Rc<Box<dyn Event<T>>>)> {
         if let Some((last_replay_tick, pawn_key)) = self.last_replay_tick {
             self.entity_manager
                 .save_replay_snapshot(last_replay_tick.wrapping_add(1), &pawn_key);
@@ -286,7 +278,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         }
         if let Some((tick, pawn_key, command)) = self.command_receiver.pop_command() {
             self.last_replay_tick = Some((tick, pawn_key));
-            self.sync_pawn_interpolation(&pawn_key, now);
+            self.sync_pawn_interpolation(&pawn_key, tick);
             return Some((pawn_key, command));
         }
         return None;

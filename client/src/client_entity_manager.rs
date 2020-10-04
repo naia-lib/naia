@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use log::{info, warn};
 use naia_shared::{
-    EntityType, EventType, Instant, LocalEntityKey, Manifest, PacketReader, SequenceBuffer,
+    EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer,
     SequenceIterator, StateMask,
 };
 use std::collections::{HashMap, VecDeque};
@@ -38,7 +38,6 @@ impl<U: EntityType> ClientEntityManager<U> {
         packet_tick: u16,
         packet_index: u16,
         reader: &mut PacketReader,
-        now: &Instant,
     ) {
         let buffer = reader.get_buffer();
         let cursor = reader.get_cursor();
@@ -144,7 +143,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                         command_receiver.pawn_init(&local_key);
 
                         if entity_ref.is_interpolated() {
-                            interpolator.create_pawn_interpolation(&self, &local_key);
+                            interpolator.create_pawn_interpolation(&self, &local_key, &packet_tick);
                         }
 
                         self.queued_incoming_messages
@@ -187,8 +186,11 @@ impl<U: EntityType> ClientEntityManager<U> {
                                 if !entity_ref.equals(historical_pawn) {
                                     // prediction error encountered!
                                     if let Some(pawn_ref) = self.pawn_store.get(&local_key) {
-                                        interpolator
-                                            .sync_pawn_interpolation(&local_key, pawn_ref, now);
+                                        interpolator.pawn_snapshot(
+                                            &local_key,
+                                            packet_tick,
+                                            pawn_ref,
+                                        );
                                     }
                                     info!("XXXXX prediction error encountered XXXXX ");
                                     command_receiver.replay_commands(packet_tick, local_key);
