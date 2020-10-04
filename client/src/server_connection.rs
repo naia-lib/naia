@@ -35,10 +35,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
             entity_manager: ClientEntityManager::new(),
-            interpolation_manager: InterpolationManager::new(
-                &tick_manager.get_tick_interval(),
-                tick_manager.get_buffered_server_tick(),
-            ),
+            interpolation_manager: InterpolationManager::new(&tick_manager.get_tick_interval()),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
@@ -152,8 +149,15 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.entity_keys();
     }
 
-    pub fn get_entity(&mut self, key: &LocalEntityKey) -> Option<&U> {
-        if let Some(interpolated_entity) = self.interpolation_manager.get_interpolation(key) {
+    pub fn get_entity(
+        &mut self,
+        tick_manager: &ClientTickManager,
+        key: &LocalEntityKey,
+    ) -> Option<&U> {
+        if let Some(interpolated_entity) = self
+            .interpolation_manager
+            .get_interpolation(tick_manager, key)
+        {
             return Some(interpolated_entity);
         }
         return self.entity_manager.get_entity(key);
@@ -167,8 +171,15 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.pawn_history_iter(pawn_key);
     }
 
-    pub fn get_pawn(&mut self, key: &LocalEntityKey) -> Option<&U> {
-        if let Some(interpolated_pawn) = self.interpolation_manager.get_pawn_interpolation(key) {
+    pub fn get_pawn(
+        &mut self,
+        tick_manager: &ClientTickManager,
+        key: &LocalEntityKey,
+    ) -> Option<&U> {
+        if let Some(interpolated_pawn) = self
+            .interpolation_manager
+            .get_pawn_interpolation(tick_manager, key)
+        {
             return Some(interpolated_pawn);
         }
         return self.entity_manager.get_pawn(key);
@@ -183,8 +194,17 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     /// This doesn't actually interpolate all entities, but rather it marks the
     /// current time & tick in order to later present interpolated entities
     /// correctly. Call this at the beginning of any frame
-    pub fn interpolate_entities(&mut self) {
-        self.interpolation_manager.mark(&self.entity_manager);
+    pub fn frame_begin(&mut self, manifest: &Manifest<T, U>, tick_manager: &mut ClientTickManager) {
+        if tick_manager.mark_frame() {
+            let target_tick = tick_manager.get_server_tick();
+            while let Some((tick, packet_index, data_packet)) =
+                self.get_buffered_data_packet(target_tick)
+            {
+                self.process_incoming_data(tick, packet_index, manifest, &data_packet);
+            }
+
+            self.interpolation_manager.tick(&self.entity_manager);
+        }
     }
 
     // Pass-through methods to underlying common connection

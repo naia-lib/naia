@@ -122,21 +122,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                     }
                 }
                 // update current tick
-                if self.tick_manager.has_ticked() {
-                    // store pawn states
+                if self.tick_manager.take_tick() {
                     return Some(Ok(ClientEvent::Tick));
-                }
-                // process incoming data based on current tick
-                let buffered_server_tick = self.tick_manager.get_buffered_server_tick();
-                while let Some((tick, packet_index, data_packet)) =
-                    connection.get_buffered_data_packet(buffered_server_tick)
-                {
-                    connection.process_incoming_data(
-                        tick,
-                        packet_index,
-                        &self.manifest,
-                        &data_packet,
-                    );
                 }
                 // drop connection if necessary
                 if connection.should_drop() {
@@ -149,7 +136,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                     // send heartbeats
                     if connection.should_send_heartbeat() {
                         NaiaClient::internal_send_with_connection(
-                            self.tick_manager.get_tick(),
+                            self.tick_manager.get_client_tick(),
                             &mut self.sender,
                             connection,
                             PacketType::Heartbeat,
@@ -160,7 +147,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                     if connection.should_send_ping() {
                         let ping_payload = connection.get_ping_payload();
                         NaiaClient::internal_send_with_connection(
-                            self.tick_manager.get_tick(),
+                            self.tick_manager.get_client_tick(),
                             &mut self.sender,
                             connection,
                             PacketType::Ping,
@@ -168,8 +155,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                         );
                     }
                     // send a packet
-                    while let Some(payload) =
-                        connection.get_outgoing_packet(self.tick_manager.get_tick(), &self.manifest)
+                    while let Some(payload) = connection
+                        .get_outgoing_packet(self.tick_manager.get_client_tick(), &self.manifest)
                     {
                         self.sender
                             .send(Packet::new_raw(payload))
@@ -348,9 +335,9 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     /// This doesn't actually interpolate all entities, but rather it marks the
     /// current time & tick in order to later present interpolated entities
     /// correctly. Call this at the beginning of any frame
-    pub fn interpolate_entities(&mut self) {
+    pub fn frame_begin(&mut self) {
         if let Some(connection) = &mut self.server_connection {
-            connection.interpolate_entities();
+            connection.frame_begin(&self.manifest, &mut self.tick_manager);
         }
     }
 
@@ -359,7 +346,11 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     /// Get a reference to an Entity currently in scope for the Client, given
     /// that Entity's Key
     pub fn get_entity(&mut self, key: &LocalEntityKey) -> Option<&U> {
-        return self.server_connection.as_mut().unwrap().get_entity(key);
+        return self
+            .server_connection
+            .as_mut()
+            .unwrap()
+            .get_entity(&self.tick_manager, key);
     }
 
     /// Return an iterator to the collection of keys to all entities tracked by
@@ -380,7 +371,11 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
     /// Get a reference to a Pawn
     pub fn get_pawn(&mut self, key: &LocalEntityKey) -> Option<&U> {
-        return self.server_connection.as_mut().unwrap().get_pawn(key);
+        return self
+            .server_connection
+            .as_mut()
+            .unwrap()
+            .get_pawn(&self.tick_manager, key);
     }
 
     /// Get a reference to a Pawn, used for setting it's state
@@ -426,7 +421,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
     /// Gets the current tick of the Client
     pub fn get_client_tick(&self) -> u16 {
-        return self.tick_manager.get_tick();
+        return self.tick_manager.get_client_tick();
     }
 
     /// Gets the last received tick from the Server
