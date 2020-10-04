@@ -14,6 +14,7 @@ pub struct ClientTickManager {
     last_client_tick_leftover: Duration,
     last_server_tick_instant: Instant,
     last_server_tick_leftover: Duration,
+    server_tick_running_diff: i16,
 }
 
 const NANOS_PER_SEC: u32 = 1_000_000_000;
@@ -31,6 +32,7 @@ impl ClientTickManager {
             last_server_tick_leftover: Duration::new(0, 0),
             client_tick_adjust: 0,
             server_tick_adjust: 0,
+            server_tick_running_diff: 0,
         }
     }
 
@@ -106,6 +108,9 @@ impl ClientTickManager {
 
         self.client_tick_adjust = ((3000 / (self.tick_interval.as_millis())) + 1) as u16;
         self.client_tick = server_tick.wrapping_add(self.client_tick_adjust);
+
+        self.last_server_tick_instant = Instant::now();
+        self.last_client_tick_instant = Instant::now();
     }
 
     /// Using information from the Server and RTT/Jitter measurements, determine
@@ -116,7 +121,32 @@ impl ClientTickManager {
         rtt_average: f32,
         jitter_deviation: f32,
     ) {
-        self.server_tick = server_tick;
+        self.server_tick_running_diff += wrapping_diff(self.server_tick, server_tick);
+        if self.server_tick_running_diff > 0 {
+            if self.server_tick_running_diff > 8 {
+                println!(
+                    "Adding! Client: {}, Server: {}",
+                    self.server_tick, server_tick,
+                );
+                self.server_tick = self.server_tick.wrapping_add(1);
+                self.server_tick_running_diff = 0;
+            }
+
+            self.server_tick_running_diff = self.server_tick_running_diff.wrapping_sub(1);
+        }
+        if self.server_tick_running_diff < 0 {
+            if self.server_tick_running_diff < -8 {
+                println!(
+                    "Subing! Client: {}, Server: {}",
+                    self.server_tick, server_tick,
+                );
+                self.server_tick = self.server_tick.wrapping_sub(1);
+                self.server_tick_running_diff = 0;
+            }
+
+            self.server_tick_running_diff = self.server_tick_running_diff.wrapping_add(1);
+        }
+
         self.server_tick_adjust =
             ((((jitter_deviation * 3.0) / 2.0) / self.tick_interval.as_millis() as f32) + 1.0)
                 .ceil() as u16;
@@ -127,8 +157,8 @@ impl ClientTickManager {
     }
 
     /// Gets a reference to the tick interval used
-    pub fn get_tick_interval(&self) -> u128 {
-        return self.tick_interval.as_millis();
+    pub fn get_tick_interval(&self) -> &Duration {
+        return &self.tick_interval;
     }
 
     /// Gets the server tick with the jitter buffer offset applied

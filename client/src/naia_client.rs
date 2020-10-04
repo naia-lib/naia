@@ -346,16 +346,21 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         return self.server_connection.is_some();
     }
 
+    /// This doesn't actually interpolate all entities, but rather it marks the
+    /// current time & tick in order to later present interpolated entities
+    /// correctly. Call this at the beginning of any frame
+    pub fn interpolate_entities(&mut self) {
+        if let Some(connection) = &mut self.server_connection {
+            connection.interpolate_entities();
+        }
+    }
+
     // entities
 
     /// Get a reference to an Entity currently in scope for the Client, given
     /// that Entity's Key
-    pub fn get_entity(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
-        return self
-            .server_connection
-            .as_mut()
-            .unwrap()
-            .get_entity(key, now);
+    pub fn get_entity(&mut self, key: &LocalEntityKey) -> Option<&U> {
+        return self.server_connection.as_mut().unwrap().get_entity(key);
     }
 
     /// Return an iterator to the collection of keys to all entities tracked by

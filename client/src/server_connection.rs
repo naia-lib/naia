@@ -35,7 +35,10 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
             entity_manager: ClientEntityManager::new(),
-            interpolation_manager: InterpolationManager::new(&tick_manager.get_tick_interval()),
+            interpolation_manager: InterpolationManager::new(
+                &tick_manager.get_tick_interval(),
+                tick_manager.get_buffered_server_tick(),
+            ),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
@@ -151,11 +154,8 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return self.entity_manager.entity_keys();
     }
 
-    pub fn get_entity(&mut self, key: &LocalEntityKey, now: &Instant) -> Option<&U> {
-        if let Some(interpolated_entity) =
-            self.interpolation_manager
-                .get_interpolation(&self.entity_manager, now, key)
-        {
+    pub fn get_entity(&mut self, key: &LocalEntityKey) -> Option<&U> {
+        if let Some(interpolated_entity) = self.interpolation_manager.get_interpolation(key) {
             return Some(interpolated_entity);
         }
         return self.entity_manager.get_entity(key);
@@ -191,6 +191,13 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                 .interpolation_manager
                 .sync_pawn_interpolation(key, entity_ref, now);
         }
+    }
+
+    /// This doesn't actually interpolate all entities, but rather it marks the
+    /// current time & tick in order to later present interpolated entities
+    /// correctly. Call this at the beginning of any frame
+    pub fn interpolate_entities(&mut self) {
+        self.interpolation_manager.mark(&self.entity_manager);
     }
 
     // Pass-through methods to underlying common connection

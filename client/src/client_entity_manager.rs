@@ -71,7 +71,11 @@ impl<U: EntityType> ClientEntityManager<U> {
                                 let is_interpolated = new_entity.is_interpolated();
                                 self.local_entity_store.insert(local_key, new_entity);
                                 if is_interpolated {
-                                    interpolator.create_interpolation(&self, &local_key);
+                                    interpolator.create_interpolation(
+                                        &self,
+                                        &local_key,
+                                        &packet_tick,
+                                    );
                                 }
                                 self.queued_incoming_messages
                                     .push_back(ClientEntityMessage::Create(local_key));
@@ -114,7 +118,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                             .to_vec()
                             .into_boxed_slice();
 
-                        interpolator.sync_interpolation(&local_key, entity_ref, now);
+                        interpolator.entity_snapshot(&local_key, packet_tick, entity_ref);
 
                         entity_ref.read_partial(&state_mask, &entity_payload, packet_index);
 
@@ -173,7 +177,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                             .to_vec()
                             .into_boxed_slice();
 
-                        interpolator.sync_interpolation(&local_key, entity_ref, now);
+                        interpolator.entity_snapshot(&local_key, packet_tick, entity_ref);
 
                         entity_ref.read_full(&entity_payload, packet_index);
 
