@@ -7,7 +7,7 @@ use std::time::Duration;
 #[derive(Debug)]
 pub struct InterpolationManager<U: EntityType> {
     ////////temp_entity, prev_entity, next_entity
-    entity_store: HashMap<LocalEntityKey, (U, U, U)>,
+    entity_store: HashMap<LocalEntityKey, (U, U)>,
     pawn_store: HashMap<LocalEntityKey, (U, U, U)>,
     interp_duration: f32,
 }
@@ -21,14 +21,15 @@ impl<U: EntityType> InterpolationManager<U> {
         }
     }
 
-    pub fn tick(&mut self, entity_manager: &ClientEntityManager<U>) {
-        for (key, (_, prev_ent, next_ent)) in self.entity_store.iter_mut() {
+    pub fn snapshot_entities(&mut self, entity_manager: &ClientEntityManager<U>) {
+        for (key, (_, prev_ent)) in self.entity_store.iter_mut() {
             if let Some(now_ent) = entity_manager.get_entity(key) {
-                prev_ent.mirror(next_ent);
-                next_ent.mirror(now_ent);
+                prev_ent.mirror(now_ent);
             }
         }
+    }
 
+    pub fn update_pawns(&mut self, entity_manager: &ClientEntityManager<U>) {
         for (key, (_, prev_ent, next_ent)) in self.pawn_store.iter_mut() {
             if let Some(now_ent) = entity_manager.get_pawn(key) {
                 prev_ent.mirror(next_ent);
@@ -54,13 +55,7 @@ impl<U: EntityType> InterpolationManager<U> {
                 .as_ref()
                 .borrow()
                 .get_typed_copy();
-            let next_entity = existing_entity
-                .inner_ref()
-                .as_ref()
-                .borrow()
-                .get_typed_copy();
-            self.entity_store
-                .insert(*key, (temp_entity, prev_entity, next_entity));
+            self.entity_store.insert(*key, (temp_entity, prev_entity));
         }
     }
 
@@ -71,11 +66,14 @@ impl<U: EntityType> InterpolationManager<U> {
     pub fn get_interpolation(
         &mut self,
         tick_manager: &ClientTickManager,
+        entity_manager: &ClientEntityManager<U>,
         key: &LocalEntityKey,
     ) -> Option<&U> {
-        if let Some((temp_entity, prev_entity, next_entity)) = self.entity_store.get_mut(key) {
-            temp_entity.set_to_interpolation(prev_entity, next_entity, tick_manager.fraction);
-            return Some(temp_entity);
+        if let Some((temp_entity, prev_entity)) = self.entity_store.get_mut(key) {
+            if let Some(next_entity) = entity_manager.get_entity(key) {
+                temp_entity.set_to_interpolation(prev_entity, next_entity, tick_manager.fraction);
+                return Some(temp_entity);
+            }
         }
         return None;
     }
