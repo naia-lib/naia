@@ -5,7 +5,7 @@ use super::entity_mutator::EntityMutator;
 /// A Property of an Entity, that contains data which must be tracked for
 /// updates, and synced to the Client
 #[derive(Clone)]
-pub struct Property<T: Clone> {
+pub struct Property<T: Clone + PartialEq> {
     mutator: Option<Rc<RefCell<dyn EntityMutator>>>,
     mutator_index: u8,
     pub(crate) inner: T,
