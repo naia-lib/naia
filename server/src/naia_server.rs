@@ -2,6 +2,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
     net::SocketAddr,
+    panic,
     rc::Rc,
 };
 
@@ -685,7 +686,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     /// Assigns an Entity to a specific User, making it a Pawn for that User
     /// (meaning that the User will be able to issue Commands to that Pawn)
     pub fn assign_pawn(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
-        if self.global_entity_store.contains_key(*entity_key) {
+        if let Some(entity_ref) = self.global_entity_store.get(*entity_key) {
+            if !entity_ref.is_predicted() {
+                panic!("\nAttempting to call assign_pawn() referring to an Entity which has NO predicted properties.\nPawns are only used for client-side prediction, so an Entity must have at least one predicted property to be allowed to become a Pawn.\nIn order to do this, add the attribute: '#[predict]' before you define an Entity's property, like so: '#[predict] pub my_u16: Property<u16>'\n");
+            }
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                 user_connection.add_pawn(entity_key);
             }

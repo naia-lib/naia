@@ -35,9 +35,9 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let equals_method = get_equals_method(entity_name, &properties);
     let equals_prediction_method = get_equals_prediction_method(entity_name, &predicted_properties);
     let set_to_interpolation_method =
-        get_set_to_interpolation_method(entity_name, &interpolated_properties);
+        get_set_to_interpolation_method(entity_name, &properties, &interpolated_properties);
     let is_interpolated_method = get_is_interpolated_method(&predicted_properties);
-    let is_predicted_method = get_is_predicted_method(&interpolated_properties);
+    let is_predicted_method = get_is_predicted_method(&predicted_properties);
     let mirror_method = get_mirror_method(entity_name, &properties);
 
     let state_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
@@ -390,12 +390,32 @@ fn get_equals_prediction_method(
 fn get_set_to_interpolation_method(
     entity_name: &Ident,
     properties: &Vec<(Ident, Type)>,
+    interpolated_properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, field_type) in properties.iter() {
-        let new_output_right = quote! {
-            self.#field_name.set(interp_lerp::<#field_type>(old.#field_name.get(), new.#field_name.get(), fraction));
+        let is_interpolated = {
+            let mut i_output = false;
+            for (interp_field_name, _) in interpolated_properties.iter() {
+                if interp_field_name == field_name {
+                    i_output = true;
+                    break;
+                }
+            }
+            i_output
+        };
+
+        let new_output_right = {
+            if is_interpolated {
+                quote! {
+                    self.#field_name.set(interp_lerp::<#field_type>(old.#field_name.get(), new.#field_name.get(), fraction));
+                }
+            } else {
+                quote! {
+                    self.#field_name.mirror(&new.#field_name);
+                }
+            }
         };
         let new_output_result = quote! {
             #output
