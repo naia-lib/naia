@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, ReadBytesExt};
-use log::{info, warn};
+use log::warn;
 use naia_shared::{
     EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer,
     SequenceIterator, StateMask,

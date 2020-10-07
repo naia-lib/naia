@@ -560,6 +560,11 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         return self.global_entity_store.iter();
     }
 
+    /// Get the number of Entities tracked by the Server
+    pub fn get_entities_count(&self) -> usize {
+        return self.global_entity_store.len();
+    }
+
     /// Creates a new Room on the Server, returns a Key which can be used to
     /// reference said Room
     pub fn create_room(&mut self) -> RoomKey {
@@ -585,6 +590,11 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     /// Iterate through all the Server's current Rooms
     pub fn rooms_iter(&self) -> slotmap::dense::Iter<RoomKey, Room> {
         return self.rooms.iter();
+    }
+
+    /// Get the number of Rooms in the Server
+    pub fn get_rooms_count(&self) -> usize {
+        return self.rooms.len();
     }
 
     /// Add an Entity to a Room, given the appropriate RoomKey & EntityKey
@@ -652,6 +662,11 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     /// Get a User, given the associated UserKey
     pub fn get_user(&self, user_key: &UserKey) -> Option<&User> {
         return self.users.get(*user_key);
+    }
+
+    /// Get the number of Users currently connected
+    pub fn get_users_count(&self) -> usize {
+        return self.users.len();
     }
 
     /// Gets the last received tick from the Client
