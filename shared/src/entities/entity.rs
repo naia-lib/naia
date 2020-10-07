@@ -36,6 +36,8 @@ pub trait Entity<T: EntityType> {
     fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>);
     /// Returns whether or not the Entity has any interpolated properties
     fn is_interpolated(&self) -> bool;
+    /// Returns whether or not the Entity has any predicted properties
+    fn is_predicted(&self) -> bool;
 }
 
 //TODO: do we really need another trait here?
@@ -44,6 +46,8 @@ pub trait Entity<T: EntityType> {
 pub trait EntityEq<T: EntityType, Impl = Self>: Entity<T> {
     /// Compare properties in another Entity
     fn equals(&self, other: &Impl) -> bool;
+    /// Compare only predicted properties in another Entity
+    fn equals_prediction(&self, other: &Impl) -> bool;
     /// Sets the current Entity to an interpolated state between two other
     /// Entities of the same type
     fn set_to_interpolation(&mut self, old: &Impl, new: &Impl, fraction: f32);

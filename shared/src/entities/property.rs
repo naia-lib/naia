@@ -45,4 +45,9 @@ impl<T: Clone + PartialEq> Property<T> {
     pub fn equals(&self, other: &Property<T>) -> bool {
         return self.inner == other.inner;
     }
+
+    /// Set value to the value of another Property
+    pub fn mirror(&mut self, other: &Property<T>) {
+        self.inner = other.inner.clone();
+    }
 }
