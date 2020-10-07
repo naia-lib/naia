@@ -316,7 +316,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
 
     /// Queues up an Command to be sent to the Server
     pub fn send_command(&mut self, pawn_key: LocalEntityKey, command: &impl Event<T>) {
-        //TODO: don't use Event trait here
         if let Some(connection) = &mut self.server_connection {
             connection.queue_command(pawn_key, command);
         }
