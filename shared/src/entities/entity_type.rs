@@ -14,6 +14,8 @@ pub trait EntityType<Impl = Self>: Clone {
     fn inner_ref(&self) -> Rc<RefCell<dyn Entity<Impl>>>;
     /// Compare properties in another EntityType
     fn equals(&self, other: &Impl) -> bool;
+    /// Compare predicted properties in another EntityType
+    fn equals_prediction(&self, other: &Impl) -> bool;
     /// Sets the current Entity to an interpolated state between two other
     /// Entities of the same type
     fn set_to_interpolation(&mut self, old: &Impl, new: &Impl, fraction: f32);
@@ -22,4 +24,6 @@ pub trait EntityType<Impl = Self>: Clone {
     fn mirror(&mut self, other: &Impl);
     /// Returns whether or not the Entity has any interpolated properties
     fn is_interpolated(&self) -> bool;
+    /// Returns whether or not the Entity has any predicted properties
+    fn is_predicted(&self) -> bool;
 }
