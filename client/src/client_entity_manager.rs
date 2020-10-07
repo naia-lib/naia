@@ -175,7 +175,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                         // check it against it's history
                         if let Some(pawn_history) = self.pawn_history.get_mut(&local_key) {
                             if let Some(historical_pawn) = pawn_history.get(packet_tick) {
-                                if !entity_ref.equals(historical_pawn) {
+                                if !entity_ref.equals_prediction(historical_pawn) {
                                     // prediction error encountered!
                                     command_receiver.replay_commands(packet_tick, local_key);
                                 } else {
