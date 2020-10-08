@@ -1,5 +1,5 @@
-use byteorder::{ReadBytesExt, WriteBytesExt};
-use std::{fmt, io::Cursor};
+use byteorder::WriteBytesExt;
+use std::fmt;
 
 use crate::packet_reader::PacketReader;
 

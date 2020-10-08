@@ -69,9 +69,6 @@ impl EventPacketWriter {
         let type_id = event.as_ref().get_type_id();
         let naia_id = manifest.get_event_naia_id(&type_id); // get naia id
         event_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-        event_total_bytes
-            .write_u8(event_payload_bytes.len() as u8)
-            .unwrap(); // write payload length
         event_total_bytes.append(&mut event_payload_bytes); // write payload
 
         let mut hypothetical_next_payload_size = self.bytes_number() + event_total_bytes.len();
