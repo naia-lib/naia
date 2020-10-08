@@ -58,7 +58,7 @@ impl ClientPacketWriter {
     pub fn write_command<T: EventType, U: EntityType>(
         &mut self,
         manifest: &Manifest<T, U>,
-        _command_receiver: &CommandReceiver<T>,
+        command_receiver: &CommandReceiver<T>,
         pawn_key: LocalEntityKey,
         command: &Box<dyn Event<T>>,
     ) -> bool {

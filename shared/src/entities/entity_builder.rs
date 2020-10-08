@@ -1,5 +1,7 @@
 use super::entity_type::EntityType;
 
+use crate::packet_reader::PacketReader;
+
 use std::{
     any::TypeId,
     fmt::{Debug, Formatter, Result},
@@ -8,7 +10,7 @@ use std::{
 /// Handles the creation of new Entity instances
 pub trait EntityBuilder<T: EntityType> {
     /// Create a new Entity instance
-    fn build(&self, in_bytes: &[u8]) -> T;
+    fn build(&self, reader: &mut PacketReader) -> T;
     /// Gets the TypeId of the Entity the builder is able to build
     fn get_type_id(&self) -> TypeId;
 }

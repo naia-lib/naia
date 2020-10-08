@@ -3,6 +3,7 @@ use std::{any::TypeId, collections::HashMap};
 use crate::{
     entities::{entity_builder::EntityBuilder, entity_type::EntityType},
     events::{event_builder::EventBuilder, event_type::EventType},
+    packet_reader::PacketReader,
 };
 
 /// Contains the shared protocol between Client & Server, with a data that is
@@ -55,10 +56,10 @@ impl<T: EventType, U: EntityType> Manifest<T, U> {
 
     /// Creates an Event instance, given a NaiaId and a payload, typically from
     /// an incoming packet
-    pub fn create_event(&self, naia_id: u16, bytes: &[u8]) -> Option<T> {
+    pub fn create_event(&self, naia_id: u16, reader: &mut PacketReader) -> Option<T> {
         match self.event_builder_map.get(&naia_id) {
             Some(event_builder) => {
-                return Some(event_builder.as_ref().build(bytes));
+                return Some(event_builder.as_ref().build(reader));
             }
             None => {}
         }
@@ -87,10 +88,10 @@ impl<T: EventType, U: EntityType> Manifest<T, U> {
 
     /// Creates an Event instance, given a NaiaId and a payload, typically from
     /// an incoming packet
-    pub fn create_entity(&self, naia_id: u16, bytes: &[u8]) -> Option<U> {
+    pub fn create_entity(&self, naia_id: u16, reader: &mut PacketReader) -> Option<U> {
         match self.entity_builder_map.get(&naia_id) {
             Some(entity_builder) => {
-                return Some(entity_builder.as_ref().build(bytes));
+                return Some(entity_builder.as_ref().build(reader));
             }
             None => {}
         }

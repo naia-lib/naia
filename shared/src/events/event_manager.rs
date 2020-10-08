@@ -126,23 +126,15 @@ impl<T: EventType> EventManager<T> {
 
         let event_count = cursor.read_u8().unwrap();
         for _x in 0..event_count {
-            let naia_id: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
-            let payload_length: u8 = cursor.read_u8().unwrap().into();
-            let payload_start_position: usize = cursor.position() as usize;
-            let payload_end_position: usize = payload_start_position + (payload_length as usize);
+            let naia_id: u16 = reader.read_u16();
+            let payload_length: u8 = reader.read_u8();
 
-            let event_payload = buffer[payload_start_position..payload_end_position]
-                .to_vec()
-                .into_boxed_slice();
-
-            match manifest.create_event(naia_id, &event_payload) {
+            match manifest.create_event(naia_id, reader) {
                 Some(new_event) => {
                     self.queued_incoming_events.push_back(new_event);
                 }
                 _ => {}
             }
-
-            cursor.set_position(payload_end_position as u64);
         }
     }
 }
