@@ -43,8 +43,8 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let state_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
 
     let gen = quote! {
-        use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{StateMask, EntityBuilder, EntityMutator, PropertyIo, EntityEq, interp_lerp};
+        use std::{any::{TypeId}, rc::Rc, cell::RefCell};
+        use naia_shared::{StateMask, EntityBuilder, EntityMutator, PropertyIo, EntityEq, interp_lerp, PacketReader};
         #property_enum
         pub struct #entity_builder_name {
             type_id: TypeId,
@@ -53,8 +53,8 @@ pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             fn get_type_id(&self) -> TypeId {
                 return self.type_id;
             }
-            fn build(&self, buffer: &[u8]) -> #type_name {
-                return #entity_name::read_to_type(buffer);
+            fn build(&self, reader: &mut PacketReader) -> #type_name {
+                return #entity_name::read_to_type(reader);
             }
         }
         impl #entity_name {
@@ -215,7 +215,7 @@ fn get_read_to_type_method(
 
         let new_output_right = quote! {
             let mut #field_name = Property::<#field_type>::new(Default::default(), #enum_name::#uppercase_variant_name as u8);
-            #field_name.read(read_cursor);
+            #field_name.read(reader);
         };
         let new_output_result = quote! {
             #prop_reads
@@ -225,8 +225,7 @@ fn get_read_to_type_method(
     }
 
     return quote! {
-        fn read_to_type(buffer: &[u8]) -> #type_name {
-            let read_cursor = &mut Cursor::new(buffer);
+        fn read_to_type(reader: &mut PacketReader) -> #type_name {
             #prop_reads
 
             return #type_name::#entity_name(Rc::new(RefCell::new(#entity_name {
@@ -294,7 +293,7 @@ fn get_read_full_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
 
     for (field_name, _) in properties.iter() {
         let new_output_right = quote! {
-            PropertyIo::read_seq(&mut self.#field_name, read_cursor, packet_index);
+            PropertyIo::read_seq(&mut self.#field_name, reader, packet_index);
         };
         let new_output_result = quote! {
             #output
@@ -304,8 +303,7 @@ fn get_read_full_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn read_full(&mut self, buffer: &[u8], packet_index: u16) {
-            let read_cursor = &mut Cursor::new(buffer);
+        fn read_full(&mut self, reader: &mut PacketReader, packet_index: u16) {
             #output
         }
     };
@@ -322,7 +320,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
 
         let new_output_right = quote! {
             if let Some(true) = state_mask.get_bit(#enum_name::#uppercase_variant_name as u8) {
-                PropertyIo::read_seq(&mut self.#field_name, read_cursor, packet_index);
+                PropertyIo::read_seq(&mut self.#field_name, reader, packet_index);
             }
         };
         let new_output_result = quote! {
@@ -333,8 +331,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
     }
 
     return quote! {
-        fn read_partial(&mut self, state_mask: &StateMask, buffer: &[u8], packet_index: u16) {
-            let read_cursor = &mut Cursor::new(buffer);
+        fn read_partial(&mut self, state_mask: &StateMask, reader: &mut PacketReader, packet_index: u16) {
             #output
         }
     };

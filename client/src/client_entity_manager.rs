@@ -39,29 +39,19 @@ impl<U: EntityType> ClientEntityManager<U> {
         packet_index: u16,
         reader: &mut PacketReader,
     ) {
-        let buffer = reader.get_buffer();
-        let cursor = reader.get_cursor();
-
-        let entity_message_count = cursor.read_u8().unwrap();
+        let entity_message_count = reader.read_u8();
         //info!("reading {} entity messages", entity_message_count);
         for _x in 0..entity_message_count {
-            let message_type: u8 = cursor.read_u8().unwrap().into();
+            let message_type: u8 = reader.read_u8();
 
             match message_type {
                 0 => {
                     // Creation
-                    let naia_id: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
-                    let local_key: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
-                    let payload_length: u8 = cursor.read_u8().unwrap().into();
-                    let payload_start_position: usize = cursor.position() as usize;
-                    let payload_end_position: usize =
-                        payload_start_position + (payload_length as usize);
+                    let naia_id: u16 = reader.read_u16();
+                    let local_key: u16 = reader.read_u16();
+                    let payload_length: u8 = reader.read_u8();
 
-                    let entity_payload = buffer[payload_start_position..payload_end_position]
-                        .to_vec()
-                        .into_boxed_slice();
-
-                    match manifest.create_entity(naia_id, &entity_payload) {
+                    match manifest.create_entity(naia_id, reader) {
                         Some(new_entity) => {
                             if self.local_entity_store.contains_key(&local_key) {
                                 warn!("duplicate local key inserted");
@@ -78,12 +68,10 @@ impl<U: EntityType> ClientEntityManager<U> {
                         }
                         _ => {}
                     }
-
-                    cursor.set_position(payload_end_position as u64);
                 }
                 1 => {
                     // Deletion
-                    let local_key = cursor.read_u16::<BigEndian>().unwrap().into();
+                    let local_key = reader.read_u16();
                     self.local_entity_store.remove(&local_key);
                     interpolator.delete_interpolation(&local_key);
 
@@ -99,31 +87,22 @@ impl<U: EntityType> ClientEntityManager<U> {
                 }
                 2 => {
                     // Update Entity
-                    let local_key = cursor.read_u16::<BigEndian>().unwrap().into();
+                    let local_key = reader.read_u16();
 
                     if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
                         // Entity is not a Pawn
-                        let state_mask: StateMask = StateMask::read(cursor);
-                        let payload_length: u8 = cursor.read_u8().unwrap().into();
-                        let payload_start_position: usize = cursor.position() as usize;
-                        let payload_end_position: usize =
-                            payload_start_position + (payload_length as usize);
+                        let state_mask: StateMask = StateMask::read(reader);
+                        let payload_length: u8 = reader.read_u8();
 
-                        let entity_payload = buffer[payload_start_position..payload_end_position]
-                            .to_vec()
-                            .into_boxed_slice();
-
-                        entity_ref.read_partial(&state_mask, &entity_payload, packet_index);
+                        entity_ref.read_partial(&state_mask, reader, packet_index);
 
                         self.queued_incoming_messages
                             .push_back(ClientEntityMessage::Update(local_key));
-
-                        cursor.set_position(payload_end_position as u64);
                     }
                 }
                 3 => {
                     // Assign Pawn
-                    let local_key: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
+                    let local_key: u16 = reader.read_u16();
 
                     if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
                         self.pawn_store.insert(
@@ -146,7 +125,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                 }
                 4 => {
                     // Unassign Pawn
-                    let local_key: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
+                    let local_key: u16 = reader.read_u16();
                     if self.pawn_store.contains_key(&local_key) {
                         self.pawn_store.remove(&local_key);
                         self.pawn_history.remove(&local_key);
@@ -158,19 +137,12 @@ impl<U: EntityType> ClientEntityManager<U> {
                 }
                 5 => {
                     // Update Pawn
-                    let local_key = cursor.read_u16::<BigEndian>().unwrap().into();
+                    let local_key = reader.read_u16();
 
                     if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
-                        let payload_length: u8 = cursor.read_u8().unwrap().into();
-                        let payload_start_position: usize = cursor.position() as usize;
-                        let payload_end_position: usize =
-                            payload_start_position + (payload_length as usize);
+                        let payload_length: u8 = reader.read_u8();
 
-                        let entity_payload = buffer[payload_start_position..payload_end_position]
-                            .to_vec()
-                            .into_boxed_slice();
-
-                        entity_ref.read_full(&entity_payload, packet_index);
+                        entity_ref.read_full(reader, packet_index);
 
                         // check it against it's history
                         if let Some(pawn_history) = self.pawn_history.get_mut(&local_key) {
@@ -189,8 +161,6 @@ impl<U: EntityType> ClientEntityManager<U> {
 
                         self.queued_incoming_messages
                             .push_back(ClientEntityMessage::Update(local_key));
-
-                        cursor.set_position(payload_end_position as u64);
                     }
                 }
                 _ => {}

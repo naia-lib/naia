@@ -19,7 +19,7 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let is_predicted_method = get_is_predicted_method(&type_name, &input.data);
 
     let gen = quote! {
-        use naia_shared::{EntityType, Entity, EntityEq, StateMask};
+        use naia_shared::{EntityType, Entity, EntityEq, StateMask, PacketReader};
         impl EntityType for #type_name {
             #read_full_method
             #read_partial_method
@@ -45,7 +45,7 @@ fn get_read_full_method(type_name: &Ident, data: &Data) -> TokenStream {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
                     #type_name::#variant_name(identity) => {
-                        identity.as_ref().borrow_mut().read_full(bytes, packet_index);
+                        identity.as_ref().borrow_mut().read_full(reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -60,7 +60,7 @@ fn get_read_full_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn read_full(&mut self, bytes: &[u8], packet_index: u16) {
+        fn read_full(&mut self, reader: &mut PacketReader, packet_index: u16) {
             match self {
                 #variants
             }
@@ -76,7 +76,7 @@ fn get_read_partial_method(type_name: &Ident, data: &Data) -> TokenStream {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
                     #type_name::#variant_name(identity) => {
-                        identity.as_ref().borrow_mut().read_partial(state_mask, bytes, packet_index);
+                        identity.as_ref().borrow_mut().read_partial(state_mask, reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -91,7 +91,7 @@ fn get_read_partial_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn read_partial(&mut self, state_mask: &StateMask, bytes: &[u8], packet_index: u16) {
+        fn read_partial(&mut self, state_mask: &StateMask, reader: &mut PacketReader, packet_index: u16) {
             match self {
                 #variants
             }

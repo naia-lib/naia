@@ -303,23 +303,9 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
 
                                         // Call auth function if there is one
                                         if let Some(auth_func) = &self.auth_func {
-                                            let buffer = reader.get_buffer();
-                                            let cursor = reader.get_cursor();
-                                            let naia_id_result = cursor.read_u16::<BigEndian>();
-                                            if naia_id_result.is_err() {
-                                                self.users.remove(user_key);
-                                                continue;
-                                            }
-                                            let naia_id: u16 = naia_id_result.unwrap().into();
-                                            let event_payload = buffer
-                                                [cursor.position() as usize..buffer.len()]
-                                                .to_vec()
-                                                .into_boxed_slice();
+                                            let naia_id = reader.read_u16();
 
-                                            match self
-                                                .manifest
-                                                .create_event(naia_id, &event_payload)
-                                            {
+                                            match self.manifest.create_event(naia_id, &mut reader) {
                                                 Some(new_entity) => {
                                                     if !(auth_func.as_ref().as_ref())(
                                                         &user_key,
