@@ -161,6 +161,9 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                 return Ok(ServerEvent::Disconnection(user_key, user_clone));
             }
 
+            // TODO: have 1 single queue for commands/events from all users, as it's
+            // possible this current technique unfairly favors the 1st users in
+            // self.client_connections
             for (user_key, connection) in self.client_connections.iter_mut() {
                 //receive commands from anyone
                 if let Some((pawn_key, command)) =
@@ -688,7 +691,10 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     pub fn assign_pawn(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
         if let Some(entity_ref) = self.global_entity_store.get(*entity_key) {
             if !entity_ref.is_predicted() {
-                panic!("\nAttempting to call assign_pawn() referring to an Entity which has NO predicted properties.\nPawns are only used for client-side prediction, so an Entity must have at least one predicted property to be allowed to become a Pawn.\nIn order to do this, add the attribute: '#[predict]' before you define an Entity's property, like so: '#[predict] pub my_u16: Property<u16>'\n");
+                panic!("\nAttempting to call assign_pawn() referring to an Entity which has NO predicted properties.\n\
+                          Pawns are only used for client-side prediction, so an Entity must have at least one predicted\n\
+                          property to be allowed to become a Pawn. In order to do this, add the attribute: '#[predict]'\n\
+                          before you define an Entity's property, like so: '#[predict] pub my_u16: Property<u16>'\n");
             }
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                 user_connection.add_pawn(entity_key);

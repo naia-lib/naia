@@ -2,14 +2,13 @@ use std::{net::SocketAddr, rc::Rc};
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType,
-    Manifest, PacketReader, PacketType, PacketWriter, SequenceIterator, SequenceNumber,
-    StandardHeader,
+    Manifest, PacketReader, PacketType, SequenceIterator, SequenceNumber, StandardHeader,
 };
 
 use super::{
     client_entity_manager::ClientEntityManager, client_entity_message::ClientEntityMessage,
-    command_sender::CommandSender, interpolation_manager::InterpolationManager,
-    ping_manager::PingManager, tick_queue::TickQueue,
+    client_packet_writer::ClientPacketWriter, command_sender::CommandSender,
+    interpolation_manager::InterpolationManager, ping_manager::PingManager, tick_queue::TickQueue,
 };
 use crate::{client_tick_manager::ClientTickManager, command_receiver::CommandReceiver, Packet};
 use std::collections::hash_map::Keys;
@@ -53,10 +52,10 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         manifest: &Manifest<T, U>,
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() || self.command_sender.has_command() {
-            let mut writer = PacketWriter::new();
+            let mut writer = ClientPacketWriter::new();
 
             while let Some((pawn_key, command)) = self.command_sender.pop_command() {
-                if writer.write_command(manifest, pawn_key, &command) {
+                if writer.write_command(manifest, &self.command_receiver, pawn_key, &command) {
                     self.command_receiver
                         .queue_command(host_tick, pawn_key, &command);
                 } else {
