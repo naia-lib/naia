@@ -75,34 +75,3 @@ fn get_type_id_variants(type_name: &Ident, data: &Data) -> TokenStream {
         _ => unimplemented!(),
     }
 }
-
-////FROM THIS
-//#[derive(EventType, Clone)]
-//pub enum ExampleEvent {
-//    StringEvent(StringEvent),
-//    AuthEvent(AuthEvent),
-//}
-
-////TO THIS
-//impl EventType for ExampleEvent {
-//    fn write(&mut self, buffer: &mut Vec<u8>) {
-//        match self {
-//            ExampleEvent::StringEvent(identity) => {
-//                identity.write(buffer);
-//            }
-//            ExampleEvent::AuthEvent(identity) => {
-//                identity.write(buffer);
-//            }
-//        }
-//    }
-//    fn get_type_id(&self) -> TypeId {
-//        match self {
-//            ExampleEvent::StringEvent(identity) => {
-//                return identity.get_type_id();
-//            }
-//            ExampleEvent::AuthEvent(identity) => {
-//                return identity.get_type_id();
-//            }
-//        }
-//    }
-//}

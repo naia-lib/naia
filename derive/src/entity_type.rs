@@ -375,20 +375,3 @@ fn get_is_predicted_method(type_name: &Ident, data: &Data) -> TokenStream {
         }
     };
 }
-
-////FROM THIS
-//#[derive(EntityType)]
-//pub enum ExampleEntity {
-//    PointEntity(Rc<RefCell<PointEntity>>),
-//}
-
-////TO THIS
-//impl EntityType for ExampleEntity {
-//    fn read_partial(&mut self, state_mask: &StateMask, bytes: &[u8],
-// packet_index: u16) {        match self {
-//            ExampleEntity::PointEntity(identity) => {
-//                identity.as_ref().borrow_mut().read_partial(state_mask,
-// bytes, packet_index);            }
-//        }
-//    }
-//}
