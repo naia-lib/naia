@@ -1,8 +1,4 @@
-use std::io::Cursor;
-
 use nanoserde::{DeBin, SerBin};
-
-use byteorder::ReadBytesExt;
 
 use super::property::Property;
 
