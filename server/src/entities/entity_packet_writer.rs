@@ -42,9 +42,6 @@ impl EntityPacketWriter {
                 entity_total_bytes
                     .write_u16::<BigEndian>(*local_key)
                     .unwrap(); //write local key
-                entity_total_bytes
-                    .write_u8(entity_payload_bytes.len() as u8)
-                    .unwrap(); // write payload length
                 entity_total_bytes.append(&mut entity_payload_bytes); // write payload
             }
             ServerEntityMessage::DeleteEntity(_, local_key) => {
@@ -80,9 +77,6 @@ impl EntityPacketWriter {
                     .as_ref()
                     .borrow_mut()
                     .write(&mut entity_total_bytes); // write state mask
-                entity_total_bytes
-                    .write_u8(entity_payload_bytes.len() as u8)
-                    .unwrap(); // write payload length
                 entity_total_bytes.append(&mut entity_payload_bytes); // write payload
             }
             ServerEntityMessage::AssignPawn(_, local_key) => {
@@ -119,9 +113,6 @@ impl EntityPacketWriter {
                 entity_total_bytes
                     .write_u16::<BigEndian>(*local_key)
                     .unwrap(); //write local key
-                entity_total_bytes
-                    .write_u8(entity_payload_bytes.len() as u8)
-                    .unwrap(); // write payload length
                 entity_total_bytes.append(&mut entity_payload_bytes); // write payload
             }
         }

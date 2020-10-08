@@ -1,4 +1,3 @@
-use byteorder::{BigEndian, ReadBytesExt};
 use log::warn;
 use naia_shared::{
     EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer,
@@ -49,7 +48,6 @@ impl<U: EntityType> ClientEntityManager<U> {
                     // Creation
                     let naia_id: u16 = reader.read_u16();
                     let local_key: u16 = reader.read_u16();
-                    let payload_length: u8 = reader.read_u8();
 
                     match manifest.create_entity(naia_id, reader) {
                         Some(new_entity) => {
@@ -92,7 +90,6 @@ impl<U: EntityType> ClientEntityManager<U> {
                     if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
                         // Entity is not a Pawn
                         let state_mask: StateMask = StateMask::read(reader);
-                        let payload_length: u8 = reader.read_u8();
 
                         entity_ref.read_partial(&state_mask, reader, packet_index);
 
@@ -140,8 +137,6 @@ impl<U: EntityType> ClientEntityManager<U> {
                     let local_key = reader.read_u16();
 
                     if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
-                        let payload_length: u8 = reader.read_u8();
-
                         entity_ref.read_full(reader, packet_index);
 
                         // check it against it's history
