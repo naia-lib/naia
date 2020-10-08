@@ -6,7 +6,7 @@ use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 
 pub use naia_shared::{
     ConnectionConfig, EntityType, Event, EventType, HostTickManager, Instant, LocalEntityKey,
-    ManagerType, Manifest, PacketReader, PacketType, PacketWriter, SequenceIterator, SharedConfig,
+    ManagerType, Manifest, PacketReader, PacketType, SequenceIterator, SharedConfig,
     StandardHeader, Timer, Timestamp,
 };
 

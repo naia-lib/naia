@@ -12,6 +12,7 @@
     unused_import_braces
 )]
 
+#[macro_use]
 extern crate log;
 
 mod client_config;
@@ -19,6 +20,7 @@ mod client_connection_state;
 mod client_entity_manager;
 mod client_entity_message;
 mod client_event;
+mod client_packet_writer;
 mod client_tick_manager;
 mod command_receiver;
 mod command_sender;
