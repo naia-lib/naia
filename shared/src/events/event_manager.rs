@@ -1,4 +1,3 @@
-use byteorder::{BigEndian, ReadBytesExt};
 use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
@@ -121,13 +120,9 @@ impl<T: EventType> EventManager<T> {
         reader: &mut PacketReader,
         manifest: &Manifest<T, U>,
     ) {
-        let buffer = reader.get_buffer();
-        let cursor = reader.get_cursor();
-
-        let event_count = cursor.read_u8().unwrap();
+        let event_count = reader.read_u8();
         for _x in 0..event_count {
             let naia_id: u16 = reader.read_u16();
-            let payload_length: u8 = reader.read_u8();
 
             match manifest.create_event(naia_id, reader) {
                 Some(new_event) => {
