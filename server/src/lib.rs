@@ -37,6 +37,7 @@ mod ping_manager;
 mod room;
 mod server_config;
 mod server_event;
+mod server_packet_writer;
 mod server_tick_manager;
 mod user;
 

@@ -2,7 +2,7 @@ use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
     Connection, ConnectionConfig, Entity, EntityType, Event, EventType, ManagerType, Manifest,
-    PacketReader, PacketType, PacketWriter, SequenceNumber, StandardHeader,
+    PacketReader, PacketType, SequenceNumber, StandardHeader,
 };
 
 use super::{
@@ -12,6 +12,7 @@ use super::{
         mut_handler::MutHandler, server_entity_manager::ServerEntityManager,
     },
     ping_manager::PingManager,
+    server_packet_writer::ServerPacketWriter,
 };
 
 pub struct ClientConnection<T: EventType, U: EntityType> {
@@ -41,7 +42,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         manifest: &Manifest<T, U>,
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() || self.entity_manager.has_outgoing_messages() {
-            let mut writer = PacketWriter::new();
+            let mut writer = ServerPacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
             while let Some(popped_event) = self.connection.pop_outgoing_event(next_packet_index) {

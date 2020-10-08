@@ -1,8 +1,10 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
-use naia_shared::{EntityType, EventType, Manifest, PacketWriter, MTU_SIZE};
+use naia_shared::{EntityType, EventType, Manifest, MTU_SIZE};
 
 use super::server_entity_message::ServerEntityMessage;
+
+use crate::server_packet_writer::ServerPacketWriter;
 
 /// Writes into a packet with Entity data
 #[derive(Debug)]
@@ -12,7 +14,7 @@ impl EntityPacketWriter {
     /// Given a general PacketWriter, the manifest, and a buffered
     /// EntityMessage, actually write Entity data into the packet
     pub fn write_entity_message<T: EventType, U: EntityType>(
-        packet_writer: &mut PacketWriter,
+        packet_writer: &mut ServerPacketWriter,
         manifest: &Manifest<T, U>,
         message: &ServerEntityMessage<U>,
     ) -> bool {
