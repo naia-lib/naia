@@ -35,22 +35,13 @@ impl<T: EventType> CommandReceiver<T> {
         reader: &mut PacketReader,
         manifest: &Manifest<T, U>,
     ) {
-        let buffer = reader.get_buffer();
-        let cursor = reader.get_cursor();
-
-        let command_count = cursor.read_u8().unwrap();
+        let command_count = reader.read_u8();
         for _x in 0..command_count {
-            let local_entity_key: LocalEntityKey = cursor.read_u16::<BigEndian>().unwrap().into();
-            let naia_id: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
-            let payload_length: u8 = cursor.read_u8().unwrap().into();
-            let payload_start_position: usize = cursor.position() as usize;
-            let payload_end_position: usize = payload_start_position + (payload_length as usize);
+            let local_entity_key: LocalEntityKey = reader.read_u16();
+            let naia_id: u16 = reader.read_u16();
+            let payload_length: u8 = reader.read_u8();
 
-            let command_payload = buffer[payload_start_position..payload_end_position]
-                .to_vec()
-                .into_boxed_slice();
-
-            match manifest.create_event(naia_id, &command_payload) {
+            match manifest.create_event(naia_id, reader) {
                 Some(new_command) => {
                     if !self.queued_incoming_commands.exists(client_tick) {
                         self.queued_incoming_commands
@@ -62,8 +53,6 @@ impl<T: EventType> CommandReceiver<T> {
                 }
                 _ => {}
             }
-
-            cursor.set_position(payload_end_position as u64);
         }
     }
 }
