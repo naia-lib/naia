@@ -1,4 +1,4 @@
-use byteorder::ReadBytesExt;
+use byteorder::{BigEndian, ReadBytesExt};
 use std::io::Cursor;
 
 /// Contains an underlying byte payload, and provides a Cursor into that payload
@@ -25,6 +25,11 @@ impl<'s> PacketReader<'s> {
     /// Read a single byte from the payload
     pub fn read_u8(&mut self) -> u8 {
         return self.cursor.read_u8().unwrap();
+    }
+
+    /// Read a u16 from the payload
+    pub fn read_u16(&mut self) -> u16 {
+        return self.cursor.read_u16::<BigEndian>().unwrap();
     }
 
     /// Get a reference to the Cursor
