@@ -25,22 +25,32 @@ impl<T: Clone + DeBin + SerBin + PartialEq> PropertyIo<T> for Property<T> {
 
     fn read(&mut self, reader: &mut PacketReader) {
         let length = reader.read_u8();
-        let mut buffer = Vec::with_capacity(length as usize);
-        for _ in 0..length {
-            buffer.push(reader.read_u8());
-        }
-        self.inner = DeBin::deserialize_bin(&buffer[..]).unwrap();
+
+        let buffer = reader.get_buffer();
+        let cursor = reader.get_cursor();
+
+        let start: usize = cursor.position() as usize;
+        let end: usize = start + (length as usize);
+
+        self.inner = DeBin::deserialize_bin(&buffer[start..end]).unwrap();
+
+        cursor.set_position(end as u64);
     }
 
     fn read_seq(&mut self, reader: &mut PacketReader, packet_index: u16) {
         let length = reader.read_u8();
-        let mut buffer = Vec::with_capacity(length as usize);
-        for _ in 0..length {
-            buffer.push(reader.read_u8());
-        }
+
+        let buffer = reader.get_buffer();
+        let cursor = reader.get_cursor();
+
+        let start: usize = cursor.position() as usize;
+        let end: usize = start + (length as usize);
+
         if sequence_greater_than(packet_index, self.last_recv_index) {
             self.last_recv_index = packet_index;
-            self.inner = DeBin::deserialize_bin(&buffer[..]).unwrap();
+            self.inner = DeBin::deserialize_bin(&buffer[start..end]).unwrap();
         }
+
+        cursor.set_position(end as u64);
     }
 }
