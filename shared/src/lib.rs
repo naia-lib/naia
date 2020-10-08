@@ -28,7 +28,6 @@ mod manager_type;
 mod manifest;
 mod packet_reader;
 mod packet_type;
-mod packet_writer;
 mod sequence_buffer;
 mod shared_config;
 mod standard_header;
@@ -59,6 +58,7 @@ pub use events::{
     event::{Event, EventClone},
     event_builder::EventBuilder,
     event_manager::EventManager,
+    event_packet_writer::{EventPacketWriter, MTU_SIZE},
     event_type::EventType,
 };
 pub use host_tick_manager::HostTickManager;
@@ -68,7 +68,6 @@ pub use manager_type::ManagerType;
 pub use manifest::Manifest;
 pub use packet_reader::PacketReader;
 pub use packet_type::PacketType;
-pub use packet_writer::{PacketWriter, MTU_SIZE};
 pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
 pub use shared_config::SharedConfig;
 pub use standard_header::StandardHeader;
