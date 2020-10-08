@@ -70,7 +70,7 @@ impl ClientPacketWriter {
             error!("cannot encode an event with more than 255 bytes, need to implement this");
         }
 
-        //Write event "header" (event id & payload length)
+        //Write command "header"
         let mut command_total_bytes = Vec::<u8>::new();
 
         let type_id = command.as_ref().get_type_id();
@@ -79,9 +79,6 @@ impl ClientPacketWriter {
             .unwrap(); // write pawn key
         let naia_id = manifest.get_event_naia_id(&type_id); // get naia id
         command_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-        command_total_bytes
-            .write_u8(command_payload_bytes.len() as u8)
-            .unwrap(); // write payload length
         command_total_bytes.append(&mut command_payload_bytes); // write payload
 
         let mut hypothetical_next_payload_size = self.bytes_number() + command_total_bytes.len();
