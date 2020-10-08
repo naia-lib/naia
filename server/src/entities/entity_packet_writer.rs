@@ -31,7 +31,7 @@ impl EntityPacketWriter {
                     );
                 }
 
-                //Write entity "header" (entity id & payload length)
+                //Write entity "header"
                 entity_total_bytes
                     .write_u8(message.write_message_type())
                     .unwrap(); // write entity message type
@@ -65,7 +65,7 @@ impl EntityPacketWriter {
                     );
                 }
 
-                //Write entity "header" (entity id & payload length)
+                //Write entity "header"
                 entity_total_bytes
                     .write_u8(message.write_message_type())
                     .unwrap(); // write entity message type
@@ -105,7 +105,7 @@ impl EntityPacketWriter {
                     );
                 }
 
-                //Write entity "header" (entity id & payload length)
+                //Write entity "header"
                 entity_total_bytes
                     .write_u8(message.write_message_type())
                     .unwrap(); // write entity message type
