@@ -1,4 +1,3 @@
-use byteorder::{BigEndian, ReadBytesExt};
 use std::collections::VecDeque;
 
 use naia_shared::{EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer};
@@ -39,7 +38,6 @@ impl<T: EventType> CommandReceiver<T> {
         for _x in 0..command_count {
             let local_entity_key: LocalEntityKey = reader.read_u16();
             let naia_id: u16 = reader.read_u16();
-            let payload_length: u8 = reader.read_u8();
 
             match manifest.create_event(naia_id, reader) {
                 Some(new_command) => {

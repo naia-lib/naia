@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, WriteBytesExt};
 use futures_util::{pin_mut, select, FutureExt};
 use log::info;
 use ring::{hmac, rand};
