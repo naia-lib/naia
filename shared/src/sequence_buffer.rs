@@ -143,9 +143,32 @@ impl<T: Clone> SequenceBuffer<T> {
         }
     }
 
+    /// Get a count of entries in the buffer
+    pub fn get_entries_count(&self) -> u8 {
+        let mut count = 0;
+        let mut seq = self.oldest();
+        loop {
+            if self.exists(seq) {
+                count += 1;
+            }
+            seq = seq.wrapping_add(1);
+            if seq == self.sequence_num {
+                break;
+            }
+        }
+        return count;
+    }
+
     /// Get an iterator into the sequence
-    pub fn iter(&self) -> SequenceIterator<T> {
-        return SequenceIterator::new(self.oldest(), self.entry_sequences.len(), self);
+    pub fn iter(&self, reverse: bool) -> SequenceIterator<T> {
+        let index = {
+            if reverse {
+                self.sequence_num
+            } else {
+                self.oldest()
+            }
+        };
+        return SequenceIterator::new(self, index, self.entry_sequences.len(), reverse);
     }
 }
 
@@ -154,39 +177,44 @@ pub struct SequenceIterator<'s, T>
 where
     T: 's + Clone,
 {
+    buffer: &'s SequenceBuffer<T>,
     index: u16,
     count: usize,
-    buffer: &'s SequenceBuffer<T>,
+    reverse: bool,
 }
 
 impl<'s, T: Clone> SequenceIterator<'s, T> {
     /// Create a new iterator for a sequence
     pub fn new(
+        seq_buf: &'s SequenceBuffer<T>,
         start: u16,
         count: usize,
-        seq_buf: &'s SequenceBuffer<T>,
+        reverse: bool,
     ) -> SequenceIterator<'s, T> {
         SequenceIterator::<T> {
+            buffer: seq_buf,
             index: start,
             count,
-            buffer: seq_buf,
+            reverse,
         }
     }
-}
 
-impl<'s, T: Clone> Iterator for SequenceIterator<'s, T> {
-    type Item = &'s T;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    /// Get next value in the sequence
+    pub fn next(&mut self) -> Option<(SequenceNumber, &'s T)> {
         loop {
             if self.count == 0 {
                 return None;
             }
             let current_item = self.buffer.get(self.index);
-            self.index = self.index.wrapping_add(1);
+            let current_index = self.index;
+            if self.reverse {
+                self.index = self.index.wrapping_sub(1);
+            } else {
+                self.index = self.index.wrapping_add(1);
+            }
             self.count -= 1;
-            if current_item.is_some() {
-                return current_item;
+            if let Some(item) = current_item {
+                return Some((current_index, item));
             }
         }
     }
