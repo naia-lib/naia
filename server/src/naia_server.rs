@@ -348,6 +348,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                             Some(connection) => {
                                                 connection.process_incoming_header(&header);
                                                 connection.process_incoming_data(
+                                                    self.tick_manager.get_tick(),
                                                     header.host_tick(),
                                                     &self.manifest,
                                                     &payload,

@@ -14,7 +14,7 @@ pub fn event_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
         use std::any::TypeId;
         use naia_shared::{EventType, Event};
         impl EventType for #type_name {
-            fn write(&mut self, buffer: &mut Vec<u8>) {
+            fn write(&self, buffer: &mut Vec<u8>) {
                 match self {
                     #write_variants
                 }

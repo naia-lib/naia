@@ -86,6 +86,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
 
     pub fn process_incoming_data(
         &mut self,
+        server_tick: u16,
         client_tick: u16,
         manifest: &Manifest<T, U>,
         data: &[u8],
@@ -95,8 +96,12 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
             let manager_type: ManagerType = reader.read_u8().into();
             match manager_type {
                 ManagerType::Command => {
-                    self.command_receiver
-                        .process_data(client_tick, &mut reader, manifest);
+                    self.command_receiver.process_data(
+                        server_tick,
+                        client_tick,
+                        &mut reader,
+                        manifest,
+                    );
                 }
                 ManagerType::Event => {
                     self.connection.process_event_data(&mut reader, manifest);
