@@ -41,6 +41,7 @@ mod server_packet_writer;
 mod server_tick_manager;
 mod user;
 
+pub use entities::entity_key::entity_key::EntityKey;
 pub use naia_server::NaiaServer;
 pub use room::room_key::RoomKey;
 pub use server_config::ServerConfig;

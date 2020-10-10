@@ -59,9 +59,6 @@ impl EventPacketWriter {
         //Write event payload
         let mut event_payload_bytes = Vec::<u8>::new();
         event.as_ref().write(&mut event_payload_bytes);
-        if event_payload_bytes.len() > 255 {
-            error!("cannot encode an event with more than 255 bytes, need to implement this");
-        }
 
         //Write event "header"
         let mut event_total_bytes = Vec::<u8>::new();

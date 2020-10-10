@@ -396,14 +396,6 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         return None;
     }
 
-    /// Return an iterator to all historical snapshots of a particular Pawn
-    pub fn pawn_history_iter(&self, pawn_key: &LocalEntityKey) -> Option<SequenceIterator<U>> {
-        if let Some(connection) = &self.server_connection {
-            return connection.pawn_history_iter(pawn_key);
-        }
-        return None;
-    }
-
     // connection metrics
 
     /// Gets the average Round Trip Time measured to the Server
