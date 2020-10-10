@@ -1,7 +1,6 @@
 use log::warn;
 use naia_shared::{
-    EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer,
-    SequenceIterator, StateMask,
+    EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer, StateMask,
 };
 use std::collections::{HashMap, VecDeque};
 
@@ -177,13 +176,6 @@ impl<U: EntityType> ClientEntityManager<U> {
 
     pub fn pawn_keys(&self) -> Keys<LocalEntityKey, U> {
         return self.pawn_store.keys();
-    }
-
-    pub fn pawn_history_iter(&self, key: &LocalEntityKey) -> Option<SequenceIterator<'_, U>> {
-        if let Some(pawn_history) = self.pawn_history.get(&key) {
-            return Some(pawn_history.iter());
-        }
-        return None;
     }
 
     pub fn get_pawn(&self, key: &LocalEntityKey) -> Option<&U> {

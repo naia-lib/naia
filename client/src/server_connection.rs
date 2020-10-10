@@ -2,7 +2,7 @@ use std::{net::SocketAddr, rc::Rc};
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType,
-    Manifest, PacketReader, PacketType, SequenceIterator, SequenceNumber, StandardHeader,
+    Manifest, PacketReader, PacketType, SequenceNumber, StandardHeader,
 };
 
 use super::{
@@ -55,7 +55,13 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
             let mut writer = ClientPacketWriter::new();
 
             while let Some((pawn_key, command)) = self.command_sender.pop_command() {
-                if writer.write_command(manifest, &self.command_receiver, pawn_key, &command) {
+                if writer.write_command(
+                    host_tick,
+                    manifest,
+                    &self.command_receiver,
+                    pawn_key,
+                    &command,
+                ) {
                     self.command_receiver
                         .queue_command(host_tick, pawn_key, &command);
                 } else {
@@ -164,10 +170,6 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
 
     pub fn pawn_keys(&self) -> Keys<LocalEntityKey, U> {
         return self.entity_manager.pawn_keys();
-    }
-
-    pub fn pawn_history_iter(&self, pawn_key: &LocalEntityKey) -> Option<SequenceIterator<U>> {
-        return self.entity_manager.pawn_history_iter(pawn_key);
     }
 
     pub fn get_pawn(

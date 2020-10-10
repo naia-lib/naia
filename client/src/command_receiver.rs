@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{client_entity_manager::ClientEntityManager, naia_client::LocalEntityKey};
-use naia_shared::{wrapping_diff, EntityType, Event, EventType, SequenceBuffer};
+use naia_shared::{wrapping_diff, EntityType, Event, EventType, SequenceBuffer, SequenceIterator};
 
 const COMMAND_HISTORY_SIZE: u16 = 64;
 
@@ -78,6 +78,26 @@ impl<T: EventType> CommandReceiver<T> {
         if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
             command_buffer.insert(host_tick, command.clone());
         }
+    }
+
+    /// Get number of Commands in the command history for a given Pawn
+    pub fn command_history_count(&self, pawn_key: LocalEntityKey) -> u8 {
+        if let Some(command_buffer) = self.command_history.get(&pawn_key) {
+            return command_buffer.get_entries_count();
+        }
+        return 0;
+    }
+
+    /// Get an iterator of Commands in the command history for a given Pawn
+    pub fn command_history_iter(
+        &self,
+        pawn_key: LocalEntityKey,
+        reverse: bool,
+    ) -> Option<SequenceIterator<Rc<Box<dyn Event<T>>>>> {
+        if let Some(command_buffer) = self.command_history.get(&pawn_key) {
+            return Some(command_buffer.iter(reverse));
+        }
+        return None;
     }
 
     /// Queues commands to be replayed from a given tick

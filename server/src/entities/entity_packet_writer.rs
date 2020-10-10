@@ -25,11 +25,6 @@ impl EntityPacketWriter {
                 //write entity payload
                 let mut entity_payload_bytes = Vec::<u8>::new();
                 entity.as_ref().borrow().write(&mut entity_payload_bytes);
-                if entity_payload_bytes.len() > 255 {
-                    error!(
-                        "cannot encode an entity with more than 255 bytes, need to implement this"
-                    );
-                }
 
                 //Write entity "header"
                 entity_total_bytes
@@ -59,11 +54,6 @@ impl EntityPacketWriter {
                     .as_ref()
                     .borrow()
                     .write_partial(&state_mask.as_ref().borrow(), &mut entity_payload_bytes);
-                if entity_payload_bytes.len() > 255 {
-                    error!(
-                        "cannot encode an entity with more than 255 bytes, need to implement this"
-                    );
-                }
 
                 //Write entity "header"
                 entity_total_bytes
@@ -99,11 +89,6 @@ impl EntityPacketWriter {
                 //write entity payload
                 let mut entity_payload_bytes = Vec::<u8>::new();
                 entity.as_ref().borrow().write(&mut entity_payload_bytes);
-                if entity_payload_bytes.len() > 255 {
-                    error!(
-                        "cannot encode an entity with more than 255 bytes, need to implement this"
-                    );
-                }
 
                 //Write entity "header"
                 entity_total_bytes
