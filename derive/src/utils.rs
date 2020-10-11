@@ -65,7 +65,7 @@ pub fn get_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
 
     for (field_name, _) in properties.iter() {
         let new_output_right = quote! {
-            PropertyIo::write(&self.#field_name, buffer);
+            Property::write(&self.#field_name, buffer);
         };
         let new_output_result = quote! {
             #output
