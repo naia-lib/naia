@@ -1,4 +1,3 @@
-use byteorder::{BigEndian, ReadBytesExt};
 use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
@@ -6,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    entities::entity_type::EntityType,
+    actors::actor_type::ActorType,
     events::{
         event::{Event, EventClone},
         event_type::EventType,
@@ -116,34 +115,21 @@ impl<T: EventType> EventManager<T> {
 
     /// Given incoming packet data, read transmitted Events and store them to be
     /// returned to the application
-    pub fn process_data<U: EntityType>(
+    pub fn process_data<U: ActorType>(
         &mut self,
         reader: &mut PacketReader,
         manifest: &Manifest<T, U>,
     ) {
-        let buffer = reader.get_buffer();
-        let cursor = reader.get_cursor();
-
-        let event_count = cursor.read_u8().unwrap();
+        let event_count = reader.read_u8();
         for _x in 0..event_count {
-            let naia_id: u16 = cursor.read_u16::<BigEndian>().unwrap().into();
-            let payload_length: u8 = cursor.read_u8().unwrap().into();
-            let payload_start_position: usize = cursor.position() as usize;
-            let payload_end_position: usize = payload_start_position + (payload_length as usize);
+            let naia_id: u16 = reader.read_u16();
 
-            let event_payload = buffer[payload_start_position..payload_end_position]
-                .to_vec()
-                .into_boxed_slice();
-
-            match manifest.create_event(naia_id, &event_payload) {
+            match manifest.create_event(naia_id, reader) {
                 Some(new_event) => {
-                    //new_entity.read(&event_payload);
                     self.queued_incoming_events.push_back(new_event);
                 }
                 _ => {}
             }
-
-            cursor.set_position(payload_end_position as u64);
         }
     }
 }

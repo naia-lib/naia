@@ -1,8 +1,10 @@
-use byteorder::{ReadBytesExt, WriteBytesExt};
-use std::{fmt, io::Cursor};
+use byteorder::WriteBytesExt;
+use std::fmt;
+
+use crate::packet_reader::PacketReader;
 
 /// The State Mask is a variable-length byte array, where each bit represents
-/// the current state of a Property owned by an Entity. The Property state
+/// the current state of a Property owned by an Actor. The Property state
 /// tracked is whether it has been updated and needs to be synced with the
 /// remote Client
 #[derive(Debug, Clone)]
@@ -107,11 +109,11 @@ impl StateMask {
     }
 
     /// Reads the StateMask from an incoming packet
-    pub fn read(cursor: &mut Cursor<&[u8]>) -> StateMask {
-        let bytes: u8 = cursor.read_u8().unwrap().into();
+    pub fn read(reader: &mut PacketReader) -> StateMask {
+        let bytes: u8 = reader.read_u8();
         let mut mask: Vec<u8> = Vec::new();
         for _ in 0..bytes {
-            mask.push(cursor.read_u8().unwrap().into());
+            mask.push(reader.read_u8());
         }
         StateMask { bytes, mask }
     }
