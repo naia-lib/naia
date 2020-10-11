@@ -2,7 +2,7 @@
 name = "naia-client"
 version = "0.2.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-description = "Provides a cross-platform client that can send/receive events to/from a server, and has a pool of in-scope entities that is synced with the server."
+description = "Provides a cross-platform client that can send/receive events to/from a server, and has a pool of in-scope actors that is synced with the server."
 documentation = "https://docs.rs/naia-client"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
@@ -16,7 +16,7 @@ edition = "2018"
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-naia-client-socket = { version = "0.3.1" }
+naia-client-socket = { path = "../../naia-socket/client" } # { version = "0.3.1" }
 naia-shared = { version = "0.2.0", path = "../shared" }
 cfg-if = "0.1.10"
 log = "0.4"
