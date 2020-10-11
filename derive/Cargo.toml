@@ -1,6 +1,6 @@
 [package]
 name = "naia-derive"
-version = "0.1.1"
+version = "0.3.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Procedural macros to simplify implementation of Naia Event & Actor traits"
 documentation = "https://docs.rs/naia-derive"
