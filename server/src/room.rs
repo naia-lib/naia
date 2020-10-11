@@ -5,7 +5,7 @@ use super::{actors::actor_key::actor_key::ActorKey, user::user_key::UserKey};
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
 pub mod room_key {
-    /// The Key used to get a reference of a Room
+    // The Key used to get a reference of a Room
     new_key_type! { pub struct RoomKey; }
 }
 
