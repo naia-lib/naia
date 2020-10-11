@@ -84,8 +84,10 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
         }
     }
 
-    /// Must be called regularly, performs updates to the connection, and
-    /// retrieves event/actor updates sent by the Server
+    /// Must call this regularly (preferably at the beginning of every draw
+    /// frame), in a loop until it returns None.
+    /// Retrieves incoming events/updates, and performs updates to maintain the
+    /// connection.
     pub fn receive(&mut self) -> Option<Result<ClientEvent<T>, NaiaClientError>> {
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
@@ -219,8 +221,8 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
         // receive from socket
         loop {
             match self.socket.receive() {
-                Ok(event) => match event {
-                    Some(packet) => {
+                Ok(event) => {
+                    if let Some(packet) = event {
                         let server_connection_wrapper = self.server_connection.as_mut();
 
                         if let Some(server_connection) = server_connection_wrapper {
@@ -295,16 +297,22 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                                 _ => {}
                             }
                         }
+                    } else {
+                        break;
                     }
-                    None => {
-                        return None;
-                    }
-                },
+                }
                 Err(error) => {
                     return Some(Err(NaiaClientError::Wrapped(Box::new(error))));
                 }
             }
         }
+
+        // apply updates on tick boundary, and interpolate
+        if let Some(connection) = &mut self.server_connection {
+            connection.frame_begin(&self.manifest, &mut self.tick_manager);
+        }
+
+        return None;
     }
 
     /// Queues up an Event to be sent to the Server
@@ -329,15 +337,6 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
     /// Return whether or not a connection has been established with the Server
     pub fn has_connection(&self) -> bool {
         return self.server_connection.is_some();
-    }
-
-    /// This doesn't actually interpolate all actors, but rather it marks the
-    /// current time & tick in order to later present interpolated actors
-    /// correctly. Call this at the beginning of any frame
-    pub fn frame_begin(&mut self) {
-        if let Some(connection) = &mut self.server_connection {
-            connection.frame_begin(&self.manifest, &mut self.tick_manager);
-        }
     }
 
     // actors

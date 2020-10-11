@@ -21,7 +21,7 @@ impl<U: ActorType> InterpolationManager<U> {
         }
     }
 
-    pub fn snapshot_actors(&mut self, actor_manager: &ClientActorManager<U>) {
+    pub fn update_actors(&mut self, actor_manager: &ClientActorManager<U>) {
         for (key, (_, prev_ent)) in self.actor_store.iter_mut() {
             if let Some(now_ent) = actor_manager.get_actor(key) {
                 prev_ent.mirror(now_ent);
