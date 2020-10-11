@@ -2,10 +2,11 @@ use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
     net::SocketAddr,
+    panic,
     rc::Rc,
 };
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, WriteBytesExt};
 use futures_util::{pin_mut, select, FutureExt};
 use log::info;
 use ring::{hmac, rand};
@@ -16,17 +17,17 @@ use naia_server_socket::{
     MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
 };
 pub use naia_shared::{
-    wrapping_diff, Connection, ConnectionConfig, Entity, EntityMutator, EntityType, Event,
-    EventType, HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType,
-    SharedConfig, Timer, Timestamp,
+    wrapping_diff, Actor, ActorMutator, ActorType, Connection, ConnectionConfig, Event, EventType,
+    HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType, SharedConfig, Timer,
+    Timestamp,
 };
 
 use super::{
-    client_connection::ClientConnection,
-    entities::{
-        entity_key::entity_key::EntityKey, mut_handler::MutHandler,
-        server_entity_mutator::ServerEntityMutator,
+    actors::{
+        actor_key::actor_key::ActorKey, mut_handler::MutHandler,
+        server_actor_mutator::ServerActorMutator,
     },
+    client_connection::ClientConnection,
     error::NaiaServerError,
     room::{room_key::RoomKey, Room},
     server_config::ServerConfig,
@@ -37,15 +38,15 @@ use super::{
 use naia_shared::StandardHeader;
 
 /// A server that uses either UDP or WebRTC communication to send/receive events
-/// to/from connected clients, and syncs registered entities to clients to whom
-/// those entities are in-scope
-pub struct NaiaServer<T: EventType, U: EntityType> {
+/// to/from connected clients, and syncs registered actors to clients to whom
+/// those actors are in-scope
+pub struct NaiaServer<T: EventType, U: ActorType> {
     connection_config: ConnectionConfig,
     manifest: Manifest<T, U>,
     socket: Box<dyn ServerSocketTrait>,
     sender: MessageSender,
-    global_entity_store: DenseSlotMap<EntityKey, Rc<RefCell<dyn Entity<U>>>>,
-    scope_entity_func: Option<Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>>,
+    global_actor_store: DenseSlotMap<ActorKey, U>,
+    scope_actor_func: Option<Rc<Box<dyn Fn(&RoomKey, &UserKey, &ActorKey, U) -> bool>>>,
     auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
     mut_handler: Rc<RefCell<MutHandler>>,
     users: DenseSlotMap<UserKey, User>,
@@ -59,8 +60,8 @@ pub struct NaiaServer<T: EventType, U: EntityType> {
     tick_timer: Interval,
 }
 
-impl<T: EventType, U: EntityType> NaiaServer<T, U> {
-    /// Create a new Server, given an address to listen at, an Event/Entity
+impl<T: EventType, U: ActorType> NaiaServer<T, U> {
+    /// Create a new Server, given an address to listen at, an Event/Actor
     /// manifest, and an optional Config
     pub async fn new(
         address: SocketAddr,
@@ -94,8 +95,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
 
         NaiaServer {
             manifest,
-            global_entity_store: DenseSlotMap::with_key(),
-            scope_entity_func: None,
+            global_actor_store: DenseSlotMap::with_key(),
+            scope_actor_func: None,
             auth_func: None,
             mut_handler: MutHandler::new(),
             socket: server_socket,
@@ -116,8 +117,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
     pub async fn receive(&mut self) -> Result<ServerEvent<T>, NaiaServerError> {
-        let mut output: Option<Result<ServerEvent<T>, NaiaServerError>> = None;
-        while output.is_none() {
+        loop {
             // heartbeats
             if self.heartbeat_timer.ringing() {
                 self.heartbeat_timer.reset();
@@ -158,15 +158,22 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                 let user_clone = self.users.get(user_key).unwrap().clone();
                 self.users.remove(user_key);
                 self.client_connections.remove(&user_key);
-                output = Some(Ok(ServerEvent::Disconnection(user_key, user_clone)));
-                continue;
+                return Ok(ServerEvent::Disconnection(user_key, user_clone));
             }
 
-            for (address, connection) in self.client_connections.iter_mut() {
+            // TODO: have 1 single queue for commands/events from all users, as it's
+            // possible this current technique unfairly favors the 1st users in
+            // self.client_connections
+            for (user_key, connection) in self.client_connections.iter_mut() {
+                //receive commands from anyone
+                if let Some((pawn_key, command)) =
+                    connection.get_incoming_command(self.tick_manager.get_tick())
+                {
+                    return Ok(ServerEvent::Command(*user_key, pawn_key, command));
+                }
                 //receive events from anyone
-                if let Some(something) = connection.get_incoming_event() {
-                    output = Some(Ok(ServerEvent::Event(*address, something)));
-                    continue;
+                if let Some(event) = connection.get_incoming_event() {
+                    return Ok(ServerEvent::Event(*user_key, event));
                 }
             }
 
@@ -296,27 +303,12 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
 
                                         // Call auth function if there is one
                                         if let Some(auth_func) = &self.auth_func {
-                                            let buffer = reader.get_buffer();
-                                            let cursor = reader.get_cursor();
-                                            let naia_id_result = cursor.read_u16::<BigEndian>();
-                                            if naia_id_result.is_err() {
-                                                self.users.remove(user_key);
-                                                continue;
-                                            }
-                                            let naia_id: u16 = naia_id_result.unwrap().into();
-                                            let event_payload = buffer
-                                                [cursor.position() as usize..buffer.len()]
-                                                .to_vec()
-                                                .into_boxed_slice();
+                                            let naia_id = reader.read_u16();
 
-                                            match self
-                                                .manifest
-                                                .create_event(naia_id, &event_payload)
-                                            {
-                                                Some(new_entity) => {
+                                            match self.manifest.create_event(naia_id, &mut reader) {
+                                                Some(new_actor) => {
                                                     if !(auth_func.as_ref().as_ref())(
-                                                        &user_key,
-                                                        &new_entity,
+                                                        &user_key, &new_actor,
                                                     ) {
                                                         self.users.remove(user_key);
                                                         continue;
@@ -344,8 +336,7 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                         )
                                         .await;
                                         self.client_connections.insert(user_key, new_connection);
-                                        output = Some(Ok(ServerEvent::Connection(user_key)));
-                                        continue;
+                                        return Ok(ServerEvent::Connection(user_key));
                                     }
                                 }
                                 PacketType::Data => {
@@ -356,6 +347,8 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                                             Some(connection) => {
                                                 connection.process_incoming_header(&header);
                                                 connection.process_incoming_data(
+                                                    self.tick_manager.get_tick(),
+                                                    header.host_tick(),
                                                     &self.manifest,
                                                     &payload,
                                                 );
@@ -443,19 +436,16 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
                             //                        }
                             //                    }
 
-                            output = Some(Err(NaiaServerError::Wrapped(Box::new(error))));
-                            continue;
+                            return Err(NaiaServerError::Wrapped(Box::new(error)));
                         }
                     }
                 }
                 Next::Tick => {
                     self.tick_manager.increment_tick();
-                    output = Some(Ok(ServerEvent::Tick));
-                    continue;
+                    return Ok(ServerEvent::Tick);
                 }
             }
         }
-        return output.unwrap();
     }
 
     async fn send_connect_accept_message(
@@ -484,17 +474,17 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         }
     }
 
-    /// Sends all Entity/Event messages to all Clients. If you don't call this
+    /// Sends all Actor/Event messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
     pub async fn send_all_updates(&mut self) {
-        // update entity scopes
-        self.update_entity_scopes();
+        // update actor scopes
+        self.update_actor_scopes();
 
         // loop through all connections, send packet
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
-                connection.collect_entity_updates();
+                connection.collect_actor_updates();
                 while let Some(payload) =
                     connection.get_outgoing_packet(self.tick_manager.get_tick(), &self.manifest)
                 {
@@ -514,37 +504,55 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         }
     }
 
-    /// Register an Entity with the Server, whereby the Server will sync the
-    /// state of the Entity to all connected Clients for which the Entity is
-    /// in scope. Gives back an EntityKey which can be used to get the reference
-    /// to the Entity from the Server once again
-    pub fn register_entity(&mut self, entity: Rc<RefCell<dyn Entity<U>>>) -> EntityKey {
-        let new_mutator_ref: Rc<RefCell<ServerEntityMutator>> =
-            Rc::new(RefCell::new(ServerEntityMutator::new(&self.mut_handler)));
-        entity
+    /// Register an Actor with the Server, whereby the Server will sync the
+    /// state of the Actor to all connected Clients for which the Actor is
+    /// in scope. Gives back an ActorKey which can be used to get the reference
+    /// to the Actor from the Server once again
+    pub fn register_actor(&mut self, actor: U) -> ActorKey {
+        let new_mutator_ref: Rc<RefCell<ServerActorMutator>> =
+            Rc::new(RefCell::new(ServerActorMutator::new(&self.mut_handler)));
+        actor
+            .inner_ref()
             .as_ref()
             .borrow_mut()
-            .set_mutator(&to_entity_mutator(&new_mutator_ref));
-        let entity_key = self.global_entity_store.insert(entity.clone());
+            .set_mutator(&to_actor_mutator(&new_mutator_ref));
+        let actor_key = self.global_actor_store.insert(actor);
         new_mutator_ref
             .as_ref()
             .borrow_mut()
-            .set_entity_key(entity_key);
-        self.mut_handler.borrow_mut().register_entity(&entity_key);
-        return entity_key;
+            .set_actor_key(actor_key);
+        self.mut_handler.borrow_mut().register_actor(&actor_key);
+        return actor_key;
     }
 
-    /// Deregisters an Entity with the Server, deleting local copies of the
-    /// Entity on each Client
-    pub fn deregister_entity(&mut self, key: EntityKey) {
-        self.mut_handler.borrow_mut().deregister_entity(&key);
-        self.global_entity_store.remove(key);
+    /// Deregisters an Actor with the Server, deleting local copies of the
+    /// Actor on each Client
+    pub fn deregister_actor(&mut self, key: ActorKey) {
+        for (user_key, _) in self.users.iter() {
+            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+                user_connection.remove_pawn(&key);
+                user_connection.remove_actor(&key);
+            }
+        }
+
+        self.mut_handler.borrow_mut().deregister_actor(&key);
+        self.global_actor_store.remove(key);
     }
 
-    /// Given an EntityKey, get a reference to a registered Entity being tracked
+    /// Given an ActorKey, get a reference to a registered Actor being tracked
     /// by the Server
-    pub fn get_entity(&mut self, key: EntityKey) -> Option<&Rc<RefCell<dyn Entity<U>>>> {
-        return self.global_entity_store.get(key);
+    pub fn get_actor(&mut self, key: ActorKey) -> Option<&U> {
+        return self.global_actor_store.get(key);
+    }
+
+    /// Iterate through all the Server's Actors
+    pub fn actors_iter(&self) -> slotmap::dense::Iter<ActorKey, U> {
+        return self.global_actor_store.iter();
+    }
+
+    /// Get the number of Actors tracked by the Server
+    pub fn get_actors_count(&self) -> usize {
+        return self.global_actor_store.len();
     }
 
     /// Creates a new Room on the Server, returns a Key which can be used to
@@ -574,17 +582,29 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         return self.rooms.iter();
     }
 
-    /// Add an Entity to a Room, given the appropriate RoomKey & EntityKey
-    /// Entities will only ever be in-scope for Users which are in a Room with
+    /// Get the number of Rooms in the Server
+    pub fn get_rooms_count(&self) -> usize {
+        return self.rooms.len();
+    }
+
+    /// Add an Actor to a Room, given the appropriate RoomKey & ActorKey
+    /// Actors will only ever be in-scope for Users which are in a Room with
     /// them
-    pub fn room_add_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
+    pub fn room_add_actor(&mut self, room_key: &RoomKey, actor_key: &ActorKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
-            room.add_entity(entity_key);
+            room.add_actor(actor_key);
+        }
+    }
+
+    /// Remove an Actor from a Room, given the appropriate RoomKey & ActorKey
+    pub fn room_remove_actor(&mut self, room_key: &RoomKey, actor_key: &ActorKey) {
+        if let Some(room) = self.rooms.get_mut(*room_key) {
+            room.remove_actor(actor_key);
         }
     }
 
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
-    /// Entities will only ever be in-scope for Users which are in a Room with
+    /// Actors will only ever be in-scope for Users which are in a Room with
     /// them
     pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
@@ -592,20 +612,27 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         }
     }
 
+    /// Removes a User from a Room
+    pub fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+        if let Some(room) = self.rooms.get_mut(*room_key) {
+            room.unsubscribe_user(user_key);
+        }
+    }
+
     /// Registers a closure which is used to evaluate whether, given a User &
-    /// Entity that are in the same Room, said Entity should be in scope for
+    /// Actor that are in the same Room, said Actor should be in scope for
     /// the given User.
     ///
-    /// While Rooms allow for a very simple scope to which an Entity can belong,
+    /// While Rooms allow for a very simple scope to which an Actor can belong,
     /// this closure provides complete customization for advanced scopes.
     ///
     /// This closure will be called every Tick of the Server, for every User &
-    /// Entity in a Room together, so try to keep it performant
-    pub fn on_scope_entity(
+    /// Actor in a Room together, so try to keep it performant
+    pub fn on_scope_actor(
         &mut self,
-        scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey, U) -> bool>>,
+        scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &ActorKey, U) -> bool>>,
     ) {
-        self.scope_entity_func = Some(scope_func);
+        self.scope_actor_func = Some(scope_func);
     }
 
     /// Registers a closure which will be called during the handshake process
@@ -627,6 +654,11 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         return self.users.get(*user_key);
     }
 
+    /// Get the number of Users currently connected
+    pub fn get_users_count(&self) -> usize {
+        return self.users.len();
+    }
+
     /// Gets the last received tick from the Client
     pub fn get_client_tick(&self, user_key: &UserKey) -> Option<u16> {
         if let Some(user_connection) = self.client_connections.get(user_key) {
@@ -640,40 +672,67 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
         self.tick_manager.get_tick()
     }
 
-    fn update_entity_scopes(&mut self) {
+    /// Assigns an Actor to a specific User, making it a Pawn for that User
+    /// (meaning that the User will be able to issue Commands to that Pawn)
+    pub fn assign_pawn(&mut self, user_key: &UserKey, actor_key: &ActorKey) {
+        if let Some(actor_ref) = self.global_actor_store.get(*actor_key) {
+            if !actor_ref.is_predicted() {
+                panic!("\nAttempting to call assign_pawn() referring to an Actor which has NO predicted properties.\n\
+                          Pawns are only used for client-side prediction, so an Actor must have at least one predicted\n\
+                          property to be allowed to become a Pawn. In order to do this, add the attribute: '#[predict]'\n\
+                          before you define an Actor's property, like so: '#[predict] pub my_u16: Property<u16>'\n");
+            }
+            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                user_connection.add_pawn(actor_key);
+            }
+        }
+    }
+
+    /// Unassigns a Pawn from a specific User (meaning that the User will be
+    /// unable to issue Commands to that Pawn)
+    pub fn unassign_pawn(&mut self, user_key: &UserKey, actor_key: &ActorKey) {
+        if self.global_actor_store.contains_key(*actor_key) {
+            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                user_connection.remove_pawn(actor_key);
+            }
+        }
+    }
+
+    fn update_actor_scopes(&mut self) {
         for (room_key, room) in self.rooms.iter_mut() {
-            while let Some((removed_user, removed_entity)) = room.pop_removal_queue() {
+            while let Some((removed_user, removed_actor)) = room.pop_removal_queue() {
                 if let Some(user_connection) = self.client_connections.get_mut(&removed_user) {
-                    user_connection.remove_entity(&removed_entity);
+                    user_connection.remove_actor(&removed_actor);
                 }
             }
 
-            if let Some(scope_func) = &self.scope_entity_func {
+            if let Some(scope_func) = &self.scope_actor_func {
                 for user_key in room.users_iter() {
-                    for entity_key in room.entities_iter() {
-                        if let Some(entity) = self.global_entity_store.get(*entity_key) {
+                    for actor_key in room.actors_iter() {
+                        if let Some(actor) = self.global_actor_store.get(*actor_key) {
                             if let Some(user_connection) = self.client_connections.get_mut(user_key)
                             {
-                                let currently_in_scope = user_connection.has_entity(entity_key);
-                                let should_be_in_scope = (scope_func.as_ref().as_ref())(
-                                    &room_key,
-                                    user_key,
-                                    entity_key,
-                                    entity.as_ref().borrow().get_typed_copy(),
-                                );
+                                let currently_in_scope = user_connection.has_actor(actor_key);
+                                let should_be_in_scope = user_connection.has_pawn(actor_key)
+                                    || (scope_func.as_ref().as_ref())(
+                                        &room_key,
+                                        user_key,
+                                        actor_key,
+                                        (*actor).clone(),
+                                    );
                                 if should_be_in_scope {
                                     if !currently_in_scope {
-                                        // add entity to the connections local scope
-                                        if let Some(entity) =
-                                            self.global_entity_store.get(*entity_key)
+                                        // add actor to the connections local scope
+                                        if let Some(actor) = self.global_actor_store.get(*actor_key)
                                         {
-                                            user_connection.add_entity(entity_key, entity);
+                                            user_connection
+                                                .add_actor(actor_key, &actor.inner_ref());
                                         }
                                     }
                                 } else {
                                     if currently_in_scope {
-                                        // remove entity from the connections local scope
-                                        user_connection.remove_entity(entity_key);
+                                        // remove actor from the connections local scope
+                                        user_connection.remove_actor(actor_key);
                                     }
                                 }
                             }
@@ -698,6 +757,6 @@ impl<T: EventType, U: EntityType> NaiaServer<T, U> {
     }
 }
 
-fn to_entity_mutator(eref: &Rc<RefCell<ServerEntityMutator>>) -> Rc<RefCell<dyn EntityMutator>> {
+fn to_actor_mutator(eref: &Rc<RefCell<ServerActorMutator>>) -> Rc<RefCell<dyn ActorMutator>> {
     eref.clone()
 }

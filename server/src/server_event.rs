@@ -1,4 +1,7 @@
-use super::user::{user_key::UserKey, User};
+use super::{
+    actors::actor_key::actor_key::ActorKey,
+    user::{user_key::UserKey, User},
+};
 
 /// An Event that is emitted as a result of some communication with a Client, or
 /// a Tick event
@@ -11,6 +14,8 @@ pub enum ServerEvent<T> {
     Disconnection(UserKey, User),
     /// An Event emitted to the Server from a Client
     Event(UserKey, T),
+    /// An Command emitted to the Server from a Client
+    Command(UserKey, ActorKey, T),
     /// A Tick Event, the duration between Tick events is defined in the Config
     /// object passed to the Server on initialization
     Tick,
