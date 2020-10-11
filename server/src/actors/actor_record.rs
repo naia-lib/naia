@@ -1,27 +1,27 @@
 use std::{cell::RefCell, rc::Rc};
 
-use naia_shared::{LocalEntityKey, StateMask};
+use naia_shared::{LocalActorKey, StateMask};
 
 #[derive(Debug)]
-pub struct EntityRecord {
-    pub local_key: LocalEntityKey,
+pub struct ActorRecord {
+    pub local_key: LocalActorKey,
     state_mask: Rc<RefCell<StateMask>>,
-    pub status: LocalEntityStatus,
+    pub status: LocalActorStatus,
 }
 
 #[derive(Debug, PartialEq)]
-pub enum LocalEntityStatus {
+pub enum LocalActorStatus {
     Creating,
     Created,
     Deleting,
 }
 
-impl EntityRecord {
-    pub fn new(local_key: LocalEntityKey, state_mask_size: u8) -> EntityRecord {
-        EntityRecord {
+impl ActorRecord {
+    pub fn new(local_key: LocalActorKey, state_mask_size: u8) -> ActorRecord {
+        ActorRecord {
             local_key,
             state_mask: Rc::new(RefCell::new(StateMask::new(state_mask_size))),
-            status: LocalEntityStatus::Creating,
+            status: LocalActorStatus::Creating,
         }
     }
 

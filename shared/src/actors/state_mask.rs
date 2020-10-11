@@ -4,7 +4,7 @@ use std::fmt;
 use crate::packet_reader::PacketReader;
 
 /// The State Mask is a variable-length byte array, where each bit represents
-/// the current state of a Property owned by an Entity. The Property state
+/// the current state of a Property owned by an Actor. The Property state
 /// tracked is whether it has been updated and needs to be synced with the
 /// remote Client
 #[derive(Debug, Clone)]

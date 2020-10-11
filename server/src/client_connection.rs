@@ -1,28 +1,28 @@
 use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
-    Connection, ConnectionConfig, Entity, EntityType, Event, EventType, ManagerType, Manifest,
+    Actor, ActorType, Connection, ConnectionConfig, Event, EventType, ManagerType, Manifest,
     PacketReader, PacketType, SequenceNumber, StandardHeader,
 };
 
 use super::{
-    command_receiver::CommandReceiver,
-    entities::{
-        entity_key::entity_key::EntityKey, entity_packet_writer::EntityPacketWriter,
-        mut_handler::MutHandler, server_entity_manager::ServerEntityManager,
+    actors::{
+        actor_key::actor_key::ActorKey, actor_packet_writer::ActorPacketWriter,
+        mut_handler::MutHandler, server_actor_manager::ServerActorManager,
     },
+    command_receiver::CommandReceiver,
     ping_manager::PingManager,
     server_packet_writer::ServerPacketWriter,
 };
 
-pub struct ClientConnection<T: EventType, U: EntityType> {
+pub struct ClientConnection<T: EventType, U: ActorType> {
     connection: Connection<T>,
-    entity_manager: ServerEntityManager<U>,
+    actor_manager: ServerActorManager<U>,
     ping_manager: PingManager,
     command_receiver: CommandReceiver<T>,
 }
 
-impl<T: EventType, U: EntityType> ClientConnection<T, U> {
+impl<T: EventType, U: ActorType> ClientConnection<T, U> {
     pub fn new(
         address: SocketAddr,
         mut_handler: Option<&Rc<RefCell<MutHandler>>>,
@@ -30,7 +30,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
     ) -> Self {
         ClientConnection {
             connection: Connection::new(address, connection_config),
-            entity_manager: ServerEntityManager::new(address, mut_handler.unwrap()),
+            actor_manager: ServerActorManager::new(address, mut_handler.unwrap()),
             ping_manager: PingManager::new(),
             command_receiver: CommandReceiver::new(),
         }
@@ -41,7 +41,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         host_tick: u16,
         manifest: &Manifest<T, U>,
     ) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_events() || self.entity_manager.has_outgoing_messages() {
+        if self.connection.has_outgoing_events() || self.actor_manager.has_outgoing_messages() {
             let mut writer = ServerPacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
@@ -52,16 +52,16 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
                     break;
                 }
             }
-            while let Some(popped_entity_message) =
-                self.entity_manager.pop_outgoing_message(next_packet_index)
+            while let Some(popped_actor_message) =
+                self.actor_manager.pop_outgoing_message(next_packet_index)
             {
-                if !EntityPacketWriter::write_entity_message(
+                if !ActorPacketWriter::write_actor_message(
                     &mut writer,
                     manifest,
-                    &popped_entity_message,
+                    &popped_actor_message,
                 ) {
-                    self.entity_manager
-                        .unpop_outgoing_message(next_packet_index, &popped_entity_message);
+                    self.actor_manager
+                        .unpop_outgoing_message(next_packet_index, &popped_actor_message);
                     break;
                 }
             }
@@ -111,32 +111,32 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         }
     }
 
-    pub fn has_entity(&self, key: &EntityKey) -> bool {
-        return self.entity_manager.has_entity(key);
+    pub fn has_actor(&self, key: &ActorKey) -> bool {
+        return self.actor_manager.has_actor(key);
     }
 
-    pub fn add_entity(&mut self, key: &EntityKey, entity: &Rc<RefCell<dyn Entity<U>>>) {
-        self.entity_manager.add_entity(key, entity);
+    pub fn add_actor(&mut self, key: &ActorKey, actor: &Rc<RefCell<dyn Actor<U>>>) {
+        self.actor_manager.add_actor(key, actor);
     }
 
-    pub fn remove_entity(&mut self, key: &EntityKey) {
-        self.entity_manager.remove_entity(key);
+    pub fn remove_actor(&mut self, key: &ActorKey) {
+        self.actor_manager.remove_actor(key);
     }
 
-    pub fn collect_entity_updates(&mut self) {
-        self.entity_manager.collect_entity_updates();
+    pub fn collect_actor_updates(&mut self) {
+        self.actor_manager.collect_actor_updates();
     }
 
-    pub fn has_pawn(&self, key: &EntityKey) -> bool {
-        return self.entity_manager.has_pawn(key);
+    pub fn has_pawn(&self, key: &ActorKey) -> bool {
+        return self.actor_manager.has_pawn(key);
     }
 
-    pub fn add_pawn(&mut self, key: &EntityKey) {
-        self.entity_manager.add_pawn(key);
+    pub fn add_pawn(&mut self, key: &ActorKey) {
+        self.actor_manager.add_pawn(key);
     }
 
-    pub fn remove_pawn(&mut self, key: &EntityKey) {
-        self.entity_manager.remove_pawn(key);
+    pub fn remove_pawn(&mut self, key: &ActorKey) {
+        self.actor_manager.remove_pawn(key);
     }
 
     // Pass-through methods to underlying common connection
@@ -159,7 +159,7 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         self.connection
-            .process_incoming_header(header, &mut Some(&mut self.entity_manager));
+            .process_incoming_header(header, &mut Some(&mut self.actor_manager));
     }
 
     pub fn process_outgoing_header(
@@ -189,13 +189,12 @@ impl<T: EventType, U: EntityType> ClientConnection<T, U> {
         return self.connection.get_incoming_event();
     }
 
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(EntityKey, T)> {
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(ActorKey, T)> {
         if let Some((local_pawn_key, command)) =
             self.command_receiver.pop_incoming_command(server_tick)
         {
-            if let Some(global_pawn_key) = self
-                .entity_manager
-                .get_global_key_from_local(local_pawn_key)
+            if let Some(global_pawn_key) =
+                self.actor_manager.get_global_key_from_local(local_pawn_key)
             {
                 return Some((*global_pawn_key, command));
             }

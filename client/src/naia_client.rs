@@ -5,13 +5,13 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 
 pub use naia_shared::{
-    ConnectionConfig, EntityType, Event, EventType, HostTickManager, Instant, LocalEntityKey,
+    ActorType, ConnectionConfig, Event, EventType, HostTickManager, Instant, LocalActorKey,
     ManagerType, Manifest, PacketReader, PacketType, SequenceIterator, SharedConfig,
     StandardHeader, Timer, Timestamp,
 };
 
 use super::{
-    client_config::ClientConfig, client_entity_message::ClientEntityMessage,
+    client_actor_message::ClientActorMessage, client_config::ClientConfig,
     client_event::ClientEvent, client_tick_manager::ClientTickManager, error::NaiaClientError,
     server_connection::ServerConnection, Packet,
 };
@@ -20,9 +20,9 @@ use crate::client_connection_state::{
 };
 
 /// Client can send/receive events to/from a server, and has a pool of in-scope
-/// entities that are synced with the server
+/// actors that are synced with the server
 #[derive(Debug)]
-pub struct NaiaClient<T: EventType, U: EntityType> {
+pub struct NaiaClient<T: EventType, U: ActorType> {
     manifest: Manifest<T, U>,
     server_address: SocketAddr,
     connection_config: ConnectionConfig,
@@ -37,7 +37,7 @@ pub struct NaiaClient<T: EventType, U: EntityType> {
     tick_manager: ClientTickManager,
 }
 
-impl<T: EventType, U: EntityType> NaiaClient<T, U> {
+impl<T: EventType, U: ActorType> NaiaClient<T, U> {
     /// Create a new client, given the server's address, a shared manifest, an
     /// optional Config, and an optional Authentication event
     pub fn new(
@@ -85,7 +85,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     }
 
     /// Must be called regularly, performs updates to the connection, and
-    /// retrieves event/entity updates sent by the Server
+    /// retrieves event/actor updates sent by the Server
     pub fn receive(&mut self) -> Option<Result<ClientEvent<T>, NaiaClientError>> {
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
@@ -101,22 +101,22 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
                 if let Some(event) = connection.get_incoming_event() {
                     return Some(Ok(ClientEvent::Event(event)));
                 }
-                // receive entity message
-                if let Some(message) = connection.get_incoming_entity_message() {
+                // receive actor message
+                if let Some(message) = connection.get_incoming_actor_message() {
                     match message {
-                        ClientEntityMessage::Create(local_key) => {
-                            return Some(Ok(ClientEvent::CreateEntity(local_key)));
+                        ClientActorMessage::Create(local_key) => {
+                            return Some(Ok(ClientEvent::CreateActor(local_key)));
                         }
-                        ClientEntityMessage::Delete(local_key) => {
-                            return Some(Ok(ClientEvent::DeleteEntity(local_key)));
+                        ClientActorMessage::Delete(local_key) => {
+                            return Some(Ok(ClientEvent::DeleteActor(local_key)));
                         }
-                        ClientEntityMessage::Update(local_key) => {
-                            return Some(Ok(ClientEvent::UpdateEntity(local_key)));
+                        ClientActorMessage::Update(local_key) => {
+                            return Some(Ok(ClientEvent::UpdateActor(local_key)));
                         }
-                        ClientEntityMessage::AssignPawn(local_key) => {
+                        ClientActorMessage::AssignPawn(local_key) => {
                             return Some(Ok(ClientEvent::AssignPawn(local_key)));
                         }
-                        ClientEntityMessage::UnassignPawn(local_key) => {
+                        ClientActorMessage::UnassignPawn(local_key) => {
                             return Some(Ok(ClientEvent::UnassignPawn(local_key)));
                         }
                     }
@@ -315,7 +315,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     }
 
     /// Queues up an Command to be sent to the Server
-    pub fn send_command(&mut self, pawn_key: LocalEntityKey, command: &impl Event<T>) {
+    pub fn send_command(&mut self, pawn_key: LocalActorKey, command: &impl Event<T>) {
         if let Some(connection) = &mut self.server_connection {
             connection.queue_command(pawn_key, command);
         }
@@ -331,8 +331,8 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         return self.server_connection.is_some();
     }
 
-    /// This doesn't actually interpolate all entities, but rather it marks the
-    /// current time & tick in order to later present interpolated entities
+    /// This doesn't actually interpolate all actors, but rather it marks the
+    /// current time & tick in order to later present interpolated actors
     /// correctly. Call this at the beginning of any frame
     pub fn frame_begin(&mut self) {
         if let Some(connection) = &mut self.server_connection {
@@ -340,27 +340,27 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
         }
     }
 
-    // entities
+    // actors
 
-    /// Get a reference to an Entity currently in scope for the Client, given
-    /// that Entity's Key
-    pub fn get_entity(&mut self, key: &LocalEntityKey) -> Option<&U> {
+    /// Get a reference to an Actor currently in scope for the Client, given
+    /// that Actor's Key
+    pub fn get_actor(&mut self, key: &LocalActorKey) -> Option<&U> {
         return self
             .server_connection
             .as_mut()
             .unwrap()
-            .get_entity(&self.tick_manager, key);
+            .get_actor(&self.tick_manager, key);
     }
 
-    /// Return an iterator to the collection of keys to all entities tracked by
+    /// Return an iterator to the collection of keys to all actors tracked by
     /// the Client
-    pub fn entity_keys(&self) -> Option<Vec<LocalEntityKey>> {
+    pub fn actor_keys(&self) -> Option<Vec<LocalActorKey>> {
         if let Some(connection) = &self.server_connection {
             return Some(
                 connection
-                    .entity_keys()
+                    .actor_keys()
                     .cloned()
-                    .collect::<Vec<LocalEntityKey>>(),
+                    .collect::<Vec<LocalActorKey>>(),
             );
         }
         return None;
@@ -369,7 +369,7 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     // pawns
 
     /// Get a reference to a Pawn
-    pub fn get_pawn(&mut self, key: &LocalEntityKey) -> Option<&U> {
+    pub fn get_pawn(&mut self, key: &LocalActorKey) -> Option<&U> {
         return self
             .server_connection
             .as_mut()
@@ -378,19 +378,19 @@ impl<T: EventType, U: EntityType> NaiaClient<T, U> {
     }
 
     /// Get a reference to a Pawn, used for setting it's state
-    pub fn get_pawn_mut(&mut self, key: &LocalEntityKey) -> Option<&U> {
+    pub fn get_pawn_mut(&mut self, key: &LocalActorKey) -> Option<&U> {
         return self.server_connection.as_mut().unwrap().get_pawn_mut(key);
     }
 
     /// Return an iterator to the collection of keys to all Pawns tracked by
     /// the Client
-    pub fn pawn_keys(&self) -> Option<Vec<LocalEntityKey>> {
+    pub fn pawn_keys(&self) -> Option<Vec<LocalActorKey>> {
         if let Some(connection) = &self.server_connection {
             return Some(
                 connection
                     .pawn_keys()
                     .cloned()
-                    .collect::<Vec<LocalEntityKey>>(),
+                    .collect::<Vec<LocalActorKey>>(),
             );
         }
         return None;
