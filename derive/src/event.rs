@@ -25,7 +25,7 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let gen = quote! {
         use std::{any::TypeId, io::Cursor};
-        use naia_shared::{EventBuilder, PropertyIo, PacketReader};
+        use naia_shared::{EventBuilder, PacketReader};
         pub struct #event_builder_name {
             type_id: TypeId,
         }
@@ -117,7 +117,7 @@ fn get_read_to_type_method(
     for (field_name, field_type) in properties.iter() {
         let new_output_right = quote! {
             let mut #field_name = Property::<#field_type>::new(Default::default(), 0);
-            #field_name.read(reader);
+            #field_name.read(reader, 1);
         };
         let new_output_result = quote! {
             #prop_reads
