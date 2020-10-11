@@ -49,7 +49,6 @@ pub use actors::{
     interp_lerp::interp_lerp,
     local_actor_key::LocalActorKey,
     property::Property,
-    property_io::PropertyIo,
     state_mask::StateMask,
 };
 pub use connection::Connection;

@@ -44,7 +44,7 @@ pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell};
-        use naia_shared::{StateMask, ActorBuilder, ActorMutator, PropertyIo, ActorEq, interp_lerp, PacketReader};
+        use naia_shared::{StateMask, ActorBuilder, ActorMutator, ActorEq, interp_lerp, PacketReader};
         #property_enum
         pub struct #actor_builder_name {
             type_id: TypeId,
@@ -215,7 +215,7 @@ fn get_read_to_type_method(
 
         let new_output_right = quote! {
             let mut #field_name = Property::<#field_type>::new(Default::default(), #enum_name::#uppercase_variant_name as u8);
-            #field_name.read(reader);
+            #field_name.read(reader, 1);
         };
         let new_output_result = quote! {
             #prop_reads
@@ -270,7 +270,7 @@ fn get_write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) 
 
         let new_output_right = quote! {
             if let Some(true) = state_mask.get_bit(#enum_name::#uppercase_variant_name as u8) {
-                PropertyIo::write(&self.#field_name, buffer);
+                Property::write(&self.#field_name, buffer);
             }
         };
         let new_output_result = quote! {
@@ -293,7 +293,7 @@ fn get_read_full_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
 
     for (field_name, _) in properties.iter() {
         let new_output_right = quote! {
-            PropertyIo::read_seq(&mut self.#field_name, reader, packet_index);
+            Property::read(&mut self.#field_name, reader, packet_index);
         };
         let new_output_result = quote! {
             #output
@@ -320,7 +320,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
 
         let new_output_right = quote! {
             if let Some(true) = state_mask.get_bit(#enum_name::#uppercase_variant_name as u8) {
-                PropertyIo::read_seq(&mut self.#field_name, reader, packet_index);
+                Property::read(&mut self.#field_name, reader, packet_index);
             }
         };
         let new_output_result = quote! {
