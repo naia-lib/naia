@@ -199,7 +199,7 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
         if tick_manager.mark_frame() {
             // interpolation manager snapshots current state of all actors
             self.interpolation_manager
-                .snapshot_actors(&self.actor_manager);
+                .update_actors(&self.actor_manager);
 
             // then we apply all received updates to actors at once
             let target_tick = tick_manager.get_server_tick();
