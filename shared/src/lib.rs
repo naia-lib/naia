@@ -17,9 +17,9 @@ extern crate log;
 extern crate cfg_if;
 
 mod ack_manager;
+mod actors;
 mod connection;
 mod connection_config;
-mod entities;
 mod events;
 mod host_tick_manager;
 mod host_type;
@@ -40,20 +40,20 @@ pub mod utils;
 pub use naia_socket_shared::{find_my_ip_address, random, LinkConditionerConfig, Timer};
 
 pub use ack_manager::AckManager;
-pub use connection::Connection;
-pub use connection_config::ConnectionConfig;
-pub use entities::{
-    entity::{Entity, EntityEq},
-    entity_builder::EntityBuilder,
-    entity_mutator::EntityMutator,
-    entity_notifiable::EntityNotifiable,
-    entity_type::EntityType,
+pub use actors::{
+    actor::{Actor, ActorEq},
+    actor_builder::ActorBuilder,
+    actor_mutator::ActorMutator,
+    actor_notifiable::ActorNotifiable,
+    actor_type::ActorType,
     interp_lerp::interp_lerp,
-    local_entity_key::LocalEntityKey,
+    local_actor_key::LocalActorKey,
     property::Property,
     property_io::PropertyIo,
     state_mask::StateMask,
 };
+pub use connection::Connection;
+pub use connection_config::ConnectionConfig;
 pub use events::{
     event::{Event, EventClone},
     event_builder::EventBuilder,

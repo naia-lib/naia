@@ -1,9 +1,9 @@
 use nanoserde::{DeBin, SerBin};
 
-use naia_derive::Entity;
-use naia_shared::{Entity, Property};
+use naia_derive::Actor;
+use naia_shared::{Actor, Property};
 
-use crate::ExampleEntity;
+use crate::ExampleActor;
 
 // Here's an example of a Custom Property
 #[derive(Default, Clone, DeBin, SerBin)]
@@ -12,17 +12,17 @@ pub struct Name {
     pub last: String,
 }
 
-#[derive(Entity)]
-#[type_name = "ExampleEntity"]
-pub struct PointEntity {
+#[derive(Actor)]
+#[type_name = "ExampleActor"]
+pub struct PointActor {
     pub x: Property<u8>,
     pub y: Property<u8>,
     pub name: Property<Name>,
 }
 
-impl PointEntity {
-    pub fn new(x: u8, y: u8, first: &str, last: &str) -> PointEntity {
-        return PointEntity::new_complete(
+impl PointActor {
+    pub fn new(x: u8, y: u8, first: &str, last: &str) -> PointActor {
+        return PointActor::new_complete(
             x,
             y,
             Name {

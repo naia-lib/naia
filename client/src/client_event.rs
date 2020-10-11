@@ -1,4 +1,4 @@
-use naia_shared::{EventType, LocalEntityKey};
+use naia_shared::{EventType, LocalActorKey};
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
@@ -12,23 +12,23 @@ pub enum ClientEvent<T: EventType> {
     Disconnection,
     /// An Event emitted to the Client from the Server
     Event(T),
-    /// Occurs when an Entity on the Server has come into scope for the Client
-    CreateEntity(LocalEntityKey),
-    /// Occurs when an Entity has had a state change on the Server while in
+    /// Occurs when an Actor on the Server has come into scope for the Client
+    CreateActor(LocalActorKey),
+    /// Occurs when an Actor has had a state change on the Server while in
     /// scope for the Client
-    UpdateEntity(LocalEntityKey),
-    /// Occurs when an Entity on the Server has left the Client's scope
-    DeleteEntity(LocalEntityKey),
+    UpdateActor(LocalActorKey),
+    /// Occurs when an Actor on the Server has left the Client's scope
+    DeleteActor(LocalActorKey),
     /// A Tick Event, the duration between Tick events is defined in the Config
     /// object passed to the Client on initialization
     Tick,
-    /// Occurs when an Entity has been assigned to the local host as a Pawn,
+    /// Occurs when an Actor has been assigned to the local host as a Pawn,
     /// meaning it can receive Commands from the Client
-    AssignPawn(LocalEntityKey),
+    AssignPawn(LocalActorKey),
     /// Occurs when a Pawn has been unassigned from the local host, meaning it
     /// cannot receive Commands from this Client
-    UnassignPawn(LocalEntityKey),
+    UnassignPawn(LocalActorKey),
     /// A Command received which is to be simulated on the Client as well as on
     /// the Server
-    Command(LocalEntityKey, T),
+    Command(LocalActorKey, T),
 }
