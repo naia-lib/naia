@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Ident};
 
-pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn actor_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let type_name = input.ident;
@@ -19,8 +19,8 @@ pub fn entity_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let is_predicted_method = get_is_predicted_method(&type_name, &input.data);
 
     let gen = quote! {
-        use naia_shared::{EntityType, Entity, EntityEq, StateMask, PacketReader};
-        impl EntityType for #type_name {
+        use naia_shared::{ActorType, Actor, ActorEq, StateMask, PacketReader};
+        impl ActorType for #type_name {
             #read_full_method
             #read_partial_method
             #inner_ref_method
@@ -44,8 +44,8 @@ fn get_read_full_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
-                        identity.as_ref().borrow_mut().read_full(reader, packet_index);
+                    #type_name::#variant_name(idactor) => {
+                        idactor.as_ref().borrow_mut().read_full(reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -75,8 +75,8 @@ fn get_read_partial_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
-                        identity.as_ref().borrow_mut().read_partial(state_mask, reader, packet_index);
+                    #type_name::#variant_name(idactor) => {
+                        idactor.as_ref().borrow_mut().read_partial(state_mask, reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -112,8 +112,8 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
                 );
 
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
-                        return #method_name(identity.clone());
+                    #type_name::#variant_name(idactor) => {
+                        return #method_name(idactor.clone());
                     }
                 };
                 let new_output_result = quote! {
@@ -128,7 +128,7 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn inner_ref(&self) -> Rc<RefCell<dyn Entity<#type_name>>> {
+        fn inner_ref(&self) -> Rc<RefCell<dyn Actor<#type_name>>> {
             match self {
                 #variants
             }
@@ -149,7 +149,7 @@ fn get_conversion_methods(type_name: &Ident, data: &Data) -> TokenStream {
                 );
 
                 let new_output_right = quote! {
-                    fn #method_name(eref: Rc<RefCell<#variant_name>>) -> Rc<RefCell<dyn Entity<#type_name>>> {
+                    fn #method_name(eref: Rc<RefCell<#variant_name>>) -> Rc<RefCell<dyn Actor<#type_name>>> {
                         eref.clone()
                     }
                 };
@@ -172,10 +172,10 @@ fn get_equals_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
+                    #type_name::#variant_name(idactor) => {
                         match other {
-                            #type_name::#variant_name(other_identity) => {
-                                return identity.as_ref().borrow().equals(&other_identity.as_ref().borrow());
+                            #type_name::#variant_name(other_idactor) => {
+                                return idactor.as_ref().borrow().equals(&other_idactor.as_ref().borrow());
                             }
                             _ => { return false; }
                         }
@@ -208,10 +208,10 @@ fn get_equals_prediction_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
+                    #type_name::#variant_name(idactor) => {
                         match other {
-                            #type_name::#variant_name(other_identity) => {
-                                return identity.as_ref().borrow().equals_prediction(&other_identity.as_ref().borrow());
+                            #type_name::#variant_name(other_idactor) => {
+                                return idactor.as_ref().borrow().equals_prediction(&other_idactor.as_ref().borrow());
                             }
                             _ => { return false; }
                         }
@@ -244,12 +244,12 @@ fn get_set_to_interpolation_method(type_name: &Ident, data: &Data) -> TokenStrea
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
+                    #type_name::#variant_name(idactor) => {
                         match old {
-                            #type_name::#variant_name(old_identity) => {
+                            #type_name::#variant_name(old_idactor) => {
                                 match new {
-                                    #type_name::#variant_name(new_identity) => {
-                                        return identity.borrow_mut().set_to_interpolation(&old_identity.as_ref().borrow(), &new_identity.as_ref().borrow(), fraction);
+                                    #type_name::#variant_name(new_idactor) => {
+                                        return idactor.borrow_mut().set_to_interpolation(&old_idactor.as_ref().borrow(), &new_idactor.as_ref().borrow(), fraction);
                                     }
                                     _ => {}
                                 }
@@ -285,10 +285,10 @@ fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
+                    #type_name::#variant_name(idactor) => {
                         match other {
-                            #type_name::#variant_name(other_identity) => {
-                                        return identity.borrow_mut().mirror(&other_identity.as_ref().borrow());
+                            #type_name::#variant_name(other_idactor) => {
+                                        return idactor.borrow_mut().mirror(&other_idactor.as_ref().borrow());
                                     }
                             _ => {}
                         }
@@ -321,8 +321,8 @@ fn get_is_interpolated_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
-                        return identity.borrow().is_interpolated();
+                    #type_name::#variant_name(idactor) => {
+                        return idactor.borrow().is_interpolated();
                     }
                 };
                 let new_output_result = quote! {
@@ -352,8 +352,8 @@ fn get_is_predicted_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
-                        return identity.borrow().is_predicted();
+                    #type_name::#variant_name(idactor) => {
+                        return idactor.borrow().is_predicted();
                     }
                 };
                 let new_output_result = quote! {

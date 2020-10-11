@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, EntityType, Event, EventPacketWriter, EventType, LocalEntityKey, ManagerType,
+    wrapping_diff, ActorType, Event, EventPacketWriter, EventType, LocalActorKey, ManagerType,
     Manifest, MTU_SIZE,
 };
 
@@ -9,7 +9,7 @@ use super::command_receiver::CommandReceiver;
 
 const MAX_PAST_COMMANDS: u8 = 2;
 
-/// Handles writing of Event & Entity data into an outgoing packet
+/// Handles writing of Event & Actor data into an outgoing packet
 pub struct ClientPacketWriter {
     command_working_bytes: Vec<u8>,
     command_count: u8,
@@ -36,7 +36,7 @@ impl ClientPacketWriter {
     pub fn get_bytes(&mut self) -> Box<[u8]> {
         let mut out_bytes = Vec::<u8>::new();
 
-        //Write manager "header" (manager type & entity count)
+        //Write manager "header" (manager type & actor count)
         if self.command_count != 0 {
             out_bytes.write_u8(ManagerType::Command as u8).unwrap(); // write manager type
             out_bytes.write_u8(self.command_count).unwrap(); // write number of events in the following message
@@ -57,12 +57,12 @@ impl ClientPacketWriter {
 
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_command<T: EventType, U: EntityType>(
+    pub fn write_command<T: EventType, U: ActorType>(
         &mut self,
         host_tick: u16,
         manifest: &Manifest<T, U>,
         command_receiver: &CommandReceiver<T>,
-        pawn_key: LocalEntityKey,
+        pawn_key: LocalActorKey,
         command: &Box<dyn Event<T>>,
     ) -> bool {
         //Write command payload
@@ -122,7 +122,7 @@ impl ClientPacketWriter {
 
     /// Writes an Event into the Writer's internal buffer, which will eventually
     /// be put into the outgoing packet
-    pub fn write_event<T: EventType, U: EntityType>(
+    pub fn write_event<T: EventType, U: ActorType>(
         &mut self,
         manifest: &Manifest<T, U>,
         event: &Box<dyn Event<T>>,

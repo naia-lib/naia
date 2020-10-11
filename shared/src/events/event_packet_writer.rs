@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use crate::{
-    entities::entity_type::EntityType,
+    actors::actor_type::ActorType,
     events::{event::Event, event_type::EventType},
     manager_type::ManagerType,
     manifest::Manifest,
@@ -11,7 +11,7 @@ use crate::{
 /// The maximum of bytes that can be used for the payload of a given packet. (See #38 of http://ithare.com/64-network-dos-and-donts-for-game-engines-part-v-udp/)
 pub const MTU_SIZE: usize = 508 - StandardHeader::bytes_number();
 
-/// Handles writing of Event & Entity data into an outgoing packet
+/// Handles writing of Event & Actor data into an outgoing packet
 pub struct EventPacketWriter {
     event_working_bytes: Vec<u8>,
     event_count: u8,
@@ -34,7 +34,7 @@ impl EventPacketWriter {
 
     /// Gets the bytes to write into an outgoing packet
     pub fn get_bytes(&mut self, out_bytes: &mut Vec<u8>) {
-        //Write manager "header" (manager type & entity count)
+        //Write manager "header" (manager type & actor count)
         if self.event_count != 0 {
             out_bytes.write_u8(ManagerType::Event as u8).unwrap(); // write manager type
             out_bytes.write_u8(self.event_count).unwrap(); // write number of events in the following message
@@ -51,7 +51,7 @@ impl EventPacketWriter {
 
     /// Writes an Event into the Writer's internal buffer, which will eventually
     /// be put into the outgoing packet
-    pub fn write_event<T: EventType, U: EntityType>(
+    pub fn write_event<T: EventType, U: ActorType>(
         &mut self,
         manifest: &Manifest<T, U>,
         event: &Box<dyn Event<T>>,

@@ -10,8 +10,8 @@
 * [x] Connection / Disconnection events
 * [x] Customizable Client authentication
 * [x] Unguaranteed & guaranteed Events sent between hosts
-* [x] Entities sync with Clients when "in scope"
-* [x] Rooms restrict syncing to their contained Users & Entities
+* [x] Actors sync with Clients when "in scope"
+* [x] Rooms restrict syncing to their contained Users & Actors
 * [x] Customizable scoping function for advanced usage
 * [x] Rtt estimations
 
@@ -25,14 +25,14 @@ This list is not sorted by order of priority
 * [ ] Client Tick events
 * [ ] Synced Tick between Server/Client
 * [ ] Custom Property read/write implementation
-* [ ] "Deep" Entity property syncing
-* [ ] Support Client prediction of Entities
-* [ ] Support Client-side iterpolation of Entity properties
+* [ ] "Deep" Actor property syncing
+* [ ] Support Client prediction of Actors
+* [ ] Support Client-side iterpolation of Actor properties
 * [ ] Ordered Guaranteed Events?
 * [ ] Send consecutive copies of Events (see Tribes 2 Networking Model's "MoveManager")
-* [ ] Event/Entity Priority (indicates certain updates should be sent earlier than others)
-* [ ] Dynamic Event/Entity Priority based on scope evaluation (conditionally raise priority on Entities)
-* [ ] Set independent Entity update rate
+* [ ] Event/Actor Priority (indicates certain updates should be sent earlier than others)
+* [ ] Dynamic Event/Actor Priority based on scope evaluation (conditionally raise priority on Actors)
+* [ ] Set independent Actor update rate
 * [ ] Horizontally scale Servers
 * [ ] Support Debugging / Logging / Metrics visualizations
 * [ ] Bitwise (as opposed to current "Bytewise") reading/writing of messages, to save bandwidth

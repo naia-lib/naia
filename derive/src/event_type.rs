@@ -37,8 +37,8 @@ fn get_write_variants(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
-                        identity.write(buffer);
+                    #type_name::#variant_name(idactor) => {
+                        idactor.write(buffer);
                     }
                 };
                 let new_output_result = quote! {
@@ -60,8 +60,8 @@ fn get_type_id_variants(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
-                        return identity.get_type_id();
+                    #type_name::#variant_name(idactor) => {
+                        return idactor.get_type_id();
                     }
                 };
                 let new_output_result = quote! {

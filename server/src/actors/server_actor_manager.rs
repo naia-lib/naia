@@ -10,47 +10,47 @@ use std::{
 use slotmap::SparseSecondaryMap;
 
 use super::{
-    entity_key::entity_key::EntityKey,
-    entity_record::{EntityRecord, LocalEntityStatus},
+    actor_key::actor_key::ActorKey,
+    actor_record::{ActorRecord, LocalActorStatus},
     mut_handler::MutHandler,
-    server_entity_message::ServerEntityMessage,
+    server_actor_message::ServerActorMessage,
 };
-use naia_shared::{Entity, EntityNotifiable, EntityType, LocalEntityKey, StateMask};
+use naia_shared::{Actor, ActorNotifiable, ActorType, LocalActorKey, StateMask};
 
-/// Manages Entities for a given Client connection and keeps them in sync on the
+/// Manages Actors for a given Client connection and keeps them in sync on the
 /// Client
 #[derive(Debug)]
-pub struct ServerEntityManager<T: EntityType> {
+pub struct ServerActorManager<T: ActorType> {
     address: SocketAddr,
-    local_entity_store: SparseSecondaryMap<EntityKey, Rc<RefCell<dyn Entity<T>>>>,
-    local_to_global_key_map: HashMap<LocalEntityKey, EntityKey>,
-    recycled_local_keys: Vec<LocalEntityKey>,
-    next_new_local_key: LocalEntityKey,
-    entity_records: SparseSecondaryMap<EntityKey, EntityRecord>,
-    queued_messages: VecDeque<ServerEntityMessage<T>>,
-    sent_messages: HashMap<u16, Vec<ServerEntityMessage<T>>>,
-    sent_updates: HashMap<u16, HashMap<EntityKey, Rc<RefCell<StateMask>>>>,
+    local_actor_store: SparseSecondaryMap<ActorKey, Rc<RefCell<dyn Actor<T>>>>,
+    local_to_global_key_map: HashMap<LocalActorKey, ActorKey>,
+    recycled_local_keys: Vec<LocalActorKey>,
+    next_new_local_key: LocalActorKey,
+    actor_records: SparseSecondaryMap<ActorKey, ActorRecord>,
+    queued_messages: VecDeque<ServerActorMessage<T>>,
+    sent_messages: HashMap<u16, Vec<ServerActorMessage<T>>>,
+    sent_updates: HashMap<u16, HashMap<ActorKey, Rc<RefCell<StateMask>>>>,
     last_update_packet_index: u16,
     last_last_update_packet_index: u16,
     mut_handler: Rc<RefCell<MutHandler>>,
     last_popped_state_mask: StateMask,
-    pawn_store: HashSet<EntityKey>,
+    pawn_store: HashSet<ActorKey>,
 }
 
-impl<T: EntityType> ServerEntityManager<T> {
-    /// Create a new ServerEntityManager, given the client's address and a
+impl<T: ActorType> ServerActorManager<T> {
+    /// Create a new ServerActorManager, given the client's address and a
     /// reference to a MutHandler associated with the Client
     pub fn new(address: SocketAddr, mut_handler: &Rc<RefCell<MutHandler>>) -> Self {
-        ServerEntityManager {
+        ServerActorManager {
             address,
-            local_entity_store: SparseSecondaryMap::new(),
+            local_actor_store: SparseSecondaryMap::new(),
             local_to_global_key_map: HashMap::new(),
             recycled_local_keys: Vec::new(),
             next_new_local_key: 0,
-            entity_records: SparseSecondaryMap::new(),
+            actor_records: SparseSecondaryMap::new(),
             queued_messages: VecDeque::new(),
             sent_messages: HashMap::new(),
-            sent_updates: HashMap::<u16, HashMap<EntityKey, Rc<RefCell<StateMask>>>>::new(),
+            sent_updates: HashMap::<u16, HashMap<ActorKey, Rc<RefCell<StateMask>>>>::new(),
             last_update_packet_index: 0,
             last_last_update_packet_index: 0,
             mut_handler: mut_handler.clone(),
@@ -63,11 +63,11 @@ impl<T: EntityType> ServerEntityManager<T> {
         return self.queued_messages.len() != 0;
     }
 
-    pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<ServerEntityMessage<T>> {
+    pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<ServerActorMessage<T>> {
         match self.queued_messages.pop_front() {
             Some(message) => {
                 if !self.sent_messages.contains_key(&packet_index) {
-                    let sent_messages_list: Vec<ServerEntityMessage<T>> = Vec::new();
+                    let sent_messages_list: Vec<ServerActorMessage<T>> = Vec::new();
                     self.sent_messages.insert(packet_index, sent_messages_list);
                 }
 
@@ -75,10 +75,10 @@ impl<T: EntityType> ServerEntityManager<T> {
                     sent_messages_list.push(message.clone());
                 }
 
-                //clear state mask of entity if need be
+                //clear state mask of actor if need be
                 match &message {
-                    ServerEntityMessage::CreateEntity(global_key, _, _) => {
-                        if let Some(record) = self.entity_records.get(*global_key) {
+                    ServerActorMessage::CreateActor(global_key, _, _) => {
+                        if let Some(record) = self.actor_records.get(*global_key) {
                             self.last_popped_state_mask =
                                 record.get_state_mask().as_ref().borrow().clone();
                         }
@@ -87,31 +87,26 @@ impl<T: EntityType> ServerEntityManager<T> {
                             .borrow_mut()
                             .clear_state(&self.address, global_key);
                     }
-                    ServerEntityMessage::UpdateEntity(
-                        global_key,
-                        local_key,
-                        state_mask,
-                        entity,
-                    ) => {
+                    ServerActorMessage::UpdateActor(global_key, local_key, state_mask, actor) => {
                         let locked_state_mask =
-                            self.process_entity_update(packet_index, global_key, state_mask);
+                            self.process_actor_update(packet_index, global_key, state_mask);
                         // return new Update message to be written
-                        return Some(ServerEntityMessage::UpdateEntity(
+                        return Some(ServerActorMessage::UpdateActor(
                             *global_key,
                             *local_key,
                             locked_state_mask,
-                            entity.clone(),
+                            actor.clone(),
                         ));
                     }
-                    ServerEntityMessage::UpdatePawn(global_key, local_key, state_mask, entity) => {
+                    ServerActorMessage::UpdatePawn(global_key, local_key, state_mask, actor) => {
                         let locked_state_mask =
-                            self.process_entity_update(packet_index, global_key, state_mask);
+                            self.process_actor_update(packet_index, global_key, state_mask);
                         // return new Update message to be written
-                        return Some(ServerEntityMessage::UpdatePawn(
+                        return Some(ServerActorMessage::UpdatePawn(
                             *global_key,
                             *local_key,
                             locked_state_mask,
-                            entity.clone(),
+                            actor.clone(),
                         ));
                     }
                     _ => {}
@@ -125,19 +120,19 @@ impl<T: EntityType> ServerEntityManager<T> {
         }
     }
 
-    fn process_entity_update(
+    fn process_actor_update(
         &mut self,
         packet_index: u16,
-        global_key: &EntityKey,
+        global_key: &ActorKey,
         state_mask: &Rc<RefCell<StateMask>>,
     ) -> Rc<RefCell<StateMask>> {
-        // previously the state mask was the CURRENT state mask for the entity,
+        // previously the state mask was the CURRENT state mask for the actor,
         // we want to lock that in so we know exactly what we're writing
         let locked_state_mask = Rc::new(RefCell::new(state_mask.as_ref().borrow().clone()));
 
         // place state mask in a special transmission record - like map
         if !self.sent_updates.contains_key(&packet_index) {
-            let sent_updates_map: HashMap<EntityKey, Rc<RefCell<StateMask>>> = HashMap::new();
+            let sent_updates_map: HashMap<ActorKey, Rc<RefCell<StateMask>>> = HashMap::new();
             self.sent_updates.insert(packet_index, sent_updates_map);
             self.last_last_update_packet_index = self.last_update_packet_index;
             self.last_update_packet_index = packet_index;
@@ -157,7 +152,7 @@ impl<T: EntityType> ServerEntityManager<T> {
         locked_state_mask
     }
 
-    pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: &ServerEntityMessage<T>) {
+    pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: &ServerActorMessage<T>) {
         info!("unpopping");
         if let Some(sent_messages_list) = self.sent_messages.get_mut(&packet_index) {
             sent_messages_list.pop();
@@ -167,31 +162,31 @@ impl<T: EntityType> ServerEntityManager<T> {
         }
 
         match &message {
-            ServerEntityMessage::CreateEntity(global_key, _, _) => {
+            ServerActorMessage::CreateActor(global_key, _, _) => {
                 self.mut_handler.as_ref().borrow_mut().set_state(
                     &self.address,
                     global_key,
                     &self.last_popped_state_mask,
                 );
             }
-            ServerEntityMessage::UpdateEntity(global_key, local_key, _, entity) => {
-                let original_state_mask = self.undo_entity_update(&packet_index, &global_key);
-                let cloned_message = ServerEntityMessage::UpdateEntity(
+            ServerActorMessage::UpdateActor(global_key, local_key, _, actor) => {
+                let original_state_mask = self.undo_actor_update(&packet_index, &global_key);
+                let cloned_message = ServerActorMessage::UpdateActor(
                     *global_key,
                     *local_key,
                     original_state_mask,
-                    entity.clone(),
+                    actor.clone(),
                 );
                 self.queued_messages.push_front(cloned_message);
                 return;
             }
-            ServerEntityMessage::UpdatePawn(global_key, local_key, _, entity) => {
-                let original_state_mask = self.undo_entity_update(&packet_index, &global_key);
-                let cloned_message = ServerEntityMessage::UpdatePawn(
+            ServerActorMessage::UpdatePawn(global_key, local_key, _, actor) => {
+                let original_state_mask = self.undo_actor_update(&packet_index, &global_key);
+                let cloned_message = ServerActorMessage::UpdatePawn(
                     *global_key,
                     *local_key,
                     original_state_mask,
-                    entity.clone(),
+                    actor.clone(),
                 );
                 self.queued_messages.push_front(cloned_message);
                 return;
@@ -202,10 +197,10 @@ impl<T: EntityType> ServerEntityManager<T> {
         self.queued_messages.push_front(message.clone());
     }
 
-    fn undo_entity_update(
+    fn undo_actor_update(
         &mut self,
         packet_index: &u16,
-        global_key: &EntityKey,
+        global_key: &ActorKey,
     ) -> Rc<RefCell<StateMask>> {
         if let Some(sent_updates_map) = self.sent_updates.get_mut(packet_index) {
             sent_updates_map.remove(global_key);
@@ -221,99 +216,96 @@ impl<T: EntityType> ServerEntityManager<T> {
             &self.last_popped_state_mask,
         );
 
-        self.entity_records
+        self.actor_records
             .get(*global_key)
             .expect("uh oh, we don't have enough info to unpop the message")
             .get_state_mask()
             .clone()
     }
 
-    pub fn has_entity(&self, key: &EntityKey) -> bool {
-        return self.local_entity_store.contains_key(*key);
+    pub fn has_actor(&self, key: &ActorKey) -> bool {
+        return self.local_actor_store.contains_key(*key);
     }
 
-    pub fn add_entity(&mut self, key: &EntityKey, entity: &Rc<RefCell<dyn Entity<T>>>) {
-        if !self.local_entity_store.contains_key(*key) {
-            self.local_entity_store.insert(*key, entity.clone());
+    pub fn add_actor(&mut self, key: &ActorKey, actor: &Rc<RefCell<dyn Actor<T>>>) {
+        if !self.local_actor_store.contains_key(*key) {
+            self.local_actor_store.insert(*key, actor.clone());
             let local_key = self.get_new_local_key();
             self.local_to_global_key_map.insert(local_key, *key);
-            let state_mask_size = entity.as_ref().borrow().get_state_mask_size();
-            let entity_record = EntityRecord::new(local_key, state_mask_size);
+            let state_mask_size = actor.as_ref().borrow().get_state_mask_size();
+            let actor_record = ActorRecord::new(local_key, state_mask_size);
             self.mut_handler.as_ref().borrow_mut().register_mask(
                 &self.address,
                 &key,
-                entity_record.get_state_mask(),
+                actor_record.get_state_mask(),
             );
-            self.entity_records.insert(*key, entity_record);
+            self.actor_records.insert(*key, actor_record);
             self.queued_messages
-                .push_back(ServerEntityMessage::CreateEntity(
+                .push_back(ServerActorMessage::CreateActor(
                     *key,
                     local_key,
-                    entity.clone(),
+                    actor.clone(),
                 ));
 
             // if this is a pawn, send a "assign pawn" follow-up message
             if self.pawn_store.contains(key) {
                 self.queued_messages
-                    .push_back(ServerEntityMessage::AssignPawn(*key, local_key));
+                    .push_back(ServerActorMessage::AssignPawn(*key, local_key));
             }
         }
     }
 
-    pub fn remove_entity(&mut self, key: &EntityKey) {
-        if let Some(entity_record) = self.entity_records.get_mut(*key) {
-            if entity_record.status != LocalEntityStatus::Deleting {
-                entity_record.status = LocalEntityStatus::Deleting;
+    pub fn remove_actor(&mut self, key: &ActorKey) {
+        if let Some(actor_record) = self.actor_records.get_mut(*key) {
+            if actor_record.status != LocalActorStatus::Deleting {
+                actor_record.status = LocalActorStatus::Deleting;
 
                 // if this is a pawn, send an "unassign pawn" message first
                 if self.pawn_store.contains(key) {
                     self.queued_messages
-                        .push_back(ServerEntityMessage::UnassignPawn(
+                        .push_back(ServerActorMessage::UnassignPawn(
                             *key,
-                            entity_record.local_key,
+                            actor_record.local_key,
                         ));
                 }
 
                 self.queued_messages
-                    .push_back(ServerEntityMessage::DeleteEntity(
+                    .push_back(ServerActorMessage::DeleteActor(
                         *key,
-                        entity_record.local_key,
+                        actor_record.local_key,
                     ));
             }
         }
     }
 
-    pub fn has_pawn(&self, key: &EntityKey) -> bool {
+    pub fn has_pawn(&self, key: &ActorKey) -> bool {
         return self.pawn_store.contains(key);
     }
 
-    pub fn add_pawn(&mut self, key: &EntityKey) {
+    pub fn add_pawn(&mut self, key: &ActorKey) {
         if !self.pawn_store.contains(key) {
             self.pawn_store.insert(*key);
-            if let Some(entity_record) = self.entity_records.get_mut(*key) {
+            if let Some(actor_record) = self.actor_records.get_mut(*key) {
                 self.queued_messages
-                    .push_back(ServerEntityMessage::AssignPawn(
-                        *key,
-                        entity_record.local_key,
-                    ));
+                    .push_back(ServerActorMessage::AssignPawn(*key, actor_record.local_key));
             }
         }
     }
 
-    pub fn remove_pawn(&mut self, key: &EntityKey) {
+    pub fn remove_pawn(&mut self, key: &ActorKey) {
         if self.pawn_store.contains(key) {
             self.pawn_store.remove(key);
-            if let Some(entity_record) = self.entity_records.get_mut(*key) {
+            if let Some(actor_record) = self.actor_records.get_mut(*key) {
                 self.queued_messages
-                    .push_back(ServerEntityMessage::UnassignPawn(
+                    .push_back(ServerActorMessage::UnassignPawn(
                         *key,
-                        entity_record.local_key,
+                        actor_record.local_key,
                     ));
             }
         }
     }
 
-    pub fn get_global_key_from_local(&self, local_key: LocalEntityKey) -> Option<&EntityKey> {
+    pub fn get_global_key_from_local(&self, local_key: LocalActorKey) -> Option<&ActorKey> {
         return self.local_to_global_key_map.get(&local_key);
     }
 
@@ -327,29 +319,29 @@ impl<T: EntityType> ServerEntityManager<T> {
         return output;
     }
 
-    pub fn collect_entity_updates(&mut self) {
-        for (key, record) in self.entity_records.iter() {
-            if record.status == LocalEntityStatus::Created
+    pub fn collect_actor_updates(&mut self) {
+        for (key, record) in self.actor_records.iter() {
+            if record.status == LocalActorStatus::Created
                 && !record.get_state_mask().as_ref().borrow().is_clear()
             {
-                if let Some(entity_ref) = self.local_entity_store.get(key) {
+                if let Some(actor_ref) = self.local_actor_store.get(key) {
                     if self.pawn_store.contains(&key) {
                         // handle as a pawn
                         self.queued_messages
-                            .push_back(ServerEntityMessage::UpdatePawn(
+                            .push_back(ServerActorMessage::UpdatePawn(
                                 key,
                                 record.local_key,
                                 record.get_state_mask().clone(),
-                                entity_ref.clone(),
+                                actor_ref.clone(),
                             ));
                     } else {
-                        // handle as an entity
+                        // handle as an actor
                         self.queued_messages
-                            .push_back(ServerEntityMessage::UpdateEntity(
+                            .push_back(ServerActorMessage::UpdateActor(
                                 key,
                                 record.local_key,
                                 record.get_state_mask().clone(),
-                                entity_ref.clone(),
+                                actor_ref.clone(),
                             ));
                     }
                 }
@@ -358,38 +350,38 @@ impl<T: EntityType> ServerEntityManager<T> {
     }
 }
 
-impl<T: EntityType> EntityNotifiable for ServerEntityManager<T> {
+impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
     fn notify_packet_delivered(&mut self, packet_index: u16) {
         if let Some(delivered_messages_list) = self.sent_messages.get(&packet_index) {
             for delivered_message in delivered_messages_list.into_iter() {
                 match delivered_message {
-                    ServerEntityMessage::CreateEntity(global_key, _, _) => {
-                        if let Some(entity_record) = self.entity_records.get_mut(*global_key) {
-                            // update entity record status
-                            entity_record.status = LocalEntityStatus::Created;
+                    ServerActorMessage::CreateActor(global_key, _, _) => {
+                        if let Some(actor_record) = self.actor_records.get_mut(*global_key) {
+                            // update actor record status
+                            actor_record.status = LocalActorStatus::Created;
                         }
                     }
-                    ServerEntityMessage::DeleteEntity(global_key_ref, local_key) => {
+                    ServerActorMessage::DeleteActor(global_key_ref, local_key) => {
                         let global_key = *global_key_ref;
-                        if let Some(_) = self.entity_records.get(global_key) {
-                            // actually delete the entity from local records
+                        if let Some(_) = self.actor_records.get(global_key) {
+                            // actually delete the actor from local records
                             self.mut_handler
                                 .as_ref()
                                 .borrow_mut()
                                 .deregister_mask(&self.address, global_key_ref);
-                            self.local_entity_store.remove(global_key);
+                            self.local_actor_store.remove(global_key);
                             self.local_to_global_key_map.remove(local_key);
                             self.recycled_local_keys.push(*local_key);
-                            self.entity_records.remove(global_key);
+                            self.actor_records.remove(global_key);
                             self.pawn_store.remove(&global_key);
                         }
                     }
-                    ServerEntityMessage::UpdateEntity(_, _, _, _)
-                    | ServerEntityMessage::UpdatePawn(_, _, _, _) => {
+                    ServerActorMessage::UpdateActor(_, _, _, _)
+                    | ServerActorMessage::UpdatePawn(_, _, _, _) => {
                         self.sent_updates.remove(&packet_index);
                     }
-                    ServerEntityMessage::AssignPawn(_, _) => {}
-                    ServerEntityMessage::UnassignPawn(_, _) => {}
+                    ServerActorMessage::AssignPawn(_, _) => {}
+                    ServerActorMessage::UnassignPawn(_, _) => {}
                 }
             }
 
@@ -401,14 +393,14 @@ impl<T: EntityType> EntityNotifiable for ServerEntityManager<T> {
         if let Some(dropped_messages_list) = self.sent_messages.get(&dropped_packet_index) {
             for dropped_message in dropped_messages_list.into_iter() {
                 match dropped_message {
-                    ServerEntityMessage::CreateEntity(_, _, _)
-                    | ServerEntityMessage::DeleteEntity(_, _)
-                    | ServerEntityMessage::AssignPawn(_, _)
-                    | ServerEntityMessage::UnassignPawn(_, _) => {
+                    ServerActorMessage::CreateActor(_, _, _)
+                    | ServerActorMessage::DeleteActor(_, _)
+                    | ServerActorMessage::AssignPawn(_, _)
+                    | ServerActorMessage::UnassignPawn(_, _) => {
                         self.queued_messages.push_back(dropped_message.clone());
                     }
-                    ServerEntityMessage::UpdateEntity(global_key, _, _, _)
-                    | ServerEntityMessage::UpdatePawn(global_key, _, _, _) => {
+                    ServerActorMessage::UpdateActor(global_key, _, _, _)
+                    | ServerActorMessage::UpdatePawn(global_key, _, _, _) => {
                         if let Some(state_mask_map) = self.sent_updates.get(&dropped_packet_index) {
                             if let Some(state_mask) = state_mask_map.get(global_key) {
                                 let mut new_state_mask = state_mask.as_ref().borrow().clone();
@@ -431,7 +423,7 @@ impl<T: EntityType> EntityNotifiable for ServerEntityManager<T> {
                                     }
                                 }
 
-                                if let Some(record) = self.entity_records.get_mut(*global_key) {
+                                if let Some(record) = self.actor_records.get_mut(*global_key) {
                                     let mut current_state_mask =
                                         record.get_state_mask().as_ref().borrow_mut();
                                     current_state_mask.or(new_state_mask.borrow());

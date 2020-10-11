@@ -1,12 +1,12 @@
 use std::{net::SocketAddr, rc::Rc};
 
 use naia_shared::{
-    Connection, ConnectionConfig, EntityType, Event, EventType, LocalEntityKey, ManagerType,
+    ActorType, Connection, ConnectionConfig, Event, EventType, LocalActorKey, ManagerType,
     Manifest, PacketReader, PacketType, SequenceNumber, StandardHeader,
 };
 
 use super::{
-    client_entity_manager::ClientEntityManager, client_entity_message::ClientEntityMessage,
+    client_actor_manager::ClientActorManager, client_actor_message::ClientActorMessage,
     client_packet_writer::ClientPacketWriter, command_sender::CommandSender,
     interpolation_manager::InterpolationManager, ping_manager::PingManager, tick_queue::TickQueue,
 };
@@ -14,18 +14,18 @@ use crate::{client_tick_manager::ClientTickManager, command_receiver::CommandRec
 use std::collections::hash_map::Keys;
 
 #[derive(Debug)]
-pub struct ServerConnection<T: EventType, U: EntityType> {
+pub struct ServerConnection<T: EventType, U: ActorType> {
     connection: Connection<T>,
-    entity_manager: ClientEntityManager<U>,
+    actor_manager: ClientActorManager<U>,
     ping_manager: PingManager,
     command_sender: CommandSender<T>,
     command_receiver: CommandReceiver<T>,
-    last_replay_tick: Option<(u16, LocalEntityKey)>,
+    last_replay_tick: Option<(u16, LocalActorKey)>,
     interpolation_manager: InterpolationManager<U>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
-impl<T: EventType, U: EntityType> ServerConnection<T, U> {
+impl<T: EventType, U: ActorType> ServerConnection<T, U> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
@@ -33,7 +33,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     ) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
-            entity_manager: ClientEntityManager::new(),
+            actor_manager: ClientActorManager::new(),
             interpolation_manager: InterpolationManager::new(&tick_manager.get_tick_interval()),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
@@ -111,8 +111,8 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
                 ManagerType::Event => {
                     self.connection.process_event_data(&mut reader, manifest);
                 }
-                ManagerType::Entity => {
-                    self.entity_manager.process_data(
+                ManagerType::Actor => {
+                    self.actor_manager.process_data(
                         manifest,
                         &mut self.command_receiver,
                         &mut self.interpolation_manager,
@@ -145,37 +145,37 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         return None;
     }
 
-    // Pass-through methods to underlying entity manager
-    pub fn get_incoming_entity_message(&mut self) -> Option<ClientEntityMessage> {
-        return self.entity_manager.pop_incoming_message();
+    // Pass-through methods to underlying actor manager
+    pub fn get_incoming_actor_message(&mut self) -> Option<ClientActorMessage> {
+        return self.actor_manager.pop_incoming_message();
     }
 
-    pub fn entity_keys(&self) -> Keys<LocalEntityKey, U> {
-        return self.entity_manager.entity_keys();
+    pub fn actor_keys(&self) -> Keys<LocalActorKey, U> {
+        return self.actor_manager.actor_keys();
     }
 
-    pub fn get_entity(
+    pub fn get_actor(
         &mut self,
         tick_manager: &ClientTickManager,
-        key: &LocalEntityKey,
+        key: &LocalActorKey,
     ) -> Option<&U> {
-        if let Some(interpolated_entity) =
+        if let Some(interpolated_actor) =
             self.interpolation_manager
-                .get_interpolation(tick_manager, &self.entity_manager, key)
+                .get_interpolation(tick_manager, &self.actor_manager, key)
         {
-            return Some(interpolated_entity);
+            return Some(interpolated_actor);
         }
-        return self.entity_manager.get_entity(key);
+        return self.actor_manager.get_actor(key);
     }
 
-    pub fn pawn_keys(&self) -> Keys<LocalEntityKey, U> {
-        return self.entity_manager.pawn_keys();
+    pub fn pawn_keys(&self) -> Keys<LocalActorKey, U> {
+        return self.actor_manager.pawn_keys();
     }
 
     pub fn get_pawn(
         &mut self,
         tick_manager: &ClientTickManager,
-        key: &LocalEntityKey,
+        key: &LocalActorKey,
     ) -> Option<&U> {
         if let Some(interpolated_pawn) = self
             .interpolation_manager
@@ -183,25 +183,25 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
         {
             return Some(interpolated_pawn);
         }
-        return self.entity_manager.get_pawn(key);
+        return self.actor_manager.get_pawn(key);
     }
 
-    pub fn get_pawn_mut(&mut self, key: &LocalEntityKey) -> Option<&U> {
-        return self.entity_manager.get_pawn(key);
+    pub fn get_pawn_mut(&mut self, key: &LocalActorKey) -> Option<&U> {
+        return self.actor_manager.get_pawn(key);
     }
 
     // Pass-through methods to underlying interpolation manager
 
-    /// This doesn't actually interpolate all entities, but rather it marks the
-    /// current time & tick in order to later present interpolated entities
+    /// This doesn't actually interpolate all actors, but rather it marks the
+    /// current time & tick in order to later present interpolated actors
     /// correctly. Call this at the beginning of any frame
     pub fn frame_begin(&mut self, manifest: &Manifest<T, U>, tick_manager: &mut ClientTickManager) {
         if tick_manager.mark_frame() {
-            // interpolation manager snapshots current state of all entities
+            // interpolation manager snapshots current state of all actors
             self.interpolation_manager
-                .snapshot_entities(&self.entity_manager);
+                .snapshot_actors(&self.actor_manager);
 
-            // then we apply all received updates to entities at once
+            // then we apply all received updates to actors at once
             let target_tick = tick_manager.get_server_tick();
             while let Some((tick, packet_index, data_packet)) =
                 self.get_buffered_data_packet(target_tick)
@@ -210,8 +210,7 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
             }
 
             // finally, we must update pawns since they may have been reconciled
-            self.interpolation_manager
-                .update_pawns(&self.entity_manager);
+            self.interpolation_manager.update_pawns(&self.actor_manager);
         }
     }
 
@@ -278,20 +277,20 @@ impl<T: EventType, U: EntityType> ServerConnection<T, U> {
     }
 
     // command related
-    pub fn queue_command(&mut self, pawn_key: LocalEntityKey, command: &impl Event<T>) {
+    pub fn queue_command(&mut self, pawn_key: LocalActorKey, command: &impl Event<T>) {
         return self.command_sender.queue_command(pawn_key, command);
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<(LocalEntityKey, Rc<Box<dyn Event<T>>>)> {
+    pub fn get_incoming_command(&mut self) -> Option<(LocalActorKey, Rc<Box<dyn Event<T>>>)> {
         if let Some((last_replay_tick, pawn_key)) = self.last_replay_tick {
-            self.entity_manager
+            self.actor_manager
                 .save_replay_snapshot(last_replay_tick.wrapping_add(1), &pawn_key);
             self.last_replay_tick = None;
         }
 
         if let Some((tick, pawn_key, command)) = self
             .command_receiver
-            .pop_command_replay::<U>(&mut self.entity_manager)
+            .pop_command_replay::<U>(&mut self.actor_manager)
         {
             self.last_replay_tick = Some((tick, pawn_key));
             return Some((pawn_key, command));

@@ -1,6 +1,6 @@
 use std::collections::{hash_set::Iter, HashSet, VecDeque};
 
-use super::{entities::entity_key::entity_key::EntityKey, user::user_key::UserKey};
+use super::{actors::actor_key::actor_key::ActorKey, user::user_key::UserKey};
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
@@ -11,32 +11,32 @@ pub mod room_key {
 
 pub struct Room {
     users: HashSet<UserKey>,
-    entities: HashSet<EntityKey>,
-    removal_queue: VecDeque<(UserKey, EntityKey)>,
+    actors: HashSet<ActorKey>,
+    removal_queue: VecDeque<(UserKey, ActorKey)>,
 }
 
 impl Room {
     pub fn new() -> Room {
         Room {
             users: HashSet::new(),
-            entities: HashSet::new(),
+            actors: HashSet::new(),
             removal_queue: VecDeque::new(),
         }
     }
 
-    pub fn add_entity(&mut self, entity_key: &EntityKey) {
-        self.entities.insert(*entity_key);
+    pub fn add_actor(&mut self, actor_key: &ActorKey) {
+        self.actors.insert(*actor_key);
     }
 
-    pub fn remove_entity(&mut self, entity_key: &EntityKey) {
-        self.entities.remove(entity_key);
+    pub fn remove_actor(&mut self, actor_key: &ActorKey) {
+        self.actors.remove(actor_key);
         for user_key in self.users.iter() {
-            self.removal_queue.push_back((*user_key, *entity_key));
+            self.removal_queue.push_back((*user_key, *actor_key));
         }
     }
 
-    pub fn entities_iter(&self) -> Iter<EntityKey> {
-        return self.entities.iter();
+    pub fn actors_iter(&self) -> Iter<ActorKey> {
+        return self.actors.iter();
     }
 
     pub fn subscribe_user(&mut self, user_key: &UserKey) {
@@ -45,8 +45,8 @@ impl Room {
 
     pub fn unsubscribe_user(&mut self, user_key: &UserKey) {
         self.users.remove(user_key);
-        for entity_key in self.entities.iter() {
-            self.removal_queue.push_back((*user_key, *entity_key));
+        for actor_key in self.actors.iter() {
+            self.removal_queue.push_back((*user_key, *actor_key));
         }
     }
 
@@ -54,7 +54,7 @@ impl Room {
         return self.users.iter();
     }
 
-    pub fn pop_removal_queue(&mut self) -> Option<(UserKey, EntityKey)> {
+    pub fn pop_removal_queue(&mut self) -> Option<(UserKey, ActorKey)> {
         return self.removal_queue.pop_front();
     }
 }

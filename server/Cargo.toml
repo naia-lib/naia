@@ -2,7 +2,7 @@
 name = "naia-server"
 version = "0.2.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-description = "A server that uses either UDP or WebRTC communication to send/receive events to/from connected clients, and syncs registered entities to clients to whom those entities are in-scope."
+description = "A server that uses either UDP or WebRTC communication to send/receive events to/from connected clients, and syncs registered actors to clients to whom those actors are in-scope."
 documentation = "https://docs.rs/naia-server"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
