@@ -6,7 +6,7 @@ use naia_shared::{Actor, Property};
 use crate::ExampleActor;
 
 // Here's an example of a Custom Property
-#[derive(Default, Clone, DeBin, SerBin)]
+#[derive(Default, PartialEq, Clone, DeBin, SerBin)]
 pub struct Name {
     pub first: String,
     pub last: String,
