@@ -1,119 +1,123 @@
 use std::time::Duration;
 
-use naia_shared::{wrapping_diff, HostTickManager, Instant};
+use naia_shared::{wrapping_diff, Instant};
 
 /// Manages the current tick for the host
 #[derive(Debug)]
 pub struct ClientTickManager {
     tick_interval: Duration,
-    current_tick: u16,
-    intended_tick: u16,
-    current_tick_instant: Instant,
-    current_tick_leftover: Duration,
-    intended_tick_instant: Instant,
-    intended_tick_leftover: Duration,
+    tick_interval_f32: f32,
+    server_tick: u16,
+    client_tick_adjust: u16,
+    server_tick_adjust: u16,
+    server_tick_running_diff: i16,
+    last_tick_instant: Instant,
+    pub fraction: f32,
+    accumulator: f32,
+    has_ticked: bool,
 }
-
-const NANOS_PER_SEC: u32 = 1_000_000_000;
 
 impl ClientTickManager {
     /// Create a new HostTickManager with a given tick interval duration
     pub fn new(tick_interval: Duration) -> Self {
         ClientTickManager {
             tick_interval,
-            current_tick: 0,
-            intended_tick: 1,
-            current_tick_instant: Instant::now(),
-            current_tick_leftover: Duration::new(0, 0),
-            intended_tick_instant: Instant::now(),
-            intended_tick_leftover: Duration::new(0, 0),
+            tick_interval_f32: tick_interval.as_nanos() as f32 / 1000000000.0,
+            server_tick: 1,
+            client_tick_adjust: 0,
+            server_tick_adjust: 0,
+            server_tick_running_diff: 0,
+            last_tick_instant: Instant::now(),
+            accumulator: 0.0,
+            fraction: 0.0,
+            has_ticked: false,
         }
+    }
+
+    pub fn mark_frame(&mut self) -> bool {
+        let mut ticked = false;
+        let mut frame_time = self.last_tick_instant.elapsed().as_nanos() as f32 / 1000000000.0;
+        if frame_time > 0.25 {
+            frame_time = 0.25;
+        }
+        self.accumulator += frame_time;
+        self.last_tick_instant = Instant::now();
+        if self.accumulator >= self.tick_interval_f32 {
+            while self.accumulator >= self.tick_interval_f32 {
+                self.accumulator -= self.tick_interval_f32;
+            }
+            // tick has occurred
+            ticked = true;
+            self.has_ticked = true;
+            self.server_tick = self.server_tick.wrapping_add(1);
+        }
+        self.fraction = self.accumulator / self.tick_interval_f32;
+        ticked
     }
 
     /// If the tick interval duration has elapsed, increment the current tick
-    pub fn update_frame(&mut self) {
-        // Intended Tick
-        {
-            let mut time_elapsed =
-                self.intended_tick_instant.elapsed() + self.intended_tick_leftover;
-
-            if time_elapsed > self.tick_interval {
-                while time_elapsed > self.tick_interval {
-                    self.intended_tick = self.intended_tick.wrapping_add(1);
-                    time_elapsed -= self.tick_interval;
-                }
-
-                self.intended_tick_leftover = time_elapsed;
-                self.intended_tick_instant = Instant::now();
-            }
+    pub fn take_tick(&mut self) -> bool {
+        if self.has_ticked {
+            self.has_ticked = false;
+            return true;
         }
-
-        // Current Tick
-        {
-            let mut time_elapsed = self.current_tick_instant.elapsed() + self.current_tick_leftover;
-
-            let intended_diff = wrapping_diff(self.current_tick, self.intended_tick)
-                .min(20)
-                .max(-20);
-            let tick_factor = 2.0_f64.powf(-0.2_f64 * f64::from(intended_diff));
-            let adjusted_interval = self.get_adjusted_duration(tick_factor);
-
-            if time_elapsed > adjusted_interval {
-                while time_elapsed > adjusted_interval {
-                    self.current_tick = self.current_tick.wrapping_add(1);
-                    time_elapsed -= adjusted_interval;
-                }
-
-                self.current_tick_leftover = time_elapsed;
-                self.current_tick_instant = Instant::now();
-            }
-        }
-    }
-
-    fn get_adjusted_duration(&self, tick_factor: f64) -> Duration {
-        const MAX_NANOS_F64: f64 = ((std::u64::MAX as u128 + 1) * (NANOS_PER_SEC as u128)) as f64;
-        let nanos = tick_factor * self.tick_interval.as_secs_f64() * (NANOS_PER_SEC as f64);
-        if !nanos.is_finite() {
-            panic!("got non-finite value when converting float to duration");
-        }
-        if nanos >= MAX_NANOS_F64 {
-            panic!("overflow when converting float to duration");
-        }
-        if nanos < 0.0 {
-            panic!("underflow when converting float to duration");
-        }
-        let nanos_u128 = nanos as u128;
-        Duration::new(
-            (nanos_u128 / (NANOS_PER_SEC as u128)) as u64,
-            (nanos_u128 % (NANOS_PER_SEC as u128)) as u32,
-        )
+        return false;
     }
 
     /// Use tick data from initial server handshake to set the initial tick
-    pub fn set_initial_tick(&mut self, tick: u16) {
-        let tick_adjust: u16 = ((3000 / (self.tick_interval.as_millis())) + 1) as u16;
-        self.current_tick = tick + tick_adjust;
-        self.intended_tick = tick + tick_adjust;
+    pub fn set_initial_tick(&mut self, server_tick: u16) {
+        self.server_tick = server_tick;
+        self.server_tick_adjust = ((1000 / (self.tick_interval.as_millis())) + 1) as u16;
+
+        self.client_tick_adjust = ((3000 / (self.tick_interval.as_millis())) + 1) as u16;
     }
 
     /// Using information from the Server and RTT/Jitter measurements, determine
     /// the appropriate future intended tick
-    pub fn project_intended_tick(
+    pub fn record_server_tick(
         &mut self,
         server_tick: u16,
         rtt_average: f32,
         jitter_deviation: f32,
     ) {
-        let tick_adjust = (((rtt_average + (jitter_deviation * 3.0) / 2.0)
+        self.server_tick_running_diff += wrapping_diff(self.server_tick, server_tick);
+
+        // Decay the diff so that small fluctuations are acceptable
+        if self.server_tick_running_diff > 0 {
+            self.server_tick_running_diff = self.server_tick_running_diff.wrapping_sub(1);
+        }
+        if self.server_tick_running_diff < 0 {
+            self.server_tick_running_diff = self.server_tick_running_diff.wrapping_add(1);
+        }
+
+        // If the server tick is far off enough, reset to the received server tick
+        if self.server_tick_running_diff.abs() > 8 {
+            self.server_tick = server_tick;
+            self.server_tick_running_diff = 0;
+        }
+
+        // Calculate incoming & outgoing jitter buffer tick offsets
+        self.server_tick_adjust =
+            ((((jitter_deviation * 3.0) / 2.0) / self.tick_interval.as_millis() as f32) + 1.0)
+                .ceil() as u16;
+        self.client_tick_adjust = (((rtt_average + (jitter_deviation * 3.0) / 2.0)
             / (self.tick_interval.as_millis() as f32))
             + 1.0)
             .ceil() as u16;
-        self.intended_tick = server_tick + tick_adjust;
     }
-}
 
-impl HostTickManager for ClientTickManager {
-    fn get_tick(&self) -> u16 {
-        self.current_tick
+    /// Gets a reference to the tick interval used
+    pub fn get_tick_interval(&self) -> &Duration {
+        return &self.tick_interval;
+    }
+
+    /// Gets the server tick with the incoming jitter buffer offset applied
+    pub fn get_server_tick(&self) -> u16 {
+        return self.server_tick.wrapping_sub(self.server_tick_adjust);
+    }
+
+    /// Gets the client tick with the outgoing jitter buffer offset applied
+    pub fn get_client_tick(&self) -> u16 {
+        return self.server_tick.wrapping_add(self.client_tick_adjust);
     }
 }

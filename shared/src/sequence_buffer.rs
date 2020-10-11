@@ -1,5 +1,7 @@
 use std::clone::Clone;
 
+use super::wrapping_number::{sequence_greater_than, sequence_less_than};
+
 /// Used to index packets that have been sent & received
 pub type SequenceNumber = u16;
 
@@ -24,6 +26,24 @@ impl<T: Clone> SequenceBuffer<T> {
     /// Returns the most recently stored sequence number.
     pub fn sequence_num(&self) -> SequenceNumber {
         self.sequence_num
+    }
+
+    /// Returns a mutable reference to the entry with the given sequence number.
+    pub fn get_mut(&mut self, sequence_num: SequenceNumber) -> Option<&mut T> {
+        if self.exists(sequence_num) {
+            let index = self.index(sequence_num);
+            return self.entries[index].as_mut();
+        }
+        None
+    }
+
+    /// Returns a reference to the entry with the given sequence number.
+    pub fn get(&self, sequence_num: SequenceNumber) -> Option<&T> {
+        if self.exists(sequence_num) {
+            let index = self.index(sequence_num);
+            return self.entries[index].as_ref();
+        }
+        None
     }
 
     /// Inserts the entry data into the sequence buffer. If the requested
@@ -99,12 +119,103 @@ impl<T: Clone> SequenceBuffer<T> {
     fn index(&self, sequence: SequenceNumber) -> usize {
         sequence as usize % self.entry_sequences.len()
     }
+
+    /// Gets the oldest stored sequence number
+    pub fn oldest(&self) -> u16 {
+        return self
+            .sequence_num
+            .wrapping_sub(self.entry_sequences.len() as u16);
+    }
+
+    /// Clear sequence buffer completely
+    pub fn clear(&mut self) {
+        let size = self.entry_sequences.len();
+        self.sequence_num = 0;
+        self.entry_sequences = vec![None; size].into_boxed_slice();
+        self.entries = vec![None; size].into_boxed_slice();
+    }
+
+    /// Remove entries up until a specific sequence number
+    pub fn remove_until(&mut self, finish_sequence: u16) {
+        let oldest = self.oldest();
+        for seq in oldest..finish_sequence {
+            self.remove(seq);
+        }
+    }
+
+    /// Get a count of entries in the buffer
+    pub fn get_entries_count(&self) -> u8 {
+        let mut count = 0;
+        let mut seq = self.oldest();
+        loop {
+            if self.exists(seq) {
+                count += 1;
+            }
+            seq = seq.wrapping_add(1);
+            if seq == self.sequence_num {
+                break;
+            }
+        }
+        return count;
+    }
+
+    /// Get an iterator into the sequence
+    pub fn iter(&self, reverse: bool) -> SequenceIterator<T> {
+        let index = {
+            if reverse {
+                self.sequence_num
+            } else {
+                self.oldest()
+            }
+        };
+        return SequenceIterator::new(self, index, self.entry_sequences.len(), reverse);
+    }
 }
 
-pub fn sequence_greater_than(s1: u16, s2: u16) -> bool {
-    ((s1 > s2) && (s1 - s2 <= 32768)) || ((s1 < s2) && (s2 - s1 > 32768))
+/// Iterator for a Sequence
+pub struct SequenceIterator<'s, T>
+where
+    T: 's + Clone,
+{
+    buffer: &'s SequenceBuffer<T>,
+    index: u16,
+    count: usize,
+    reverse: bool,
 }
 
-pub fn sequence_less_than(s1: u16, s2: u16) -> bool {
-    sequence_greater_than(s2, s1)
+impl<'s, T: Clone> SequenceIterator<'s, T> {
+    /// Create a new iterator for a sequence
+    pub fn new(
+        seq_buf: &'s SequenceBuffer<T>,
+        start: u16,
+        count: usize,
+        reverse: bool,
+    ) -> SequenceIterator<'s, T> {
+        SequenceIterator::<T> {
+            buffer: seq_buf,
+            index: start,
+            count,
+            reverse,
+        }
+    }
+
+    /// Get next value in the sequence
+    pub fn next(&mut self) -> Option<(SequenceNumber, &'s T)> {
+        loop {
+            if self.count == 0 {
+                return None;
+            }
+            let current_item = self.buffer.get(self.index);
+            let current_index = self.index;
+            if self.reverse {
+                self.index = self.index.wrapping_sub(1);
+            } else {
+                self.index = self.index.wrapping_add(1);
+            }
+            self.count -= 1;
+            if let Some(item) = current_item {
+                return Some((current_index, item));
+            }
+        }
+    }
 }

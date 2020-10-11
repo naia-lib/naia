@@ -1,4 +1,18 @@
+/// Returns whether or not a wrapping number is greater than another
+pub fn sequence_greater_than(s1: u16, s2: u16) -> bool {
+    ((s1 > s2) && (s1 - s2 <= 32768)) || ((s1 < s2) && (s2 - s1 > 32768))
+}
+
+/// Returns whether or not a wrapping number is greater than another
+pub fn sequence_less_than(s1: u16, s2: u16) -> bool {
+    sequence_greater_than(s2, s1)
+}
+
 /// Retrieves the wrapping difference between 2 u16 values
+/// wrapping_diff(1,2) will return 1
+/// wrapping_diff(2,1) will return -1
+/// wrapping_diff(65535,0) will return 1
+/// wrapping_diff(0,65535) will return -1
 pub fn wrapping_diff(a: u16, b: u16) -> i16 {
     const MAX: i32 = std::i16::MAX as i32;
     const MIN: i32 = std::i16::MIN as i32;

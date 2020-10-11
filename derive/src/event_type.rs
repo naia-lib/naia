@@ -14,7 +14,7 @@ pub fn event_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
         use std::any::TypeId;
         use naia_shared::{EventType, Event};
         impl EventType for #type_name {
-            fn write(&mut self, buffer: &mut Vec<u8>) {
+            fn write(&self, buffer: &mut Vec<u8>) {
                 match self {
                     #write_variants
                 }
@@ -37,8 +37,8 @@ fn get_write_variants(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
-                        identity.write(buffer);
+                    #type_name::#variant_name(idactor) => {
+                        idactor.write(buffer);
                     }
                 };
                 let new_output_result = quote! {
@@ -60,8 +60,8 @@ fn get_type_id_variants(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(identity) => {
-                        return identity.get_type_id();
+                    #type_name::#variant_name(idactor) => {
+                        return idactor.get_type_id();
                     }
                 };
                 let new_output_result = quote! {
@@ -75,34 +75,3 @@ fn get_type_id_variants(type_name: &Ident, data: &Data) -> TokenStream {
         _ => unimplemented!(),
     }
 }
-
-////FROM THIS
-//#[derive(EventType, Clone)]
-//pub enum ExampleEvent {
-//    StringEvent(StringEvent),
-//    AuthEvent(AuthEvent),
-//}
-
-////TO THIS
-//impl EventType for ExampleEvent {
-//    fn write(&mut self, buffer: &mut Vec<u8>) {
-//        match self {
-//            ExampleEvent::StringEvent(identity) => {
-//                identity.write(buffer);
-//            }
-//            ExampleEvent::AuthEvent(identity) => {
-//                identity.write(buffer);
-//            }
-//        }
-//    }
-//    fn get_type_id(&self) -> TypeId {
-//        match self {
-//            ExampleEvent::StringEvent(identity) => {
-//                return identity.get_type_id();
-//            }
-//            ExampleEvent::AuthEvent(identity) => {
-//                return identity.get_type_id();
-//            }
-//        }
-//    }
-//}

@@ -25,7 +25,7 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let gen = quote! {
         use std::{any::TypeId, io::Cursor};
-        use naia_shared::{EventBuilder, PropertyIo};
+        use naia_shared::{EventBuilder, PropertyIo, PacketReader};
         pub struct #event_builder_name {
             type_id: TypeId,
         }
@@ -33,8 +33,8 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             fn get_type_id(&self) -> TypeId {
                 return self.type_id;
             }
-            fn build(&self, buffer: &[u8]) -> #type_name {
-                return #event_name::read_to_type(buffer);
+            fn build(&self, reader: &mut PacketReader) -> #type_name {
+                return #event_name::read_to_type(reader);
             }
         }
         impl #event_name {
@@ -117,7 +117,7 @@ fn get_read_to_type_method(
     for (field_name, field_type) in properties.iter() {
         let new_output_right = quote! {
             let mut #field_name = Property::<#field_type>::new(Default::default(), 0);
-            #field_name.read(read_cursor);
+            #field_name.read(reader);
         };
         let new_output_result = quote! {
             #prop_reads
@@ -127,8 +127,7 @@ fn get_read_to_type_method(
     }
 
     return quote! {
-        fn read_to_type(buffer: &[u8]) -> #type_name {
-            let read_cursor = &mut Cursor::new(buffer);
+        fn read_to_type(reader: &mut PacketReader) -> #type_name {
             #prop_reads
 
             return #type_name::#event_name(#event_name {
@@ -137,63 +136,3 @@ fn get_read_to_type_method(
         }
     };
 }
-
-////FROM THIS
-//#[derive(Event, Clone)]
-//#[type_name = "ExampleType"]
-//pub struct StringEvent {
-//    pub message: Property<String>,
-//}
-
-////TO THIS
-//pub struct StringEventBuilder {
-//    type_id: TypeId,
-//}
-//
-//impl EventBuilder<ExampleEvent> for StringEventBuilder {
-//    fn get_type_id(&self) -> TypeId {
-//        return self.type_id;
-//    }
-//
-//    fn build(&self, buffer: &[u8]) -> ExampleEvent {
-//        return StringEvent::read_to_type(buffer);
-//    }
-//}
-//
-//impl StringEvent {
-//    pub fn get_builder() -> Box<dyn EventBuilder<ExampleEvent>> {
-//        return Box::new(StringEventBuilder {
-//            type_id: TypeId::of::<StringEvent>(),
-//        });
-//    }
-//
-//    pub fn new_complete(message: String) -> StringEvent {
-//        StringEvent {
-//            message: Property::<String>::new(message, 0),
-//        }
-//    }
-//
-//    fn read_to_type(buffer: &[u8]) -> ExampleEvent {
-//        let read_cursor = &mut Cursor::new(buffer);
-//        let mut message = Property::<String>::new(Default::default(), 0);
-//        message.read(read_cursor);
-//
-//        return ExampleEvent::StringEvent(StringEvent {
-//            message,
-//        });
-//    }
-//}
-//impl Event<ExampleEvent> for StringEvent {
-//    fn is_guaranteed(&self) -> bool {
-//        StringEvent::is_guaranteed()
-//    }
-//    fn write(&self, buffer: &mut Vec<u8>) {
-//        PropertyIo::write(&self.message, buffer);
-//    }
-//    fn get_typed_copy(&self) -> ExampleEvent {
-//        return ExampleEvent::StringEvent(self.clone());
-//    }
-//    fn get_type_id(&self) -> TypeId {
-//        return TypeId::of::<StringEvent>();
-//    }
-//}
