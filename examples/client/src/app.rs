@@ -65,8 +65,8 @@ impl App {
     // it's called via request_animation_frame()
     pub fn update(&mut self) {
         loop {
-            match self.client.receive() {
-                Some(result) => match result {
+            if let Some(result) = self.client.receive() {
+                match result {
                     Ok(event) => match event {
                         ClientEvent::Connection => {
                             info!("Client connected to: {}", self.client.server_address());
@@ -90,7 +90,7 @@ impl App {
                             _ => {}
                         },
                         ClientEvent::CreateActor(local_key) => {
-                            if let Some(actor) = self.client.get_actor(local_key) {
+                            if let Some(actor) = self.client.get_actor(&local_key) {
                                 match actor {
                                     ExampleActor::PointActor(point_actor) => {
                                         info!("creation of point actor with key: {}, x: {}, y: {}, name: {} {}",
@@ -105,7 +105,7 @@ impl App {
                             }
                         }
                         ClientEvent::UpdateActor(local_key) => {
-                            if let Some(actor) = self.client.get_actor(local_key) {
+                            if let Some(actor) = self.client.get_actor(&local_key) {
                                 match actor {
                                     ExampleActor::PointActor(point_actor) => {
                                         info!("update of point actor with key: {}, x:{}, y: {}, name: {} {}",
@@ -124,15 +124,15 @@ impl App {
                         ClientEvent::Tick => {
                             //info!("tick event");
                         }
+                        _ => {}
                     },
                     Err(err) => {
                         info!("Client Error: {}", err);
                         return;
                     }
-                },
-                None => {
-                    return;
                 }
+            } else {
+                break;
             }
         }
     }
