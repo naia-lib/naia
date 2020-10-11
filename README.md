@@ -2,6 +2,7 @@
 [![Latest Version](https://img.shields.io/crates/v/naia-server.svg)](https://crates.io/crates/naia-server)
 [![API Documentation](https://docs.rs/naia-server/badge.svg)](https://docs.rs/naia-server)
 ![](https://tokei.rs/b1/github/naia-rs/naia)
+[![Discord chat](https://img.shields.io/discord/710177966440579103.svg?label=discord%20chat)](https://discord.gg/fD6QCtX)
 [![MIT/Apache][s3]][l3]
 
 [s3]: https://img.shields.io/badge/license-MIT%2FApache-blue.svg
