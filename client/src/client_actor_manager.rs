@@ -1,28 +1,28 @@
 use log::warn;
 use naia_shared::{
-    EntityType, EventType, LocalEntityKey, Manifest, PacketReader, SequenceBuffer, StateMask,
+    ActorType, EventType, LocalActorKey, Manifest, PacketReader, SequenceBuffer, StateMask,
 };
 use std::collections::{HashMap, VecDeque};
 
-use super::client_entity_message::ClientEntityMessage;
+use super::client_actor_message::ClientActorMessage;
 use crate::{command_receiver::CommandReceiver, interpolation_manager::InterpolationManager};
 use std::collections::hash_map::Keys;
 
 const PAWN_HISTORY_SIZE: u16 = 64;
 
 #[derive(Debug)]
-pub struct ClientEntityManager<U: EntityType> {
-    local_entity_store: HashMap<LocalEntityKey, U>,
-    queued_incoming_messages: VecDeque<ClientEntityMessage>,
-    pawn_store: HashMap<LocalEntityKey, U>,
-    pawn_history: HashMap<LocalEntityKey, SequenceBuffer<U>>,
+pub struct ClientActorManager<U: ActorType> {
+    local_actor_store: HashMap<LocalActorKey, U>,
+    queued_incoming_messages: VecDeque<ClientActorMessage>,
+    pawn_store: HashMap<LocalActorKey, U>,
+    pawn_history: HashMap<LocalActorKey, SequenceBuffer<U>>,
 }
 
-impl<U: EntityType> ClientEntityManager<U> {
+impl<U: ActorType> ClientActorManager<U> {
     pub fn new() -> Self {
-        ClientEntityManager {
+        ClientActorManager {
             queued_incoming_messages: VecDeque::new(),
-            local_entity_store: HashMap::new(),
+            local_actor_store: HashMap::new(),
             pawn_store: HashMap::new(),
             pawn_history: HashMap::new(),
         }
@@ -37,9 +37,9 @@ impl<U: EntityType> ClientEntityManager<U> {
         packet_index: u16,
         reader: &mut PacketReader,
     ) {
-        let entity_message_count = reader.read_u8();
-        //info!("reading {} entity messages", entity_message_count);
-        for _x in 0..entity_message_count {
+        let actor_message_count = reader.read_u8();
+        //info!("reading {} actor messages", actor_message_count);
+        for _x in 0..actor_message_count {
             let message_type: u8 = reader.read_u8();
 
             match message_type {
@@ -48,19 +48,19 @@ impl<U: EntityType> ClientEntityManager<U> {
                     let naia_id: u16 = reader.read_u16();
                     let local_key: u16 = reader.read_u16();
 
-                    match manifest.create_entity(naia_id, reader) {
-                        Some(new_entity) => {
-                            if self.local_entity_store.contains_key(&local_key) {
+                    match manifest.create_actor(naia_id, reader) {
+                        Some(new_actor) => {
+                            if self.local_actor_store.contains_key(&local_key) {
                                 warn!("duplicate local key inserted");
                             } else {
-                                //info!("creation of entity w/ key of {}", local_key);
-                                let is_interpolated = new_entity.is_interpolated();
-                                self.local_entity_store.insert(local_key, new_entity);
+                                //info!("creation of actor w/ key of {}", local_key);
+                                let is_interpolated = new_actor.is_interpolated();
+                                self.local_actor_store.insert(local_key, new_actor);
                                 if is_interpolated {
                                     interpolator.create_interpolation(&self, &local_key);
                                 }
                                 self.queued_incoming_messages
-                                    .push_back(ClientEntityMessage::Create(local_key));
+                                    .push_back(ClientActorMessage::Create(local_key));
                             }
                         }
                         _ => {}
@@ -69,7 +69,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                 1 => {
                     // Deletion
                     let local_key = reader.read_u16();
-                    self.local_entity_store.remove(&local_key);
+                    self.local_actor_store.remove(&local_key);
                     interpolator.delete_interpolation(&local_key);
 
                     if self.pawn_store.contains_key(&local_key) {
@@ -80,30 +80,30 @@ impl<U: EntityType> ClientEntityManager<U> {
                     }
 
                     self.queued_incoming_messages
-                        .push_back(ClientEntityMessage::Delete(local_key));
+                        .push_back(ClientActorMessage::Delete(local_key));
                 }
                 2 => {
-                    // Update Entity
+                    // Update Actor
                     let local_key = reader.read_u16();
 
-                    if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
-                        // Entity is not a Pawn
+                    if let Some(actor_ref) = self.local_actor_store.get_mut(&local_key) {
+                        // Actor is not a Pawn
                         let state_mask: StateMask = StateMask::read(reader);
 
-                        entity_ref.read_partial(&state_mask, reader, packet_index);
+                        actor_ref.read_partial(&state_mask, reader, packet_index);
 
                         self.queued_incoming_messages
-                            .push_back(ClientEntityMessage::Update(local_key));
+                            .push_back(ClientActorMessage::Update(local_key));
                     }
                 }
                 3 => {
                     // Assign Pawn
                     let local_key: u16 = reader.read_u16();
 
-                    if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
+                    if let Some(actor_ref) = self.local_actor_store.get_mut(&local_key) {
                         self.pawn_store.insert(
                             local_key,
-                            entity_ref.inner_ref().as_ref().borrow().get_typed_copy(),
+                            actor_ref.inner_ref().as_ref().borrow().get_typed_copy(),
                         );
 
                         self.pawn_history
@@ -111,12 +111,12 @@ impl<U: EntityType> ClientEntityManager<U> {
 
                         command_receiver.pawn_init(&local_key);
 
-                        if entity_ref.is_interpolated() {
+                        if actor_ref.is_interpolated() {
                             interpolator.create_pawn_interpolation(&self, &local_key);
                         }
 
                         self.queued_incoming_messages
-                            .push_back(ClientEntityMessage::AssignPawn(local_key));
+                            .push_back(ClientActorMessage::AssignPawn(local_key));
                     }
                 }
                 4 => {
@@ -129,19 +129,19 @@ impl<U: EntityType> ClientEntityManager<U> {
                         interpolator.delete_pawn_interpolation(&local_key);
                     }
                     self.queued_incoming_messages
-                        .push_back(ClientEntityMessage::UnassignPawn(local_key));
+                        .push_back(ClientActorMessage::UnassignPawn(local_key));
                 }
                 5 => {
                     // Update Pawn
                     let local_key = reader.read_u16();
 
-                    if let Some(entity_ref) = self.local_entity_store.get_mut(&local_key) {
-                        entity_ref.read_full(reader, packet_index);
+                    if let Some(actor_ref) = self.local_actor_store.get_mut(&local_key) {
+                        actor_ref.read_full(reader, packet_index);
 
                         // check it against it's history
                         if let Some(pawn_history) = self.pawn_history.get_mut(&local_key) {
                             if let Some(historical_pawn) = pawn_history.get(packet_tick) {
-                                if !entity_ref.equals_prediction(historical_pawn) {
+                                if !actor_ref.equals_prediction(historical_pawn) {
                                     // prediction error encountered!
                                     command_receiver.replay_commands(packet_tick, local_key);
                                 } else {
@@ -154,7 +154,7 @@ impl<U: EntityType> ClientEntityManager<U> {
                         command_receiver.remove_history_until(packet_tick, local_key);
 
                         self.queued_incoming_messages
-                            .push_back(ClientEntityMessage::Update(local_key));
+                            .push_back(ClientActorMessage::Update(local_key));
                     }
                 }
                 _ => {}
@@ -162,43 +162,43 @@ impl<U: EntityType> ClientEntityManager<U> {
         }
     }
 
-    pub fn pop_incoming_message(&mut self) -> Option<ClientEntityMessage> {
+    pub fn pop_incoming_message(&mut self) -> Option<ClientActorMessage> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn entity_keys(&self) -> Keys<LocalEntityKey, U> {
-        return self.local_entity_store.keys();
+    pub fn actor_keys(&self) -> Keys<LocalActorKey, U> {
+        return self.local_actor_store.keys();
     }
 
-    pub fn get_entity(&self, key: &LocalEntityKey) -> Option<&U> {
-        return self.local_entity_store.get(key);
+    pub fn get_actor(&self, key: &LocalActorKey) -> Option<&U> {
+        return self.local_actor_store.get(key);
     }
 
-    pub fn pawn_keys(&self) -> Keys<LocalEntityKey, U> {
+    pub fn pawn_keys(&self) -> Keys<LocalActorKey, U> {
         return self.pawn_store.keys();
     }
 
-    pub fn get_pawn(&self, key: &LocalEntityKey) -> Option<&U> {
+    pub fn get_pawn(&self, key: &LocalActorKey) -> Option<&U> {
         return self.pawn_store.get(key);
     }
 
-    pub fn pawn_reset(&mut self, key: &LocalEntityKey) {
-        if let Some(entity_ref) = self.local_entity_store.get_mut(key) {
+    pub fn pawn_reset(&mut self, key: &LocalActorKey) {
+        if let Some(actor_ref) = self.local_actor_store.get_mut(key) {
             self.pawn_store.remove(key);
             self.pawn_store.insert(
                 *key,
-                entity_ref.inner_ref().as_ref().borrow().get_typed_copy(),
+                actor_ref.inner_ref().as_ref().borrow().get_typed_copy(),
             );
         }
     }
 
-    pub fn pawn_clear_history(&mut self, key: &LocalEntityKey) {
+    pub fn pawn_clear_history(&mut self, key: &LocalActorKey) {
         if let Some(pawn_history) = self.pawn_history.get_mut(&key) {
             pawn_history.clear();
         }
     }
 
-    pub fn save_replay_snapshot(&mut self, history_tick: u16, pawn_key: &LocalEntityKey) {
+    pub fn save_replay_snapshot(&mut self, history_tick: u16, pawn_key: &LocalActorKey) {
         if let Some(pawn_ref) = self.pawn_store.get(pawn_key) {
             if let Some(pawn_history) = self.pawn_history.get_mut(pawn_key) {
                 pawn_history.insert(

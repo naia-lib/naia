@@ -1,6 +1,6 @@
 //! # Naia Client
 //! A cross-platform client that can send/receive events to/from a server, and
-//! has a pool of in-scope entities that are synced with the server.
+//! has a pool of in-scope actors that are synced with the server.
 
 #![deny(
     missing_docs,
@@ -15,10 +15,10 @@
 #[macro_use]
 extern crate log;
 
+mod client_actor_manager;
+mod client_actor_message;
 mod client_config;
 mod client_connection_state;
-mod client_entity_manager;
-mod client_entity_message;
 mod client_event;
 mod client_packet_writer;
 mod client_tick_manager;

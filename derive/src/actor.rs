@@ -6,84 +6,84 @@ use syn::{
 
 use super::utils;
 
-pub fn entity_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    let entity_name = &input.ident;
-    let entity_builder_name = Ident::new(
-        (entity_name.to_string() + "Builder").as_str(),
+    let actor_name = &input.ident;
+    let actor_builder_name = Ident::new(
+        (actor_name.to_string() + "Builder").as_str(),
         Span::call_site(),
     );
-    let type_name = utils::get_type_name(&input, "Entity");
+    let type_name = utils::get_type_name(&input, "Actor");
 
     let properties = utils::get_properties(&input);
     let interpolated_properties = get_interpolated_properties(&input);
     let predicted_properties = get_predicted_properties(&input);
 
-    let enum_name = format_ident!("{}Prop", entity_name);
+    let enum_name = format_ident!("{}Prop", actor_name);
     let property_enum = get_property_enum(&enum_name, &properties);
 
-    let new_complete_method = get_new_complete_method(entity_name, &enum_name, &properties);
+    let new_complete_method = get_new_complete_method(actor_name, &enum_name, &properties);
     let read_to_type_method =
-        get_read_to_type_method(&type_name, entity_name, &enum_name, &properties);
-    let entity_write_method = utils::get_write_method(&properties);
-    let entity_write_partial_method = get_write_partial_method(&enum_name, &properties);
-    let entity_read_full_method = get_read_full_method(&properties);
-    let entity_read_partial_method = get_read_partial_method(&enum_name, &properties);
+        get_read_to_type_method(&type_name, actor_name, &enum_name, &properties);
+    let actor_write_method = utils::get_write_method(&properties);
+    let actor_write_partial_method = get_write_partial_method(&enum_name, &properties);
+    let actor_read_full_method = get_read_full_method(&properties);
+    let actor_read_partial_method = get_read_partial_method(&enum_name, &properties);
     let set_mutator_method = get_set_mutator_method(&properties);
-    let get_typed_copy_method = get_get_typed_copy_method(&type_name, entity_name, &properties);
-    let equals_method = get_equals_method(entity_name, &properties);
-    let equals_prediction_method = get_equals_prediction_method(entity_name, &predicted_properties);
+    let get_typed_copy_method = get_get_typed_copy_method(&type_name, actor_name, &properties);
+    let equals_method = get_equals_method(actor_name, &properties);
+    let equals_prediction_method = get_equals_prediction_method(actor_name, &predicted_properties);
     let set_to_interpolation_method =
-        get_set_to_interpolation_method(entity_name, &properties, &interpolated_properties);
+        get_set_to_interpolation_method(actor_name, &properties, &interpolated_properties);
     let is_interpolated_method = get_is_interpolated_method(&predicted_properties);
     let is_predicted_method = get_is_predicted_method(&predicted_properties);
-    let mirror_method = get_mirror_method(entity_name, &properties);
+    let mirror_method = get_mirror_method(actor_name, &properties);
 
     let state_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell};
-        use naia_shared::{StateMask, EntityBuilder, EntityMutator, PropertyIo, EntityEq, interp_lerp, PacketReader};
+        use naia_shared::{StateMask, ActorBuilder, ActorMutator, PropertyIo, ActorEq, interp_lerp, PacketReader};
         #property_enum
-        pub struct #entity_builder_name {
+        pub struct #actor_builder_name {
             type_id: TypeId,
         }
-        impl EntityBuilder<#type_name> for #entity_builder_name {
+        impl ActorBuilder<#type_name> for #actor_builder_name {
             fn get_type_id(&self) -> TypeId {
                 return self.type_id;
             }
             fn build(&self, reader: &mut PacketReader) -> #type_name {
-                return #entity_name::read_to_type(reader);
+                return #actor_name::read_to_type(reader);
             }
         }
-        impl #entity_name {
-            pub fn get_builder() -> Box<dyn EntityBuilder<#type_name>> {
-                return Box::new(#entity_builder_name {
-                    type_id: TypeId::of::<#entity_name>(),
+        impl #actor_name {
+            pub fn get_builder() -> Box<dyn ActorBuilder<#type_name>> {
+                return Box::new(#actor_builder_name {
+                    type_id: TypeId::of::<#actor_name>(),
                 });
             }
-            pub fn wrap(self) -> Rc<RefCell<#entity_name>> {
+            pub fn wrap(self) -> Rc<RefCell<#actor_name>> {
                 return Rc::new(RefCell::new(self));
             }
             #new_complete_method
             #read_to_type_method
         }
-        impl Entity<#type_name> for #entity_name {
+        impl Actor<#type_name> for #actor_name {
             fn get_state_mask_size(&self) -> u8 { #state_mask_size }
             fn get_type_id(&self) -> TypeId {
-                return TypeId::of::<#entity_name>();
+                return TypeId::of::<#actor_name>();
             }
             #set_mutator_method
-            #entity_write_method
-            #entity_write_partial_method
-            #entity_read_full_method
-            #entity_read_partial_method
+            #actor_write_method
+            #actor_write_partial_method
+            #actor_read_full_method
+            #actor_read_partial_method
             #get_typed_copy_method
             #is_interpolated_method
             #is_predicted_method
         }
-        impl EntityEq<#type_name> for #entity_name {
+        impl ActorEq<#type_name> for #actor_name {
             #equals_method
             #equals_prediction_method
             #set_to_interpolation_method
@@ -140,14 +140,14 @@ fn get_set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>) {
+        fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn ActorMutator>>) {
             #output
         }
     };
 }
 
 fn get_new_complete_method(
-    entity_name: &Ident,
+    actor_name: &Ident,
     enum_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
@@ -180,8 +180,8 @@ fn get_new_complete_method(
     }
 
     return quote! {
-        pub fn new_complete(#args) -> #entity_name {
-            #entity_name {
+        pub fn new_complete(#args) -> #actor_name {
+            #actor_name {
                 #fields
             }
         }
@@ -190,7 +190,7 @@ fn get_new_complete_method(
 
 fn get_read_to_type_method(
     type_name: &Ident,
-    entity_name: &Ident,
+    actor_name: &Ident,
     enum_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
@@ -228,7 +228,7 @@ fn get_read_to_type_method(
         fn read_to_type(reader: &mut PacketReader) -> #type_name {
             #prop_reads
 
-            return #type_name::#entity_name(Rc::new(RefCell::new(#entity_name {
+            return #type_name::#actor_name(Rc::new(RefCell::new(#actor_name {
                 #prop_names
             })));
         }
@@ -237,7 +237,7 @@ fn get_read_to_type_method(
 
 fn get_get_typed_copy_method(
     type_name: &Ident,
-    entity_name: &Ident,
+    actor_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
     let mut args = quote! {};
@@ -253,8 +253,8 @@ fn get_get_typed_copy_method(
 
     return quote! {
         fn get_typed_copy(&self) -> #type_name {
-            let copied_entity = #entity_name::new_complete(#args).wrap();
-            return #type_name::#entity_name(copied_entity);
+            let copied_actor = #actor_name::new_complete(#args).wrap();
+            return #type_name::#actor_name(copied_actor);
         }
     };
 }
@@ -337,7 +337,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
     };
 }
 
-fn get_equals_method(entity_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn get_equals_method(actor_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
@@ -352,7 +352,7 @@ fn get_equals_method(entity_name: &Ident, properties: &Vec<(Ident, Type)>) -> To
     }
 
     return quote! {
-        fn equals(&self, other: &#entity_name) -> bool {
+        fn equals(&self, other: &#actor_name) -> bool {
             #output
             return true;
         }
@@ -360,7 +360,7 @@ fn get_equals_method(entity_name: &Ident, properties: &Vec<(Ident, Type)>) -> To
 }
 
 fn get_equals_prediction_method(
-    entity_name: &Ident,
+    actor_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
     let mut output = quote! {};
@@ -377,7 +377,7 @@ fn get_equals_prediction_method(
     }
 
     return quote! {
-        fn equals_prediction(&self, other: &#entity_name) -> bool {
+        fn equals_prediction(&self, other: &#actor_name) -> bool {
             #output
             return true;
         }
@@ -385,7 +385,7 @@ fn get_equals_prediction_method(
 }
 
 fn get_set_to_interpolation_method(
-    entity_name: &Ident,
+    actor_name: &Ident,
     properties: &Vec<(Ident, Type)>,
     interpolated_properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
@@ -422,13 +422,13 @@ fn get_set_to_interpolation_method(
     }
 
     return quote! {
-        fn set_to_interpolation(&mut self, old: &#entity_name, new: &#entity_name, fraction: f32) {
+        fn set_to_interpolation(&mut self, old: &#actor_name, new: &#actor_name, fraction: f32) {
             #output
         }
     };
 }
 
-fn get_mirror_method(entity_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn get_mirror_method(actor_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
@@ -443,7 +443,7 @@ fn get_mirror_method(entity_name: &Ident, properties: &Vec<(Ident, Type)>) -> To
     }
 
     return quote! {
-        fn mirror(&mut self, other: &#entity_name) {
+        fn mirror(&mut self, other: &#actor_name) {
             #output
         }
     };

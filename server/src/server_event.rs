@@ -1,5 +1,5 @@
 use super::{
-    entities::entity_key::entity_key::EntityKey,
+    actors::actor_key::actor_key::ActorKey,
     user::{user_key::UserKey, User},
 };
 
@@ -15,7 +15,7 @@ pub enum ServerEvent<T> {
     /// An Event emitted to the Server from a Client
     Event(UserKey, T),
     /// An Command emitted to the Server from a Client
-    Command(UserKey, EntityKey, T),
+    Command(UserKey, ActorKey, T),
     /// A Tick Event, the duration between Tick events is defined in the Config
     /// object passed to the Server on initialization
     Tick,

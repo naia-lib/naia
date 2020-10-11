@@ -1,12 +1,12 @@
 use std::{cell::RefCell, rc::Rc};
 
-use super::entity_mutator::EntityMutator;
+use super::actor_mutator::ActorMutator;
 
-/// A Property of an Entity, that contains data which must be tracked for
+/// A Property of an Actor, that contains data which must be tracked for
 /// updates, and synced to the Client
 #[derive(Clone)]
 pub struct Property<T: Clone + PartialEq> {
-    mutator: Option<Rc<RefCell<dyn EntityMutator>>>,
+    mutator: Option<Rc<RefCell<dyn ActorMutator>>>,
     mutator_index: u8,
     pub(crate) inner: T,
     pub(crate) last_recv_index: u16,
@@ -36,8 +36,8 @@ impl<T: Clone + PartialEq> Property<T> {
         self.inner = value;
     }
 
-    /// Set an EntityMutator object to track changes to the Property
-    pub fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn EntityMutator>>) {
+    /// Set an ActorMutator object to track changes to the Property
+    pub fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn ActorMutator>>) {
         self.mutator = Some(mutator.clone());
     }
 
