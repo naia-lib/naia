@@ -14,6 +14,6 @@ use-webrtc = [ "naia-server/use-webrtc" ]
 [dependencies]
 naia-server = { path = "../../server" }
 naia-example-shared = { path = "../shared" }
-tokio = { version = "0.2", features = ["macros"] }
 log = "0.4"
 simple_logger = { version = "1.4" }
+smol = { version = "1.2.4" }

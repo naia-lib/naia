@@ -7,11 +7,10 @@ use std::{
 };
 
 use byteorder::{BigEndian, WriteBytesExt};
-use futures_util::{pin_mut, select, FutureExt};
+use futures_util::{pin_mut, select, FutureExt, StreamExt};
 use log::info;
 use ring::{hmac, rand};
 use slotmap::DenseSlotMap;
-use tokio::time::Interval;
 
 use naia_server_socket::{
     MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
@@ -34,6 +33,7 @@ use super::{
     server_event::ServerEvent,
     server_tick_manager::ServerTickManager,
     user::{user_key::UserKey, User},
+    interval::Interval,
 };
 use naia_shared::StandardHeader;
 
@@ -110,7 +110,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
             outstanding_disconnects: VecDeque::new(),
             heartbeat_timer,
             tick_manager: ServerTickManager::new(shared_config.tick_interval),
-            tick_timer: tokio::time::interval(shared_config.tick_interval),
+            tick_timer: Interval::new(shared_config.tick_interval),
         }
     }
 
@@ -184,7 +184,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
             }
 
             let next = {
-                let timer_next = self.tick_timer.tick().fuse();
+                let timer_next = self.tick_timer.next().fuse();
                 pin_mut!(timer_next);
 
                 let socket_next = self.socket.receive().fuse();
