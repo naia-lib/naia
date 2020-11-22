@@ -1,6 +1,6 @@
 [package]
 name = "naia-shared"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Common functionality shared between naia-server & naia-client crates"
 documentation = "https://docs.rs/naia-shared"
@@ -15,8 +15,11 @@ edition = "2018"
 [badges]
 maintenance = { status = "actively-developed" }
 
+[features]
+multithread = [ "naia-socket-shared/multithread" ]
+
 [dependencies]
-naia-socket-shared = { version = "0.2.2" }
+naia-socket-shared = { version = "0.3.0" }
 byteorder = "1.3"
 log = "0.4"
 cfg-if = "0.1.10"
