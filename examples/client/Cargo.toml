@@ -14,6 +14,9 @@ crate-type = ["cdylib","rlib"]
 name = "index" # This is because cargo-web also picks up the static assets folder...
 path = "src/main.rs"
 
+[features]
+multithread = [ "naia-client/multithread", "naia-example-shared/multithread" ]
+
 [dependencies]
 naia-client = { path = "../../client" }
 naia-example-shared = { path = "../shared" }

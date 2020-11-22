@@ -10,6 +10,7 @@ license = "MIT OR Apache-2.0"
 [features]
 use-udp = [ "naia-server/use-udp" ]
 use-webrtc = [ "naia-server/use-webrtc" ]
+multithread = [ "naia-server/multithread", "naia-example-shared/multithread" ]
 
 [dependencies]
 naia-server = { path = "../../server" }

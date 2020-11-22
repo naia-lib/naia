@@ -21,6 +21,7 @@ features = [ "use-webrtc" ]
 [features]
 use-udp = [ "naia-server-socket/use-udp" ]
 use-webrtc = [ "naia-server-socket/use-webrtc" ]
+multithread = [ "naia-shared/multithread" ]
 
 [dependencies]
 naia-server-socket = { version = "0.4.0" }
