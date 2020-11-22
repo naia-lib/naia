@@ -30,7 +30,7 @@ impl App {
         cfg_if! {
             if #[cfg(target_arch = "wasm32")] {
                 // Put your Server's IP Address here!, can't easily find this automatically from the browser
-                let server_ip_address: IpAddr = "192.168.1.5".parse().expect("couldn't parse input IP address");
+                let server_ip_address: IpAddr = "192.168.86.38".parse().expect("couldn't parse input IP address");
             } else {
                 let server_ip_address = find_my_ip_address().expect("can't find ip address");
             }
