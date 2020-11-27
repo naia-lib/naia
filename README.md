@@ -11,7 +11,7 @@
 # naia
 a *n*etworking *a*rchitecture for *i*nteractive *a*pplications
 
-A cross-platform (currently WebAssembly & Linux) networking engine that intends to make multiplayer game development in Rust dead simple and lightning fast.
+A cross-platform (including Wasm!) networking engine that intends to make multiplayer game development in Rust dead simple and lightning fast.
 
 At the highest level, you register Event and Actor implementations in a module shared by Client & Server. Then, naia will facilitate sending/receiving those Events between Client & Server, and also keep a pool of tracked Actors synced with each Client for whom they are "in-scope". Actors are "scoped" to Clients with whom they share the same Room, as well as being sufficiently customizable to, for example, only keep Actors persisted & synced while within a Client's viewport or according to some other criteria.
 
@@ -22,6 +22,8 @@ The API is heavily inspired by the [Nengi.js](https://github.com/timetocode/neng
 Thank very much to Kyren for support & [webrtc-unreliable](https://github.com/kyren/webrtc-unreliable), and to the [Laminar](https://github.com/amethyst/laminar) authors, for the cannibalized code within.
 
 Any help is very welcome, please get in touch! I'm still very new to Rust and this project is overly ambitious, and so I intend to be very open to any criticism / feedback in order to better this project.
+
+Currently guaranteed to work WebAssembly & Linux, although Windows & MacOS have been reported working as well. Please file issues if you find inconsistencies and I'll do what I can.
 
 ## Examples
 
