@@ -12,11 +12,12 @@ use futures_core::Stream;
 
 /// Simple stream of `std::time::Instant` at a target rate.
 ///
-/// If the stream is polled late, the next instant will target the duration after the call to
-/// `poll_next` that generated the event, not after the previous timer deadline.  Thus, under load
-/// or with artificial delays, the stream will just not generate as many events rather than trying
-/// to generate more events to catch up.  The target rate is the *fastest* rate the stream will run,
-/// it may run slower.
+/// If the stream is polled late, the next instant will target the duration
+/// after the call to `poll_next` that generated the event, not after the
+/// previous timer deadline.  Thus, under load or with artificial delays, the
+/// stream will just not generate as many events rather than trying to generate
+/// more events to catch up.  The target rate is the *fastest* rate the stream
+/// will run, it may run slower.
 pub struct Interval {
     duration: Duration,
     timer: Timer,

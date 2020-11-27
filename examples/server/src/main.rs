@@ -137,9 +137,9 @@ fn main() -> io::Result<()> {
                                 }
                             }
 
-                            // VERY IMPORTANT! Calling this actually sends all Actor/Event data packets
-                            // to all Clients that require it. If you don't call this method, the Server
-                            // will never communicate with it's connected Clients
+                            // VERY IMPORTANT! Calling this actually sends all Actor/Event data
+                            // packets to all Clients that require it. If you don't call this
+                            // method, the Server will never communicate with it's connected Clients
                             server.send_all_updates().await;
 
                             tick_count = tick_count.wrapping_add(1);
