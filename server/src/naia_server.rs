@@ -28,12 +28,12 @@ use super::{
     },
     client_connection::ClientConnection,
     error::NaiaServerError,
+    interval::Interval,
     room::{room_key::RoomKey, Room},
     server_config::ServerConfig,
     server_event::ServerEvent,
     server_tick_manager::ServerTickManager,
     user::{user_key::UserKey, User},
-    interval::Interval,
 };
 use naia_shared::StandardHeader;
 
