@@ -5,6 +5,8 @@ members = [
     "shared",
     "derive",
     "demo/server",
-    "demo/client",
     "demo/shared",
+    "demo/client/wasm_bindgen",
+    "demo/client/miniquad",
+    "demo/client/miniquad/dev_http_server",
     ]
