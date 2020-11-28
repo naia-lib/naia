@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use nanoserde::{DeBin, SerBin};
 
-use crate::{PacketReader, wrapping_number::sequence_greater_than};
+use crate::{wrapping_number::sequence_greater_than, PacketReader};
 
 use super::actor_mutator::ActorMutator;
 
