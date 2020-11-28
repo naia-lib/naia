@@ -8,7 +8,7 @@ use super::{
     connection_config::ConnectionConfig,
     events::{event::Event, event_manager::EventManager, event_type::EventType},
     manifest::Manifest,
-    packet_reader::PacketReader,
+    PacketReader,
     packet_type::PacketType,
     sequence_buffer::SequenceNumber,
     standard_header::StandardHeader,

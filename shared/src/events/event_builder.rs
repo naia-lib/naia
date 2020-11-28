@@ -3,7 +3,7 @@ use std::{
     fmt::{Debug, Formatter, Result},
 };
 
-use crate::packet_reader::PacketReader;
+use crate::PacketReader;
 
 use super::event_type::EventType;
 
