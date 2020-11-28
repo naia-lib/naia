@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [features]
 multithread = [ "naia-client/multithread", "naia-example-shared/multithread" ]
+wbindgen = [ "naia-client/wbindgen", "naia-example-shared/wbindgen" ]
 
 [dependencies]
 naia-client = { path = "../../client" }
