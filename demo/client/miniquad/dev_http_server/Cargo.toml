@@ -1,0 +1,18 @@
+[package]
+name = "dev_http_server"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+version = "0.1.0"
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "dev_http_server"
+path = "src/main.rs"
+
+[dependencies]
+actix = "0.10"
+actix-files = "0.3"
+actix-web = "3"
+actix-web-actors = "3"
+env_logger = "0.7"
+listenfd = "0.3"
