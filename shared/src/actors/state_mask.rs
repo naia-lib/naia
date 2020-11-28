@@ -1,7 +1,7 @@
 use byteorder::WriteBytesExt;
 use std::fmt;
 
-use crate::packet_reader::PacketReader;
+use crate::PacketReader;
 
 /// The State Mask is a variable-length byte array, where each bit represents
 /// the current state of a Property owned by an Actor. The Property state

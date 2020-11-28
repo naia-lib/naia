@@ -20,7 +20,7 @@ multithread = [ "naia-client-socket/multithread", "naia-shared/multithread" ]
 wbindgen = [ "naia-client-socket/wbindgen", "naia-shared/wbindgen" ]
 
 [dependencies]
-naia-client-socket = { version = "0.5.0" }
+naia-client-socket = { version = "0.5.0", path = "../../naia-socket/client" }
 naia-shared = { version = "0.4.1", path = "../shared" }
 cfg-if = "0.1.10"
 log = "0.4"

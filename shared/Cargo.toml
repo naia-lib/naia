@@ -20,7 +20,7 @@ multithread = [ "naia-socket-shared/multithread" ]
 wbindgen = [ "naia-socket-shared/wbindgen", "js-sys" ]
 
 [dependencies]
-naia-socket-shared = { version = "0.4.0" }
+naia-socket-shared = { version = "0.4.0", path = "../../naia-socket/shared" }
 byteorder = "1.3"
 log = "0.4"
 cfg-if = "0.1.10"

@@ -7,7 +7,7 @@ use std::{
 
 use super::{actor_mutator::ActorMutator, actor_type::ActorType, state_mask::StateMask};
 
-use crate::packet_reader::PacketReader;
+use crate::PacketReader;
 
 /// An Actor is a container of Properties that can be scoped, tracked, and
 /// synced, with a remote host

@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use super::{actor::Actor, state_mask::StateMask};
 
-use crate::packet_reader::PacketReader;
+use crate::PacketReader;
 
 /// An Enum with a variant for every Actor that can be synced between
 /// Client/Host
