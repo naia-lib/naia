@@ -34,7 +34,9 @@ mod wrapping_number;
 /// Commonly used utility methods to be used by naia-server & naia-client
 pub mod utils;
 
-pub use naia_socket_shared::{find_my_ip_address, Random, LinkConditionerConfig, Timer, Instant, Timestamp, PacketReader};
+pub use naia_socket_shared::{
+    find_my_ip_address, Instant, LinkConditionerConfig, PacketReader, Random, Timer, Timestamp,
+};
 
 pub use ack_manager::AckManager;
 pub use actors::{
