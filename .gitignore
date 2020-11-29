@@ -5,4 +5,8 @@
 node_modules
 /demo/client/wasm_bindgen/dist
 /demo/client/miniquad/target
+/demo/client/miniquad/target/
+/demo/client/miniquad/target/*
 /demo/client/miniquad/dev_http_server/dist
+/demo/client/miniquad/dev_http_server/dist/
+/demo/client/miniquad/dev_http_server/dist/*
