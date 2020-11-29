@@ -9,6 +9,7 @@ license = "MIT OR Apache-2.0"
 
 [features]
 multithread = [ "naia-shared/multithread" ]
+wbindgen = [ "naia-shared/wbindgen" ]
 
 [dependencies]
 naia-shared = { path = "../../shared" }

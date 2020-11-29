@@ -3,7 +3,7 @@ use std::{any::TypeId, collections::HashMap};
 use crate::{
     actors::{actor_builder::ActorBuilder, actor_type::ActorType},
     events::{event_builder::EventBuilder, event_type::EventType},
-    packet_reader::PacketReader,
+    PacketReader,
 };
 
 /// Contains the shared protocol between Client & Server, with a data that is
