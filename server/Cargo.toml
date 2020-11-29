@@ -24,7 +24,7 @@ use-webrtc = [ "naia-server-socket/use-webrtc" ]
 multithread = [ "naia-shared/multithread" ]
 
 [dependencies]
-naia-server-socket = { version = "0.4.1", path = "../../naia-socket/server" }
+naia-server-socket = { version = "0.4.2" }
 naia-shared = { version = "0.4.1", path = "../shared" }
 log = "0.4"
 slotmap = { version = "0.4" }
