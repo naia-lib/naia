@@ -11,7 +11,7 @@ use crate::{
         event_type::EventType,
     },
     manifest::Manifest,
-    packet_reader::PacketReader,
+    PacketReader,
 };
 
 /// Handles incoming/outgoing events, tracks the delivery status of Events so

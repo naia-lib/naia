@@ -1,8 +1,8 @@
 [package]
-name = "naia-client-example"
+name = "naia-client-bindgen-example"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-workspace = "../../"
+workspace = "../../../"
 publish = false
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -16,10 +16,11 @@ path = "src/main.rs"
 
 [features]
 multithread = [ "naia-client/multithread", "naia-example-shared/multithread" ]
+wbindgen = [ "naia-client/wbindgen", "naia-example-shared/wbindgen" ]
 
 [dependencies]
-naia-client = { path = "../../client" }
-naia-example-shared = { path = "../shared" }
+naia-client = { path = "../../../client" }
+naia-example-shared = { path = "../../shared" }
 log = "0.4"
 cfg-if = "0.1.10"
 

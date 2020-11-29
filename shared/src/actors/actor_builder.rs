@@ -1,6 +1,6 @@
 use super::actor_type::ActorType;
 
-use crate::packet_reader::PacketReader;
+use crate::PacketReader;
 
 use std::{
     any::TypeId,
