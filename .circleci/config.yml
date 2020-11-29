@@ -30,15 +30,15 @@ jobs:
             cargo fmt --all -- --check --color=auto
       - run:
           name: Build Server Example (UDP)
-          working_directory: ~/project/examples/server
+          working_directory: ~/project/demo/server
           command: cargo build --target x86_64-unknown-linux-gnu --features "use-udp"
       - run:
           name: Build Server Example (WebRTC)
-          working_directory: ~/project/examples/server
+          working_directory: ~/project/demo/server
           command: cargo build --target x86_64-unknown-linux-gnu --features "use-webrtc"
       - run:
           name: Build Client Example (Linux)
-          working_directory: ~/project/examples/client
+          working_directory: ~/project/demo/client/wasm_bindgen
           command: cargo build --target x86_64-unknown-linux-gnu
       - save_cache:
           paths:
