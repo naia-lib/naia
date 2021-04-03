@@ -17,4 +17,4 @@ mquad = [ "naia-client/mquad" ]
 cfg-if = "0.1.10"
 naia-client = { path = "../../../client" }
 naia-example-shared = { path = "../../shared" }
-miniquad = { version = "=0.3.0-alpha.22", features = ["log-impl"] }
+miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"] }
