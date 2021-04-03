@@ -10,18 +10,36 @@ use naia_example_shared::{
     get_shared_config, manifest_load, ExampleActor, ExampleEvent, PointActor, StringEvent,
 };
 
-use std::{net::SocketAddr, rc::Rc, time::Duration};
+use std::{
+    net::{IpAddr, SocketAddr},
+    rc::Rc,
+    time::Duration,
+};
 
-const SERVER_PORT: u16 = 14191;
+const DEFAULT_SERVER_PORT: u16 = 14191;
 
 fn main() -> io::Result<()> {
+    let port: u16 = {
+        let args: Vec<String> = std::env::args().collect();
+        if args.len() > 1 {
+            args[1]
+                .parse()
+                .expect("Argument must be a valid u16 integer")
+        } else {
+            DEFAULT_SERVER_PORT
+        }
+    };
+
     smol::block_on(async {
         simple_logger::init_with_level(log::Level::Info).expect("A logger was already initialized");
 
         info!("Naia Server Example Started");
 
-        let current_ip_address = find_my_ip_address().expect("can't find ip address");
-        let current_socket_address = SocketAddr::new(current_ip_address, SERVER_PORT);
+        // Put your Server's IP Address here!
+        let server_ip_address: IpAddr = "127.0.0.1"
+            .parse()
+            .expect("couldn't parse input IP address");
+        let current_socket_address = SocketAddr::new(server_ip_address, port);
 
         let mut server_config = ServerConfig::default();
         server_config.heartbeat_interval = Duration::from_secs(2);
