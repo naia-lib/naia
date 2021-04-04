@@ -10,12 +10,6 @@
     unused_import_braces
 )]
 
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate cfg_if;
-
 mod ack_manager;
 mod actors;
 mod connection;

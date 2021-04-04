@@ -1,6 +1,9 @@
 use miniquad::info;
 
-use std::{net::SocketAddr, time::Duration};
+use std::{
+    net::{IpAddr, SocketAddr},
+    time::Duration,
+};
 
 use naia_client::{ClientConfig, ClientEvent, NaiaClient};
 
@@ -9,14 +12,6 @@ use naia_example_shared::{
 };
 
 const SERVER_PORT: u16 = 14191;
-
-cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        use std::net::IpAddr;
-    } else {
-        use naia_client::find_my_ip_address;
-    }
-}
 
 pub struct App {
     client: NaiaClient<ExampleEvent, ExampleActor>,

@@ -4,7 +4,7 @@ extern crate log;
 use simple_logger;
 use smol::io;
 
-use naia_server::{find_my_ip_address, NaiaServer, ServerConfig, ServerEvent, UserKey};
+use naia_server::{NaiaServer, ServerConfig, ServerEvent, UserKey};
 
 use naia_example_shared::{
     get_shared_config, manifest_load, ExampleActor, ExampleEvent, PointActor, StringEvent,

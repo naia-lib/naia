@@ -12,9 +12,6 @@
     unused_import_braces
 )]
 
-#[macro_use]
-extern crate log;
-
 mod client_actor_manager;
 mod client_actor_message;
 mod client_config;
