@@ -60,11 +60,32 @@ pub struct NaiaServer<T: EventType, U: ActorType> {
     tick_timer: Interval,
 }
 
+/// A collection of IP addresses describing which IP to listen on for new sessions,
+/// which to dedicate to UDP traffic, and which to advertise publicly
+pub struct ServerAddresses {
+    session_listen_addr: SocketAddr,
+    webrtc_listen_addr: SocketAddr,
+    public_webrtc_addr: SocketAddr,
+}
+
+impl ServerAddresses {
+    /// Create a new ServerAddresses config struct from component addresses
+    pub fn new(session_listen_addr: SocketAddr,
+               webrtc_listen_addr: SocketAddr,
+               public_webrtc_addr: SocketAddr) -> Self {
+        ServerAddresses {
+            session_listen_addr,
+            webrtc_listen_addr,
+            public_webrtc_addr
+        }
+    }
+}
+
 impl<T: EventType, U: ActorType> NaiaServer<T, U> {
     /// Create a new Server, given an address to listen at, an Event/Actor
     /// manifest, and an optional Config
     pub async fn new(
-        address: SocketAddr,
+        addresses: ServerAddresses,
         manifest: Manifest<T, U>,
         server_config: Option<ServerConfig>,
         shared_config: SharedConfig,
@@ -81,7 +102,10 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
             server_config.rtt_sample_size,
         );
 
-        let mut server_socket = ServerSocket::listen(address).await;
+        let mut server_socket = ServerSocket::listen(addresses.session_listen_addr,
+                                                     addresses.webrtc_listen_addr,
+                                                     addresses.public_webrtc_addr)
+            .await;
         if let Some(config) = &shared_config.link_condition_config {
             server_socket = server_socket.with_link_conditioner(config);
         }

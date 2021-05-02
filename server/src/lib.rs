@@ -43,7 +43,7 @@ mod server_tick_manager;
 mod user;
 
 pub use actors::actor_key::actor_key::ActorKey;
-pub use naia_server::NaiaServer;
+pub use naia_server::{NaiaServer, ServerAddresses};
 pub use room::room_key::RoomKey;
 pub use server_config::ServerConfig;
 pub use server_event::ServerEvent;

@@ -4,7 +4,7 @@ extern crate log;
 use simple_logger;
 use smol::io;
 
-use naia_server::{NaiaServer, ServerConfig, ServerEvent, UserKey};
+use naia_server::{NaiaServer, ServerAddresses, ServerConfig, ServerEvent, UserKey};
 
 use naia_example_shared::{
     get_shared_config, manifest_load, ExampleActor, ExampleEvent, PointActor, StringEvent,
@@ -16,30 +16,26 @@ use std::{
     time::Duration,
 };
 
-const DEFAULT_SERVER_PORT: u16 = 14191;
-
 fn main() -> io::Result<()> {
-    let port: u16 = {
-        let args: Vec<String> = std::env::args().collect();
-        if args.len() > 1 {
-            args[1]
-                .parse()
-                .expect("Argument must be a valid u16 integer")
-        } else {
-            DEFAULT_SERVER_PORT
-        }
-    };
+    let server_addresses: ServerAddresses = ServerAddresses::new(
+        // IP Address to listen on for the signaling portion of WebRTC
+        "127.0.0.1:14191"
+            .parse()
+            .expect("could not parse HTTP address/port"),
+        // IP Address to listen on for UDP WebRTC data channels
+        "127.0.0.1:14192"
+            .parse()
+            .expect("could not parse WebRTC data address/port"),
+        // The public WebRTC IP address to advertise
+        "127.0.0.1:14192"
+            .parse()
+            .expect("could not parse advertised public WebRTC data address/port")
+    );
 
     smol::block_on(async {
         simple_logger::init_with_level(log::Level::Info).expect("A logger was already initialized");
 
         info!("Naia Server Example Started");
-
-        // Put your Server's IP Address here!
-        let server_ip_address: IpAddr = "127.0.0.1"
-            .parse()
-            .expect("couldn't parse input IP address");
-        let current_socket_address = SocketAddr::new(server_ip_address, port);
 
         let mut server_config = ServerConfig::default();
         server_config.heartbeat_interval = Duration::from_secs(2);
@@ -50,7 +46,7 @@ fn main() -> io::Result<()> {
         server_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         let mut server = NaiaServer::new(
-            current_socket_address,
+            server_addresses,
             manifest_load(),
             Some(server_config),
             get_shared_config(),
