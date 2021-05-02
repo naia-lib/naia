@@ -29,7 +29,7 @@ fn main() -> io::Result<()> {
         // The public WebRTC IP address to advertise
         "127.0.0.1:14192"
             .parse()
-            .expect("could not parse advertised public WebRTC data address/port")
+            .expect("could not parse advertised public WebRTC data address/port"),
     );
 
     smol::block_on(async {
