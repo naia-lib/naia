@@ -35,26 +35,26 @@ More comprehensive documentation / tutorials are on their way, but for now, the 
 
 To run the UDP server example on Linux: (that will be able to communicate with Linux clients)
 
-    1. cd examples/server
+    1. cd demo/server
     2. cargo run --features "use-udp"
 
 To run the WebRTC server example on Linux: (that will be able to communicate with Web clients)
 
-    1. cd examples/server
+    1. cd demo/server
     2. cargo run --features "use-webrtc"
 
 ### Client:
 
 To run the UDP client example on Linux: (that will be able to communicate with a UDP server)
 
-    1. cd examples/client
+    1. cd demo/client/miniquad
     2. cargo run
 
 To run the WebRTC client example on Web: (that will be able to communicate with a WebRTC server)
 
     1. cargo install cargo-web  // should only need to do this once if you haven't already
     2. Enter in your IP Address at the appropriate spot in examples/client/src/app.rs
-    3. cd examples/client
+    3. cd demo/client/wasm_bindgen // consult NOTES.md
     4. npm install              // should only need to do this once to install dependencies
     5. npm run start            // this will open a web browser, and hot reload
-    6. Open your debug console to see communications from the server
+    6. Web page will be blank - check debug console to see communications from the server.
