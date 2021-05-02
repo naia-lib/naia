@@ -20,7 +20,35 @@ pub fn interp_lerp<T: InterpLerpable>(old_value: &T, new_value: &T, fraction: f3
     output
 }
 
+///TODO: for https://github.com/naia-rs/naia/issues/15, add more implementations here
+impl InterpLerpable for u8 {
+    fn to_f32(&self) -> f32 {
+        *self as f32
+    }
+
+    fn from_f32(input: f32) -> Self {
+        input as Self
+    }
+}
 impl InterpLerpable for u16 {
+    fn to_f32(&self) -> f32 {
+        *self as f32
+    }
+
+    fn from_f32(input: f32) -> Self {
+        input as Self
+    }
+}
+impl InterpLerpable for i8 {
+    fn to_f32(&self) -> f32 {
+        *self as f32
+    }
+
+    fn from_f32(input: f32) -> Self {
+        input as Self
+    }
+}
+impl InterpLerpable for i16 {
     fn to_f32(&self) -> f32 {
         *self as f32
     }
