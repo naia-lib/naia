@@ -344,11 +344,10 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
     /// Get a reference to an Actor currently in scope for the Client, given
     /// that Actor's Key
     pub fn get_actor(&mut self, key: &LocalActorKey) -> Option<&U> {
-        return self
-            .server_connection
-            .as_mut()
-            .unwrap()
-            .get_actor(&self.tick_manager, key);
+        if let Some(connection) = self.server_connection.as_mut() {
+            return connection.get_actor(&self.tick_manager, key);
+        }
+        return None;
     }
 
     /// Return an iterator to the collection of keys to all actors tracked by
@@ -369,11 +368,10 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
 
     /// Get a reference to a Pawn
     pub fn get_pawn(&mut self, key: &LocalActorKey) -> Option<&U> {
-        return self
-            .server_connection
-            .as_mut()
-            .unwrap()
-            .get_pawn(&self.tick_manager, key);
+        if let Some(connection) = self.server_connection.as_mut() {
+            return connection.get_pawn(&self.tick_manager, key);
+        }
+        return None;
     }
 
     /// Get a reference to a Pawn, used for setting it's state
