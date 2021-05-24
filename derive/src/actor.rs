@@ -44,7 +44,7 @@ pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell};
-        use naia_shared::{StateMask, ActorBuilder, ActorMutator, ActorEq, interp_lerp, PacketReader};
+        use naia_shared::{StateMask, ActorBuilder, ActorMutator, ActorEq, interp_lerp, PacketReader, Ref};
         #property_enum
         pub struct #actor_builder_name {
             type_id: TypeId,
@@ -63,8 +63,8 @@ pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                     type_id: TypeId::of::<#actor_name>(),
                 });
             }
-            pub fn wrap(self) -> Rc<RefCell<#actor_name>> {
-                return Rc::new(RefCell::new(self));
+            pub fn wrap(self) -> Ref<#actor_name> {
+                return Ref::new(self);
             }
             #new_complete_method
             #read_to_type_method
@@ -228,9 +228,9 @@ fn get_read_to_type_method(
         fn read_to_type(reader: &mut PacketReader) -> #type_name {
             #prop_reads
 
-            return #type_name::#actor_name(Rc::new(RefCell::new(#actor_name {
+            return #type_name::#actor_name(Ref::new(#actor_name {
                 #prop_names
-            })));
+            }));
         }
     };
 }

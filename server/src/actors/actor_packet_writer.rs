@@ -24,14 +24,14 @@ impl ActorPacketWriter {
             ServerActorMessage::CreateActor(_, local_key, actor) => {
                 //write actor payload
                 let mut actor_payload_bytes = Vec::<u8>::new();
-                actor.as_ref().borrow().write(&mut actor_payload_bytes);
+                actor.borrow().write(&mut actor_payload_bytes);
 
                 //Write actor "header"
                 actor_total_bytes
                     .write_u8(message.write_message_type())
                     .unwrap(); // write actor message type
 
-                let type_id = actor.as_ref().borrow().get_type_id();
+                let type_id = actor.borrow().get_type_id();
                 let naia_id = manifest.get_actor_naia_id(&type_id); // get naia id
                 actor_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                 actor_total_bytes
@@ -51,7 +51,6 @@ impl ActorPacketWriter {
                 //write actor payload
                 let mut actor_payload_bytes = Vec::<u8>::new();
                 actor
-                    .as_ref()
                     .borrow()
                     .write_partial(&state_mask.as_ref().borrow(), &mut actor_payload_bytes);
 
@@ -88,7 +87,7 @@ impl ActorPacketWriter {
             ServerActorMessage::UpdatePawn(_, local_key, _, actor) => {
                 //write actor payload
                 let mut actor_payload_bytes = Vec::<u8>::new();
-                actor.as_ref().borrow().write(&mut actor_payload_bytes);
+                actor.borrow().write(&mut actor_payload_bytes);
 
                 //Write actor "header"
                 actor_total_bytes

@@ -541,7 +541,6 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
             Rc::new(RefCell::new(ServerActorMutator::new(&self.mut_handler)));
         actor
             .inner_ref()
-            .as_ref()
             .borrow_mut()
             .set_mutator(&to_actor_mutator(&new_mutator_ref));
         let actor_key = self.global_actor_store.insert(actor);

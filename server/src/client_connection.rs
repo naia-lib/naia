@@ -2,7 +2,7 @@ use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use naia_shared::{
     Actor, ActorType, Connection, ConnectionConfig, Event, EventType, ManagerType, Manifest,
-    PacketReader, PacketType, SequenceNumber, StandardHeader,
+    PacketReader, PacketType, SequenceNumber, StandardHeader, Ref
 };
 
 use super::{
@@ -115,7 +115,7 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         return self.actor_manager.has_actor(key);
     }
 
-    pub fn add_actor(&mut self, key: &ActorKey, actor: &Rc<RefCell<dyn Actor<U>>>) {
+    pub fn add_actor(&mut self, key: &ActorKey, actor: &Ref<dyn Actor<U>>) {
         self.actor_manager.add_actor(key, actor);
     }
 

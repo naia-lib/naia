@@ -47,12 +47,10 @@ impl<U: ActorType> InterpolationManager<U> {
         if let Some(existing_actor) = actor_manager.get_actor(key) {
             let temp_actor = existing_actor
                 .inner_ref()
-                .as_ref()
                 .borrow()
                 .get_typed_copy();
             let prev_actor = existing_actor
                 .inner_ref()
-                .as_ref()
                 .borrow()
                 .get_typed_copy();
             self.actor_store.insert(*key, (temp_actor, prev_actor));
@@ -87,17 +85,14 @@ impl<U: ActorType> InterpolationManager<U> {
         if let Some(existing_actor) = actor_manager.get_pawn(key) {
             let temp_actor = existing_actor
                 .inner_ref()
-                .as_ref()
                 .borrow()
                 .get_typed_copy();
             let prev_actor = existing_actor
                 .inner_ref()
-                .as_ref()
                 .borrow()
                 .get_typed_copy();
             let next_actor = existing_actor
                 .inner_ref()
-                .as_ref()
                 .borrow()
                 .get_typed_copy();
             self.pawn_store

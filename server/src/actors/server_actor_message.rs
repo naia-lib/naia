@@ -1,16 +1,16 @@
-use naia_shared::{Actor, ActorType, LocalActorKey, StateMask};
+use naia_shared::{Actor, ActorType, LocalActorKey, Ref, StateMask};
 use std::{cell::RefCell, rc::Rc};
 
 use super::actor_key::actor_key::ActorKey;
 
 #[derive(Debug)]
 pub enum ServerActorMessage<T: ActorType> {
-    CreateActor(ActorKey, LocalActorKey, Rc<RefCell<dyn Actor<T>>>),
+    CreateActor(ActorKey, LocalActorKey, Ref<dyn Actor<T>>),
     UpdateActor(
         ActorKey,
         LocalActorKey,
         Rc<RefCell<StateMask>>,
-        Rc<RefCell<dyn Actor<T>>>,
+        Ref<dyn Actor<T>>,
     ),
     DeleteActor(ActorKey, LocalActorKey),
     AssignPawn(ActorKey, LocalActorKey),
@@ -19,7 +19,7 @@ pub enum ServerActorMessage<T: ActorType> {
         ActorKey,
         LocalActorKey,
         Rc<RefCell<StateMask>>,
-        Rc<RefCell<dyn Actor<T>>>,
+        Ref<dyn Actor<T>>,
     ),
 }
 
