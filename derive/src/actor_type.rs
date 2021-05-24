@@ -45,7 +45,7 @@ fn get_read_full_method(type_name: &Ident, data: &Data) -> TokenStream {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
                     #type_name::#variant_name(idactor) => {
-                        idactor.as_ref().borrow_mut().read_full(reader, packet_index);
+                        idactor.borrow_mut().read_full(reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -76,7 +76,7 @@ fn get_read_partial_method(type_name: &Ident, data: &Data) -> TokenStream {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
                     #type_name::#variant_name(idactor) => {
-                        idactor.as_ref().borrow_mut().read_partial(state_mask, reader, packet_index);
+                        idactor.borrow_mut().read_partial(state_mask, reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -128,7 +128,7 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn inner_ref(&self) -> Rc<RefCell<dyn Actor<#type_name>>> {
+        fn inner_ref(&self) -> Ref<dyn Actor<#type_name>> {
             match self {
                 #variants
             }
@@ -148,16 +148,60 @@ fn get_conversion_methods(type_name: &Ident, data: &Data) -> TokenStream {
                     Span::call_site(),
                 );
 
-                let new_output_right = quote! {
-                    fn #method_name(eref: Rc<RefCell<#variant_name>>) -> Rc<RefCell<dyn Actor<#type_name>>> {
-                        eref.clone()
+                let method_name_raw = Ident::new(
+                    (variant_name.to_string() + "ConvertRaw").as_str(),
+                    Span::call_site(),
+                );
+
+
+                cfg_if! {
+                    if #[cfg(feature = "multithread")] {
+                        let multithread = true;
+                    } else {
+                        let multithread = false;
                     }
-                };
-                let new_output_result = quote! {
-                    #output
-                    #new_output_right
-                };
-                output = new_output_result;
+                }
+
+                {
+                    let new_output_right = {
+                        if multithread {
+                            quote! {
+                                use std::{sync::{Arc, Mutex}};
+                                fn #method_name_raw(eref: Arc<Mutex<#variant_name>>) -> Arc<Mutex<dyn Actor<#type_name>>> {
+                                    eref.clone()
+                                }
+                            }
+                        } else {
+                            quote! {
+                                use std::{rc::Rc, cell::RefCell};
+                                fn #method_name_raw(eref: Rc<RefCell<#variant_name>>) -> Rc<RefCell<dyn Actor<#type_name>>> {
+                                    eref.clone()
+                                }
+                            }
+                        }
+                    };
+
+                    let new_output_result = quote! {
+                        #output
+                        #new_output_right
+                    };
+
+                    output = new_output_result;
+                }
+
+                {
+                    let new_output_right = quote! {
+                        fn #method_name(eref: Ref<#variant_name>) -> Ref<dyn Actor<#type_name>> {
+                            let upcast_ref = #method_name_raw(eref.inner());
+                            Ref::new_raw(upcast_ref)
+                        }
+                    };
+                    let new_output_result = quote! {
+                        #output
+                        #new_output_right
+                    };
+                    output = new_output_result;
+                }
             }
             output
         }
@@ -175,7 +219,7 @@ fn get_equals_method(type_name: &Ident, data: &Data) -> TokenStream {
                     #type_name::#variant_name(idactor) => {
                         match other {
                             #type_name::#variant_name(other_idactor) => {
-                                return idactor.as_ref().borrow().equals(&other_idactor.as_ref().borrow());
+                                return idactor.borrow().equals(&other_idactor.borrow());
                             }
                             _ => { return false; }
                         }
@@ -211,7 +255,7 @@ fn get_equals_prediction_method(type_name: &Ident, data: &Data) -> TokenStream {
                     #type_name::#variant_name(idactor) => {
                         match other {
                             #type_name::#variant_name(other_idactor) => {
-                                return idactor.as_ref().borrow().equals_prediction(&other_idactor.as_ref().borrow());
+                                return idactor.borrow().equals_prediction(&other_idactor.borrow());
                             }
                             _ => { return false; }
                         }
@@ -249,7 +293,7 @@ fn get_set_to_interpolation_method(type_name: &Ident, data: &Data) -> TokenStrea
                             #type_name::#variant_name(old_idactor) => {
                                 match new {
                                     #type_name::#variant_name(new_idactor) => {
-                                        return idactor.borrow_mut().set_to_interpolation(&old_idactor.as_ref().borrow(), &new_idactor.as_ref().borrow(), fraction);
+                                        return idactor.borrow_mut().set_to_interpolation(&old_idactor.borrow(), &new_idactor.borrow(), fraction);
                                     }
                                     _ => {}
                                 }
@@ -288,7 +332,7 @@ fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
                     #type_name::#variant_name(idactor) => {
                         match other {
                             #type_name::#variant_name(other_idactor) => {
-                                        return idactor.borrow_mut().mirror(&other_idactor.as_ref().borrow());
+                                        return idactor.borrow_mut().mirror(&other_idactor.borrow());
                                     }
                             _ => {}
                         }

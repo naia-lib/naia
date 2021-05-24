@@ -15,14 +15,14 @@ use super::{
     mut_handler::MutHandler,
     server_actor_message::ServerActorMessage,
 };
-use naia_shared::{Actor, ActorNotifiable, ActorType, LocalActorKey, StateMask};
+use naia_shared::{Actor, ActorNotifiable, ActorType, LocalActorKey, Ref, StateMask};
 
 /// Manages Actors for a given Client connection and keeps them in sync on the
 /// Client
 #[derive(Debug)]
 pub struct ServerActorManager<T: ActorType> {
     address: SocketAddr,
-    local_actor_store: SparseSecondaryMap<ActorKey, Rc<RefCell<dyn Actor<T>>>>,
+    local_actor_store: SparseSecondaryMap<ActorKey, Ref<dyn Actor<T>>>,
     local_to_global_key_map: HashMap<LocalActorKey, ActorKey>,
     recycled_local_keys: Vec<LocalActorKey>,
     next_new_local_key: LocalActorKey,
@@ -227,12 +227,12 @@ impl<T: ActorType> ServerActorManager<T> {
         return self.local_actor_store.contains_key(*key);
     }
 
-    pub fn add_actor(&mut self, key: &ActorKey, actor: &Rc<RefCell<dyn Actor<T>>>) {
+    pub fn add_actor(&mut self, key: &ActorKey, actor: &Ref<dyn Actor<T>>) {
         if !self.local_actor_store.contains_key(*key) {
             self.local_actor_store.insert(*key, actor.clone());
             let local_key = self.get_new_local_key();
             self.local_to_global_key_map.insert(local_key, *key);
-            let state_mask_size = actor.as_ref().borrow().get_state_mask_size();
+            let state_mask_size = actor.borrow().get_state_mask_size();
             let actor_record = ActorRecord::new(local_key, state_mask_size);
             self.mut_handler.as_ref().borrow_mut().register_mask(
                 &self.address,

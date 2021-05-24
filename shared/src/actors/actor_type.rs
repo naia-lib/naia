@@ -1,8 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
-
 use super::{actor::Actor, state_mask::StateMask};
 
-use crate::PacketReader;
+use crate::{PacketReader, Ref};
 
 /// An Enum with a variant for every Actor that can be synced between
 /// Client/Host
@@ -18,7 +16,7 @@ pub trait ActorType<Impl = Self>: Clone {
         packet_index: u16,
     );
     /// Convert ActorType to an inner reference to the Actor
-    fn inner_ref(&self) -> Rc<RefCell<dyn Actor<Impl>>>;
+    fn inner_ref(&self) -> Ref<dyn Actor<Impl>>;
     /// Compare properties in another ActorType
     fn equals(&self, other: &Impl) -> bool;
     /// Compare predicted properties in another ActorType

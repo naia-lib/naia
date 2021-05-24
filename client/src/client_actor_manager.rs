@@ -103,7 +103,7 @@ impl<U: ActorType> ClientActorManager<U> {
                     if let Some(actor_ref) = self.local_actor_store.get_mut(&local_key) {
                         self.pawn_store.insert(
                             local_key,
-                            actor_ref.inner_ref().as_ref().borrow().get_typed_copy(),
+                            actor_ref.inner_ref().borrow().get_typed_copy(),
                         );
 
                         self.pawn_history
@@ -187,7 +187,7 @@ impl<U: ActorType> ClientActorManager<U> {
             self.pawn_store.remove(key);
             self.pawn_store.insert(
                 *key,
-                actor_ref.inner_ref().as_ref().borrow().get_typed_copy(),
+                actor_ref.inner_ref().borrow().get_typed_copy(),
             );
         }
     }
@@ -203,7 +203,7 @@ impl<U: ActorType> ClientActorManager<U> {
             if let Some(pawn_history) = self.pawn_history.get_mut(pawn_key) {
                 pawn_history.insert(
                     history_tick,
-                    pawn_ref.inner_ref().as_ref().borrow().get_typed_copy(),
+                    pawn_ref.inner_ref().borrow().get_typed_copy(),
                 );
             }
         }

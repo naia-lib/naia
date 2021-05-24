@@ -10,6 +10,9 @@
     unused_import_braces
 )]
 
+#[macro_use]
+extern crate cfg_if;
+
 mod actor;
 mod actor_type;
 mod event;
