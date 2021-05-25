@@ -36,7 +36,7 @@ pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let equals_prediction_method = get_equals_prediction_method(actor_name, &predicted_properties);
     let set_to_interpolation_method =
         get_set_to_interpolation_method(actor_name, &properties, &interpolated_properties);
-    let is_interpolated_method = get_is_interpolated_method(&predicted_properties);
+    let is_interpolated_method = get_is_interpolated_method(&interpolated_properties);
     let is_predicted_method = get_is_predicted_method(&predicted_properties);
     let mirror_method = get_mirror_method(actor_name, &properties);
 
@@ -140,7 +140,7 @@ fn get_set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn ActorMutator>>) {
+        fn set_mutator(&mut self, mutator: &Ref<dyn ActorMutator>) {
             #output
         }
     };

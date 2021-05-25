@@ -153,7 +153,6 @@ fn get_conversion_methods(type_name: &Ident, data: &Data) -> TokenStream {
                     Span::call_site(),
                 );
 
-
                 cfg_if! {
                     if #[cfg(feature = "multithread")] {
                         let multithread = true;

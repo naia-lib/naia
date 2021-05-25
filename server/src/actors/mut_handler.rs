@@ -1,6 +1,6 @@
-use std::{cell::RefCell, collections::HashMap, net::SocketAddr, rc::Rc};
+use std::{collections::HashMap, net::SocketAddr};
 
-use naia_shared::StateMask;
+use naia_shared::{Ref, StateMask};
 
 use crate::actors::actor_key::actor_key::ActorKey;
 
@@ -8,14 +8,14 @@ use indexmap::IndexMap;
 
 #[derive(Debug)]
 pub struct MutHandler {
-    actor_state_mask_list_map: HashMap<ActorKey, IndexMap<SocketAddr, Rc<RefCell<StateMask>>>>,
+    actor_state_mask_list_map: HashMap<ActorKey, IndexMap<SocketAddr, Ref<StateMask>>>,
 }
 
 impl MutHandler {
-    pub fn new() -> Rc<RefCell<MutHandler>> {
-        Rc::new(RefCell::new(MutHandler {
+    pub fn new() -> Ref<MutHandler> {
+        Ref::new(MutHandler {
             actor_state_mask_list_map: HashMap::new(),
-        }))
+        })
     }
 
     pub fn mutate(&mut self, actor_key: &ActorKey, property_index: u8) {
@@ -63,7 +63,7 @@ impl MutHandler {
         &mut self,
         address: &SocketAddr,
         actor_key: &ActorKey,
-        mask: &Rc<RefCell<StateMask>>,
+        mask: &Ref<StateMask>,
     ) {
         if let Some(state_mask_list) = self.actor_state_mask_list_map.get_mut(actor_key) {
             state_mask_list.insert(*address, mask.clone());

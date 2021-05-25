@@ -1,13 +1,11 @@
 use std::{
     any::TypeId,
-    cell::RefCell,
     fmt::{Debug, Formatter, Result},
-    rc::Rc,
 };
 
 use super::{actor_mutator::ActorMutator, actor_type::ActorType, state_mask::StateMask};
 
-use crate::PacketReader;
+use crate::{PacketReader, Ref};
 
 /// An Actor is a container of Properties that can be scoped, tracked, and
 /// synced, with a remote host
@@ -40,7 +38,7 @@ pub trait Actor<T: ActorType> {
     /// Set the Actor's ActorMutator, which keeps track of which Properties
     /// have been mutated, necessary to sync only the Properties that have
     /// changed with the client
-    fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn ActorMutator>>);
+    fn set_mutator(&mut self, mutator: &Ref<dyn ActorMutator>);
     /// Returns whether or not the Actor has any interpolated properties
     fn is_interpolated(&self) -> bool;
     /// Returns whether or not the Actor has any predicted properties

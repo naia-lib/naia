@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     collections::{HashMap, VecDeque},
     net::SocketAddr,
     panic,
@@ -17,8 +16,8 @@ use naia_server_socket::{
 };
 pub use naia_shared::{
     wrapping_diff, Actor, ActorMutator, ActorType, Connection, ConnectionConfig, Event, EventType,
-    HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType, SharedConfig, Timer,
-    Timestamp,
+    HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType, Ref, SharedConfig,
+    Timer, Timestamp,
 };
 
 use super::{
@@ -48,7 +47,7 @@ pub struct NaiaServer<T: EventType, U: ActorType> {
     global_actor_store: DenseSlotMap<ActorKey, U>,
     scope_actor_func: Option<Rc<Box<dyn Fn(&RoomKey, &UserKey, &ActorKey, U) -> bool>>>,
     auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
-    mut_handler: Rc<RefCell<MutHandler>>,
+    mut_handler: Ref<MutHandler>,
     users: DenseSlotMap<UserKey, User>,
     rooms: DenseSlotMap<RoomKey, Room>,
     address_to_user_key_map: HashMap<SocketAddr, UserKey>,
@@ -537,17 +536,14 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
     /// in scope. Gives back an ActorKey which can be used to get the reference
     /// to the Actor from the Server once again
     pub fn register_actor(&mut self, actor: U) -> ActorKey {
-        let new_mutator_ref: Rc<RefCell<ServerActorMutator>> =
-            Rc::new(RefCell::new(ServerActorMutator::new(&self.mut_handler)));
+        let new_mutator_ref: Ref<ServerActorMutator> =
+            Ref::new(ServerActorMutator::new(&self.mut_handler));
         actor
             .inner_ref()
             .borrow_mut()
             .set_mutator(&to_actor_mutator(&new_mutator_ref));
         let actor_key = self.global_actor_store.insert(actor);
-        new_mutator_ref
-            .as_ref()
-            .borrow_mut()
-            .set_actor_key(actor_key);
+        new_mutator_ref.borrow_mut().set_actor_key(actor_key);
         self.mut_handler.borrow_mut().register_actor(&actor_key);
         return actor_key;
     }
@@ -784,6 +780,20 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
     }
 }
 
-fn to_actor_mutator(eref: &Rc<RefCell<ServerActorMutator>>) -> Rc<RefCell<dyn ActorMutator>> {
-    eref.clone()
+cfg_if! {
+    if #[cfg(feature = "multithread")] {
+        use std::sync::{Arc, Mutex};
+        fn to_actor_mutator_raw(eref: &Arc<Mutex<ServerActorMutator>>) -> Arc<Mutex<dyn ActorMutator>> {
+            eref.clone()
+        }
+    } else {
+        fn to_actor_mutator_raw(eref: &Rc<RefCell<ServerActorMutator>>) -> Rc<RefCell<dyn ActorMutator>> {
+            eref.clone()
+        }
+    }
+}
+
+fn to_actor_mutator(eref: &Ref<ServerActorMutator>) -> Ref<dyn ActorMutator> {
+    let upcast_ref = to_actor_mutator_raw(&eref.inner());
+    Ref::new_raw(upcast_ref)
 }

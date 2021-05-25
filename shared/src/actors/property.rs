@@ -1,8 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
-
 use nanoserde::{DeBin, SerBin};
 
-use crate::{wrapping_number::sequence_greater_than, PacketReader};
+use crate::{wrapping_number::sequence_greater_than, PacketReader, Ref};
 
 use super::actor_mutator::ActorMutator;
 
@@ -10,7 +8,7 @@ use super::actor_mutator::ActorMutator;
 /// updates, and synced to the Client
 #[derive(Clone)]
 pub struct Property<T: Clone + DeBin + SerBin + PartialEq> {
-    mutator: Option<Rc<RefCell<dyn ActorMutator>>>,
+    mutator: Option<Ref<dyn ActorMutator>>,
     mutator_index: u8,
     pub(crate) inner: T,
     pub(crate) last_recv_index: u16,
@@ -35,13 +33,13 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
     /// Set the Property's contained value
     pub fn set(&mut self, value: T) {
         if let Some(mutator) = &self.mutator {
-            mutator.as_ref().borrow_mut().mutate(self.mutator_index);
+            mutator.borrow_mut().mutate(self.mutator_index);
         }
         self.inner = value;
     }
 
     /// Set an ActorMutator object to track changes to the Property
-    pub fn set_mutator(&mut self, mutator: &Rc<RefCell<dyn ActorMutator>>) {
+    pub fn set_mutator(&mut self, mutator: &Ref<dyn ActorMutator>) {
         self.mutator = Some(mutator.clone());
     }
 

@@ -1,8 +1,8 @@
-use std::{cell::RefCell, net::SocketAddr, rc::Rc};
+use std::net::SocketAddr;
 
 use naia_shared::{
     Actor, ActorType, Connection, ConnectionConfig, Event, EventType, ManagerType, Manifest,
-    PacketReader, PacketType, SequenceNumber, StandardHeader, Ref
+    PacketReader, PacketType, Ref, SequenceNumber, StandardHeader,
 };
 
 use super::{
@@ -25,7 +25,7 @@ pub struct ClientConnection<T: EventType, U: ActorType> {
 impl<T: EventType, U: ActorType> ClientConnection<T, U> {
     pub fn new(
         address: SocketAddr,
-        mut_handler: Option<&Rc<RefCell<MutHandler>>>,
+        mut_handler: Option<&Ref<MutHandler>>,
         connection_config: &ConnectionConfig,
     ) -> Self {
         ClientConnection {

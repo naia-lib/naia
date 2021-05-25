@@ -52,7 +52,7 @@ impl ActorPacketWriter {
                 let mut actor_payload_bytes = Vec::<u8>::new();
                 actor
                     .borrow()
-                    .write_partial(&state_mask.as_ref().borrow(), &mut actor_payload_bytes);
+                    .write_partial(&state_mask.borrow(), &mut actor_payload_bytes);
 
                 //Write actor "header"
                 actor_total_bytes
@@ -62,10 +62,7 @@ impl ActorPacketWriter {
                 actor_total_bytes
                     .write_u16::<BigEndian>(*local_key)
                     .unwrap(); //write local key
-                state_mask
-                    .as_ref()
-                    .borrow_mut()
-                    .write(&mut actor_total_bytes); // write state mask
+                state_mask.borrow_mut().write(&mut actor_total_bytes); // write state mask
                 actor_total_bytes.append(&mut actor_payload_bytes); // write payload
             }
             ServerActorMessage::AssignPawn(_, local_key) => {
