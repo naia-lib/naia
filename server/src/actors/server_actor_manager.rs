@@ -1,10 +1,8 @@
 use std::{
     borrow::Borrow,
-    cell::RefCell,
     clone::Clone,
     collections::{HashMap, HashSet, VecDeque},
     net::SocketAddr,
-    rc::Rc,
 };
 
 use slotmap::SparseSecondaryMap;
@@ -29,10 +27,10 @@ pub struct ServerActorManager<T: ActorType> {
     actor_records: SparseSecondaryMap<ActorKey, ActorRecord>,
     queued_messages: VecDeque<ServerActorMessage<T>>,
     sent_messages: HashMap<u16, Vec<ServerActorMessage<T>>>,
-    sent_updates: HashMap<u16, HashMap<ActorKey, Rc<RefCell<StateMask>>>>,
+    sent_updates: HashMap<u16, HashMap<ActorKey, Ref<StateMask>>>,
     last_update_packet_index: u16,
     last_last_update_packet_index: u16,
-    mut_handler: Rc<RefCell<MutHandler>>,
+    mut_handler: Ref<MutHandler>,
     last_popped_state_mask: StateMask,
     pawn_store: HashSet<ActorKey>,
 }
@@ -40,7 +38,7 @@ pub struct ServerActorManager<T: ActorType> {
 impl<T: ActorType> ServerActorManager<T> {
     /// Create a new ServerActorManager, given the client's address and a
     /// reference to a MutHandler associated with the Client
-    pub fn new(address: SocketAddr, mut_handler: &Rc<RefCell<MutHandler>>) -> Self {
+    pub fn new(address: SocketAddr, mut_handler: &Ref<MutHandler>) -> Self {
         ServerActorManager {
             address,
             local_actor_store: SparseSecondaryMap::new(),
@@ -50,7 +48,7 @@ impl<T: ActorType> ServerActorManager<T> {
             actor_records: SparseSecondaryMap::new(),
             queued_messages: VecDeque::new(),
             sent_messages: HashMap::new(),
-            sent_updates: HashMap::<u16, HashMap<ActorKey, Rc<RefCell<StateMask>>>>::new(),
+            sent_updates: HashMap::<u16, HashMap<ActorKey, Ref<StateMask>>>::new(),
             last_update_packet_index: 0,
             last_last_update_packet_index: 0,
             mut_handler: mut_handler.clone(),
@@ -79,11 +77,9 @@ impl<T: ActorType> ServerActorManager<T> {
                 match &message {
                     ServerActorMessage::CreateActor(global_key, _, _) => {
                         if let Some(record) = self.actor_records.get(*global_key) {
-                            self.last_popped_state_mask =
-                                record.get_state_mask().as_ref().borrow().clone();
+                            self.last_popped_state_mask = record.get_state_mask().borrow().clone();
                         }
                         self.mut_handler
-                            .as_ref()
                             .borrow_mut()
                             .clear_state(&self.address, global_key);
                     }
@@ -124,15 +120,15 @@ impl<T: ActorType> ServerActorManager<T> {
         &mut self,
         packet_index: u16,
         global_key: &ActorKey,
-        state_mask: &Rc<RefCell<StateMask>>,
-    ) -> Rc<RefCell<StateMask>> {
+        state_mask: &Ref<StateMask>,
+    ) -> Ref<StateMask> {
         // previously the state mask was the CURRENT state mask for the actor,
         // we want to lock that in so we know exactly what we're writing
-        let locked_state_mask = Rc::new(RefCell::new(state_mask.as_ref().borrow().clone()));
+        let locked_state_mask = Ref::new(state_mask.borrow().clone());
 
         // place state mask in a special transmission record - like map
         if !self.sent_updates.contains_key(&packet_index) {
-            let sent_updates_map: HashMap<ActorKey, Rc<RefCell<StateMask>>> = HashMap::new();
+            let sent_updates_map: HashMap<ActorKey, Ref<StateMask>> = HashMap::new();
             self.sent_updates.insert(packet_index, sent_updates_map);
             self.last_last_update_packet_index = self.last_update_packet_index;
             self.last_update_packet_index = packet_index;
@@ -143,9 +139,8 @@ impl<T: ActorType> ServerActorManager<T> {
         }
 
         // having copied the state mask for this update, clear the state
-        self.last_popped_state_mask = state_mask.as_ref().borrow().clone();
+        self.last_popped_state_mask = state_mask.borrow().clone();
         self.mut_handler
-            .as_ref()
             .borrow_mut()
             .clear_state(&self.address, global_key);
 
@@ -163,7 +158,7 @@ impl<T: ActorType> ServerActorManager<T> {
 
         match &message {
             ServerActorMessage::CreateActor(global_key, _, _) => {
-                self.mut_handler.as_ref().borrow_mut().set_state(
+                self.mut_handler.borrow_mut().set_state(
                     &self.address,
                     global_key,
                     &self.last_popped_state_mask,
@@ -197,11 +192,7 @@ impl<T: ActorType> ServerActorManager<T> {
         self.queued_messages.push_front(message.clone());
     }
 
-    fn undo_actor_update(
-        &mut self,
-        packet_index: &u16,
-        global_key: &ActorKey,
-    ) -> Rc<RefCell<StateMask>> {
+    fn undo_actor_update(&mut self, packet_index: &u16, global_key: &ActorKey) -> Ref<StateMask> {
         if let Some(sent_updates_map) = self.sent_updates.get_mut(packet_index) {
             sent_updates_map.remove(global_key);
             if sent_updates_map.len() == 0 {
@@ -210,7 +201,7 @@ impl<T: ActorType> ServerActorManager<T> {
         }
 
         self.last_update_packet_index = self.last_last_update_packet_index;
-        self.mut_handler.as_ref().borrow_mut().set_state(
+        self.mut_handler.borrow_mut().set_state(
             &self.address,
             global_key,
             &self.last_popped_state_mask,
@@ -234,7 +225,7 @@ impl<T: ActorType> ServerActorManager<T> {
             self.local_to_global_key_map.insert(local_key, *key);
             let state_mask_size = actor.borrow().get_state_mask_size();
             let actor_record = ActorRecord::new(local_key, state_mask_size);
-            self.mut_handler.as_ref().borrow_mut().register_mask(
+            self.mut_handler.borrow_mut().register_mask(
                 &self.address,
                 &key,
                 actor_record.get_state_mask(),
@@ -322,7 +313,7 @@ impl<T: ActorType> ServerActorManager<T> {
     pub fn collect_actor_updates(&mut self) {
         for (key, record) in self.actor_records.iter() {
             if record.status == LocalActorStatus::Created
-                && !record.get_state_mask().as_ref().borrow().is_clear()
+                && !record.get_state_mask().borrow().is_clear()
             {
                 if let Some(actor_ref) = self.local_actor_store.get(key) {
                     if self.pawn_store.contains(&key) {
@@ -366,7 +357,6 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                         if let Some(_) = self.actor_records.get(global_key) {
                             // actually delete the actor from local records
                             self.mut_handler
-                                .as_ref()
                                 .borrow_mut()
                                 .deregister_mask(&self.address, global_key_ref);
                             self.local_actor_store.remove(global_key);
@@ -403,7 +393,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                     | ServerActorMessage::UpdatePawn(global_key, _, _, _) => {
                         if let Some(state_mask_map) = self.sent_updates.get(&dropped_packet_index) {
                             if let Some(state_mask) = state_mask_map.get(global_key) {
-                                let mut new_state_mask = state_mask.as_ref().borrow().clone();
+                                let mut new_state_mask = state_mask.borrow().clone();
 
                                 // walk from dropped packet up to most recently sent packet
                                 if dropped_packet_index != self.last_update_packet_index {
@@ -414,8 +404,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                                         {
                                             if let Some(state_mask) = state_mask_map.get(global_key)
                                             {
-                                                new_state_mask
-                                                    .nand(state_mask.as_ref().borrow().borrow());
+                                                new_state_mask.nand(state_mask.borrow().borrow());
                                             }
                                         }
 
@@ -425,7 +414,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
 
                                 if let Some(record) = self.actor_records.get_mut(*global_key) {
                                     let mut current_state_mask =
-                                        record.get_state_mask().as_ref().borrow_mut();
+                                        record.get_state_mask().borrow_mut();
                                     current_state_mask.or(new_state_mask.borrow());
                                 }
                             }

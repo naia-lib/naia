@@ -29,7 +29,7 @@ mod wrapping_number;
 pub mod utils;
 
 pub use naia_socket_shared::{
-    find_my_ip_address, Instant, LinkConditionerConfig, PacketReader, Random, Timer, Timestamp, Ref
+    find_my_ip_address, Instant, LinkConditionerConfig, PacketReader, Random, Ref, Timer, Timestamp,
 };
 
 pub use ack_manager::AckManager;

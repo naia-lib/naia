@@ -1,10 +1,8 @@
-use std::{cell::RefCell, rc::Rc};
-
 use naia_derive::ActorType;
 
-use crate::PointActor;
+use crate::{PointActor, Ref};
 
 #[derive(ActorType, Clone)]
 pub enum ExampleActor {
-    PointActor(Rc<RefCell<PointActor>>),
+    PointActor(Ref<PointActor>),
 }

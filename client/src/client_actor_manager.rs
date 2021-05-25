@@ -101,10 +101,8 @@ impl<U: ActorType> ClientActorManager<U> {
                     let local_key: u16 = reader.read_u16();
 
                     if let Some(actor_ref) = self.local_actor_store.get_mut(&local_key) {
-                        self.pawn_store.insert(
-                            local_key,
-                            actor_ref.inner_ref().borrow().get_typed_copy(),
-                        );
+                        self.pawn_store
+                            .insert(local_key, actor_ref.inner_ref().borrow().get_typed_copy());
 
                         self.pawn_history
                             .insert(local_key, SequenceBuffer::with_capacity(PAWN_HISTORY_SIZE));
@@ -183,12 +181,10 @@ impl<U: ActorType> ClientActorManager<U> {
     }
 
     pub fn pawn_reset(&mut self, key: &LocalActorKey) {
-        if let Some(actor_ref) = self.local_actor_store.get_mut(key) {
-            self.pawn_store.remove(key);
-            self.pawn_store.insert(
-                *key,
-                actor_ref.inner_ref().borrow().get_typed_copy(),
-            );
+        if let Some(actor_ref) = self.local_actor_store.get(key) {
+            if let Some(pawn_ref) = self.pawn_store.get_mut(key) {
+                pawn_ref.mirror(actor_ref);
+            }
         }
     }
 
@@ -201,10 +197,7 @@ impl<U: ActorType> ClientActorManager<U> {
     pub fn save_replay_snapshot(&mut self, history_tick: u16, pawn_key: &LocalActorKey) {
         if let Some(pawn_ref) = self.pawn_store.get(pawn_key) {
             if let Some(pawn_history) = self.pawn_history.get_mut(pawn_key) {
-                pawn_history.insert(
-                    history_tick,
-                    pawn_ref.inner_ref().borrow().get_typed_copy(),
-                );
+                pawn_history.insert(history_tick, pawn_ref.inner_ref().borrow().get_typed_copy());
             }
         }
     }

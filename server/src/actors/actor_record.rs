@@ -1,11 +1,9 @@
-use std::{cell::RefCell, rc::Rc};
-
-use naia_shared::{LocalActorKey, StateMask};
+use naia_shared::{LocalActorKey, Ref, StateMask};
 
 #[derive(Debug)]
 pub struct ActorRecord {
     pub local_key: LocalActorKey,
-    state_mask: Rc<RefCell<StateMask>>,
+    state_mask: Ref<StateMask>,
     pub status: LocalActorStatus,
 }
 
@@ -20,12 +18,12 @@ impl ActorRecord {
     pub fn new(local_key: LocalActorKey, state_mask_size: u8) -> ActorRecord {
         ActorRecord {
             local_key,
-            state_mask: Rc::new(RefCell::new(StateMask::new(state_mask_size))),
+            state_mask: Ref::new(StateMask::new(state_mask_size)),
             status: LocalActorStatus::Creating,
         }
     }
 
-    pub fn get_state_mask(&self) -> &Rc<RefCell<StateMask>> {
+    pub fn get_state_mask(&self) -> &Ref<StateMask> {
         return &self.state_mask;
     }
 }
