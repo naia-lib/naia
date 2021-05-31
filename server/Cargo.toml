@@ -24,7 +24,7 @@ use-webrtc = [ "naia-server-socket/use-webrtc" ]
 multithread = [ "naia-shared/multithread" ]
 
 [dependencies]
-naia-server-socket = { version = "0.5.0" }
+naia-server-socket = { path = "../../naia-socket/server" } #{ version = "0.5.0" }
 naia-shared = { version = "0.4.1", path = "../shared" }
 log = "0.4"
 slotmap = { version = "0.4" }
@@ -34,3 +34,4 @@ ring = "0.16.15"
 futures-util = { version = "0.3", features = ["sink"] }
 async-io = { version = "1.1" }
 futures-core = { version = "0.3" }
+cfg-if = "0.1.10"
