@@ -787,6 +787,7 @@ cfg_if! {
             eref.clone()
         }
     } else {
+        use std::cell::RefCell;
         fn to_actor_mutator_raw(eref: &Rc<RefCell<ServerActorMutator>>) -> Rc<RefCell<dyn ActorMutator>> {
             eref.clone()
         }
