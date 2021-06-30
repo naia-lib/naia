@@ -121,6 +121,9 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                         ClientActorMessage::UnassignPawn(local_key) => {
                             return Some(Ok(ClientEvent::UnassignPawn(local_key)));
                         }
+                        ClientActorMessage::ResetPawn(local_key) => {
+                            return Some(Ok(ClientEvent::ResetPawn(local_key)));
+                        }
                     }
                 }
                 // update current tick

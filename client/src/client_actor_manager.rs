@@ -136,17 +136,7 @@ impl<U: ActorType> ClientActorManager<U> {
                     if let Some(actor_ref) = self.local_actor_store.get_mut(&local_key) {
                         actor_ref.read_full(reader, packet_index);
 
-                        // check it against it's history
-                        if let Some(pawn_history) = self.pawn_history.get_mut(&local_key) {
-                            if let Some(historical_pawn) = pawn_history.get(packet_tick) {
-                                if !actor_ref.equals_prediction(historical_pawn) {
-                                    // prediction error encountered!
-                                    command_receiver.replay_commands(packet_tick, local_key);
-                                } else {
-                                    pawn_history.remove_until(packet_tick);
-                                }
-                            }
-                        }
+                        command_receiver.replay_commands(packet_tick, local_key);
 
                         // remove command history until the tick that has already been checked
                         command_receiver.remove_history_until(packet_tick, local_key);
@@ -186,6 +176,8 @@ impl<U: ActorType> ClientActorManager<U> {
                 pawn_ref.mirror(actor_ref);
             }
         }
+        self.queued_incoming_messages
+            .push_back(ClientActorMessage::ResetPawn(*key));
     }
 
     pub fn pawn_clear_history(&mut self, key: &LocalActorKey) {
