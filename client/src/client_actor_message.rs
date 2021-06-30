@@ -7,4 +7,5 @@ pub enum ClientActorMessage {
     Delete(LocalActorKey),
     AssignPawn(LocalActorKey),
     UnassignPawn(LocalActorKey),
+    ResetPawn(LocalActorKey),
 }
