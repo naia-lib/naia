@@ -9,6 +9,7 @@ pub enum ServerActorMessage<T: ActorType> {
     DeleteActor(ActorKey, LocalActorKey),
     AssignPawn(ActorKey, LocalActorKey),
     UnassignPawn(ActorKey, LocalActorKey),
+    UpdatePawn(ActorKey, LocalActorKey, Ref<StateMask>, Ref<dyn Actor<T>>),
 }
 
 impl<T: ActorType> ServerActorMessage<T> {
@@ -19,6 +20,7 @@ impl<T: ActorType> ServerActorMessage<T> {
             ServerActorMessage::UpdateActor(_, _, _, _) => 2,
             ServerActorMessage::AssignPawn(_, _) => 3,
             ServerActorMessage::UnassignPawn(_, _) => 4,
+            ServerActorMessage::UpdatePawn(_, _, _, _) => 5,
         }
     }
 }
@@ -40,6 +42,9 @@ impl<T: ActorType> Clone for ServerActorMessage<T> {
             }
             ServerActorMessage::UnassignPawn(gk, lk) => {
                 ServerActorMessage::UnassignPawn(gk.clone(), lk.clone())
+            }
+            ServerActorMessage::UpdatePawn(gk, lk, sm, e) => {
+                ServerActorMessage::UpdatePawn(gk.clone(), lk.clone(), sm.clone(), e.clone())
             }
         }
     }
