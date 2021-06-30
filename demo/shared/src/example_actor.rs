@@ -1,6 +1,8 @@
 use naia_derive::ActorType;
 
-use crate::{PointActor, Ref};
+use naia_shared::Ref;
+
+use crate::PointActor;
 
 #[derive(ActorType, Clone)]
 pub enum ExampleActor {

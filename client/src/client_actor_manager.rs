@@ -1,6 +1,6 @@
 use log::warn;
 use naia_shared::{
-    ActorType, EventType, LocalActorKey, Manifest, PacketReader, SequenceBuffer, StateMask,
+    ActorType, EventType, LocalActorKey, Manifest, PacketReader, StateMask,
 };
 use std::collections::{HashMap, VecDeque};
 
@@ -8,14 +8,11 @@ use super::client_actor_message::ClientActorMessage;
 use crate::{command_receiver::CommandReceiver, interpolation_manager::InterpolationManager};
 use std::collections::hash_map::Keys;
 
-const PAWN_HISTORY_SIZE: u16 = 64;
-
 #[derive(Debug)]
 pub struct ClientActorManager<U: ActorType> {
     local_actor_store: HashMap<LocalActorKey, U>,
     queued_incoming_messages: VecDeque<ClientActorMessage>,
     pawn_store: HashMap<LocalActorKey, U>,
-    pawn_history: HashMap<LocalActorKey, SequenceBuffer<U>>,
 }
 
 impl<U: ActorType> ClientActorManager<U> {
@@ -24,7 +21,6 @@ impl<U: ActorType> ClientActorManager<U> {
             queued_incoming_messages: VecDeque::new(),
             local_actor_store: HashMap::new(),
             pawn_store: HashMap::new(),
-            pawn_history: HashMap::new(),
         }
     }
 
@@ -74,7 +70,6 @@ impl<U: ActorType> ClientActorManager<U> {
 
                     if self.pawn_store.contains_key(&local_key) {
                         self.pawn_store.remove(&local_key);
-                        self.pawn_history.remove(&local_key);
                         command_receiver.pawn_cleanup(&local_key);
                         interpolator.delete_pawn_interpolation(&local_key);
                     }
@@ -104,9 +99,6 @@ impl<U: ActorType> ClientActorManager<U> {
                         self.pawn_store
                             .insert(local_key, actor_ref.inner_ref().borrow().get_typed_copy());
 
-                        self.pawn_history
-                            .insert(local_key, SequenceBuffer::with_capacity(PAWN_HISTORY_SIZE));
-
                         command_receiver.pawn_init(&local_key);
 
                         if actor_ref.is_interpolated() {
@@ -122,7 +114,6 @@ impl<U: ActorType> ClientActorManager<U> {
                     let local_key: u16 = reader.read_u16();
                     if self.pawn_store.contains_key(&local_key) {
                         self.pawn_store.remove(&local_key);
-                        self.pawn_history.remove(&local_key);
                         command_receiver.pawn_cleanup(&local_key);
                         interpolator.delete_pawn_interpolation(&local_key);
                     }
@@ -178,19 +169,5 @@ impl<U: ActorType> ClientActorManager<U> {
         }
         self.queued_incoming_messages
             .push_back(ClientActorMessage::ResetPawn(*key));
-    }
-
-    pub fn pawn_clear_history(&mut self, key: &LocalActorKey) {
-        if let Some(pawn_history) = self.pawn_history.get_mut(&key) {
-            pawn_history.clear();
-        }
-    }
-
-    pub fn save_replay_snapshot(&mut self, history_tick: u16, pawn_key: &LocalActorKey) {
-        if let Some(pawn_ref) = self.pawn_store.get(pawn_key) {
-            if let Some(pawn_history) = self.pawn_history.get_mut(pawn_key) {
-                pawn_history.insert(history_tick, pawn_ref.inner_ref().borrow().get_typed_copy());
-            }
-        }
     }
 }

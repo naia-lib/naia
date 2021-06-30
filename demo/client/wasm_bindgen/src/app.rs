@@ -86,10 +86,10 @@ impl App {
                                     ExampleActor::PointActor(point_actor) => {
                                         info!("creation of point actor with key: {}, x: {}, y: {}, name: {} {}",
                                               local_key,
-                                              point_actor.as_ref().borrow().x.get(),
-                                              point_actor.as_ref().borrow().y.get(),
-                                              point_actor.as_ref().borrow().name.get().first,
-                                              point_actor.as_ref().borrow().name.get().last,
+                                              point_actor.borrow().x.get(),
+                                              point_actor.borrow().y.get(),
+                                              point_actor.borrow().name.get().first,
+                                              point_actor.borrow().name.get().last,
                                         );
                                     }
                                 }
@@ -101,10 +101,10 @@ impl App {
                                     ExampleActor::PointActor(point_actor) => {
                                         info!("update of point actor with key: {}, x:{}, y: {}, name: {} {}",
                                               local_key,
-                                              point_actor.as_ref().borrow().x.get(),
-                                              point_actor.as_ref().borrow().y.get(),
-                                              point_actor.as_ref().borrow().name.get().first,
-                                              point_actor.as_ref().borrow().name.get().last);
+                                              point_actor.borrow().x.get(),
+                                              point_actor.borrow().y.get(),
+                                              point_actor.borrow().name.get().first,
+                                              point_actor.borrow().name.get().last);
                                     }
                                 }
                             }

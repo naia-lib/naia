@@ -42,9 +42,6 @@ impl<T: EventType> CommandReceiver<T> {
             // set pawn to server authoritative state
             actor_manager.pawn_reset(pawn_key);
 
-            // clear all
-            actor_manager.pawn_clear_history(pawn_key);
-
             // trigger replay of historical commands
             if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
                 self.queued_incoming_commands.clear();
