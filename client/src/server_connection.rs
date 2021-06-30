@@ -282,9 +282,7 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
     }
 
     pub fn get_incoming_command(&mut self) -> Option<(LocalActorKey, Rc<Box<dyn Event<T>>>)> {
-        if let Some((last_replay_tick, pawn_key)) = self.last_replay_tick {
-            self.actor_manager
-                .save_replay_snapshot(last_replay_tick.wrapping_add(1), &pawn_key);
+        if let Some((_, _)) = self.last_replay_tick {
             self.last_replay_tick = None;
         }
 

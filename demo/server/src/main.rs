@@ -11,7 +11,6 @@ use naia_example_shared::{
 };
 
 use std::{
-    net::{IpAddr, SocketAddr},
     rc::Rc,
     time::Duration,
 };
@@ -91,7 +90,7 @@ fn main() -> io::Result<()> {
         // should be in scope for a given User
         server.on_scope_actor(Rc::new(Box::new(|_, _, _, actor| match actor {
             ExampleActor::PointActor(point_actor) => {
-                let x = *point_actor.as_ref().borrow().x.get();
+                let x = *point_actor.borrow().x.get();
                 // Currently, a PointActor is only in scope if it's X value is between 5 & 15.
                 // This could be configured to some value within a User's current viewport, for
                 // example
