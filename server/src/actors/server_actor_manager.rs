@@ -94,6 +94,17 @@ impl<T: ActorType> ServerActorManager<T> {
                             actor.clone(),
                         ));
                     }
+                    ServerActorMessage::UpdatePawn(global_key, local_key, state_mask, actor) => {
+                        let locked_state_mask =
+                            self.process_actor_update(packet_index, global_key, state_mask);
+                        // return new Update message to be written
+                        return Some(ServerActorMessage::UpdatePawn(
+                            *global_key,
+                            *local_key,
+                            locked_state_mask,
+                            actor.clone(),
+                        ));
+                    }
                     _ => {}
                 }
 
@@ -156,6 +167,17 @@ impl<T: ActorType> ServerActorManager<T> {
             ServerActorMessage::UpdateActor(global_key, local_key, _, actor) => {
                 let original_state_mask = self.undo_actor_update(&packet_index, &global_key);
                 let cloned_message = ServerActorMessage::UpdateActor(
+                    *global_key,
+                    *local_key,
+                    original_state_mask,
+                    actor.clone(),
+                );
+                self.queued_messages.push_front(cloned_message);
+                return;
+            }
+            ServerActorMessage::UpdatePawn(global_key, local_key, _, actor) => {
+                let original_state_mask = self.undo_actor_update(&packet_index, &global_key);
+                let cloned_message = ServerActorMessage::UpdatePawn(
                     *global_key,
                     *local_key,
                     original_state_mask,
@@ -301,16 +323,16 @@ impl<T: ActorType> ServerActorManager<T> {
                 && !record.get_state_mask().borrow().is_clear()
             {
                 if let Some(actor_ref) = self.local_actor_store.get(key) {
-//                    if self.pawn_store.contains(&key) {
-//                        // handle as a pawn
-//                        self.queued_messages
-//                            .push_back(ServerActorMessage::UpdatePawn(
-//                                key,
-//                                record.local_key,
-//                                record.get_state_mask().clone(),
-//                                actor_ref.clone(),
-//                            ));
-//                    } else {
+                    if self.pawn_store.contains(&key) {
+                        // handle as a pawn
+                        self.queued_messages
+                            .push_back(ServerActorMessage::UpdatePawn(
+                                key,
+                                record.local_key,
+                                record.get_state_mask().clone(),
+                                actor_ref.clone(),
+                            ));
+                    } else {
                         // handle as an actor
                         self.queued_messages
                             .push_back(ServerActorMessage::UpdateActor(
@@ -319,7 +341,7 @@ impl<T: ActorType> ServerActorManager<T> {
                                 record.get_state_mask().clone(),
                                 actor_ref.clone(),
                             ));
-                    //}
+                    }
                 }
             }
         }
@@ -351,7 +373,8 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                             self.pawn_store.remove(&global_key);
                         }
                     }
-                    ServerActorMessage::UpdateActor(_, _, _, _) => {
+                    ServerActorMessage::UpdateActor(_, _, _, _)
+                    | ServerActorMessage::UpdatePawn(_, _, _, _) => {
                         self.sent_updates.remove(&packet_index);
                     }
                     ServerActorMessage::AssignPawn(_, _) => {}
@@ -373,7 +396,8 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                     | ServerActorMessage::UnassignPawn(_, _) => {
                         self.queued_messages.push_back(dropped_message.clone());
                     }
-                    ServerActorMessage::UpdateActor(global_key, _, _, _) => {
+                    ServerActorMessage::UpdateActor(global_key, _, _, _)
+                    | ServerActorMessage::UpdatePawn(global_key, _, _, _) => {
                         if let Some(state_mask_map) = self.sent_updates.get(&dropped_packet_index) {
                             if let Some(state_mask) = state_mask_map.get(global_key) {
                                 let mut new_state_mask = state_mask.borrow().clone();

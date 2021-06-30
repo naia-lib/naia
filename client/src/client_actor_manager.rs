@@ -73,21 +73,16 @@ impl<U: ActorType> ClientActorManager<U> {
                 2 => {
                     // Update Actor
                     let local_key = reader.read_u16();
+
                     if let Some(actor_ref) = self.local_actor_store.get_mut(&local_key) {
+                        // Actor is not a Pawn
                         let state_mask: StateMask = StateMask::read(reader);
+
                         actor_ref.read_partial(&state_mask, reader, packet_index);
 
-                        if self.pawn_store.contains_key(&local_key) {
-                            // Actor is a Pawn
-                            command_receiver.replay_commands(packet_tick, local_key);
-
-                            // remove command history until the tick that has already been checked
-                            command_receiver.remove_history_until(packet_tick, local_key);
-                        }
+                        self.queued_incoming_messages
+                            .push_back(ClientActorMessage::Update(local_key));
                     }
-
-                    self.queued_incoming_messages
-                        .push_back(ClientActorMessage::Update(local_key));
                 }
                 3 => {
                     // Assign Pawn
@@ -112,6 +107,22 @@ impl<U: ActorType> ClientActorManager<U> {
                     }
                     self.queued_incoming_messages
                         .push_back(ClientActorMessage::UnassignPawn(local_key));
+                }
+                5 => {
+                    // Update Pawn
+                    let local_key = reader.read_u16();
+
+                    if let Some(actor_ref) = self.local_actor_store.get_mut(&local_key) {
+                        actor_ref.read_full(reader, packet_index);
+
+                        command_receiver.replay_commands(packet_tick, local_key);
+
+                        // remove command history until the tick that has already been checked
+                        command_receiver.remove_history_until(packet_tick, local_key);
+
+                        self.queued_incoming_messages
+                            .push_back(ClientActorMessage::Update(local_key));
+                    }
                 }
                 _ => {}
             }

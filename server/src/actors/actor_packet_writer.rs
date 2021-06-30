@@ -81,6 +81,21 @@ impl ActorPacketWriter {
                     .write_u16::<BigEndian>(*local_key)
                     .unwrap(); //write local key
             }
+            ServerActorMessage::UpdatePawn(_, local_key, _, actor) => {
+                //write actor payload
+                let mut actor_payload_bytes = Vec::<u8>::new();
+                actor.borrow().write(&mut actor_payload_bytes);
+
+                //Write actor "header"
+                actor_total_bytes
+                    .write_u8(message.write_message_type())
+                    .unwrap(); // write actor message type
+
+                actor_total_bytes
+                    .write_u16::<BigEndian>(*local_key)
+                    .unwrap(); //write local key
+                actor_total_bytes.append(&mut actor_payload_bytes); // write payload
+            }
         }
 
         let mut hypothetical_next_payload_size =
