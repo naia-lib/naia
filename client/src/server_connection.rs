@@ -8,7 +8,7 @@ use naia_shared::{
 use super::{
     client_actor_manager::ClientActorManager, client_actor_message::ClientActorMessage,
     client_packet_writer::ClientPacketWriter, command_sender::CommandSender,
-    interpolation_manager::InterpolationManager, ping_manager::PingManager, tick_queue::TickQueue,
+    ping_manager::PingManager, tick_queue::TickQueue,
 };
 use crate::{client_tick_manager::ClientTickManager, command_receiver::CommandReceiver, Packet};
 use std::collections::hash_map::Keys;
@@ -21,7 +21,6 @@ pub struct ServerConnection<T: EventType, U: ActorType> {
     command_sender: CommandSender<T>,
     command_receiver: CommandReceiver<T>,
     last_replay_tick: Option<(u16, LocalActorKey)>,
-    interpolation_manager: InterpolationManager<U>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
@@ -29,12 +28,10 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
-        tick_manager: &ClientTickManager,
     ) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
             actor_manager: ClientActorManager::new(),
-            interpolation_manager: InterpolationManager::new(&tick_manager.get_tick_interval()),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
@@ -115,7 +112,6 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
                     self.actor_manager.process_data(
                         manifest,
                         &mut self.command_receiver,
-                        &mut self.interpolation_manager,
                         packet_tick,
                         packet_index,
                         &mut reader,
@@ -156,15 +152,8 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
 
     pub fn get_actor(
         &mut self,
-        tick_manager: &ClientTickManager,
         key: &LocalActorKey,
     ) -> Option<&U> {
-        if let Some(interpolated_actor) =
-            self.interpolation_manager
-                .get_interpolation(tick_manager, &self.actor_manager, key)
-        {
-            return Some(interpolated_actor);
-        }
         return self.actor_manager.get_actor(key);
     }
 
@@ -174,15 +163,8 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
 
     pub fn get_pawn(
         &mut self,
-        tick_manager: &ClientTickManager,
         key: &LocalActorKey,
     ) -> Option<&U> {
-        if let Some(interpolated_pawn) = self
-            .interpolation_manager
-            .get_pawn_interpolation(tick_manager, key)
-        {
-            return Some(interpolated_pawn);
-        }
         return self.actor_manager.get_pawn(key);
     }
 
@@ -190,17 +172,9 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
         return self.actor_manager.get_pawn(key);
     }
 
-    // Pass-through methods to underlying interpolation manager
-
-    /// This doesn't actually interpolate all actors, but rather it marks the
-    /// current time & tick in order to later present interpolated actors
-    /// correctly. Call this at the beginning of any frame
-    pub fn frame_begin(&mut self, manifest: &Manifest<T, U>, tick_manager: &mut ClientTickManager) {
+    /// Reads buffered incoming data on the appropriate tick boundary
+    pub fn frame_begin(&mut self, manifest: &Manifest<T, U>, tick_manager: &mut ClientTickManager) -> bool {
         if tick_manager.mark_frame() {
-            // interpolation manager snapshots current state of all actors
-            self.interpolation_manager
-                .update_actors(&self.actor_manager);
-
             // then we apply all received updates to actors at once
             let target_tick = tick_manager.get_server_tick();
             while let Some((tick, packet_index, data_packet)) =
@@ -208,10 +182,9 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
             {
                 self.process_incoming_data(tick, packet_index, manifest, &data_packet);
             }
-
-            // finally, we must update pawns since they may have been reconciled
-            self.interpolation_manager.update_pawns(&self.actor_manager);
+            return true;
         }
+        return false;
     }
 
     // Pass-through methods to underlying common connection

@@ -43,7 +43,7 @@ pub fn event_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /// Derives the Actor trait for a given struct
-#[proc_macro_derive(Actor, attributes(type_name, interpolate, predict))]
+#[proc_macro_derive(Actor, attributes(type_name, predict))]
 pub fn actor_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     actor_impl(input)
 }

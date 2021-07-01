@@ -13,8 +13,6 @@ pub fn actor_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
     let conversion_methods = get_conversion_methods(&type_name, &input.data);
     let equals_method = get_equals_method(&type_name, &input.data);
     let equals_prediction_method = get_equals_prediction_method(&type_name, &input.data);
-    let set_to_interpolation_method = get_set_to_interpolation_method(&type_name, &input.data);
-    let is_interpolated_method = get_is_interpolated_method(&type_name, &input.data);
     let mirror_method = get_mirror_method(&type_name, &input.data);
     let is_predicted_method = get_is_predicted_method(&type_name, &input.data);
 
@@ -26,8 +24,6 @@ pub fn actor_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
             #inner_ref_method
             #equals_method
             #equals_prediction_method
-            #set_to_interpolation_method
-            #is_interpolated_method
             #is_predicted_method
             #mirror_method
         }
@@ -280,47 +276,6 @@ fn get_equals_prediction_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 }
 
-fn get_set_to_interpolation_method(type_name: &Ident, data: &Data) -> TokenStream {
-    let variants = match *data {
-        Data::Enum(ref data) => {
-            let mut output = quote! {};
-            for variant in data.variants.iter() {
-                let variant_name = &variant.ident;
-                let new_output_right = quote! {
-                    #type_name::#variant_name(idactor) => {
-                        match old {
-                            #type_name::#variant_name(old_idactor) => {
-                                match new {
-                                    #type_name::#variant_name(new_idactor) => {
-                                        return idactor.borrow_mut().set_to_interpolation(&old_idactor.borrow(), &new_idactor.borrow(), fraction);
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                };
-                let new_output_result = quote! {
-                    #output
-                    #new_output_right
-                };
-                output = new_output_result;
-            }
-            output
-        }
-        _ => unimplemented!(),
-    };
-
-    return quote! {
-        fn set_to_interpolation(&mut self, old: &#type_name, new: &#type_name, fraction: f32) {
-            match self {
-                #variants
-            }
-        }
-    };
-}
-
 fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
     let variants = match *data {
         Data::Enum(ref data) => {
@@ -350,37 +305,6 @@ fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
 
     return quote! {
         fn mirror(&mut self, other: &#type_name) {
-            match self {
-                #variants
-            }
-        }
-    };
-}
-
-fn get_is_interpolated_method(type_name: &Ident, data: &Data) -> TokenStream {
-    let variants = match *data {
-        Data::Enum(ref data) => {
-            let mut output = quote! {};
-            for variant in data.variants.iter() {
-                let variant_name = &variant.ident;
-                let new_output_right = quote! {
-                    #type_name::#variant_name(idactor) => {
-                        return idactor.borrow().is_interpolated();
-                    }
-                };
-                let new_output_result = quote! {
-                    #output
-                    #new_output_right
-                };
-                output = new_output_result;
-            }
-            output
-        }
-        _ => unimplemented!(),
-    };
-
-    return quote! {
-        fn is_interpolated(&self) -> bool {
             match self {
                 #variants
             }

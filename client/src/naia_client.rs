@@ -136,7 +136,8 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                     )));
                 }
                 // update current tick
-                if self.tick_manager.take_tick() {
+                // apply updates on tick boundary
+                if connection.frame_begin(&self.manifest, &mut self.tick_manager) {
                     return Some(Ok(ClientEvent::Tick));
                 }
                 // drop connection if necessary
@@ -299,7 +300,6 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                                     let server_connection = ServerConnection::new(
                                         self.server_address,
                                         &self.connection_config,
-                                        &self.tick_manager,
                                     );
 
                                     self.server_connection = Some(server_connection);
@@ -317,11 +317,6 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                     return Some(Err(NaiaClientError::Wrapped(Box::new(error))));
                 }
             }
-        }
-
-        // apply updates on tick boundary, and interpolate
-        if let Some(connection) = &mut self.server_connection {
-            connection.frame_begin(&self.manifest, &mut self.tick_manager);
         }
 
         return None;
@@ -357,7 +352,7 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
     /// that Actor's Key
     pub fn get_actor(&mut self, key: &LocalActorKey) -> Option<&U> {
         if let Some(connection) = self.server_connection.as_mut() {
-            return connection.get_actor(&self.tick_manager, key);
+            return connection.get_actor(key);
         }
         return None;
     }
@@ -381,7 +376,7 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
     /// Get a reference to a Pawn
     pub fn get_pawn(&mut self, key: &LocalActorKey) -> Option<&U> {
         if let Some(connection) = self.server_connection.as_mut() {
-            return connection.get_pawn(&self.tick_manager, key);
+            return connection.get_pawn(key);
         }
         return None;
     }
@@ -434,6 +429,13 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
             .as_ref()
             .unwrap()
             .get_last_received_tick();
+    }
+
+    // interpolation
+
+    /// Gets the interpolation tween amount for the current frame
+    pub fn get_interpolation(&self) -> f32 {
+        self.tick_manager.fraction
     }
 
     // internal functions

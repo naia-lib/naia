@@ -14,7 +14,6 @@ pub struct ClientTickManager {
     last_tick_instant: Instant,
     pub fraction: f32,
     accumulator: f32,
-    has_ticked: bool,
 }
 
 impl ClientTickManager {
@@ -30,7 +29,6 @@ impl ClientTickManager {
             last_tick_instant: Instant::now(),
             accumulator: 0.0,
             fraction: 0.0,
-            has_ticked: false,
         }
     }
 
@@ -48,20 +46,10 @@ impl ClientTickManager {
             }
             // tick has occurred
             ticked = true;
-            self.has_ticked = true;
             self.server_tick = self.server_tick.wrapping_add(1);
         }
         self.fraction = self.accumulator / self.tick_interval_f32;
         ticked
-    }
-
-    /// If the tick interval duration has elapsed, increment the current tick
-    pub fn take_tick(&mut self) -> bool {
-        if self.has_ticked {
-            self.has_ticked = false;
-            return true;
-        }
-        return false;
     }
 
     /// Use tick data from initial server handshake to set the initial tick
@@ -104,11 +92,6 @@ impl ClientTickManager {
             / (self.tick_interval.as_millis() as f32))
             + 1.0)
             .ceil() as u16;
-    }
-
-    /// Gets a reference to the tick interval used
-    pub fn get_tick_interval(&self) -> &Duration {
-        return &self.tick_interval;
     }
 
     /// Gets the server tick with the incoming jitter buffer offset applied

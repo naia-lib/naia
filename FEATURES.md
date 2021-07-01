@@ -17,7 +17,6 @@
 * [x] Client Tick events
 * [x] Synced Tick between Server/Client
 * [x] Support Client prediction of Actors
-* [x] Support Client-side interpolation of Actor properties
 * [x] Send consecutive copies of Events (see Tribes 2 Networking Model's "MoveManager")
 
 ## Planned

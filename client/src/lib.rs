@@ -22,7 +22,6 @@ mod client_tick_manager;
 mod command_receiver;
 mod command_sender;
 mod error;
-mod interpolation_manager;
 mod naia_client;
 mod ping_manager;
 mod server_connection;
