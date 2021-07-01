@@ -92,13 +92,8 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
             Some(connection) => {
-                // receive command
-                if let Some((pawn_key, command)) = connection.get_incoming_command() {
-                    return Some(Ok(ClientEvent::Command(
-                        pawn_key,
-                        command.as_ref().get_typed_copy(),
-                    )));
-                }
+                // process replays
+                connection.process_replay();
                 // receive event
                 if let Some(event) = connection.get_incoming_event() {
                     return Some(Ok(ClientEvent::Event(event)));
@@ -125,6 +120,20 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                             return Some(Ok(ClientEvent::ResetPawn(local_key)));
                         }
                     }
+                }
+                // receive replay command
+                if let Some((pawn_key, command)) = connection.get_incoming_replay() {
+                    return Some(Ok(ClientEvent::CommandReplay(
+                        pawn_key,
+                        command.as_ref().get_typed_copy(),
+                    )));
+                }
+                // receive command
+                if let Some((pawn_key, command)) = connection.get_incoming_command() {
+                    return Some(Ok(ClientEvent::Command(
+                        pawn_key,
+                        command.as_ref().get_typed_copy(),
+                    )));
                 }
                 // update current tick
                 if self.tick_manager.take_tick() {

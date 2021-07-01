@@ -36,8 +36,15 @@ impl<T: EventType> CommandReceiver<T> {
     /// Gets the next queued Replayed Command
     pub fn pop_command_replay<U: ActorType>(
         &mut self,
-        actor_manager: &mut ClientActorManager<U>,
     ) -> Option<(u16, LocalActorKey, Rc<Box<dyn Event<T>>>)> {
+        self.queued_command_replays.pop_front()
+    }
+
+    /// Process any necessary replayed Command
+    pub fn process_command_replay<U: ActorType>(
+        &mut self,
+        actor_manager: &mut ClientActorManager<U>,
+    ) {
         for (pawn_key, history_tick) in self.replay_trigger.iter() {
             // set pawn to server authoritative state
             actor_manager.pawn_reset(pawn_key);
@@ -58,8 +65,6 @@ impl<T: EventType> CommandReceiver<T> {
         }
 
         self.replay_trigger.clear();
-
-        self.queued_command_replays.pop_front()
     }
 
     /// Queues an Command to be ran locally on the Client
