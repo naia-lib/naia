@@ -33,4 +33,7 @@ pub enum ClientEvent<T: EventType> {
     /// A Command received which is to be simulated on the Client as well as on
     /// the Server
     Command(LocalActorKey, T),
+    /// A Command which is replayed to extrapolate from recently received
+    /// authoritative state
+    CommandReplay(LocalActorKey, T),
 }

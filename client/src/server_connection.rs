@@ -281,18 +281,31 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
         return self.command_sender.queue_command(pawn_key, command);
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<(LocalActorKey, Rc<Box<dyn Event<T>>>)> {
+    pub fn process_replay(&mut self) {
+
+        self
+            .command_receiver
+            .process_command_replay::<U>(&mut self.actor_manager);
+
+    }
+
+    pub fn get_incoming_replay(&mut self) -> Option<(LocalActorKey, Rc<Box<dyn Event<T>>>)> {
         if let Some((_, _)) = self.last_replay_tick {
             self.last_replay_tick = None;
         }
 
         if let Some((tick, pawn_key, command)) = self
             .command_receiver
-            .pop_command_replay::<U>(&mut self.actor_manager)
+            .pop_command_replay::<U>()
         {
             self.last_replay_tick = Some((tick, pawn_key));
             return Some((pawn_key, command));
         }
+
+        return None;
+    }
+
+    pub fn get_incoming_command(&mut self) -> Option<(LocalActorKey, Rc<Box<dyn Event<T>>>)> {
         if let Some((tick, pawn_key, command)) = self.command_receiver.pop_command() {
             self.last_replay_tick = Some((tick, pawn_key));
             return Some((pawn_key, command));
