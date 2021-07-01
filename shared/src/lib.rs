@@ -42,7 +42,6 @@ pub use actors::{
     actor_mutator::ActorMutator,
     actor_notifiable::ActorNotifiable,
     actor_type::ActorType,
-    interp_lerp::interp_lerp,
     local_actor_key::LocalActorKey,
     property::Property,
     state_mask::StateMask,

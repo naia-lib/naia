@@ -39,8 +39,6 @@ pub trait Actor<T: ActorType> {
     /// have been mutated, necessary to sync only the Properties that have
     /// changed with the client
     fn set_mutator(&mut self, mutator: &Ref<dyn ActorMutator>);
-    /// Returns whether or not the Actor has any interpolated properties
-    fn is_interpolated(&self) -> bool;
     /// Returns whether or not the Actor has any predicted properties
     fn is_predicted(&self) -> bool;
 }
@@ -53,9 +51,6 @@ pub trait ActorEq<T: ActorType, Impl = Self>: Actor<T> {
     fn equals(&self, other: &Impl) -> bool;
     /// Compare only predicted properties in another Actor
     fn equals_prediction(&self, other: &Impl) -> bool;
-    /// Sets the current Actor to an interpolated state between two other
-    /// Actors of the same type
-    fn set_to_interpolation(&mut self, old: &Impl, new: &Impl, fraction: f32);
     /// Sets the current Actor to the state of another Actor of the same type
     fn mirror(&mut self, other: &Impl);
 }

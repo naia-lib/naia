@@ -5,7 +5,7 @@ use naia_shared::{
 use std::collections::{HashMap, VecDeque};
 
 use super::client_actor_message::ClientActorMessage;
-use crate::{command_receiver::CommandReceiver, interpolation_manager::InterpolationManager};
+use crate::command_receiver::CommandReceiver;
 use std::collections::hash_map::Keys;
 
 #[derive(Debug)]
@@ -28,7 +28,6 @@ impl<U: ActorType> ClientActorManager<U> {
         &mut self,
         manifest: &Manifest<T, U>,
         command_receiver: &mut CommandReceiver<T>,
-        interpolator: &mut InterpolationManager<U>,
         packet_tick: u16,
         packet_index: u16,
         reader: &mut PacketReader,
@@ -50,11 +49,7 @@ impl<U: ActorType> ClientActorManager<U> {
                                 warn!("duplicate local key inserted");
                             } else {
                                 //info!("creation of actor w/ key of {}", local_key);
-                                let is_interpolated = new_actor.is_interpolated();
                                 self.local_actor_store.insert(local_key, new_actor);
-                                if is_interpolated {
-                                    interpolator.create_interpolation(&self, &local_key);
-                                }
                                 self.queued_incoming_messages
                                     .push_back(ClientActorMessage::Create(local_key));
                             }
@@ -66,12 +61,10 @@ impl<U: ActorType> ClientActorManager<U> {
                     // Deletion
                     let local_key = reader.read_u16();
                     self.local_actor_store.remove(&local_key);
-                    interpolator.delete_interpolation(&local_key);
 
                     if self.pawn_store.contains_key(&local_key) {
                         self.pawn_store.remove(&local_key);
                         command_receiver.pawn_cleanup(&local_key);
-                        interpolator.delete_pawn_interpolation(&local_key);
                     }
 
                     self.queued_incoming_messages
@@ -106,10 +99,6 @@ impl<U: ActorType> ClientActorManager<U> {
 
                         command_receiver.pawn_init(&local_key);
 
-                        if actor_ref.is_interpolated() {
-                            interpolator.create_pawn_interpolation(&self, &local_key);
-                        }
-
                         self.queued_incoming_messages
                             .push_back(ClientActorMessage::AssignPawn(local_key));
                     }
@@ -120,7 +109,6 @@ impl<U: ActorType> ClientActorManager<U> {
                     if self.pawn_store.contains_key(&local_key) {
                         self.pawn_store.remove(&local_key);
                         command_receiver.pawn_cleanup(&local_key);
-                        interpolator.delete_pawn_interpolation(&local_key);
                     }
                     self.queued_incoming_messages
                         .push_back(ClientActorMessage::UnassignPawn(local_key));

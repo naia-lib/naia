@@ -17,7 +17,6 @@ pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let type_name = utils::get_type_name(&input, "Actor");
 
     let properties = utils::get_properties(&input);
-    let interpolated_properties = get_interpolated_properties(&input);
     let predicted_properties = get_predicted_properties(&input);
 
     let enum_name = format_ident!("{}Prop", actor_name);
@@ -34,9 +33,6 @@ pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let get_typed_copy_method = get_get_typed_copy_method(&type_name, actor_name, &properties);
     let equals_method = get_equals_method(actor_name, &properties);
     let equals_prediction_method = get_equals_prediction_method(actor_name, &predicted_properties);
-    let set_to_interpolation_method =
-        get_set_to_interpolation_method(actor_name, &properties, &interpolated_properties);
-    let is_interpolated_method = get_is_interpolated_method(&interpolated_properties);
     let is_predicted_method = get_is_predicted_method(&predicted_properties);
     let mirror_method = get_mirror_method(actor_name, &properties);
 
@@ -44,7 +40,7 @@ pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell};
-        use naia_shared::{StateMask, ActorBuilder, ActorMutator, ActorEq, interp_lerp, PacketReader, Ref};
+        use naia_shared::{StateMask, ActorBuilder, ActorMutator, ActorEq, PacketReader, Ref};
         #property_enum
         pub struct #actor_builder_name {
             type_id: TypeId,
@@ -80,13 +76,11 @@ pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             #actor_read_full_method
             #actor_read_partial_method
             #get_typed_copy_method
-            #is_interpolated_method
             #is_predicted_method
         }
         impl ActorEq<#type_name> for #actor_name {
             #equals_method
             #equals_prediction_method
-            #set_to_interpolation_method
             #mirror_method
         }
     };
@@ -384,50 +378,6 @@ fn get_equals_prediction_method(
     };
 }
 
-fn get_set_to_interpolation_method(
-    actor_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
-    interpolated_properties: &Vec<(Ident, Type)>,
-) -> TokenStream {
-    let mut output = quote! {};
-
-    for (field_name, field_type) in properties.iter() {
-        let is_interpolated = {
-            let mut i_output = false;
-            for (interp_field_name, _) in interpolated_properties.iter() {
-                if interp_field_name == field_name {
-                    i_output = true;
-                    break;
-                }
-            }
-            i_output
-        };
-
-        let new_output_right = {
-            if is_interpolated {
-                quote! {
-                    self.#field_name.set(interp_lerp::<#field_type>(old.#field_name.get(), new.#field_name.get(), fraction));
-                }
-            } else {
-                quote! {
-                    self.#field_name.mirror(&new.#field_name);
-                }
-            }
-        };
-        let new_output_result = quote! {
-            #output
-            #new_output_right
-        };
-        output = new_output_result;
-    }
-
-    return quote! {
-        fn set_to_interpolation(&mut self, old: &#actor_name, new: &#actor_name, fraction: f32) {
-            #output
-        }
-    };
-}
-
 fn get_mirror_method(actor_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
@@ -449,22 +399,6 @@ fn get_mirror_method(actor_name: &Ident, properties: &Vec<(Ident, Type)>) -> Tok
     };
 }
 
-fn get_is_interpolated_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
-    let output = {
-        if properties.len() > 0 {
-            quote! { true }
-        } else {
-            quote! { false }
-        }
-    };
-
-    return quote! {
-        fn is_interpolated(&self) -> bool {
-            return #output;
-        }
-    };
-}
-
 fn get_is_predicted_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     let output = {
         if properties.len() > 0 {
@@ -479,44 +413,6 @@ fn get_is_predicted_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
             return #output;
         }
     };
-}
-
-fn get_interpolated_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
-    let mut fields: Vec<(Ident, Type)> = Vec::new();
-
-    if let Data::Struct(data_struct) = &input.data {
-        if let Fields::Named(fields_named) = &data_struct.fields {
-            for field in fields_named.named.iter() {
-                for attr in field.attrs.iter() {
-                    match attr.parse_meta().unwrap() {
-                        syn::Meta::Path(ref path)
-                            if path.get_ident().unwrap().to_string() == "interpolate" =>
-                        {
-                            if let Some(property_name) = &field.ident {
-                                if let Type::Path(type_path) = &field.ty {
-                                    if let PathArguments::AngleBracketed(angle_args) =
-                                        &type_path.path.segments.first().unwrap().arguments
-                                    {
-                                        if let Some(GenericArgument::Type(property_type)) =
-                                            angle_args.args.first()
-                                        {
-                                            fields.push((
-                                                property_name.clone(),
-                                                (*property_type).clone(),
-                                            ));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-    }
-
-    fields
 }
 
 fn get_predicted_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
