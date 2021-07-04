@@ -17,7 +17,7 @@ use naia_server_socket::{
 pub use naia_shared::{
     wrapping_diff, Actor, ActorMutator, ActorType, Connection, ConnectionConfig, Event, EventType,
     HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType, Ref, SharedConfig,
-    Timer, Timestamp,
+    Timer, Timestamp, LocalActorKey
 };
 
 use super::{
@@ -475,23 +475,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         }
     }
 
-    async fn send_connect_accept_message(
-        connection: &mut ClientConnection<T, U>,
-        sender: &mut MessageSender,
-    ) {
-        let payload =
-            connection.process_outgoing_header(0, 0, PacketType::ServerConnectResponse, &[]);
-        match sender
-            .send(Packet::new_raw(connection.get_address(), payload))
-            .await
-        {
-            Ok(_) => {}
-            Err(err) => {
-                info!("send error! {}", err);
-            }
-        }
-        connection.mark_sent();
-    }
+
 
     /// Queues up an Event to be sent to the Client associated with a given
     /// UserKey
@@ -721,6 +705,22 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         }
     }
 
+    /// Returns true if a given User has an Actor with a given ActorKey in-scope currently
+    pub fn user_scope_has_actor(&self, user_key: &UserKey, actor_key: &ActorKey) -> bool {
+        if let Some(user_connection) = self.client_connections.get(user_key) {
+            return user_connection.has_actor(actor_key);
+        }
+        return false;
+    }
+
+    /// Returns the local key used to reference a given actor for a given user
+    pub fn get_user_local_key_for_actor(&self, user_key: &UserKey, actor_key: &ActorKey) -> Option<LocalActorKey> {
+        if let Some(user_connection) = self.client_connections.get(user_key) {
+            return user_connection.get_actor_local_key(actor_key);
+        }
+        return None;
+    }
+
     fn update_actor_scopes(&mut self) {
         for (room_key, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_actor)) = room.pop_removal_queue() {
@@ -764,6 +764,24 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
                 }
             }
         }
+    }
+
+    async fn send_connect_accept_message(
+        connection: &mut ClientConnection<T, U>,
+        sender: &mut MessageSender,
+    ) {
+        let payload =
+            connection.process_outgoing_header(0, 0, PacketType::ServerConnectResponse, &[]);
+        match sender
+            .send(Packet::new_raw(connection.get_address(), payload))
+            .await
+            {
+                Ok(_) => {}
+                Err(err) => {
+                    info!("send error! {}", err);
+                }
+            }
+        connection.mark_sent();
     }
 
     async fn internal_send_connectionless(

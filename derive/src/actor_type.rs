@@ -2,6 +2,14 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Ident};
 
+cfg_if! {
+    if #[cfg(feature = "multithread")] {
+        const MULTITHREAD: bool = true;
+    } else {
+        const MULTITHREAD: bool = false;
+    }
+}
+
 pub fn actor_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -16,8 +24,21 @@ pub fn actor_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
     let mirror_method = get_mirror_method(&type_name, &input.data);
     let is_predicted_method = get_is_predicted_method(&type_name, &input.data);
 
+    let ref_imports = {
+        if MULTITHREAD {
+            quote! {
+                use std::{sync::{Arc, Mutex}};
+            }
+        } else {
+            quote! {
+                use std::{rc::Rc, cell::RefCell};
+            }
+        }
+    };
+
     let gen = quote! {
         use naia_shared::{ActorType, Actor, ActorEq, StateMask, PacketReader};
+        #ref_imports
         impl ActorType for #type_name {
             #read_full_method
             #read_partial_method
@@ -149,26 +170,16 @@ fn get_conversion_methods(type_name: &Ident, data: &Data) -> TokenStream {
                     Span::call_site(),
                 );
 
-                cfg_if! {
-                    if #[cfg(feature = "multithread")] {
-                        let multithread = true;
-                    } else {
-                        let multithread = false;
-                    }
-                }
-
                 {
                     let new_output_right = {
-                        if multithread {
+                        if MULTITHREAD {
                             quote! {
-                                use std::{sync::{Arc, Mutex}};
                                 fn #method_name_raw(eref: Arc<Mutex<#variant_name>>) -> Arc<Mutex<dyn Actor<#type_name>>> {
                                     eref.clone()
                                 }
                             }
                         } else {
                             quote! {
-                                use std::{rc::Rc, cell::RefCell};
                                 fn #method_name_raw(eref: Rc<RefCell<#variant_name>>) -> Rc<RefCell<dyn Actor<#type_name>>> {
                                     eref.clone()
                                 }
