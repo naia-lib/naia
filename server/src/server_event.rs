@@ -19,4 +19,8 @@ pub enum ServerEvent<T> {
     /// A Tick Event, the duration between Tick events is defined in the Config
     /// object passed to the Server on initialization
     Tick,
+    /// Event which is fired when an Actor comes into scope for a given User
+    IntoScope(UserKey, ActorKey),
+    /// Event which is fired when an Actor goes out of scope for a given User
+    OutOfScope(UserKey, ActorKey),
 }

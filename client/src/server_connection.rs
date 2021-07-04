@@ -151,7 +151,7 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
     }
 
     pub fn get_actor(
-        &mut self,
+        &self,
         key: &LocalActorKey,
     ) -> Option<&U> {
         return self.actor_manager.get_actor(key);
@@ -162,7 +162,7 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
     }
 
     pub fn get_pawn(
-        &mut self,
+        &self,
         key: &LocalActorKey,
     ) -> Option<&U> {
         return self.actor_manager.get_pawn(key);
