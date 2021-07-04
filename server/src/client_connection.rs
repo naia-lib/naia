@@ -143,6 +143,10 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         return self.actor_manager.get_local_key_from_global(key);
     }
 
+    pub fn get_global_actor_keys(&self) -> Vec<ActorKey> {
+        return self.actor_manager.global_actor_keys();
+    }
+
     // Pass-through methods to underlying common connection
 
     pub fn mark_sent(&mut self) {

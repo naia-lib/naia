@@ -350,8 +350,8 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
 
     /// Get a reference to an Actor currently in scope for the Client, given
     /// that Actor's Key
-    pub fn get_actor(&mut self, key: &LocalActorKey) -> Option<&U> {
-        if let Some(connection) = self.server_connection.as_mut() {
+    pub fn get_actor(&self, key: &LocalActorKey) -> Option<&U> {
+        if let Some(connection) = &self.server_connection {
             return connection.get_actor(key);
         }
         return None;
@@ -374,8 +374,8 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
     // pawns
 
     /// Get a reference to a Pawn
-    pub fn get_pawn(&mut self, key: &LocalActorKey) -> Option<&U> {
-        if let Some(connection) = self.server_connection.as_mut() {
+    pub fn get_pawn(&self, key: &LocalActorKey) -> Option<&U> {
+        if let Some(connection) = &self.server_connection {
             return connection.get_pawn(key);
         }
         return None;
