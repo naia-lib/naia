@@ -278,6 +278,13 @@ impl<T: ActorType> ServerActorManager<T> {
         return self.local_to_global_key_map.get(&local_key);
     }
 
+    pub fn get_local_key_from_global(&self, global_key: &ActorKey) -> Option<LocalActorKey> {
+        if let Some(record) = self.actor_records.get(*global_key) {
+            return Some(record.local_key);
+        }
+        return None;
+    }
+
     fn get_new_local_key(&mut self) -> u16 {
         if let Some(local_key) = self.recycled_local_keys.pop() {
             return local_key;

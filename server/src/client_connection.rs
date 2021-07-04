@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_shared::{
     Actor, ActorType, Connection, ConnectionConfig, Event, EventType, ManagerType, Manifest,
-    PacketReader, PacketType, Ref, SequenceNumber, StandardHeader,
+    PacketReader, PacketType, Ref, SequenceNumber, StandardHeader, LocalActorKey
 };
 
 use super::{
@@ -137,6 +137,10 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
 
     pub fn remove_pawn(&mut self, key: &ActorKey) {
         self.actor_manager.remove_pawn(key);
+    }
+
+    pub fn get_actor_local_key(&self, key: &ActorKey) -> Option<LocalActorKey> {
+        return self.actor_manager.get_local_key_from_global(key);
     }
 
     // Pass-through methods to underlying common connection
