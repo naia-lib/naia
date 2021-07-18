@@ -1,5 +1,5 @@
 #[derive(Debug, PartialEq)]
-pub enum LocalActorStatus {
+pub enum LocalityStatus {
     Creating,
     Created,
     Deleting,

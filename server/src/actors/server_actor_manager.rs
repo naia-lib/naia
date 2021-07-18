@@ -10,7 +10,7 @@ use slotmap::SparseSecondaryMap;
 use super::{
     actor_key::actor_key::ActorKey,
     actor_record::ActorRecord,
-    locality_status::LocalActorStatus,
+    locality_status::LocalityStatus,
     entity_record::EntityRecord,
     mut_handler::MutHandler,
     server_actor_message::ServerActorMessage,
@@ -256,8 +256,8 @@ impl<T: ActorType> ServerActorManager<T> {
 
     pub fn remove_actor(&mut self, key: &ActorKey) {
         if let Some(actor_record) = self.actor_records.get_mut(*key) {
-            if actor_record.status != LocalActorStatus::Deleting {
-                actor_record.status = LocalActorStatus::Deleting;
+            if actor_record.status != LocalityStatus::Deleting {
+                actor_record.status = LocalityStatus::Deleting;
 
                 // if this is a pawn, send an "unassign pawn" message first
                 if self.pawn_store.contains(key) {
@@ -318,7 +318,7 @@ impl<T: ActorType> ServerActorManager<T> {
     pub fn actor_is_created(&self, local_key: &LocalActorKey) -> bool {
         if let Some(global_key) = self.local_to_global_key_map.get(&local_key) {
             if let Some(record) = self.actor_records.get(*global_key) {
-                return record.status == LocalActorStatus::Created;
+                return record.status == LocalityStatus::Created;
             }
         }
 
@@ -327,7 +327,7 @@ impl<T: ActorType> ServerActorManager<T> {
 
     pub fn collect_actor_updates(&mut self) {
         for (key, record) in self.actor_records.iter() {
-            if record.status == LocalActorStatus::Created
+            if record.status == LocalityStatus::Created
                 && !record.get_state_mask().borrow().is_clear()
             {
                 if let Some(actor_ref) = self.local_actor_store.get(key) {
@@ -383,8 +383,8 @@ impl<T: ActorType> ServerActorManager<T> {
 
     pub fn remove_entity(&mut self, key: &EntityKey) {
         if let Some(entity_record) = self.local_entity_store.get_mut(key) {
-            if entity_record.status != LocalActorStatus::Deleting {
-                entity_record.status = LocalActorStatus::Deleting;
+            if entity_record.status != LocalityStatus::Deleting {
+                entity_record.status = LocalityStatus::Deleting;
 
                 // if this is a pawn, send an "unassign pawn" message first
                 if self.pawn_entity_store.contains(key) {
@@ -440,7 +440,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                     ServerActorMessage::CreateActor(global_key, _, _) => {
                         if let Some(actor_record) = self.actor_records.get_mut(*global_key) {
                             // update actor record status
-                            actor_record.status = LocalActorStatus::Created;
+                            actor_record.status = LocalityStatus::Created;
                         }
                     }
                     ServerActorMessage::DeleteActor(global_key_ref, local_key) => {
@@ -466,7 +466,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                     ServerActorMessage::CreateEntity(global_key, _) => {
                         if let Some(entity_record) = self.local_entity_store.get_mut(global_key) {
                             // update entity record status
-                            entity_record.status = LocalActorStatus::Created;
+                            entity_record.status = LocalityStatus::Created;
                         }
                     }
                     ServerActorMessage::DeleteEntity(global_key, local_key) => {
