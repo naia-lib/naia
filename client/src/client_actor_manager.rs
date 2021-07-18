@@ -1,26 +1,30 @@
-use log::warn;
-use naia_shared::{
-    ActorType, EventType, LocalActorKey, Manifest, PacketReader, StateMask,
-};
-use std::collections::{HashMap, VecDeque};
+
+use std::collections::{HashSet, HashMap, VecDeque, hash_map::Keys};
+
+use log::{info, warn};
+
+use naia_shared::{ActorType, EventType, LocalActorKey, Manifest, PacketReader, StateMask, LocalEntityKey};
 
 use super::client_actor_message::ClientActorMessage;
 use crate::command_receiver::CommandReceiver;
-use std::collections::hash_map::Keys;
 
 #[derive(Debug)]
 pub struct ClientActorManager<U: ActorType> {
     local_actor_store: HashMap<LocalActorKey, U>,
     queued_incoming_messages: VecDeque<ClientActorMessage>,
     pawn_store: HashMap<LocalActorKey, U>,
+    local_entity_store: HashSet<LocalEntityKey>,
+    pawn_entity_store: HashSet<LocalEntityKey>,
 }
 
 impl<U: ActorType> ClientActorManager<U> {
     pub fn new() -> Self {
         ClientActorManager {
             queued_incoming_messages: VecDeque::new(),
-            local_actor_store: HashMap::new(),
-            pawn_store: HashMap::new(),
+            local_actor_store:  HashMap::new(),
+            pawn_store:         HashMap::new(),
+            local_entity_store: HashSet::new(),
+            pawn_entity_store:  HashSet::new(),
         }
     }
 
@@ -39,26 +43,26 @@ impl<U: ActorType> ClientActorManager<U> {
 
             match message_type {
                 0 => {
-                    // Creation
+                    // Actor Creation
                     let naia_id: u16 = reader.read_u16();
                     let local_key: u16 = reader.read_u16();
 
                     match manifest.create_actor(naia_id, reader) {
                         Some(new_actor) => {
                             if self.local_actor_store.contains_key(&local_key) {
-                                warn!("duplicate local key inserted");
+                                warn!("duplicate local actor key inserted");
                             } else {
                                 //info!("creation of actor w/ key of {}", local_key);
                                 self.local_actor_store.insert(local_key, new_actor);
                                 self.queued_incoming_messages
-                                    .push_back(ClientActorMessage::Create(local_key));
+                                    .push_back(ClientActorMessage::CreateActor(local_key));
                             }
                         }
                         _ => {}
                     }
                 }
                 1 => {
-                    // Deletion
+                    // Actor Deletion
                     let local_key = reader.read_u16();
                     self.local_actor_store.remove(&local_key);
 
@@ -68,10 +72,10 @@ impl<U: ActorType> ClientActorManager<U> {
                     }
 
                     self.queued_incoming_messages
-                        .push_back(ClientActorMessage::Delete(local_key));
+                        .push_back(ClientActorMessage::DeleteActor(local_key));
                 }
                 2 => {
-                    // Update Actor
+                    // Actor Update
                     let local_key = reader.read_u16();
 
                     if let Some(actor_ref) = self.local_actor_store.get_mut(&local_key) {
@@ -81,7 +85,7 @@ impl<U: ActorType> ClientActorManager<U> {
                         actor_ref.read_partial(&state_mask, reader, packet_index);
 
                         self.queued_incoming_messages
-                            .push_back(ClientActorMessage::Update(local_key));
+                            .push_back(ClientActorMessage::UpdateActor(local_key));
                     }
                 }
                 3 => {
@@ -109,7 +113,7 @@ impl<U: ActorType> ClientActorManager<U> {
                         .push_back(ClientActorMessage::UnassignPawn(local_key));
                 }
                 5 => {
-                    // Update Pawn
+                    // Pawn Update
                     let local_key = reader.read_u16();
 
                     if let Some(actor_ref) = self.local_actor_store.get_mut(&local_key) {
@@ -121,8 +125,59 @@ impl<U: ActorType> ClientActorManager<U> {
                         command_receiver.remove_history_until(packet_tick, local_key);
 
                         self.queued_incoming_messages
-                            .push_back(ClientActorMessage::Update(local_key));
+                            .push_back(ClientActorMessage::UpdateActor(local_key));
                     }
+                }
+                6 => {
+                    // Entity Creation
+                    let local_key = reader.read_u16();
+                    if self.local_entity_store.contains(&local_key) {
+                        warn!("duplicate local entity key inserted");
+                    } else {
+                        info!("creation of entity w/ key of {}", local_key);
+                        self.local_entity_store.insert(local_key);
+                        self.queued_incoming_messages
+                            .push_back(ClientActorMessage::CreateEntity(local_key));
+                    }
+                }
+                7 => {
+                    // Entity Deletion
+                    let local_key = reader.read_u16();
+                    info!("deletion of entity w/ key of {}", local_key);
+                    self.local_entity_store.remove(&local_key);
+
+                    if self.pawn_entity_store.contains(&local_key) {
+                        self.pawn_entity_store.remove(&local_key);
+                        command_receiver.pawn_entity_cleanup(&local_key);
+                    }
+
+                    self.queued_incoming_messages
+                        .push_back(ClientActorMessage::DeleteEntity(local_key));
+                }
+                8 => {
+                    // Assign Pawn Entity
+                    let local_key: u16 = reader.read_u16();
+                    info!("pawn assignment of entity w/ key of {}", local_key);
+                    if self.local_entity_store.contains(&local_key) {
+                        self.pawn_entity_store
+                            .insert(local_key);
+
+                        command_receiver.pawn_entity_init(&local_key);
+
+                        self.queued_incoming_messages
+                            .push_back(ClientActorMessage::AssignPawnEntity(local_key));
+                    }
+                }
+                9 => {
+                    // Unassign Pawn Entity
+                    let local_key: u16 = reader.read_u16();
+                    info!("pawn unassignment of entity w/ key of {}", local_key);
+                    if self.pawn_entity_store.contains(&local_key) {
+                        self.pawn_entity_store.remove(&local_key);
+                        command_receiver.pawn_entity_cleanup(&local_key);
+                    }
+                    self.queued_incoming_messages
+                        .push_back(ClientActorMessage::UnassignPawnEntity(local_key));
                 }
                 _ => {}
             }

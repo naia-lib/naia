@@ -101,13 +101,13 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                 // receive actor message
                 if let Some(message) = connection.get_incoming_actor_message() {
                     match message {
-                        ClientActorMessage::Create(local_key) => {
+                        ClientActorMessage::CreateActor(local_key) => {
                             return Some(Ok(ClientEvent::CreateActor(local_key)));
                         }
-                        ClientActorMessage::Delete(local_key) => {
+                        ClientActorMessage::DeleteActor(local_key) => {
                             return Some(Ok(ClientEvent::DeleteActor(local_key)));
                         }
-                        ClientActorMessage::Update(local_key) => {
+                        ClientActorMessage::UpdateActor(local_key) => {
                             return Some(Ok(ClientEvent::UpdateActor(local_key)));
                         }
                         ClientActorMessage::AssignPawn(local_key) => {
@@ -118,6 +118,21 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                         }
                         ClientActorMessage::ResetPawn(local_key) => {
                             return Some(Ok(ClientEvent::ResetPawn(local_key)));
+                        }
+                        ClientActorMessage::CreateEntity(local_key) => {
+                            return Some(Ok(ClientEvent::CreateEntity(local_key)));
+                        }
+                        ClientActorMessage::DeleteEntity(local_key) => {
+                            return Some(Ok(ClientEvent::DeleteEntity(local_key)));
+                        }
+                        ClientActorMessage::AssignPawnEntity(local_key) => {
+                            return Some(Ok(ClientEvent::AssignPawnEntity(local_key)));
+                        }
+                        ClientActorMessage::UnassignPawnEntity(local_key) => {
+                            return Some(Ok(ClientEvent::UnassignPawnEntity(local_key)));
+                        }
+                        ClientActorMessage::ResetPawnEntity(local_key) => {
+                            return Some(Ok(ClientEvent::ResetPawnEntity(local_key)));
                         }
                     }
                 }

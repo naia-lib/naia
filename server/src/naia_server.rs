@@ -46,6 +46,7 @@ pub struct NaiaServer<T: EventType, U: ActorType> {
     sender: MessageSender,
     global_actor_store: DenseSlotMap<ActorKey, U>,
     scope_actor_func: Option<Rc<Box<dyn Fn(&RoomKey, &UserKey, &ActorKey, U) -> bool>>>,
+    scope_entity_func: Option<Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey) -> bool>>>,
     auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
     mut_handler: Ref<MutHandler>,
     users: DenseSlotMap<UserKey, User>,
@@ -134,6 +135,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
             manifest,
             global_actor_store: DenseSlotMap::with_key(),
             scope_actor_func: None,
+            scope_entity_func: None,
             auth_func: None,
             mut_handler: MutHandler::new(),
             socket: server_socket,
@@ -517,6 +519,9 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         // update actor scopes
         self.update_actor_scopes();
 
+        // update entity scopes
+        self.update_entity_scopes();
+
         // loop through all connections, send packet
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
@@ -670,6 +675,14 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         self.scope_actor_func = Some(scope_func);
     }
 
+    /// Similar to `on_scope_actor()` but for entities only
+    pub fn on_scope_entity(
+        &mut self,
+        scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey) -> bool>>,
+    ) {
+        self.scope_entity_func = Some(scope_func);
+    }
+
     /// Registers a closure which will be called during the handshake process
     /// with a new Client
     ///
@@ -778,11 +791,31 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         self.entity_key_store.remove(key);
     }
 
+    /// Assigns an Actor to a specific User, making it a Pawn for that User
+    /// (meaning that the User will be able to issue Commands to that Pawn)
+    pub fn assign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
+        if self.entity_key_store.contains(entity_key) {
+            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                user_connection.add_pawn_entity(entity_key);
+            }
+        }
+    }
+
+    /// Unassigns a Pawn from a specific User (meaning that the User will be
+    /// unable to issue Commands to that Pawn)
+    pub fn unassign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
+        if self.entity_key_store.contains(entity_key) {
+            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                user_connection.remove_pawn_entity(entity_key);
+            }
+        }
+    }
+
     // Private methods
 
     fn update_actor_scopes(&mut self) {
         for (room_key, room) in self.rooms.iter_mut() {
-            while let Some((removed_user, removed_actor)) = room.pop_removal_queue() {
+            while let Some((removed_user, removed_actor)) = room.pop_actor_removal_queue() {
                 if let Some(user_connection) = self.client_connections.get_mut(&removed_user) {
                     Self::user_remove_actor(&mut self.scope_change_events,
                                             user_connection,
@@ -824,6 +857,55 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
                                                                 user_connection,
                                                                 user_key,
                                                                 actor_key);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn update_entity_scopes(&mut self) {
+        for (room_key, room) in self.rooms.iter_mut() {
+            while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
+                if let Some(user_connection) = self.client_connections.get_mut(&removed_user) {
+                    Self::user_remove_entity(&mut self.scope_change_events,
+                                            user_connection,
+                                            &removed_user,
+                                            &removed_entity);
+                }
+            }
+
+            if let Some(scope_func) = &self.scope_entity_func {
+                for user_key in room.users_iter() {
+                    for entity_key in room.entities_iter() {
+                        if self.entity_key_store.contains(entity_key) {
+                            if let Some(user_connection) = self.client_connections.get_mut(user_key)
+                            {
+                                let currently_in_scope = user_connection.has_entity(entity_key);
+                                let should_be_in_scope = user_connection.has_pawn_entity(entity_key)
+                                    || (scope_func.as_ref().as_ref())(
+                                        &room_key,
+                                        user_key,
+                                        entity_key,
+                                    );
+                                if should_be_in_scope {
+                                    if !currently_in_scope {
+                                        // add entity to the connections local scope
+                                        Self::user_add_entity(&mut self.scope_change_events,
+                                                                 user_connection,
+                                                                 user_key,
+                                                                 entity_key);
+                                    }
+                                } else {
+                                    if currently_in_scope {
+                                        // remove entity from the connections local scope
+                                        Self::user_remove_entity(&mut self.scope_change_events,
+                                                                user_connection,
+                                                                user_key,
+                                                                entity_key);
                                     }
                                 }
                             }
