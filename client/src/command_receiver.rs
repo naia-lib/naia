@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{client_actor_manager::ClientActorManager, naia_client::LocalActorKey};
-use naia_shared::{wrapping_diff, ActorType, Event, EventType, SequenceBuffer, SequenceIterator};
+use naia_shared::{wrapping_diff, ActorType, Event, EventType, SequenceBuffer, SequenceIterator, LocalEntityKey};
 
 const COMMAND_HISTORY_SIZE: u16 = 64;
 
@@ -13,6 +13,7 @@ const COMMAND_HISTORY_SIZE: u16 = 64;
 pub struct CommandReceiver<T: EventType> {
     queued_incoming_commands: VecDeque<(u16, LocalActorKey, Rc<Box<dyn Event<T>>>)>,
     command_history: HashMap<LocalActorKey, SequenceBuffer<Rc<Box<dyn Event<T>>>>>,
+    entity_command_history: HashMap<LocalActorKey, SequenceBuffer<Rc<Box<dyn Event<T>>>>>,
     queued_command_replays: VecDeque<(u16, LocalActorKey, Rc<Box<dyn Event<T>>>)>,
     replay_trigger: HashMap<LocalActorKey, u16>,
 }
@@ -23,6 +24,7 @@ impl<T: EventType> CommandReceiver<T> {
         CommandReceiver {
             queued_incoming_commands: VecDeque::new(),
             command_history: HashMap::new(),
+            entity_command_history: HashMap::new(),
             queued_command_replays: VecDeque::new(),
             replay_trigger: HashMap::new(),
         }
@@ -131,5 +133,18 @@ impl<T: EventType> CommandReceiver<T> {
     /// Perform cleanup on pawn deletion
     pub fn pawn_cleanup(&mut self, pawn_key: &LocalActorKey) {
         self.command_history.remove(pawn_key);
+    }
+
+    /// Perform initialization on pawn entity creation
+    pub fn pawn_entity_init(&mut self, pawn_key: &LocalEntityKey) {
+        self.entity_command_history.insert(
+            *pawn_key,
+            SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE),
+        );
+    }
+
+    /// Perform cleanup on pawn entity deletion
+    pub fn pawn_entity_cleanup(&mut self, pawn_key: &LocalEntityKey) {
+        self.entity_command_history.remove(pawn_key);
     }
 }

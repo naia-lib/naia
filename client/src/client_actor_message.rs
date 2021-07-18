@@ -1,11 +1,16 @@
-use naia_shared::LocalActorKey;
+use naia_shared::{LocalActorKey, LocalEntityKey};
 
 #[derive(Debug, Clone)]
 pub enum ClientActorMessage {
-    Create(LocalActorKey),
-    Update(LocalActorKey),
-    Delete(LocalActorKey),
+    CreateActor(LocalActorKey),
+    UpdateActor(LocalActorKey),
+    DeleteActor(LocalActorKey),
     AssignPawn(LocalActorKey),
     UnassignPawn(LocalActorKey),
     ResetPawn(LocalActorKey),
+    CreateEntity(LocalEntityKey),
+    DeleteEntity(LocalEntityKey),
+    AssignPawnEntity(LocalEntityKey),
+    UnassignPawnEntity(LocalEntityKey),
+    ResetPawnEntity(LocalEntityKey),
 }

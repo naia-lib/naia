@@ -1,6 +1,7 @@
 use std::collections::{hash_set::Iter, HashSet, VecDeque};
 
 use super::{actors::actor_key::actor_key::ActorKey, user::user_key::UserKey};
+use naia_shared::EntityKey;
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
@@ -12,7 +13,9 @@ pub mod room_key {
 pub struct Room {
     users: HashSet<UserKey>,
     actors: HashSet<ActorKey>,
-    removal_queue: VecDeque<(UserKey, ActorKey)>,
+    actor_removal_queue: VecDeque<(UserKey, ActorKey)>,
+    entities: HashSet<EntityKey>,
+    entity_removal_queue: VecDeque<(UserKey, EntityKey)>,
 }
 
 impl Room {
@@ -20,7 +23,9 @@ impl Room {
         Room {
             users: HashSet::new(),
             actors: HashSet::new(),
-            removal_queue: VecDeque::new(),
+            actor_removal_queue: VecDeque::new(),
+            entities: HashSet::new(),
+            entity_removal_queue: VecDeque::new(),
         }
     }
 
@@ -31,7 +36,7 @@ impl Room {
     pub fn remove_actor(&mut self, actor_key: &ActorKey) {
         self.actors.remove(actor_key);
         for user_key in self.users.iter() {
-            self.removal_queue.push_back((*user_key, *actor_key));
+            self.actor_removal_queue.push_back((*user_key, *actor_key));
         }
     }
 
@@ -46,7 +51,7 @@ impl Room {
     pub fn unsubscribe_user(&mut self, user_key: &UserKey) {
         self.users.remove(user_key);
         for actor_key in self.actors.iter() {
-            self.removal_queue.push_back((*user_key, *actor_key));
+            self.actor_removal_queue.push_back((*user_key, *actor_key));
         }
     }
 
@@ -54,7 +59,26 @@ impl Room {
         return self.users.iter();
     }
 
-    pub fn pop_removal_queue(&mut self) -> Option<(UserKey, ActorKey)> {
-        return self.removal_queue.pop_front();
+    pub fn pop_actor_removal_queue(&mut self) -> Option<(UserKey, ActorKey)> {
+        return self.actor_removal_queue.pop_front();
+    }
+
+    pub fn add_entity(&mut self, actor_key: &EntityKey) {
+        self.entities.insert(*actor_key);
+    }
+
+    pub fn remove_entity(&mut self, actor_key: &EntityKey) {
+        self.entities.remove(actor_key);
+        for user_key in self.users.iter() {
+            self.entity_removal_queue.push_back((*user_key, *actor_key));
+        }
+    }
+
+    pub fn entities_iter(&self) -> Iter<EntityKey> {
+        return self.entities.iter();
+    }
+
+    pub fn pop_entity_removal_queue(&mut self) -> Option<(UserKey, EntityKey)> {
+        return self.entity_removal_queue.pop_front();
     }
 }
