@@ -15,12 +15,10 @@ name = "index" # This is because cargo-web also picks up the static assets folde
 path = "src/main.rs"
 
 [features]
-multithread = [ "naia-client/multithread", "naia-example-shared/multithread" ]
-wbindgen = [ "naia-client/wbindgen", "naia-example-shared/wbindgen" ]
+multithread = [ "naia-client-example-app/multithread" ]
 
 [dependencies]
-naia-client = { path = "../../../client" }
-naia-example-shared = { path = "../../shared" }
+naia-client-example-app = { path = "../app", features = [ "wbindgen" ] }
 log = "0.4"
 cfg-if = "0.1.10"
 

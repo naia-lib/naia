@@ -10,11 +10,9 @@ name = "naia-client-miniquad-example"
 path = "src/main.rs"
 
 [features]
-multithread = [ "naia-client/multithread" ]
-mquad = [ "naia-client/mquad" ]
+multithread = [ "naia-client-example-app/multithread", ]
 
 [dependencies]
 cfg-if = "0.1.10"
-naia-client = { path = "../../../client" }
-naia-example-shared = { path = "../../shared" }
+naia-client-example-app = { path = "../app", features = [ "mquad" ] }
 miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"] }

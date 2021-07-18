@@ -6,12 +6,11 @@ extern crate log;
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
 
-        mod app;
         mod loop_wasm;
 
         use wasm_bindgen::prelude::*;
 
-        use crate::app::App;
+        use naia_client_example_app::App;
 
         #[wasm_bindgen(start)]
         pub fn main_js() {

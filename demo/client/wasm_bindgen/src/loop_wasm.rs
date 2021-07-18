@@ -12,7 +12,7 @@ cfg_if! {
         use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsCast;
 
-        use crate::app::App;
+        use naia_client_example_app::App;
 
         pub fn start_loop(app: App) {
             fn set_timeout(f: &Closure<dyn FnMut()>) {

@@ -3,10 +3,9 @@ extern crate cfg_if;
 
 extern crate log;
 
-mod app;
-mod loop_native;
+use naia_client_example_app::App;
 
-use app::App;
+mod loop_native;
 
 fn main() {
     // Uncomment the line below to enable logging. You don't need it if something

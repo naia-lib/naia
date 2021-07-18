@@ -1,0 +1,18 @@
+[package]
+name = "naia-client-example-app"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+publish = false
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[features]
+multithread = [ "naia-client/multithread" ]
+mquad = [ "naia-client/mquad", "naia-example-shared/mquad" ]
+wbindgen = [ "naia-client/wbindgen", "naia-example-shared/wbindgen" ]
+
+[dependencies]
+cfg-if = "0.1.10"
+naia-client = { path = "../../../client" }
+naia-example-shared = { path = "../../shared" }
+miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"] }
