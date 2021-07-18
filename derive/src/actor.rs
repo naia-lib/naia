@@ -1,7 +1,7 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, PathArguments, Type,
+    parse_macro_input, DeriveInput, Ident, Type,
 };
 
 use super::utils;
@@ -17,7 +17,6 @@ pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let type_name = utils::get_type_name(&input, "Actor");
 
     let properties = utils::get_properties(&input);
-    let predicted_properties = get_predicted_properties(&input);
 
     let enum_name = format_ident!("{}Prop", actor_name);
     let property_enum = get_property_enum(&enum_name, &properties);
@@ -32,8 +31,6 @@ pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let set_mutator_method = get_set_mutator_method(&properties);
     let get_typed_copy_method = get_get_typed_copy_method(&type_name, actor_name, &properties);
     let equals_method = get_equals_method(actor_name, &properties);
-    let equals_prediction_method = get_equals_prediction_method(actor_name, &predicted_properties);
-    let is_predicted_method = get_is_predicted_method(&predicted_properties);
     let mirror_method = get_mirror_method(actor_name, &properties);
 
     let state_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
@@ -76,11 +73,9 @@ pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             #actor_read_full_method
             #actor_read_partial_method
             #get_typed_copy_method
-            #is_predicted_method
         }
         impl ActorEq<#type_name> for #actor_name {
             #equals_method
-            #equals_prediction_method
             #mirror_method
         }
     };
@@ -353,31 +348,6 @@ fn get_equals_method(actor_name: &Ident, properties: &Vec<(Ident, Type)>) -> Tok
     };
 }
 
-fn get_equals_prediction_method(
-    actor_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
-) -> TokenStream {
-    let mut output = quote! {};
-
-    for (field_name, _) in properties.iter() {
-        let new_output_right = quote! {
-            if !Property::equals(&self.#field_name, &other.#field_name) { return false; }
-        };
-        let new_output_result = quote! {
-            #output
-            #new_output_right
-        };
-        output = new_output_result;
-    }
-
-    return quote! {
-        fn equals_prediction(&self, other: &#actor_name) -> bool {
-            #output
-            return true;
-        }
-    };
-}
-
 fn get_mirror_method(actor_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
@@ -397,58 +367,4 @@ fn get_mirror_method(actor_name: &Ident, properties: &Vec<(Ident, Type)>) -> Tok
             #output
         }
     };
-}
-
-fn get_is_predicted_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
-    let output = {
-        if properties.len() > 0 {
-            quote! { true }
-        } else {
-            quote! { false }
-        }
-    };
-
-    return quote! {
-        fn is_predicted(&self) -> bool {
-            return #output;
-        }
-    };
-}
-
-fn get_predicted_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
-    let mut fields: Vec<(Ident, Type)> = Vec::new();
-
-    if let Data::Struct(data_struct) = &input.data {
-        if let Fields::Named(fields_named) = &data_struct.fields {
-            for field in fields_named.named.iter() {
-                for attr in field.attrs.iter() {
-                    match attr.parse_meta().unwrap() {
-                        syn::Meta::Path(ref path)
-                            if path.get_ident().unwrap().to_string() == "predict" =>
-                        {
-                            if let Some(property_name) = &field.ident {
-                                if let Type::Path(type_path) = &field.ty {
-                                    if let PathArguments::AngleBracketed(angle_args) =
-                                        &type_path.path.segments.first().unwrap().arguments
-                                    {
-                                        if let Some(GenericArgument::Type(property_type)) =
-                                            angle_args.args.first()
-                                        {
-                                            fields.push((
-                                                property_name.clone(),
-                                                (*property_type).clone(),
-                                            ));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-    }
-
-    fields
 }

@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque, HashSet},
+    collections::{HashMap, VecDeque},
     net::SocketAddr,
     panic,
     rc::Rc,
@@ -697,13 +697,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
     /// Assigns an Actor to a specific User, making it a Pawn for that User
     /// (meaning that the User will be able to issue Commands to that Pawn)
     pub fn assign_pawn(&mut self, user_key: &UserKey, actor_key: &ActorKey) {
-        if let Some(actor_ref) = self.global_actor_store.get(*actor_key) {
-            if !actor_ref.is_predicted() {
-                panic!("\nAttempting to call assign_pawn() referring to an Actor which has NO predicted properties.\n\
-                          Pawns are only used for client-side prediction, so an Actor must have at least one predicted\n\
-                          property to be allowed to become a Pawn. In order to do this, add the attribute: '#[predict]'\n\
-                          before you define an Actor's property, like so: '#[predict] pub my_u16: Property<u16>'\n");
-            }
+        if self.global_actor_store.contains_key(*actor_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                 user_connection.add_pawn(actor_key);
             }
