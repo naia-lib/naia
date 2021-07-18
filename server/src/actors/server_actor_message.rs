@@ -1,4 +1,4 @@
-use naia_shared::{Actor, ActorType, LocalActorKey, Ref, StateMask};
+use naia_shared::{Actor, ActorType, LocalActorKey, Ref, StateMask, LocalEntityKey, EntityKey};
 
 use super::actor_key::actor_key::ActorKey;
 
@@ -10,6 +10,10 @@ pub enum ServerActorMessage<T: ActorType> {
     AssignPawn(ActorKey, LocalActorKey),
     UnassignPawn(ActorKey, LocalActorKey),
     UpdatePawn(ActorKey, LocalActorKey, Ref<StateMask>, Ref<dyn Actor<T>>),
+    CreateEntity(EntityKey, LocalEntityKey),
+    DeleteEntity(EntityKey, LocalEntityKey),
+    AssignPawnEntity(EntityKey, LocalEntityKey),
+    UnassignPawnEntity(EntityKey, LocalEntityKey),
 }
 
 impl<T: ActorType> ServerActorMessage<T> {
@@ -21,6 +25,10 @@ impl<T: ActorType> ServerActorMessage<T> {
             ServerActorMessage::AssignPawn(_, _) => 3,
             ServerActorMessage::UnassignPawn(_, _) => 4,
             ServerActorMessage::UpdatePawn(_, _, _, _) => 5,
+            ServerActorMessage::CreateEntity(_, _) => 6,
+            ServerActorMessage::DeleteEntity(_, _) => 7,
+            ServerActorMessage::AssignPawnEntity(_, _) => 8,
+            ServerActorMessage::UnassignPawnEntity(_, _) => 9,
         }
     }
 }
@@ -45,6 +53,18 @@ impl<T: ActorType> Clone for ServerActorMessage<T> {
             }
             ServerActorMessage::UpdatePawn(gk, lk, sm, e) => {
                 ServerActorMessage::UpdatePawn(gk.clone(), lk.clone(), sm.clone(), e.clone())
+            }
+            ServerActorMessage::CreateEntity(gk, lk) => {
+                ServerActorMessage::CreateEntity(gk.clone(), lk.clone())
+            }
+            ServerActorMessage::DeleteEntity(gk, lk) => {
+                ServerActorMessage::DeleteEntity(gk.clone(), lk.clone())
+            }
+            ServerActorMessage::AssignPawnEntity(gk, lk) => {
+                ServerActorMessage::AssignPawnEntity(gk.clone(), lk.clone())
+            }
+            ServerActorMessage::UnassignPawnEntity(gk, lk) => {
+                ServerActorMessage::UnassignPawnEntity(gk.clone(), lk.clone())
             }
         }
     }

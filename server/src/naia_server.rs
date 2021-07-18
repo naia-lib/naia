@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashSet, HashMap, VecDeque},
     net::SocketAddr,
     panic,
     rc::Rc,
@@ -34,7 +34,7 @@ use super::{
     server_tick_manager::ServerTickManager,
     user::{user_key::UserKey, User},
 };
-use naia_shared::StandardHeader;
+use naia_shared::{StandardHeader, KeyGenerator, EntityKey};
 
 /// A server that uses either UDP or WebRTC communication to send/receive events
 /// to/from connected clients, and syncs registered actors to clients to whom
@@ -57,7 +57,16 @@ pub struct NaiaServer<T: EventType, U: ActorType> {
     connection_hash_key: hmac::Key,
     tick_manager: ServerTickManager,
     tick_timer: Interval,
-    scope_change_events: VecDeque<(bool, UserKey, ActorKey)>,
+    scope_change_events: VecDeque<ScopeEvent>,
+    entity_key_generator: KeyGenerator,
+    entity_key_store: HashSet<EntityKey>,
+}
+
+enum ScopeEvent {
+    ActorIntoScope(UserKey,   ActorKey),
+    ActorOutOfScope(UserKey,  ActorKey),
+    EntityIntoScope(UserKey,  EntityKey),
+    EntityOutOfScope(UserKey, EntityKey),
 }
 
 /// A collection of IP addresses describing which IP to listen on for new
@@ -140,6 +149,8 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
             tick_manager: ServerTickManager::new(shared_config.tick_interval),
             tick_timer: Interval::new(shared_config.tick_interval),
             scope_change_events: VecDeque::new(),
+            entity_key_generator: KeyGenerator::new(),
+            entity_key_store: HashSet::new(),
         }
     }
 
@@ -209,10 +220,12 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
             }
 
             //receive scope change events events
-            if let Some((in_scope, user_key, actor_key)) = self.scope_change_events.pop_front() {
-                match in_scope {
-                    true => return Ok(ServerEvent::IntoScope(user_key, actor_key)),
-                    false => return Ok(ServerEvent::OutOfScope(user_key, actor_key))
+            if let Some(event) = self.scope_change_events.pop_front() {
+                match event {
+                    ScopeEvent::ActorIntoScope(user_key,  actor_key) =>   return Ok(ServerEvent::IntoScope(user_key, actor_key)),
+                    ScopeEvent::ActorOutOfScope(user_key, actor_key) =>  return Ok(ServerEvent::OutOfScope(user_key, actor_key)),
+                    ScopeEvent::EntityIntoScope(user_key,  entity_key) =>  return Ok(ServerEvent::IntoScopeEntity(user_key, entity_key)),
+                    ScopeEvent::EntityOutOfScope(user_key, entity_key) => return Ok(ServerEvent::OutOfScopeEntity(user_key, entity_key)),
                 }
             }
 
@@ -739,6 +752,33 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         return false;
     }
 
+    /// Register an Entity with the Server, whereby the Server will sync the
+    /// state of all the given Entity's Components to all connected Clients for which the Entity is
+    /// in scope. Gives back an EntityKey which can be used to get the reference
+    /// to the Entity from the Server once again
+    pub fn register_entity(&mut self) -> EntityKey {
+        let entity_key: EntityKey = self.entity_key_generator.generate();
+        self.entity_key_store.insert(entity_key);
+        return entity_key;
+    }
+
+    /// Deregisters an Entity with the Server, deleting local copies of the
+    /// Entity on each Client
+    pub fn deregister_entity(&mut self, key: &EntityKey) {
+        for (user_key, _) in self.users.iter() {
+            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+                user_connection.remove_pawn_entity(key);
+                Self::user_remove_entity(&mut self.scope_change_events,
+                                        user_connection,
+                                        &user_key,
+                                        key);
+            }
+        }
+
+        self.entity_key_store.remove(key);
+    }
+
+    // Private methods
 
     fn update_actor_scopes(&mut self) {
         for (room_key, room) in self.rooms.iter_mut() {
@@ -794,7 +834,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         }
     }
 
-    fn user_add_actor(event_queue: &mut VecDeque<(bool, UserKey, ActorKey)>,
+    fn user_add_actor(event_queue: &mut VecDeque<ScopeEvent>,
                       user_connection: &mut ClientConnection<T, U>,
                       user_key: &UserKey,
                       actor_key: &ActorKey,
@@ -803,18 +843,40 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         user_connection.add_actor(actor_key, &actor_ref.inner_ref());
 
         //fire event
-        event_queue.push_back((true, *user_key, *actor_key));
+        event_queue.push_back(ScopeEvent::ActorIntoScope(*user_key, *actor_key));
     }
 
-    fn user_remove_actor(event_queue: &mut VecDeque<(bool, UserKey, ActorKey)>,
+    fn user_remove_actor(event_queue: &mut VecDeque<ScopeEvent>,
                          user_connection: &mut ClientConnection<T, U>,
                          user_key: &UserKey,
                          actor_key: &ActorKey) {
-        //remove actor from user connection
+        //add actor to user connection
         user_connection.remove_actor(actor_key);
 
         //fire event
-        event_queue.push_back((false, *user_key, *actor_key));
+        event_queue.push_back(ScopeEvent::ActorOutOfScope(*user_key, *actor_key));
+    }
+
+    fn user_add_entity(event_queue: &mut VecDeque<ScopeEvent>,
+                      user_connection: &mut ClientConnection<T, U>,
+                      user_key: &UserKey,
+                      entity_key: &EntityKey) {
+        //add entity to user connection
+        user_connection.add_entity(entity_key);
+
+        //fire event
+        event_queue.push_back(ScopeEvent::EntityIntoScope(*user_key, *entity_key));
+    }
+
+    fn user_remove_entity(event_queue: &mut VecDeque<ScopeEvent>,
+                         user_connection: &mut ClientConnection<T, U>,
+                         user_key: &UserKey,
+                         entity_key: &EntityKey) {
+        //remove actor from user connection
+        user_connection.remove_entity(entity_key);
+
+        //fire event
+        event_queue.push_back(ScopeEvent::EntityOutOfScope(*user_key, *entity_key));
     }
 
     async fn send_connect_accept_message(

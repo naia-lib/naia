@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_shared::{
     Actor, ActorType, Connection, ConnectionConfig, Event, EventType, ManagerType, Manifest,
-    PacketReader, PacketType, Ref, SequenceNumber, StandardHeader, LocalActorKey
+    PacketReader, PacketType, Ref, SequenceNumber, StandardHeader, LocalActorKey, EntityKey
 };
 
 use super::{
@@ -147,6 +147,49 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         return self.actor_manager.actor_is_created(local_key);
     }
 
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(ActorKey, T)> {
+        if let Some((local_pawn_key, command)) =
+            self.command_receiver.pop_incoming_command(server_tick)
+        {
+            if let Some(global_pawn_key) =
+                self.actor_manager.get_global_key_from_local(local_pawn_key)
+            {
+                return Some((*global_pawn_key, command));
+            }
+        }
+        return None;
+    }
+
+    pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
+        return self.ping_manager.process_ping(ping_payload);
+    }
+
+    // Entity management
+
+    pub fn has_entity(&self, key: &EntityKey) -> bool {
+        return self.actor_manager.has_entity(key);
+    }
+
+    pub fn add_entity(&mut self, key: &EntityKey) {
+        self.actor_manager.add_entity(key);
+    }
+
+    pub fn remove_entity(&mut self, key: &EntityKey) {
+        self.actor_manager.remove_entity(key);
+    }
+
+    pub fn has_pawn_entity(&self, key: &EntityKey) -> bool {
+        return self.actor_manager.has_pawn_entity(key);
+    }
+
+    pub fn add_pawn_entity(&mut self, key: &EntityKey) {
+        self.actor_manager.add_pawn_entity(key);
+    }
+
+    pub fn remove_pawn_entity(&mut self, key: &EntityKey) {
+        self.actor_manager.remove_pawn_entity(key);
+    }
+
     // Pass-through methods to underlying common connection
 
     pub fn mark_sent(&mut self) {
@@ -197,25 +240,8 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         return self.connection.get_incoming_event();
     }
 
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(ActorKey, T)> {
-        if let Some((local_pawn_key, command)) =
-            self.command_receiver.pop_incoming_command(server_tick)
-        {
-            if let Some(global_pawn_key) =
-                self.actor_manager.get_global_key_from_local(local_pawn_key)
-            {
-                return Some((*global_pawn_key, command));
-            }
-        }
-        return None;
-    }
-
     pub fn get_address(&self) -> SocketAddr {
         return self.connection.get_address();
-    }
-
-    pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
-        return self.ping_manager.process_ping(ping_payload);
     }
 
     pub fn get_last_received_tick(&self) -> u16 {

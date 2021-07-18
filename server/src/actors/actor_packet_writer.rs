@@ -96,6 +96,38 @@ impl ActorPacketWriter {
                     .unwrap(); //write local key
                 actor_total_bytes.append(&mut actor_payload_bytes); // write payload
             }
+            ServerActorMessage::CreateEntity(_, local_key) => {
+                actor_total_bytes
+                    .write_u8(message.write_message_type())
+                    .unwrap(); //Write actor message type
+                actor_total_bytes
+                    .write_u16::<BigEndian>(*local_key)
+                    .unwrap(); //write local key
+            }
+            ServerActorMessage::DeleteEntity(_, local_key) => {
+                actor_total_bytes
+                    .write_u8(message.write_message_type())
+                    .unwrap(); //Write actor message type
+                actor_total_bytes
+                    .write_u16::<BigEndian>(*local_key)
+                    .unwrap(); //write local key
+            }
+            ServerActorMessage::AssignPawnEntity(_, local_key) => {
+                actor_total_bytes
+                    .write_u8(message.write_message_type())
+                    .unwrap(); //Write actor message type
+                actor_total_bytes
+                    .write_u16::<BigEndian>(*local_key)
+                    .unwrap(); //write local key
+            }
+            ServerActorMessage::UnassignPawnEntity(_, local_key) => {
+                actor_total_bytes
+                    .write_u8(message.write_message_type())
+                    .unwrap(); //Write actor message type
+                actor_total_bytes
+                    .write_u16::<BigEndian>(*local_key)
+                    .unwrap(); //write local key
+            }
         }
 
         let mut hypothetical_next_payload_size =

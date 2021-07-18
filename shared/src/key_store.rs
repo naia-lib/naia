@@ -18,7 +18,7 @@ impl KeyGenerator {
     }
 
     /// Get a new, unused key
-    pub fn get_new_local_key(&mut self) -> u16 {
+    pub fn generate(&mut self) -> u16 {
         if let Some(local_key) = self.recycled_local_keys.pop() {
             return local_key;
         }
