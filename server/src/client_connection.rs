@@ -143,10 +143,6 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         return self.actor_manager.get_local_key_from_global(key);
     }
 
-    pub fn get_global_actor_keys(&self) -> Vec<ActorKey> {
-        return self.actor_manager.global_actor_keys();
-    }
-
     pub fn actor_is_created(&self, local_key: &LocalActorKey) -> bool {
         return self.actor_manager.actor_is_created(local_key);
     }

@@ -356,11 +356,6 @@ impl<T: ActorType> ServerActorManager<T> {
             }
         }
     }
-
-    pub fn global_actor_keys(&self) -> Vec<ActorKey> {
-        let keys: Vec<ActorKey> = self.actor_records.keys().collect();
-        return keys;
-    }
 }
 
 impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {

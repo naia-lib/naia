@@ -39,8 +39,6 @@ pub trait Actor<T: ActorType> {
     /// have been mutated, necessary to sync only the Properties that have
     /// changed with the client
     fn set_mutator(&mut self, mutator: &Ref<dyn ActorMutator>);
-    /// Returns whether or not the Actor has any predicted properties
-    fn is_predicted(&self) -> bool;
 }
 
 //TODO: do we really need another trait here?
@@ -49,8 +47,6 @@ pub trait Actor<T: ActorType> {
 pub trait ActorEq<T: ActorType, Impl = Self>: Actor<T> {
     /// Compare properties in another Actor
     fn equals(&self, other: &Impl) -> bool;
-    /// Compare only predicted properties in another Actor
-    fn equals_prediction(&self, other: &Impl) -> bool;
     /// Sets the current Actor to the state of another Actor of the same type
     fn mirror(&mut self, other: &Impl);
 }

@@ -19,10 +19,6 @@ pub trait ActorType<Impl = Self>: Clone {
     fn inner_ref(&self) -> Ref<dyn Actor<Impl>>;
     /// Compare properties in another ActorType
     fn equals(&self, other: &Impl) -> bool;
-    /// Compare predicted properties in another ActorType
-    fn equals_prediction(&self, other: &Impl) -> bool;
     /// Sets the current Actor to the state of another Actor of the same type
     fn mirror(&mut self, other: &Impl);
-    /// Returns whether or not the Actor has any predicted properties
-    fn is_predicted(&self) -> bool;
 }
