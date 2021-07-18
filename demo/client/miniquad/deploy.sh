@@ -11,7 +11,7 @@ get_reload_actions(){
   local w=$2
   FMT='rm -rf %s/dist &&
   mkdir %s/dist &&
-  cargo build --target wasm32-unknown-unknown --features mquad --target-dir target &&
+  cargo build --target wasm32-unknown-unknown --target-dir target &&
   cp target/wasm32-unknown-unknown/debug/%s.wasm %s/dist/%s.wasm &&
   cp -a static/. %s/dist/ &&
   cp -a js/. %s/dist/ &&

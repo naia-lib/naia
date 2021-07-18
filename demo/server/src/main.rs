@@ -69,22 +69,25 @@ fn main() -> io::Result<()> {
         let main_room_key = server.create_room();
 
         // Create 4 PointActors, with a range of X values
-        {
-            let mut count = 0;
-            for (first, last) in [
-                ("alpha", "red"),
-                ("bravo", "blue"),
-                ("charlie", "green"),
-                ("delta", "yellow"),
-            ]
-            .iter()
-            {
-                count += 1;
-                let point_actor = PointActor::new((count * 4) as u8, 0, first, last).wrap();
-                let actor_key = server.register_actor(ExampleActor::PointActor(point_actor));
-                server.room_add_actor(&main_room_key, &actor_key);
-            }
-        }
+//        {
+//            let mut count = 0;
+//            for (first, last) in [
+//                ("alpha", "red"),
+//                ("bravo", "blue"),
+//                ("charlie", "green"),
+//                ("delta", "yellow"),
+//            ]
+//            .iter()
+//            {
+//                count += 1;
+//                let point_actor = PointActor::new((count * 4) as u8, 0, first, last).wrap();
+//                let actor_key = server.register_actor(ExampleActor::PointActor(point_actor));
+//                server.room_add_actor(&main_room_key, &actor_key);
+//            }
+//        }
+
+        let entity_key = server.register_entity();
+        server.room_add_entity(&main_room_key, &entity_key);
 
         // This method will be called every step to determine whether a given Actor
         // should be in scope for a given User

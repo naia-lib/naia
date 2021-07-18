@@ -45,8 +45,8 @@ pub struct NaiaServer<T: EventType, U: ActorType> {
     socket: Box<dyn ServerSocketTrait>,
     sender: MessageSender,
     global_actor_store: DenseSlotMap<ActorKey, U>,
-    scope_actor_func: Option<Rc<Box<dyn Fn(&RoomKey, &UserKey, &ActorKey, U) -> bool>>>,
-    scope_entity_func: Option<Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey) -> bool>>>,
+    scope_actor_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &ActorKey, U) -> bool>>,
+    scope_entity_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey) -> bool>>,
     auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
     mut_handler: Ref<MutHandler>,
     users: DenseSlotMap<UserKey, User>,
@@ -134,8 +134,12 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         NaiaServer {
             manifest,
             global_actor_store: DenseSlotMap::with_key(),
-            scope_actor_func: None,
-            scope_entity_func: None,
+            scope_actor_func: Rc::new(Box::new(|_, _, _, _|  {
+                return true;
+            })),
+            scope_entity_func: Rc::new(Box::new(|_, _, _|  {
+                return true;
+            })),
             auth_func: None,
             mut_handler: MutHandler::new(),
             socket: server_socket,
@@ -659,6 +663,22 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         }
     }
 
+    /// Add an Entity to a Room, given the appropriate RoomKey & EntityKey
+    /// Entities will only ever be in-scope for Users which are in a Room with
+    /// them
+    pub fn room_add_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
+        if let Some(room) = self.rooms.get_mut(*room_key) {
+            room.add_entity(entity_key);
+        }
+    }
+
+    /// Remove an Entity from a Room, given the appropriate RoomKey & EntityKey
+    pub fn room_remove_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
+        if let Some(room) = self.rooms.get_mut(*room_key) {
+            room.remove_entity(entity_key);
+        }
+    }
+
     /// Registers a closure which is used to evaluate whether, given a User &
     /// Actor that are in the same Room, said Actor should be in scope for
     /// the given User.
@@ -672,7 +692,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         &mut self,
         scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &ActorKey, U) -> bool>>,
     ) {
-        self.scope_actor_func = Some(scope_func);
+        self.scope_actor_func = scope_func;
     }
 
     /// Similar to `on_scope_actor()` but for entities only
@@ -680,7 +700,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         &mut self,
         scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey) -> bool>>,
     ) {
-        self.scope_entity_func = Some(scope_func);
+        self.scope_entity_func = scope_func;
     }
 
     /// Registers a closure which will be called during the handshake process
@@ -824,40 +844,39 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
                 }
             }
 
-            if let Some(scope_func) = &self.scope_actor_func {
-                for user_key in room.users_iter() {
-                    for actor_key in room.actors_iter() {
-                        if let Some(actor) = self.global_actor_store.get(*actor_key) {
-                            if let Some(user_connection) = self.client_connections.get_mut(user_key)
-                            {
-                                let currently_in_scope = user_connection.has_actor(actor_key);
-                                let should_be_in_scope = user_connection.has_pawn(actor_key)
-                                    || (scope_func.as_ref().as_ref())(
-                                        &room_key,
-                                        user_key,
-                                        actor_key,
-                                        (*actor).clone(),
-                                    );
-                                if should_be_in_scope {
-                                    if !currently_in_scope {
-                                        // add actor to the connections local scope
-                                        if let Some(actor) = self.global_actor_store.get(*actor_key)
-                                        {
-                                            Self::user_add_actor(&mut self.scope_change_events,
-                                                                 user_connection,
-                                                                 user_key,
-                                                                 actor_key,
-                                                                 &actor);
-                                        }
+
+            for user_key in room.users_iter() {
+                for actor_key in room.actors_iter() {
+                    if let Some(actor) = self.global_actor_store.get(*actor_key) {
+                        if let Some(user_connection) = self.client_connections.get_mut(user_key)
+                        {
+                            let currently_in_scope = user_connection.has_actor(actor_key);
+                            let should_be_in_scope = user_connection.has_pawn(actor_key)
+                                || (&self.scope_actor_func.as_ref().as_ref())(
+                                    &room_key,
+                                    user_key,
+                                    actor_key,
+                                    (*actor).clone(),
+                                );
+                            if should_be_in_scope {
+                                if !currently_in_scope {
+                                    // add actor to the connections local scope
+                                    if let Some(actor) = self.global_actor_store.get(*actor_key)
+                                    {
+                                        Self::user_add_actor(&mut self.scope_change_events,
+                                                             user_connection,
+                                                             user_key,
+                                                             actor_key,
+                                                             &actor);
                                     }
-                                } else {
-                                    if currently_in_scope {
-                                        // remove actor from the connections local scope
-                                        Self::user_remove_actor(&mut self.scope_change_events,
-                                                                user_connection,
-                                                                user_key,
-                                                                actor_key);
-                                    }
+                                }
+                            } else {
+                                if currently_in_scope {
+                                    // remove actor from the connections local scope
+                                    Self::user_remove_actor(&mut self.scope_change_events,
+                                                            user_connection,
+                                                            user_key,
+                                                            actor_key);
                                 }
                             }
                         }
@@ -878,41 +897,41 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
                 }
             }
 
-            if let Some(scope_func) = &self.scope_entity_func {
-                for user_key in room.users_iter() {
-                    for entity_key in room.entities_iter() {
-                        if self.entity_key_store.contains(entity_key) {
-                            if let Some(user_connection) = self.client_connections.get_mut(user_key)
-                            {
-                                let currently_in_scope = user_connection.has_entity(entity_key);
-                                let should_be_in_scope = user_connection.has_pawn_entity(entity_key)
-                                    || (scope_func.as_ref().as_ref())(
-                                        &room_key,
-                                        user_key,
-                                        entity_key,
-                                    );
-                                if should_be_in_scope {
-                                    if !currently_in_scope {
-                                        // add entity to the connections local scope
-                                        Self::user_add_entity(&mut self.scope_change_events,
-                                                                 user_connection,
-                                                                 user_key,
-                                                                 entity_key);
-                                    }
-                                } else {
-                                    if currently_in_scope {
-                                        // remove entity from the connections local scope
-                                        Self::user_remove_entity(&mut self.scope_change_events,
-                                                                user_connection,
-                                                                user_key,
-                                                                entity_key);
-                                    }
+
+            for user_key in room.users_iter() {
+                for entity_key in room.entities_iter() {
+                    if self.entity_key_store.contains(entity_key) {
+                        if let Some(user_connection) = self.client_connections.get_mut(user_key)
+                        {
+                            let currently_in_scope = user_connection.has_entity(entity_key);
+                            let should_be_in_scope = user_connection.has_pawn_entity(entity_key)
+                                || (&self.scope_entity_func.as_ref().as_ref())(
+                                    &room_key,
+                                    user_key,
+                                    entity_key,
+                                );
+                            if should_be_in_scope {
+                                if !currently_in_scope {
+                                    // add entity to the connections local scope
+                                    Self::user_add_entity(&mut self.scope_change_events,
+                                                             user_connection,
+                                                             user_key,
+                                                             entity_key);
+                                }
+                            } else {
+                                if currently_in_scope {
+                                    // remove entity from the connections local scope
+                                    Self::user_remove_entity(&mut self.scope_change_events,
+                                                            user_connection,
+                                                            user_key,
+                                                            entity_key);
                                 }
                             }
                         }
                     }
                 }
             }
+
         }
     }
 

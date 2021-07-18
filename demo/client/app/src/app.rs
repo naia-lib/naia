@@ -68,11 +68,11 @@ impl App {
                         ClientEvent::Event(event_type) => match event_type {
                             ExampleEvent::StringEvent(string_event) => {
                                 let message = string_event.message.get();
-                                info!("Client received event: {}", message);
+                                //info!("Client received event: {}", message);
 
                                 let new_message =
                                     format!("Client Packet ({})", self.server_event_count);
-                                info!("Client send: {}", new_message);
+                                //info!("Client send: {}", new_message);
 
                                 let string_event = StringEvent::new(new_message);
                                 self.client.send_event(&string_event);
@@ -114,6 +114,9 @@ impl App {
                         }
                         ClientEvent::Tick => {
                             //info!("tick event");
+                        }
+                        ClientEvent::CreateEntity(local_key) => {
+                            info!("yassss baby entity {}", local_key);
                         }
                         _ => {}
                     },
