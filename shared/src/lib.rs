@@ -62,7 +62,7 @@ pub use ecs::{
 };
 pub use host_tick_manager::HostTickManager;
 pub use host_type::HostType;
-pub use key_store::KeyStore;
+pub use key_store::KeyGenerator;
 pub use manager_type::ManagerType;
 pub use manifest::Manifest;
 pub use packet_type::PacketType;

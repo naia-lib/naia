@@ -3,15 +3,15 @@ use super::LocalActorKey;
 
 /// Simple implementation of a store that manages a recycling pool of u16 keys
 #[derive(Debug)]
-pub struct KeyStore {
+pub struct KeyGenerator {
     recycled_local_keys: Vec<LocalActorKey>,
     next_new_local_key: LocalActorKey,
 }
 
-impl KeyStore {
+impl KeyGenerator {
     /// Create a new KeyStore
     pub fn new() -> Self {
-        KeyStore {
+        KeyGenerator {
             recycled_local_keys: Vec::new(),
             next_new_local_key: 0,
         }
