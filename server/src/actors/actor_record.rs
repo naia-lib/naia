@@ -1,12 +1,12 @@
 use naia_shared::{LocalActorKey, Ref, StateMask};
 
-use super::locality_status::LocalActorStatus;
+use super::locality_status::LocalityStatus;
 
 #[derive(Debug)]
 pub struct ActorRecord {
     pub local_key: LocalActorKey,
     state_mask: Ref<StateMask>,
-    pub status: LocalActorStatus,
+    pub status: LocalityStatus,
 }
 
 impl ActorRecord {
@@ -14,7 +14,7 @@ impl ActorRecord {
         ActorRecord {
             local_key,
             state_mask: Ref::new(StateMask::new(state_mask_size)),
-            status: LocalActorStatus::Creating,
+            status: LocalityStatus::Creating,
         }
     }
 
