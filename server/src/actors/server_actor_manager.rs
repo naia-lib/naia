@@ -9,11 +9,13 @@ use slotmap::SparseSecondaryMap;
 
 use super::{
     actor_key::actor_key::ActorKey,
-    actor_record::{ActorRecord, LocalActorStatus},
+    actor_record::ActorRecord,
+    locality_status::LocalActorStatus,
+    entity_record::EntityRecord,
     mut_handler::MutHandler,
     server_actor_message::ServerActorMessage,
 };
-use naia_shared::{Actor, ActorNotifiable, ActorType, KeyGenerator, LocalActorKey, Ref, StateMask};
+use naia_shared::{Actor, ActorNotifiable, ActorType, KeyGenerator, LocalActorKey, Ref, StateMask, EntityKey, LocalEntityKey};
 
 /// Manages Actors for a given Client connection and keeps them in sync on the
 /// Client
@@ -31,7 +33,11 @@ pub struct ServerActorManager<T: ActorType> {
     mut_handler: Ref<MutHandler>,
     last_popped_state_mask: StateMask,
     pawn_store: HashSet<ActorKey>,
-    key_generator: KeyGenerator,
+    actor_key_generator: KeyGenerator,
+    entity_key_generator: KeyGenerator,
+    local_to_global_entity_key_map: HashMap<LocalEntityKey, EntityKey>,
+    local_entity_store: HashMap<EntityKey, EntityRecord>,
+    pawn_entity_store: HashSet<EntityKey>,
 }
 
 impl<T: ActorType> ServerActorManager<T> {
@@ -51,7 +57,11 @@ impl<T: ActorType> ServerActorManager<T> {
             mut_handler: mut_handler.clone(),
             last_popped_state_mask: StateMask::new(0),
             pawn_store: HashSet::new(),
-            key_generator: KeyGenerator::new(),
+            actor_key_generator: KeyGenerator::new(),
+            entity_key_generator: KeyGenerator::new(),
+            local_to_global_entity_key_map: HashMap::new(),
+            local_entity_store: HashMap::new(),
+            pawn_entity_store: HashSet::new(),
         }
     }
 
@@ -219,7 +229,7 @@ impl<T: ActorType> ServerActorManager<T> {
     pub fn add_actor(&mut self, key: &ActorKey, actor: &Ref<dyn Actor<T>>) {
         if !self.local_actor_store.contains_key(*key) {
             self.local_actor_store.insert(*key, actor.clone());
-            let local_key = self.get_new_local_key();
+            let local_key: LocalActorKey = self.actor_key_generator.generate();
             self.local_to_global_key_map.insert(local_key, *key);
             let state_mask_size = actor.borrow().get_state_mask_size();
             let actor_record = ActorRecord::new(local_key, state_mask_size);
@@ -315,10 +325,6 @@ impl<T: ActorType> ServerActorManager<T> {
         return false;
     }
 
-    fn get_new_local_key(&mut self) -> u16 {
-        return self.key_generator.get_new_local_key();
-    }
-
     pub fn collect_actor_updates(&mut self) {
         for (key, record) in self.actor_records.iter() {
             if record.status == LocalActorStatus::Created
@@ -348,6 +354,82 @@ impl<T: ActorType> ServerActorManager<T> {
             }
         }
     }
+
+    // Entity management methods
+
+    pub fn has_entity(&self, key: &EntityKey) -> bool {
+        return self.local_entity_store.contains_key(key);
+    }
+
+    pub fn add_entity(&mut self, key: &EntityKey) {
+        if !self.local_entity_store.contains_key(key) {
+            let local_key: LocalEntityKey = self.entity_key_generator.generate();
+            self.local_to_global_entity_key_map.insert(local_key, *key);
+            let entity_record = EntityRecord::new(local_key);
+            self.local_entity_store.insert(*key, entity_record);
+            self.queued_messages
+                .push_back(ServerActorMessage::CreateEntity(
+                    *key,
+                    local_key
+                ));
+
+            // if this is a pawn, send a "assign pawn" follow-up message
+            if self.pawn_entity_store.contains(key) {
+                self.queued_messages
+                    .push_back(ServerActorMessage::AssignPawnEntity(*key, local_key));
+            }
+        }
+    }
+
+    pub fn remove_entity(&mut self, key: &EntityKey) {
+        if let Some(entity_record) = self.local_entity_store.get_mut(key) {
+            if entity_record.status != LocalActorStatus::Deleting {
+                entity_record.status = LocalActorStatus::Deleting;
+
+                // if this is a pawn, send an "unassign pawn" message first
+                if self.pawn_entity_store.contains(key) {
+                    self.queued_messages
+                        .push_back(ServerActorMessage::UnassignPawnEntity(
+                            *key,
+                            entity_record.local_key,
+                        ));
+                }
+
+                self.queued_messages
+                    .push_back(ServerActorMessage::DeleteEntity(
+                        *key,
+                        entity_record.local_key,
+                    ));
+            }
+        }
+    }
+
+    pub fn has_pawn_entity(&self, key: &EntityKey) -> bool {
+        return self.pawn_entity_store.contains(key);
+    }
+
+    pub fn add_pawn_entity(&mut self, key: &EntityKey) {
+        if !self.pawn_entity_store.contains(key) {
+            self.pawn_entity_store.insert(*key);
+            if let Some(entity_record) = self.local_entity_store.get_mut(key) {
+                self.queued_messages
+                    .push_back(ServerActorMessage::AssignPawnEntity(*key, entity_record.local_key));
+            }
+        }
+    }
+
+    pub fn remove_pawn_entity(&mut self, key: &EntityKey) {
+        if self.pawn_entity_store.contains(key) {
+            self.pawn_entity_store.remove(key);
+            if let Some(entity_record) = self.local_entity_store.get_mut(key) {
+                self.queued_messages
+                    .push_back(ServerActorMessage::UnassignPawnEntity(
+                        *key,
+                        entity_record.local_key,
+                    ));
+            }
+        }
+    }
 }
 
 impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
@@ -370,7 +452,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                                 .deregister_mask(&self.address, global_key_ref);
                             self.local_actor_store.remove(global_key);
                             self.local_to_global_key_map.remove(local_key);
-                            self.key_generator.recycle_key(local_key);
+                            self.actor_key_generator.recycle_key(local_key);
                             self.actor_records.remove(global_key);
                             self.pawn_store.remove(&global_key);
                         }
@@ -381,6 +463,23 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                     }
                     ServerActorMessage::AssignPawn(_, _) => {}
                     ServerActorMessage::UnassignPawn(_, _) => {}
+                    ServerActorMessage::CreateEntity(global_key, _) => {
+                        if let Some(entity_record) = self.local_entity_store.get_mut(global_key) {
+                            // update entity record status
+                            entity_record.status = LocalActorStatus::Created;
+                        }
+                    }
+                    ServerActorMessage::DeleteEntity(global_key, local_key) => {
+                        if let Some(_) = self.local_entity_store.get(global_key) {
+                            // actually delete the entity from local records
+                            self.local_entity_store.remove(global_key);
+                            self.local_to_global_entity_key_map.remove(local_key);
+                            self.entity_key_generator.recycle_key(local_key);
+                            self.pawn_entity_store.remove(&global_key);
+                        }
+                    }
+                    ServerActorMessage::AssignPawnEntity(_, _) => {}
+                    ServerActorMessage::UnassignPawnEntity(_, _) => {}
                 }
             }
 
@@ -392,12 +491,18 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
         if let Some(dropped_messages_list) = self.sent_messages.get(&dropped_packet_index) {
             for dropped_message in dropped_messages_list.into_iter() {
                 match dropped_message {
+                    // gauranteed delivery messages
                     ServerActorMessage::CreateActor(_, _, _)
                     | ServerActorMessage::DeleteActor(_, _)
                     | ServerActorMessage::AssignPawn(_, _)
-                    | ServerActorMessage::UnassignPawn(_, _) => {
+                    | ServerActorMessage::UnassignPawn(_, _)
+                    | ServerActorMessage::CreateEntity(_, _)
+                    | ServerActorMessage::DeleteEntity(_, _)
+                    | ServerActorMessage::AssignPawnEntity(_, _)
+                    | ServerActorMessage::UnassignPawnEntity(_, _)=> {
                         self.queued_messages.push_back(dropped_message.clone());
                     }
+                    // non-gauranteed delivery messages
                     ServerActorMessage::UpdateActor(global_key, _, _, _)
                     | ServerActorMessage::UpdatePawn(global_key, _, _, _) => {
                         if let Some(state_mask_map) = self.sent_updates.get(&dropped_packet_index) {

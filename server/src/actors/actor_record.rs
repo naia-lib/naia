@@ -1,17 +1,12 @@
 use naia_shared::{LocalActorKey, Ref, StateMask};
 
+use super::locality_status::LocalActorStatus;
+
 #[derive(Debug)]
 pub struct ActorRecord {
     pub local_key: LocalActorKey,
     state_mask: Ref<StateMask>,
     pub status: LocalActorStatus,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum LocalActorStatus {
-    Creating,
-    Created,
-    Deleting,
 }
 
 impl ActorRecord {
