@@ -28,7 +28,7 @@ compile_error!("Naia Server can only use UDP or WebRTC, you must pick one");
 compile_error!("Naia Server requires either the 'use-udp' or 'use-webrtc' feature to be enabled, you must pick one.");
 
 pub use naia_shared::{
-    find_my_ip_address, Actor, ActorType, LinkConditionerConfig, Random, Ref, SharedConfig,
+    find_my_ip_address, Actor, LocalActorKey, ActorType, LinkConditionerConfig, Random, Ref, SharedConfig,
 };
 
 mod actors;

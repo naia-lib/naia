@@ -307,6 +307,16 @@ impl<T: ActorType> ServerActorManager<T> {
         return None;
     }
 
+    pub fn actor_is_created(&self, local_key: &LocalActorKey) -> bool {
+        if let Some(global_key) = self.local_to_global_key_map.get(&local_key) {
+            if let Some(record) = self.actor_records.get(*global_key) {
+                return record.status == LocalActorStatus::Created;
+            }
+        }
+
+        return false;
+    }
+
     fn get_new_local_key(&mut self) -> u16 {
         if let Some(local_key) = self.recycled_local_keys.pop() {
             return local_key;
