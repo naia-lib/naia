@@ -58,7 +58,6 @@ pub struct NaiaServer<T: EventType, U: ActorType> {
     tick_manager: ServerTickManager,
     tick_timer: Interval,
     scope_change_events: VecDeque<(bool, UserKey, ActorKey)>,
-    //actor_key_to_user_key: HashMap<ActorKey, HashSet<UserKey>>,
 }
 
 /// A collection of IP addresses describing which IP to listen on for new
@@ -141,7 +140,6 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
             tick_manager: ServerTickManager::new(shared_config.tick_interval),
             tick_timer: Interval::new(shared_config.tick_interval),
             scope_change_events: VecDeque::new(),
-            //actor_key_to_user_key: HashMap::new(),
         }
     }
 
@@ -180,15 +178,6 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
 
             // timeouts
             if let Some(user_key) = self.outstanding_disconnects.pop_front() {
-
-                // remove from actor_key_to_user_key map
-//                if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-//                    for actor_key in user_connection.get_global_actor_keys() {
-//                        if let Some(user_set) = self.actor_key_to_user_key.get_mut(&actor_key) {
-//                            user_set.remove(&user_key);
-//                        }
-//                    }
-//                }
 
                 for (_, room) in self.rooms.iter_mut() {
                     room.unsubscribe_user(&user_key);
@@ -562,7 +551,6 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
                 user_connection.remove_pawn(&key);
                 Self::user_remove_actor(&mut self.scope_change_events,
-                                        //&mut self.actor_key_to_user_key,
                                         user_connection,
                                         &user_key,
                                         &key);
@@ -748,20 +736,21 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         return None;
     }
 
-//    /// Get keys of users which have a specific actor in scope
-//    pub fn get_users_with_actor(&self, actor_key: &ActorKey) -> HashSet<UserKey> {
-//        if let Some(user_set) = self.actor_key_to_user_key.get(actor_key) {
-//            return user_set.clone();
-//        }
-//        return HashSet::new();
-//    }
+    /// see if actor is created for given user
+    pub fn actor_is_created(&self, user_key: &UserKey, local_key: &LocalActorKey) -> bool {
+        if let Some(user_connection) = self.client_connections.get(user_key) {
+            return user_connection.actor_is_created(local_key);
+        }
+
+        return false;
+    }
+
 
     fn update_actor_scopes(&mut self) {
         for (room_key, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_actor)) = room.pop_removal_queue() {
                 if let Some(user_connection) = self.client_connections.get_mut(&removed_user) {
                     Self::user_remove_actor(&mut self.scope_change_events,
-                                            //&mut self.actor_key_to_user_key,
                                             user_connection,
                                             &removed_user,
                                             &removed_actor);
@@ -788,7 +777,6 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
                                         if let Some(actor) = self.global_actor_store.get(*actor_key)
                                         {
                                             Self::user_add_actor(&mut self.scope_change_events,
-                                                                 //&mut self.actor_key_to_user_key,
                                                                  user_connection,
                                                                  user_key,
                                                                  actor_key,
@@ -799,7 +787,6 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
                                     if currently_in_scope {
                                         // remove actor from the connections local scope
                                         Self::user_remove_actor(&mut self.scope_change_events,
-                                                                //&mut self.actor_key_to_user_key,
                                                                 user_connection,
                                                                 user_key,
                                                                 actor_key);
@@ -814,7 +801,6 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
     }
 
     fn user_add_actor(event_queue: &mut VecDeque<(bool, UserKey, ActorKey)>,
-                      //actor_key_to_user_key: &mut HashMap<ActorKey, HashSet<UserKey>>,
                       user_connection: &mut ClientConnection<T, U>,
                       user_key: &UserKey,
                       actor_key: &ActorKey,
@@ -824,21 +810,9 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
 
         //fire event
         event_queue.push_back((true, *user_key, *actor_key));
-
-        //associate actor to user
-//        if !actor_key_to_user_key.contains_key(actor_key) {
-//            actor_key_to_user_key.insert(*actor_key, HashSet::new());
-//        }
-//
-//        if let Some(user_set) = actor_key_to_user_key.get_mut(actor_key) {
-//            if !user_set.contains(user_key) {
-//                user_set.insert(*user_key);
-//            }
-//        }
     }
 
     fn user_remove_actor(event_queue: &mut VecDeque<(bool, UserKey, ActorKey)>,
-                         //actor_key_to_user_key: &mut HashMap<ActorKey, HashSet<UserKey>>,
                          user_connection: &mut ClientConnection<T, U>,
                          user_key: &UserKey,
                          actor_key: &ActorKey) {
@@ -847,11 +821,6 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
 
         //fire event
         event_queue.push_back((false, *user_key, *actor_key));
-
-        //disassociate actor with user
-//        if let Some(user_set) = actor_key_to_user_key.get_mut(actor_key) {
-//            user_set.remove(user_key);
-//        }
     }
 
     async fn send_connect_accept_message(

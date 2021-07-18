@@ -147,6 +147,10 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         return self.actor_manager.global_actor_keys();
     }
 
+    pub fn actor_is_created(&self, local_key: &LocalActorKey) -> bool {
+        return self.actor_manager.actor_is_created(local_key);
+    }
+
     // Pass-through methods to underlying common connection
 
     pub fn mark_sent(&mut self) {

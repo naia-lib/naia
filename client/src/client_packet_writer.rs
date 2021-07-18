@@ -7,7 +7,7 @@ use naia_shared::{
 
 use super::command_receiver::CommandReceiver;
 
-const MAX_PAST_COMMANDS: u8 = 2;
+const MAX_PAST_COMMANDS: u8 = 3;
 
 /// Handles writing of Event & Actor data into an outgoing packet
 pub struct ClientPacketWriter {

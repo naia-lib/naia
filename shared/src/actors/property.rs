@@ -30,6 +30,14 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
         return &self.inner;
     }
 
+    /// Gets a mutable reference to the value contained by the Property, queue to update
+    pub fn get_mut(&mut self) -> &mut T {
+        if let Some(mutator) = &self.mutator {
+            mutator.borrow_mut().mutate(self.mutator_index);
+        }
+        return &mut self.inner;
+    }
+
     /// Set the Property's contained value
     pub fn set(&mut self, value: T) {
         if let Some(mutator) = &self.mutator {
