@@ -123,14 +123,14 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                 }
                 // receive replay command
                 if let Some((pawn_key, command)) = connection.get_incoming_replay() {
-                    return Some(Ok(ClientEvent::CommandReplay(
+                    return Some(Ok(ClientEvent::ReplayCommand(
                         pawn_key,
                         command.as_ref().get_typed_copy(),
                     )));
                 }
                 // receive command
                 if let Some((pawn_key, command)) = connection.get_incoming_command() {
-                    return Some(Ok(ClientEvent::Command(
+                    return Some(Ok(ClientEvent::NewCommand(
                         pawn_key,
                         command.as_ref().get_typed_copy(),
                     )));

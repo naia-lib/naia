@@ -13,7 +13,7 @@ use super::{
     mut_handler::MutHandler,
     server_actor_message::ServerActorMessage,
 };
-use naia_shared::{Actor, ActorNotifiable, ActorType, LocalActorKey, Ref, StateMask};
+use naia_shared::{Actor, ActorNotifiable, ActorType, KeyStore, LocalActorKey, Ref, StateMask};
 
 /// Manages Actors for a given Client connection and keeps them in sync on the
 /// Client
@@ -22,8 +22,6 @@ pub struct ServerActorManager<T: ActorType> {
     address: SocketAddr,
     local_actor_store: SparseSecondaryMap<ActorKey, Ref<dyn Actor<T>>>,
     local_to_global_key_map: HashMap<LocalActorKey, ActorKey>,
-    recycled_local_keys: Vec<LocalActorKey>,
-    next_new_local_key: LocalActorKey,
     actor_records: SparseSecondaryMap<ActorKey, ActorRecord>,
     queued_messages: VecDeque<ServerActorMessage<T>>,
     sent_messages: HashMap<u16, Vec<ServerActorMessage<T>>>,
@@ -33,6 +31,7 @@ pub struct ServerActorManager<T: ActorType> {
     mut_handler: Ref<MutHandler>,
     last_popped_state_mask: StateMask,
     pawn_store: HashSet<ActorKey>,
+    local_key_store: KeyStore,
 }
 
 impl<T: ActorType> ServerActorManager<T> {
@@ -43,8 +42,6 @@ impl<T: ActorType> ServerActorManager<T> {
             address,
             local_actor_store: SparseSecondaryMap::new(),
             local_to_global_key_map: HashMap::new(),
-            recycled_local_keys: Vec::new(),
-            next_new_local_key: 0,
             actor_records: SparseSecondaryMap::new(),
             queued_messages: VecDeque::new(),
             sent_messages: HashMap::new(),
@@ -54,6 +51,7 @@ impl<T: ActorType> ServerActorManager<T> {
             mut_handler: mut_handler.clone(),
             last_popped_state_mask: StateMask::new(0),
             pawn_store: HashSet::new(),
+            local_key_store: KeyStore::new(),
         }
     }
 
@@ -318,13 +316,7 @@ impl<T: ActorType> ServerActorManager<T> {
     }
 
     fn get_new_local_key(&mut self) -> u16 {
-        if let Some(local_key) = self.recycled_local_keys.pop() {
-            return local_key;
-        }
-
-        let output = self.next_new_local_key;
-        self.next_new_local_key += 1;
-        return output;
+        return self.local_key_store.get_new_local_key();
     }
 
     pub fn collect_actor_updates(&mut self) {
@@ -378,7 +370,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                                 .deregister_mask(&self.address, global_key_ref);
                             self.local_actor_store.remove(global_key);
                             self.local_to_global_key_map.remove(local_key);
-                            self.recycled_local_keys.push(*local_key);
+                            self.local_key_store.recycle_key(local_key);
                             self.actor_records.remove(global_key);
                             self.pawn_store.remove(&global_key);
                         }

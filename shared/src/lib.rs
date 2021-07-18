@@ -17,9 +17,11 @@ mod ack_manager;
 mod actors;
 mod connection;
 mod connection_config;
+mod ecs;
 mod events;
 mod host_tick_manager;
 mod host_type;
+mod key_store;
 mod manager_type;
 mod manifest;
 mod packet_type;
@@ -55,8 +57,12 @@ pub use events::{
     event_packet_writer::{EventPacketWriter, MTU_SIZE},
     event_type::EventType,
 };
+pub use ecs::{
+    keys::{EntityKey, LocalEntityKey, LocalComponentKey}
+};
 pub use host_tick_manager::HostTickManager;
 pub use host_type::HostType;
+pub use key_store::KeyStore;
 pub use manager_type::ManagerType;
 pub use manifest::Manifest;
 pub use packet_type::PacketType;
