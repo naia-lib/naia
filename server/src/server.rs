@@ -558,6 +558,112 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         self.global_actor_store.remove(key);
     }
 
+    /// Assigns an Actor to a specific User, making it a Pawn for that User
+    /// (meaning that the User will be able to issue Commands to that Pawn)
+    pub fn assign_pawn(&mut self, user_key: &UserKey, actor_key: &ActorKey) {
+        if self.global_actor_store.contains_key(*actor_key) {
+            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                user_connection.add_pawn(actor_key);
+            }
+        }
+    }
+
+    /// Unassigns a Pawn from a specific User (meaning that the User will be
+    /// unable to issue Commands to that Pawn)
+    pub fn unassign_pawn(&mut self, user_key: &UserKey, actor_key: &ActorKey) {
+        if self.global_actor_store.contains_key(*actor_key) {
+            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                user_connection.remove_pawn(actor_key);
+            }
+        }
+    }
+
+    /// Register an Entity with the Server, whereby the Server will sync the
+    /// state of all the given Entity's Components to all connected Clients for which the Entity is
+    /// in scope. Gives back an EntityKey which can be used to get the reference
+    /// to the Entity from the Server once again
+    pub fn register_entity(&mut self) -> EntityKey {
+        let entity_key: EntityKey = self.entity_key_generator.generate();
+        self.entity_component_map.insert(entity_key, HashSet::new());
+        return entity_key;
+    }
+
+    /// Deregisters an Entity with the Server, deleting local copies of the
+    /// Entity on each Client
+    pub fn deregister_entity(&mut self, key: &EntityKey) {
+        for (user_key, _) in self.users.iter() {
+            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+                user_connection.remove_pawn_entity(key);
+                Self::user_remove_entity(&mut self.scope_change_events,
+                                        user_connection,
+                                        &user_key,
+                                        key);
+            }
+        }
+
+        self.entity_component_map.remove(key);
+    }
+
+    /// Assigns an Actor to a specific User, making it a Pawn for that User
+    /// (meaning that the User will be able to issue Commands to that Pawn)
+    pub fn assign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
+        if self.entity_component_map.contains_key(entity_key) {
+            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                user_connection.add_pawn_entity(entity_key);
+            }
+        }
+    }
+
+    /// Unassigns a Pawn from a specific User (meaning that the User will be
+    /// unable to issue Commands to that Pawn)
+    pub fn unassign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
+        if self.entity_component_map.contains_key(entity_key) {
+            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                user_connection.remove_pawn_entity(entity_key);
+            }
+        }
+    }
+
+    /// Register an Actor as a Component with the Server, whereby the Server will sync the
+    /// state of the Component to all connected Clients for which the Component's Entity is
+    /// in Scope.
+    /// Gives back a ComponentKey which can be used to get the reference to the Component
+    /// from the Server once again
+    pub fn add_component_to_entity(&mut self, entity_key: &EntityKey, actor: U) -> Result<ComponentKey, &str> {
+
+        if !self.entity_component_map.contains_key(&entity_key) {
+            return Err("attempted to add component to nonexistant entity");
+        }
+
+        let component_key: ComponentKey = self.register_actor(actor);
+        self.component_entity_map.insert(component_key, *entity_key);
+
+        if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
+            component_set.insert(component_key);
+        }
+
+        return Ok(component_key);
+    }
+
+    /// Deregisters a Component with the Server, deleting local copies of the
+    /// Component on each Client
+    pub fn remove_component(&mut self, component_key: &ComponentKey) {
+        if let Some(entity_key) = self.component_entity_map.remove(component_key) {
+            if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
+                for (user_key, _) in self.users.iter() {
+                    if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+                        user_connection.remove_actor(component_key);
+                    }
+                }
+
+                self.mut_handler.borrow_mut().deregister_actor(component_key);
+                self.global_actor_store.remove(*component_key);
+
+                component_set.remove(component_key);
+            }
+        }
+    }
+
     /// Given an ActorKey, get a reference to a registered Actor being tracked
     /// by the Server
     pub fn get_actor(&mut self, key: ActorKey) -> Option<&U> {
@@ -757,118 +863,12 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         self.tick_manager.get_tick()
     }
 
-    /// Assigns an Actor to a specific User, making it a Pawn for that User
-    /// (meaning that the User will be able to issue Commands to that Pawn)
-    pub fn assign_pawn(&mut self, user_key: &UserKey, actor_key: &ActorKey) {
-        if self.global_actor_store.contains_key(*actor_key) {
-            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-                user_connection.add_pawn(actor_key);
-            }
-        }
-    }
-
-    /// Unassigns a Pawn from a specific User (meaning that the User will be
-    /// unable to issue Commands to that Pawn)
-    pub fn unassign_pawn(&mut self, user_key: &UserKey, actor_key: &ActorKey) {
-        if self.global_actor_store.contains_key(*actor_key) {
-            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-                user_connection.remove_pawn(actor_key);
-            }
-        }
-    }
-
     /// Returns true if a given User has an Actor with a given ActorKey in-scope currently
     pub fn user_scope_has_actor(&self, user_key: &UserKey, actor_key: &ActorKey) -> bool {
         if let Some(user_connection) = self.client_connections.get(user_key) {
             return user_connection.has_actor(actor_key);
         }
         return false;
-    }
-
-    /// Register an Entity with the Server, whereby the Server will sync the
-    /// state of all the given Entity's Components to all connected Clients for which the Entity is
-    /// in scope. Gives back an EntityKey which can be used to get the reference
-    /// to the Entity from the Server once again
-    pub fn register_entity(&mut self) -> EntityKey {
-        let entity_key: EntityKey = self.entity_key_generator.generate();
-        self.entity_component_map.insert(entity_key, HashSet::new());
-        return entity_key;
-    }
-
-    /// Deregisters an Entity with the Server, deleting local copies of the
-    /// Entity on each Client
-    pub fn deregister_entity(&mut self, key: &EntityKey) {
-        for (user_key, _) in self.users.iter() {
-            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                user_connection.remove_pawn_entity(key);
-                Self::user_remove_entity(&mut self.scope_change_events,
-                                        user_connection,
-                                        &user_key,
-                                        key);
-            }
-        }
-
-        self.entity_component_map.remove(key);
-    }
-
-    /// Assigns an Actor to a specific User, making it a Pawn for that User
-    /// (meaning that the User will be able to issue Commands to that Pawn)
-    pub fn assign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
-        if self.entity_component_map.contains_key(entity_key) {
-            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-                user_connection.add_pawn_entity(entity_key);
-            }
-        }
-    }
-
-    /// Unassigns a Pawn from a specific User (meaning that the User will be
-    /// unable to issue Commands to that Pawn)
-    pub fn unassign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
-        if self.entity_component_map.contains_key(entity_key) {
-            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-                user_connection.remove_pawn_entity(entity_key);
-            }
-        }
-    }
-
-    /// Register an Actor as a Component with the Server, whereby the Server will sync the
-    /// state of the Component to all connected Clients for which the Component's Entity is
-    /// in Scope.
-    /// Gives back a ComponentKey which can be used to get the reference to the Component
-    /// from the Server once again
-    pub fn add_component_to_entity(&mut self, entity_key: &EntityKey, actor: U) -> Result<ComponentKey, &str> {
-
-        if !self.entity_component_map.contains_key(&entity_key) {
-            return Err("attempted to add component to nonexistant entity");
-        }
-
-        let component_key: ComponentKey = self.register_actor(actor);
-        self.component_entity_map.insert(component_key, *entity_key);
-
-        if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
-            component_set.insert(component_key);
-        }
-
-        return Ok(component_key);
-    }
-
-    /// Deregisters a Component with the Server, deleting local copies of the
-    /// Component on each Client
-    pub fn remove_component(&mut self, component_key: &ComponentKey) {
-        if let Some(entity_key) = self.component_entity_map.remove(component_key) {
-            if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
-                for (user_key, _) in self.users.iter() {
-                    if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                        user_connection.remove_actor(component_key);
-                    }
-                }
-
-                self.mut_handler.borrow_mut().deregister_actor(component_key);
-                self.global_actor_store.remove(*component_key);
-
-                component_set.remove(component_key);
-            }
-        }
     }
 
     // Private methods
