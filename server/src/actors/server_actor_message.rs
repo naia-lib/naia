@@ -15,7 +15,6 @@ pub enum ServerActorMessage<T: ActorType> {
     AssignPawnEntity(EntityKey, LocalEntityKey),
     UnassignPawnEntity(EntityKey, LocalEntityKey),
     AddComponent(EntityKey, LocalEntityKey, ComponentKey, LocalComponentKey),
-    RemoveComponent(EntityKey, LocalEntityKey, ComponentKey, LocalComponentKey),
 }
 
 impl<T: ActorType> ServerActorMessage<T> {
@@ -32,7 +31,6 @@ impl<T: ActorType> ServerActorMessage<T> {
             ServerActorMessage::AssignPawnEntity(_, _) => 8,
             ServerActorMessage::UnassignPawnEntity(_, _) => 9,
             ServerActorMessage::AddComponent(_, _, _, _) => 10,
-            ServerActorMessage::RemoveComponent(_, _, _, _) => 11,
         }
     }
 }
@@ -72,9 +70,6 @@ impl<T: ActorType> Clone for ServerActorMessage<T> {
             }
             ServerActorMessage::AddComponent(gek, lek, gck, lck) => {
                 ServerActorMessage::AddComponent(gek.clone(), lek.clone(), gck.clone(), lck.clone())
-            }
-            ServerActorMessage::RemoveComponent(gek, lek, gck, lck) => {
-                ServerActorMessage::RemoveComponent(gek.clone(), lek.clone(), gck.clone(), lck.clone())
             }
         }
     }
