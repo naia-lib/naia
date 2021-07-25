@@ -785,23 +785,6 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         return false;
     }
 
-    /// Returns the local key used to reference a given actor for a given user
-    pub fn get_user_local_key_for_actor(&self, user_key: &UserKey, actor_key: &ActorKey) -> Option<LocalActorKey> {
-        if let Some(user_connection) = self.client_connections.get(user_key) {
-            return user_connection.get_actor_local_key(actor_key);
-        }
-        return None;
-    }
-
-    /// see if actor is created for given user
-    pub fn actor_is_created(&self, user_key: &UserKey, local_key: &LocalActorKey) -> bool {
-        if let Some(user_connection) = self.client_connections.get(user_key) {
-            return user_connection.actor_is_created(local_key);
-        }
-
-        return false;
-    }
-
     /// Register an Entity with the Server, whereby the Server will sync the
     /// state of all the given Entity's Components to all connected Clients for which the Entity is
     /// in scope. Gives back an EntityKey which can be used to get the reference
@@ -853,20 +836,20 @@ impl<T: EventType, U: ActorType> Server<T, U> {
     /// in Scope.
     /// Gives back a ComponentKey which can be used to get the reference to the Component
     /// from the Server once again
-    pub fn add_component_to_entity(&mut self, entity_key: &EntityKey, actor: U) -> ComponentKey {
-        if !self.entity_component_map.contains_key(entity_key) {
-            warn!("attempted to add component to nonexistant entity");
+    pub fn add_component_to_entity(&mut self, entity_key: &EntityKey, actor: U) -> Result<ComponentKey, &str> {
+
+        if !self.entity_component_map.contains_key(&entity_key) {
+            return Err("attempted to add component to nonexistant entity");
         }
 
         let component_key: ComponentKey = self.register_actor(actor);
-
         self.component_entity_map.insert(component_key, *entity_key);
 
         if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
             component_set.insert(component_key);
         }
 
-        return component_key;
+        return Ok(component_key);
     }
 
     /// Deregisters a Component with the Server, deleting local copies of the
