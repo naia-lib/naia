@@ -1,12 +1,15 @@
-use crate::{AuthEvent, ExampleActor, ExampleEvent, PointActor, StringEvent};
+
 use naia_shared::Manifest;
 
-pub fn manifest_load() -> Manifest<ExampleEvent, ExampleActor> {
-    let mut manifest = Manifest::<ExampleEvent, ExampleActor>::new();
+use super::components::{Components, Position};
+use super::events::{Events, StringMessage, Auth};
 
-    manifest.register_event(AuthEvent::get_builder());
-    manifest.register_event(StringEvent::get_builder());
-    manifest.register_actor(PointActor::get_builder());
+pub fn manifest_load() -> Manifest<Events, Components> {
+    let mut manifest = Manifest::<Events, Components>::new();
+
+    manifest.register_event(Auth::get_builder());
+    manifest.register_event(StringMessage::get_builder());
+    manifest.register_actor(Position::get_builder());
 
     manifest
 }

@@ -17,14 +17,23 @@ use super::{
 };
 use naia_shared::{Actor, ActorNotifiable, ActorType, KeyGenerator, LocalActorKey, Ref, StateMask, EntityKey, LocalEntityKey};
 
-/// Manages Actors for a given Client connection and keeps them in sync on the
+/// Manages Actors/Entities for a given Client connection and keeps them in sync on the
 /// Client
 #[derive(Debug)]
 pub struct ServerActorManager<T: ActorType> {
     address: SocketAddr,
+    // actors
+    actor_key_generator: KeyGenerator,
     local_actor_store: SparseSecondaryMap<ActorKey, Ref<dyn Actor<T>>>,
     local_to_global_key_map: HashMap<LocalActorKey, ActorKey>,
     actor_records: SparseSecondaryMap<ActorKey, ActorRecord>,
+    pawn_store: HashSet<ActorKey>,
+    // entities
+    entity_key_generator: KeyGenerator,
+    local_entity_store: HashMap<EntityKey, EntityRecord>,
+    local_to_global_entity_key_map: HashMap<LocalEntityKey, EntityKey>,
+    pawn_entity_store: HashSet<EntityKey>,
+    // messages / updates / ect
     queued_messages: VecDeque<ServerActorMessage<T>>,
     sent_messages: HashMap<u16, Vec<ServerActorMessage<T>>>,
     sent_updates: HashMap<u16, HashMap<ActorKey, Ref<StateMask>>>,
@@ -32,12 +41,6 @@ pub struct ServerActorManager<T: ActorType> {
     last_last_update_packet_index: u16,
     mut_handler: Ref<MutHandler>,
     last_popped_state_mask: StateMask,
-    pawn_store: HashSet<ActorKey>,
-    actor_key_generator: KeyGenerator,
-    entity_key_generator: KeyGenerator,
-    local_to_global_entity_key_map: HashMap<LocalEntityKey, EntityKey>,
-    local_entity_store: HashMap<EntityKey, EntityRecord>,
-    pawn_entity_store: HashSet<EntityKey>,
 }
 
 impl<T: ActorType> ServerActorManager<T> {

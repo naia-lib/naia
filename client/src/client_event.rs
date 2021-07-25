@@ -1,4 +1,4 @@
-use naia_shared::{EventType, LocalActorKey, LocalEntityKey, };
+use naia_shared::{EventType, LocalActorKey, LocalEntityKey, LocalComponentKey};
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
@@ -36,6 +36,18 @@ pub enum ClientEvent<T: EventType> {
     UpdateActor(LocalActorKey),
     /// Occurs when an Actor on the Server has left the Client's scope
     DeleteActor(LocalActorKey),
+    /// Occurs when an Entity on the Server has come into scope for the Client,
+    /// and should be added to the local client's ECS "world"
+    CreateEntity(LocalEntityKey),
+    /// Occurs when an Entity on the Server has left the Client's scope, and should be removed from the local client's ECS "world"
+    DeleteEntity(LocalEntityKey),
+    /// Occurs when a Component should be added to a given Entity
+    AddComponent(LocalEntityKey, LocalComponentKey),
+    /// Occurs when a Component has had a state change on the Server while the
+    /// Entity it is attached to has come into scope for the Client
+    UpdateComponent(LocalEntityKey, LocalComponentKey),
+    /// Occurs when a Component should be removed from the given Entity
+    RemoveComponent(LocalEntityKey, LocalComponentKey),
     /// Occurs when an Entity has been assigned to the local host as a Pawn,
     /// meaning it can receive Commands from the Client
     AssignPawnEntity(LocalEntityKey),
@@ -50,16 +62,4 @@ pub enum ClientEvent<T: EventType> {
     /// An Pawn Entity Command which is replayed to extrapolate from recently received
     /// authoritative state
     ReplayCommandEntity(LocalEntityKey, T),
-    /// Occurs when an Entity on the Server has come into scope for the Client,
-    /// and should be added to the local client's ECS "world"
-    CreateEntity(LocalEntityKey),
-    /// Occurs when an Entity on the Server has left the Client's scope, and should be removed from the local client's ECS "world"
-    DeleteEntity(LocalEntityKey),
-    /// Occurs when a Component should be added to a given Entity
-    AddComponent(LocalEntityKey, LocalActorKey),
-    /// Occurs when a Component has had a state change on the Server while the
-    /// Entity it is attached to has come into scope for the Client
-    UpdateComponent(LocalEntityKey, LocalActorKey),
-    /// Occurs when a Component should be removed from the given Entity
-    RemoveComponent(LocalEntityKey, LocalActorKey),
 }
