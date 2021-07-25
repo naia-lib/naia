@@ -1,22 +1,22 @@
-use std::collections::VecDeque;
+use std::collections::HashMap;
 
-use naia_shared::{LocalEntityKey, ActorType};
+use naia_shared::LocalEntityKey;
 
-use super::{locality_status::LocalityStatus, server_actor_message::ServerActorMessage};
+use super::{locality_status::LocalityStatus, actor_key::ComponentKey};
 
 #[derive(Debug)]
-pub struct EntityRecord<T: ActorType> {
+pub struct EntityRecord {
     pub local_key: LocalEntityKey,
     pub status: LocalityStatus,
-    pub on_create_messages: VecDeque<ServerActorMessage<T>>,
+    pub components: HashMap<ComponentKey, bool>,
 }
 
-impl<T: ActorType> EntityRecord<T> {
+impl EntityRecord {
     pub fn new(local_key: LocalEntityKey) -> Self {
         EntityRecord {
             local_key,
             status: LocalityStatus::Creating,
-            on_create_messages: VecDeque::new(),
+            components: HashMap::new(),
         }
     }
 }
