@@ -45,12 +45,9 @@ mod server_packet_writer;
 mod server_tick_manager;
 mod user;
 
-pub use actors::actor_key::actor_key::ActorKey;
+pub use actors::actor_key::{actor_key::ActorKey, ComponentKey};
 pub use server::Server;
 pub use room::room_key::RoomKey;
 pub use server_config::{ServerConfig, ServerAddresses};
 pub use server_event::ServerEvent;
 pub use user::user_key::UserKey;
-
-/// Key to be used to reference a Component Actor
-pub type ComponentKey = ActorKey;

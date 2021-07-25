@@ -14,6 +14,7 @@ use super::{
     ping_manager::PingManager,
     server_packet_writer::ServerPacketWriter,
 };
+use crate::ComponentKey;
 
 pub struct ClientConnection<T: EventType, U: ActorType> {
     connection: Connection<T>,
@@ -180,6 +181,14 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
 
     pub fn remove_pawn_entity(&mut self, key: &EntityKey) {
         self.actor_manager.remove_pawn_entity(key);
+    }
+
+    pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Actor<U>>) {
+        self.actor_manager.add_component(entity_key, component_key, component_ref);
+    }
+
+    pub fn remove_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey) {
+        self.actor_manager.remove_component(entity_key, component_key);
     }
 
     // Pass-through methods to underlying common connection

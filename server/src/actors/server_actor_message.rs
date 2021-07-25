@@ -1,6 +1,6 @@
-use naia_shared::{Actor, ActorType, LocalActorKey, Ref, StateMask, LocalEntityKey, EntityKey};
+use naia_shared::{Actor, ActorType, LocalActorKey, Ref, StateMask, LocalEntityKey, EntityKey, LocalComponentKey};
 
-use super::actor_key::actor_key::ActorKey;
+use super::actor_key::{actor_key::ActorKey, ComponentKey};
 
 #[derive(Debug)]
 pub enum ServerActorMessage<T: ActorType> {
@@ -14,6 +14,8 @@ pub enum ServerActorMessage<T: ActorType> {
     DeleteEntity(EntityKey, LocalEntityKey),
     AssignPawnEntity(EntityKey, LocalEntityKey),
     UnassignPawnEntity(EntityKey, LocalEntityKey),
+    AddComponent(EntityKey, LocalEntityKey, ComponentKey, LocalComponentKey),
+    RemoveComponent(EntityKey, LocalEntityKey, ComponentKey, LocalComponentKey),
 }
 
 impl<T: ActorType> ServerActorMessage<T> {
@@ -29,6 +31,8 @@ impl<T: ActorType> ServerActorMessage<T> {
             ServerActorMessage::DeleteEntity(_, _) => 7,
             ServerActorMessage::AssignPawnEntity(_, _) => 8,
             ServerActorMessage::UnassignPawnEntity(_, _) => 9,
+            ServerActorMessage::AddComponent(_, _, _, _) => 10,
+            ServerActorMessage::RemoveComponent(_, _, _, _) => 11,
         }
     }
 }
@@ -65,6 +69,12 @@ impl<T: ActorType> Clone for ServerActorMessage<T> {
             }
             ServerActorMessage::UnassignPawnEntity(gk, lk) => {
                 ServerActorMessage::UnassignPawnEntity(gk.clone(), lk.clone())
+            }
+            ServerActorMessage::AddComponent(gek, lek, gck, lck) => {
+                ServerActorMessage::AddComponent(gek.clone(), lek.clone(), gck.clone(), lck.clone())
+            }
+            ServerActorMessage::RemoveComponent(gek, lek, gck, lck) => {
+                ServerActorMessage::RemoveComponent(gek.clone(), lek.clone(), gck.clone(), lck.clone())
             }
         }
     }
