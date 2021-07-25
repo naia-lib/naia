@@ -17,9 +17,10 @@ use naia_server_socket::{
 pub use naia_shared::{
     wrapping_diff, Actor, ActorMutator, ActorType, Connection, ConnectionConfig, Event, EventType,
     HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType, Ref, SharedConfig,
-    Timer, Timestamp, LocalActorKey
+    Timer, Timestamp, LocalActorKey, StandardHeader, KeyGenerator, EntityKey
 };
 
+use crate::ComponentKey;
 use super::{
     actors::{
         actor_key::actor_key::ActorKey, mut_handler::MutHandler,
@@ -34,7 +35,7 @@ use super::{
     server_tick_manager::ServerTickManager,
     user::{user_key::UserKey, User},
 };
-use naia_shared::{StandardHeader, KeyGenerator, EntityKey};
+
 
 /// A server that uses either UDP or WebRTC communication to send/receive events
 /// to/from connected clients, and syncs registered actors to clients to whom
@@ -45,8 +46,6 @@ pub struct NaiaServer<T: EventType, U: ActorType> {
     socket: Box<dyn ServerSocketTrait>,
     sender: MessageSender,
     global_actor_store: DenseSlotMap<ActorKey, U>,
-    scope_actor_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &ActorKey, U) -> bool>>,
-    scope_entity_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey) -> bool>>,
     auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
     mut_handler: Ref<MutHandler>,
     users: DenseSlotMap<UserKey, User>,
@@ -58,9 +57,12 @@ pub struct NaiaServer<T: EventType, U: ActorType> {
     connection_hash_key: hmac::Key,
     tick_manager: ServerTickManager,
     tick_timer: Interval,
+    actor_scope_map: HashMap<(RoomKey, UserKey, ActorKey), bool>,
+    entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
     scope_change_events: VecDeque<ScopeEvent>,
     entity_key_generator: KeyGenerator,
-    entity_key_store: HashSet<EntityKey>,
+    entity_component_map: HashMap<EntityKey, HashSet<ComponentKey>>,
+    component_entity_map: HashMap<ComponentKey, EntityKey>,
 }
 
 enum ScopeEvent {
@@ -70,34 +72,10 @@ enum ScopeEvent {
     EntityOutOfScope(UserKey, EntityKey),
 }
 
-/// A collection of IP addresses describing which IP to listen on for new
-/// sessions, which to dedicate to UDP traffic, and which to advertise publicly
-pub struct ServerAddresses {
-    session_listen_addr: SocketAddr,
-    webrtc_listen_addr: SocketAddr,
-    public_webrtc_addr: SocketAddr,
-}
-
-impl ServerAddresses {
-    /// Create a new ServerAddresses config struct from component addresses
-    pub fn new(
-        session_listen_addr: SocketAddr,
-        webrtc_listen_addr: SocketAddr,
-        public_webrtc_addr: SocketAddr,
-    ) -> Self {
-        ServerAddresses {
-            session_listen_addr,
-            webrtc_listen_addr,
-            public_webrtc_addr,
-        }
-    }
-}
-
 impl<T: EventType, U: ActorType> NaiaServer<T, U> {
     /// Create a new Server, given an address to listen at, an Event/Actor
     /// manifest, and an optional Config
     pub async fn new(
-        addresses: ServerAddresses,
         manifest: Manifest<T, U>,
         server_config: Option<ServerConfig>,
         shared_config: SharedConfig,
@@ -115,9 +93,9 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         );
 
         let mut server_socket = ServerSocket::listen(
-            addresses.session_listen_addr,
-            addresses.webrtc_listen_addr,
-            addresses.public_webrtc_addr,
+            server_config.socket_addresses.session_listen_addr,
+            server_config.socket_addresses.webrtc_listen_addr,
+            server_config.socket_addresses.public_webrtc_addr,
         )
         .await;
         if let Some(config) = &shared_config.link_condition_config {
@@ -134,12 +112,8 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         NaiaServer {
             manifest,
             global_actor_store: DenseSlotMap::with_key(),
-            scope_actor_func: Rc::new(Box::new(|_, _, _, _|  {
-                return true;
-            })),
-            scope_entity_func: Rc::new(Box::new(|_, _, _|  {
-                return true;
-            })),
+            actor_scope_map: HashMap::new(),
+            entity_scope_map: HashMap::new(),
             auth_func: None,
             mut_handler: MutHandler::new(),
             socket: server_socket,
@@ -156,7 +130,8 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
             tick_timer: Interval::new(shared_config.tick_interval),
             scope_change_events: VecDeque::new(),
             entity_key_generator: KeyGenerator::new(),
-            entity_key_store: HashSet::new(),
+            entity_component_map: HashMap::new(),
+            component_entity_map: HashMap::new(),
         }
     }
 
@@ -679,28 +654,70 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         }
     }
 
-    /// Registers a closure which is used to evaluate whether, given a User &
-    /// Actor that are in the same Room, said Actor should be in scope for
-    /// the given User.
+    /// Used to evaluate whether, given a User & Actor that are in the
+    /// same Room, said Actor should be in scope for the given User.
     ///
     /// While Rooms allow for a very simple scope to which an Actor can belong,
-    /// this closure provides complete customization for advanced scopes.
-    ///
-    /// This closure will be called every Tick of the Server, for every User &
-    /// Actor in a Room together, so try to keep it performant
-    pub fn on_scope_actor(
+    /// this provides complete customization for advanced scopes.
+    pub fn actor_set_scope(
         &mut self,
-        scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &ActorKey, U) -> bool>>,
+        room_key: &RoomKey,
+        user_key: &UserKey,
+        actor_key: &ActorKey,
+        in_scope: bool,
     ) {
-        self.scope_actor_func = scope_func;
+        let key = (*room_key, *user_key, *actor_key);
+        self.actor_scope_map.insert(key, in_scope);
     }
 
-    /// Similar to `on_scope_actor()` but for entities only
-    pub fn on_scope_entity(
+    /// Similar to `actor_set_scope()` but for entities only
+    pub fn entity_set_scope(
         &mut self,
-        scope_func: Rc<Box<dyn Fn(&RoomKey, &UserKey, &EntityKey) -> bool>>,
+        room_key: &RoomKey,
+        user_key: &UserKey,
+        entity_key: &EntityKey,
+        in_scope: bool,
     ) {
-        self.scope_entity_func = scope_func;
+        let key = (*room_key, *user_key, *entity_key);
+        self.entity_scope_map.insert(key, in_scope);
+    }
+
+    /// Return a collection of Actor Scope Sets, being a unique combination of
+    /// a related Room, User, and Actor, used to determine which actors to
+    /// replicate to which users
+    pub fn actor_scope_sets(&self) -> Vec<(RoomKey, UserKey, ActorKey)> {
+        let mut list: Vec<(RoomKey, UserKey, ActorKey)> = Vec::new();
+
+        // TODO: precache this, instead of generating a new list every call
+        // likely this is called A LOT
+        for (room_key, room) in self.rooms.iter() {
+            for user_key in room.users_iter() {
+                for actor_key in room.actors_iter() {
+                    list.push((room_key, *user_key, *actor_key));
+                }
+            }
+        }
+
+        return list;
+    }
+
+    /// Return a collection of Entity Scope Sets, being a unique combination of
+    /// a related Room, User, and Entity, used to determine which entities to
+    /// replicate to which users
+    pub fn entity_scope_sets(&self) -> Vec<(RoomKey, UserKey, EntityKey)> {
+        let mut list: Vec<(RoomKey, UserKey, EntityKey)> = Vec::new();
+
+        // TODO: precache this, instead of generating a new list every call
+        // likely this is called A LOT
+        for (room_key, room) in self.rooms.iter() {
+            for user_key in room.users_iter() {
+                for entity_key in room.entities_iter() {
+                    list.push((room_key, *user_key, *entity_key));
+                }
+            }
+        }
+
+        return list;
     }
 
     /// Registers a closure which will be called during the handshake process
@@ -791,7 +808,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
     /// to the Entity from the Server once again
     pub fn register_entity(&mut self) -> EntityKey {
         let entity_key: EntityKey = self.entity_key_generator.generate();
-        self.entity_key_store.insert(entity_key);
+        self.entity_component_map.insert(entity_key, HashSet::new());
         return entity_key;
     }
 
@@ -808,13 +825,13 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
             }
         }
 
-        self.entity_key_store.remove(key);
+        self.entity_component_map.remove(key);
     }
 
     /// Assigns an Actor to a specific User, making it a Pawn for that User
     /// (meaning that the User will be able to issue Commands to that Pawn)
     pub fn assign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
-        if self.entity_key_store.contains(entity_key) {
+        if self.entity_component_map.contains_key(entity_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                 user_connection.add_pawn_entity(entity_key);
             }
@@ -824,9 +841,49 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
     /// Unassigns a Pawn from a specific User (meaning that the User will be
     /// unable to issue Commands to that Pawn)
     pub fn unassign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
-        if self.entity_key_store.contains(entity_key) {
+        if self.entity_component_map.contains_key(entity_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                 user_connection.remove_pawn_entity(entity_key);
+            }
+        }
+    }
+
+    /// Register an Actor as a Component with the Server, whereby the Server will sync the
+    /// state of the Component to all connected Clients for which the Component's Entity is
+    /// in Scope.
+    /// Gives back a ComponentKey which can be used to get the reference to the Component
+    /// from the Server once again
+    pub fn add_component_to_entity(&mut self, entity_key: &EntityKey, actor: U) -> ComponentKey {
+        if !self.entity_component_map.contains_key(entity_key) {
+            warn!("attempted to add component to nonexistant entity");
+        }
+
+        let component_key: ComponentKey = self.register_actor(actor);
+
+        self.component_entity_map.insert(component_key, *entity_key);
+
+        if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
+            component_set.insert(component_key);
+        }
+
+        return component_key;
+    }
+
+    /// Deregisters a Component with the Server, deleting local copies of the
+    /// Component on each Client
+    pub fn remove_component(&mut self, component_key: &ComponentKey) {
+        if let Some(entity_key) = self.component_entity_map.remove(component_key) {
+            if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
+                for (user_key, _) in self.users.iter() {
+                    if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+                        user_connection.remove_actor(component_key);
+                    }
+                }
+
+                self.mut_handler.borrow_mut().deregister_actor(component_key);
+                self.global_actor_store.remove(*component_key);
+
+                component_set.remove(component_key);
             }
         }
     }
@@ -847,37 +904,41 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
 
             for user_key in room.users_iter() {
                 for actor_key in room.actors_iter() {
-                    if let Some(actor) = self.global_actor_store.get(*actor_key) {
-                        if let Some(user_connection) = self.client_connections.get_mut(user_key)
-                        {
-                            let currently_in_scope = user_connection.has_actor(actor_key);
-                            let should_be_in_scope = user_connection.has_pawn(actor_key)
-                                || (&self.scope_actor_func.as_ref().as_ref())(
-                                    &room_key,
-                                    user_key,
-                                    actor_key,
-                                    (*actor).clone(),
-                                );
-                            if should_be_in_scope {
-                                if !currently_in_scope {
-                                    // add actor to the connections local scope
-                                    if let Some(actor) = self.global_actor_store.get(*actor_key)
-                                    {
-                                        Self::user_add_actor(&mut self.scope_change_events,
-                                                             user_connection,
-                                                             user_key,
-                                                             actor_key,
-                                                             &actor);
-                                    }
-                                }
+                    if let Some(user_connection) = self.client_connections.get_mut(user_key)
+                    {
+                        let currently_in_scope = user_connection.has_actor(actor_key);
+
+                        let should_be_in_scope: bool;
+                        if user_connection.has_pawn(actor_key) {
+                            should_be_in_scope = true
+                        } else {
+                            let key = (room_key, *user_key, *actor_key);
+                            if let Some(in_scope) = self.actor_scope_map.get(&key) {
+                                should_be_in_scope = *in_scope
                             } else {
-                                if currently_in_scope {
-                                    // remove actor from the connections local scope
-                                    Self::user_remove_actor(&mut self.scope_change_events,
-                                                            user_connection,
-                                                            user_key,
-                                                            actor_key);
+                                should_be_in_scope = true
+                            }
+                        }
+
+                        if should_be_in_scope {
+                            if !currently_in_scope {
+                                // add actor to the connections local scope
+                                if let Some(actor) = self.global_actor_store.get(*actor_key)
+                                {
+                                    Self::user_add_actor(&mut self.scope_change_events,
+                                                         user_connection,
+                                                         user_key,
+                                                         actor_key,
+                                                         &actor);
                                 }
+                            }
+                        } else {
+                            if currently_in_scope {
+                                // remove actor from the connections local scope
+                                Self::user_remove_actor(&mut self.scope_change_events,
+                                                        user_connection,
+                                                        user_key,
+                                                        actor_key);
                             }
                         }
                     }
@@ -900,16 +961,23 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
 
             for user_key in room.users_iter() {
                 for entity_key in room.entities_iter() {
-                    if self.entity_key_store.contains(entity_key) {
+                    if self.entity_component_map.contains_key(entity_key) {
                         if let Some(user_connection) = self.client_connections.get_mut(user_key)
                         {
                             let currently_in_scope = user_connection.has_entity(entity_key);
-                            let should_be_in_scope = user_connection.has_pawn_entity(entity_key)
-                                || (&self.scope_entity_func.as_ref().as_ref())(
-                                    &room_key,
-                                    user_key,
-                                    entity_key,
-                                );
+
+                            let should_be_in_scope: bool;
+                            if user_connection.has_pawn_entity(entity_key) {
+                                should_be_in_scope = true
+                            } else {
+                                let key = (room_key, *user_key, *entity_key);
+                                if let Some(in_scope) = self.entity_scope_map.get(&key) {
+                                    should_be_in_scope = *in_scope
+                                } else {
+                                    should_be_in_scope = true
+                                }
+                            }
+
                             if should_be_in_scope {
                                 if !currently_in_scope {
                                     // add entity to the connections local scope
@@ -940,7 +1008,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
                       user_key: &UserKey,
                       actor_key: &ActorKey,
                       actor_ref: &U) {
-        //remove actor from user connection
+        //add actor to user connection
         user_connection.add_actor(actor_key, &actor_ref.inner_ref());
 
         //fire event
@@ -951,7 +1019,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
                          user_connection: &mut ClientConnection<T, U>,
                          user_key: &UserKey,
                          actor_key: &ActorKey) {
-        //add actor to user connection
+        //remove actor from user connection
         user_connection.remove_actor(actor_key);
 
         //fire event
@@ -973,7 +1041,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
                          user_connection: &mut ClientConnection<T, U>,
                          user_key: &UserKey,
                          entity_key: &EntityKey) {
-        //remove actor from user connection
+        //remove entity from user connection
         user_connection.remove_entity(entity_key);
 
         //fire event

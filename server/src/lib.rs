@@ -28,7 +28,7 @@ compile_error!("Naia Server can only use UDP or WebRTC, you must pick one");
 compile_error!("Naia Server requires either the 'use-udp' or 'use-webrtc' feature to be enabled, you must pick one.");
 
 pub use naia_shared::{
-    find_my_ip_address, Actor, LocalActorKey, ActorType, LinkConditionerConfig, Random, Ref, SharedConfig,
+    find_my_ip_address, Actor, LocalActorKey, ActorType, LinkConditionerConfig, Random, Ref, SharedConfig, EntityKey,
 };
 
 mod actors;
@@ -46,8 +46,11 @@ mod server_tick_manager;
 mod user;
 
 pub use actors::actor_key::actor_key::ActorKey;
-pub use naia_server::{NaiaServer, ServerAddresses};
+pub use naia_server::NaiaServer;
 pub use room::room_key::RoomKey;
-pub use server_config::ServerConfig;
+pub use server_config::{ServerConfig, ServerAddresses};
 pub use server_event::ServerEvent;
 pub use user::user_key::UserKey;
+
+/// Key to be used to reference a Component Actor
+pub type ComponentKey = ActorKey;

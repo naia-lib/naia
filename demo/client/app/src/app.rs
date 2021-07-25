@@ -116,7 +116,7 @@ impl App {
                             //info!("tick event");
                         }
                         ClientEvent::CreateEntity(local_key) => {
-                            info!("yassss baby entity {}", local_key);
+                            //info!("yassss baby entity {}", local_key);
                         }
                         _ => {}
                     },
