@@ -60,17 +60,9 @@ pub struct Server<T: EventType, U: ActorType> {
     tick_timer: Interval,
     actor_scope_map: HashMap<(RoomKey, UserKey, ActorKey), bool>,
     entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
-    scope_change_events: VecDeque<ScopeEvent>,
     entity_key_generator: KeyGenerator,
     entity_component_map: HashMap<EntityKey, HashSet<ComponentKey>>,
     component_entity_map: HashMap<ComponentKey, EntityKey>,
-}
-
-enum ScopeEvent {
-    ActorIntoScope(UserKey,   ActorKey),
-    ActorOutOfScope(UserKey,  ActorKey),
-    EntityIntoScope(UserKey,  EntityKey),
-    EntityOutOfScope(UserKey, EntityKey),
 }
 
 impl<T: EventType, U: ActorType> Server<T, U> {
@@ -130,7 +122,6 @@ impl<T: EventType, U: ActorType> Server<T, U> {
             heartbeat_timer,
             tick_manager: ServerTickManager::new(shared_config.tick_interval),
             tick_timer: Interval::new(shared_config.tick_interval),
-            scope_change_events: VecDeque::new(),
             entity_key_generator: KeyGenerator::new(),
             entity_component_map: HashMap::new(),
             component_entity_map: HashMap::new(),
@@ -199,16 +190,6 @@ impl<T: EventType, U: ActorType> Server<T, U> {
                 //receive events from anyone
                 if let Some(event) = connection.get_incoming_event() {
                     return Ok(ServerEvent::Event(*user_key, event));
-                }
-            }
-
-            //receive scope change events events
-            if let Some(event) = self.scope_change_events.pop_front() {
-                match event {
-                    ScopeEvent::ActorIntoScope(user_key,  actor_key) =>   return Ok(ServerEvent::IntoScope(user_key, actor_key)),
-                    ScopeEvent::ActorOutOfScope(user_key, actor_key) =>  return Ok(ServerEvent::OutOfScope(user_key, actor_key)),
-                    ScopeEvent::EntityIntoScope(user_key,  entity_key) =>  return Ok(ServerEvent::IntoScopeEntity(user_key, entity_key)),
-                    ScopeEvent::EntityOutOfScope(user_key, entity_key) => return Ok(ServerEvent::OutOfScopeEntity(user_key, entity_key)),
                 }
             }
 
@@ -549,9 +530,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
     pub fn deregister_actor(&mut self, key: ActorKey) {
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                Self::user_remove_actor(&mut self.scope_change_events,
-                                        user_connection,
-                                        &user_key,
+                Self::user_remove_actor(user_connection,
                                         &key);
             }
         }
@@ -594,9 +573,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
     pub fn deregister_entity(&mut self, key: &EntityKey) {
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                Self::user_remove_entity(&mut self.scope_change_events,
-                                        user_connection,
-                                        &user_key,
+                Self::user_remove_entity(user_connection,
                                         key);
             }
         }
@@ -629,17 +606,28 @@ impl<T: EventType, U: ActorType> Server<T, U> {
     /// in Scope.
     /// Gives back a ComponentKey which can be used to get the reference to the Component
     /// from the Server once again
-    pub fn add_component_to_entity(&mut self, entity_key: &EntityKey, actor: U) -> Result<ComponentKey, &str> {
+    pub fn add_component_to_entity(&mut self, entity_key: &EntityKey, component: U) -> Result<ComponentKey, &str> {
 
         if !self.entity_component_map.contains_key(&entity_key) {
             return Err("attempted to add component to nonexistant entity");
         }
 
-        let component_key: ComponentKey = self.register_actor(actor);
+        let component_ref = component.inner_ref().clone();
+        let component_key: ComponentKey = self.register_actor(component);
         self.component_entity_map.insert(component_key, *entity_key);
 
         if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
             component_set.insert(component_key);
+        }
+
+        // add component to connections already tracking entity
+        for (user_key, _) in self.users.iter() {
+            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+                Self::user_add_component(user_connection,
+                                        entity_key,
+                                        &component_key,
+                                         &component_ref);
+            }
         }
 
         return Ok(component_key);
@@ -652,7 +640,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
             if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
                 for (user_key, _) in self.users.iter() {
                     if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                        user_connection.remove_actor(component_key);
+                        user_connection.remove_component(&entity_key, component_key);
                     }
                 }
 
@@ -886,9 +874,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         for (room_key, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_actor)) = room.pop_actor_removal_queue() {
                 if let Some(user_connection) = self.client_connections.get_mut(&removed_user) {
-                    Self::user_remove_actor(&mut self.scope_change_events,
-                                            user_connection,
-                                            &removed_user,
+                    Self::user_remove_actor(user_connection,
                                             &removed_actor);
                 }
             }
@@ -917,9 +903,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
                                 // add actor to the connections local scope
                                 if let Some(actor) = self.global_state_store.get(*actor_key)
                                 {
-                                    Self::user_add_actor(&mut self.scope_change_events,
-                                                         user_connection,
-                                                         user_key,
+                                    Self::user_add_actor(user_connection,
                                                          actor_key,
                                                          &actor);
                                 }
@@ -927,9 +911,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
                         } else {
                             if currently_in_scope {
                                 // remove actor from the connections local scope
-                                Self::user_remove_actor(&mut self.scope_change_events,
-                                                        user_connection,
-                                                        user_key,
+                                Self::user_remove_actor(user_connection,
                                                         actor_key);
                             }
                         }
@@ -943,9 +925,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         for (room_key, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
                 if let Some(user_connection) = self.client_connections.get_mut(&removed_user) {
-                    Self::user_remove_entity(&mut self.scope_change_events,
-                                            user_connection,
-                                            &removed_user,
+                    Self::user_remove_entity(user_connection,
                                             &removed_entity);
                 }
             }
@@ -973,17 +953,13 @@ impl<T: EventType, U: ActorType> Server<T, U> {
                             if should_be_in_scope {
                                 if !currently_in_scope {
                                     // add entity to the connections local scope
-                                    Self::user_add_entity(&mut self.scope_change_events,
-                                                             user_connection,
-                                                             user_key,
+                                    Self::user_add_entity(user_connection,
                                                              entity_key);
                                 }
                             } else {
                                 if currently_in_scope {
                                     // remove entity from the connections local scope
-                                    Self::user_remove_entity(&mut self.scope_change_events,
-                                                            user_connection,
-                                                            user_key,
+                                    Self::user_remove_entity(user_connection,
                                                             entity_key);
                                 }
                             }
@@ -995,49 +971,37 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         }
     }
 
-    fn user_add_actor(event_queue: &mut VecDeque<ScopeEvent>,
-                      user_connection: &mut ClientConnection<T, U>,
-                      user_key: &UserKey,
+    fn user_add_actor(user_connection: &mut ClientConnection<T, U>,
                       actor_key: &ActorKey,
                       actor_ref: &U) {
         //add actor to user connection
         user_connection.add_actor(actor_key, &actor_ref.inner_ref());
-
-        //fire event
-        event_queue.push_back(ScopeEvent::ActorIntoScope(*user_key, *actor_key));
     }
 
-    fn user_remove_actor(event_queue: &mut VecDeque<ScopeEvent>,
-                         user_connection: &mut ClientConnection<T, U>,
-                         user_key: &UserKey,
+    fn user_remove_actor(user_connection: &mut ClientConnection<T, U>,
                          actor_key: &ActorKey) {
         //remove actor from user connection
         user_connection.remove_actor(actor_key);
-
-        //fire event
-        event_queue.push_back(ScopeEvent::ActorOutOfScope(*user_key, *actor_key));
     }
 
-    fn user_add_entity(event_queue: &mut VecDeque<ScopeEvent>,
-                      user_connection: &mut ClientConnection<T, U>,
-                      user_key: &UserKey,
+    fn user_add_entity(user_connection: &mut ClientConnection<T, U>,
                       entity_key: &EntityKey) {
         //add entity to user connection
         user_connection.add_entity(entity_key);
-
-        //fire event
-        event_queue.push_back(ScopeEvent::EntityIntoScope(*user_key, *entity_key));
     }
 
-    fn user_remove_entity(event_queue: &mut VecDeque<ScopeEvent>,
-                         user_connection: &mut ClientConnection<T, U>,
-                         user_key: &UserKey,
+    fn user_remove_entity(user_connection: &mut ClientConnection<T, U>,
                          entity_key: &EntityKey) {
         //remove entity from user connection
         user_connection.remove_entity(entity_key);
+    }
 
-        //fire event
-        event_queue.push_back(ScopeEvent::EntityOutOfScope(*user_key, *entity_key));
+    fn user_add_component(user_connection: &mut ClientConnection<T, U>,
+                      entity_key: &EntityKey,
+                      component_key: &ComponentKey,
+                      component_ref: &Ref<dyn Actor<U>>) {
+        //add actor to user connection
+        user_connection.add_component(entity_key, component_key, component_ref);
     }
 
     async fn send_connect_accept_message(

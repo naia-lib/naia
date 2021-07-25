@@ -128,6 +128,28 @@ impl ActorPacketWriter {
                     .write_u16::<BigEndian>(*local_key)
                     .unwrap(); //write local key
             }
+            ServerActorMessage::AddComponent(_, local_entity_key, _, local_component_key) => {
+                actor_total_bytes
+                    .write_u8(message.write_message_type())
+                    .unwrap(); //Write actor message type
+                actor_total_bytes
+                    .write_u16::<BigEndian>(*local_entity_key)
+                    .unwrap(); //write local entity key
+                actor_total_bytes
+                    .write_u16::<BigEndian>(*local_component_key)
+                    .unwrap(); //write local component key
+            }
+            ServerActorMessage::RemoveComponent(_, local_entity_key, _, local_component_key) => {
+                actor_total_bytes
+                    .write_u8(message.write_message_type())
+                    .unwrap(); //Write actor message type
+                actor_total_bytes
+                    .write_u16::<BigEndian>(*local_entity_key)
+                    .unwrap(); //write local entity key
+                actor_total_bytes
+                    .write_u16::<BigEndian>(*local_component_key)
+                    .unwrap(); //write local component key
+            }
         }
 
         let mut hypothetical_next_payload_size =

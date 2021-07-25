@@ -21,14 +21,6 @@ pub enum ServerEvent<T> {
     Tick,
     /// An Command emitted to the Server from a Client
     Command(UserKey, ActorKey, T),
-    /// Event which is fired when an Actor comes into scope for a given User
-    IntoScope(UserKey, ActorKey),
-    /// Event which is fired when an Actor goes out of scope for a given User
-    OutOfScope(UserKey, ActorKey),
     /// An Command emitted to the Server from a Client, related to an Entity
     CommandEntity(UserKey, EntityKey, T),
-    /// Event which is fired when an Entity comes into scope for a given User
-    IntoScopeEntity(UserKey, EntityKey),
-    /// Event which is fired when an Entity goes out of scope for a given User
-    OutOfScopeEntity(UserKey, EntityKey),
 }

@@ -10,11 +10,11 @@ pub struct ActorRecord {
 }
 
 impl ActorRecord {
-    pub fn new(local_key: LocalActorKey, state_mask_size: u8) -> ActorRecord {
+    pub fn new(local_key: LocalActorKey, state_mask_size: u8, status: LocalityStatus) -> ActorRecord {
         ActorRecord {
             local_key,
             state_mask: Ref::new(StateMask::new(state_mask_size)),
-            status: LocalityStatus::Creating,
+            status,
         }
     }
 
