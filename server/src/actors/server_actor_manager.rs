@@ -260,18 +260,11 @@ impl<T: ActorType> ServerActorManager<T> {
     }
 
     pub fn remove_actor(&mut self, key: &ActorKey) {
+        self.remove_pawn(key);
+
         if let Some(actor_record) = self.actor_records.get_mut(*key) {
             if actor_record.status != LocalityStatus::Deleting {
                 actor_record.status = LocalityStatus::Deleting;
-
-                // if this is a pawn, send an "unassign pawn" message first
-                if self.pawn_store.contains(key) {
-                    self.queued_messages
-                        .push_back(ServerActorMessage::UnassignPawn(
-                            *key,
-                            actor_record.local_key,
-                        ));
-                }
 
                 self.queued_messages
                     .push_back(ServerActorMessage::DeleteActor(
@@ -370,18 +363,11 @@ impl<T: ActorType> ServerActorManager<T> {
     }
 
     pub fn remove_entity(&mut self, key: &EntityKey) {
+        self.remove_pawn_entity(key);
+
         if let Some(entity_record) = self.local_entity_store.get_mut(key) {
             if entity_record.status != LocalityStatus::Deleting {
                 entity_record.status = LocalityStatus::Deleting;
-
-                // if this is a pawn, send an "unassign pawn" message first
-                if self.pawn_entity_store.contains(key) {
-                    self.queued_messages
-                        .push_back(ServerActorMessage::UnassignPawnEntity(
-                            *key,
-                            entity_record.local_key,
-                        ));
-                }
 
                 self.queued_messages
                     .push_back(ServerActorMessage::DeleteEntity(
