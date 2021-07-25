@@ -3,8 +3,9 @@ use std::{
     rc::Rc,
 };
 
-use crate::{client_actor_manager::ClientActorManager, naia_client::LocalActorKey};
-use naia_shared::{wrapping_diff, ActorType, Event, EventType, SequenceBuffer, SequenceIterator, LocalEntityKey};
+use naia_shared::{wrapping_diff, ActorType, Event, EventType, SequenceBuffer, SequenceIterator, LocalEntityKey, LocalActorKey};
+
+use super::client_actor_manager::ClientActorManager;
 
 const COMMAND_HISTORY_SIZE: u16 = 64;
 

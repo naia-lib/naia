@@ -1,5 +1,6 @@
-use crate::naia_server::Timestamp;
 use std::net::SocketAddr;
+
+use naia_shared::Timestamp;
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]

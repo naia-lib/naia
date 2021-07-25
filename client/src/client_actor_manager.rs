@@ -134,7 +134,6 @@ impl<U: ActorType> ClientActorManager<U> {
                     if self.local_entity_store.contains(&local_key) {
                         warn!("duplicate local entity key inserted");
                     } else {
-                        info!("creation of entity w/ key of {}", local_key);
                         self.local_entity_store.insert(local_key);
                         self.queued_incoming_messages
                             .push_back(ClientActorMessage::CreateEntity(local_key));
@@ -143,7 +142,6 @@ impl<U: ActorType> ClientActorManager<U> {
                 7 => {
                     // Entity Deletion
                     let local_key = reader.read_u16();
-                    info!("deletion of entity w/ key of {}", local_key);
                     self.local_entity_store.remove(&local_key);
 
                     if self.pawn_entity_store.contains(&local_key) {
@@ -157,7 +155,6 @@ impl<U: ActorType> ClientActorManager<U> {
                 8 => {
                     // Assign Pawn Entity
                     let local_key: u16 = reader.read_u16();
-                    info!("pawn assignment of entity w/ key of {}", local_key);
                     if self.local_entity_store.contains(&local_key) {
                         self.pawn_entity_store
                             .insert(local_key);
@@ -171,7 +168,6 @@ impl<U: ActorType> ClientActorManager<U> {
                 9 => {
                     // Unassign Pawn Entity
                     let local_key: u16 = reader.read_u16();
-                    info!("pawn unassignment of entity w/ key of {}", local_key);
                     if self.pawn_entity_store.contains(&local_key) {
                         self.pawn_entity_store.remove(&local_key);
                         command_receiver.pawn_entity_cleanup(&local_key);

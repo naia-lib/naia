@@ -22,7 +22,7 @@ mod client_tick_manager;
 mod command_receiver;
 mod command_sender;
 mod error;
-mod naia_client;
+mod client;
 mod ping_manager;
 mod server_connection;
 mod tick_queue;
@@ -31,5 +31,5 @@ pub use naia_shared::{find_my_ip_address, Instant, LinkConditionerConfig, Random
 
 pub use client_config::ClientConfig;
 pub use client_event::ClientEvent;
-pub use naia_client::NaiaClient;
+pub use client::Client;
 pub use naia_client_socket::Packet;
