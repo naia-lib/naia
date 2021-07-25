@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_shared::{
     Actor, ActorType, Connection, ConnectionConfig, Event, EventType, ManagerType, Manifest,
-    PacketReader, PacketType, Ref, SequenceNumber, StandardHeader, LocalActorKey, EntityKey
+    PacketReader, PacketType, Ref, SequenceNumber, StandardHeader, EntityKey
 };
 
 use super::{
@@ -137,14 +137,6 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
 
     pub fn remove_pawn(&mut self, key: &ActorKey) {
         self.actor_manager.remove_pawn(key);
-    }
-
-    pub fn get_actor_local_key(&self, key: &ActorKey) -> Option<LocalActorKey> {
-        return self.actor_manager.get_local_key_from_global(key);
-    }
-
-    pub fn actor_is_created(&self, local_key: &LocalActorKey) -> bool {
-        return self.actor_manager.actor_is_created(local_key);
     }
 
     pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(ActorKey, T)> {

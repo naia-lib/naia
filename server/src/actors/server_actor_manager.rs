@@ -49,9 +49,18 @@ impl<T: ActorType> ServerActorManager<T> {
     pub fn new(address: SocketAddr, mut_handler: &Ref<MutHandler>) -> Self {
         ServerActorManager {
             address,
+            // actors
+            actor_key_generator: KeyGenerator::new(),
             local_actor_store: SparseSecondaryMap::new(),
             local_to_global_key_map: HashMap::new(),
             actor_records: SparseSecondaryMap::new(),
+            pawn_store: HashSet::new(),
+            // entities
+            entity_key_generator: KeyGenerator::new(),
+            local_to_global_entity_key_map: HashMap::new(),
+            local_entity_store: HashMap::new(),
+            pawn_entity_store: HashSet::new(),
+            // messages / updates / ect
             queued_messages: VecDeque::new(),
             sent_messages: HashMap::new(),
             sent_updates: HashMap::<u16, HashMap<ActorKey, Ref<StateMask>>>::new(),
@@ -59,12 +68,6 @@ impl<T: ActorType> ServerActorManager<T> {
             last_last_update_packet_index: 0,
             mut_handler: mut_handler.clone(),
             last_popped_state_mask: StateMask::new(0),
-            pawn_store: HashSet::new(),
-            actor_key_generator: KeyGenerator::new(),
-            entity_key_generator: KeyGenerator::new(),
-            local_to_global_entity_key_map: HashMap::new(),
-            local_entity_store: HashMap::new(),
-            pawn_entity_store: HashSet::new(),
         }
     }
 
@@ -76,8 +79,7 @@ impl<T: ActorType> ServerActorManager<T> {
         match self.queued_messages.pop_front() {
             Some(message) => {
                 if !self.sent_messages.contains_key(&packet_index) {
-                    let sent_messages_list: Vec<ServerActorMessage<T>> = Vec::new();
-                    self.sent_messages.insert(packet_index, sent_messages_list);
+                    self.sent_messages.insert(packet_index, Vec::new());
                 }
 
                 if let Some(sent_messages_list) = self.sent_messages.get_mut(&packet_index) {
@@ -311,23 +313,6 @@ impl<T: ActorType> ServerActorManager<T> {
         return self.local_to_global_key_map.get(&local_key);
     }
 
-    pub fn get_local_key_from_global(&self, global_key: &ActorKey) -> Option<LocalActorKey> {
-        if let Some(record) = self.actor_records.get(*global_key) {
-            return Some(record.local_key);
-        }
-        return None;
-    }
-
-    pub fn actor_is_created(&self, local_key: &LocalActorKey) -> bool {
-        if let Some(global_key) = self.local_to_global_key_map.get(&local_key) {
-            if let Some(record) = self.actor_records.get(*global_key) {
-                return record.status == LocalityStatus::Created;
-            }
-        }
-
-        return false;
-    }
-
     pub fn collect_actor_updates(&mut self) {
         for (key, record) in self.actor_records.iter() {
             if record.status == LocalityStatus::Created
@@ -364,22 +349,22 @@ impl<T: ActorType> ServerActorManager<T> {
         return self.local_entity_store.contains_key(key);
     }
 
-    pub fn add_entity(&mut self, key: &EntityKey) {
-        if !self.local_entity_store.contains_key(key) {
+    pub fn add_entity(&mut self, global_key: &EntityKey) {
+        if !self.local_entity_store.contains_key(global_key) {
             let local_key: LocalEntityKey = self.entity_key_generator.generate();
-            self.local_to_global_entity_key_map.insert(local_key, *key);
+            self.local_to_global_entity_key_map.insert(local_key, *global_key);
             let entity_record = EntityRecord::new(local_key);
-            self.local_entity_store.insert(*key, entity_record);
+            self.local_entity_store.insert(*global_key, entity_record);
             self.queued_messages
                 .push_back(ServerActorMessage::CreateEntity(
-                    *key,
+                    *global_key,
                     local_key
                 ));
 
             // if this is a pawn, send a "assign pawn" follow-up message
-            if self.pawn_entity_store.contains(key) {
+            if self.pawn_entity_store.contains(global_key) {
                 self.queued_messages
-                    .push_back(ServerActorMessage::AssignPawnEntity(*key, local_key));
+                    .push_back(ServerActorMessage::AssignPawnEntity(*global_key, local_key));
             }
         }
     }
