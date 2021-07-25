@@ -36,7 +36,7 @@ mod client_connection;
 mod command_receiver;
 mod error;
 mod interval;
-mod naia_server;
+mod server;
 mod ping_manager;
 mod room;
 mod server_config;
@@ -46,7 +46,7 @@ mod server_tick_manager;
 mod user;
 
 pub use actors::actor_key::actor_key::ActorKey;
-pub use naia_server::NaiaServer;
+pub use server::Server;
 pub use room::room_key::RoomKey;
 pub use server_config::{ServerConfig, ServerAddresses};
 pub use server_event::ServerEvent;

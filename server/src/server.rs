@@ -40,7 +40,7 @@ use super::{
 /// A server that uses either UDP or WebRTC communication to send/receive events
 /// to/from connected clients, and syncs registered actors to clients to whom
 /// those actors are in-scope
-pub struct NaiaServer<T: EventType, U: ActorType> {
+pub struct Server<T: EventType, U: ActorType> {
     connection_config: ConnectionConfig,
     manifest: Manifest<T, U>,
     socket: Box<dyn ServerSocketTrait>,
@@ -72,7 +72,7 @@ enum ScopeEvent {
     EntityOutOfScope(UserKey, EntityKey),
 }
 
-impl<T: EventType, U: ActorType> NaiaServer<T, U> {
+impl<T: EventType, U: ActorType> Server<T, U> {
     /// Create a new Server, given an address to listen at, an Event/Actor
     /// manifest, and an optional Config
     pub async fn new(
@@ -109,7 +109,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
         let connection_hash_key =
             hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
 
-        NaiaServer {
+        Server {
             manifest,
             global_actor_store: DenseSlotMap::with_key(),
             actor_scope_map: HashMap::new(),
@@ -274,7 +274,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
                                         payload_bytes.push(*hash_byte);
                                     }
 
-                                    NaiaServer::<T, U>::internal_send_connectionless(
+                                    Server::<T, U>::internal_send_connectionless(
                                         &mut self.sender,
                                         PacketType::ServerChallengeResponse,
                                         Packet::new(address, payload_bytes),
@@ -298,7 +298,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
                                                     .get_mut(user_key)
                                                     .unwrap();
                                                 connection.process_incoming_header(&header);
-                                                NaiaServer::<T, U>::send_connect_accept_message(
+                                                Server::<T, U>::send_connect_accept_message(
                                                     &mut connection,
                                                     &mut self.sender,
                                                 )
@@ -363,7 +363,7 @@ impl<T: EventType, U: ActorType> NaiaServer<T, U> {
                                             &self.connection_config,
                                         );
                                         new_connection.process_incoming_header(&header);
-                                        NaiaServer::<T, U>::send_connect_accept_message(
+                                        Server::<T, U>::send_connect_accept_message(
                                             &mut new_connection,
                                             &mut self.sender,
                                         )

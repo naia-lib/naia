@@ -5,7 +5,7 @@ use std::{
 
 use hecs::*;
 
-use naia_server::{NaiaServer, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey, Ref};
+use naia_server::{Server, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey, Ref};
 
 use naia_example_shared::{
     get_shared_config, manifest_load,
@@ -14,7 +14,7 @@ use naia_example_shared::{
 };
 
 pub struct App {
-    server: NaiaServer<Events, Components>,
+    server: Server<Events, Components>,
     world: World,
     main_room_key: RoomKey,
     tick_count: u32,
@@ -24,7 +24,7 @@ pub struct App {
 impl App {
     pub async fn new(server_config: ServerConfig) -> Self {
 
-        let mut server = NaiaServer::new(
+        let mut server = Server::new(
             manifest_load(),
             Some(server_config),
             get_shared_config(),

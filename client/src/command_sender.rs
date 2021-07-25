@@ -1,7 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use crate::naia_client::LocalActorKey;
-use naia_shared::{Event, EventClone, EventType};
+use naia_shared::{Event, EventClone, EventType, LocalActorKey};
 
 /// Handles outgoing Commands
 #[derive(Debug)]

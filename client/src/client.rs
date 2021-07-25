@@ -22,7 +22,7 @@ use crate::client_connection_state::{
 /// Client can send/receive events to/from a server, and has a pool of in-scope
 /// actors that are synced with the server
 #[derive(Debug)]
-pub struct NaiaClient<T: EventType, U: ActorType> {
+pub struct Client<T: EventType, U: ActorType> {
     manifest: Manifest<T, U>,
     server_address: SocketAddr,
     connection_config: ConnectionConfig,
@@ -37,7 +37,7 @@ pub struct NaiaClient<T: EventType, U: ActorType> {
     tick_manager: ClientTickManager,
 }
 
-impl<T: EventType, U: ActorType> NaiaClient<T, U> {
+impl<T: EventType, U: ActorType> Client<T, U> {
     /// Create a new client, given the server's address, a shared manifest, an
     /// optional Config, and an optional Authentication event
     pub fn new(
@@ -68,7 +68,7 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
         handshake_timer.ring_manual();
         let message_sender = client_socket.get_sender();
 
-        NaiaClient {
+        Client {
             server_address,
             manifest,
             socket: client_socket,
@@ -165,7 +165,7 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                 } else {
                     // send heartbeats
                     if connection.should_send_heartbeat() {
-                        NaiaClient::internal_send_with_connection(
+                        Client::internal_send_with_connection(
                             self.tick_manager.get_client_tick(),
                             &mut self.sender,
                             connection,
@@ -176,7 +176,7 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                     // send pings
                     if connection.should_send_ping() {
                         let ping_payload = connection.get_ping_payload();
-                        NaiaClient::internal_send_with_connection(
+                        Client::internal_send_with_connection(
                             self.tick_manager.get_client_tick(),
                             &mut self.sender,
                             connection,
@@ -208,7 +208,7 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                                 .as_mut()
                                 .unwrap()
                                 .write(&mut timestamp_bytes);
-                            NaiaClient::<T, U>::internal_send_connectionless(
+                            Client::<T, U>::internal_send_connectionless(
                                 &mut self.sender,
                                 PacketType::ClientChallengeRequest,
                                 Packet::new(timestamp_bytes),
@@ -232,7 +232,7 @@ impl<T: EventType, U: ActorType> NaiaClient<T, U> {
                                 payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                                 auth_event.write(&mut payload_bytes);
                             }
-                            NaiaClient::<T, U>::internal_send_connectionless(
+                            Client::<T, U>::internal_send_connectionless(
                                 &mut self.sender,
                                 PacketType::ClientConnectRequest,
                                 Packet::new(payload_bytes),
