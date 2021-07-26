@@ -11,12 +11,10 @@ pub use naia_shared::{
 };
 
 use super::{
-    client_actor_message::ClientActorMessage, client_config::ClientConfig,
+    client_config::ClientConfig,
     client_event::ClientEvent, client_tick_manager::ClientTickManager, error::NaiaClientError,
     server_connection::ServerConnection, Packet,
-};
-use crate::client_connection_state::{
-    ClientConnectionState, ClientConnectionState::AwaitingChallengeResponse,
+    client_connection_state::{ClientConnectionState, ClientConnectionState::AwaitingChallengeResponse},
 };
 
 /// Client can send/receive events to/from a server, and has a pool of in-scope
@@ -100,50 +98,7 @@ impl<T: EventType, U: ActorType> Client<T, U> {
                 }
                 // receive actor message
                 if let Some(message) = connection.get_incoming_actor_message() {
-                    match message {
-                        ClientActorMessage::CreateActor(local_key) => {
-                            return Some(Ok(ClientEvent::CreateActor(local_key)));
-                        }
-                        ClientActorMessage::DeleteActor(local_key) => {
-                            return Some(Ok(ClientEvent::DeleteActor(local_key)));
-                        }
-                        ClientActorMessage::UpdateActor(local_key) => {
-                            return Some(Ok(ClientEvent::UpdateActor(local_key)));
-                        }
-                        ClientActorMessage::AssignPawn(local_key) => {
-                            return Some(Ok(ClientEvent::AssignPawn(local_key)));
-                        }
-                        ClientActorMessage::UnassignPawn(local_key) => {
-                            return Some(Ok(ClientEvent::UnassignPawn(local_key)));
-                        }
-                        ClientActorMessage::ResetPawn(local_key) => {
-                            return Some(Ok(ClientEvent::ResetPawn(local_key)));
-                        }
-                        ClientActorMessage::CreateEntity(local_key) => {
-                            return Some(Ok(ClientEvent::CreateEntity(local_key)));
-                        }
-                        ClientActorMessage::DeleteEntity(local_key) => {
-                            return Some(Ok(ClientEvent::DeleteEntity(local_key)));
-                        }
-                        ClientActorMessage::AssignPawnEntity(local_key) => {
-                            return Some(Ok(ClientEvent::AssignPawnEntity(local_key)));
-                        }
-                        ClientActorMessage::UnassignPawnEntity(local_key) => {
-                            return Some(Ok(ClientEvent::UnassignPawnEntity(local_key)));
-                        }
-                        ClientActorMessage::ResetPawnEntity(local_key) => {
-                            return Some(Ok(ClientEvent::ResetPawnEntity(local_key)));
-                        }
-                        ClientActorMessage::AddComponent(entity_key, component_key) => {
-                            return Some(Ok(ClientEvent::AddComponent(entity_key, component_key)));
-                        }
-                        ClientActorMessage::UpdateComponent(entity_key, component_key) => {
-                            return Some(Ok(ClientEvent::UpdateComponent(entity_key, component_key)));
-                        }
-                        ClientActorMessage::RemoveComponent(entity_key, component_key) => {
-                            return Some(Ok(ClientEvent::RemoveComponent(entity_key, component_key)));
-                        }
-                    }
+                    return Some(Ok(message.to_event()));
                 }
                 // receive replay command
                 if let Some((pawn_key, command)) = connection.get_incoming_replay() {

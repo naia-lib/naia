@@ -3,7 +3,7 @@ use std::collections::{HashSet, HashMap, VecDeque, hash_map::Keys};
 
 use log::warn;
 
-use naia_shared::{ActorType, EventType, LocalActorKey, Manifest, PacketReader, StateMask, LocalEntityKey};
+use naia_shared::{ActorType, EventType, LocalActorKey, Manifest, PacketReader, StateMask, LocalEntityKey, ActorMessageType};
 
 use super::client_actor_message::ClientActorMessage;
 use crate::command_receiver::CommandReceiver;
@@ -40,11 +40,11 @@ impl<U: ActorType> ClientActorManager<U> {
     ) {
         let actor_message_count = reader.read_u8();
         //info!("reading {} actor messages", actor_message_count);
-        for _x in 0..actor_message_count {
-            let message_type: u8 = reader.read_u8();
+        for _ in 0..actor_message_count {
+            let message_type = ActorMessageType::from_u8(reader.read_u8());
 
             match message_type {
-                0 => {
+                ActorMessageType::CreateActor => {
                     // Actor Creation
                     let naia_id: u16 = reader.read_u16();
                     let local_actor_key: u16 = reader.read_u16();
@@ -68,12 +68,12 @@ impl<U: ActorType> ClientActorManager<U> {
                         }
                     }
                 }
-                1 => {
+                ActorMessageType::DeleteActor => {
                     // Actor Deletion
                     let local_key = reader.read_u16();
                     self.actor_delete_cleanup(command_receiver, &local_key);
                 }
-                2 => {
+                ActorMessageType::UpdateActor => {
                     // Actor Update
                     let actor_key = reader.read_u16();
 
@@ -94,7 +94,7 @@ impl<U: ActorType> ClientActorManager<U> {
                         }
                     }
                 }
-                3 => {
+                ActorMessageType::AssignPawn => {
                     // Assign Pawn
                     let local_key: u16 = reader.read_u16();
 
@@ -108,7 +108,7 @@ impl<U: ActorType> ClientActorManager<U> {
                             .push_back(ClientActorMessage::AssignPawn(local_key));
                     }
                 }
-                4 => {
+                ActorMessageType::UnassignPawn => {
                     // Unassign Pawn
                     let local_key: u16 = reader.read_u16();
                     if self.pawn_store.contains_key(&local_key) {
@@ -118,7 +118,7 @@ impl<U: ActorType> ClientActorManager<U> {
                     self.queued_incoming_messages
                         .push_back(ClientActorMessage::UnassignPawn(local_key));
                 }
-                5 => {
+                ActorMessageType::UpdatePawn => {
                     // Pawn Update
                     let pawn_key = reader.read_u16();
 
@@ -134,7 +134,7 @@ impl<U: ActorType> ClientActorManager<U> {
                             .push_back(ClientActorMessage::UpdateActor(pawn_key));
                     }
                 }
-                6 => {
+                ActorMessageType::CreateEntity => {
                     // Entity Creation
                     let local_key = reader.read_u16();
                     if self.local_entity_store.contains_key(&local_key) {
@@ -145,7 +145,7 @@ impl<U: ActorType> ClientActorManager<U> {
                             .push_back(ClientActorMessage::CreateEntity(local_key));
                     }
                 }
-                7 => {
+                ActorMessageType::DeleteEntity => {
                     // Entity Deletion
                     let entity_key = reader.read_u16();
                     if let Some(component_set) = self.local_entity_store.remove(&entity_key) {
@@ -167,7 +167,7 @@ impl<U: ActorType> ClientActorManager<U> {
                         warn!("received message attempting to delete nonexistent entity!");
                     }
                 }
-                8 => {
+                ActorMessageType::AssignPawnEntity => {
                     // Assign Pawn Entity
                     let local_key: u16 = reader.read_u16();
                     if self.local_entity_store.contains_key(&local_key) {
@@ -180,7 +180,7 @@ impl<U: ActorType> ClientActorManager<U> {
                             .push_back(ClientActorMessage::AssignPawnEntity(local_key));
                     }
                 }
-                9 => {
+                ActorMessageType::UnassignPawnEntity => {
                     // Unassign Pawn Entity
                     let local_key: u16 = reader.read_u16();
                     if self.pawn_entity_store.contains(&local_key) {
@@ -190,7 +190,7 @@ impl<U: ActorType> ClientActorManager<U> {
                     self.queued_incoming_messages
                         .push_back(ClientActorMessage::UnassignPawnEntity(local_key));
                 }
-                10 => {
+                ActorMessageType::AddComponent => {
                     // Add Component to Entity
                     let local_entity_key = reader.read_u16();
                     let local_component_key = reader.read_u16();
@@ -201,8 +201,8 @@ impl<U: ActorType> ClientActorManager<U> {
                         warn!("received add_component message for nonexistent entity");
                     }
                 }
-                _ => {
-                    warn!("what's going on here? {}", message_type);
+                ActorMessageType::Unknown => {
+                    warn!("received unknown type of actor message");
                     return;
                 }
             }

@@ -41,6 +41,7 @@ pub use ack_manager::AckManager;
 pub use actors::{
     actor::{Actor, ActorEq},
     actor_builder::ActorBuilder,
+    actor_message_type::ActorMessageType,
     actor_mutator::ActorMutator,
     actor_notifiable::ActorNotifiable,
     actor_type::ActorType,
