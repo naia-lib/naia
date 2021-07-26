@@ -904,13 +904,13 @@ impl<T: EventType, U: ActorType> Server<T, U> {
 
                         let should_be_in_scope: bool;
                         if user_connection.has_pawn(actor_key) {
-                            should_be_in_scope = true
+                            should_be_in_scope = true;
                         } else {
                             let key = (room_key, *user_key, *actor_key);
                             if let Some(in_scope) = self.actor_scope_map.get(&key) {
-                                should_be_in_scope = *in_scope
+                                should_be_in_scope = *in_scope;
                             } else {
-                                should_be_in_scope = true
+                                should_be_in_scope = false;
                             }
                         }
 
@@ -956,13 +956,13 @@ impl<T: EventType, U: ActorType> Server<T, U> {
 
                             let should_be_in_scope: bool;
                             if user_connection.has_pawn_entity(entity_key) {
-                                should_be_in_scope = true
+                                should_be_in_scope = true;
                             } else {
                                 let key = (room_key, *user_key, *entity_key);
                                 if let Some(in_scope) = self.entity_scope_map.get(&key) {
-                                    should_be_in_scope = *in_scope
+                                    should_be_in_scope = *in_scope;
                                 } else {
-                                    should_be_in_scope = true
+                                    should_be_in_scope = false;
                                 }
                             }
 

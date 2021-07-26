@@ -58,17 +58,16 @@ impl<T: EventType> CommandReceiver<T> {
             let naia_id: u16 = reader.read_u16();
             let past_commands_number: u8 = reader.read_u8();
 
-            match manifest.create_event(naia_id, reader) {
-                Some(new_command) => {
-                    if !self.queued_incoming_commands.exists(client_tick) {
-                        self.queued_incoming_commands
-                            .insert(client_tick, HashMap::new());
-                    }
-                    if let Some(map) = self.queued_incoming_commands.get_mut(client_tick) {
-                        map.insert(pawn_key, new_command);
-                    }
+            if let Some(new_command) = manifest.create_event(naia_id, reader) {
+                if !self.queued_incoming_commands.exists(client_tick) {
+                    self.queued_incoming_commands
+                        .insert(client_tick, HashMap::new());
                 }
-                _ => {}
+                if let Some(map) = self.queued_incoming_commands.get_mut(client_tick) {
+                    map.insert(pawn_key, new_command);
+                }
+            } else {
+                panic!("using current manifest, can't create a new event with a NaiaId of {}", naia_id);
             }
 
             for _y in 0..past_commands_number {

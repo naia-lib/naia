@@ -1,11 +1,14 @@
 use std::{
     net::{IpAddr, SocketAddr},
     time::Duration,
+    collections::HashMap,
 };
 
-use log::info;
+use log::{info, warn};
 
-use naia_client::{ClientConfig, ClientEvent, Client, NaiaKey};
+use hecs::{Entity as HecsEntityKey, World};
+
+use naia_client::{ClientConfig, ClientEvent, Client, NaiaKey, LocalEntityKey as NaiaEntityKey, Ref, Actor};
 
 use naia_example_shared::{
     get_shared_config, manifest_load,
@@ -17,6 +20,8 @@ const SERVER_PORT: u16 = 14191;
 
 pub struct App {
     client: Client<Events, Components>,
+    world: World,
+    entity_key_map: HashMap<NaiaEntityKey, HecsEntityKey>,
     server_event_count: u32,
 }
 
@@ -50,12 +55,15 @@ impl App {
                 get_shared_config(),
                 Some(auth),
             ),
+            world: World::new(),
+            entity_key_map: HashMap::new(),
             server_event_count: 0,
         }
     }
 
-    // Currently, this will call every frame. On Linux it's called in a loop. On Web
-    // it's called via request_animation_frame()
+    // Currently, this will call every frame.
+    // On Linux it's called in a loop.
+    // On Web it's called via request_animation_frame()
     pub fn update(&mut self) {
         loop {
             if let Some(result) = self.client.receive() {
@@ -82,48 +90,62 @@ impl App {
                             }
                             _ => {}
                         },
-                        ClientEvent::CreateEntity(entity_key) => {
-                            info!("creation of entity: {}", entity_key.to_u16());
+                        ClientEvent::CreateEntity(naia_entity_key) => {
+                            info!("creation of entity: {}", naia_entity_key.to_u16());
+                            let hecs_entity_key = self.world.spawn(());
+                            self.entity_key_map.insert(naia_entity_key, hecs_entity_key);
                         },
-                        ClientEvent::DeleteEntity(entity_key) => {
-                            info!("deletion of entity: {}", entity_key.to_u16());
+                        ClientEvent::DeleteEntity(naia_entity_key) => {
+                            info!("deletion of entity: {}", naia_entity_key.to_u16());
+                            if let Some(hecs_entity_key) = self.entity_key_map.remove(&naia_entity_key) {
+                                self.world.despawn(hecs_entity_key)
+                                    .expect("unsuccessful despawn of entity");
+                            } else {
+                                warn!("attempted deletion of non-existent entity");
+                            }
                         },
-                        ClientEvent::AddComponent(entity_key, component_key) => {
-                            info!("add component: {}, to entity: {}", component_key.to_u16(), entity_key.to_u16());
+                        ClientEvent::AddComponent(naia_entity_key, component_key) => {
+                            info!("add component: {}, to entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
+                            if self.entity_key_map.contains_key(&naia_entity_key) {
+                                let hecs_entity_key = *self.entity_key_map.get(&naia_entity_key).unwrap();
+                                if self.client.has_component(&component_key) {
+                                    let component = self.client.get_component(&component_key).unwrap().clone();
+                                    match component {
+                                        Components::Position(position_ref) => {
+                                            self.insert_component(&hecs_entity_key, position_ref);
+                                        }
+                                        Components::Name(name_ref) => {
+                                            self.insert_component(&hecs_entity_key, name_ref);
+                                        }
+                                    }
+                                } else {
+                                    warn!("attempting to add non-existent component to entity");
+                                }
+                            } else {
+                                warn!("attempting to add new component to non-existent entity");
+                            }
                         },
-                        ClientEvent::UpdateComponent(entity_key, component_key) => {
-                            info!("update component: {}, to entity: {}", component_key.to_u16(), entity_key.to_u16());
-                        },
-                        ClientEvent::RemoveComponent(entity_key, component_key) => {
-                            info!("remove component: {}, from entity: {}", component_key.to_u16(), entity_key.to_u16());
-                        },
-                        ClientEvent::CreateActor(entity_key) => {
-                            info!("creation of actor: {}", entity_key.to_u16());
-                        },
-                        ClientEvent::DeleteActor(entity_key) => {
-                            info!("deletion of actor: {}", entity_key.to_u16());
-                        },
-                        ClientEvent::UpdateActor(entity_key) => {
-                            info!("update of actor: {}", entity_key.to_u16());
-                        },
+                        ClientEvent::RemoveComponent(naia_entity_key, component_key, component_ref) => {
+                            info!("remove component: {}, from entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
+                            if self.entity_key_map.contains_key(&naia_entity_key) {
+                                let hecs_entity_key = *self.entity_key_map.get(&naia_entity_key).unwrap();
 
-//                        ClientEvent::UpdateActor(local_key) => {
-//                            if let Some(actor) = self.client.get_actor(&local_key) {
-//                                match actor {
-//                                    Components::Position(point_actor) => {
-//                                        info!("update of point actor with key: {}, x:{}, y: {}, name: {} {}",
-//                                              local_key,
-//                                              point_actor.borrow().x.get(),
-//                                              point_actor.borrow().y.get(),
-//                                              point_actor.borrow().name.get().first,
-//                                              point_actor.borrow().name.get().last);
-//                                    }
-//                                }
-//                            }
-//                        }
+                                match component_ref {
+                                    Components::Position(position_ref) => {
+                                        self.remove_component(&hecs_entity_key, &position_ref);
+                                    }
+                                    Components::Name(name_ref) => {
+                                        self.remove_component(&hecs_entity_key, &name_ref);
+                                    }
+                                }
+
+                            } else {
+                                warn!("attempting to remove component from non-existent entity");
+                            }
+                        },
                         ClientEvent::Tick => {
                             //info!("tick event");
-                        }
+                        },
                         _ => {}
                     },
                     Err(err) => {
@@ -135,5 +157,15 @@ impl App {
                 break;
             }
         }
+    }
+
+    fn insert_component<T: 'static + Actor<Components>>(&mut self, hecs_entity_key: &HecsEntityKey, component_ref: Ref<T>) {
+        self.world.insert_one(*hecs_entity_key, component_ref)
+            .expect("error inserting component");
+    }
+
+    fn remove_component<T: 'static + Actor<Components>>(&mut self, hecs_entity_key: &HecsEntityKey, _component_ref: &Ref<T>) {
+        self.world.remove_one::<Ref<T>>(*hecs_entity_key)
+            .expect("error removing component");
     }
 }
