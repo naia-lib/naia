@@ -1,4 +1,4 @@
-use naia_shared::{Actor, ActorType, LocalActorKey, Ref, StateMask, LocalEntityKey, EntityKey, LocalComponentKey};
+use naia_shared::{Actor, ActorType, LocalActorKey, Ref, StateMask, LocalEntityKey, EntityKey, LocalComponentKey, ActorMessageType};
 
 use super::actor_key::{actor_key::ActorKey, ComponentKey};
 
@@ -18,19 +18,19 @@ pub enum ServerActorMessage<T: ActorType> {
 }
 
 impl<T: ActorType> ServerActorMessage<T> {
-    pub fn write_message_type(&self) -> u8 {
+    pub fn as_type(&self) -> ActorMessageType {
         match self {
-            ServerActorMessage::CreateActor(_, _, _) => 0,
-            ServerActorMessage::DeleteActor(_, _) => 1,
-            ServerActorMessage::UpdateActor(_, _, _, _) => 2,
-            ServerActorMessage::AssignPawn(_, _) => 3,
-            ServerActorMessage::UnassignPawn(_, _) => 4,
-            ServerActorMessage::UpdatePawn(_, _, _, _) => 5,
-            ServerActorMessage::CreateEntity(_, _) => 6,
-            ServerActorMessage::DeleteEntity(_, _) => 7,
-            ServerActorMessage::AssignPawnEntity(_, _) => 8,
-            ServerActorMessage::UnassignPawnEntity(_, _) => 9,
-            ServerActorMessage::AddComponent(_, _, _, _) => 10,
+            ServerActorMessage::CreateActor(_, _, _) => ActorMessageType::CreateActor,
+            ServerActorMessage::DeleteActor(_, _) => ActorMessageType::DeleteActor,
+            ServerActorMessage::UpdateActor(_, _, _, _) => ActorMessageType::UpdateActor,
+            ServerActorMessage::AssignPawn(_, _) => ActorMessageType::AssignPawn,
+            ServerActorMessage::UnassignPawn(_, _) => ActorMessageType::UnassignPawn,
+            ServerActorMessage::UpdatePawn(_, _, _, _) => ActorMessageType::UpdatePawn,
+            ServerActorMessage::CreateEntity(_, _) => ActorMessageType::CreateEntity,
+            ServerActorMessage::DeleteEntity(_, _) => ActorMessageType::DeleteEntity,
+            ServerActorMessage::AssignPawnEntity(_, _) => ActorMessageType::AssignPawnEntity,
+            ServerActorMessage::UnassignPawnEntity(_, _) => ActorMessageType::UnassignPawnEntity,
+            ServerActorMessage::AddComponent(_, _, _, _) => ActorMessageType::AddComponent,
         }
     }
 }

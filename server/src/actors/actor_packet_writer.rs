@@ -28,7 +28,7 @@ impl ActorPacketWriter {
 
                 //Write actor "header"
                 actor_total_bytes
-                    .write_u8(message.write_message_type())
+                    .write_u8(message.as_type().to_u8())
                     .unwrap(); // write actor message type
 
                 let type_id = actor.borrow().get_type_id();
@@ -41,7 +41,7 @@ impl ActorPacketWriter {
             }
             ServerActorMessage::DeleteActor(_, local_key) => {
                 actor_total_bytes
-                    .write_u8(message.write_message_type())
+                    .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
                     .write_u16::<BigEndian>(*local_key)
@@ -56,7 +56,7 @@ impl ActorPacketWriter {
 
                 //Write actor "header"
                 actor_total_bytes
-                    .write_u8(message.write_message_type())
+                    .write_u8(message.as_type().to_u8())
                     .unwrap(); // write actor message type
 
                 actor_total_bytes
@@ -67,7 +67,7 @@ impl ActorPacketWriter {
             }
             ServerActorMessage::AssignPawn(_, local_key) => {
                 actor_total_bytes
-                    .write_u8(message.write_message_type())
+                    .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
                     .write_u16::<BigEndian>(*local_key)
@@ -75,7 +75,7 @@ impl ActorPacketWriter {
             }
             ServerActorMessage::UnassignPawn(_, local_key) => {
                 actor_total_bytes
-                    .write_u8(message.write_message_type())
+                    .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
                     .write_u16::<BigEndian>(*local_key)
@@ -88,7 +88,7 @@ impl ActorPacketWriter {
 
                 //Write actor "header"
                 actor_total_bytes
-                    .write_u8(message.write_message_type())
+                    .write_u8(message.as_type().to_u8())
                     .unwrap(); // write actor message type
 
                 actor_total_bytes
@@ -98,7 +98,7 @@ impl ActorPacketWriter {
             }
             ServerActorMessage::CreateEntity(_, local_key) => {
                 actor_total_bytes
-                    .write_u8(message.write_message_type())
+                    .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
                     .write_u16::<BigEndian>(*local_key)
@@ -106,7 +106,7 @@ impl ActorPacketWriter {
             }
             ServerActorMessage::DeleteEntity(_, local_key) => {
                 actor_total_bytes
-                    .write_u8(message.write_message_type())
+                    .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
                     .write_u16::<BigEndian>(*local_key)
@@ -114,7 +114,7 @@ impl ActorPacketWriter {
             }
             ServerActorMessage::AssignPawnEntity(_, local_key) => {
                 actor_total_bytes
-                    .write_u8(message.write_message_type())
+                    .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
                     .write_u16::<BigEndian>(*local_key)
@@ -122,7 +122,7 @@ impl ActorPacketWriter {
             }
             ServerActorMessage::UnassignPawnEntity(_, local_key) => {
                 actor_total_bytes
-                    .write_u8(message.write_message_type())
+                    .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
                     .write_u16::<BigEndian>(*local_key)
@@ -130,7 +130,7 @@ impl ActorPacketWriter {
             }
             ServerActorMessage::AddComponent(_, local_entity_key, _, local_component_key) => {
                 actor_total_bytes
-                    .write_u8(message.write_message_type())
+                    .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
                     .write_u16::<BigEndian>(*local_entity_key)
