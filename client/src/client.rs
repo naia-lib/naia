@@ -7,7 +7,7 @@ use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 pub use naia_shared::{
     ActorType, ConnectionConfig, Event, EventType, HostTickManager, Instant, LocalActorKey,
     ManagerType, Manifest, PacketReader, PacketType, SequenceIterator, SharedConfig,
-    StandardHeader, Timer, Timestamp,
+    StandardHeader, Timer, Timestamp, PawnKey
 };
 
 use super::{
@@ -102,17 +102,37 @@ impl<T: EventType, U: ActorType> Client<T, U> {
                 }
                 // receive replay command
                 if let Some((pawn_key, command)) = connection.get_incoming_replay() {
-                    return Some(Ok(ClientEvent::ReplayCommand(
-                        pawn_key,
-                        command.as_ref().get_typed_copy(),
-                    )));
+                    match pawn_key {
+                        PawnKey::Actor(actor_key) => {
+                            return Some(Ok(ClientEvent::ReplayCommand(
+                                actor_key,
+                                command.as_ref().get_typed_copy(),
+                            )));
+                        }
+                        PawnKey::Entity(entity_key) => {
+                            return Some(Ok(ClientEvent::ReplayCommandEntity(
+                                entity_key,
+                                command.as_ref().get_typed_copy(),
+                            )));
+                        }
+                    }
                 }
                 // receive command
                 if let Some((pawn_key, command)) = connection.get_incoming_command() {
-                    return Some(Ok(ClientEvent::NewCommand(
-                        pawn_key,
-                        command.as_ref().get_typed_copy(),
-                    )));
+                    match pawn_key {
+                        PawnKey::Actor(actor_key) => {
+                            return Some(Ok(ClientEvent::NewCommand(
+                                actor_key,
+                                command.as_ref().get_typed_copy(),
+                            )));
+                        }
+                        PawnKey::Entity(entity_key) => {
+                            return Some(Ok(ClientEvent::NewCommandEntity(
+                                entity_key,
+                                command.as_ref().get_typed_copy(),
+                            )));
+                        }
+                    }
                 }
                 // update current tick
                 // apply updates on tick boundary
@@ -309,9 +329,9 @@ impl<T: EventType, U: ActorType> Client<T, U> {
     }
 
     /// Queues up an Command to be sent to the Server
-    pub fn send_command(&mut self, pawn_key: LocalActorKey, command: &impl Event<T>) {
+    pub fn send_command(&mut self, pawn_actor_key: &LocalActorKey, command: &impl Event<T>) {
         if let Some(connection) = &mut self.server_connection {
-            connection.queue_command(pawn_key, command);
+            connection.actor_queue_command(pawn_actor_key, command);
         }
     }
 

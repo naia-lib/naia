@@ -45,7 +45,6 @@ pub use actors::{
     actor_mutator::ActorMutator,
     actor_notifiable::ActorNotifiable,
     actor_type::ActorType,
-    local_actor_key::LocalActorKey,
     property::Property,
     state_mask::StateMask,
 };
@@ -59,7 +58,7 @@ pub use events::{
     event_type::EventType,
 };
 pub use ecs::{
-    keys::{EntityKey, LocalEntityKey, LocalComponentKey}
+    keys::{EntityKey, LocalActorKey, LocalEntityKey, LocalComponentKey, PawnKey, NaiaKey}
 };
 pub use host_tick_manager::HostTickManager;
 pub use host_type::HostType;

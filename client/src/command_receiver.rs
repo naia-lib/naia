@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use naia_shared::{wrapping_diff, ActorType, Event, EventType, SequenceBuffer, SequenceIterator, LocalEntityKey, LocalActorKey};
+use naia_shared::{wrapping_diff, ActorType, Event, EventType, SequenceBuffer, SequenceIterator, PawnKey};
 
 use super::client_actor_manager::ClientActorManager;
 
@@ -12,11 +12,10 @@ const COMMAND_HISTORY_SIZE: u16 = 64;
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
 pub struct CommandReceiver<T: EventType> {
-    queued_incoming_commands: VecDeque<(u16, LocalActorKey, Rc<Box<dyn Event<T>>>)>,
-    command_history: HashMap<LocalActorKey, SequenceBuffer<Rc<Box<dyn Event<T>>>>>,
-    entity_command_history: HashMap<LocalActorKey, SequenceBuffer<Rc<Box<dyn Event<T>>>>>,
-    queued_command_replays: VecDeque<(u16, LocalActorKey, Rc<Box<dyn Event<T>>>)>,
-    replay_trigger: HashMap<LocalActorKey, u16>,
+    queued_incoming_commands: VecDeque<(u16, PawnKey, Rc<Box<dyn Event<T>>>)>,
+    command_history: HashMap<PawnKey, SequenceBuffer<Rc<Box<dyn Event<T>>>>>,
+    queued_command_replays: VecDeque<(u16, PawnKey, Rc<Box<dyn Event<T>>>)>,
+    replay_trigger: HashMap<PawnKey, u16>,
 }
 
 impl<T: EventType> CommandReceiver<T> {
@@ -25,21 +24,20 @@ impl<T: EventType> CommandReceiver<T> {
         CommandReceiver {
             queued_incoming_commands: VecDeque::new(),
             command_history: HashMap::new(),
-            entity_command_history: HashMap::new(),
             queued_command_replays: VecDeque::new(),
             replay_trigger: HashMap::new(),
         }
     }
 
     /// Gets the next queued Command
-    pub fn pop_command(&mut self) -> Option<(u16, LocalActorKey, Rc<Box<dyn Event<T>>>)> {
+    pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Rc<Box<dyn Event<T>>>)> {
         self.queued_incoming_commands.pop_front()
     }
 
     /// Gets the next queued Replayed Command
     pub fn pop_command_replay<U: ActorType>(
         &mut self,
-    ) -> Option<(u16, LocalActorKey, Rc<Box<dyn Event<T>>>)> {
+    ) -> Option<(u16, PawnKey, Rc<Box<dyn Event<T>>>)> {
         self.queued_command_replays.pop_front()
     }
 
@@ -50,7 +48,10 @@ impl<T: EventType> CommandReceiver<T> {
     ) {
         for (pawn_key, history_tick) in self.replay_trigger.iter() {
             // set pawn to server authoritative state
-            actor_manager.pawn_reset(pawn_key);
+            match pawn_key {
+                PawnKey::Actor(actor_key) => actor_manager.pawn_reset(actor_key),
+                PawnKey::Entity(entity_key) => actor_manager.pawn_reset_entity(entity_key),
+            }
 
             // trigger replay of historical commands
             if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
@@ -74,11 +75,11 @@ impl<T: EventType> CommandReceiver<T> {
     pub fn queue_command(
         &mut self,
         host_tick: u16,
-        pawn_key: LocalActorKey,
+        pawn_key: &PawnKey,
         command: &Rc<Box<dyn Event<T>>>,
     ) {
         self.queued_incoming_commands
-            .push_back((host_tick, pawn_key, command.clone()));
+            .push_back((host_tick, *pawn_key, command.clone()));
 
         if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
             command_buffer.insert(host_tick, command.clone());
@@ -86,7 +87,7 @@ impl<T: EventType> CommandReceiver<T> {
     }
 
     /// Get number of Commands in the command history for a given Pawn
-    pub fn command_history_count(&self, pawn_key: LocalActorKey) -> u8 {
+    pub fn command_history_count(&self, pawn_key: &PawnKey) -> u8 {
         if let Some(command_buffer) = self.command_history.get(&pawn_key) {
             return command_buffer.get_entries_count();
         }
@@ -96,7 +97,7 @@ impl<T: EventType> CommandReceiver<T> {
     /// Get an iterator of Commands in the command history for a given Pawn
     pub fn command_history_iter(
         &self,
-        pawn_key: LocalActorKey,
+        pawn_key: &PawnKey,
         reverse: bool,
     ) -> Option<SequenceIterator<Rc<Box<dyn Event<T>>>>> {
         if let Some(command_buffer) = self.command_history.get(&pawn_key) {
@@ -105,47 +106,34 @@ impl<T: EventType> CommandReceiver<T> {
         return None;
     }
 
-    /// Queues commands to be replayed from a given tick
-    pub fn replay_commands(&mut self, history_tick: u16, pawn_key: LocalActorKey) {
+    /// Queues Commands to be replayed from a given tick
+    pub fn replay_commands(&mut self, history_tick: u16, pawn_key: &PawnKey) {
         if let Some(tick) = self.replay_trigger.get_mut(&pawn_key) {
             if wrapping_diff(*tick, history_tick) > 0 {
                 *tick = history_tick;
             }
         } else {
-            self.replay_trigger.insert(pawn_key, history_tick);
+            self.replay_trigger.insert(*pawn_key, history_tick);
         }
     }
 
-    /// Removes command history for a given pawn until a specific tick
-    pub fn remove_history_until(&mut self, history_tick: u16, pawn_key: LocalActorKey) {
+    /// Removes command history for a given Pawn until a specific tick
+    pub fn remove_history_until(&mut self, history_tick: u16, pawn_key: &PawnKey) {
         if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
             command_buffer.remove_until(history_tick);
         }
     }
 
-    /// Perform initialization on pawn creation
-    pub fn pawn_init(&mut self, pawn_key: &LocalActorKey) {
+    /// Perform initialization on Pawn creation
+    pub fn pawn_init(&mut self, pawn_key: &PawnKey) {
         self.command_history.insert(
             *pawn_key,
             SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE),
         );
     }
 
-    /// Perform cleanup on pawn deletion
-    pub fn pawn_cleanup(&mut self, pawn_key: &LocalActorKey) {
+    /// Perform cleanup on Pawn deletion
+    pub fn pawn_cleanup(&mut self, pawn_key: &PawnKey) {
         self.command_history.remove(pawn_key);
-    }
-
-    /// Perform initialization on pawn entity creation
-    pub fn pawn_entity_init(&mut self, pawn_key: &LocalEntityKey) {
-        self.entity_command_history.insert(
-            *pawn_key,
-            SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE),
-        );
-    }
-
-    /// Perform cleanup on pawn entity deletion
-    pub fn pawn_entity_cleanup(&mut self, pawn_key: &LocalEntityKey) {
-        self.entity_command_history.remove(pawn_key);
     }
 }

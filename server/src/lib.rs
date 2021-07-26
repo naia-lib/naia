@@ -45,7 +45,7 @@ mod server_packet_writer;
 mod server_tick_manager;
 mod user;
 
-pub use actors::actor_key::{actor_key::ActorKey, ComponentKey};
+pub use actors::actor_key::{actor_key::ActorKey, ComponentKey, GlobalPawnKey};
 pub use server::Server;
 pub use room::room_key::RoomKey;
 pub use server_config::{ServerConfig, ServerAddresses};

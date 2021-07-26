@@ -5,7 +5,7 @@ use std::{
 
 use log::info;
 
-use naia_client::{ClientConfig, ClientEvent, Client};
+use naia_client::{ClientConfig, ClientEvent, Client, NaiaKey};
 
 use naia_example_shared::{
     get_shared_config, manifest_load,
@@ -83,28 +83,28 @@ impl App {
                             _ => {}
                         },
                         ClientEvent::CreateEntity(entity_key) => {
-                            info!("creation of entity: {}", entity_key);
+                            info!("creation of entity: {}", entity_key.to_u16());
                         },
                         ClientEvent::DeleteEntity(entity_key) => {
-                            info!("deletion of entity: {}", entity_key);
+                            info!("deletion of entity: {}", entity_key.to_u16());
                         },
                         ClientEvent::AddComponent(entity_key, component_key) => {
-                            info!("add component: {}, to entity: {}", component_key, entity_key);
+                            info!("add component: {}, to entity: {}", component_key.to_u16(), entity_key.to_u16());
                         },
                         ClientEvent::UpdateComponent(entity_key, component_key) => {
-                            info!("update component: {}, to entity: {}", component_key, entity_key);
+                            info!("update component: {}, to entity: {}", component_key.to_u16(), entity_key.to_u16());
                         },
                         ClientEvent::RemoveComponent(entity_key, component_key) => {
-                            info!("remove component: {}, from entity: {}", component_key, entity_key);
+                            info!("remove component: {}, from entity: {}", component_key.to_u16(), entity_key.to_u16());
                         },
                         ClientEvent::CreateActor(entity_key) => {
-                            info!("creation of actor: {}", entity_key);
+                            info!("creation of actor: {}", entity_key.to_u16());
                         },
                         ClientEvent::DeleteActor(entity_key) => {
-                            info!("deletion of actor: {}", entity_key);
+                            info!("deletion of actor: {}", entity_key.to_u16());
                         },
                         ClientEvent::UpdateActor(entity_key) => {
-                            info!("update of actor: {}", entity_key);
+                            info!("update of actor: {}", entity_key.to_u16());
                         },
 
 //                        ClientEvent::UpdateActor(local_key) => {

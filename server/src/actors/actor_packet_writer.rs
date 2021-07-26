@@ -1,6 +1,6 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
-use naia_shared::{ActorType, EventType, Manifest, MTU_SIZE};
+use naia_shared::{ActorType, EventType, Manifest, MTU_SIZE, NaiaKey};
 
 use super::server_actor_message::ServerActorMessage;
 
@@ -35,7 +35,7 @@ impl ActorPacketWriter {
                 let naia_id = manifest.get_actor_naia_id(&type_id); // get naia id
                 actor_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                 actor_total_bytes
-                    .write_u16::<BigEndian>(*local_key)
+                    .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
                 actor_total_bytes.append(&mut actor_payload_bytes); // write payload
             }
@@ -44,7 +44,7 @@ impl ActorPacketWriter {
                     .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
-                    .write_u16::<BigEndian>(*local_key)
+                    .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
             ServerActorMessage::UpdateActor(_, local_key, state_mask, actor) => {
@@ -60,7 +60,7 @@ impl ActorPacketWriter {
                     .unwrap(); // write actor message type
 
                 actor_total_bytes
-                    .write_u16::<BigEndian>(*local_key)
+                    .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
                 state_mask.borrow_mut().write(&mut actor_total_bytes); // write state mask
                 actor_total_bytes.append(&mut actor_payload_bytes); // write payload
@@ -70,7 +70,7 @@ impl ActorPacketWriter {
                     .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
-                    .write_u16::<BigEndian>(*local_key)
+                    .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
             ServerActorMessage::UnassignPawn(_, local_key) => {
@@ -78,7 +78,7 @@ impl ActorPacketWriter {
                     .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
-                    .write_u16::<BigEndian>(*local_key)
+                    .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
             ServerActorMessage::UpdatePawn(_, local_key, _, actor) => {
@@ -92,7 +92,7 @@ impl ActorPacketWriter {
                     .unwrap(); // write actor message type
 
                 actor_total_bytes
-                    .write_u16::<BigEndian>(*local_key)
+                    .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
                 actor_total_bytes.append(&mut actor_payload_bytes); // write payload
             }
@@ -101,7 +101,7 @@ impl ActorPacketWriter {
                     .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
-                    .write_u16::<BigEndian>(*local_key)
+                    .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
             ServerActorMessage::DeleteEntity(_, local_key) => {
@@ -109,7 +109,7 @@ impl ActorPacketWriter {
                     .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
-                    .write_u16::<BigEndian>(*local_key)
+                    .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
             ServerActorMessage::AssignPawnEntity(_, local_key) => {
@@ -117,7 +117,7 @@ impl ActorPacketWriter {
                     .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
-                    .write_u16::<BigEndian>(*local_key)
+                    .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
             ServerActorMessage::UnassignPawnEntity(_, local_key) => {
@@ -125,7 +125,7 @@ impl ActorPacketWriter {
                     .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
-                    .write_u16::<BigEndian>(*local_key)
+                    .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
             ServerActorMessage::AddComponent(_, local_entity_key, _, local_component_key) => {
@@ -133,10 +133,10 @@ impl ActorPacketWriter {
                     .write_u8(message.as_type().to_u8())
                     .unwrap(); //Write actor message type
                 actor_total_bytes
-                    .write_u16::<BigEndian>(*local_entity_key)
+                    .write_u16::<BigEndian>(local_entity_key.to_u16())
                     .unwrap(); //write local entity key
                 actor_total_bytes
-                    .write_u16::<BigEndian>(*local_component_key)
+                    .write_u16::<BigEndian>(local_component_key.to_u16())
                     .unwrap(); //write local component key
             }
         }
