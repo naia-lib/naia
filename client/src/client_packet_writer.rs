@@ -98,7 +98,7 @@ impl ClientPacketWriter {
         //Write command "header"
         let mut command_total_bytes = Vec::<u8>::new();
 
-        let type_id = command.as_ref().get_type_id();
+
         match pawn_key {
             PawnKey::Actor(_) => {
                 command_total_bytes
@@ -114,6 +114,8 @@ impl ClientPacketWriter {
         command_total_bytes
             .write_u16::<BigEndian>(pawn_key.to_u16())
             .unwrap(); // write pawn key
+
+        let type_id = command.as_ref().get_type_id();
         let naia_id = manifest.get_event_naia_id(&type_id); // get naia id
         command_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
         command_total_bytes.write_u8(past_command_index).unwrap(); // write past command number

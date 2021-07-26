@@ -3,9 +3,9 @@ use std::{
     collections::HashMap,
 };
 
-use hecs::*;
+use hecs::{Entity as HecsEntityKey, World};
 
-use naia_server::{Server, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey, Ref};
+use naia_server::{Server, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey as NaiaEntityKey, Ref};
 
 use naia_example_shared::{
     get_shared_config, manifest_load,
@@ -18,7 +18,7 @@ pub struct App {
     world: World,
     main_room_key: RoomKey,
     tick_count: u32,
-    entity_key_map: HashMap<EntityKey, Entity>,
+    entity_key_map: HashMap<NaiaEntityKey, HecsEntityKey>,
 }
 
 impl App {
@@ -124,7 +124,7 @@ impl App {
                                 let mut position = position_ref.borrow_mut();
                                 let mut x = *position.x.get();
                                 x += 1;
-                                if x > 20 {
+                                if x > 50 {
                                     x = 0;
                                 }
                                 if x % 3 == 0 {
@@ -140,7 +140,7 @@ impl App {
                                 if let Some(entity) = self.entity_key_map.get(&entity_key) {
                                     if let Ok(pos_ref) = self.world.get::<Ref<Position>>(*entity) {
                                         let x = *pos_ref.borrow().x.get();
-                                        let in_scope = x >= 5 && x <= 15;
+                                        let in_scope = x >= 5 && x <= 35;
                                         self.server.entity_set_scope(&room_key, &user_key, &entity_key, in_scope);
                                     }
                                 }

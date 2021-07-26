@@ -3,30 +3,32 @@ use std::collections::{HashSet, HashMap, VecDeque, hash_map::Keys};
 
 use log::warn;
 
-use naia_shared::{ActorType, EventType, LocalActorKey, Manifest, PacketReader, StateMask, LocalEntityKey, ActorMessageType, NaiaKey, LocalComponentKey, PawnKey};
+use naia_shared::{ActorType, EventType, LocalActorKey, Manifest, PacketReader, StateMask,
+                  LocalEntityKey, ActorMessageType, NaiaKey, LocalComponentKey, PawnKey};
 
-use super::client_actor_message::ClientActorMessage;
-use crate::dual_command_receiver::DualCommandReceiver;
+use super::{client_actor_message::ClientActorMessage, dual_command_receiver::DualCommandReceiver};
 
 #[derive(Debug)]
 pub struct ClientActorManager<U: ActorType> {
     local_actor_store:                  HashMap<LocalActorKey, U>,
-    queued_incoming_messages:           VecDeque<ClientActorMessage>,
+    queued_incoming_messages:           VecDeque<ClientActorMessage<U>>,
     pawn_store:                         HashMap<LocalActorKey, U>,
     local_entity_store:                 HashMap<LocalEntityKey, HashSet<LocalComponentKey>>,
     pawn_entity_store:                  HashSet<LocalEntityKey>,
     component_entity_map:               HashMap<LocalComponentKey, LocalEntityKey>,
+    reserved_add_component_messages:    HashMap<LocalEntityKey, LocalComponentKey>,
 }
 
 impl<U: ActorType> ClientActorManager<U> {
     pub fn new() -> Self {
         ClientActorManager {
-            queued_incoming_messages:   VecDeque::new(),
-            local_actor_store:          HashMap::new(),
-            pawn_store:                 HashMap::new(),
-            local_entity_store:         HashMap::new(),
-            pawn_entity_store:          HashSet::new(),
-            component_entity_map:       HashMap::new(),
+            queued_incoming_messages:           VecDeque::new(),
+            local_actor_store:                  HashMap::new(),
+            pawn_store:                         HashMap::new(),
+            local_entity_store:                 HashMap::new(),
+            pawn_entity_store:                  HashSet::new(),
+            component_entity_map:               HashMap::new(),
+            reserved_add_component_messages:    HashMap::new()
         }
     }
 
@@ -155,7 +157,15 @@ impl<U: ActorType> ClientActorManager<U> {
                     if self.local_entity_store.contains_key(&entity_key) {
                         warn!("duplicate local entity key inserted");
                     } else {
-                        self.local_entity_store.insert(entity_key, HashSet::new());
+                        let mut component_set = HashSet::new();
+
+                        // if we have an AddComponent message waiting, apply it
+                        if let Some(component_key) = self.reserved_add_component_messages.remove(&entity_key) {
+                            component_init(&mut self.component_entity_map, &mut component_set, &entity_key, &component_key);
+                        }
+
+                        self.local_entity_store.insert(entity_key, component_set);
+
                         self.queued_incoming_messages
                             .push_back(ClientActorMessage::CreateEntity(entity_key));
                     }
@@ -212,11 +222,11 @@ impl<U: ActorType> ClientActorManager<U> {
                     // Add Component to Entity
                     let local_entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     let local_component_key = LocalComponentKey::from_u16(reader.read_u16());
-                    if let Some(component_set) = self.local_entity_store.get_mut(&local_entity_key) {
-                        self.component_entity_map.insert(local_component_key, local_entity_key);
-                        component_set.insert(local_component_key);
+                    if self.local_entity_store.contains_key(&local_entity_key) {
+                        let mut component_set = self.local_entity_store.get_mut(&local_entity_key).unwrap();
+                        component_init(&mut self.component_entity_map, component_set, &local_entity_key, &local_component_key);
                     } else {
-                        warn!("received add_component message for nonexistent entity");
+                        self.reserved_add_component_messages.insert(local_entity_key, local_component_key);
                     }
                 }
                 ActorMessageType::Unknown => {
@@ -227,16 +237,38 @@ impl<U: ActorType> ClientActorManager<U> {
         }
     }
 
-    pub fn pop_incoming_message(&mut self) -> Option<ClientActorMessage> {
+    pub fn pop_incoming_message(&mut self) -> Option<ClientActorMessage<U>> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn actor_keys(&self) -> Keys<LocalActorKey, U> {
-        return self.local_actor_store.keys();
+    pub fn actor_keys(&self) -> Vec<LocalActorKey> {
+        let mut output: Vec<LocalActorKey> = Vec::new();
+        for key in self.local_actor_store.keys() {
+            if !self.component_entity_map.contains_key(key) {
+                output.push(*key);
+            }
+        }
+        output
+    }
+
+    pub fn component_keys(&self) -> Vec<LocalComponentKey> {
+        let mut output: Vec<LocalComponentKey> = Vec::new();
+        for key in self.component_entity_map.keys() {
+            output.push(*key);
+        }
+        output
     }
 
     pub fn get_actor(&self, key: &LocalActorKey) -> Option<&U> {
         return self.local_actor_store.get(key);
+    }
+
+    pub fn has_actor(&self, key: &LocalActorKey) -> bool {
+        return self.local_actor_store.contains_key(key);
+    }
+
+    pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
+        return self.local_entity_store.contains_key(key);
     }
 
     pub fn pawn_keys(&self) -> Keys<LocalActorKey, U> {
@@ -266,22 +298,27 @@ impl<U: ActorType> ClientActorManager<U> {
 
     fn actor_delete_cleanup<T: EventType>(&mut self, command_receiver: &mut DualCommandReceiver<T>,
                                           actor_key: &LocalActorKey) {
-        self.local_actor_store.remove(&actor_key);
+        if let Some(actor) = self.local_actor_store.remove(&actor_key) {
+            if self.pawn_store.contains_key(&actor_key) {
+                self.pawn_store.remove(&actor_key);
+                let pawn_key = PawnKey::Actor(*actor_key);
+                command_receiver.pawn_cleanup(&pawn_key);
+            }
 
-        if self.pawn_store.contains_key(&actor_key) {
-            self.pawn_store.remove(&actor_key);
-            let pawn_key = PawnKey::Actor(*actor_key);
-            command_receiver.pawn_cleanup(&pawn_key);
-        }
-
-        if let Some(entity_key) = self.component_entity_map.get(actor_key) {
-            // actor is a component
-            self.queued_incoming_messages
-                .push_back(ClientActorMessage::RemoveComponent(*entity_key, *actor_key));
-        } else {
-            // actor is an object
-            self.queued_incoming_messages
-                .push_back(ClientActorMessage::DeleteActor(*actor_key));
+            if let Some(entity_key) = self.component_entity_map.get(actor_key) {
+                // actor is a component
+                self.queued_incoming_messages
+                    .push_back(ClientActorMessage::RemoveComponent(*entity_key, *actor_key, actor));
+            } else {
+                // actor is an object
+                self.queued_incoming_messages
+                    .push_back(ClientActorMessage::DeleteActor(*actor_key, actor));
+            }
         }
     }
+}
+
+fn component_init(component_map: &mut HashMap<LocalComponentKey, LocalEntityKey>, component_set: &mut HashSet<LocalComponentKey>, entity_key: &LocalEntityKey, component_key: &LocalComponentKey) {
+    component_map.insert(*component_key, *entity_key);
+    component_set.insert(*component_key);
 }

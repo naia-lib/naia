@@ -1,6 +1,8 @@
 use std::{net::SocketAddr, rc::Rc, collections::hash_map::Keys};
 
-use naia_shared::{ActorType, Connection, ConnectionConfig, Event, EventType, LocalActorKey, ManagerType, Manifest, PacketReader, PacketType, PawnKey, SequenceNumber, StandardHeader, LocalEntityKey};
+use naia_shared::{ActorType, Connection, ConnectionConfig, Event, EventType, LocalActorKey,
+                  ManagerType, Manifest, PacketReader, PacketType, PawnKey, SequenceNumber,
+                  StandardHeader, LocalEntityKey, LocalComponentKey};
 
 use crate::Packet;
 
@@ -143,34 +145,44 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
     }
 
     // Pass-through methods to underlying actor manager
-    pub fn get_incoming_actor_message(&mut self) -> Option<ClientActorMessage> {
+    pub fn get_incoming_actor_message(&mut self) -> Option<ClientActorMessage<U>> {
         return self.actor_manager.pop_incoming_message();
     }
 
-    pub fn actor_keys(&self) -> Keys<LocalActorKey, U> {
+    pub fn actor_keys(&self) -> Vec<LocalActorKey> {
         return self.actor_manager.actor_keys();
     }
 
-    pub fn get_actor(
-        &self,
-        key: &LocalActorKey,
-    ) -> Option<&U> {
+    pub fn component_keys(&self) -> Vec<LocalComponentKey> {
+        return self.actor_manager.component_keys();
+    }
+
+    pub fn get_actor(&self, key: &LocalActorKey) -> Option<&U> {
         return self.actor_manager.get_actor(key);
+    }
+
+    pub fn has_actor(&self, key: &LocalActorKey) -> bool {
+        return self.actor_manager.has_actor(key);
+    }
+
+    pub fn has_component(&self, key: &LocalComponentKey) -> bool {
+        return self.has_actor(key);
     }
 
     pub fn pawn_keys(&self) -> Keys<LocalActorKey, U> {
         return self.actor_manager.pawn_keys();
     }
 
-    pub fn get_pawn(
-        &self,
-        key: &LocalActorKey,
-    ) -> Option<&U> {
+    pub fn get_pawn(&self, key: &LocalActorKey) -> Option<&U> {
         return self.actor_manager.get_pawn(key);
     }
 
     pub fn get_pawn_mut(&mut self, key: &LocalActorKey) -> Option<&U> {
         return self.actor_manager.get_pawn(key);
+    }
+
+    pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
+        return self.actor_manager.has_entity(key);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary

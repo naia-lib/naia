@@ -118,17 +118,16 @@ impl<T: EventType> EventManager<T> {
     pub fn process_data<U: ActorType>(
         &mut self,
         reader: &mut PacketReader,
-        manifest: &Manifest<T, U>,
-    ) {
+        manifest: &Manifest<T, U>)
+    {
         let event_count = reader.read_u8();
         for _x in 0..event_count {
             let naia_id: u16 = reader.read_u16();
 
-            match manifest.create_event(naia_id, reader) {
-                Some(new_event) => {
-                    self.queued_incoming_events.push_back(new_event);
-                }
-                _ => {}
+            if let Some(new_event) = manifest.create_event(naia_id, reader) {
+                self.queued_incoming_events.push_back(new_event);
+            } else {
+                panic!("using current manifest, can't create a new event with a NaiaId of {}", naia_id);
             }
         }
     }
