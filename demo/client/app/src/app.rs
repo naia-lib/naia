@@ -1,9 +1,9 @@
-use miniquad::info;
-
 use std::{
     net::{IpAddr, SocketAddr},
     time::Duration,
 };
+
+use log::info;
 
 use naia_client::{ClientConfig, ClientEvent, Client};
 
@@ -89,14 +89,24 @@ impl App {
                             info!("deletion of entity: {}", entity_key);
                         },
                         ClientEvent::AddComponent(entity_key, component_key) => {
-                            info!("add component: {}, to entity: {}", entity_key, component_key);
+                            info!("add component: {}, to entity: {}", component_key, entity_key);
                         },
                         ClientEvent::UpdateComponent(entity_key, component_key) => {
-                            info!("update component: {}, to entity: {}", entity_key, component_key);
+                            info!("update component: {}, to entity: {}", component_key, entity_key);
                         },
                         ClientEvent::RemoveComponent(entity_key, component_key) => {
-                            info!("delete component: {}, to entity: {}", entity_key, component_key);
+                            info!("remove component: {}, from entity: {}", component_key, entity_key);
                         },
+                        ClientEvent::CreateActor(entity_key) => {
+                            info!("creation of actor: {}", entity_key);
+                        },
+                        ClientEvent::DeleteActor(entity_key) => {
+                            info!("deletion of actor: {}", entity_key);
+                        },
+                        ClientEvent::UpdateActor(entity_key) => {
+                            info!("update of actor: {}", entity_key);
+                        },
+
 //                        ClientEvent::UpdateActor(local_key) => {
 //                            if let Some(actor) = self.client.get_actor(&local_key) {
 //                                match actor {

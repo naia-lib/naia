@@ -134,6 +134,15 @@ impl<T: EventType, U: ActorType> Client<T, U> {
                         ClientActorMessage::ResetPawnEntity(local_key) => {
                             return Some(Ok(ClientEvent::ResetPawnEntity(local_key)));
                         }
+                        ClientActorMessage::AddComponent(entity_key, component_key) => {
+                            return Some(Ok(ClientEvent::AddComponent(entity_key, component_key)));
+                        }
+                        ClientActorMessage::UpdateComponent(entity_key, component_key) => {
+                            return Some(Ok(ClientEvent::UpdateComponent(entity_key, component_key)));
+                        }
+                        ClientActorMessage::RemoveComponent(entity_key, component_key) => {
+                            return Some(Ok(ClientEvent::RemoveComponent(entity_key, component_key)));
+                        }
                     }
                 }
                 // receive replay command

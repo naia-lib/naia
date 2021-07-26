@@ -245,6 +245,7 @@ impl<T: ActorType> ServerActorManager<T> {
             self.actor_records.insert(*key, actor_record);
             return Some(local_key);
         }
+        info!("added actor twice..");
         return None;
     }
 
@@ -323,12 +324,6 @@ impl<T: ActorType> ServerActorManager<T> {
                     *global_key,
                     local_key
                 ));
-
-            // if this is a pawn, send a "assign pawn" follow-up message
-            if self.pawn_entity_store.contains(global_key) {
-                self.queued_messages
-                    .push_back(ServerActorMessage::AssignPawnEntity(*global_key, local_key));
-            }
         }
     }
 
@@ -344,6 +339,17 @@ impl<T: ActorType> ServerActorManager<T> {
                         *key,
                         entity_record.local_key,
                     ));
+
+                // Entity deletion = Component deletion, so update accordingly
+                for (component_key, _) in &entity_record.components {
+                    self.pawn_store.remove(component_key);
+
+                    if let Some(actor_record) = self.actor_records.get_mut(*component_key) {
+                        if actor_record.status != LocalityStatus::Deleting {
+                            actor_record.status = LocalityStatus::Deleting;
+                        }
+                    }
+                }
             }
         }
     }
@@ -355,12 +361,16 @@ impl<T: ActorType> ServerActorManager<T> {
     // Pawn Entities
 
     pub fn add_pawn_entity(&mut self, key: &EntityKey) {
-        if !self.pawn_entity_store.contains(key) {
-            self.pawn_entity_store.insert(*key);
-            if let Some(entity_record) = self.local_entity_store.get_mut(key) {
-                self.queued_messages
-                    .push_back(ServerActorMessage::AssignPawnEntity(*key, entity_record.local_key));
+        if self.local_entity_store.contains_key(key) {
+            if !self.pawn_entity_store.contains(key) {
+                self.pawn_entity_store.insert(*key);
+                if let Some(entity_record) = self.local_entity_store.get_mut(key) {
+                    self.queued_messages
+                        .push_back(ServerActorMessage::AssignPawnEntity(*key, entity_record.local_key));
+                }
             }
+        } else {
+            warn!("attempting to assign a nonexistent entity to be a pawn");
         }
     }
 
@@ -384,23 +394,41 @@ impl<T: ActorType> ServerActorManager<T> {
     // Components
 
     pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Actor<T>>) {
-        if let Some(local_component_key) = self.actor_init(component_key, component_ref, LocalityStatus::Waiting) {
-            if let Some(entity_record) = self.local_entity_store.get_mut(entity_key) {
+        if let Some(entity_record) = self.local_entity_store.get_mut(entity_key) {
 
-                if entity_record.status == LocalityStatus::Created {
-                    let message = ServerActorMessage::AddComponent(
-                        *entity_key,
-                        entity_record.local_key,
-                        *component_key,
-                        local_component_key,
+            if !self.local_actor_store.contains_key(*component_key) {
+                //duplicate code
+                let local_component_key: LocalActorKey;
+                {
+                    self.local_actor_store.insert(*component_key, component_ref.clone());
+                    local_component_key = self.actor_key_generator.generate();
+                    self.local_to_global_key_map.insert(local_component_key, *component_key);
+                    let state_mask_size = component_ref.borrow().get_state_mask_size();
+                    let actor_record = ActorRecord::new(local_component_key, state_mask_size, LocalityStatus::Waiting);
+                    self.mut_handler.borrow_mut().register_mask(
+                        &self.address,
+                        &component_key,
+                        actor_record.get_state_mask(),
                     );
+                    self.actor_records.insert(*component_key, actor_record);
+                }
+                //good stuff
+                {
+                    if entity_record.status == LocalityStatus::Created {
+                        let message = ServerActorMessage::AddComponent(
+                            *entity_key,
+                            entity_record.local_key,
+                            *component_key,
+                            local_component_key,
+                        );
 
-                    self.queued_messages
-                        .push_back(message);
+                        self.queued_messages
+                            .push_back(message);
 
-                    entity_record.components.insert(*component_key, true);
-                } else {
-                    entity_record.components.insert(*component_key, false);
+                        entity_record.components.insert(*component_key, true);
+                    } else {
+                        entity_record.components.insert(*component_key, false);
+                    }
                 }
             }
         }
@@ -493,7 +521,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                             entity_record.status = LocalityStatus::Created;
 
                             // pop deferred component messages
-                            for (component_key, message_sent) in entity_record.components.iter_mut() {
+                            for (component_key, message_sent) in &mut entity_record.components {
                                 if !*message_sent {
                                     if let Some(component_record) = self.actor_records.get(*component_key) {
                                         let local_component_key = component_record.local_key;

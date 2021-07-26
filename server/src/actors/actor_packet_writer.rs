@@ -147,7 +147,10 @@ impl ActorPacketWriter {
             hypothetical_next_payload_size += 2;
         }
         if hypothetical_next_payload_size < MTU_SIZE {
-            packet_writer.actor_message_count += 1;
+            if packet_writer.actor_message_count == 255 {
+                return false;
+            }
+            packet_writer.actor_message_count = packet_writer.actor_message_count.wrapping_add(1);
             packet_writer
                 .actor_working_bytes
                 .append(&mut actor_total_bytes);

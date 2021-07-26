@@ -609,6 +609,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
     pub fn add_component_to_entity(&mut self, entity_key: &EntityKey, component: U) -> Result<ComponentKey, &str> {
 
         if !self.entity_component_map.contains_key(&entity_key) {
+            warn!("attempted to add component to nonexistant entity");
             return Err("attempted to add component to nonexistant entity");
         }
 
@@ -955,6 +956,15 @@ impl<T: EventType, U: ActorType> Server<T, U> {
                                     // add entity to the connections local scope
                                     Self::user_add_entity(user_connection,
                                                              entity_key);
+
+                                    //add entity's components to user connect
+                                    for component_set in self.entity_component_map.get(entity_key) {
+                                        for component_key in component_set {
+                                            if let Some(component_ref) = self.global_state_store.get(*component_key) {
+                                                Self::user_add_component(user_connection, entity_key, component_key, &component_ref.inner_ref());
+                                            }
+                                        }
+                                    }
                                 }
                             } else {
                                 if currently_in_scope {
