@@ -340,7 +340,7 @@ impl<T: ActorType> ServerActorManager<T> {
                         entity_record.local_key,
                     ));
 
-                // Entity deletion = Component deletion, so update accordingly
+                // Entity deletion IS Component deletion, so update those actor records accordingly
                 for (component_key, _) in &entity_record.components {
                     self.pawn_store.remove(component_key);
 
@@ -394,26 +394,9 @@ impl<T: ActorType> ServerActorManager<T> {
     // Components
 
     pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Actor<T>>) {
-        if let Some(entity_record) = self.local_entity_store.get_mut(entity_key) {
-
-            if !self.local_actor_store.contains_key(*component_key) {
-                //duplicate code
-                let local_component_key: LocalActorKey;
-                {
-                    self.local_actor_store.insert(*component_key, component_ref.clone());
-                    local_component_key = self.actor_key_generator.generate();
-                    self.local_to_global_key_map.insert(local_component_key, *component_key);
-                    let state_mask_size = component_ref.borrow().get_state_mask_size();
-                    let actor_record = ActorRecord::new(local_component_key, state_mask_size, LocalityStatus::Waiting);
-                    self.mut_handler.borrow_mut().register_mask(
-                        &self.address,
-                        &component_key,
-                        actor_record.get_state_mask(),
-                    );
-                    self.actor_records.insert(*component_key, actor_record);
-                }
-                //good stuff
-                {
+        if self.local_entity_store.contains_key(entity_key) {
+            if let Some(local_component_key) = self.actor_init(component_key, component_ref, LocalityStatus::Waiting) {
+                if let Some(entity_record) = self.local_entity_store.get_mut(entity_key) {
                     if entity_record.status == LocalityStatus::Created {
                         let message = ServerActorMessage::AddComponent(
                             *entity_key,
