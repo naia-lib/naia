@@ -254,8 +254,7 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
         return self.command_sender.queue_command(pawn_key, command);
     }
 
-    pub fn process_replay(&mut self) {
-
+    pub fn process_replays(&mut self) {
         self
             .command_receiver
             .process_command_replay::<U>(&mut self.actor_manager);

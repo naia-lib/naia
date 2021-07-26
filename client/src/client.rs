@@ -91,7 +91,7 @@ impl<T: EventType, U: ActorType> Client<T, U> {
         match &mut self.server_connection {
             Some(connection) => {
                 // process replays
-                connection.process_replay();
+                connection.process_replays();
                 // receive event
                 if let Some(event) = connection.get_incoming_event() {
                     return Some(Ok(ClientEvent::Event(event)));
