@@ -73,7 +73,10 @@ impl EventPacketWriter {
             hypothetical_next_payload_size += 2;
         }
         if hypothetical_next_payload_size < MTU_SIZE {
-            self.event_count += 1;
+            if self.event_count == 255 {
+                return false;
+            }
+            self.event_count = self.event_count.wrapping_add(1);
             self.event_working_bytes.append(&mut event_total_bytes);
             return true;
         } else {

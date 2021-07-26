@@ -13,4 +13,7 @@ pub enum ClientActorMessage {
     AssignPawnEntity(LocalEntityKey),
     UnassignPawnEntity(LocalEntityKey),
     ResetPawnEntity(LocalEntityKey),
+    AddComponent(LocalEntityKey, LocalActorKey),
+    UpdateComponent(LocalEntityKey, LocalActorKey),
+    RemoveComponent(LocalEntityKey, LocalActorKey),
 }

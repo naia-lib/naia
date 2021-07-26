@@ -15,5 +15,5 @@ wbindgen = [ "naia-client/wbindgen", "naia-example-shared/wbindgen" ]
 cfg-if = "0.1.10"
 naia-client = { path = "../../../client" }
 naia-example-shared = { path = "../../shared" }
-miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"] }
 hecs = { path = "../../../../Forks/hecs" }
+log = "0.4"
