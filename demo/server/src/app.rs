@@ -71,12 +71,12 @@ impl App {
                 let _pos_key = server.add_component_to_entity(&entity_key, Components::Position(position.clone()));
 
                 // Add name component to Entity
-//                let name = Name::new(first, last).wrap();
-//                let _name_key = server.add_component_to_entity(&entity_key, Components::Name(name.clone()));
+                let name = Name::new(first, last).wrap();
+                let _name_key = server.add_component_to_entity(&entity_key, Components::Name(name.clone()));
 
                 // Add to World
                 let hecs_entity = world.spawn((
-//                    Ref::clone(&name),
+                    Ref::clone(&name),
                     Ref::clone(&position),
                 ));
 
