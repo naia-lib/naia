@@ -69,7 +69,7 @@ impl App {
                         }
                         ClientEvent::Event(event_type) => match event_type {
                             Events::StringMessage(string_event) => {
-                                let message = string_event.message.get();
+                                let _message = string_event.message.get();
                                 //info!("Client received event: {}", message);
 
                                 let new_message =
