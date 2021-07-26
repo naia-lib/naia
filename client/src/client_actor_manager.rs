@@ -1,7 +1,7 @@
 
 use std::collections::{HashSet, HashMap, VecDeque, hash_map::Keys};
 
-use log::{info, warn};
+use log::warn;
 
 use naia_shared::{ActorType, EventType, LocalActorKey, Manifest, PacketReader, StateMask, LocalEntityKey};
 
