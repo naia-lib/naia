@@ -230,7 +230,7 @@ impl<T: ActorType> ServerActorManager<T> {
 
     // Actors
 
-    fn actor_init(&mut self, key: &ActorKey, actor: &Ref<dyn Actor<T>>, status: LocalityStatus) -> Option<LocalActorKey> {
+    fn actor_init(&mut self, key: &ActorKey, actor: &Ref<dyn Actor<T>>, status: LocalityStatus) -> LocalActorKey {
         if !self.local_actor_store.contains_key(*key) {
             self.local_actor_store.insert(*key, actor.clone());
             let local_key: LocalActorKey = self.actor_key_generator.generate();
@@ -243,21 +243,21 @@ impl<T: ActorType> ServerActorManager<T> {
                 actor_record.get_state_mask(),
             );
             self.actor_records.insert(*key, actor_record);
-            return Some(local_key);
+            return local_key;
+        } else {
+            panic!("added actor twice..");
         }
-        info!("added actor twice..");
-        return None;
     }
 
     pub fn add_actor(&mut self, key: &ActorKey, actor: &Ref<dyn Actor<T>>) {
-        if let Some(local_key) = self.actor_init(key, actor, LocalityStatus::Creating) {
-            self.queued_messages
-                .push_back(ServerActorMessage::CreateActor(
-                    *key,
-                    local_key,
-                    actor.clone(),
-                ));
-        }
+        let local_key = self.actor_init(key, actor, LocalityStatus::Creating);
+
+        self.queued_messages
+            .push_back(ServerActorMessage::CreateActor(
+                *key,
+                local_key,
+                actor.clone(),
+            ));
     }
 
     pub fn remove_actor(&mut self, key: &ActorKey) {
@@ -364,10 +364,13 @@ impl<T: ActorType> ServerActorManager<T> {
         if self.local_entity_store.contains_key(key) {
             if !self.pawn_entity_store.contains(key) {
                 self.pawn_entity_store.insert(*key);
-                if let Some(entity_record) = self.local_entity_store.get_mut(key) {
-                    self.queued_messages
-                        .push_back(ServerActorMessage::AssignPawnEntity(*key, entity_record.local_key));
-                }
+                let local_key = self.local_entity_store.get(key)
+                    .unwrap()
+                    .local_key;
+                self.queued_messages
+                    .push_back(ServerActorMessage::AssignPawnEntity(*key, local_key));
+            } else {
+                warn!("attempting to assign a pawn entity twice");
             }
         } else {
             warn!("attempting to assign a nonexistent entity to be a pawn");
@@ -377,13 +380,17 @@ impl<T: ActorType> ServerActorManager<T> {
     pub fn remove_pawn_entity(&mut self, key: &EntityKey) {
         if self.pawn_entity_store.contains(key) {
             self.pawn_entity_store.remove(key);
-            if let Some(entity_record) = self.local_entity_store.get_mut(key) {
-                self.queued_messages
-                    .push_back(ServerActorMessage::UnassignPawnEntity(
-                        *key,
-                        entity_record.local_key,
-                    ));
-            }
+            let local_key = self.local_entity_store.get(key)
+                .expect("expecting an entity record to exist if that entity is designated as a pawn")
+                .local_key;
+
+            self.queued_messages
+                .push_back(ServerActorMessage::UnassignPawnEntity(
+                    *key,
+                    local_key,
+                ));
+        } else {
+            panic!("attempting to unassign an entity as a pawn which is not assigned as a pawn in the first place")
         }
     }
 
@@ -395,33 +402,38 @@ impl<T: ActorType> ServerActorManager<T> {
 
     pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Actor<T>>) {
         if self.local_entity_store.contains_key(entity_key) {
-            if let Some(local_component_key) = self.actor_init(component_key, component_ref, LocalityStatus::Waiting) {
-                if let Some(entity_record) = self.local_entity_store.get_mut(entity_key) {
-                    if entity_record.status == LocalityStatus::Created {
-                        let message = ServerActorMessage::AddComponent(
-                            *entity_key,
-                            entity_record.local_key,
-                            *component_key,
-                            local_component_key,
-                        );
+            let local_component_key = self.actor_init(component_key, component_ref, LocalityStatus::Waiting);
+            let entity_record = self.local_entity_store.get_mut(entity_key).unwrap();
+            if entity_record.status == LocalityStatus::Created {
+                let message = ServerActorMessage::AddComponent(
+                    *entity_key,
+                    entity_record.local_key,
+                    *component_key,
+                    local_component_key,
+                );
 
-                        self.queued_messages
-                            .push_back(message);
+                self.queued_messages
+                    .push_back(message);
 
-                        entity_record.components.insert(*component_key, true);
-                    } else {
-                        entity_record.components.insert(*component_key, false);
-                    }
-                }
+                entity_record.components.insert(*component_key, true);
+            } else {
+                entity_record.components.insert(*component_key, false);
             }
+        } else {
+            panic!("attempting to add a component to a non-existent entity")
         }
     }
 
     pub fn remove_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey) {
-        if let Some(entity_record) = self.local_entity_store.get_mut(entity_key) {
-            entity_record.components.remove(component_key);
 
-            self.remove_actor(component_key);
+        if let Some(entity_record) = self.local_entity_store.get_mut(entity_key) {
+            if let Some(_) = entity_record.components.remove(component_key) {
+                self.remove_actor(component_key);
+            } else {
+                panic!("attempting to remove a component which does not exist on this entity");
+            }
+        } else {
+            panic!("attempting to remove a component from a non-existent entity");
         }
     }
 
@@ -476,6 +488,8 @@ impl<T: ActorType> ServerActorManager<T> {
             self.local_to_global_key_map.remove(&local_actor_key);
             self.actor_key_generator.recycle_key(&local_actor_key);
             self.pawn_store.remove(&global_actor_key);
+        } else {
+            panic!("attempting to clean up actor from connection inside which it is not present");
         }
     }
 }
