@@ -21,13 +21,15 @@ mod client_packet_writer;
 mod client_tick_manager;
 mod command_receiver;
 mod command_sender;
+mod dual_command_receiver;
+mod dual_command_sender;
 mod error;
 mod client;
 mod ping_manager;
 mod server_connection;
 mod tick_queue;
 
-pub use naia_shared::{find_my_ip_address, Instant, LinkConditionerConfig, Random, Ref, wrapping_diff};
+pub use naia_shared::{find_my_ip_address, Instant, LinkConditionerConfig, Random, Ref, wrapping_diff, NaiaKey};
 
 pub use client_config::ClientConfig;
 pub use client_event::ClientEvent;

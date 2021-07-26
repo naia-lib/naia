@@ -20,7 +20,7 @@ pub use naia_shared::{
     Timer, Timestamp, LocalActorKey, StandardHeader, KeyGenerator, EntityKey
 };
 
-use crate::ComponentKey;
+use crate::{ComponentKey, GlobalPawnKey};
 use super::{
     actors::{
         actor_key::actor_key::ActorKey, mut_handler::MutHandler,
@@ -60,7 +60,7 @@ pub struct Server<T: EventType, U: ActorType> {
     tick_timer: Interval,
     actor_scope_map: HashMap<(RoomKey, UserKey, ActorKey), bool>,
     entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
-    entity_key_generator: KeyGenerator,
+    entity_key_generator: KeyGenerator<EntityKey>,
     entity_component_map: HashMap<EntityKey, HashSet<ComponentKey>>,
     component_entity_map: HashMap<ComponentKey, EntityKey>,
 }
@@ -185,7 +185,22 @@ impl<T: EventType, U: ActorType> Server<T, U> {
                 if let Some((pawn_key, command)) =
                     connection.get_incoming_command(self.tick_manager.get_tick())
                 {
-                    return Ok(ServerEvent::Command(*user_key, pawn_key, command));
+                    match pawn_key {
+                        GlobalPawnKey::Actor(actor_key) => {
+                            return Ok(ServerEvent::Command(
+                                *user_key,
+                                actor_key,
+                                command,
+                            ));
+                        }
+                        GlobalPawnKey::Entity(entity_key) => {
+                            return Ok(ServerEvent::CommandEntity(
+                                *user_key,
+                                entity_key,
+                                command,
+                            ));
+                        }
+                    }
                 }
                 //receive events from anyone
                 if let Some(event) = connection.get_incoming_event() {

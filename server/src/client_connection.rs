@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_shared::{
     Actor, ActorType, Connection, ConnectionConfig, Event, EventType, ManagerType, Manifest,
-    PacketReader, PacketType, Ref, SequenceNumber, StandardHeader, EntityKey
+    PacketReader, PacketType, Ref, SequenceNumber, StandardHeader, EntityKey, PawnKey
 };
 
 use super::{
@@ -14,7 +14,7 @@ use super::{
     ping_manager::PingManager,
     server_packet_writer::ServerPacketWriter,
 };
-use crate::ComponentKey;
+use crate::{ComponentKey, GlobalPawnKey};
 
 pub struct ClientConnection<T: EventType, U: ActorType> {
     connection: Connection<T>,
@@ -140,15 +140,27 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         self.actor_manager.remove_pawn(key);
     }
 
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(ActorKey, T)> {
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(GlobalPawnKey, T)> {
         if let Some((local_pawn_key, command)) =
             self.command_receiver.pop_incoming_command(server_tick)
         {
-            if let Some(global_pawn_key) =
-                self.actor_manager.get_global_key_from_local(local_pawn_key)
-            {
-                return Some((*global_pawn_key, command));
+            match local_pawn_key {
+                PawnKey::Actor(local_actor_key) => {
+                    if let Some(global_pawn_key) =
+                        self.actor_manager.get_global_key_from_local(local_actor_key)
+                    {
+                        return Some((GlobalPawnKey::Actor(*global_pawn_key), command));
+                    }
+                }
+                PawnKey::Entity(local_entity_key) => {
+                    if let Some(global_pawn_key) =
+                        self.actor_manager.get_global_entity_key_from_local(local_entity_key)
+                    {
+                        return Some((GlobalPawnKey::Entity(*global_pawn_key), command));
+                    }
+                }
             }
+
         }
         return None;
     }

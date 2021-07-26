@@ -1,26 +1,25 @@
-use std::{net::SocketAddr, rc::Rc};
+use std::{net::SocketAddr, rc::Rc, collections::hash_map::Keys};
 
-use naia_shared::{
-    ActorType, Connection, ConnectionConfig, Event, EventType, LocalActorKey, ManagerType,
-    Manifest, PacketReader, PacketType, SequenceNumber, StandardHeader,
-};
+use naia_shared::{ActorType, Connection, ConnectionConfig, Event, EventType, LocalActorKey, ManagerType, Manifest, PacketReader, PacketType, PawnKey, SequenceNumber, StandardHeader, LocalEntityKey};
+
+use crate::Packet;
 
 use super::{
     client_actor_manager::ClientActorManager, client_actor_message::ClientActorMessage,
-    client_packet_writer::ClientPacketWriter, command_sender::CommandSender,
+    client_packet_writer::ClientPacketWriter,
     ping_manager::PingManager, tick_queue::TickQueue,
+    client_tick_manager::ClientTickManager,
+    dual_command_sender::DualCommandSender,
+    dual_command_receiver::DualCommandReceiver
 };
-use crate::{client_tick_manager::ClientTickManager, command_receiver::CommandReceiver, Packet};
-use std::collections::hash_map::Keys;
 
 #[derive(Debug)]
 pub struct ServerConnection<T: EventType, U: ActorType> {
     connection: Connection<T>,
     actor_manager: ClientActorManager<U>,
     ping_manager: PingManager,
-    command_sender: CommandSender<T>,
-    command_receiver: CommandReceiver<T>,
-    last_replay_tick: Option<(u16, LocalActorKey)>,
+    command_sender: DualCommandSender<T>,
+    command_receiver: DualCommandReceiver<T>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
@@ -36,9 +35,8 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
             ),
-            command_sender: CommandSender::new(),
-            command_receiver: CommandReceiver::new(),
-            last_replay_tick: None,
+            command_sender: DualCommandSender::new(),
+            command_receiver: DualCommandReceiver::new(),
             jitter_buffer: TickQueue::new(),
         };
     }
@@ -51,22 +49,24 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
         if self.connection.has_outgoing_events() || self.command_sender.has_command() {
             let mut writer = ClientPacketWriter::new();
 
+            // Commands
             while let Some((pawn_key, command)) = self.command_sender.pop_command() {
                 if writer.write_command(
                     host_tick,
                     manifest,
                     &self.command_receiver,
-                    pawn_key,
+                    &pawn_key,
                     &command,
                 ) {
                     self.command_receiver
-                        .queue_command(host_tick, pawn_key, &command);
+                        .queue_command(host_tick, &pawn_key, &command);
                 } else {
-                    self.command_sender.unpop_command(pawn_key, &command);
+                    self.command_sender.unpop_command(&pawn_key, &command);
                     break;
                 }
             }
 
+            // Events
             let next_packet_index: u16 = self.get_next_packet_index();
             while let Some(popped_event) = self.connection.pop_outgoing_event(next_packet_index) {
                 if !writer.write_event(manifest, &popped_event) {
@@ -76,6 +76,7 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
                 }
             }
 
+            // Add header
             if writer.has_bytes() {
                 // Get bytes from writer
                 let out_bytes = writer.get_bytes();
@@ -250,8 +251,14 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
     }
 
     // command related
-    pub fn queue_command(&mut self, pawn_key: LocalActorKey, command: &impl Event<T>) {
-        return self.command_sender.queue_command(pawn_key, command);
+    pub fn actor_queue_command(&mut self, actor_key: &LocalActorKey, command: &impl Event<T>) {
+        let pawn_key = PawnKey::Actor(*actor_key);
+        return self.command_sender.queue_command(&pawn_key, command);
+    }
+
+    pub fn entity_queue_command(&mut self, entity_key: &LocalEntityKey, command: &impl Event<T>) {
+        let pawn_key = PawnKey::Entity(*entity_key);
+        return self.command_sender.queue_command(&pawn_key, command);
     }
 
     pub fn process_replays(&mut self) {
@@ -261,25 +268,19 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
 
     }
 
-    pub fn get_incoming_replay(&mut self) -> Option<(LocalActorKey, Rc<Box<dyn Event<T>>>)> {
-        if let Some((_, _)) = self.last_replay_tick {
-            self.last_replay_tick = None;
-        }
-
-        if let Some((tick, pawn_key, command)) = self
+    pub fn get_incoming_replay(&mut self) -> Option<(PawnKey, Rc<Box<dyn Event<T>>>)> {
+        if let Some((_tick, pawn_key, command)) = self
             .command_receiver
             .pop_command_replay::<U>()
         {
-            self.last_replay_tick = Some((tick, pawn_key));
             return Some((pawn_key, command));
         }
 
         return None;
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<(LocalActorKey, Rc<Box<dyn Event<T>>>)> {
-        if let Some((tick, pawn_key, command)) = self.command_receiver.pop_command() {
-            self.last_replay_tick = Some((tick, pawn_key));
+    pub fn get_incoming_command(&mut self) -> Option<(PawnKey, Rc<Box<dyn Event<T>>>)> {
+        if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command() {
             return Some((pawn_key, command));
         }
         return None;

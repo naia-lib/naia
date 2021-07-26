@@ -1,11 +1,11 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, ActorType, Event, EventPacketWriter, EventType, LocalActorKey, ManagerType,
-    Manifest, MTU_SIZE,
+    wrapping_diff, ActorType, Event, EventPacketWriter, EventType, ManagerType,
+    Manifest, MTU_SIZE, PawnKey
 };
 
-use super::command_receiver::CommandReceiver;
+use crate::dual_command_receiver::DualCommandReceiver;
 
 const MAX_PAST_COMMANDS: u8 = 3;
 
@@ -61,8 +61,8 @@ impl ClientPacketWriter {
         &mut self,
         host_tick: u16,
         manifest: &Manifest<T, U>,
-        command_receiver: &CommandReceiver<T>,
-        pawn_key: LocalActorKey,
+        command_receiver: &DualCommandReceiver<T>,
+        pawn_key: &PawnKey,
         command: &Box<dyn Event<T>>,
     ) -> bool {
         //Write command payload
@@ -72,11 +72,11 @@ impl ClientPacketWriter {
 
         // write past commands
         let past_commands_number = command_receiver
-            .command_history_count(pawn_key)
+            .command_history_count(&pawn_key)
             .min(MAX_PAST_COMMANDS);
         let mut past_command_index: u8 = 0;
 
-        if let Some(mut iter) = command_receiver.command_history_iter(pawn_key, true) {
+        if let Some(mut iter) = command_receiver.command_history_iter(&pawn_key, true) {
             while past_command_index < past_commands_number {
                 if let Some((past_tick, past_command)) = iter.next() {
                     // get tick diff between commands
@@ -99,8 +99,20 @@ impl ClientPacketWriter {
         let mut command_total_bytes = Vec::<u8>::new();
 
         let type_id = command.as_ref().get_type_id();
+        match pawn_key {
+            PawnKey::Actor(_) => {
+                command_total_bytes
+                    .write_u8(0)
+                    .unwrap(); // write pawn type
+            }
+            PawnKey::Entity(_) => {
+                command_total_bytes
+                    .write_u8(255)
+                    .unwrap(); // write pawn type
+            }
+        }
         command_total_bytes
-            .write_u16::<BigEndian>(pawn_key)
+            .write_u16::<BigEndian>(pawn_key.to_u16())
             .unwrap(); // write pawn key
         let naia_id = manifest.get_event_naia_id(&type_id); // get naia id
         command_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id

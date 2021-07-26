@@ -1,3 +1,5 @@
+use naia_shared::EntityKey;
+
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
 pub mod actor_key {
@@ -7,3 +9,11 @@ pub mod actor_key {
 
 /// Key to be used to reference a Component Actor
 pub type ComponentKey = actor_key::ActorKey;
+
+/// GlobalPawnKey
+pub enum GlobalPawnKey {
+    /// Actor
+    Actor(actor_key::ActorKey),
+    /// Entity
+    Entity(EntityKey),
+}

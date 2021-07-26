@@ -24,13 +24,13 @@ use super::{
 pub struct ServerActorManager<T: ActorType> {
     address: SocketAddr,
     // actors
-    actor_key_generator: KeyGenerator,
+    actor_key_generator: KeyGenerator<LocalActorKey>,
     local_actor_store: SparseSecondaryMap<ActorKey, Ref<dyn Actor<T>>>,
     local_to_global_key_map: HashMap<LocalActorKey, ActorKey>,
     actor_records: SparseSecondaryMap<ActorKey, ActorRecord>,
     pawn_store: HashSet<ActorKey>,
     // entities
-    entity_key_generator: KeyGenerator,
+    entity_key_generator: KeyGenerator<LocalEntityKey>,
     local_entity_store: HashMap<EntityKey, EntityRecord>,
     local_to_global_entity_key_map: HashMap<LocalEntityKey, EntityKey>,
     pawn_entity_store: HashSet<EntityKey>,
@@ -446,6 +446,10 @@ impl<T: ActorType> ServerActorManager<T> {
 
     pub fn get_global_key_from_local(&self, local_key: LocalActorKey) -> Option<&ActorKey> {
         return self.local_to_global_key_map.get(&local_key);
+    }
+
+    pub fn get_global_entity_key_from_local(&self, local_key: LocalEntityKey) -> Option<&EntityKey> {
+        return self.local_to_global_entity_key_map.get(&local_key);
     }
 
     pub fn collect_actor_updates(&mut self) {
