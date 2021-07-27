@@ -124,29 +124,29 @@ impl App {
                                 warn!("attempted deletion of non-existent entity");
                             }
                         },
-                        ClientEvent::AddComponent(naia_entity_key, component_key) => {
-                            info!("add component: {}, to entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
-                            if self.entity_key_map.contains_key(&naia_entity_key) {
-                                let hecs_entity_key = *self.entity_key_map.get(&naia_entity_key).unwrap();
-                                if self.client.has_component(&component_key) {
-                                    let component = self.client.get_component(&component_key).unwrap().clone();
-                                    match component {
-                                        Components::Position(position_ref) => {
-                                            self.world.insert_one(hecs_entity_key, position_ref)
-                                                .expect("error inserting component");
-                                        }
-                                        Components::Name(name_ref) => {
-                                            self.world.insert_one(hecs_entity_key, name_ref)
-                                                .expect("error inserting component");
-                                        }
-                                    }
-                                } else {
-                                    warn!("attempting to add non-existent component to entity");
-                                }
-                            } else {
-                                warn!("attempting to add new component to non-existent entity");
-                            }
-                        },
+//                        ClientEvent::AddComponent(naia_entity_key, component_key) => {
+//                            info!("add component: {}, to entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
+//                            if self.entity_key_map.contains_key(&naia_entity_key) {
+//                                let hecs_entity_key = *self.entity_key_map.get(&naia_entity_key).unwrap();
+//                                if self.client.has_component(&component_key) {
+//                                    let component = self.client.get_component(&component_key).unwrap().clone();
+//                                    match component {
+//                                        Components::Position(position_ref) => {
+//                                            self.world.insert_one(hecs_entity_key, position_ref)
+//                                                .expect("error inserting component");
+//                                        }
+//                                        Components::Name(name_ref) => {
+//                                            self.world.insert_one(hecs_entity_key, name_ref)
+//                                                .expect("error inserting component");
+//                                        }
+//                                    }
+//                                } else {
+//                                    warn!("attempting to add non-existent component to entity");
+//                                }
+//                            } else {
+//                                warn!("attempting to add new component to non-existent entity");
+//                            }
+//                        },
                         ClientEvent::RemoveComponent(naia_entity_key, component_key, component_ref) => {
                             info!("remove component: {}, from entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
                             if self.entity_key_map.contains_key(&naia_entity_key) {

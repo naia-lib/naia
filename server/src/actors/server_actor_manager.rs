@@ -639,6 +639,10 @@ impl<T: ActorType> ServerActorManager<T> {
                             .unwrap(); //write local key
                         actor_total_bytes.append(&mut component_payload_bytes); // write payload
                     }
+                } else {
+                    actor_total_bytes
+                        .write_u8(0)
+                        .unwrap();
                 }
             }
             ServerActorMessage::DeleteEntity(_, local_key) => {
