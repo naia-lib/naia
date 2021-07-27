@@ -542,7 +542,11 @@ impl<T: EventType, U: ActorType> Server<T, U> {
 
     /// Deregisters an Actor with the Server, deleting local copies of the
     /// Actor on each Client
-    pub fn deregister_actor(&mut self, key: ActorKey) {
+    pub fn deregister_actor(&mut self, key: ActorKey) -> U {
+        if !self.global_actor_set.contains(&key) {
+            panic!("attempted to deregister an Actor which was never registered");
+        }
+
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
                 Self::user_remove_actor(user_connection,
@@ -552,7 +556,8 @@ impl<T: EventType, U: ActorType> Server<T, U> {
 
         self.mut_handler.borrow_mut().deregister_actor(&key);
         self.global_actor_set.remove(&key);
-        self.global_state_store.remove(key);
+        return self.global_state_store.remove(key)
+            .expect("actor not initialized correctly?");
     }
 
     /// Assigns an Actor to a specific User, making it a Pawn for that User
@@ -653,7 +658,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
 
     /// Deregisters a Component with the Server, deleting local copies of the
     /// Component on each Client
-//    pub fn remove_component(&mut self, component_key: &ComponentKey) {
+    pub fn remove_component(&mut self, component_key: &ComponentKey) -> U {
 //        if let Some(entity_key) = self.component_entity_map.remove(component_key) {
 //            if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
 //                for (user_key, _) in self.users.iter() {
@@ -668,7 +673,25 @@ impl<T: EventType, U: ActorType> Server<T, U> {
 //                component_set.remove(component_key);
 //            }
 //        }
-//    }
+
+        let entity_key = self.component_entity_map.remove(component_key)
+            .expect("attempting to remove a component which does not exist");
+        let mut component_set = self.entity_component_map.get_mut(&entity_key)
+            .expect("component error during initialization causing issue with removal of component")
+            .borrow_mut();
+        for (user_key, _) in self.users.iter() {
+            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+                Self::user_remove_actor(user_connection,
+                                        component_key);
+            }
+        }
+
+        component_set.remove(component_key);
+
+        self.mut_handler.borrow_mut().deregister_actor(component_key);
+        return self.global_state_store.remove(*component_key)
+            .expect("component not initialized correctly?");
+    }
 
     /// Given an ActorKey, get a reference to a registered Actor being tracked
     /// by the Server
