@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, rc::Rc, collections::{hash_map::Keys, HashSet}};
+use std::{net::SocketAddr, rc::Rc, collections::hash_map::Keys};
 
 use naia_shared::{ActorType, Connection, ConnectionConfig, Event, EventType, LocalActorKey,
                   ManagerType, Manifest, PacketReader, PacketType, PawnKey, SequenceNumber,
@@ -183,10 +183,6 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
 
     pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
         return self.actor_manager.has_entity(key);
-    }
-
-    pub fn get_entity_component_set(&self, entity_key: &LocalEntityKey) -> Option<&HashSet<LocalComponentKey>> {
-        return self.actor_manager.get_entity_component_set(entity_key);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary

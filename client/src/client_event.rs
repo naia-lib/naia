@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use naia_shared::{EventType, LocalActorKey, LocalEntityKey, LocalComponentKey, ActorType};
 
 /// An Event that is be emitted by the Client, usually as a result of some

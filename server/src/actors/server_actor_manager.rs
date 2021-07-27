@@ -140,10 +140,10 @@ impl<T: ActorType> ServerActorManager<T> {
                     .borrow_mut()
                     .clear_state(&self.address, global_key);
             }
-            ServerActorMessage::CreateEntity(global_entity_key, local_entity_key, components_list_opt) => {
+            ServerActorMessage::CreateEntity(_, _, components_list_opt) => {
                 if let Some(components_list) = components_list_opt {
                     let mut state_mask_list: Vec<(ComponentKey, StateMask)> = Vec::new();
-                    for (global_component_key, local_component_key, component_ref) in components_list {
+                    for (global_component_key, _, _) in components_list {
                         if let Some(record) = self.actor_records.get(*global_component_key) {
                             state_mask_list.push((*global_component_key, record.get_state_mask().borrow().clone()));
                         }
@@ -232,7 +232,7 @@ impl<T: ActorType> ServerActorManager<T> {
                     );
                 }
             }
-            ServerActorMessage::CreateEntity(global_entity_key, local_entity_key, component_list_opt) => {
+            ServerActorMessage::CreateEntity(_, _, _) => {
                 if let Some(last_popped_state_mask_list) = &self.last_popped_state_mask_list {
                     for (global_component_key, last_popped_state_mask) in last_popped_state_mask_list {
                         self.mut_handler.borrow_mut().set_state(
@@ -335,7 +335,7 @@ impl<T: ActorType> ServerActorManager<T> {
 
         if let Some(actor_record) = self.actor_records.get_mut(*key) {
             match actor_record.status {
-                LocalityStatus::Waiting | LocalityStatus::Creating => {
+                LocalityStatus::Creating => {
                     // queue deletion message to be sent after creation
                     self.delayed_actor_deletions.insert(*key);
                 }
@@ -390,8 +390,16 @@ impl<T: ActorType> ServerActorManager<T> {
 
     // Entities
 
-    pub fn add_entity(&mut self, global_key: &EntityKey, components_ref: &Ref<HashSet<ComponentKey>>) {
+    pub fn add_entity(&mut self, global_key: &EntityKey,
+                      components_ref: &Ref<HashSet<ComponentKey>>,
+                      component_list: &Vec<(ComponentKey, Ref<dyn Actor<T>>)>) {
         if !self.local_entity_store.contains_key(global_key) {
+            // first, add components
+            for (component_key, component_ref) in component_list {
+                self.actor_init(component_key, component_ref, LocalityStatus::Creating);
+            }
+
+            // then, add entity
             let local_key: LocalEntityKey = self.entity_key_generator.generate();
             self.local_to_global_entity_key_map.insert(local_key, *global_key);
             let entity_record = EntityRecord::new(local_key, components_ref);
@@ -402,6 +410,8 @@ impl<T: ActorType> ServerActorManager<T> {
                     local_key,
                     None,
                 ));
+        } else {
+            panic!("added entity twice");
         }
     }
 
@@ -413,7 +423,7 @@ impl<T: ActorType> ServerActorManager<T> {
         if let Some(entity_record) = self.local_entity_store.get_mut(key) {
 
             match entity_record.status {
-                LocalityStatus::Waiting | LocalityStatus::Creating => {
+                LocalityStatus::Creating => {
                     // queue deletion message to be sent after creation
                     self.delayed_entity_deletions.insert(*key);
                 }
@@ -484,9 +494,9 @@ impl<T: ActorType> ServerActorManager<T> {
 
     // Components
 
-    pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Actor<T>>) {
-        self.actor_init(component_key, component_ref, LocalityStatus::Waiting);
-    }
+//    pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Actor<T>>) {
+//        self.actor_init(component_key, component_ref, LocalityStatus::Waiting);
+//    }
 
 //    pub fn remove_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey) {
 //
@@ -625,7 +635,7 @@ impl<T: ActorType> ServerActorManager<T> {
                         .write_u8(components_num as u8)
                         .unwrap(); //write number of components
 
-                    for (global_component_key, local_component_key, component_ref) in component_list {
+                    for (_, local_component_key, component_ref) in component_list {
                         //write component payload
                         let mut component_payload_bytes = Vec::<u8>::new();
                         component_ref.borrow().write(&mut component_payload_bytes);
@@ -733,7 +743,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                     }
                     ServerActorMessage::AssignPawn(_, _) => {}
                     ServerActorMessage::UnassignPawn(_, _) => {}
-                    ServerActorMessage::CreateEntity(global_entity_key, local_entity_key, component_map) => {
+                    ServerActorMessage::CreateEntity(global_entity_key, _, component_map) => {
                         if let Some(entity_record) = self.local_entity_store.get_mut(&global_entity_key) {
 
                             // do we need to delete this now?
@@ -745,7 +755,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
 
                                 // pop deferred component messages
                                 if let Some(mut component_list) = component_map {
-                                    while let Some((global_component_key, local_component_key, component_ref)) = component_list.pop() {
+                                    while let Some((global_component_key, _, _)) = component_list.pop() {
                                         let component_record = self.actor_records.get_mut(global_component_key)
                                             .expect("component not created correctly?");
                                         component_record.status = LocalityStatus::Created;
