@@ -154,11 +154,11 @@ impl<U: ActorType> ClientActorManager<U> {
                         let components_num = reader.read_u8();
                         for _ in 0..components_num {
                             let naia_id: u16 = reader.read_u16();
-                            let component_key = reader.read_u16();
+                            let _component_key = reader.read_u16();
                             manifest.create_actor(naia_id, reader);
                         }
                     } else {
-                        let mut component_list: Vec<(LocalComponentKey)> = Vec::new();
+                        let mut component_list: Vec<LocalComponentKey> = Vec::new();
                         let mut component_set = HashSet::new();
 
                         let components_num = reader.read_u8();
@@ -316,10 +316,6 @@ impl<U: ActorType> ClientActorManager<U> {
     pub fn pawn_reset_entity(&mut self, key: &LocalEntityKey) {
         self.queued_incoming_messages
             .push_back(ClientActorMessage::ResetPawnEntity(*key));
-    }
-
-    pub fn get_entity_component_set(&self, entity_key: &LocalEntityKey) -> Option<&HashSet<LocalComponentKey>> {
-        return self.local_entity_store.get(entity_key);
     }
 
     // internal

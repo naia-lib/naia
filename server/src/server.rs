@@ -968,7 +968,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
 
                             if should_be_in_scope {
                                 if !currently_in_scope {
-                                    //add entity's components to user connection
+                                    // get a reference to the component map
                                     let component_set_ref = self.entity_component_map.get(entity_key).unwrap();
 
                                     // add entity to the connections local scope
@@ -1005,17 +1005,18 @@ impl<T: EventType, U: ActorType> Server<T, U> {
                        user_connection: &mut ClientConnection<T, U>,
                        entity_key: &EntityKey,
                        component_set_ref: &Ref<HashSet<ComponentKey>>) {
-        // Add components first
+
+        // Get list of components first
+        let mut component_list: Vec<(ComponentKey, Ref<dyn Actor<U>>)> = Vec::new();
         let component_set: &HashSet<ComponentKey> = &component_set_ref.borrow();
         for component_key in component_set {
             if let Some(component_ref) = state_store.get(*component_key) {
-                //add component to user connection
-                user_connection.add_component(entity_key, component_key, &component_ref.inner_ref());
+                component_list.push((*component_key, component_ref.inner_ref().clone()));
             }
         }
 
         //add entity to user connection
-        user_connection.add_entity(entity_key, component_set_ref);
+        user_connection.add_entity(entity_key, component_set_ref, &component_list);
     }
 
     fn user_remove_entity(user_connection: &mut ClientConnection<T, U>,
