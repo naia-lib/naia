@@ -8,8 +8,12 @@ pub use position::Position;
 mod name;
 pub use name::Name;
 
+mod marker;
+pub use marker::Marker;
+
 #[derive(ActorType, Clone)]
 pub enum Components {
     Position(Ref<Position>),
     Name(Ref<Name>),
+    Marker(Ref<Marker>),
 }
