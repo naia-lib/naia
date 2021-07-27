@@ -417,19 +417,6 @@ impl<T: ActorType> ServerActorManager<T> {
         }
     }
 
-//    pub fn remove_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey) {
-//
-//        if let Some(entity_record) = self.local_entity_store.get_mut(entity_key) {
-//            if entity_record.components.remove(component_key) {
-//                self.remove_actor(component_key);
-//            } else {
-//                panic!("attempting to remove a component which does not exist on this entity");
-//            }
-//        } else {
-//            panic!("attempting to remove a component from a non-existent entity");
-//        }
-//    }
-
     // Ect..
 
     pub fn get_global_key_from_local(&self, local_key: LocalActorKey) -> Option<&ActorKey> {

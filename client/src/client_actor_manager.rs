@@ -66,7 +66,20 @@ impl<U: ActorType> ClientActorManager<U> {
                 ActorMessageType::DeleteActor => {
                     // Actor Deletion
                     let actor_key = LocalActorKey::from_u16(reader.read_u16());
-                    self.actor_delete_cleanup(command_receiver, &actor_key);
+
+                    if self.component_entity_map.contains_key(&actor_key) {
+                        // Actor is a Component
+                        let entity_key = self.component_entity_map.remove(&actor_key).unwrap();
+                        let component_set = self.local_entity_store.get_mut(&entity_key)
+                            .expect("entity not instantiated properly?");
+                        if !component_set.remove(&actor_key) {
+                            panic!("trying to delete non-existent component");
+                        }
+                        self.component_delete_cleanup(&entity_key, &actor_key);
+                    } else {
+                        // Actor is a Object
+                        self.actor_delete_cleanup(command_receiver, &actor_key);
+                    }
                 }
                 ActorMessageType::UpdateActor => {
                     // Actor Update
@@ -198,7 +211,7 @@ impl<U: ActorType> ClientActorManager<U> {
 
                         for component_key in component_set {
                             // delete all components
-                            self.actor_delete_cleanup(command_receiver, &component_key);
+                            self.component_delete_cleanup(&entity_key, &component_key);
 
                             self.component_entity_map.remove(&component_key);
                         }
@@ -327,24 +340,24 @@ impl<U: ActorType> ClientActorManager<U> {
 
     fn actor_delete_cleanup<T: EventType>(&mut self, command_receiver: &mut DualCommandReceiver<T>,
                                           actor_key: &LocalActorKey) {
-        if let Some(actor) = self.local_actor_store.remove(&actor_key) {
-            if self.pawn_store.contains_key(&actor_key) {
-                self.pawn_store.remove(&actor_key);
-                let pawn_key = PawnKey::Actor(*actor_key);
-                command_receiver.pawn_cleanup(&pawn_key);
-            }
+        let actor = self.local_actor_store.remove(&actor_key)
+            .expect("attempting to delete actor which does not exist");
 
-            if let Some(entity_key) = self.component_entity_map.get(actor_key) {
-                // actor is a component
-                self.queued_incoming_messages
-                    .push_back(ClientActorMessage::RemoveComponent(*entity_key, *actor_key, actor));
-            } else {
-                // actor is an object
-                self.queued_incoming_messages
-                    .push_back(ClientActorMessage::DeleteActor(*actor_key, actor));
-            }
-        } else {
-            panic!("attempting to delete actor which does not exist");
+        if self.pawn_store.contains_key(&actor_key) {
+            self.pawn_store.remove(&actor_key);
+            let pawn_key = PawnKey::Actor(*actor_key);
+            command_receiver.pawn_cleanup(&pawn_key);
         }
+
+        self.queued_incoming_messages
+                .push_back(ClientActorMessage::DeleteActor(*actor_key, actor));
+    }
+
+    fn component_delete_cleanup(&mut self, entity_key: &LocalEntityKey, component_key: &LocalComponentKey) {
+        let component = self.local_actor_store.remove(&component_key)
+            .expect("attempting to delete actor which does not exist");
+
+        self.queued_incoming_messages
+                .push_back(ClientActorMessage::RemoveComponent(*entity_key, *component_key, component));
     }
 }
