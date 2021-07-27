@@ -631,7 +631,8 @@ impl<T: ActorType> ServerActorManager<T> {
             self.actor_records.insert(*key, actor_record);
             return local_key;
         } else {
-            panic!("added actor twice..");
+            // Should panic, as this is not dependent on any unreliable transport factor
+            panic!("attempted to add actor twice..");
         }
     }
 
@@ -647,7 +648,8 @@ impl<T: ActorType> ServerActorManager<T> {
             self.actor_key_generator.recycle_key(&local_actor_key);
             self.pawn_store.remove(&global_actor_key);
         } else {
-            panic!("attempting to clean up actor from connection inside which it is not present");
+            // likely due to duplicate delivered deletion messages
+            warn!("attempting to clean up actor from connection inside which it is not present");
         }
     }
 
