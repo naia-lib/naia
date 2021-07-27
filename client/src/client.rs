@@ -119,13 +119,8 @@ impl<T: EventType, U: ActorType> Client<T, U> {
                             ClientActorMessage::ResetPawn(local_key) => {
                                 Some(ClientEvent::ResetPawn(local_key))
                             }
-                            ClientActorMessage::CreateEntity(local_key) => {
-                                if let Some(component_set) = connection.get_entity_component_set(&local_key) {
-                                    Some(ClientEvent::CreateEntity(local_key, component_set.clone()))
-                                } else {
-                                    None
-                                }
-
+                            ClientActorMessage::CreateEntity(local_key, component_list) => {
+                                Some(ClientEvent::CreateEntity(local_key, component_list))
                             }
                             ClientActorMessage::DeleteEntity(local_key) => {
                                 Some(ClientEvent::DeleteEntity(local_key))
@@ -139,14 +134,9 @@ impl<T: EventType, U: ActorType> Client<T, U> {
                             ClientActorMessage::ResetPawnEntity(local_key) => {
                                 Some(ClientEvent::ResetPawnEntity(local_key))
                             }
-                            ClientActorMessage::AddComponent(entity_key, component_key) => {
-//                                if connection.has_entity(&entity_key) && connection.has_component(&component_key) {
-//                                    Some(ClientEvent::AddComponent(entity_key, component_key))
-//                                } else {
-//                                    None
-//                                }
-                                Some(ClientEvent::AddComponent(entity_key, component_key))
-                            }
+//                            ClientActorMessage::AddComponent(entity_key, component_key) => {
+//                                Some(ClientEvent::AddComponent(entity_key, component_key))
+//                            }
                             ClientActorMessage::UpdateComponent(entity_key, component_key) => {
                                 Some(ClientEvent::UpdateComponent(entity_key, component_key))
                             }
