@@ -97,18 +97,17 @@ impl App {
 
                             // initialize w/ starting components
                             for component_key in component_keys {
-                                if self.client.has_component(&component_key) {
-                                    let component = self.client.get_component(&component_key).unwrap().clone();
-                                    match component {
-                                        Components::Position(position_ref) => {
-                                            self.entity_builder.add(position_ref);
-                                        }
-                                        Components::Name(name_ref) => {
-                                            self.entity_builder.add(name_ref);
-                                        }
+                                info!("add component: {}, to entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
+                                let component = self.client.get_component(&component_key)
+                                    .expect("attempting to add non-existent component to entity")
+                                    .clone();
+                                match component {
+                                    Components::Position(position_ref) => {
+                                        self.entity_builder.add(position_ref);
                                     }
-                                } else {
-                                    warn!("attempting to add non-existent component to entity");
+                                    Components::Name(name_ref) => {
+                                        self.entity_builder.add(name_ref);
+                                    }
                                 }
                             }
 
@@ -124,29 +123,26 @@ impl App {
                                 warn!("attempted deletion of non-existent entity");
                             }
                         },
-//                        ClientEvent::AddComponent(naia_entity_key, component_key) => {
-//                            info!("add component: {}, to entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
-//                            if self.entity_key_map.contains_key(&naia_entity_key) {
-//                                let hecs_entity_key = *self.entity_key_map.get(&naia_entity_key).unwrap();
-//                                if self.client.has_component(&component_key) {
-//                                    let component = self.client.get_component(&component_key).unwrap().clone();
-//                                    match component {
-//                                        Components::Position(position_ref) => {
-//                                            self.world.insert_one(hecs_entity_key, position_ref)
-//                                                .expect("error inserting component");
-//                                        }
-//                                        Components::Name(name_ref) => {
-//                                            self.world.insert_one(hecs_entity_key, name_ref)
-//                                                .expect("error inserting component");
-//                                        }
-//                                    }
-//                                } else {
-//                                    warn!("attempting to add non-existent component to entity");
-//                                }
-//                            } else {
-//                                warn!("attempting to add new component to non-existent entity");
-//                            }
-//                        },
+                        ClientEvent::AddComponent(naia_entity_key, component_key) => {
+                            info!("add component: {}, to entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
+
+                            let hecs_entity_key = *self.entity_key_map.get(&naia_entity_key)
+                                .expect("attempting to add new component to non-existent entity");
+
+                            let component = self.client.get_component(&component_key)
+                                .expect("attempting to add non-existent component to entity")
+                                .clone();
+                            match component {
+                                Components::Position(position_ref) => {
+                                    self.world.insert_one(hecs_entity_key, position_ref)
+                                        .expect("error inserting component");
+                                }
+                                Components::Name(name_ref) => {
+                                    self.world.insert_one(hecs_entity_key, name_ref)
+                                        .expect("error inserting component");
+                                }
+                            }
+                        },
                         ClientEvent::RemoveComponent(naia_entity_key, component_key, component_ref) => {
                             info!("remove component: {}, from entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
                             if self.entity_key_map.contains_key(&naia_entity_key) {
