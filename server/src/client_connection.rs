@@ -7,8 +7,8 @@ use naia_shared::{
 
 use super::{
     actors::{
-        actor_key::actor_key::ActorKey, actor_packet_writer::ActorPacketWriter,
-        mut_handler::MutHandler, server_actor_manager::ServerActorManager,
+        actor_key::actor_key::ActorKey, mut_handler::MutHandler,
+        server_actor_manager::ServerActorManager,
     },
     command_receiver::CommandReceiver,
     ping_manager::PingManager,
@@ -56,7 +56,7 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
             while let Some(popped_actor_message) =
                 self.actor_manager.pop_outgoing_message(next_packet_index)
             {
-                if !ActorPacketWriter::write_actor_message(
+                if !self.actor_manager.write_actor_message(
                     &mut writer,
                     manifest,
                     &popped_actor_message,

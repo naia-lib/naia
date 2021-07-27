@@ -25,7 +25,7 @@ pub enum ActorMessageType {
     UnassignPawnEntity,
     /// Message indicating a Component to be added to an Entity
     AddComponent,
-    /// Unknown / Undefined message
+    /// Unknown / Undefined message, should always be last variant in this list
     Unknown
 }
 
