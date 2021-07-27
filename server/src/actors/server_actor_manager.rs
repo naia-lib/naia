@@ -842,15 +842,19 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                                 for component_key in component_set {
                                     let component_record = self.actor_records.get(*component_key)
                                         .expect("component not created correctly?");
-                                    let component_ref = self.local_actor_store.get(*component_key)
-                                        .expect("component not created correctly?");
-                                    self.queued_messages
-                                        .push_back(ServerActorMessage::AddComponent(
-                                            entity_record.local_key,
-                                            *component_key,
-                                            component_record.local_key,
-                                            component_ref.clone(),
-                                        ));
+                                    // check if component has been successfully created
+                                    // (perhaps through the previous entity_create operation)
+                                    if component_record.status == LocalityStatus::Creating {
+                                        let component_ref = self.local_actor_store.get(*component_key)
+                                            .expect("component not created correctly?");
+                                        self.queued_messages
+                                            .push_back(ServerActorMessage::AddComponent(
+                                                entity_record.local_key,
+                                                *component_key,
+                                                component_record.local_key,
+                                                component_ref.clone(),
+                                            ));
+                                    }
                                 }
                             }
                         }

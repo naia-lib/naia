@@ -42,7 +42,7 @@ pub enum ClientEvent<T: EventType, U: ActorType> {
     /// Occurs when an Entity on the Server has left the Client's scope, and should be removed from the local client's ECS "world"
     DeleteEntity(LocalEntityKey),
     /// Occurs when a Component should be added to a given Entity
-    //AddComponent(LocalEntityKey, LocalComponentKey),
+    AddComponent(LocalEntityKey, LocalComponentKey),
     /// Occurs when a Component has had a state change on the Server while the
     /// Entity it is attached to has come into scope for the Client
     UpdateComponent(LocalEntityKey, LocalComponentKey),

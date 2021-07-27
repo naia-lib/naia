@@ -58,7 +58,6 @@ impl<U: ActorType> ClientActorManager<U> {
 
                             self.local_actor_store.insert(actor_key, new_actor);
 
-                            // actor is an object
                             self.queued_incoming_messages
                                 .push_back(ClientActorMessage::CreateActor(actor_key));
                         }
@@ -170,7 +169,7 @@ impl<U: ActorType> ClientActorManager<U> {
 
                             if let Some(new_actor) = manifest.create_actor(naia_id, reader) {
                                 if self.local_actor_store.contains_key(&component_key) {
-                                    warn!("duplicate local actor key inserted");
+                                    warn!("duplicate local component key inserted");
                                 } else {
                                     self.local_actor_store.insert(component_key, new_actor);
                                     self.component_entity_map.insert(component_key, entity_key);
@@ -179,11 +178,6 @@ impl<U: ActorType> ClientActorManager<U> {
                                 }
                             }
                         }
-
-                        // if we have an AddComponent message waiting, apply it
-//                        if let Some(component_key) = self.reserved_add_component_messages.remove(&entity_key) {
-//                            component_init(&mut self.component_entity_map, &mut component_set, &entity_key, &component_key);
-//                        }
 
                         self.local_entity_store.insert(entity_key, component_set);
 
@@ -194,8 +188,6 @@ impl<U: ActorType> ClientActorManager<U> {
                 ActorMessageType::DeleteEntity => {
                     // Entity Deletion
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
-
-                    //warn!("entity delete {}", entity_key.to_u16());
 
                     if let Some(component_set) = self.local_entity_store.remove(&entity_key) {
 
@@ -214,7 +206,7 @@ impl<U: ActorType> ClientActorManager<U> {
                         self.queued_incoming_messages
                             .push_back(ClientActorMessage::DeleteEntity(entity_key));
                     } else {
-                        warn!("received message attempting to delete nonexistent entity!");
+                        panic!("received message attempting to delete nonexistent entity!");
                     }
                 }
                 ActorMessageType::AssignPawnEntity => {
@@ -242,20 +234,33 @@ impl<U: ActorType> ClientActorManager<U> {
                     self.queued_incoming_messages
                         .push_back(ClientActorMessage::UnassignPawnEntity(entity_key));
                 }
-//                ActorMessageType::AddComponent => {
-//                    // Add Component to Entity
-//                    let local_entity_key = LocalEntityKey::from_u16(reader.read_u16());
-//                    let local_component_key = LocalComponentKey::from_u16(reader.read_u16());
-//                    if self.local_entity_store.contains_key(&local_entity_key) {
-//                        let component_set = self.local_entity_store.get_mut(&local_entity_key).unwrap();
-//                        component_init(&mut self.component_entity_map, component_set, &local_entity_key, &local_component_key);
-//                    } else {
-//                        self.reserved_add_component_messages.insert(local_entity_key, local_component_key);
-//                    }
-//                }
+                ActorMessageType::AddComponent => {
+                    // Add Component to Entity
+                    let entity_key = LocalEntityKey::from_u16(reader.read_u16());
+                    let naia_id: u16 = reader.read_u16();
+                    let component_key = LocalActorKey::from_u16(reader.read_u16());
+
+                    if let Some(new_component) = manifest.create_actor(naia_id, reader) {
+                        if self.local_actor_store.contains_key(&component_key) {
+                            panic!("duplicate local component key: {}, inserted into entity: {}",
+                                   component_key.to_u16(), entity_key.to_u16());
+                        }
+
+                        self.local_actor_store.insert(component_key, new_component);
+
+                        self.component_entity_map.insert(component_key, entity_key);
+                        if let Some(component_set) = self.local_entity_store.get_mut(&entity_key) {
+                            component_set.insert(component_key);
+                        } else {
+                            panic!("attempting to add a component to nonexistent entity");
+                        }
+
+                        self.queued_incoming_messages
+                            .push_back(ClientActorMessage::AddComponent(entity_key, component_key));
+                    }
+                }
                 ActorMessageType::Unknown => {
-                    warn!("received unknown type of actor message");
-                    return;
+                    panic!("received unknown type of actor message");
                 }
             }
         }
@@ -342,9 +347,4 @@ impl<U: ActorType> ClientActorManager<U> {
             panic!("attempting to delete actor which does not exist");
         }
     }
-}
-
-fn component_init(component_map: &mut HashMap<LocalComponentKey, LocalEntityKey>, component_set: &mut HashSet<LocalComponentKey>, entity_key: &LocalEntityKey, component_key: &LocalComponentKey) {
-    component_map.insert(*component_key, *entity_key);
-    component_set.insert(*component_key);
 }

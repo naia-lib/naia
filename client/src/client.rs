@@ -134,9 +134,9 @@ impl<T: EventType, U: ActorType> Client<T, U> {
                             ClientActorMessage::ResetPawnEntity(local_key) => {
                                 Some(ClientEvent::ResetPawnEntity(local_key))
                             }
-//                            ClientActorMessage::AddComponent(entity_key, component_key) => {
-//                                Some(ClientEvent::AddComponent(entity_key, component_key))
-//                            }
+                            ClientActorMessage::AddComponent(entity_key, component_key) => {
+                                Some(ClientEvent::AddComponent(entity_key, component_key))
+                            }
                             ClientActorMessage::UpdateComponent(entity_key, component_key) => {
                                 Some(ClientEvent::UpdateComponent(entity_key, component_key))
                             }

@@ -124,7 +124,7 @@ impl App {
                                 let mut position = position_ref.borrow_mut();
                                 let mut x = *position.x.get();
                                 x += 1;
-                                if x > 50 {
+                                if x > 70 {
                                     x = 0;
                                 }
                                 if x % 3 == 0 {
@@ -140,7 +140,7 @@ impl App {
                                 if let Some(entity) = self.entity_key_map.get(&entity_key) {
                                     if let Ok(pos_ref) = self.world.get::<Ref<Position>>(*entity) {
                                         let x = *pos_ref.borrow().x.get();
-                                        let in_scope = x >= 5 && x <= 35;
+                                        let in_scope = x >= 5 && x <= 55;
                                         self.server.entity_set_scope(&room_key, &user_key, &entity_key, in_scope);
                                     }
                                 }
