@@ -207,151 +207,7 @@ impl<T: ActorType> ServerActorManager<T> {
         self.queued_messages.push_front(message.clone());
     }
 
-    fn pop_create_actor_state_mask(&mut self, global_key: &ActorKey) {
-        if let Some(record) = self.actor_records.get(*global_key) {
-            self.last_popped_state_mask = Some(record.get_state_mask().borrow().clone());
-        }
-        self.mut_handler
-            .borrow_mut()
-            .clear_state(&self.address, global_key);
-    }
-
-    fn unpop_create_actor_state_mask(&mut self, global_key: &ActorKey) {
-        if let Some(last_popped_state_mask) = &self.last_popped_state_mask {
-            self.mut_handler.borrow_mut().set_state(
-                &self.address,
-                global_key,
-                &last_popped_state_mask,
-            );
-        }
-    }
-
-    fn pop_update_actor_state_mask(&mut self,
-                                   is_pawn: bool,
-                                   packet_index: u16,
-                                   global_key: &ActorKey,
-                                   local_key: &LocalActorKey,
-                                   state_mask: &Ref<StateMask>,
-                                   actor: &Ref<dyn Actor<T>>) -> ServerActorMessage<T> {
-        let locked_state_mask =
-            self.process_actor_update(packet_index, global_key, state_mask);
-        // return new Update message to be written
-        if is_pawn {
-            return ServerActorMessage::UpdatePawn(
-                *global_key,
-                *local_key,
-                locked_state_mask,
-                actor.clone(),
-            );
-        } else {
-            return ServerActorMessage::UpdateActor(
-                *global_key,
-                *local_key,
-                locked_state_mask,
-                actor.clone(),
-            );
-        }
-    }
-
-    fn unpop_update_actor_state_mask(&mut self,
-                                   is_pawn: bool,
-                                   packet_index: u16,
-                                   global_key: &ActorKey,
-                                   local_key: &LocalActorKey,
-                                   actor: &Ref<dyn Actor<T>>) -> ServerActorMessage<T> {
-        let original_state_mask = self.undo_actor_update(&packet_index, &global_key);
-        if is_pawn {
-            return ServerActorMessage::UpdatePawn(
-                *global_key,
-                *local_key,
-                original_state_mask,
-                actor.clone(),
-            );
-        } else {
-            return ServerActorMessage::UpdateActor(
-                *global_key,
-                *local_key,
-                original_state_mask,
-                actor.clone(),
-            );
-        }
-    }
-
-    fn process_actor_update(
-        &mut self,
-        packet_index: u16,
-        global_key: &ActorKey,
-        state_mask: &Ref<StateMask>,
-    ) -> Ref<StateMask> {
-        // previously the state mask was the CURRENT state mask for the actor,
-        // we want to lock that in so we know exactly what we're writing
-        let locked_state_mask = Ref::new(state_mask.borrow().clone());
-
-        // place state mask in a special transmission record - like map
-        if !self.sent_updates.contains_key(&packet_index) {
-            let sent_updates_map: HashMap<ActorKey, Ref<StateMask>> = HashMap::new();
-            self.sent_updates.insert(packet_index, sent_updates_map);
-            self.last_last_update_packet_index = self.last_update_packet_index;
-            self.last_update_packet_index = packet_index;
-        }
-
-        if let Some(sent_updates_map) = self.sent_updates.get_mut(&packet_index) {
-            sent_updates_map.insert(*global_key, locked_state_mask.clone());
-        }
-
-        // having copied the state mask for this update, clear the state
-        self.last_popped_state_mask = Some(state_mask.borrow().clone());
-        self.mut_handler
-            .borrow_mut()
-            .clear_state(&self.address, global_key);
-
-        locked_state_mask
-    }
-
-    fn undo_actor_update(&mut self, packet_index: &u16, global_key: &ActorKey) -> Ref<StateMask> {
-        if let Some(sent_updates_map) = self.sent_updates.get_mut(packet_index) {
-            sent_updates_map.remove(global_key);
-            if sent_updates_map.len() == 0 {
-                self.sent_updates.remove(&packet_index);
-            }
-        }
-
-        self.last_update_packet_index = self.last_last_update_packet_index;
-        if let Some(last_popped_state_mask) = &self.last_popped_state_mask {
-            self.mut_handler.borrow_mut().set_state(
-                &self.address,
-                global_key,
-                &last_popped_state_mask,
-            );
-        }
-
-        self.actor_records
-            .get(*global_key)
-            .expect("uh oh, we don't have enough info to unpop the message")
-            .get_state_mask()
-            .clone()
-    }
-
     // Actors
-
-    fn actor_init(&mut self, key: &ActorKey, actor: &Ref<dyn Actor<T>>, status: LocalityStatus) -> LocalActorKey {
-        if !self.local_actor_store.contains_key(*key) {
-            self.local_actor_store.insert(*key, actor.clone());
-            let local_key: LocalActorKey = self.actor_key_generator.generate();
-            self.local_to_global_key_map.insert(local_key, *key);
-            let state_mask_size = actor.borrow().get_state_mask_size();
-            let actor_record = ActorRecord::new(local_key, state_mask_size, status);
-            self.mut_handler.borrow_mut().register_mask(
-                &self.address,
-                &key,
-                actor_record.get_state_mask(),
-            );
-            self.actor_records.insert(*key, actor_record);
-            return local_key;
-        } else {
-            panic!("added actor twice..");
-        }
-    }
 
     pub fn add_actor(&mut self, key: &ActorKey, actor: &Ref<dyn Actor<T>>) {
         let local_key = self.actor_init(key, actor, LocalityStatus::Creating);
@@ -771,6 +627,27 @@ impl<T: ActorType> ServerActorManager<T> {
         }
     }
 
+    // Private methods
+
+    fn actor_init(&mut self, key: &ActorKey, actor: &Ref<dyn Actor<T>>, status: LocalityStatus) -> LocalActorKey {
+        if !self.local_actor_store.contains_key(*key) {
+            self.local_actor_store.insert(*key, actor.clone());
+            let local_key: LocalActorKey = self.actor_key_generator.generate();
+            self.local_to_global_key_map.insert(local_key, *key);
+            let state_mask_size = actor.borrow().get_state_mask_size();
+            let actor_record = ActorRecord::new(local_key, state_mask_size, status);
+            self.mut_handler.borrow_mut().register_mask(
+                &self.address,
+                &key,
+                actor_record.get_state_mask(),
+            );
+            self.actor_records.insert(*key, actor_record);
+            return local_key;
+        } else {
+            panic!("added actor twice..");
+        }
+    }
+
     fn actor_cleanup(&mut self, global_actor_key: &ActorKey) {
         if let Some(actor_record) = self.actor_records.remove(*global_actor_key) {
             // actually delete the actor from local records
@@ -785,6 +662,131 @@ impl<T: ActorType> ServerActorManager<T> {
         } else {
             panic!("attempting to clean up actor from connection inside which it is not present");
         }
+    }
+
+    fn pop_create_actor_state_mask(&mut self, global_key: &ActorKey) {
+        if let Some(record) = self.actor_records.get(*global_key) {
+            self.last_popped_state_mask = Some(record.get_state_mask().borrow().clone());
+        }
+        self.mut_handler
+            .borrow_mut()
+            .clear_state(&self.address, global_key);
+    }
+
+    fn unpop_create_actor_state_mask(&mut self, global_key: &ActorKey) {
+        if let Some(last_popped_state_mask) = &self.last_popped_state_mask {
+            self.mut_handler.borrow_mut().set_state(
+                &self.address,
+                global_key,
+                &last_popped_state_mask,
+            );
+        }
+    }
+
+    fn pop_update_actor_state_mask(&mut self,
+                                   is_pawn: bool,
+                                   packet_index: u16,
+                                   global_key: &ActorKey,
+                                   local_key: &LocalActorKey,
+                                   state_mask: &Ref<StateMask>,
+                                   actor: &Ref<dyn Actor<T>>) -> ServerActorMessage<T> {
+        let locked_state_mask =
+            self.process_actor_update(packet_index, global_key, state_mask);
+        // return new Update message to be written
+        if is_pawn {
+            return ServerActorMessage::UpdatePawn(
+                *global_key,
+                *local_key,
+                locked_state_mask,
+                actor.clone(),
+            );
+        } else {
+            return ServerActorMessage::UpdateActor(
+                *global_key,
+                *local_key,
+                locked_state_mask,
+                actor.clone(),
+            );
+        }
+    }
+
+    fn unpop_update_actor_state_mask(&mut self,
+                                   is_pawn: bool,
+                                   packet_index: u16,
+                                   global_key: &ActorKey,
+                                   local_key: &LocalActorKey,
+                                   actor: &Ref<dyn Actor<T>>) -> ServerActorMessage<T> {
+        let original_state_mask = self.undo_actor_update(&packet_index, &global_key);
+        if is_pawn {
+            return ServerActorMessage::UpdatePawn(
+                *global_key,
+                *local_key,
+                original_state_mask,
+                actor.clone(),
+            );
+        } else {
+            return ServerActorMessage::UpdateActor(
+                *global_key,
+                *local_key,
+                original_state_mask,
+                actor.clone(),
+            );
+        }
+    }
+
+    fn process_actor_update(
+        &mut self,
+        packet_index: u16,
+        global_key: &ActorKey,
+        state_mask: &Ref<StateMask>,
+    ) -> Ref<StateMask> {
+        // previously the state mask was the CURRENT state mask for the actor,
+        // we want to lock that in so we know exactly what we're writing
+        let locked_state_mask = Ref::new(state_mask.borrow().clone());
+
+        // place state mask in a special transmission record - like map
+        if !self.sent_updates.contains_key(&packet_index) {
+            let sent_updates_map: HashMap<ActorKey, Ref<StateMask>> = HashMap::new();
+            self.sent_updates.insert(packet_index, sent_updates_map);
+            self.last_last_update_packet_index = self.last_update_packet_index;
+            self.last_update_packet_index = packet_index;
+        }
+
+        if let Some(sent_updates_map) = self.sent_updates.get_mut(&packet_index) {
+            sent_updates_map.insert(*global_key, locked_state_mask.clone());
+        }
+
+        // having copied the state mask for this update, clear the state
+        self.last_popped_state_mask = Some(state_mask.borrow().clone());
+        self.mut_handler
+            .borrow_mut()
+            .clear_state(&self.address, global_key);
+
+        locked_state_mask
+    }
+
+    fn undo_actor_update(&mut self, packet_index: &u16, global_key: &ActorKey) -> Ref<StateMask> {
+        if let Some(sent_updates_map) = self.sent_updates.get_mut(packet_index) {
+            sent_updates_map.remove(global_key);
+            if sent_updates_map.len() == 0 {
+                self.sent_updates.remove(&packet_index);
+            }
+        }
+
+        self.last_update_packet_index = self.last_last_update_packet_index;
+        if let Some(last_popped_state_mask) = &self.last_popped_state_mask {
+            self.mut_handler.borrow_mut().set_state(
+                &self.address,
+                global_key,
+                &last_popped_state_mask,
+            );
+        }
+
+        self.actor_records
+            .get(*global_key)
+            .expect("uh oh, we don't have enough info to unpop the message")
+            .get_state_mask()
+            .clone()
     }
 }
 
