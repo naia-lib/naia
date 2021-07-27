@@ -2,7 +2,7 @@ extern crate cfg_if;
 
 extern crate log;
 
-use naia_client_example_app::App;
+use naia_client_example_app::{App, Config};
 use simple_logger::SimpleLogger;
 use log::LevelFilter;
 
@@ -16,5 +16,5 @@ fn main() {
             .init()
             .expect("A logger was already initialized");
 
-    loop_native::start_loop(&mut App::new());
+    loop_native::start_loop(&mut App::new(Config::get()));
 }

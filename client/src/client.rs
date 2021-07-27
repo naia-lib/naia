@@ -40,7 +40,6 @@ impl<T: EventType, U: ActorType> Client<T, U> {
     /// Create a new client, given the server's address, a shared manifest, an
     /// optional Config, and an optional Authentication event
     pub fn new(
-        server_address: SocketAddr,
         manifest: Manifest<T, U>,
         client_config: Option<ClientConfig>,
         shared_config: SharedConfig,
@@ -50,6 +49,8 @@ impl<T: EventType, U: ActorType> Client<T, U> {
             Some(config) => config,
             None => ClientConfig::default(),
         };
+
+        let server_address = client_config.server_address;
 
         let connection_config = ConnectionConfig::new(
             client_config.disconnection_timeout_duration,

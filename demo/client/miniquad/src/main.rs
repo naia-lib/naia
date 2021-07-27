@@ -1,5 +1,5 @@
 use miniquad::*;
-use naia_client_example_app::App;
+use naia_client_example_app::{App, Config};
 
 struct Stage {
     ctx: Context,
@@ -16,7 +16,7 @@ impl EventHandlerFree for Stage {
 }
 
 fn main() {
-    let app = App::new();
+    let app = App::new(Config::get());
     miniquad::start(conf::Conf::default(), |ctx| {
         UserData::free(Stage { ctx, app })
     });

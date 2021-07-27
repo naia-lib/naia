@@ -1,8 +1,4 @@
-use std::{
-    net::{IpAddr, SocketAddr},
-    time::Duration,
-    collections::HashMap,
-};
+use std::collections::HashMap;
 
 use log::{info, warn};
 
@@ -16,8 +12,6 @@ use naia_example_shared::{
     events::{Events, Auth, StringMessage},
 };
 
-const SERVER_PORT: u16 = 14191;
-
 pub struct App {
     client: Client<Events, Components>,
     world: World,
@@ -27,30 +21,14 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> App {
+    pub fn new(client_config: ClientConfig) -> App {
         info!("Naia Client Example Started");
-
-        // Put your Server's IP Address here!, can't easily find this automatically from
-        // the browser
-        let server_ip_address: IpAddr = "127.0.0.1"
-            .parse()
-            .expect("couldn't parse input IP address");
-        let server_socket_address = SocketAddr::new(server_ip_address, SERVER_PORT);
-
-        let mut client_config = ClientConfig::default();
-        client_config.heartbeat_interval = Duration::from_secs(2);
-        // Keep in mind that the disconnect timeout duration should always be at least
-        // 2x greater than the heartbeat interval, to make it so at the worst case, the
-        // server would need to miss 2 heartbeat signals before disconnecting from a
-        // given client
-        client_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         // This will be evaluated in the Server's 'on_auth()' method
         let auth = Events::Auth(Auth::new("charlie", "12345"));
 
         App {
             client: Client::new(
-                server_socket_address,
                 manifest_load(),
                 Some(client_config),
                 get_shared_config(),
