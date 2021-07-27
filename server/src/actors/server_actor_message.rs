@@ -14,7 +14,7 @@ pub enum ServerActorMessage<T: ActorType> {
     DeleteEntity(EntityKey, LocalEntityKey),
     AssignPawnEntity(EntityKey, LocalEntityKey),
     UnassignPawnEntity(EntityKey, LocalEntityKey),
-    //AddComponent(EntityKey, LocalEntityKey, ComponentKey, LocalComponentKey),
+    AddComponent(LocalEntityKey, ComponentKey, LocalComponentKey, Ref<dyn Actor<T>>),
 }
 
 impl<T: ActorType> ServerActorMessage<T> {
@@ -30,7 +30,7 @@ impl<T: ActorType> ServerActorMessage<T> {
             ServerActorMessage::DeleteEntity(_, _) => ActorMessageType::DeleteEntity,
             ServerActorMessage::AssignPawnEntity(_, _) => ActorMessageType::AssignPawnEntity,
             ServerActorMessage::UnassignPawnEntity(_, _) => ActorMessageType::UnassignPawnEntity,
-            //ServerActorMessage::AddComponent(_, _, _, _) => ActorMessageType::AddComponent,
+            ServerActorMessage::AddComponent(_, _, _, _) => ActorMessageType::AddComponent,
         }
     }
 }
@@ -68,9 +68,9 @@ impl<T: ActorType> Clone for ServerActorMessage<T> {
             ServerActorMessage::UnassignPawnEntity(gk, lk) => {
                 ServerActorMessage::UnassignPawnEntity(gk.clone(), lk.clone())
             }
-//            ServerActorMessage::AddComponent(gek, lek, gck, lck) => {
-//                ServerActorMessage::AddComponent(gek.clone(), lek.clone(), gck.clone(), lck.clone())
-//            }
+            ServerActorMessage::AddComponent(lek, gck,lck, r) => {
+                ServerActorMessage::AddComponent(lek.clone(), gck.clone(), lck.clone(), r.clone())
+            }
         }
     }
 }
