@@ -158,10 +158,11 @@ impl<U: ActorType> ClientActorManager<U> {
                 ActorMessageType::CreateEntity => {
                     // Entity Creation
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
+                    let components_num = reader.read_u8();
                     if self.local_entity_store.contains_key(&entity_key) {
+                        // its possible we received a very late duplicate message
                         warn!("attempted to insert duplicate entity");
                         // continue reading, just don't do anything with the data
-                        let components_num = reader.read_u8();
                         for _ in 0..components_num {
                             let naia_id: u16 = reader.read_u16();
                             let _component_key = reader.read_u16();
@@ -170,8 +171,6 @@ impl<U: ActorType> ClientActorManager<U> {
                     } else {
                         let mut component_list: Vec<LocalComponentKey> = Vec::new();
                         let mut component_set = HashSet::new();
-
-                        let components_num = reader.read_u8();
 
                         for _ in 0..components_num {
                             // Component Creation
@@ -199,23 +198,26 @@ impl<U: ActorType> ClientActorManager<U> {
                     // Entity Deletion
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
 
-                    let component_set = self.local_entity_store.remove(&entity_key)
-                        .expect("received message attempting to delete nonexistent entity!");
+                    if let Some(component_set) = self.local_entity_store.remove(&entity_key) {
 
-                    if self.pawn_entity_store.take(&entity_key).is_some() {
-                        let pawn_key = PawnKey::Entity(entity_key);
-                        command_receiver.pawn_cleanup(&pawn_key);
+                        if self.pawn_entity_store.take(&entity_key).is_some() {
+                            let pawn_key = PawnKey::Entity(entity_key);
+                            command_receiver.pawn_cleanup(&pawn_key);
+                        }
+
+                        for component_key in component_set {
+                            // delete all components
+                            self.component_delete_cleanup(&entity_key, &component_key);
+
+                            self.component_entity_map.remove(&component_key);
+                        }
+
+                        self.queued_incoming_messages
+                            .push_back(ClientActorMessage::DeleteEntity(entity_key));
+                    } else {
+                        // its possible we received a very late duplicate message
+                        warn!("received message attempting to delete nonexistent entity: {}", entity_key.to_u16());
                     }
-
-                    for component_key in component_set {
-                        // delete all components
-                        self.component_delete_cleanup(&entity_key, &component_key);
-
-                        self.component_entity_map.remove(&component_key);
-                    }
-
-                    self.queued_incoming_messages
-                        .push_back(ClientActorMessage::DeleteEntity(entity_key));
                 }
                 ActorMessageType::AssignPawnEntity => {
                     // Assign Pawn Entity
@@ -250,22 +252,27 @@ impl<U: ActorType> ClientActorManager<U> {
 
                     let new_component = manifest.create_actor(naia_id, reader);
                     if self.local_actor_store.contains_key(&component_key) {
-                        panic!("duplicate local component key: {}, inserted into entity: {}",
+                        // its possible we received a very late duplicate message
+                        warn!("attempting to add duplicate local component key: {}, into entity: {}",
                                component_key.to_u16(), entity_key.to_u16());
+                    } else {
+                        if !self.local_entity_store.contains_key(&entity_key) {
+                            // its possible we received a very late duplicate message
+                            warn!("attempting to add a component: {}, to nonexistent entity: {}",
+                                  component_key.to_u16(),
+                                  entity_key.to_u16());
+                        } else {
+                            self.local_actor_store.insert(component_key, new_component);
+
+                            self.component_entity_map.insert(component_key, entity_key);
+                            let component_set = self.local_entity_store.get_mut(&entity_key).unwrap();
+
+                            component_set.insert(component_key);
+
+                            self.queued_incoming_messages
+                                .push_back(ClientActorMessage::AddComponent(entity_key, component_key));
+                        }
                     }
-                    if !self.local_entity_store.contains_key(&entity_key) {
-                        panic!("attempting to add a component to nonexistent entity");
-                    }
-
-                    self.local_actor_store.insert(component_key, new_component);
-
-                    self.component_entity_map.insert(component_key, entity_key);
-                    let component_set = self.local_entity_store.get_mut(&entity_key).unwrap();
-
-                    component_set.insert(component_key);
-
-                    self.queued_incoming_messages
-                        .push_back(ClientActorMessage::AddComponent(entity_key, component_key));
                 }
                 ActorMessageType::Unknown => {
                     panic!("received unknown type of actor message");
