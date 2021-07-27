@@ -9,10 +9,9 @@ use naia_server::{Server, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey
 
 use naia_example_shared::{
     get_shared_config, manifest_load,
-    components::{Components, Position, Name},
+    components::{Components, Position, Name, Marker},
     events::{Events, StringMessage},
 };
-use naia_example_shared::components::Marker;
 
 pub struct App {
     server: Server<Events, Components>,
