@@ -85,15 +85,12 @@ impl<T: EventType, U: ActorType> Manifest<T, U> {
 
     /// Creates an Event instance, given a NaiaId and a payload, typically from
     /// an incoming packet
-    pub fn create_actor(&self, naia_id: u16, reader: &mut PacketReader) -> Option<U> {
-        match self.actor_builder_map.get(&naia_id) {
-            Some(actor_builder) => {
-                return Some(actor_builder.as_ref().build(reader));
-            }
-            None => {}
+    pub fn create_actor(&self, naia_id: u16, reader: &mut PacketReader) -> U {
+        if let Some(actor_builder) = self.actor_builder_map.get(&naia_id) {
+            return actor_builder.as_ref().build(reader);
         }
 
-        return None;
+        panic!("No ActorBuilder registered for NaiaId: {}", naia_id);
     }
 
     /// Register both an ActorBuilder and an EventBuilder to handle the
