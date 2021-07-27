@@ -6,7 +6,7 @@ use std::{
 
 use log::{info, warn};
 
-use hecs::{Entity as HecsEntityKey, World};
+use hecs::{Entity as HecsEntityKey, World, EntityBuilder as HecsEntityBuilder};
 
 use naia_client::{ClientConfig, ClientEvent, Client, NaiaKey, LocalEntityKey as NaiaEntityKey, Ref, Actor};
 
@@ -21,6 +21,7 @@ const SERVER_PORT: u16 = 14191;
 pub struct App {
     client: Client<Events, Components>,
     world: World,
+    entity_builder: HecsEntityBuilder,
     entity_key_map: HashMap<NaiaEntityKey, HecsEntityKey>,
     server_event_count: u32,
 }
@@ -56,6 +57,7 @@ impl App {
                 Some(auth),
             ),
             world: World::new(),
+            entity_builder: HecsEntityBuilder::new(),
             entity_key_map: HashMap::new(),
             server_event_count: 0,
         }
@@ -90,9 +92,27 @@ impl App {
                             }
                             _ => {}
                         },
-                        ClientEvent::CreateEntity(naia_entity_key) => {
+                        ClientEvent::CreateEntity(naia_entity_key, component_keys) => {
                             info!("creation of entity: {}", naia_entity_key.to_u16());
-                            let hecs_entity_key = self.world.spawn(());
+
+                            // initialize w/ starting components
+                            for component_key in component_keys {
+                                if self.client.has_component(&component_key) {
+                                    let component = self.client.get_component(&component_key).unwrap().clone();
+                                    match component {
+                                        Components::Position(position_ref) => {
+                                            self.entity_builder.add(position_ref);
+                                        }
+                                        Components::Name(name_ref) => {
+                                            self.entity_builder.add(name_ref);
+                                        }
+                                    }
+                                } else {
+                                    warn!("attempting to add non-existent component to entity");
+                                }
+                            }
+
+                            let hecs_entity_key = self.world.spawn(self.entity_builder.build());
                             self.entity_key_map.insert(naia_entity_key, hecs_entity_key);
                         },
                         ClientEvent::DeleteEntity(naia_entity_key) => {
@@ -112,10 +132,12 @@ impl App {
                                     let component = self.client.get_component(&component_key).unwrap().clone();
                                     match component {
                                         Components::Position(position_ref) => {
-                                            self.insert_component(&hecs_entity_key, position_ref);
+                                            self.world.insert_one(hecs_entity_key, position_ref)
+                                                .expect("error inserting component");
                                         }
                                         Components::Name(name_ref) => {
-                                            self.insert_component(&hecs_entity_key, name_ref);
+                                            self.world.insert_one(hecs_entity_key, name_ref)
+                                                .expect("error inserting component");
                                         }
                                     }
                                 } else {
@@ -157,11 +179,6 @@ impl App {
                 break;
             }
         }
-    }
-
-    fn insert_component<T: 'static + Actor<Components>>(&mut self, hecs_entity_key: &HecsEntityKey, component_ref: Ref<T>) {
-        self.world.insert_one(*hecs_entity_key, component_ref)
-            .expect("error inserting component");
     }
 
     fn remove_component<T: 'static + Actor<Components>>(&mut self, hecs_entity_key: &HecsEntityKey, _component_ref: &Ref<T>) {

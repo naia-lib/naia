@@ -120,7 +120,12 @@ impl<T: EventType, U: ActorType> Client<T, U> {
                                 Some(ClientEvent::ResetPawn(local_key))
                             }
                             ClientActorMessage::CreateEntity(local_key) => {
-                                Some(ClientEvent::CreateEntity(local_key))
+                                if let Some(component_set) = connection.get_entity_component_set(&local_key) {
+                                    Some(ClientEvent::CreateEntity(local_key, component_set.clone()))
+                                } else {
+                                    None
+                                }
+
                             }
                             ClientActorMessage::DeleteEntity(local_key) => {
                                 Some(ClientEvent::DeleteEntity(local_key))
@@ -436,9 +441,13 @@ impl<T: EventType, U: ActorType> Client<T, U> {
         return self.get_actor(key);
     }
 
-    /// Component-themed alias for `has_actor`
+    /// Get whether or not the Component currently in scope for the Client, given
+    /// that Component's Key
     pub fn has_component(&self, key: &LocalComponentKey) -> bool {
-        return self.has_actor(key);
+        if let Some(connection) = &self.server_connection {
+            return connection.has_component(key);
+        }
+        return false;
     }
 
     /// Return an iterator to the collection of keys to all Actors tracked by

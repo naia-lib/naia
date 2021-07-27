@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use naia_shared::{EventType, LocalActorKey, LocalEntityKey, LocalComponentKey, ActorType};
 
 /// An Event that is be emitted by the Client, usually as a result of some
@@ -38,7 +40,7 @@ pub enum ClientEvent<T: EventType, U: ActorType> {
     DeleteActor(LocalActorKey, U),
     /// Occurs when an Entity on the Server has come into scope for the Client,
     /// and should be added to the local client's ECS "world"
-    CreateEntity(LocalEntityKey),
+    CreateEntity(LocalEntityKey, HashSet<LocalComponentKey>),
     /// Occurs when an Entity on the Server has left the Client's scope, and should be removed from the local client's ECS "world"
     DeleteEntity(LocalEntityKey),
     /// Occurs when a Component should be added to a given Entity

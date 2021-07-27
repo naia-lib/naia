@@ -1,4 +1,4 @@
-use naia_shared::{LocalActorKey, LocalEntityKey, ActorType};
+use naia_shared::{LocalActorKey, LocalEntityKey, LocalComponentKey, ActorType};
 
 #[derive(Debug, Clone)]
 pub enum ClientActorMessage<U: ActorType> {
@@ -13,7 +13,7 @@ pub enum ClientActorMessage<U: ActorType> {
     AssignPawnEntity(LocalEntityKey),
     UnassignPawnEntity(LocalEntityKey),
     ResetPawnEntity(LocalEntityKey),
-    AddComponent(LocalEntityKey, LocalActorKey),
-    UpdateComponent(LocalEntityKey, LocalActorKey),
-    RemoveComponent(LocalEntityKey, LocalActorKey, U),
+    AddComponent(LocalEntityKey, LocalComponentKey),
+    UpdateComponent(LocalEntityKey, LocalComponentKey),
+    RemoveComponent(LocalEntityKey, LocalComponentKey, U),
 }
