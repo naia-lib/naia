@@ -150,6 +150,13 @@ impl<U: ActorType> ClientActorManager<U> {
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if self.local_entity_store.contains_key(&entity_key) {
                         warn!("duplicate local entity key inserted");
+                        // continue reading, just don't do anything with the data
+                        let components_num = reader.read_u8();
+                        for _ in 0..components_num {
+                            let naia_id: u16 = reader.read_u16();
+                            let component_key = reader.read_u16();
+                            manifest.create_actor(naia_id, reader);
+                        }
                     } else {
                         let mut component_list: Vec<(LocalComponentKey)> = Vec::new();
                         let mut component_set = HashSet::new();
