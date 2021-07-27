@@ -297,6 +297,10 @@ impl<U: ActorType> ClientActorManager<U> {
             .push_back(ClientActorMessage::ResetPawnEntity(*key));
     }
 
+    pub fn get_entity_component_set(&self, entity_key: &LocalEntityKey) -> Option<&HashSet<LocalComponentKey>> {
+        return self.local_entity_store.get(entity_key);
+    }
+
     // internal
 
     fn actor_delete_cleanup<T: EventType>(&mut self, command_receiver: &mut DualCommandReceiver<T>,
