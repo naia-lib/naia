@@ -627,25 +627,26 @@ impl<T: EventType, U: ActorType> Server<T, U> {
             panic!("attempted to add component to non-existent entity");
         }
 
-        //let component_ref = component.inner_ref().clone();
+        let component_ref = component.inner_ref().clone();
         let component_key: ComponentKey = self.register_actor(component);
+
+        // add component to connections already tracking entity
+        for (user_key, _) in self.users.iter() {
+            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+                if user_connection.has_entity(entity_key) {
+                    Self::user_add_component(user_connection,
+                                             entity_key,
+                                             &component_key,
+                                             &component_ref);
+                }
+            }
+        }
+
         self.component_entity_map.insert(component_key, *entity_key);
 
         if let Some(component_set_ref) = self.entity_component_map.get_mut(&entity_key) {
             component_set_ref.borrow_mut().insert(component_key);
         }
-
-        // add component to connections already tracking entity
-//        for (user_key, _) in self.users.iter() {
-//            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-//                if user_connection.has_entity(entity_key) {
-//                    Self::user_add_component(user_connection,
-//                                             entity_key,
-//                                             &component_key,
-//                                             &component_ref);
-//                }
-//            }
-//        }
 
         return component_key;
     }
@@ -896,7 +897,6 @@ impl<T: EventType, U: ActorType> Server<T, U> {
                 }
             }
 
-
             for user_key in room.users_iter() {
                 for actor_key in room.actors_iter() {
                     if let Some(user_connection) = self.client_connections.get_mut(user_key)
@@ -1020,9 +1020,17 @@ impl<T: EventType, U: ActorType> Server<T, U> {
     }
 
     fn user_remove_entity(user_connection: &mut ClientConnection<T, U>,
-                         entity_key: &EntityKey) {
+                          entity_key: &EntityKey) {
         //remove entity from user connection
         user_connection.remove_entity(entity_key);
+    }
+
+    fn user_add_component(user_connection: &mut ClientConnection<T, U>,
+                          entity_key: &EntityKey,
+                          component_key: &ComponentKey,
+                          component_ref: &Ref<dyn Actor<U>>) {
+        //add component to user connection
+        user_connection.add_component(entity_key, component_key, component_ref);
     }
 
     async fn send_connect_accept_message(
