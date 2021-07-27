@@ -12,7 +12,7 @@ use naia_client::{ClientConfig, ClientEvent, Client, NaiaKey, LocalEntityKey as 
 
 use naia_example_shared::{
     get_shared_config, manifest_load,
-    components::{Components, Position, Name},
+    components::Components,
     events::{Events, Auth, StringMessage},
 };
 
