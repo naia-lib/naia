@@ -97,7 +97,7 @@ impl App {
 
                             // initialize w/ starting components
                             for component_key in component_keys {
-                                info!("add component: {}, to entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
+                                info!("init component: {}, to entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
                                 let component = self.client.get_component(&component_key)
                                     .expect("attempting to add non-existent component to entity")
                                     .clone();
@@ -107,6 +107,9 @@ impl App {
                                     }
                                     Components::Name(name_ref) => {
                                         self.entity_builder.add(name_ref);
+                                    }
+                                    Components::Marker(marker_ref) => {
+                                        self.entity_builder.add(marker_ref);
                                     }
                                 }
                             }
@@ -141,6 +144,10 @@ impl App {
                                     self.world.insert_one(hecs_entity_key, name_ref)
                                         .expect("error inserting component");
                                 }
+                                Components::Marker(marker_ref) => {
+                                    self.world.insert_one(hecs_entity_key, marker_ref)
+                                        .expect("error inserting component");
+                                }
                             }
                         },
                         ClientEvent::RemoveComponent(naia_entity_key, component_key, component_ref) => {
@@ -154,6 +161,9 @@ impl App {
                                     }
                                     Components::Name(name_ref) => {
                                         self.remove_component(&hecs_entity_key, &name_ref);
+                                    }
+                                    Components::Marker(marker_ref) => {
+                                        self.remove_component(&hecs_entity_key, &marker_ref);
                                     }
                                 }
 

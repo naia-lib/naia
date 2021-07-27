@@ -1,6 +1,6 @@
 use std::{
     rc::Rc,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
 };
 
 use hecs::{Entity as HecsEntityKey, World};
@@ -12,13 +12,16 @@ use naia_example_shared::{
     components::{Components, Position, Name},
     events::{Events, StringMessage},
 };
+use naia_example_shared::components::Marker;
 
 pub struct App {
     server: Server<Events, Components>,
     world: World,
     main_room_key: RoomKey,
     tick_count: u32,
-    entity_key_map: HashMap<NaiaEntityKey, HecsEntityKey>,
+    naia_to_hecs_key_map: HashMap<NaiaEntityKey, HecsEntityKey>,
+    hecs_to_naia_key_map: HashMap<HecsEntityKey, NaiaEntityKey>,
+    has_marker: HashSet<NaiaEntityKey>
 }
 
 impl App {
@@ -48,7 +51,8 @@ impl App {
         let main_room_key = server.create_room();
 
         let mut world = World::new();
-        let mut entity_key_map = HashMap::new();
+        let mut naia_to_hecs_key_map = HashMap::new();
+        let mut hecs_to_naia_key_map = HashMap::new();
 
         {
             let mut count = 0;
@@ -63,33 +67,36 @@ impl App {
                 count += 1;
 
                 // Create an entity
-                let entity_key = server.register_entity();
-                server.room_add_entity(&main_room_key, &entity_key);
+                let naia_key = server.register_entity();
+                server.room_add_entity(&main_room_key, &naia_key);
 
                 // Add position component to Entity
                 let position = Position::new((count * 4) as u8, 0).wrap();
-                let _pos_key = server.add_component_to_entity(&entity_key, Components::Position(position.clone()));
+                let _pos_key = server.add_component_to_entity(&naia_key, Components::Position(position.clone()));
 
                 // Add name component to Entity
                 let name = Name::new(first, last).wrap();
-                let _name_key = server.add_component_to_entity(&entity_key, Components::Name(name.clone()));
+                let _name_key = server.add_component_to_entity(&naia_key, Components::Name(name.clone()));
 
                 // Add to World
-                let hecs_entity = world.spawn((
+                let hecs_key = world.spawn((
                     Ref::clone(&name),
                     Ref::clone(&position),
                 ));
 
-                entity_key_map.insert(entity_key, hecs_entity);
+                naia_to_hecs_key_map.insert(naia_key, hecs_key);
+                hecs_to_naia_key_map.insert(hecs_key, naia_key);
             }
         }
 
         App {
             server,
             world,
-            entity_key_map,
+            naia_to_hecs_key_map,
+            hecs_to_naia_key_map,
             main_room_key,
             tick_count: 0,
+            has_marker: HashSet::new(),
         }
     }
 
@@ -120,27 +127,49 @@ impl App {
                         ServerEvent::Tick => {
 
                             // Game logic, march entities across the screen
-                            for (_, position_ref) in self.world.query_mut::<&Ref<Position>>() {
+                            let mut entities_to_add: Vec<HecsEntityKey> = Vec::new();
+
+                            for (hecs_entity_key, position_ref) in self.world.query_mut::<&Ref<Position>>() {
                                 let mut position = position_ref.borrow_mut();
                                 let mut x = *position.x.get();
                                 x += 1;
-                                if x > 70 {
+                                if x > 125 {
                                     x = 0;
-                                }
-                                if x % 3 == 0 {
                                     let mut y = *position.y.get();
                                     y = y.wrapping_add(1);
                                     position.y.set(y);
                                 }
+                                if x == 40 {
+                                    entities_to_add.push(hecs_entity_key);
+                                }
                                 position.x.set(x);
+                            }
+
+                            while let Some(hecs_key) = entities_to_add.pop() {
+                                let naia_key = self.hecs_to_naia_key_map.get(&hecs_key)
+                                    .expect("hecs <-> naia map not working ..");
+
+                                if !self.has_marker.contains(naia_key) {
+
+                                    // Add Marker component to Entity in Naia Server
+                                    let marker = Marker::new("new").wrap();
+                                    self.server.add_component_to_entity(&naia_key,
+                                                                        Components::Marker(marker.clone()));
+
+                                    // Add to Hecs World
+                                    self.world.insert_one(hecs_key, marker)
+                                        .expect("error inserting!");
+
+                                    self.has_marker.insert(*naia_key);
+                                }
                             }
 
                             // Update scopes of entities
                             for (room_key, user_key, entity_key) in self.server.entity_scope_sets() {
-                                if let Some(entity) = self.entity_key_map.get(&entity_key) {
+                                if let Some(entity) = self.naia_to_hecs_key_map.get(&entity_key) {
                                     if let Ok(pos_ref) = self.world.get::<Ref<Position>>(*entity) {
                                         let x = *pos_ref.borrow().x.get();
-                                        let in_scope = x >= 5 && x <= 55;
+                                        let in_scope = x >= 5 && x <= 75;
                                         self.server.entity_set_scope(&room_key, &user_key, &entity_key, in_scope);
                                     }
                                 }
