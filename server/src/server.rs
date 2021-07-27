@@ -61,7 +61,7 @@ pub struct Server<T: EventType, U: ActorType> {
     actor_scope_map: HashMap<(RoomKey, UserKey, ActorKey), bool>,
     entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
     entity_key_generator: KeyGenerator<EntityKey>,
-    entity_component_map: HashMap<EntityKey, HashSet<ComponentKey>>,
+    entity_component_map: HashMap<EntityKey, Ref<HashSet<ComponentKey>>>,
     component_entity_map: HashMap<ComponentKey, EntityKey>,
 }
 
@@ -579,7 +579,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
     /// to the Entity from the Server once again
     pub fn register_entity(&mut self) -> EntityKey {
         let entity_key: EntityKey = self.entity_key_generator.generate();
-        self.entity_component_map.insert(entity_key, HashSet::new());
+        self.entity_component_map.insert(entity_key, Ref::new(HashSet::new()));
         return entity_key;
     }
 
@@ -621,52 +621,53 @@ impl<T: EventType, U: ActorType> Server<T, U> {
     /// in Scope.
     /// Gives back a ComponentKey which can be used to get the reference to the Component
     /// from the Server once again
-    pub fn add_component_to_entity(&mut self, entity_key: &EntityKey, component: U) -> Result<ComponentKey, &str> {
+    pub fn add_component_to_entity(&mut self, entity_key: &EntityKey, component: U) -> ComponentKey {
 
         if !self.entity_component_map.contains_key(&entity_key) {
-            warn!("attempted to add component to nonexistant entity");
-            return Err("attempted to add component to nonexistant entity");
+            panic!("attempted to add component to non-existent entity");
         }
 
-        let component_ref = component.inner_ref().clone();
+        //let component_ref = component.inner_ref().clone();
         let component_key: ComponentKey = self.register_actor(component);
         self.component_entity_map.insert(component_key, *entity_key);
 
-        if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
-            component_set.insert(component_key);
+        if let Some(component_set_ref) = self.entity_component_map.get_mut(&entity_key) {
+            component_set_ref.borrow_mut().insert(component_key);
         }
 
         // add component to connections already tracking entity
-        for (user_key, _) in self.users.iter() {
-            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                Self::user_add_component(user_connection,
-                                        entity_key,
-                                        &component_key,
-                                         &component_ref);
-            }
-        }
+//        for (user_key, _) in self.users.iter() {
+//            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+//                if user_connection.has_entity(entity_key) {
+//                    Self::user_add_component(user_connection,
+//                                             entity_key,
+//                                             &component_key,
+//                                             &component_ref);
+//                }
+//            }
+//        }
 
-        return Ok(component_key);
+        return component_key;
     }
 
     /// Deregisters a Component with the Server, deleting local copies of the
     /// Component on each Client
-    pub fn remove_component(&mut self, component_key: &ComponentKey) {
-        if let Some(entity_key) = self.component_entity_map.remove(component_key) {
-            if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
-                for (user_key, _) in self.users.iter() {
-                    if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                        user_connection.remove_component(&entity_key, component_key);
-                    }
-                }
-
-                self.mut_handler.borrow_mut().deregister_actor(component_key);
-                self.global_state_store.remove(*component_key);
-
-                component_set.remove(component_key);
-            }
-        }
-    }
+//    pub fn remove_component(&mut self, component_key: &ComponentKey) {
+//        if let Some(entity_key) = self.component_entity_map.remove(component_key) {
+//            if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
+//                for (user_key, _) in self.users.iter() {
+//                    if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+//                        user_connection.remove_component(&entity_key, component_key);
+//                    }
+//                }
+//
+//                self.mut_handler.borrow_mut().deregister_actor(component_key);
+//                self.global_state_store.remove(*component_key);
+//
+//                component_set.remove(component_key);
+//            }
+//        }
+//    }
 
     /// Given an ActorKey, get a reference to a registered Actor being tracked
     /// by the Server
@@ -946,7 +947,6 @@ impl<T: EventType, U: ActorType> Server<T, U> {
                 }
             }
 
-
             for user_key in room.users_iter() {
                 for entity_key in room.entities_iter() {
                     if self.entity_component_map.contains_key(entity_key) {
@@ -968,24 +968,16 @@ impl<T: EventType, U: ActorType> Server<T, U> {
 
                             if should_be_in_scope {
                                 if !currently_in_scope {
-                                    // add entity to the connections local scope
-                                    Self::user_add_entity(user_connection,
-                                                             entity_key);
+                                    //add entity's components to user connection
+                                    let component_set_ref = self.entity_component_map.get(entity_key).unwrap();
 
-                                    //add entity's components to user connect
-                                    for component_set in self.entity_component_map.get(entity_key) {
-                                        for component_key in component_set {
-                                            if let Some(component_ref) = self.global_state_store.get(*component_key) {
-                                                Self::user_add_component(user_connection, entity_key, component_key, &component_ref.inner_ref());
-                                            }
-                                        }
-                                    }
+                                    // add entity to the connections local scope
+                                    Self::user_add_entity(&self.global_state_store, user_connection, entity_key, &component_set_ref);
                                 }
                             } else {
                                 if currently_in_scope {
                                     // remove entity from the connections local scope
-                                    Self::user_remove_entity(user_connection,
-                                                            entity_key);
+                                    Self::user_remove_entity(user_connection, entity_key);
                                 }
                             }
                         }
@@ -1009,24 +1001,27 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         user_connection.remove_actor(actor_key);
     }
 
-    fn user_add_entity(user_connection: &mut ClientConnection<T, U>,
-                      entity_key: &EntityKey) {
+    fn user_add_entity(state_store: &DenseSlotMap<ActorKey, U>,
+                       user_connection: &mut ClientConnection<T, U>,
+                       entity_key: &EntityKey,
+                       component_set_ref: &Ref<HashSet<ComponentKey>>) {
+        // Add components first
+        let component_set: &HashSet<ComponentKey> = &component_set_ref.borrow();
+        for component_key in component_set {
+            if let Some(component_ref) = state_store.get(*component_key) {
+                //add component to user connection
+                user_connection.add_component(entity_key, component_key, &component_ref.inner_ref());
+            }
+        }
+
         //add entity to user connection
-        user_connection.add_entity(entity_key);
+        user_connection.add_entity(entity_key, component_set_ref);
     }
 
     fn user_remove_entity(user_connection: &mut ClientConnection<T, U>,
                          entity_key: &EntityKey) {
         //remove entity from user connection
         user_connection.remove_entity(entity_key);
-    }
-
-    fn user_add_component(user_connection: &mut ClientConnection<T, U>,
-                      entity_key: &EntityKey,
-                      component_key: &ComponentKey,
-                      component_ref: &Ref<dyn Actor<U>>) {
-        //add actor to user connection
-        user_connection.add_component(entity_key, component_key, component_ref);
     }
 
     async fn send_connect_accept_message(

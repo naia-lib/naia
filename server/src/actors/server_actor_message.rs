@@ -10,11 +10,11 @@ pub enum ServerActorMessage<T: ActorType> {
     AssignPawn(ActorKey, LocalActorKey),
     UnassignPawn(ActorKey, LocalActorKey),
     UpdatePawn(ActorKey, LocalActorKey, Ref<StateMask>, Ref<dyn Actor<T>>),
-    CreateEntity(EntityKey, LocalEntityKey),
+    CreateEntity(EntityKey, LocalEntityKey, Option<Vec<(ComponentKey, LocalComponentKey, Ref<dyn Actor<T>>)>>),
     DeleteEntity(EntityKey, LocalEntityKey),
     AssignPawnEntity(EntityKey, LocalEntityKey),
     UnassignPawnEntity(EntityKey, LocalEntityKey),
-    AddComponent(EntityKey, LocalEntityKey, ComponentKey, LocalComponentKey),
+    //AddComponent(EntityKey, LocalEntityKey, ComponentKey, LocalComponentKey),
 }
 
 impl<T: ActorType> ServerActorMessage<T> {
@@ -26,11 +26,11 @@ impl<T: ActorType> ServerActorMessage<T> {
             ServerActorMessage::AssignPawn(_, _) => ActorMessageType::AssignPawn,
             ServerActorMessage::UnassignPawn(_, _) => ActorMessageType::UnassignPawn,
             ServerActorMessage::UpdatePawn(_, _, _, _) => ActorMessageType::UpdatePawn,
-            ServerActorMessage::CreateEntity(_, _) => ActorMessageType::CreateEntity,
+            ServerActorMessage::CreateEntity(_, _, _) => ActorMessageType::CreateEntity,
             ServerActorMessage::DeleteEntity(_, _) => ActorMessageType::DeleteEntity,
             ServerActorMessage::AssignPawnEntity(_, _) => ActorMessageType::AssignPawnEntity,
             ServerActorMessage::UnassignPawnEntity(_, _) => ActorMessageType::UnassignPawnEntity,
-            ServerActorMessage::AddComponent(_, _, _, _) => ActorMessageType::AddComponent,
+            //ServerActorMessage::AddComponent(_, _, _, _) => ActorMessageType::AddComponent,
         }
     }
 }
@@ -56,8 +56,8 @@ impl<T: ActorType> Clone for ServerActorMessage<T> {
             ServerActorMessage::UpdatePawn(gk, lk, sm, e) => {
                 ServerActorMessage::UpdatePawn(gk.clone(), lk.clone(), sm.clone(), e.clone())
             }
-            ServerActorMessage::CreateEntity(gk, lk) => {
-                ServerActorMessage::CreateEntity(gk.clone(), lk.clone())
+            ServerActorMessage::CreateEntity(gk, lk, cs) => {
+                ServerActorMessage::CreateEntity(gk.clone(), lk.clone(), cs.clone())
             }
             ServerActorMessage::DeleteEntity(gk, lk) => {
                 ServerActorMessage::DeleteEntity(gk.clone(), lk.clone())
@@ -68,9 +68,9 @@ impl<T: ActorType> Clone for ServerActorMessage<T> {
             ServerActorMessage::UnassignPawnEntity(gk, lk) => {
                 ServerActorMessage::UnassignPawnEntity(gk.clone(), lk.clone())
             }
-            ServerActorMessage::AddComponent(gek, lek, gck, lck) => {
-                ServerActorMessage::AddComponent(gek.clone(), lek.clone(), gck.clone(), lck.clone())
-            }
+//            ServerActorMessage::AddComponent(gek, lek, gck, lck) => {
+//                ServerActorMessage::AddComponent(gek.clone(), lek.clone(), gck.clone(), lck.clone())
+//            }
         }
     }
 }
