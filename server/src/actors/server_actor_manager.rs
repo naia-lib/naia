@@ -785,14 +785,15 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
             for delivered_message in delivered_messages_list.into_iter() {
                 match delivered_message {
                     ServerActorMessage::CreateActor(global_key, _, _) => {
-                        if let Some(actor_record) = self.actor_records.get_mut(global_key) {
-                            // do we need to delete this now?
-                            if self.delayed_actor_deletions.remove(&global_key) {
-                                actor_delete(&mut self.queued_messages, actor_record, &global_key);
-                            } else {
-                                // we do not need to delete just yet
-                                actor_record.status = LocalityStatus::Created;
-                            }
+                        let actor_record = self.actor_records.get_mut(global_key)
+                            .expect("created actor does not have an actor_record ... initialization error?");
+
+                        // do we need to delete this now?
+                        if self.delayed_actor_deletions.remove(&global_key) {
+                            actor_delete(&mut self.queued_messages, actor_record, &global_key);
+                        } else {
+                            // we do not need to delete just yet
+                            actor_record.status = LocalityStatus::Created;
                         }
                     }
                     ServerActorMessage::DeleteActor(global_actor_key, _) => {
@@ -805,72 +806,72 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                     ServerActorMessage::AssignPawn(_, _) => {}
                     ServerActorMessage::UnassignPawn(_, _) => {}
                     ServerActorMessage::CreateEntity(global_entity_key, _, component_list_opt) => {
-                        if let Some(entity_record) = self.local_entity_store.get_mut(&global_entity_key) {
+                        let entity_record = self.local_entity_store.get_mut(&global_entity_key)
+                            .expect("created entity does not have a entity_record ... initialization error?");
 
-                            // do we need to delete this now?
-                            if self.delayed_entity_deletions.remove(&global_entity_key) {
-                                entity_delete(&mut self.queued_messages, entity_record, &global_entity_key);
-                            } else {
-                                // set to status of created
-                                entity_record.status = LocalityStatus::Created;
+                        // do we need to delete this now?
+                        if self.delayed_entity_deletions.remove(&global_entity_key) {
+                            entity_delete(&mut self.queued_messages, entity_record, &global_entity_key);
+                        } else {
+                            // set to status of created
+                            entity_record.status = LocalityStatus::Created;
 
-                                // set status of components to created
-                                if let Some(mut component_list) = component_list_opt {
-                                    while let Some((global_component_key, _, _)) = component_list.pop() {
-                                        let component_record = self.actor_records.get_mut(global_component_key)
-                                            .expect("component not created correctly?");
-                                        component_record.status = LocalityStatus::Created;
-                                    }
-                                }
-
-                                // for any components on this entity that have not yet been created
-                                // initiate that now
-                                let component_set: &HashSet<ComponentKey> = &entity_record.components_ref.borrow();
-                                for component_key in component_set {
-                                    let component_record = self.actor_records.get(*component_key)
+                            // set status of components to created
+                            if let Some(mut component_list) = component_list_opt {
+                                while let Some((global_component_key, _, _)) = component_list.pop() {
+                                    let component_record = self.actor_records.get_mut(global_component_key)
                                         .expect("component not created correctly?");
-                                    // check if component has been successfully created
-                                    // (perhaps through the previous entity_create operation)
-                                    if component_record.status == LocalityStatus::Creating {
-                                        let component_ref = self.local_actor_store.get(*component_key)
-                                            .expect("component not created correctly?");
-                                        self.queued_messages
-                                            .push_back(ServerActorMessage::AddComponent(
-                                                entity_record.local_key,
-                                                *component_key,
-                                                component_record.local_key,
-                                                component_ref.clone(),
-                                            ));
-                                    }
+                                    component_record.status = LocalityStatus::Created;
+                                }
+                            }
+
+                            // for any components on this entity that have not yet been created
+                            // initiate that now
+                            let component_set: &HashSet<ComponentKey> = &entity_record.components_ref.borrow();
+                            for component_key in component_set {
+                                let component_record = self.actor_records.get(*component_key)
+                                    .expect("component not created correctly?");
+                                // check if component has been successfully created
+                                // (perhaps through the previous entity_create operation)
+                                if component_record.status == LocalityStatus::Creating {
+                                    let component_ref = self.local_actor_store.get(*component_key)
+                                        .expect("component not created correctly?");
+                                    self.queued_messages
+                                        .push_back(ServerActorMessage::AddComponent(
+                                            entity_record.local_key,
+                                            *component_key,
+                                            component_record.local_key,
+                                            component_ref.clone(),
+                                        ));
                                 }
                             }
                         }
                     }
                     ServerActorMessage::DeleteEntity(global_key, local_key) => {
-                        if let Some(entity_record) = self.local_entity_store.remove(&global_key) {
-                            // actually delete the entity from local records
-                            self.local_to_global_entity_key_map.remove(&local_key);
-                            self.entity_key_generator.recycle_key(&local_key);
-                            self.pawn_entity_store.remove(&global_key);
+                        let entity_record = self.local_entity_store.remove(&global_key).expect("deletion of nonexistent entity!");
 
-                            // delete all associated component actors
-                            let component_set: &HashSet<ComponentKey> = &entity_record.components_ref.borrow();
-                            for component_key in component_set {
-                                deleted_actors.push(*component_key);
-                            }
+                        // actually delete the entity from local records
+                        self.local_to_global_entity_key_map.remove(&local_key);
+                        self.entity_key_generator.recycle_key(&local_key);
+                        self.pawn_entity_store.remove(&global_key);
+
+                        // delete all associated component actors
+                        let component_set: &HashSet<ComponentKey> = &entity_record.components_ref.borrow();
+                        for component_key in component_set {
+                            deleted_actors.push(*component_key);
                         }
                     }
                     ServerActorMessage::AssignPawnEntity(_, _) => {}
                     ServerActorMessage::UnassignPawnEntity(_, _) => {}
                     ServerActorMessage::AddComponent(_, global_component_key, _, _) => {
-                        if let Some(component_record) = self.actor_records.get_mut(global_component_key) {
-                            // do we need to delete this now?
-                            if self.delayed_actor_deletions.remove(&global_component_key) {
-                                actor_delete(&mut self.queued_messages, component_record, &global_component_key);
-                            } else {
-                                // we do not need to delete just yet
-                                component_record.status = LocalityStatus::Created;
-                            }
+                        let component_record = self.actor_records.get_mut(global_component_key)
+                            .expect("added component does not have a record .. initiation problem?");
+                        // do we need to delete this now?
+                        if self.delayed_actor_deletions.remove(&global_component_key) {
+                            actor_delete(&mut self.queued_messages, component_record, &global_component_key);
+                        } else {
+                            // we do not need to delete just yet
+                            component_record.status = LocalityStatus::Created;
                         }
                     }
                 }

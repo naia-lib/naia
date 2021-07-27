@@ -1,11 +1,11 @@
 use std::{
     rc::Rc,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
 };
 
 use hecs::{Entity as HecsEntityKey, World};
 
-use naia_server::{Server, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey as NaiaEntityKey, Ref, Actor, ActorType, ComponentKey};
+use naia_server::{Server, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey as NaiaEntityKey, Ref, Actor, ComponentKey};
 
 use naia_example_shared::{
     get_shared_config, manifest_load,
