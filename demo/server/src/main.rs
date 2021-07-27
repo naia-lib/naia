@@ -11,6 +11,8 @@ use smol::io;
 
 use naia_server::{ServerAddresses, ServerConfig};
 
+use naia_example_shared::get_server_address;
+
 mod app;
 use app::App;
 
@@ -22,11 +24,11 @@ fn main() -> io::Result<()> {
 
         info!("Naia Server Example Started");
 
-    let server_addresses: ServerAddresses = ServerAddresses::new(
+    let mut server_config = ServerConfig::default();
+
+    server_config.socket_addresses = ServerAddresses::new(
         // IP Address to listen on for the signaling portion of WebRTC
-        "127.0.0.1:14191"
-            .parse()
-            .expect("could not parse HTTP address/port"),
+        get_server_address(),
         // IP Address to listen on for UDP WebRTC data channels
         "127.0.0.1:14192"
             .parse()
@@ -37,14 +39,13 @@ fn main() -> io::Result<()> {
             .expect("could not parse advertised public WebRTC data address/port"),
     );
 
-    let mut server_config = ServerConfig::default();
+
     server_config.heartbeat_interval = Duration::from_secs(2);
     // Keep in mind that the disconnect timeout duration should always be at least
     // 2x greater than the heartbeat interval, to make it so at the worst case, the
     // server would need to miss 2 heartbeat signals before disconnecting from a
     // given client
     server_config.disconnection_timeout_duration = Duration::from_secs(5);
-    server_config.socket_addresses = server_addresses;
 
     smol::block_on(async {
         let mut app = App::new(server_config).await;
