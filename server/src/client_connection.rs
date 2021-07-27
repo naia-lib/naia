@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{collections::HashSet, net::SocketAddr};
 
 use naia_shared::{
     Actor, ActorType, Connection, ConnectionConfig, Event, EventType, ManagerType, Manifest,
@@ -175,8 +175,8 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         return self.actor_manager.has_entity(key);
     }
 
-    pub fn add_entity(&mut self, key: &EntityKey) {
-        self.actor_manager.add_entity(key);
+    pub fn add_entity(&mut self, key: &EntityKey, components_ref: &Ref<HashSet<ComponentKey>>) {
+        self.actor_manager.add_entity(key, components_ref);
     }
 
     pub fn remove_entity(&mut self, key: &EntityKey) {
@@ -198,10 +198,10 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
     pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Actor<U>>) {
         self.actor_manager.add_component(entity_key, component_key, component_ref);
     }
-
-    pub fn remove_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey) {
-        self.actor_manager.remove_component(entity_key, component_key);
-    }
+//
+//    pub fn remove_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey) {
+//        self.actor_manager.remove_component(entity_key, component_key);
+//    }
 
     // Pass-through methods to underlying common connection
 

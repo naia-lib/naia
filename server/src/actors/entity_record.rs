@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
-use naia_shared::LocalEntityKey;
+use naia_shared::{LocalEntityKey, Ref};
 
 use super::{locality_status::LocalityStatus, actor_key::ComponentKey};
 
@@ -8,15 +8,15 @@ use super::{locality_status::LocalityStatus, actor_key::ComponentKey};
 pub struct EntityRecord {
     pub local_key: LocalEntityKey,
     pub status: LocalityStatus,
-    pub components: HashMap<ComponentKey, bool>,
+    pub components_ref: Ref<HashSet<ComponentKey>>,
 }
 
 impl EntityRecord {
-    pub fn new(local_key: LocalEntityKey) -> Self {
+    pub fn new(local_key: LocalEntityKey, components_ref: &Ref<HashSet<ComponentKey>>) -> Self {
         EntityRecord {
             local_key,
             status: LocalityStatus::Creating,
-            components: HashMap::new(),
+            components_ref: components_ref.clone(),
         }
     }
 }
