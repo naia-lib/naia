@@ -52,13 +52,14 @@ impl<U: ActorType> ClientActorManager<U> {
                     let actor_key = LocalActorKey::from_u16(reader.read_u16());
 
                     let new_actor = manifest.create_actor(naia_id, reader);
-                    if self.local_actor_store.contains_key(&actor_key) {
-                        panic!("duplicate local actor key inserted");
-                    } else {
+                    if !self.local_actor_store.contains_key(&actor_key) {
                         self.local_actor_store.insert(actor_key, new_actor);
 
                         self.queued_incoming_messages
                             .push_back(ClientActorMessage::CreateActor(actor_key));
+                    } else {
+                        // may have received a duplicate message
+                        warn!("attempted to insert duplicate local actor key");
                     }
                 }
                 ActorMessageType::DeleteActor => {
