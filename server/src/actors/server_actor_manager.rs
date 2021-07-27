@@ -29,11 +29,13 @@ pub struct ServerActorManager<T: ActorType> {
     local_to_global_key_map: HashMap<LocalActorKey, ActorKey>,
     actor_records: SparseSecondaryMap<ActorKey, ActorRecord>,
     pawn_store: HashSet<ActorKey>,
+    delayed_actor_deletions: HashSet<ActorKey>,
     // entities
     entity_key_generator: KeyGenerator<LocalEntityKey>,
     local_entity_store: HashMap<EntityKey, EntityRecord>,
     local_to_global_entity_key_map: HashMap<LocalEntityKey, EntityKey>,
     pawn_entity_store: HashSet<EntityKey>,
+    delayed_entity_deletions: HashSet<EntityKey>,
     // messages / updates / ect
     queued_messages: VecDeque<ServerActorMessage<T>>,
     sent_messages: HashMap<u16, Vec<ServerActorMessage<T>>>,
@@ -56,11 +58,13 @@ impl<T: ActorType> ServerActorManager<T> {
             local_to_global_key_map: HashMap::new(),
             actor_records: SparseSecondaryMap::new(),
             pawn_store: HashSet::new(),
+            delayed_actor_deletions: HashSet::new(),
             // entities
             entity_key_generator: KeyGenerator::new(),
             local_to_global_entity_key_map: HashMap::new(),
             local_entity_store: HashMap::new(),
             pawn_entity_store: HashSet::new(),
+            delayed_entity_deletions: HashSet::new(),
             // messages / updates / ect
             queued_messages: VecDeque::new(),
             sent_messages: HashMap::new(),
@@ -261,18 +265,27 @@ impl<T: ActorType> ServerActorManager<T> {
     }
 
     pub fn remove_actor(&mut self, key: &ActorKey) {
-        self.remove_pawn(key);
+
+        if self.has_pawn(key) {
+            self.remove_pawn(key);
+        }
 
         if let Some(actor_record) = self.actor_records.get_mut(*key) {
-            if actor_record.status != LocalityStatus::Deleting {
-                actor_record.status = LocalityStatus::Deleting;
-
-                self.queued_messages
-                    .push_back(ServerActorMessage::DeleteActor(
-                        *key,
-                        actor_record.local_key,
-                    ));
+            match actor_record.status {
+                LocalityStatus::Waiting | LocalityStatus::Creating => {
+                    // queue deletion message to be sent after creation
+                    self.delayed_actor_deletions.insert(*key);
+                }
+                LocalityStatus::Created => {
+                    // send deletion message
+                    actor_delete(&mut self.queued_messages, actor_record, key);
+                }
+                LocalityStatus::Deleting => {
+                    // deletion in progress, do nothing
+                }
             }
+        } else {
+            panic!("attempting to remove an actor from a connection within which it does not exist");
         }
     }
 
@@ -295,8 +308,7 @@ impl<T: ActorType> ServerActorManager<T> {
     }
 
     pub fn remove_pawn(&mut self, key: &ActorKey) {
-        if self.pawn_store.contains(key) {
-            self.pawn_store.remove(key);
+        if self.pawn_store.remove(key) {
             if let Some(actor_record) = self.actor_records.get_mut(*key) {
                 self.queued_messages
                     .push_back(ServerActorMessage::UnassignPawn(
@@ -304,6 +316,8 @@ impl<T: ActorType> ServerActorManager<T> {
                         actor_record.local_key,
                     ));
             }
+        } else {
+            panic!("attempt to unassign a pawn actor from a connection to which it is not assigned as a pawn in the first place")
         }
     }
 
@@ -328,27 +342,34 @@ impl<T: ActorType> ServerActorManager<T> {
     }
 
     pub fn remove_entity(&mut self, key: &EntityKey) {
-        self.remove_pawn_entity(key);
+        if self.has_pawn_entity(key) {
+            self.remove_pawn_entity(key);
+        }
 
         if let Some(entity_record) = self.local_entity_store.get_mut(key) {
-            if entity_record.status != LocalityStatus::Deleting {
-                entity_record.status = LocalityStatus::Deleting;
 
-                self.queued_messages
-                    .push_back(ServerActorMessage::DeleteEntity(
-                        *key,
-                        entity_record.local_key,
-                    ));
+            match entity_record.status {
+                LocalityStatus::Waiting | LocalityStatus::Creating => {
+                    // queue deletion message to be sent after creation
+                    self.delayed_entity_deletions.insert(*key);
+                }
+                LocalityStatus::Created => {
+                    // send deletion message
+                    entity_delete(&mut self.queued_messages, entity_record, key);
 
-                // Entity deletion IS Component deletion, so update those actor records accordingly
-                for (component_key, _) in &entity_record.components {
-                    self.pawn_store.remove(component_key);
+                    // Entity deletion IS Component deletion, so update those actor records accordingly
+                    for (component_key, _) in &entity_record.components {
+                        self.pawn_store.remove(component_key);
 
-                    if let Some(actor_record) = self.actor_records.get_mut(*component_key) {
-                        if actor_record.status != LocalityStatus::Deleting {
-                            actor_record.status = LocalityStatus::Deleting;
+                        if let Some(actor_record) = self.actor_records.get_mut(*component_key) {
+                            if actor_record.status != LocalityStatus::Deleting {
+                                actor_record.status = LocalityStatus::Deleting;
+                            }
                         }
                     }
+                }
+                LocalityStatus::Deleting => {
+                    // deletion in progress, do nothing
                 }
             }
         }
@@ -503,8 +524,13 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                 match delivered_message {
                     ServerActorMessage::CreateActor(global_key, _, _) => {
                         if let Some(actor_record) = self.actor_records.get_mut(*global_key) {
-                            // update actor record status
-                            actor_record.status = LocalityStatus::Created;
+                            // do we need to delete this now?
+                            if self.delayed_actor_deletions.remove(global_key) {
+                                actor_delete(&mut self.queued_messages, actor_record, global_key);
+                            } else {
+                                // we do not need to delete just yet
+                                actor_record.status = LocalityStatus::Created;
+                            }
                         }
                     }
                     ServerActorMessage::DeleteActor(global_actor_key, _) => {
@@ -518,25 +544,31 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                     ServerActorMessage::UnassignPawn(_, _) => {}
                     ServerActorMessage::CreateEntity(global_entity_key, local_entity_key) => {
                         if let Some(entity_record) = self.local_entity_store.get_mut(global_entity_key) {
-                            // update entity record status
-                            entity_record.status = LocalityStatus::Created;
 
-                            // pop deferred component messages
-                            for (component_key, message_sent) in &mut entity_record.components {
-                                if !*message_sent {
-                                    if let Some(component_record) = self.actor_records.get(*component_key) {
-                                        let local_component_key = component_record.local_key;
+                            // do we need to delete this now?
+                            if self.delayed_entity_deletions.remove(global_entity_key) {
+                                entity_delete(&mut self.queued_messages, entity_record, global_entity_key);
+                            } else {
+                                // we do not need to delete just yet
+                                entity_record.status = LocalityStatus::Created;
 
-                                        let message = ServerActorMessage::AddComponent(
-                                            *global_entity_key,
-                                            *local_entity_key,
-                                            *component_key,
-                                            local_component_key,
-                                        );
+                                // pop deferred component messages
+                                for (component_key, message_sent) in &mut entity_record.components {
+                                    if !*message_sent {
+                                        if let Some(component_record) = self.actor_records.get(*component_key) {
+                                            let local_component_key = component_record.local_key;
 
-                                        self.queued_messages.push_back(message);
+                                            let message = ServerActorMessage::AddComponent(
+                                                *global_entity_key,
+                                                *local_entity_key,
+                                                *component_key,
+                                                local_component_key,
+                                            );
 
-                                        *message_sent = true;
+                                            self.queued_messages.push_back(message);
+
+                                            *message_sent = true;
+                                        }
                                     }
                                 }
                             }
@@ -638,4 +670,26 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
             self.sent_messages.remove(&dropped_packet_index);
         }
     }
+}
+
+fn actor_delete<T: ActorType>(queued_messages: &mut VecDeque<ServerActorMessage<T>>,
+                              actor_record: &mut ActorRecord,
+                              actor_key: &ActorKey) {
+    actor_record.status = LocalityStatus::Deleting;
+
+    queued_messages.push_back(ServerActorMessage::DeleteActor(
+            *actor_key,
+            actor_record.local_key,
+        ));
+}
+
+fn entity_delete<T: ActorType>(queued_messages: &mut VecDeque<ServerActorMessage<T>>,
+                              entity_record: &mut EntityRecord,
+                              entity_key: &EntityKey) {
+    entity_record.status = LocalityStatus::Deleting;
+
+    queued_messages.push_back(ServerActorMessage::DeleteEntity(
+        *entity_key,
+        entity_record.local_key,
+    ));
 }

@@ -135,11 +135,12 @@ impl<T: EventType, U: ActorType> Client<T, U> {
                                 Some(ClientEvent::ResetPawnEntity(local_key))
                             }
                             ClientActorMessage::AddComponent(entity_key, component_key) => {
-                                if connection.has_entity(&entity_key) && connection.has_component(&component_key) {
-                                    Some(ClientEvent::AddComponent(entity_key, component_key))
-                                } else {
-                                    None
-                                }
+//                                if connection.has_entity(&entity_key) && connection.has_component(&component_key) {
+//                                    Some(ClientEvent::AddComponent(entity_key, component_key))
+//                                } else {
+//                                    None
+//                                }
+                                Some(ClientEvent::AddComponent(entity_key, component_key))
                             }
                             ClientActorMessage::UpdateComponent(entity_key, component_key) => {
                                 Some(ClientEvent::UpdateComponent(entity_key, component_key))

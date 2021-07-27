@@ -173,6 +173,9 @@ impl<U: ActorType> ClientActorManager<U> {
                 ActorMessageType::DeleteEntity => {
                     // Entity Deletion
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
+
+                    warn!("entity delete {}", entity_key.to_u16());
+
                     if let Some(component_set) = self.local_entity_store.remove(&entity_key) {
 
                         if self.pawn_entity_store.take(&entity_key).is_some() {
@@ -223,7 +226,7 @@ impl<U: ActorType> ClientActorManager<U> {
                     let local_entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     let local_component_key = LocalComponentKey::from_u16(reader.read_u16());
                     if self.local_entity_store.contains_key(&local_entity_key) {
-                        let mut component_set = self.local_entity_store.get_mut(&local_entity_key).unwrap();
+                        let component_set = self.local_entity_store.get_mut(&local_entity_key).unwrap();
                         component_init(&mut self.component_entity_map, component_set, &local_entity_key, &local_component_key);
                     } else {
                         self.reserved_add_component_messages.insert(local_entity_key, local_component_key);
@@ -314,6 +317,8 @@ impl<U: ActorType> ClientActorManager<U> {
                 self.queued_incoming_messages
                     .push_back(ClientActorMessage::DeleteActor(*actor_key, actor));
             }
+        } else {
+            panic!("attempting to delete actor which does not exist");
         }
     }
 }

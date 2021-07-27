@@ -25,6 +25,7 @@ impl<K: NaiaKey> KeyGenerator<K> {
     /// Get a new, unused key
     pub fn generate(&mut self) -> K {
         if self.recycled_local_keys.len() > 250 {
+            // seems like we shouldn't need to buffer recycled keys so long .. should always recycle unused keys
             if let Some(local_key) = self.recycled_local_keys.pop_front() {
                 return K::from_u16(local_key);
             }
