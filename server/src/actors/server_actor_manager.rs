@@ -746,9 +746,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                                 // pop deferred component messages
                                 if let Some(mut component_list) = component_map {
                                     while let Some((global_component_key, local_component_key, component_ref)) = component_list.pop() {
-                                        let global_component_key = self.local_to_global_key_map.get(&local_component_key)
-                                            .expect("component not created correctly?");
-                                        let component_record = self.actor_records.get_mut(*global_component_key)
+                                        let component_record = self.actor_records.get_mut(global_component_key)
                                             .expect("component not created correctly?");
                                         component_record.status = LocalityStatus::Created;
                                     }
