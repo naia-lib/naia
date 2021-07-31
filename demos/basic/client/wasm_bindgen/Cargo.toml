@@ -1,8 +1,8 @@
 [package]
-name = "naia-client-bindgen-example"
+name = "naia-demo-basic-client-wb"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-workspace = "../../../"
+workspace = "../../../../"
 publish = false
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -15,10 +15,10 @@ name = "index" # This is because cargo-web also picks up the static assets folde
 path = "src/main.rs"
 
 [features]
-multithread = [ "naia-client-example-app/multithread" ]
+multithread = [ "naia-demo-basic-client-app/multithread" ]
 
 [dependencies]
-naia-client-example-app = { path = "../app", features = [ "wbindgen" ] }
+naia-demo-basic-client-app = { path = "../app", features = [ "wbindgen" ] }
 log = "0.4"
 cfg-if = "0.1.10"
 

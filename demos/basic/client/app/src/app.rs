@@ -6,7 +6,7 @@ use hecs::{Entity as HecsEntityKey, World, EntityBuilder as HecsEntityBuilder};
 
 use naia_client::{ClientConfig, ClientEvent, Client, NaiaKey, LocalEntityKey as NaiaEntityKey, Ref, Actor};
 
-use naia_example_shared::{
+use naia_demo_basic_shared::{
     get_shared_config, manifest_load,
     components::Components,
     events::{Events, Auth, StringMessage},

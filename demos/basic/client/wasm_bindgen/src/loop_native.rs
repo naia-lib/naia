@@ -1,4 +1,4 @@
-use naia_client_example_app::App;
+use naia_demo_basic_client_app::App;
 
 pub fn start_loop(app: &mut App) {
     loop {

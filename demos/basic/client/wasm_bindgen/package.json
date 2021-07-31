@@ -1,6 +1,6 @@
 {
   "author": "Connor Carpenter",
-  "name": "naia-client-example",
+  "name": "naia-demo-basic-client-wb",
   "version": "0.1.0",
   "scripts": {
     "build": "rimraf dist pkg && webpack",

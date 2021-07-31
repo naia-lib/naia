@@ -2,7 +2,7 @@
 xdg-open http://localhost:3113/
 
 # replace 'client' & 'webserver' below with the appropriate directory names for your project
-client='naia-client-miniquad-example'
+client='naia-demo-basic-client-mq'
 webserver_dir='dev_http_server'
 
 get_reload_actions(){

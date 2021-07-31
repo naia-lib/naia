@@ -1,0 +1,19 @@
+[package]
+name = "naia-demo-basic-client-app"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+publish = false
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[features]
+multithread = [ "naia-client/multithread" ]
+mquad = [ "naia-client/mquad", "naia-demo-basic-shared/mquad" ]
+wbindgen = [ "naia-client/wbindgen", "naia-demo-basic-shared/wbindgen" ]
+
+[dependencies]
+cfg-if = "0.1.10"
+naia-client = { path = "../../../../client" }
+naia-demo-basic-shared = { path = "../../shared" }
+hecs = { path = "../../../../../Forks/hecs" }
+log = "0.4"

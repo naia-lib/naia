@@ -1,18 +1,18 @@
 [package]
-name = "naia-client-miniquad-example"
+name = "naia-demo-basic-client-mq"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 version = "0.1.0"
 edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [[bin]]
-name = "naia-client-miniquad-example"
+name = "naia-demo-basic-client-mq"
 path = "src/main.rs"
 
 [features]
-multithread = [ "naia-client-example-app/multithread", ]
+multithread = [ "naia-demo-basic-client-app/multithread", ]
 
 [dependencies]
 cfg-if = "0.1.10"
-naia-client-example-app = { path = "../app", features = [ "mquad" ] }
+naia-demo-basic-client-app = { path = "../app", features = [ "mquad" ] }
 miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"] }

@@ -7,7 +7,7 @@ use hecs::{Entity as HecsEntityKey, World};
 
 use naia_server::{Server, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey as NaiaEntityKey, Ref, Actor, ComponentKey};
 
-use naia_example_shared::{
+use naia_demo_basic_shared::{
     get_shared_config, manifest_load,
     components::{Components, Position, Name, Marker},
     events::{Events, StringMessage},

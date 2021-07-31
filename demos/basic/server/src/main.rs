@@ -11,7 +11,7 @@ use smol::io;
 
 use naia_server::{ServerAddresses, ServerConfig};
 
-use naia_example_shared::get_server_address;
+use naia_demo_basic_shared::get_server_address;
 
 mod app;
 use app::App;
