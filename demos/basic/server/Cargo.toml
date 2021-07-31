@@ -1,8 +1,8 @@
 [package]
-name = "naia-server-example"
+name = "naia-demo-basic-server"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-workspace = "../../"
+workspace = "../../../"
 publish = false
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -10,12 +10,12 @@ license = "MIT OR Apache-2.0"
 [features]
 use-udp = [ "naia-server/use-udp" ]
 use-webrtc = [ "naia-server/use-webrtc" ]
-multithread = [ "naia-server/multithread", "naia-example-shared/multithread" ]
+multithread = [ "naia-server/multithread", "naia-demo-basic-shared/multithread" ]
 
 [dependencies]
-naia-server = { path = "../../server" }
-naia-example-shared = { path = "../shared" }
+naia-server = { path = "../../../server" }
+naia-demo-basic-shared = { path = "../shared" }
 log = "0.4"
 simple_logger = { version = "1.4" }
 smol = { version = "1.2.4" }
-hecs = { path = "../../../Forks/hecs" }
+hecs = { path = "../../../../Forks/hecs" }

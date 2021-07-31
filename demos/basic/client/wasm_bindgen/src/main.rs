@@ -2,7 +2,7 @@ extern crate cfg_if;
 
 extern crate log;
 
-use naia_client_example_app::{App, Config};
+use naia_demo_basic_client_app::{App, Config};
 use simple_logger::SimpleLogger;
 use log::LevelFilter;
 

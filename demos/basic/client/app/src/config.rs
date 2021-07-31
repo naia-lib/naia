@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use naia_client::ClientConfig;
 
-use naia_example_shared::get_server_address;
+use naia_demo_basic_shared::get_server_address;
 
 pub struct Config;
 
