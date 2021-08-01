@@ -1,7 +1,7 @@
 use nanoserde::{DeBin, SerBin};
 
-use naia_derive::Actor;
-use naia_shared::{Actor, Property};
+use naia_derive::State;
+use naia_shared::{State, Property};
 
 use super::Components;
 
@@ -12,7 +12,7 @@ pub struct Fullname {
     pub last: String,
 }
 
-#[derive(Actor)]
+#[derive(State)]
 #[type_name = "Components"]
 pub struct Name {
     pub full: Property<Fullname>,

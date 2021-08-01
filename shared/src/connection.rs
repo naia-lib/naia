@@ -4,7 +4,7 @@ use crate::{wrapping_diff, Timer};
 
 use super::{
     ack_manager::AckManager,
-    actors::{actor_notifiable::ActorNotifiable, actor_type::ActorType},
+    state::{state_notifiable::StateNotifiable, state_type::StateType},
     connection_config::ConnectionConfig,
     events::{event::Event, event_manager::EventManager, event_type::EventType},
     manifest::Manifest,
@@ -68,13 +68,13 @@ impl<T: EventType> Connection<T> {
     pub fn process_incoming_header(
         &mut self,
         header: &StandardHeader,
-        actor_notifiable: &mut Option<&mut dyn ActorNotifiable>,
+        state_notifiable: &mut Option<&mut dyn StateNotifiable>,
     ) {
         if wrapping_diff(self.last_received_tick, header.host_tick()) > 0 {
             self.last_received_tick = header.host_tick();
         }
         self.ack_manager
-            .process_incoming(&header, &mut self.event_manager, actor_notifiable);
+            .process_incoming(&header, &mut self.event_manager, state_notifiable);
     }
 
     /// Given a packet payload, start tracking the packet via it's index, attach
@@ -145,7 +145,7 @@ impl<T: EventType> Connection<T> {
 
     /// Given an incoming packet which has been identified as an event, send the
     /// data to the EventManager for processing
-    pub fn process_event_data<U: ActorType>(
+    pub fn process_event_data<U: StateType>(
         &mut self,
         reader: &mut PacketReader,
         manifest: &Manifest<T, U>,

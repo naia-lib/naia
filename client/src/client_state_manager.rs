@@ -3,27 +3,27 @@ use std::collections::{HashSet, HashMap, VecDeque, hash_map::Keys};
 
 use log::warn;
 
-use naia_shared::{ActorType, EventType, LocalActorKey, Manifest, PacketReader, StateMask,
-                  LocalEntityKey, ActorMessageType, NaiaKey, LocalComponentKey, PawnKey};
+use naia_shared::{StateType, EventType, LocalObjectKey, Manifest, PacketReader, DiffMask,
+                  LocalEntityKey, StateMessageType, NaiaKey, LocalComponentKey, PawnKey};
 
-use super::{client_actor_message::ClientActorMessage, dual_command_receiver::DualCommandReceiver};
+use super::{client_state_message::ClientStateMessage, dual_command_receiver::DualCommandReceiver};
 
 #[derive(Debug)]
-pub struct ClientActorManager<U: ActorType> {
-    local_actor_store:                  HashMap<LocalActorKey, U>,
-    queued_incoming_messages:           VecDeque<ClientActorMessage<U>>,
-    pawn_store:                         HashMap<LocalActorKey, U>,
+pub struct ClientStateManager<U: StateType> {
+    local_state_store:                  HashMap<LocalObjectKey, U>,
+    queued_incoming_messages:           VecDeque<ClientStateMessage<U>>,
+    pawn_store:                         HashMap<LocalObjectKey, U>,
     local_entity_store:                 HashMap<LocalEntityKey, HashSet<LocalComponentKey>>,
     pawn_entity_store:                  HashSet<LocalEntityKey>,
     component_entity_map:               HashMap<LocalComponentKey, LocalEntityKey>,
     //reserved_add_component_messages:    HashMap<LocalEntityKey, LocalComponentKey>,
 }
 
-impl<U: ActorType> ClientActorManager<U> {
+impl<U: StateType> ClientStateManager<U> {
     pub fn new() -> Self {
-        ClientActorManager {
+        ClientStateManager {
             queued_incoming_messages:           VecDeque::new(),
-            local_actor_store:                  HashMap::new(),
+            local_state_store:                  HashMap::new(),
             pawn_store:                         HashMap::new(),
             local_entity_store:                 HashMap::new(),
             pawn_entity_store:                  HashSet::new(),
@@ -40,58 +40,58 @@ impl<U: ActorType> ClientActorManager<U> {
         packet_index: u16,
         reader: &mut PacketReader,
     ) {
-        let actor_message_count = reader.read_u8();
+        let state_message_count = reader.read_u8();
 
-        for _ in 0..actor_message_count {
-            let message_type = ActorMessageType::from_u8(reader.read_u8());
+        for _ in 0..state_message_count {
+            let message_type = StateMessageType::from_u8(reader.read_u8());
 
             match message_type {
-                ActorMessageType::CreateActor => {
-                    // Actor Creation
+                StateMessageType::CreateState => {
+                    // State Creation
                     let naia_id: u16 = reader.read_u16();
-                    let actor_key = LocalActorKey::from_u16(reader.read_u16());
+                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
-                    let new_actor = manifest.create_actor(naia_id, reader);
-                    if !self.local_actor_store.contains_key(&actor_key) {
-                        self.local_actor_store.insert(actor_key, new_actor);
+                    let new_state = manifest.create_state(naia_id, reader);
+                    if !self.local_state_store.contains_key(&object_key) {
+                        self.local_state_store.insert(object_key, new_state);
 
                         self.queued_incoming_messages
-                            .push_back(ClientActorMessage::CreateActor(actor_key));
+                            .push_back(ClientStateMessage::CreateState(object_key));
                     } else {
                         // may have received a duplicate message
-                        warn!("attempted to insert duplicate local actor key");
+                        warn!("attempted to insert duplicate local state key");
                     }
                 }
-                ActorMessageType::DeleteActor => {
-                    // Actor Deletion
-                    let actor_key = LocalActorKey::from_u16(reader.read_u16());
+                StateMessageType::DeleteState => {
+                    // State Deletion
+                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
-                    if self.component_entity_map.contains_key(&actor_key) {
-                        // Actor is a Component
-                        let entity_key = self.component_entity_map.remove(&actor_key).unwrap();
+                    if self.component_entity_map.contains_key(&object_key) {
+                        // State is a Component
+                        let entity_key = self.component_entity_map.remove(&object_key).unwrap();
                         let component_set = self.local_entity_store.get_mut(&entity_key)
                             .expect("entity not instantiated properly?");
-                        if !component_set.remove(&actor_key) {
+                        if !component_set.remove(&object_key) {
                             panic!("trying to delete non-existent component");
                         }
-                        self.component_delete_cleanup(&entity_key, &actor_key);
+                        self.component_delete_cleanup(&entity_key, &object_key);
                     } else {
-                        // Actor is a Object
-                        self.actor_delete_cleanup(command_receiver, &actor_key);
+                        // State is a State
+                        self.state_delete_cleanup(command_receiver, &object_key);
                     }
                 }
-                ActorMessageType::UpdateActor => {
-                    // Actor Update
-                    let actor_key = LocalActorKey::from_u16(reader.read_u16());
+                StateMessageType::UpdateState => {
+                    // State Update
+                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
-                    if let Some(actor_ref) = self.local_actor_store.get_mut(&actor_key) {
-                        // Actor is not a Pawn
-                        let state_mask: StateMask = StateMask::read(reader);
+                    if let Some(state_ref) = self.local_state_store.get_mut(&object_key) {
+                        // State is not a Pawn
+                        let diff_mask: DiffMask = DiffMask::read(reader);
 
-                        actor_ref.read_partial(&state_mask, reader, packet_index);
+                        state_ref.read_partial(&diff_mask, reader, packet_index);
 
-                        if let Some(entity_key) = self.component_entity_map.get(&actor_key) {
-                            // Actor is a Component
+                        if let Some(entity_key) = self.component_entity_map.get(&object_key) {
+                            // State is a Component
 
                             // if Entity is a Pawn, replay commands
                             if self.pawn_entity_store.contains(entity_key) {
@@ -103,49 +103,49 @@ impl<U: ActorType> ClientActorManager<U> {
                             }
 
                             self.queued_incoming_messages
-                                .push_back(ClientActorMessage::UpdateComponent(*entity_key, actor_key));
+                                .push_back(ClientStateMessage::UpdateComponent(*entity_key, object_key));
                         } else {
-                            // Actor is an Object
+                            // State is an State
                             self.queued_incoming_messages
-                                .push_back(ClientActorMessage::UpdateActor(actor_key));
+                                .push_back(ClientStateMessage::UpdateState(object_key));
                         }
                     }
                 }
-                ActorMessageType::AssignPawn => {
+                StateMessageType::AssignPawn => {
                     // Assign Pawn
-                    let actor_key = LocalActorKey::from_u16(reader.read_u16());
+                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
-                    if let Some(actor_ref) = self.local_actor_store.get_mut(&actor_key) {
+                    if let Some(state_ref) = self.local_state_store.get_mut(&object_key) {
                         self.pawn_store
-                            .insert(actor_key, actor_ref.inner_ref().borrow().get_typed_copy());
+                            .insert(object_key, state_ref.inner_ref().borrow().get_typed_copy());
 
-                        let pawn_key = PawnKey::Actor(actor_key);
+                        let pawn_key = PawnKey::State(object_key);
                         command_receiver.pawn_init(&pawn_key);
 
                         self.queued_incoming_messages
-                            .push_back(ClientActorMessage::AssignPawn(actor_key));
+                            .push_back(ClientStateMessage::AssignPawn(object_key));
                     }
                 }
-                ActorMessageType::UnassignPawn => {
+                StateMessageType::UnassignPawn => {
                     // Unassign Pawn
-                    let actor_key = LocalActorKey::from_u16(reader.read_u16());
-                    if self.pawn_store.contains_key(&actor_key) {
-                        self.pawn_store.remove(&actor_key);
+                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
+                    if self.pawn_store.contains_key(&object_key) {
+                        self.pawn_store.remove(&object_key);
 
-                        let pawn_key = PawnKey::Actor(actor_key);
+                        let pawn_key = PawnKey::State(object_key);
                         command_receiver.pawn_cleanup(&pawn_key);
                     }
                     self.queued_incoming_messages
-                        .push_back(ClientActorMessage::UnassignPawn(actor_key));
+                        .push_back(ClientStateMessage::UnassignPawn(object_key));
                 }
-                ActorMessageType::UpdatePawn => {
+                StateMessageType::UpdatePawn => {
                     // Pawn Update
-                    let actor_key = LocalActorKey::from_u16(reader.read_u16());
+                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
-                    if let Some(actor_ref) = self.local_actor_store.get_mut(&actor_key) {
-                        actor_ref.read_full(reader, packet_index);
+                    if let Some(state_ref) = self.local_state_store.get_mut(&object_key) {
+                        state_ref.read_full(reader, packet_index);
 
-                        let pawn_key = PawnKey::Actor(actor_key);
+                        let pawn_key = PawnKey::State(object_key);
 
                         command_receiver.replay_commands(packet_tick, &pawn_key);
 
@@ -153,10 +153,10 @@ impl<U: ActorType> ClientActorManager<U> {
                         command_receiver.remove_history_until(packet_tick, &pawn_key);
 
                         self.queued_incoming_messages
-                            .push_back(ClientActorMessage::UpdateActor(actor_key));
+                            .push_back(ClientStateMessage::UpdateState(object_key));
                     }
                 }
-                ActorMessageType::CreateEntity => {
+                StateMessageType::CreateEntity => {
                     // Entity Creation
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     let components_num = reader.read_u8();
@@ -167,7 +167,7 @@ impl<U: ActorType> ClientActorManager<U> {
                         for _ in 0..components_num {
                             let naia_id: u16 = reader.read_u16();
                             let _component_key = reader.read_u16();
-                            manifest.create_actor(naia_id, reader);
+                            manifest.create_state(naia_id, reader);
                         }
                     } else {
                         let mut component_list: Vec<LocalComponentKey> = Vec::new();
@@ -178,11 +178,11 @@ impl<U: ActorType> ClientActorManager<U> {
                             let naia_id: u16 = reader.read_u16();
                             let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                            let new_actor = manifest.create_actor(naia_id, reader);
-                            if self.local_actor_store.contains_key(&component_key) {
+                            let new_state = manifest.create_state(naia_id, reader);
+                            if self.local_state_store.contains_key(&component_key) {
                                 panic!("attempted to insert duplicate component");
                             } else {
-                                self.local_actor_store.insert(component_key, new_actor);
+                                self.local_state_store.insert(component_key, new_state);
                                 self.component_entity_map.insert(component_key, entity_key);
                                 component_list.push(component_key);
                                 component_set.insert(component_key);
@@ -192,10 +192,10 @@ impl<U: ActorType> ClientActorManager<U> {
                         self.local_entity_store.insert(entity_key, component_set);
 
                         self.queued_incoming_messages
-                            .push_back(ClientActorMessage::CreateEntity(entity_key, component_list));
+                            .push_back(ClientStateMessage::CreateEntity(entity_key, component_list));
                     }
                 }
-                ActorMessageType::DeleteEntity => {
+                StateMessageType::DeleteEntity => {
                     // Entity Deletion
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
 
@@ -214,13 +214,13 @@ impl<U: ActorType> ClientActorManager<U> {
                         }
 
                         self.queued_incoming_messages
-                            .push_back(ClientActorMessage::DeleteEntity(entity_key));
+                            .push_back(ClientStateMessage::DeleteEntity(entity_key));
                     } else {
                         // its possible we received a very late duplicate message
                         warn!("received message attempting to delete nonexistent entity: {}", entity_key.to_u16());
                     }
                 }
-                ActorMessageType::AssignPawnEntity => {
+                StateMessageType::AssignPawnEntity => {
                     // Assign Pawn Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if self.local_entity_store.contains_key(&entity_key) {
@@ -231,10 +231,10 @@ impl<U: ActorType> ClientActorManager<U> {
                         command_receiver.pawn_init(&pawn_key);
 
                         self.queued_incoming_messages
-                            .push_back(ClientActorMessage::AssignPawnEntity(entity_key));
+                            .push_back(ClientStateMessage::AssignPawnEntity(entity_key));
                     }
                 }
-                ActorMessageType::UnassignPawnEntity => {
+                StateMessageType::UnassignPawnEntity => {
                     // Unassign Pawn Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if self.pawn_entity_store.contains(&entity_key) {
@@ -243,16 +243,16 @@ impl<U: ActorType> ClientActorManager<U> {
                         command_receiver.pawn_cleanup(&pawn_key);
                     }
                     self.queued_incoming_messages
-                        .push_back(ClientActorMessage::UnassignPawnEntity(entity_key));
+                        .push_back(ClientStateMessage::UnassignPawnEntity(entity_key));
                 }
-                ActorMessageType::AddComponent => {
+                StateMessageType::AddComponent => {
                     // Add Component to Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     let naia_id: u16 = reader.read_u16();
-                    let component_key = LocalActorKey::from_u16(reader.read_u16());
+                    let component_key = LocalObjectKey::from_u16(reader.read_u16());
 
-                    let new_component = manifest.create_actor(naia_id, reader);
-                    if self.local_actor_store.contains_key(&component_key) {
+                    let new_component = manifest.create_state(naia_id, reader);
+                    if self.local_state_store.contains_key(&component_key) {
                         // its possible we received a very late duplicate message
                         warn!("attempting to add duplicate local component key: {}, into entity: {}",
                                component_key.to_u16(), entity_key.to_u16());
@@ -263,7 +263,7 @@ impl<U: ActorType> ClientActorManager<U> {
                                   component_key.to_u16(),
                                   entity_key.to_u16());
                         } else {
-                            self.local_actor_store.insert(component_key, new_component);
+                            self.local_state_store.insert(component_key, new_component);
 
                             self.component_entity_map.insert(component_key, entity_key);
                             let component_set = self.local_entity_store.get_mut(&entity_key).unwrap();
@@ -271,24 +271,24 @@ impl<U: ActorType> ClientActorManager<U> {
                             component_set.insert(component_key);
 
                             self.queued_incoming_messages
-                                .push_back(ClientActorMessage::AddComponent(entity_key, component_key));
+                                .push_back(ClientStateMessage::AddComponent(entity_key, component_key));
                         }
                     }
                 }
-                ActorMessageType::Unknown => {
-                    panic!("received unknown type of actor message");
+                StateMessageType::Unknown => {
+                    panic!("received unknown type of state message");
                 }
             }
         }
     }
 
-    pub fn pop_incoming_message(&mut self) -> Option<ClientActorMessage<U>> {
+    pub fn pop_incoming_message(&mut self) -> Option<ClientStateMessage<U>> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn actor_keys(&self) -> Vec<LocalActorKey> {
-        let mut output: Vec<LocalActorKey> = Vec::new();
-        for key in self.local_actor_store.keys() {
+    pub fn object_keys(&self) -> Vec<LocalObjectKey> {
+        let mut output: Vec<LocalObjectKey> = Vec::new();
+        for key in self.local_state_store.keys() {
             if !self.component_entity_map.contains_key(key) {
                 output.push(*key);
             }
@@ -304,62 +304,62 @@ impl<U: ActorType> ClientActorManager<U> {
         output
     }
 
-    pub fn get_actor(&self, key: &LocalActorKey) -> Option<&U> {
-        return self.local_actor_store.get(key);
+    pub fn get_state(&self, key: &LocalObjectKey) -> Option<&U> {
+        return self.local_state_store.get(key);
     }
 
-    pub fn has_actor(&self, key: &LocalActorKey) -> bool {
-        return self.local_actor_store.contains_key(key);
+    pub fn has_state(&self, key: &LocalObjectKey) -> bool {
+        return self.local_state_store.contains_key(key);
     }
 
     pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
         return self.local_entity_store.contains_key(key);
     }
 
-    pub fn pawn_keys(&self) -> Keys<LocalActorKey, U> {
+    pub fn pawn_keys(&self) -> Keys<LocalObjectKey, U> {
         return self.pawn_store.keys();
     }
 
-    pub fn get_pawn(&self, key: &LocalActorKey) -> Option<&U> {
+    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&U> {
         return self.pawn_store.get(key);
     }
 
-    pub fn pawn_reset(&mut self, key: &LocalActorKey) {
-        if let Some(actor_ref) = self.local_actor_store.get(key) {
+    pub fn pawn_reset(&mut self, key: &LocalObjectKey) {
+        if let Some(state_ref) = self.local_state_store.get(key) {
             if let Some(pawn_ref) = self.pawn_store.get_mut(key) {
-                pawn_ref.mirror(actor_ref);
+                pawn_ref.mirror(state_ref);
             }
         }
         self.queued_incoming_messages
-            .push_back(ClientActorMessage::ResetPawn(*key));
+            .push_back(ClientStateMessage::ResetPawn(*key));
     }
 
     pub fn pawn_reset_entity(&mut self, key: &LocalEntityKey) {
         self.queued_incoming_messages
-            .push_back(ClientActorMessage::ResetPawnEntity(*key));
+            .push_back(ClientStateMessage::ResetPawnEntity(*key));
     }
 
     // internal
 
-    fn actor_delete_cleanup<T: EventType>(&mut self, command_receiver: &mut DualCommandReceiver<T>,
-                                          actor_key: &LocalActorKey) {
-        if let Some(actor) = self.local_actor_store.remove(&actor_key) {
+    fn state_delete_cleanup<T: EventType>(&mut self, command_receiver: &mut DualCommandReceiver<T>,
+                                          object_key: &LocalObjectKey) {
+        if let Some(state) = self.local_state_store.remove(&object_key) {
 
-            if self.pawn_store.contains_key(&actor_key) {
-                self.pawn_store.remove(&actor_key);
-                let pawn_key = PawnKey::Actor(*actor_key);
+            if self.pawn_store.contains_key(&object_key) {
+                self.pawn_store.remove(&object_key);
+                let pawn_key = PawnKey::State(*object_key);
                 command_receiver.pawn_cleanup(&pawn_key);
             }
 
             self.queued_incoming_messages
-                .push_back(ClientActorMessage::DeleteActor(*actor_key, actor));
+                .push_back(ClientStateMessage::DeleteState(*object_key, state));
         }
     }
 
     fn component_delete_cleanup(&mut self, entity_key: &LocalEntityKey, component_key: &LocalComponentKey) {
-        if let Some(component) = self.local_actor_store.remove(&component_key) {
+        if let Some(component) = self.local_state_store.remove(&component_key) {
             self.queued_incoming_messages
-                .push_back(ClientActorMessage::RemoveComponent(*entity_key, *component_key, component));
+                .push_back(ClientStateMessage::RemoveComponent(*entity_key, *component_key, component));
         }
     }
 }

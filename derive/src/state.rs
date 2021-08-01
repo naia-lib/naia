@@ -6,75 +6,75 @@ use syn::{
 
 use super::utils;
 
-pub fn actor_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    let actor_name = &input.ident;
-    let actor_builder_name = Ident::new(
-        (actor_name.to_string() + "Builder").as_str(),
+    let state_name = &input.ident;
+    let state_builder_name = Ident::new(
+        (state_name.to_string() + "Builder").as_str(),
         Span::call_site(),
     );
-    let type_name = utils::get_type_name(&input, "Actor");
+    let type_name = utils::get_type_name(&input, "State");
 
     let properties = utils::get_properties(&input);
 
-    let enum_name = format_ident!("{}Prop", actor_name);
+    let enum_name = format_ident!("{}Prop", state_name);
     let property_enum = get_property_enum(&enum_name, &properties);
 
-    let new_complete_method = get_new_complete_method(actor_name, &enum_name, &properties);
+    let new_complete_method = get_new_complete_method(state_name, &enum_name, &properties);
     let read_to_type_method =
-        get_read_to_type_method(&type_name, actor_name, &enum_name, &properties);
-    let actor_write_method = utils::get_write_method(&properties);
-    let actor_write_partial_method = get_write_partial_method(&enum_name, &properties);
-    let actor_read_full_method = get_read_full_method(&properties);
-    let actor_read_partial_method = get_read_partial_method(&enum_name, &properties);
+        get_read_to_type_method(&type_name, state_name, &enum_name, &properties);
+    let state_write_method = utils::get_write_method(&properties);
+    let state_write_partial_method = get_write_partial_method(&enum_name, &properties);
+    let state_read_full_method = get_read_full_method(&properties);
+    let state_read_partial_method = get_read_partial_method(&enum_name, &properties);
     let set_mutator_method = get_set_mutator_method(&properties);
-    let get_typed_copy_method = get_get_typed_copy_method(&type_name, actor_name, &properties);
-    let equals_method = get_equals_method(actor_name, &properties);
-    let mirror_method = get_mirror_method(actor_name, &properties);
+    let get_typed_copy_method = get_get_typed_copy_method(&type_name, state_name, &properties);
+    let equals_method = get_equals_method(state_name, &properties);
+    let mirror_method = get_mirror_method(state_name, &properties);
 
-    let state_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
+    let diff_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell};
-        use naia_shared::{StateMask, ActorBuilder, ActorMutator, ActorEq, PacketReader, Ref};
+        use naia_shared::{DiffMask, StateBuilder, StateMutator, StateEq, PacketReader, Ref};
         #property_enum
-        pub struct #actor_builder_name {
+        pub struct #state_builder_name {
             type_id: TypeId,
         }
-        impl ActorBuilder<#type_name> for #actor_builder_name {
+        impl StateBuilder<#type_name> for #state_builder_name {
             fn get_type_id(&self) -> TypeId {
                 return self.type_id;
             }
             fn build(&self, reader: &mut PacketReader) -> #type_name {
-                return #actor_name::read_to_type(reader);
+                return #state_name::read_to_type(reader);
             }
         }
-        impl #actor_name {
-            pub fn get_builder() -> Box<dyn ActorBuilder<#type_name>> {
-                return Box::new(#actor_builder_name {
-                    type_id: TypeId::of::<#actor_name>(),
+        impl #state_name {
+            pub fn get_builder() -> Box<dyn StateBuilder<#type_name>> {
+                return Box::new(#state_builder_name {
+                    type_id: TypeId::of::<#state_name>(),
                 });
             }
-            pub fn wrap(self) -> Ref<#actor_name> {
+            pub fn wrap(self) -> Ref<#state_name> {
                 return Ref::new(self);
             }
             #new_complete_method
             #read_to_type_method
         }
-        impl Actor<#type_name> for #actor_name {
-            fn get_state_mask_size(&self) -> u8 { #state_mask_size }
+        impl State<#type_name> for #state_name {
+            fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
             fn get_type_id(&self) -> TypeId {
-                return TypeId::of::<#actor_name>();
+                return TypeId::of::<#state_name>();
             }
             #set_mutator_method
-            #actor_write_method
-            #actor_write_partial_method
-            #actor_read_full_method
-            #actor_read_partial_method
+            #state_write_method
+            #state_write_partial_method
+            #state_read_full_method
+            #state_read_partial_method
             #get_typed_copy_method
         }
-        impl ActorEq<#type_name> for #actor_name {
+        impl StateEq<#type_name> for #state_name {
             #equals_method
             #mirror_method
         }
@@ -129,14 +129,14 @@ fn get_set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn set_mutator(&mut self, mutator: &Ref<dyn ActorMutator>) {
+        fn set_mutator(&mut self, mutator: &Ref<dyn StateMutator>) {
             #output
         }
     };
 }
 
 fn get_new_complete_method(
-    actor_name: &Ident,
+    state_name: &Ident,
     enum_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
@@ -169,8 +169,8 @@ fn get_new_complete_method(
     }
 
     return quote! {
-        pub fn new_complete(#args) -> #actor_name {
-            #actor_name {
+        pub fn new_complete(#args) -> #state_name {
+            #state_name {
                 #fields
             }
         }
@@ -179,7 +179,7 @@ fn get_new_complete_method(
 
 fn get_read_to_type_method(
     type_name: &Ident,
-    actor_name: &Ident,
+    state_name: &Ident,
     enum_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
@@ -217,7 +217,7 @@ fn get_read_to_type_method(
         fn read_to_type(reader: &mut PacketReader) -> #type_name {
             #prop_reads
 
-            return #type_name::#actor_name(Ref::new(#actor_name {
+            return #type_name::#state_name(Ref::new(#state_name {
                 #prop_names
             }));
         }
@@ -226,7 +226,7 @@ fn get_read_to_type_method(
 
 fn get_get_typed_copy_method(
     type_name: &Ident,
-    actor_name: &Ident,
+    state_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
     let mut args = quote! {};
@@ -242,8 +242,8 @@ fn get_get_typed_copy_method(
 
     return quote! {
         fn get_typed_copy(&self) -> #type_name {
-            let copied_actor = #actor_name::new_complete(#args).wrap();
-            return #type_name::#actor_name(copied_actor);
+            let copied_state = #state_name::new_complete(#args).wrap();
+            return #type_name::#state_name(copied_state);
         }
     };
 }
@@ -258,7 +258,7 @@ fn get_write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) 
         );
 
         let new_output_right = quote! {
-            if let Some(true) = state_mask.get_bit(#enum_name::#uppercase_variant_name as u8) {
+            if let Some(true) = diff_mask.get_bit(#enum_name::#uppercase_variant_name as u8) {
                 Property::write(&self.#field_name, buffer);
             }
         };
@@ -270,7 +270,7 @@ fn get_write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) 
     }
 
     return quote! {
-        fn write_partial(&self, state_mask: &StateMask, buffer: &mut Vec<u8>) {
+        fn write_partial(&self, diff_mask: &DiffMask, buffer: &mut Vec<u8>) {
 
             #output
         }
@@ -308,7 +308,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
         );
 
         let new_output_right = quote! {
-            if let Some(true) = state_mask.get_bit(#enum_name::#uppercase_variant_name as u8) {
+            if let Some(true) = diff_mask.get_bit(#enum_name::#uppercase_variant_name as u8) {
                 Property::read(&mut self.#field_name, reader, packet_index);
             }
         };
@@ -320,13 +320,13 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
     }
 
     return quote! {
-        fn read_partial(&mut self, state_mask: &StateMask, reader: &mut PacketReader, packet_index: u16) {
+        fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16) {
             #output
         }
     };
 }
 
-fn get_equals_method(actor_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn get_equals_method(state_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
@@ -341,14 +341,14 @@ fn get_equals_method(actor_name: &Ident, properties: &Vec<(Ident, Type)>) -> Tok
     }
 
     return quote! {
-        fn equals(&self, other: &#actor_name) -> bool {
+        fn equals(&self, other: &#state_name) -> bool {
             #output
             return true;
         }
     };
 }
 
-fn get_mirror_method(actor_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn get_mirror_method(state_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
@@ -363,7 +363,7 @@ fn get_mirror_method(actor_name: &Ident, properties: &Vec<(Ident, Type)>) -> Tok
     }
 
     return quote! {
-        fn mirror(&mut self, other: &#actor_name) {
+        fn mirror(&mut self, other: &#state_name) {
             #output
         }
     };

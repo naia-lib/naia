@@ -1,7 +1,7 @@
-/// The key that represents an Actor in the Client's scope, that is being
+/// The key that represents an State in the Client's scope, that is being
 /// synced to the Client
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct LocalActorKey(u16);
+pub struct LocalObjectKey(u16);
 
 /// The key that authoritatively represents an Entity in the Server
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -14,7 +14,7 @@ pub struct LocalEntityKey(u16);
 
 /// The key that represents an Component in the Client's scope, that is being
 /// synced to the Client
-pub type LocalComponentKey = LocalActorKey;
+pub type LocalComponentKey = LocalObjectKey;
 
 // FromU16
 
@@ -26,9 +26,9 @@ pub trait NaiaKey<Impl = Self>: Eq + PartialEq + Clone + Copy {
     fn to_u16(&self) -> u16;
 }
 
-impl NaiaKey for LocalActorKey {
+impl NaiaKey for LocalObjectKey {
     fn from_u16(k: u16) -> Self {
-        LocalActorKey(k)
+        LocalObjectKey(k)
     }
     fn to_u16(&self) -> u16 {
         self.0
@@ -58,8 +58,8 @@ impl NaiaKey for LocalEntityKey {
 /// Pawn Key
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum PawnKey {
-    /// Actor
-    Actor(LocalActorKey),
+    /// State
+    State(LocalObjectKey),
     /// Entity
     Entity(LocalEntityKey),
 }
@@ -68,7 +68,7 @@ impl PawnKey {
     /// Convert to u16
     pub fn to_u16(&self) -> u16 {
         match self {
-            PawnKey::Actor(key) => key.to_u16(),
+            PawnKey::State(key) => key.to_u16(),
             PawnKey::Entity(key) => key.to_u16(),
         }
     }

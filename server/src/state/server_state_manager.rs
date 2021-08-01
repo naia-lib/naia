@@ -7,15 +7,15 @@ use std::{
 
 use slotmap::SparseSecondaryMap;
 
-use naia_shared::{Actor, ActorNotifiable, ActorType, KeyGenerator, LocalActorKey, Ref, StateMask, EntityKey, LocalEntityKey};
+use naia_shared::{State, StateNotifiable, StateType, KeyGenerator, LocalObjectKey, Ref, DiffMask, EntityKey, LocalEntityKey};
 
 use super::{
-    actor_key::{actor_key::ActorKey, ComponentKey},
-    actor_record::ActorRecord,
+    object_key::{object_key::ObjectKey, ComponentKey},
+    object_record::ObjectRecord,
     locality_status::LocalityStatus,
     entity_record::EntityRecord,
     mut_handler::MutHandler,
-    server_actor_message::ServerActorMessage,
+    server_state_message::ServerStateMessage,
 };
 
 use byteorder::{BigEndian, WriteBytesExt};
@@ -24,18 +24,18 @@ use naia_shared::{EventType, Manifest, MTU_SIZE, NaiaKey};
 
 use crate::server_packet_writer::ServerPacketWriter;
 
-/// Manages Actors/Entities for a given Client connection and keeps them in sync on the
+/// Manages States/Entities for a given Client connection and keeps them in sync on the
 /// Client
 #[derive(Debug)]
-pub struct ServerActorManager<T: ActorType> {
+pub struct ServerStateManager<T: StateType> {
     address: SocketAddr,
-    // actors
-    actor_key_generator: KeyGenerator<LocalActorKey>,
-    local_actor_store: SparseSecondaryMap<ActorKey, Ref<dyn Actor<T>>>,
-    local_to_global_key_map: HashMap<LocalActorKey, ActorKey>,
-    actor_records: SparseSecondaryMap<ActorKey, ActorRecord>,
-    pawn_store: HashSet<ActorKey>,
-    delayed_actor_deletions: HashSet<ActorKey>,
+    // objects
+    object_key_generator: KeyGenerator<LocalObjectKey>,
+    local_object_store: SparseSecondaryMap<ObjectKey, Ref<dyn State<T>>>,
+    local_to_global_object_key_map: HashMap<LocalObjectKey, ObjectKey>,
+    object_records: SparseSecondaryMap<ObjectKey, ObjectRecord>,
+    pawn_object_store: HashSet<ObjectKey>,
+    delayed_object_deletions: HashSet<ObjectKey>,
     // entities
     entity_key_generator: KeyGenerator<LocalEntityKey>,
     local_entity_store: HashMap<EntityKey, EntityRecord>,
@@ -43,29 +43,29 @@ pub struct ServerActorManager<T: ActorType> {
     pawn_entity_store: HashSet<EntityKey>,
     delayed_entity_deletions: HashSet<EntityKey>,
     // messages / updates / ect
-    queued_messages: VecDeque<ServerActorMessage<T>>,
-    sent_messages: HashMap<u16, Vec<ServerActorMessage<T>>>,
-    sent_updates: HashMap<u16, HashMap<ActorKey, Ref<StateMask>>>,
+    queued_messages: VecDeque<ServerStateMessage<T>>,
+    sent_messages: HashMap<u16, Vec<ServerStateMessage<T>>>,
+    sent_updates: HashMap<u16, HashMap<ObjectKey, Ref<DiffMask>>>,
     last_update_packet_index: u16,
     last_last_update_packet_index: u16,
     mut_handler: Ref<MutHandler>,
-    last_popped_state_mask: Option<StateMask>,
-    last_popped_state_mask_list: Option<Vec<(ActorKey, StateMask)>>,
+    last_popped_diff_mask: Option<DiffMask>,
+    last_popped_diff_mask_list: Option<Vec<(ObjectKey, DiffMask)>>,
 }
 
-impl<T: ActorType> ServerActorManager<T> {
-    /// Create a new ServerActorManager, given the client's address and a
+impl<T: StateType> ServerStateManager<T> {
+    /// Create a new ServerStateManager, given the client's address and a
     /// reference to a MutHandler associated with the Client
     pub fn new(address: SocketAddr, mut_handler: &Ref<MutHandler>) -> Self {
-        ServerActorManager {
+        ServerStateManager {
             address,
-            // actors
-            actor_key_generator: KeyGenerator::new(),
-            local_actor_store: SparseSecondaryMap::new(),
-            local_to_global_key_map: HashMap::new(),
-            actor_records: SparseSecondaryMap::new(),
-            pawn_store: HashSet::new(),
-            delayed_actor_deletions: HashSet::new(),
+            // states
+            object_key_generator: KeyGenerator::new(),
+            local_object_store: SparseSecondaryMap::new(),
+            local_to_global_object_key_map: HashMap::new(),
+            object_records: SparseSecondaryMap::new(),
+            pawn_object_store: HashSet::new(),
+            delayed_object_deletions: HashSet::new(),
             // entities
             entity_key_generator: KeyGenerator::new(),
             local_to_global_entity_key_map: HashMap::new(),
@@ -75,12 +75,12 @@ impl<T: ActorType> ServerActorManager<T> {
             // messages / updates / ect
             queued_messages: VecDeque::new(),
             sent_messages: HashMap::new(),
-            sent_updates: HashMap::<u16, HashMap<ActorKey, Ref<StateMask>>>::new(),
+            sent_updates: HashMap::<u16, HashMap<ObjectKey, Ref<DiffMask>>>::new(),
             last_update_packet_index: 0,
             last_last_update_packet_index: 0,
             mut_handler: mut_handler.clone(),
-            last_popped_state_mask: None,
-            last_popped_state_mask_list: None,
+            last_popped_diff_mask: None,
+            last_popped_diff_mask_list: None,
         }
     }
 
@@ -88,31 +88,31 @@ impl<T: ActorType> ServerActorManager<T> {
         return self.queued_messages.len() != 0;
     }
 
-    pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<ServerActorMessage<T>> {
+    pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<ServerStateMessage<T>> {
         let queued_message_opt = self.queued_messages.pop_front();
         if queued_message_opt.is_none() {
             return None;
         }
         let mut message = queued_message_opt.unwrap();
 
-        let replacement_message: Option<ServerActorMessage<T>> = {
+        let replacement_message: Option<ServerStateMessage<T>> = {
             match &message {
-                ServerActorMessage::CreateEntity(global_entity_key, local_entity_key, _) => {
+                ServerStateMessage::CreateEntity(global_entity_key, local_entity_key, _) => {
                     let mut component_list = Vec::new();
 
                     let entity_record = self.local_entity_store.get(global_entity_key)
-                        .expect("trying to pop an actor message for an entity which has not been initialized correctly");
+                        .expect("trying to pop an state message for an entity which has not been initialized correctly");
 
                     let components: &HashSet<ComponentKey> = &entity_record.components_ref.borrow();
                     for global_component_key in components {
-                        let component_ref = self.local_actor_store.get(*global_component_key)
+                        let component_ref = self.local_object_store.get(*global_component_key)
                             .expect("trying to initiate a component which has not been initialized correctly");
-                        let component_record = self.actor_records.get(*global_component_key)
+                        let component_record = self.object_records.get(*global_component_key)
                             .expect("trying to initiate a component which has not been initialized correctly");
                         component_list.push((*global_component_key, component_record.local_key, component_ref.clone()));
                     }
 
-                    Some(ServerActorMessage::CreateEntity(*global_entity_key, *local_entity_key, Some(component_list)))
+                    Some(ServerStateMessage::CreateEntity(*global_entity_key, *local_entity_key, Some(component_list)))
                 }
                 _ => None
             }
@@ -130,33 +130,33 @@ impl<T: ActorType> ServerActorManager<T> {
             sent_messages_list.push(message.clone());
         }
 
-        //clear state mask of actor if need be
+        //clear state mask of state if need be
         match &message {
-            ServerActorMessage::CreateActor(global_key, _, _) => {
-                self.pop_create_actor_state_mask(global_key);
+            ServerStateMessage::CreateState(global_key, _, _) => {
+                self.pop_create_state_diff_mask(global_key);
             }
-            ServerActorMessage::AddComponent(_, global_key, _, _) => {
-                self.pop_create_actor_state_mask(global_key);
+            ServerStateMessage::AddComponent(_, global_key, _, _) => {
+                self.pop_create_state_diff_mask(global_key);
             }
-            ServerActorMessage::CreateEntity(_, _, components_list_opt) => {
+            ServerStateMessage::CreateEntity(_, _, components_list_opt) => {
                 if let Some(components_list) = components_list_opt {
-                    let mut state_mask_list: Vec<(ComponentKey, StateMask)> = Vec::new();
+                    let mut diff_mask_list: Vec<(ComponentKey, DiffMask)> = Vec::new();
                     for (global_component_key, _, _) in components_list {
-                        if let Some(record) = self.actor_records.get(*global_component_key) {
-                            state_mask_list.push((*global_component_key, record.get_state_mask().borrow().clone()));
+                        if let Some(record) = self.object_records.get(*global_component_key) {
+                            diff_mask_list.push((*global_component_key, record.get_diff_mask().borrow().clone()));
                         }
                         self.mut_handler
                             .borrow_mut()
                             .clear_state(&self.address, global_component_key);
                     }
-                    self.last_popped_state_mask_list = Some(state_mask_list);
+                    self.last_popped_diff_mask_list = Some(diff_mask_list);
                 }
             }
-            ServerActorMessage::UpdateActor(global_key, local_key, state_mask, actor) => {
-                return Some(self.pop_update_actor_state_mask(false, packet_index, global_key, local_key, state_mask, actor));
+            ServerStateMessage::UpdateState(global_key, local_key, diff_mask, state) => {
+                return Some(self.pop_update_state_diff_mask(false, packet_index, global_key, local_key, diff_mask, state));
             }
-            ServerActorMessage::UpdatePawn(global_key, local_key, state_mask, actor) => {
-                return Some(self.pop_update_actor_state_mask(true, packet_index, global_key, local_key, state_mask, actor));
+            ServerStateMessage::UpdatePawn(global_key, local_key, diff_mask, state) => {
+                return Some(self.pop_update_state_diff_mask(true, packet_index, global_key, local_key, diff_mask, state));
             }
             _ => {}
         }
@@ -164,7 +164,7 @@ impl<T: ActorType> ServerActorManager<T> {
         return Some(message);
     }
 
-    pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: &ServerActorMessage<T>) {
+    pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: &ServerStateMessage<T>) {
         info!("unpopping");
         if let Some(sent_messages_list) = self.sent_messages.get_mut(&packet_index) {
             sent_messages_list.pop();
@@ -174,30 +174,30 @@ impl<T: ActorType> ServerActorManager<T> {
         }
 
         match &message {
-            ServerActorMessage::CreateActor(global_key, _, _) => {
-                self.unpop_create_actor_state_mask(global_key);
+            ServerStateMessage::CreateState(global_key, _, _) => {
+                self.unpop_create_state_diff_mask(global_key);
             }
-            ServerActorMessage::AddComponent(_, global_key, _, _) => {
-                self.unpop_create_actor_state_mask(global_key);
+            ServerStateMessage::AddComponent(_, global_key, _, _) => {
+                self.unpop_create_state_diff_mask(global_key);
             }
-            ServerActorMessage::CreateEntity(_, _, _) => {
-                if let Some(last_popped_state_mask_list) = &self.last_popped_state_mask_list {
-                    for (global_component_key, last_popped_state_mask) in last_popped_state_mask_list {
+            ServerStateMessage::CreateEntity(_, _, _) => {
+                if let Some(last_popped_diff_mask_list) = &self.last_popped_diff_mask_list {
+                    for (global_component_key, last_popped_diff_mask) in last_popped_diff_mask_list {
                         self.mut_handler.borrow_mut().set_state(
                             &self.address,
                             global_component_key,
-                            &last_popped_state_mask,
+                            &last_popped_diff_mask,
                         );
                     }
                 }
             }
-            ServerActorMessage::UpdateActor(global_key, local_key, _, actor) => {
-                let cloned_message = self.unpop_update_actor_state_mask(false, packet_index, global_key, local_key, actor);
+            ServerStateMessage::UpdateState(global_key, local_key, _, state) => {
+                let cloned_message = self.unpop_update_state_diff_mask(false, packet_index, global_key, local_key, state);
                 self.queued_messages.push_front(cloned_message);
                 return;
             }
-            ServerActorMessage::UpdatePawn(global_key, local_key, _, actor) => {
-                let cloned_message = self.unpop_update_actor_state_mask(true, packet_index, global_key, local_key, actor);
+            ServerStateMessage::UpdatePawn(global_key, local_key, _, state) => {
+                let cloned_message = self.unpop_update_state_diff_mask(true, packet_index, global_key, local_key, state);
                 self.queued_messages.push_front(cloned_message);
                 return;
             }
@@ -207,91 +207,91 @@ impl<T: ActorType> ServerActorManager<T> {
         self.queued_messages.push_front(message.clone());
     }
 
-    // Actors
+    // States
 
-    pub fn add_actor(&mut self, key: &ActorKey, actor: &Ref<dyn Actor<T>>) {
-        let local_key = self.actor_init(key, actor, LocalityStatus::Creating);
+    pub fn add_state(&mut self, key: &ObjectKey, state: &Ref<dyn State<T>>) {
+        let local_key = self.state_init(key, state, LocalityStatus::Creating);
 
         self.queued_messages
-            .push_back(ServerActorMessage::CreateActor(
+            .push_back(ServerStateMessage::CreateState(
                 *key,
                 local_key,
-                actor.clone(),
+                state.clone(),
             ));
     }
 
-    pub fn remove_actor(&mut self, key: &ActorKey) {
+    pub fn remove_state(&mut self, key: &ObjectKey) {
 
         if self.has_pawn(key) {
             self.remove_pawn(key);
         }
 
-        if let Some(actor_record) = self.actor_records.get_mut(*key) {
-            match actor_record.status {
+        if let Some(object_record) = self.object_records.get_mut(*key) {
+            match object_record.status {
                 LocalityStatus::Creating => {
                     // queue deletion message to be sent after creation
-                    self.delayed_actor_deletions.insert(*key);
+                    self.delayed_object_deletions.insert(*key);
                 }
                 LocalityStatus::Created => {
                     // send deletion message
-                    actor_delete(&mut self.queued_messages, actor_record, key);
+                    state_delete(&mut self.queued_messages, object_record, key);
                 }
                 LocalityStatus::Deleting => {
                     // deletion in progress, do nothing
                 }
             }
         } else {
-            panic!("attempting to remove an actor from a connection within which it does not exist");
+            panic!("attempting to remove an state from a connection within which it does not exist");
         }
     }
 
-    pub fn has_actor(&self, key: &ActorKey) -> bool {
-        return self.local_actor_store.contains_key(*key);
+    pub fn has_state(&self, key: &ObjectKey) -> bool {
+        return self.local_object_store.contains_key(*key);
     }
 
     // Pawns
 
-    pub fn add_pawn(&mut self, key: &ActorKey) {
-        if self.local_actor_store.contains_key(*key) {
-            if !self.pawn_store.contains(key) {
-                self.pawn_store.insert(*key);
-                if let Some(actor_record) = self.actor_records.get_mut(*key) {
+    pub fn add_pawn(&mut self, key: &ObjectKey) {
+        if self.local_object_store.contains_key(*key) {
+            if !self.pawn_object_store.contains(key) {
+                self.pawn_object_store.insert(*key);
+                if let Some(object_record) = self.object_records.get_mut(*key) {
                     self.queued_messages
-                        .push_back(ServerActorMessage::AssignPawn(*key, actor_record.local_key));
+                        .push_back(ServerStateMessage::AssignPawn(*key, object_record.local_key));
                 }
             }
         } else {
-            panic!("user connection does not have local actor to make into a pawn!");
+            panic!("user connection does not have local state to make into a pawn!");
         }
     }
 
-    pub fn remove_pawn(&mut self, key: &ActorKey) {
-        if self.pawn_store.remove(key) {
-            if let Some(actor_record) = self.actor_records.get_mut(*key) {
+    pub fn remove_pawn(&mut self, key: &ObjectKey) {
+        if self.pawn_object_store.remove(key) {
+            if let Some(object_record) = self.object_records.get_mut(*key) {
                 self.queued_messages
-                    .push_back(ServerActorMessage::UnassignPawn(
+                    .push_back(ServerStateMessage::UnassignPawn(
                         *key,
-                        actor_record.local_key,
+                        object_record.local_key,
                     ));
             }
         } else {
-            panic!("attempt to unassign a pawn actor from a connection to which it is not assigned as a pawn in the first place")
+            panic!("attempt to unassign a pawn state from a connection to which it is not assigned as a pawn in the first place")
         }
     }
 
-    pub fn has_pawn(&self, key: &ActorKey) -> bool {
-        return self.pawn_store.contains(key);
+    pub fn has_pawn(&self, key: &ObjectKey) -> bool {
+        return self.pawn_object_store.contains(key);
     }
 
     // Entities
 
     pub fn add_entity(&mut self, global_key: &EntityKey,
                       components_ref: &Ref<HashSet<ComponentKey>>,
-                      component_list: &Vec<(ComponentKey, Ref<dyn Actor<T>>)>) {
+                      component_list: &Vec<(ComponentKey, Ref<dyn State<T>>)>) {
         if !self.local_entity_store.contains_key(global_key) {
             // first, add components
             for (component_key, component_ref) in component_list {
-                self.actor_init(component_key, component_ref, LocalityStatus::Creating);
+                self.state_init(component_key, component_ref, LocalityStatus::Creating);
             }
 
             // then, add entity
@@ -300,7 +300,7 @@ impl<T: ActorType> ServerActorManager<T> {
             let entity_record = EntityRecord::new(local_key, components_ref);
             self.local_entity_store.insert(*global_key, entity_record);
             self.queued_messages
-                .push_back(ServerActorMessage::CreateEntity(
+                .push_back(ServerStateMessage::CreateEntity(
                     *global_key,
                     local_key,
                     None,
@@ -326,13 +326,13 @@ impl<T: ActorType> ServerActorManager<T> {
                     // send deletion message
                     entity_delete(&mut self.queued_messages, entity_record, key);
 
-                    // Entity deletion IS Component deletion, so update those actor records accordingly
+                    // Entity deletion IS Component deletion, so update those state records accordingly
                     let component_set: &HashSet<ComponentKey> = &entity_record.components_ref.borrow();
                     for component_key in component_set {
-                        self.pawn_store.remove(component_key);
+                        self.pawn_object_store.remove(component_key);
 
-                        if let Some(actor_record) = self.actor_records.get_mut(*component_key) {
-                            actor_record.status = LocalityStatus::Deleting;
+                        if let Some(object_record) = self.object_records.get_mut(*component_key) {
+                            object_record.status = LocalityStatus::Deleting;
                         }
                     }
                 }
@@ -357,7 +357,7 @@ impl<T: ActorType> ServerActorManager<T> {
                     .unwrap()
                     .local_key;
                 self.queued_messages
-                    .push_back(ServerActorMessage::AssignPawnEntity(*key, local_key));
+                    .push_back(ServerStateMessage::AssignPawnEntity(*key, local_key));
             } else {
                 warn!("attempting to assign a pawn entity twice");
             }
@@ -374,7 +374,7 @@ impl<T: ActorType> ServerActorManager<T> {
                 .local_key;
 
             self.queued_messages
-                .push_back(ServerActorMessage::UnassignPawnEntity(
+                .push_back(ServerStateMessage::UnassignPawnEntity(
                     *key,
                     local_key,
                 ));
@@ -390,12 +390,12 @@ impl<T: ActorType> ServerActorManager<T> {
     // Components
 
     // called when the entity already exists in this connection
-    pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Actor<T>>) {
+    pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn State<T>>) {
         if !self.local_entity_store.contains_key(entity_key) {
             panic!("attempting to add component to entity that does not yet exist for this connection");
         }
 
-        let local_component_key = self.actor_init(component_key, component_ref, LocalityStatus::Creating);
+        let local_component_key = self.state_init(component_key, component_ref, LocalityStatus::Creating);
 
         let entity_record = self.local_entity_store.get(entity_key).unwrap();
 
@@ -406,7 +406,7 @@ impl<T: ActorType> ServerActorManager<T> {
             LocalityStatus::Created => {
                 // send add component message
                 self.queued_messages
-                    .push_back(ServerActorMessage::AddComponent(
+                    .push_back(ServerStateMessage::AddComponent(
                         entity_record.local_key,
                         *component_key,
                         local_component_key,
@@ -421,37 +421,37 @@ impl<T: ActorType> ServerActorManager<T> {
 
     // Ect..
 
-    pub fn get_global_key_from_local(&self, local_key: LocalActorKey) -> Option<&ActorKey> {
-        return self.local_to_global_key_map.get(&local_key);
+    pub fn get_global_key_from_local(&self, local_key: LocalObjectKey) -> Option<&ObjectKey> {
+        return self.local_to_global_object_key_map.get(&local_key);
     }
 
     pub fn get_global_entity_key_from_local(&self, local_key: LocalEntityKey) -> Option<&EntityKey> {
         return self.local_to_global_entity_key_map.get(&local_key);
     }
 
-    pub fn collect_actor_updates(&mut self) {
-        for (key, record) in self.actor_records.iter() {
+    pub fn collect_state_updates(&mut self) {
+        for (key, record) in self.object_records.iter() {
             if record.status == LocalityStatus::Created
-                && !record.get_state_mask().borrow().is_clear()
+                && !record.get_diff_mask().borrow().is_clear()
             {
-                if let Some(actor_ref) = self.local_actor_store.get(key) {
-                    if self.pawn_store.contains(&key) {
+                if let Some(state_ref) = self.local_object_store.get(key) {
+                    if self.pawn_object_store.contains(&key) {
                         // handle as a pawn
                         self.queued_messages
-                            .push_back(ServerActorMessage::UpdatePawn(
+                            .push_back(ServerStateMessage::UpdatePawn(
                                 key,
                                 record.local_key,
-                                record.get_state_mask().clone(),
-                                actor_ref.clone(),
+                                record.get_diff_mask().clone(),
+                                state_ref.clone(),
                             ));
                     } else {
-                        // handle as an actor
+                        // handle as an state
                         self.queued_messages
-                            .push_back(ServerActorMessage::UpdateActor(
+                            .push_back(ServerStateMessage::UpdateState(
                                 key,
                                 record.local_key,
-                                record.get_state_mask().clone(),
-                                actor_ref.clone(),
+                                record.get_diff_mask().clone(),
+                                state_ref.clone(),
                             ));
                     }
                 }
@@ -459,76 +459,76 @@ impl<T: ActorType> ServerActorManager<T> {
         }
     }
 
-    pub fn write_actor_message<U: EventType>(
+    pub fn write_state_message<U: EventType>(
         &self,
         packet_writer: &mut ServerPacketWriter,
         manifest: &Manifest<U, T>,
-        message: &ServerActorMessage<T>,
+        message: &ServerStateMessage<T>,
     ) -> bool {
-        let mut actor_total_bytes = Vec::<u8>::new();
+        let mut state_total_bytes = Vec::<u8>::new();
 
-        //Write actor message type
-        actor_total_bytes
+        //Write state message type
+        state_total_bytes
                     .write_u8(message.as_type().to_u8())
-                    .unwrap(); // write actor message type
+                    .unwrap(); // write state message type
 
         match message {
-            ServerActorMessage::CreateActor(_, local_key, actor) => {
-                //write actor payload
-                let mut actor_payload_bytes = Vec::<u8>::new();
-                actor.borrow().write(&mut actor_payload_bytes);
+            ServerStateMessage::CreateState(_, local_key, state) => {
+                //write state payload
+                let mut state_payload_bytes = Vec::<u8>::new();
+                state.borrow().write(&mut state_payload_bytes);
 
-                //Write actor "header"
-                let type_id = actor.borrow().get_type_id();
-                let naia_id = manifest.get_actor_naia_id(&type_id); // get naia id
-                actor_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                actor_total_bytes
+                //Write state "header"
+                let type_id = state.borrow().get_type_id();
+                let naia_id = manifest.get_state_naia_id(&type_id); // get naia id
+                state_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
+                state_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
-                actor_total_bytes.append(&mut actor_payload_bytes); // write payload
+                state_total_bytes.append(&mut state_payload_bytes); // write payload
             }
-            ServerActorMessage::DeleteActor(_, local_key) => {
-                actor_total_bytes
+            ServerStateMessage::DeleteState(_, local_key) => {
+                state_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            ServerActorMessage::UpdateActor(_, local_key, state_mask, actor) => {
-                //write actor payload
-                let mut actor_payload_bytes = Vec::<u8>::new();
-                actor
+            ServerStateMessage::UpdateState(_, local_key, diff_mask, state) => {
+                //write state payload
+                let mut state_payload_bytes = Vec::<u8>::new();
+                state
                     .borrow()
-                    .write_partial(&state_mask.borrow(), &mut actor_payload_bytes);
+                    .write_partial(&diff_mask.borrow(), &mut state_payload_bytes);
 
-                //Write actor "header"
-                actor_total_bytes
+                //Write state "header"
+                state_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
-                state_mask.borrow_mut().write(&mut actor_total_bytes); // write state mask
-                actor_total_bytes.append(&mut actor_payload_bytes); // write payload
+                diff_mask.borrow_mut().write(&mut state_total_bytes); // write state mask
+                state_total_bytes.append(&mut state_payload_bytes); // write payload
             }
-            ServerActorMessage::AssignPawn(_, local_key) => {
-                actor_total_bytes
-                    .write_u16::<BigEndian>(local_key.to_u16())
-                    .unwrap(); //write local key
-            }
-            ServerActorMessage::UnassignPawn(_, local_key) => {
-                actor_total_bytes
+            ServerStateMessage::AssignPawn(_, local_key) => {
+                state_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            ServerActorMessage::UpdatePawn(_, local_key, _, actor) => {
-                //write actor payload
-                let mut actor_payload_bytes = Vec::<u8>::new();
-                actor.borrow().write(&mut actor_payload_bytes);
+            ServerStateMessage::UnassignPawn(_, local_key) => {
+                state_total_bytes
+                    .write_u16::<BigEndian>(local_key.to_u16())
+                    .unwrap(); //write local key
+            }
+            ServerStateMessage::UpdatePawn(_, local_key, _, state) => {
+                //write state payload
+                let mut state_payload_bytes = Vec::<u8>::new();
+                state.borrow().write(&mut state_payload_bytes);
 
-                //Write actor "header"
-                actor_total_bytes
+                //Write state "header"
+                state_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
-                actor_total_bytes.append(&mut actor_payload_bytes); // write payload
+                state_total_bytes.append(&mut state_payload_bytes); // write payload
             }
-            ServerActorMessage::CreateEntity(_, local_entity_key, component_list_opt) => {
-                actor_total_bytes
+            ServerStateMessage::CreateEntity(_, local_entity_key, component_list_opt) => {
+                state_total_bytes
                     .write_u16::<BigEndian>(local_entity_key.to_u16())
                     .unwrap(); //write local entity key
 
@@ -539,7 +539,7 @@ impl<T: ActorType> ServerActorManager<T> {
                     if components_num > 255 {
                         panic!("no entity should have so many components... fix this");
                     }
-                    actor_total_bytes
+                    state_total_bytes
                         .write_u8(components_num as u8)
                         .unwrap(); //write number of components
 
@@ -550,66 +550,66 @@ impl<T: ActorType> ServerActorManager<T> {
 
                         //Write component "header"
                         let type_id = component_ref.borrow().get_type_id();
-                        let naia_id = manifest.get_actor_naia_id(&type_id); // get naia id
-                        actor_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                        actor_total_bytes
+                        let naia_id = manifest.get_state_naia_id(&type_id); // get naia id
+                        state_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
+                        state_total_bytes
                             .write_u16::<BigEndian>(local_component_key.to_u16())
                             .unwrap(); //write local key
-                        actor_total_bytes.append(&mut component_payload_bytes); // write payload
+                        state_total_bytes.append(&mut component_payload_bytes); // write payload
                     }
                 } else {
-                    actor_total_bytes
+                    state_total_bytes
                         .write_u8(0)
                         .unwrap();
                 }
             }
-            ServerActorMessage::DeleteEntity(_, local_key) => {
-                actor_total_bytes
+            ServerStateMessage::DeleteEntity(_, local_key) => {
+                state_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            ServerActorMessage::AssignPawnEntity(_, local_key) => {
-                actor_total_bytes
+            ServerStateMessage::AssignPawnEntity(_, local_key) => {
+                state_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            ServerActorMessage::UnassignPawnEntity(_, local_key) => {
-                actor_total_bytes
+            ServerStateMessage::UnassignPawnEntity(_, local_key) => {
+                state_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            ServerActorMessage::AddComponent(local_entity_key, _, local_component_key, component) => {
+            ServerStateMessage::AddComponent(local_entity_key, _, local_component_key, component) => {
                 //write component payload
                 let mut component_payload_bytes = Vec::<u8>::new();
                 component.borrow().write(&mut component_payload_bytes);
 
                 //Write component "header"
-                actor_total_bytes
+                state_total_bytes
                     .write_u16::<BigEndian>(local_entity_key.to_u16())
                     .unwrap(); //write local entity key
                 let type_id = component.borrow().get_type_id();
-                let naia_id = manifest.get_actor_naia_id(&type_id); // get naia id
-                actor_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                actor_total_bytes
+                let naia_id = manifest.get_state_naia_id(&type_id); // get naia id
+                state_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
+                state_total_bytes
                     .write_u16::<BigEndian>(local_component_key.to_u16())
                     .unwrap(); //write local component key
-                actor_total_bytes.append(&mut component_payload_bytes); // write payload
+                state_total_bytes.append(&mut component_payload_bytes); // write payload
             }
         }
 
         let mut hypothetical_next_payload_size =
-            packet_writer.bytes_number() + actor_total_bytes.len();
-        if packet_writer.actor_message_count == 0 {
+            packet_writer.bytes_number() + state_total_bytes.len();
+        if packet_writer.state_message_count == 0 {
             hypothetical_next_payload_size += 2;
         }
         if hypothetical_next_payload_size < MTU_SIZE {
-            if packet_writer.actor_message_count == 255 {
+            if packet_writer.state_message_count == 255 {
                 return false;
             }
-            packet_writer.actor_message_count = packet_writer.actor_message_count.wrapping_add(1);
+            packet_writer.state_message_count = packet_writer.state_message_count.wrapping_add(1);
             packet_writer
-                .actor_working_bytes
-                .append(&mut actor_total_bytes);
+                .state_working_bytes
+                .append(&mut state_total_bytes);
             return true;
         } else {
             return false;
@@ -618,145 +618,145 @@ impl<T: ActorType> ServerActorManager<T> {
 
     // Private methods
 
-    fn actor_init(&mut self, key: &ActorKey, actor: &Ref<dyn Actor<T>>, status: LocalityStatus) -> LocalActorKey {
-        if !self.local_actor_store.contains_key(*key) {
-            self.local_actor_store.insert(*key, actor.clone());
-            let local_key: LocalActorKey = self.actor_key_generator.generate();
-            self.local_to_global_key_map.insert(local_key, *key);
-            let state_mask_size = actor.borrow().get_state_mask_size();
-            let actor_record = ActorRecord::new(local_key, state_mask_size, status);
+    fn state_init(&mut self, key: &ObjectKey, state: &Ref<dyn State<T>>, status: LocalityStatus) -> LocalObjectKey {
+        if !self.local_object_store.contains_key(*key) {
+            self.local_object_store.insert(*key, state.clone());
+            let local_key: LocalObjectKey = self.object_key_generator.generate();
+            self.local_to_global_object_key_map.insert(local_key, *key);
+            let diff_mask_size = state.borrow().get_diff_mask_size();
+            let object_record = ObjectRecord::new(local_key, diff_mask_size, status);
             self.mut_handler.borrow_mut().register_mask(
                 &self.address,
                 &key,
-                actor_record.get_state_mask(),
+                object_record.get_diff_mask(),
             );
-            self.actor_records.insert(*key, actor_record);
+            self.object_records.insert(*key, object_record);
             return local_key;
         } else {
-            // Should panic, as this is not dependent on any unreliable transport factor
-            panic!("attempted to add actor twice..");
+            // Should panic, as this is not dependent on any unreliable transport fstate
+            panic!("attempted to add state twice..");
         }
     }
 
-    fn actor_cleanup(&mut self, global_actor_key: &ActorKey) {
-        if let Some(actor_record) = self.actor_records.remove(*global_actor_key) {
-            // actually delete the actor from local records
-            let local_actor_key = actor_record.local_key;
+    fn state_cleanup(&mut self, global_object_key: &ObjectKey) {
+        if let Some(object_record) = self.object_records.remove(*global_object_key) {
+            // actually delete the state from local records
+            let local_object_key = object_record.local_key;
             self.mut_handler
                 .borrow_mut()
-                .deregister_mask(&self.address, global_actor_key);
-            self.local_actor_store.remove(*global_actor_key);
-            self.local_to_global_key_map.remove(&local_actor_key);
-            self.actor_key_generator.recycle_key(&local_actor_key);
-            self.pawn_store.remove(&global_actor_key);
+                .deregister_mask(&self.address, global_object_key);
+            self.local_object_store.remove(*global_object_key);
+            self.local_to_global_object_key_map.remove(&local_object_key);
+            self.object_key_generator.recycle_key(&local_object_key);
+            self.pawn_object_store.remove(&global_object_key);
         } else {
             // likely due to duplicate delivered deletion messages
-            warn!("attempting to clean up actor from connection inside which it is not present");
+            warn!("attempting to clean up state from connection inside which it is not present");
         }
     }
 
-    fn pop_create_actor_state_mask(&mut self, global_key: &ActorKey) {
-        if let Some(record) = self.actor_records.get(*global_key) {
-            self.last_popped_state_mask = Some(record.get_state_mask().borrow().clone());
+    fn pop_create_state_diff_mask(&mut self, global_key: &ObjectKey) {
+        if let Some(record) = self.object_records.get(*global_key) {
+            self.last_popped_diff_mask = Some(record.get_diff_mask().borrow().clone());
         }
         self.mut_handler
             .borrow_mut()
             .clear_state(&self.address, global_key);
     }
 
-    fn unpop_create_actor_state_mask(&mut self, global_key: &ActorKey) {
-        if let Some(last_popped_state_mask) = &self.last_popped_state_mask {
+    fn unpop_create_state_diff_mask(&mut self, global_key: &ObjectKey) {
+        if let Some(last_popped_diff_mask) = &self.last_popped_diff_mask {
             self.mut_handler.borrow_mut().set_state(
                 &self.address,
                 global_key,
-                &last_popped_state_mask,
+                &last_popped_diff_mask,
             );
         }
     }
 
-    fn pop_update_actor_state_mask(&mut self,
+    fn pop_update_state_diff_mask(&mut self,
                                    is_pawn: bool,
                                    packet_index: u16,
-                                   global_key: &ActorKey,
-                                   local_key: &LocalActorKey,
-                                   state_mask: &Ref<StateMask>,
-                                   actor: &Ref<dyn Actor<T>>) -> ServerActorMessage<T> {
-        let locked_state_mask =
-            self.process_actor_update(packet_index, global_key, state_mask);
+                                   global_key: &ObjectKey,
+                                   local_key: &LocalObjectKey,
+                                   diff_mask: &Ref<DiffMask>,
+                                   state: &Ref<dyn State<T>>) -> ServerStateMessage<T> {
+        let locked_diff_mask =
+            self.process_state_update(packet_index, global_key, diff_mask);
         // return new Update message to be written
         if is_pawn {
-            return ServerActorMessage::UpdatePawn(
+            return ServerStateMessage::UpdatePawn(
                 *global_key,
                 *local_key,
-                locked_state_mask,
-                actor.clone(),
+                locked_diff_mask,
+                state.clone(),
             );
         } else {
-            return ServerActorMessage::UpdateActor(
+            return ServerStateMessage::UpdateState(
                 *global_key,
                 *local_key,
-                locked_state_mask,
-                actor.clone(),
+                locked_diff_mask,
+                state.clone(),
             );
         }
     }
 
-    fn unpop_update_actor_state_mask(&mut self,
+    fn unpop_update_state_diff_mask(&mut self,
                                    is_pawn: bool,
                                    packet_index: u16,
-                                   global_key: &ActorKey,
-                                   local_key: &LocalActorKey,
-                                   actor: &Ref<dyn Actor<T>>) -> ServerActorMessage<T> {
-        let original_state_mask = self.undo_actor_update(&packet_index, &global_key);
+                                   global_key: &ObjectKey,
+                                   local_key: &LocalObjectKey,
+                                   state: &Ref<dyn State<T>>) -> ServerStateMessage<T> {
+        let original_diff_mask = self.undo_state_update(&packet_index, &global_key);
         if is_pawn {
-            return ServerActorMessage::UpdatePawn(
+            return ServerStateMessage::UpdatePawn(
                 *global_key,
                 *local_key,
-                original_state_mask,
-                actor.clone(),
+                original_diff_mask,
+                state.clone(),
             );
         } else {
-            return ServerActorMessage::UpdateActor(
+            return ServerStateMessage::UpdateState(
                 *global_key,
                 *local_key,
-                original_state_mask,
-                actor.clone(),
+                original_diff_mask,
+                state.clone(),
             );
         }
     }
 
-    fn process_actor_update(
+    fn process_state_update(
         &mut self,
         packet_index: u16,
-        global_key: &ActorKey,
-        state_mask: &Ref<StateMask>,
-    ) -> Ref<StateMask> {
-        // previously the state mask was the CURRENT state mask for the actor,
+        global_key: &ObjectKey,
+        diff_mask: &Ref<DiffMask>,
+    ) -> Ref<DiffMask> {
+        // previously the state mask was the CURRENT state mask for the state,
         // we want to lock that in so we know exactly what we're writing
-        let locked_state_mask = Ref::new(state_mask.borrow().clone());
+        let locked_diff_mask = Ref::new(diff_mask.borrow().clone());
 
         // place state mask in a special transmission record - like map
         if !self.sent_updates.contains_key(&packet_index) {
-            let sent_updates_map: HashMap<ActorKey, Ref<StateMask>> = HashMap::new();
+            let sent_updates_map: HashMap<ObjectKey, Ref<DiffMask>> = HashMap::new();
             self.sent_updates.insert(packet_index, sent_updates_map);
             self.last_last_update_packet_index = self.last_update_packet_index;
             self.last_update_packet_index = packet_index;
         }
 
         if let Some(sent_updates_map) = self.sent_updates.get_mut(&packet_index) {
-            sent_updates_map.insert(*global_key, locked_state_mask.clone());
+            sent_updates_map.insert(*global_key, locked_diff_mask.clone());
         }
 
         // having copied the state mask for this update, clear the state
-        self.last_popped_state_mask = Some(state_mask.borrow().clone());
+        self.last_popped_diff_mask = Some(diff_mask.borrow().clone());
         self.mut_handler
             .borrow_mut()
             .clear_state(&self.address, global_key);
 
-        locked_state_mask
+        locked_diff_mask
     }
 
-    fn undo_actor_update(&mut self, packet_index: &u16, global_key: &ActorKey) -> Ref<StateMask> {
+    fn undo_state_update(&mut self, packet_index: &u16, global_key: &ObjectKey) -> Ref<DiffMask> {
         if let Some(sent_updates_map) = self.sent_updates.get_mut(packet_index) {
             sent_updates_map.remove(global_key);
             if sent_updates_map.len() == 0 {
@@ -765,51 +765,51 @@ impl<T: ActorType> ServerActorManager<T> {
         }
 
         self.last_update_packet_index = self.last_last_update_packet_index;
-        if let Some(last_popped_state_mask) = &self.last_popped_state_mask {
+        if let Some(last_popped_diff_mask) = &self.last_popped_diff_mask {
             self.mut_handler.borrow_mut().set_state(
                 &self.address,
                 global_key,
-                &last_popped_state_mask,
+                &last_popped_diff_mask,
             );
         }
 
-        self.actor_records
+        self.object_records
             .get(*global_key)
             .expect("uh oh, we don't have enough info to unpop the message")
-            .get_state_mask()
+            .get_diff_mask()
             .clone()
     }
 }
 
-impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
+impl<T: StateType> StateNotifiable for ServerStateManager<T> {
     fn notify_packet_delivered(&mut self, packet_index: u16) {
-        let mut deleted_actors: Vec<ActorKey> = Vec::new();
+        let mut deleted_states: Vec<ObjectKey> = Vec::new();
 
         if let Some(delivered_messages_list) = self.sent_messages.remove(&packet_index) {
             for delivered_message in delivered_messages_list.into_iter() {
                 match delivered_message {
-                    ServerActorMessage::CreateActor(global_key, _, _) => {
-                        let actor_record = self.actor_records.get_mut(global_key)
-                            .expect("created actor does not have an actor_record ... initialization error?");
+                    ServerStateMessage::CreateState(global_key, _, _) => {
+                        let object_record = self.object_records.get_mut(global_key)
+                            .expect("created state does not have an object_record ... initialization error?");
 
                         // do we need to delete this now?
-                        if self.delayed_actor_deletions.remove(&global_key) {
-                            actor_delete(&mut self.queued_messages, actor_record, &global_key);
+                        if self.delayed_object_deletions.remove(&global_key) {
+                            state_delete(&mut self.queued_messages, object_record, &global_key);
                         } else {
                             // we do not need to delete just yet
-                            actor_record.status = LocalityStatus::Created;
+                            object_record.status = LocalityStatus::Created;
                         }
                     }
-                    ServerActorMessage::DeleteActor(global_actor_key, _) => {
-                        deleted_actors.push(global_actor_key);
+                    ServerStateMessage::DeleteState(global_object_key, _) => {
+                        deleted_states.push(global_object_key);
                     }
-                    ServerActorMessage::UpdateActor(_, _, _, _)
-                    | ServerActorMessage::UpdatePawn(_, _, _, _) => {
+                    ServerStateMessage::UpdateState(_, _, _, _)
+                    | ServerStateMessage::UpdatePawn(_, _, _, _) => {
                         self.sent_updates.remove(&packet_index);
                     }
-                    ServerActorMessage::AssignPawn(_, _) => {}
-                    ServerActorMessage::UnassignPawn(_, _) => {}
-                    ServerActorMessage::CreateEntity(global_entity_key, _, component_list_opt) => {
+                    ServerStateMessage::AssignPawn(_, _) => {}
+                    ServerStateMessage::UnassignPawn(_, _) => {}
+                    ServerStateMessage::CreateEntity(global_entity_key, _, component_list_opt) => {
                         let entity_record = self.local_entity_store.get_mut(&global_entity_key)
                             .expect("created entity does not have a entity_record ... initialization error?");
 
@@ -823,7 +823,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                             // set status of components to created
                             if let Some(mut component_list) = component_list_opt {
                                 while let Some((global_component_key, _, _)) = component_list.pop() {
-                                    let component_record = self.actor_records.get_mut(global_component_key)
+                                    let component_record = self.object_records.get_mut(global_component_key)
                                         .expect("component not created correctly?");
                                     component_record.status = LocalityStatus::Created;
                                 }
@@ -833,15 +833,15 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                             // initiate that now
                             let component_set: &HashSet<ComponentKey> = &entity_record.components_ref.borrow();
                             for component_key in component_set {
-                                let component_record = self.actor_records.get(*component_key)
+                                let component_record = self.object_records.get(*component_key)
                                     .expect("component not created correctly?");
                                 // check if component has been successfully created
                                 // (perhaps through the previous entity_create operation)
                                 if component_record.status == LocalityStatus::Creating {
-                                    let component_ref = self.local_actor_store.get(*component_key)
+                                    let component_ref = self.local_object_store.get(*component_key)
                                         .expect("component not created correctly?");
                                     self.queued_messages
-                                        .push_back(ServerActorMessage::AddComponent(
+                                        .push_back(ServerStateMessage::AddComponent(
                                             entity_record.local_key,
                                             *component_key,
                                             component_record.local_key,
@@ -851,7 +851,7 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                             }
                         }
                     }
-                    ServerActorMessage::DeleteEntity(global_key, local_key) => {
+                    ServerStateMessage::DeleteEntity(global_key, local_key) => {
                         let entity_record = self.local_entity_store.remove(&global_key).expect("deletion of nonexistent entity!");
 
                         // actually delete the entity from local records
@@ -859,20 +859,20 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                         self.entity_key_generator.recycle_key(&local_key);
                         self.pawn_entity_store.remove(&global_key);
 
-                        // delete all associated component actors
+                        // delete all associated component states
                         let component_set: &HashSet<ComponentKey> = &entity_record.components_ref.borrow();
                         for component_key in component_set {
-                            deleted_actors.push(*component_key);
+                            deleted_states.push(*component_key);
                         }
                     }
-                    ServerActorMessage::AssignPawnEntity(_, _) => {}
-                    ServerActorMessage::UnassignPawnEntity(_, _) => {}
-                    ServerActorMessage::AddComponent(_, global_component_key, _, _) => {
-                        let component_record = self.actor_records.get_mut(global_component_key)
+                    ServerStateMessage::AssignPawnEntity(_, _) => {}
+                    ServerStateMessage::UnassignPawnEntity(_, _) => {}
+                    ServerStateMessage::AddComponent(_, global_component_key, _, _) => {
+                        let component_record = self.object_records.get_mut(global_component_key)
                             .expect("added component does not have a record .. initiation problem?");
                         // do we need to delete this now?
-                        if self.delayed_actor_deletions.remove(&global_component_key) {
-                            actor_delete(&mut self.queued_messages, component_record, &global_component_key);
+                        if self.delayed_object_deletions.remove(&global_component_key) {
+                            state_delete(&mut self.queued_messages, component_record, &global_component_key);
                         } else {
                             // we do not need to delete just yet
                             component_record.status = LocalityStatus::Created;
@@ -882,8 +882,8 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
             }
         }
 
-        for deleted_actor_key in deleted_actors {
-            self.actor_cleanup(&deleted_actor_key);
+        for deleted_object_key in deleted_states {
+            self.state_cleanup(&deleted_object_key);
         }
     }
 
@@ -892,34 +892,34 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
             for dropped_message in dropped_messages_list.into_iter() {
                 match dropped_message {
                     // gauranteed delivery messages
-                    ServerActorMessage::CreateActor(_, _, _)
-                    | ServerActorMessage::DeleteActor(_, _)
-                    | ServerActorMessage::AssignPawn(_, _)
-                    | ServerActorMessage::UnassignPawn(_, _)
-                    | ServerActorMessage::CreateEntity(_, _, _)
-                    | ServerActorMessage::DeleteEntity(_, _)
-                    | ServerActorMessage::AssignPawnEntity(_, _)
-                    | ServerActorMessage::UnassignPawnEntity(_, _)
-                    | ServerActorMessage::AddComponent(_, _, _, _) => {
+                    ServerStateMessage::CreateState(_, _, _)
+                    | ServerStateMessage::DeleteState(_, _)
+                    | ServerStateMessage::AssignPawn(_, _)
+                    | ServerStateMessage::UnassignPawn(_, _)
+                    | ServerStateMessage::CreateEntity(_, _, _)
+                    | ServerStateMessage::DeleteEntity(_, _)
+                    | ServerStateMessage::AssignPawnEntity(_, _)
+                    | ServerStateMessage::UnassignPawnEntity(_, _)
+                    | ServerStateMessage::AddComponent(_, _, _, _) => {
                         self.queued_messages.push_back(dropped_message.clone());
                     }
                     // non-gauranteed delivery messages
-                    ServerActorMessage::UpdateActor(global_key, _, _, _)
-                    | ServerActorMessage::UpdatePawn(global_key, _, _, _) => {
-                        if let Some(state_mask_map) = self.sent_updates.get(&dropped_packet_index) {
-                            if let Some(state_mask) = state_mask_map.get(global_key) {
-                                let mut new_state_mask = state_mask.borrow().clone();
+                    ServerStateMessage::UpdateState(global_key, _, _, _)
+                    | ServerStateMessage::UpdatePawn(global_key, _, _, _) => {
+                        if let Some(diff_mask_map) = self.sent_updates.get(&dropped_packet_index) {
+                            if let Some(diff_mask) = diff_mask_map.get(global_key) {
+                                let mut new_diff_mask = diff_mask.borrow().clone();
 
                                 // walk from dropped packet up to most recently sent packet
                                 if dropped_packet_index != self.last_update_packet_index {
                                     let mut packet_index = dropped_packet_index.wrapping_add(1);
                                     while packet_index != self.last_update_packet_index {
-                                        if let Some(state_mask_map) =
+                                        if let Some(diff_mask_map) =
                                             self.sent_updates.get(&packet_index)
                                         {
-                                            if let Some(state_mask) = state_mask_map.get(global_key)
+                                            if let Some(diff_mask) = diff_mask_map.get(global_key)
                                             {
-                                                new_state_mask.nand(state_mask.borrow().borrow());
+                                                new_diff_mask.nand(diff_mask.borrow().borrow());
                                             }
                                         }
 
@@ -927,10 +927,10 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
                                     }
                                 }
 
-                                if let Some(record) = self.actor_records.get_mut(*global_key) {
-                                    let mut current_state_mask =
-                                        record.get_state_mask().borrow_mut();
-                                    current_state_mask.or(new_state_mask.borrow());
+                                if let Some(record) = self.object_records.get_mut(*global_key) {
+                                    let mut current_diff_mask =
+                                        record.get_diff_mask().borrow_mut();
+                                    current_diff_mask.or(new_diff_mask.borrow());
                                 }
                             }
                         }
@@ -944,23 +944,23 @@ impl<T: ActorType> ActorNotifiable for ServerActorManager<T> {
     }
 }
 
-fn actor_delete<T: ActorType>(queued_messages: &mut VecDeque<ServerActorMessage<T>>,
-                              actor_record: &mut ActorRecord,
-                              actor_key: &ActorKey) {
-    actor_record.status = LocalityStatus::Deleting;
+fn state_delete<T: StateType>(queued_messages: &mut VecDeque<ServerStateMessage<T>>,
+                              object_record: &mut ObjectRecord,
+                              object_key: &ObjectKey) {
+    object_record.status = LocalityStatus::Deleting;
 
-    queued_messages.push_back(ServerActorMessage::DeleteActor(
-            *actor_key,
-            actor_record.local_key,
+    queued_messages.push_back(ServerStateMessage::DeleteState(
+            *object_key,
+            object_record.local_key,
         ));
 }
 
-fn entity_delete<T: ActorType>(queued_messages: &mut VecDeque<ServerActorMessage<T>>,
+fn entity_delete<T: StateType>(queued_messages: &mut VecDeque<ServerStateMessage<T>>,
                               entity_record: &mut EntityRecord,
                               entity_key: &EntityKey) {
     entity_record.status = LocalityStatus::Deleting;
 
-    queued_messages.push_back(ServerActorMessage::DeleteEntity(
+    queued_messages.push_back(ServerStateMessage::DeleteEntity(
         *entity_key,
         entity_record.local_key,
     ));

@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    actors::actor_type::ActorType,
+    state::state_type::StateType,
     events::{
         event::{Event, EventClone},
         event_type::EventType,
@@ -115,7 +115,7 @@ impl<T: EventType> EventManager<T> {
 
     /// Given incoming packet data, read transmitted Events and store them to be
     /// returned to the application
-    pub fn process_data<U: ActorType>(
+    pub fn process_data<U: StateType>(
         &mut self,
         reader: &mut PacketReader,
         manifest: &Manifest<T, U>)

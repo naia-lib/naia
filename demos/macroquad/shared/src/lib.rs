@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 
 pub mod events;
 pub mod behavior;
-pub mod state;
+pub mod objects;
 mod manifest_load;
 mod shared_config;
 

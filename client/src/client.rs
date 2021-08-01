@@ -5,7 +5,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 
 pub use naia_shared::{
-    ActorType, ConnectionConfig, Event, EventType, HostTickManager, Instant, LocalActorKey,
+    StateType, ConnectionConfig, Event, EventType, HostTickManager, Instant, LocalObjectKey,
     ManagerType, Manifest, PacketReader, PacketType, SequenceIterator, SharedConfig,
     StandardHeader, Timer, Timestamp, PawnKey, LocalComponentKey, LocalEntityKey
 };
@@ -15,13 +15,13 @@ use super::{
     client_event::ClientEvent, client_tick_manager::ClientTickManager, error::NaiaClientError,
     server_connection::ServerConnection, Packet,
     client_connection_state::{ClientConnectionState, ClientConnectionState::AwaitingChallengeResponse},
-    client_actor_message::ClientActorMessage
+    client_state_message::ClientStateMessage
 };
 
 /// Client can send/receive events to/from a server, and has a pool of in-scope
-/// actors that are synced with the server
+/// states that are synced with the server
 #[derive(Debug)]
-pub struct Client<T: EventType, U: ActorType> {
+pub struct Client<T: EventType, U: StateType> {
     manifest: Manifest<T, U>,
     server_address: SocketAddr,
     connection_config: ConnectionConfig,
@@ -36,7 +36,7 @@ pub struct Client<T: EventType, U: ActorType> {
     tick_manager: ClientTickManager,
 }
 
-impl<T: EventType, U: ActorType> Client<T, U> {
+impl<T: EventType, U: StateType> Client<T, U> {
     /// Create a new client, given the server's address, a shared manifest, an
     /// optional Config, and an optional Authentication event
     pub fn new(
@@ -98,50 +98,50 @@ impl<T: EventType, U: ActorType> Client<T, U> {
                 if let Some(event) = connection.get_incoming_event() {
                     return Some(Ok(ClientEvent::Event(event)));
                 }
-                // receive actor message
-                while let Some(message) = connection.get_incoming_actor_message() {
+                // receive state message
+                while let Some(message) = connection.get_incoming_state_message() {
                     let event_opt: Option<ClientEvent::<T, U>> = {
                         match message {
-                            ClientActorMessage::CreateActor(local_key) => {
-                                Some(ClientEvent::CreateActor(local_key))
+                            ClientStateMessage::CreateState(local_key) => {
+                                Some(ClientEvent::CreateState(local_key))
                             }
-                            ClientActorMessage::DeleteActor(local_key, actor) => {
-                                Some(ClientEvent::DeleteActor(local_key, actor.clone()))
+                            ClientStateMessage::DeleteState(local_key, state) => {
+                                Some(ClientEvent::DeleteState(local_key, state.clone()))
                             }
-                            ClientActorMessage::UpdateActor(local_key) => {
-                                Some(ClientEvent::UpdateActor(local_key))
+                            ClientStateMessage::UpdateState(local_key) => {
+                                Some(ClientEvent::UpdateState(local_key))
                             }
-                            ClientActorMessage::AssignPawn(local_key) => {
+                            ClientStateMessage::AssignPawn(local_key) => {
                                 Some(ClientEvent::AssignPawn(local_key))
                             }
-                            ClientActorMessage::UnassignPawn(local_key) => {
+                            ClientStateMessage::UnassignPawn(local_key) => {
                                 Some(ClientEvent::UnassignPawn(local_key))
                             }
-                            ClientActorMessage::ResetPawn(local_key) => {
+                            ClientStateMessage::ResetPawn(local_key) => {
                                 Some(ClientEvent::ResetPawn(local_key))
                             }
-                            ClientActorMessage::CreateEntity(local_key, component_list) => {
+                            ClientStateMessage::CreateEntity(local_key, component_list) => {
                                 Some(ClientEvent::CreateEntity(local_key, component_list))
                             }
-                            ClientActorMessage::DeleteEntity(local_key) => {
+                            ClientStateMessage::DeleteEntity(local_key) => {
                                 Some(ClientEvent::DeleteEntity(local_key))
                             }
-                            ClientActorMessage::AssignPawnEntity(local_key) => {
+                            ClientStateMessage::AssignPawnEntity(local_key) => {
                                 Some(ClientEvent::AssignPawnEntity(local_key))
                             }
-                            ClientActorMessage::UnassignPawnEntity(local_key) => {
+                            ClientStateMessage::UnassignPawnEntity(local_key) => {
                                 Some(ClientEvent::UnassignPawnEntity(local_key))
                             }
-                            ClientActorMessage::ResetPawnEntity(local_key) => {
+                            ClientStateMessage::ResetPawnEntity(local_key) => {
                                 Some(ClientEvent::ResetPawnEntity(local_key))
                             }
-                            ClientActorMessage::AddComponent(entity_key, component_key) => {
+                            ClientStateMessage::AddComponent(entity_key, component_key) => {
                                 Some(ClientEvent::AddComponent(entity_key, component_key))
                             }
-                            ClientActorMessage::UpdateComponent(entity_key, component_key) => {
+                            ClientStateMessage::UpdateComponent(entity_key, component_key) => {
                                 Some(ClientEvent::UpdateComponent(entity_key, component_key))
                             }
-                            ClientActorMessage::RemoveComponent(entity_key, component_key, component) => {
+                            ClientStateMessage::RemoveComponent(entity_key, component_key, component) => {
                                 Some(ClientEvent::RemoveComponent(entity_key, component_key, component.clone()))
                             }
                         }
@@ -158,9 +158,9 @@ impl<T: EventType, U: ActorType> Client<T, U> {
                 // receive replay command
                 if let Some((pawn_key, command)) = connection.get_incoming_replay() {
                     match pawn_key {
-                        PawnKey::Actor(actor_key) => {
+                        PawnKey::State(object_key) => {
                             return Some(Ok(ClientEvent::ReplayCommand(
-                                actor_key,
+                                object_key,
                                 command.as_ref().get_typed_copy(),
                             )));
                         }
@@ -175,9 +175,9 @@ impl<T: EventType, U: ActorType> Client<T, U> {
                 // receive command
                 if let Some((pawn_key, command)) = connection.get_incoming_command() {
                     match pawn_key {
-                        PawnKey::Actor(actor_key) => {
+                        PawnKey::State(object_key) => {
                             return Some(Ok(ClientEvent::NewCommand(
-                                actor_key,
+                                object_key,
                                 command.as_ref().get_typed_copy(),
                             )));
                         }
@@ -264,7 +264,7 @@ impl<T: EventType, U: ActorType> Client<T, U> {
                             {
                                 payload_bytes.push(*digest_byte);
                             }
-                            // write auth event object if there is one
+                            // write auth event state if there is one
                             if let Some(auth_event) = &mut self.auth_event {
                                 let type_id = auth_event.get_type_id();
                                 let naia_id = self.manifest.get_event_naia_id(&type_id); // get naia id
@@ -383,10 +383,10 @@ impl<T: EventType, U: ActorType> Client<T, U> {
         }
     }
 
-    /// Queues up a Pawn Actor Command to be sent to the Server
-    pub fn send_command(&mut self, pawn_actor_key: &LocalActorKey, command: &impl Event<T>) {
+    /// Queues up a Pawn State Command to be sent to the Server
+    pub fn send_command(&mut self, pawn_object_key: &LocalObjectKey, command: &impl Event<T>) {
         if let Some(connection) = &mut self.server_connection {
-            connection.actor_queue_command(pawn_actor_key, command);
+            connection.state_queue_command(pawn_object_key, command);
         }
     }
 
@@ -407,29 +407,29 @@ impl<T: EventType, U: ActorType> Client<T, U> {
         return self.server_connection.is_some();
     }
 
-    // actors
+    // states
 
-    /// Get a reference to an Actor currently in scope for the Client, given
-    /// that Actor's Key
-    pub fn get_actor(&self, key: &LocalActorKey) -> Option<&U> {
+    /// Get a reference to an State currently in scope for the Client, given
+    /// that State's Key
+    pub fn get_state(&self, key: &LocalObjectKey) -> Option<&U> {
         if let Some(connection) = &self.server_connection {
-            return connection.get_actor(key);
+            return connection.get_state(key);
         }
         return None;
     }
 
-    /// Get whether or not the Actor currently in scope for the Client, given
-    /// that Actor's Key
-    pub fn has_actor(&self, key: &LocalActorKey) -> bool {
+    /// Get whether or not the State currently in scope for the Client, given
+    /// that State's Key
+    pub fn has_state(&self, key: &LocalObjectKey) -> bool {
         if let Some(connection) = &self.server_connection {
-            return connection.has_actor(key);
+            return connection.has_state(key);
         }
         return false;
     }
 
-    /// Component-themed alias for `get_actor`
+    /// Component-themed alias for `get_state`
     pub fn get_component(&self, key: &LocalComponentKey) -> Option<&U> {
-        return self.get_actor(key);
+        return self.get_state(key);
     }
 
     /// Get whether or not the Component currently in scope for the Client, given
@@ -441,18 +441,18 @@ impl<T: EventType, U: ActorType> Client<T, U> {
         return false;
     }
 
-    /// Return an iterator to the collection of keys to all Actors tracked by
+    /// Return an iterator to the collection of keys to all States tracked by
     /// the Client
-    pub fn actor_keys(&self) -> Option<Vec<LocalActorKey>> {
+    pub fn object_keys(&self) -> Option<Vec<LocalObjectKey>> {
         if let Some(connection) = &self.server_connection {
-            return Some(connection.actor_keys());
+            return Some(connection.object_keys());
         }
         return None;
     }
 
     /// Return an iterator to the collection of keys to all Components tracked by
     /// the Client
-    pub fn component_keys(&self) -> Option<Vec<LocalActorKey>> {
+    pub fn component_keys(&self) -> Option<Vec<LocalObjectKey>> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.component_keys());
         }
@@ -462,7 +462,7 @@ impl<T: EventType, U: ActorType> Client<T, U> {
     // pawns
 
     /// Get a reference to a Pawn
-    pub fn get_pawn(&self, key: &LocalActorKey) -> Option<&U> {
+    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&U> {
         if let Some(connection) = &self.server_connection {
             return connection.get_pawn(key);
         }
@@ -470,7 +470,7 @@ impl<T: EventType, U: ActorType> Client<T, U> {
     }
 
     /// Get a reference to a Pawn, used for setting it's state
-    pub fn get_pawn_mut(&mut self, key: &LocalActorKey) -> Option<&U> {
+    pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&U> {
         if let Some(connection) = self.server_connection.as_mut() {
             return connection.get_pawn_mut(key);
         }
@@ -479,13 +479,13 @@ impl<T: EventType, U: ActorType> Client<T, U> {
 
     /// Return an iterator to the collection of keys to all Pawns tracked by
     /// the Client
-    pub fn pawn_keys(&self) -> Option<Vec<LocalActorKey>> {
+    pub fn pawn_keys(&self) -> Option<Vec<LocalObjectKey>> {
         if let Some(connection) = &self.server_connection {
             return Some(
                 connection
                     .pawn_keys()
                     .cloned()
-                    .collect::<Vec<LocalActorKey>>(),
+                    .collect::<Vec<LocalObjectKey>>(),
             );
         }
         return None;
