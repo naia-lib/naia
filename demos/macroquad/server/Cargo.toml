@@ -1,0 +1,19 @@
+[package]
+name = "naia-demo-macroquad-server"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+publish = false
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[features]
+use-udp = [ "naia-server/use-udp" ]
+use-webrtc = [ "naia-server/use-webrtc" ]
+multithread = [ "naia-server/multithread", "naia-demo-macroquad-shared/multithread" ]
+
+[dependencies]
+log = "0.4"
+simple_logger = { version = "1.4" }
+smol = { version = "1.2.4" }
+naia-server = { path = "../../../server" }  #naia-server = { version = "0.5.0" }
+naia-demo-macroquad-shared = { path = "../shared" }

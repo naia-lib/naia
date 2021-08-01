@@ -9,5 +9,8 @@ members = [
     "demos/basic/client/app",
     "demos/basic/client/wasm_bindgen",
     "demos/basic/client/miniquad",
-    "demos/basic/client/miniquad/dev_http_server",
+    "demos/dev_http_server",
+    "demos/macroquad/server",
+    "demos/macroquad/shared",
+    "demos/macroquad/client",
     ]

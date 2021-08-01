@@ -1,0 +1,23 @@
+[package]
+name = "naia-demo-macroquad-client"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+version = "0.1.0"
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "naia-demo-macroquad-client"
+path = "src/main.rs"
+
+[features]
+multithread = [ "naia-client/multithread", "naia-demo-macroquad-shared/multithread" ]
+
+[dependencies]
+cfg-if = "0.1.10"
+macroquad = { version = "=0.3.0-alpha.12", features = [ "log-impl" ] }
+naia-client = { path = "../../../client" } #version = "0.5.0", features = [ "mquad" ] }
+naia-demo-macroquad-shared = { path = "../shared" }
+
+[profile.release]
+lto = "thin"
+opt-level = 's'
