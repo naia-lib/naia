@@ -4,9 +4,14 @@
 /Cargo.lock
 node_modules
 /demos/basic/client/wasm_bindgen/dist
+/demos/basic/client/wasm_bindgen/node_modules
+/demos/basic/client/wasm_bindgen/pkg
 /demos/basic/client/miniquad/target
 /demos/basic/client/miniquad/target/
 /demos/basic/client/miniquad/target/*
-/demos/basic/client/miniquad/dev_http_server/dist
-/demos/basic/client/miniquad/dev_http_server/dist/
-/demos/basic/client/miniquad/dev_http_server/dist/*
+/demos/dev_http_server/dist
+/demos/dev_http_server/dist/
+/demos/dev_http_server/dist/*
+/demos/macroquad/client/target
+/demos/macroquad/client/target/
+/demos/macroquad/client/target/*
