@@ -1,9 +1,10 @@
-use crate::ExampleEvent;
 use naia_derive::Event;
 use naia_shared::{Event, Property};
 
+use super::Events;
+
 #[derive(Event, Clone)]
-#[type_name = "ExampleEvent"]
+#[type_name = "Events"]
 pub struct KeyCommand {
     pub w: Property<bool>,
     pub s: Property<bool>,
