@@ -13,7 +13,7 @@ wbindgen = [ "naia-client/wbindgen", "naia-demo-basic-shared/wbindgen" ]
 
 [dependencies]
 cfg-if = "0.1.10"
-naia-client = { path = "../../../../client" }
+naia-client = { path = "../../../../client", features = [ "mquad" ] }
 naia-demo-basic-shared = { path = "../../shared" }
 hecs = { path = "../../../../../Forks/hecs" }
 log = "0.4"

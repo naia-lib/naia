@@ -1,45 +1,28 @@
-use std::{
-    net::{IpAddr, SocketAddr},
-    time::Duration,
-    collections::HashMap,
-};
+use std::collections::HashMap;
 
 use macroquad::prelude::*;
 
-use naia_client::{ClientConfig, ClientEvent, NaiaClient, Ref};
+use naia_client::{ClientConfig, ClientEvent, Client, Ref, LocalActorKey};
 
-use naia_mq_example_shared::{
-    get_shared_config, manifest_load, shared_behavior, AuthEvent, ExampleActor, ExampleEvent,
-    KeyCommand, PointActorColor, PointActor
+use naia_demo_macroquad_shared::{
+    get_shared_config, manifest_load, behavior as shared_behavior, events as shared_events, state as shared_state,
 };
-
-const SERVER_PORT: u16 = 14193;
+use shared_events::{Events, KeyCommand, Auth};
+use shared_state::{State, Point, Color};
 
 pub struct App {
-    client: NaiaClient<ExampleEvent, ExampleActor>,
-    pawn: Option<(u16, Ref<PointActor>)>,
+    client: Client<Events, State>,
+    pawn: Option<(LocalActorKey, Ref<Point>)>,
     queued_command: Option<KeyCommand>,
-    actors: HashMap<u16, Ref<PointActor>>,
+    actors: HashMap<LocalActorKey, Ref<Point>>,
 }
 
 impl App {
-    pub fn new() -> Self {
-        info!("Naia Macroquad Client Example Started");
+    pub fn new(client_config: ClientConfig) -> Self {
 
-        // Put your Server's IP Address here!, can't easily find this automatically from the browser
-        let server_ip_address: IpAddr = "127.0.0.1"
-            .parse()
-            .expect("couldn't parse input IP address");
-        let server_socket_address = SocketAddr::new(server_ip_address, SERVER_PORT);
+        let auth = Events::Auth(Auth::new("charlie", "12345"));
 
-        let mut client_config = ClientConfig::default();
-        client_config.heartbeat_interval = Duration::from_secs(2);
-        client_config.disconnection_timeout_duration = Duration::from_secs(5);
-
-        let auth = ExampleEvent::AuthEvent(AuthEvent::new("charlie", "12345"));
-
-        let client = NaiaClient::new(
-            server_socket_address,
+        let client = Client::new(
             manifest_load(),
             Some(client_config),
             get_shared_config(),
@@ -92,7 +75,7 @@ impl App {
                         ClientEvent::Tick => {
                             if let Some((pawn_key, _)) = self.pawn {
                                 if let Some(command) = self.queued_command.take() {
-                                    self.client.send_command(pawn_key, &command);
+                                    self.client.send_command(&pawn_key, &command);
                                 }
                             }
                         }
@@ -100,7 +83,7 @@ impl App {
                             info!("assign pawn");
                             if let Some(typed_actor) = self.client.get_pawn_mut(&local_key) {
                                 match typed_actor {
-                                    ExampleActor::PointActor(actor_ref) => {
+                                    State::Point(actor_ref) => {
                                         self.pawn = Some((local_key, actor_ref.clone()));
                                     }
                                 }
@@ -111,7 +94,7 @@ impl App {
                             info!("unassign pawn");
                         }
                         ClientEvent::NewCommand(_, command_type) => match command_type {
-                            ExampleEvent::KeyCommand(key_command) => {
+                            Events::KeyCommand(key_command) => {
                                 if let Some((_, pawn_ref)) = &self.pawn {
                                     shared_behavior::process_command(&key_command, &pawn_ref);
                                 }
@@ -119,7 +102,7 @@ impl App {
                             _ => {}
                         },
                         ClientEvent::ReplayCommand(_, command_type) => match command_type {
-                            ExampleEvent::KeyCommand(key_command) => {
+                            Events::KeyCommand(key_command) => {
                                 if let Some((_, pawn_ref)) = &self.pawn {
                                     shared_behavior::process_command(&key_command, &pawn_ref);
                                 }
@@ -129,13 +112,13 @@ impl App {
                         ClientEvent::CreateActor(local_key) => {
                             if let Some(typed_actor) = self.client.get_actor(&local_key) {
                                 match typed_actor {
-                                    ExampleActor::PointActor(actor_ref) => {
+                                    State::Point(actor_ref) => {
                                         self.actors.insert(local_key, actor_ref.clone());
                                     }
                                 }
                             }
                         },
-                        ClientEvent::DeleteActor(local_key) => {
+                        ClientEvent::DeleteActor(local_key, _) => {
                             self.actors.remove(&local_key);
                         },
                         _ => {}
@@ -159,9 +142,9 @@ impl App {
             for (_, actor_ref) in &self.actors {
                 let point_actor = actor_ref.borrow();
                 let color = match point_actor.color.get() {
-                    PointActorColor::Red => RED,
-                    PointActorColor::Blue => BLUE,
-                    PointActorColor::Yellow => YELLOW,
+                    Color::Red => RED,
+                    Color::Blue => BLUE,
+                    Color::Yellow => YELLOW,
                 };
                 draw_rectangle(
                     f32::from(*(point_actor.x.get())),
