@@ -260,6 +260,8 @@ impl<T: ActorType> ServerActorManager<T> {
                         .push_back(ServerActorMessage::AssignPawn(*key, actor_record.local_key));
                 }
             }
+        } else {
+            panic!("user connection does not have local actor to make into a pawn!");
         }
     }
 

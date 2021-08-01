@@ -94,8 +94,16 @@ impl App {
                         _ => {}
                     },
                     ServerEvent::Tick => {
+                        // Update scopes of entities
+                            for (room_key, user_key, actor_key) in self.server.actor_scope_sets() {
+                                self.server.actor_set_scope(&room_key, &user_key, &actor_key, true);
+                            }
+
+                        // VERY IMPORTANT! Calling this actually sends all Actor/Event data
+                        // packets to all Clients that require it. If you don't call this
+                        // method, the Server will never communicate with it's connected Clients
                         self.server.send_all_updates().await;
-                        //info!("tick");
+
                     }
                     _ => {}
                 }

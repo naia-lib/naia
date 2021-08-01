@@ -563,6 +563,15 @@ impl<T: EventType, U: ActorType> Server<T, U> {
     /// Assigns an Actor to a specific User, making it a Pawn for that User
     /// (meaning that the User will be able to issue Commands to that Pawn)
     pub fn assign_pawn(&mut self, user_key: &UserKey, actor_key: &ActorKey) {
+
+        if let Some(actor) = self.global_state_store.get(*actor_key) {
+            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                Self::user_add_actor(user_connection,
+                                     actor_key,
+                                     &actor);
+            }
+        }
+
         if self.global_actor_set.contains(actor_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                 user_connection.add_pawn(actor_key);
@@ -659,21 +668,6 @@ impl<T: EventType, U: ActorType> Server<T, U> {
     /// Deregisters a Component with the Server, deleting local copies of the
     /// Component on each Client
     pub fn remove_component(&mut self, component_key: &ComponentKey) -> U {
-//        if let Some(entity_key) = self.component_entity_map.remove(component_key) {
-//            if let Some(component_set) = self.entity_component_map.get_mut(&entity_key) {
-//                for (user_key, _) in self.users.iter() {
-//                    if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-//                        user_connection.remove_component(&entity_key, component_key);
-//                    }
-//                }
-//
-//                self.mut_handler.borrow_mut().deregister_actor(component_key);
-//                self.global_state_store.remove(*component_key);
-//
-//                component_set.remove(component_key);
-//            }
-//        }
-
         let entity_key = self.component_entity_map.remove(component_key)
             .expect("attempting to remove a component which does not exist");
         let mut component_set = self.entity_component_map.get_mut(&entity_key)

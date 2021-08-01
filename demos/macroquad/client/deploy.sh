@@ -9,10 +9,10 @@ get_reload_actions(){
   local c=$1
   FMT='
   cargo build --target wasm32-unknown-unknown --target-dir target &&
-  cd ../../../dev_http_server
+  cd ../../dev_http_server
   rm -rf dist &&
   mkdir dist &&
-  cp ../demos/macroquad/client/target/wasm32-unknown-unknown/debug/%s.wasm dist/%s.wasm &&
+  cp ../macroquad/client/target/wasm32-unknown-unknown/debug/%s.wasm dist/%s.wasm &&
   cp -a ../macroquad/client/static/. dist/ &&
   cp -a ../macroquad/client/js/. dist/ &&
   cargo run'
