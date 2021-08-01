@@ -4,6 +4,9 @@ members = [
     "server",
     "shared",
     "derive",
+    "adapters/hecs/client",
+    "adapters/hecs/server",
+    "adapters/hecs/shared",
     "demos/basic/server",
     "demos/basic/shared",
     "demos/basic/client/app",
@@ -13,4 +16,7 @@ members = [
     "demos/macroquad/server",
     "demos/macroquad/shared",
     "demos/macroquad/client",
+    "demos/hecs/server",
+    "demos/hecs/shared",
+    "demos/hecs/client",
     ]
