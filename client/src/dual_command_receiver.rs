@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
-use naia_shared::{ActorType, Event, EventType, SequenceIterator, PawnKey};
+use naia_shared::{StateType, Event, EventType, SequenceIterator, PawnKey};
 
-use super::{client_actor_manager::ClientActorManager, command_receiver::CommandReceiver};
+use super::{client_state_manager::ClientStateManager, command_receiver::CommandReceiver};
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
 pub struct DualCommandReceiver<T: EventType> {
-    actor_manager:  CommandReceiver<T>,
+    state_manager:  CommandReceiver<T>,
     entity_manager: CommandReceiver<T>,
 }
 
@@ -15,41 +15,41 @@ impl<T: EventType> DualCommandReceiver<T> {
     /// Creates a new DualCommandReceiver
     pub fn new() -> Self {
         DualCommandReceiver {
-            actor_manager:  CommandReceiver::new(),
+            state_manager:  CommandReceiver::new(),
             entity_manager: CommandReceiver::new(),
         }
     }
 
     /// Gets the next queued Command
     pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Rc<Box<dyn Event<T>>>)> {
-        let actor_command = self.actor_manager.pop_command();
-        if actor_command.is_none() {
+        let state_command = self.state_manager.pop_command();
+        if state_command.is_none() {
             return self.entity_manager.pop_command();
         }
-        return actor_command;
+        return state_command;
     }
 
     /// Gets the next queued Replayed Command
-    pub fn pop_command_replay<U: ActorType>(
+    pub fn pop_command_replay<U: StateType>(
         &mut self,
     ) -> Option<(u16, PawnKey, Rc<Box<dyn Event<T>>>)> {
-        let actor_command_replay = self.actor_manager.pop_command_replay::<U>();
-        if actor_command_replay.is_none() {
+        let state_command_replay = self.state_manager.pop_command_replay::<U>();
+        if state_command_replay.is_none() {
             return self.entity_manager.pop_command_replay::<U>();
         }
-        return actor_command_replay;
+        return state_command_replay;
     }
 
     /// Process any necessary replayed Command
-    pub fn process_command_replay<U: ActorType>(
+    pub fn process_command_replay<U: StateType>(
         &mut self,
-        actor_manager: &mut ClientActorManager<U>,
+        state_manager: &mut ClientStateManager<U>,
     ) {
-        self.actor_manager.process_command_replay::<U>(actor_manager);
-        self.entity_manager.process_command_replay::<U>(actor_manager);
+        self.state_manager.process_command_replay::<U>(state_manager);
+        self.entity_manager.process_command_replay::<U>(state_manager);
     }
 
-    /// Queues a Pawn Actor Command to be ran locally on the Client
+    /// Queues a Pawn State Command to be ran locally on the Client
     pub fn queue_command(
         &mut self,
         host_tick: u16,
@@ -57,8 +57,8 @@ impl<T: EventType> DualCommandReceiver<T> {
         command: &Rc<Box<dyn Event<T>>>,
     ) {
         match pawn_key {
-            PawnKey::Actor(_) => {
-                self.actor_manager.queue_command(host_tick, pawn_key, command);
+            PawnKey::State(_) => {
+                self.state_manager.queue_command(host_tick, pawn_key, command);
             },
             PawnKey::Entity(_) => {
                 self.entity_manager.queue_command(host_tick, pawn_key, command);
@@ -69,8 +69,8 @@ impl<T: EventType> DualCommandReceiver<T> {
     /// Get number of Commands in the command history for a given Pawn
     pub fn command_history_count(&self, pawn_key: &PawnKey) -> u8 {
         match pawn_key {
-            PawnKey::Actor(_) => {
-                return self.actor_manager.command_history_count(pawn_key);
+            PawnKey::State(_) => {
+                return self.state_manager.command_history_count(pawn_key);
             },
             PawnKey::Entity(_) => {
                 return self.entity_manager.command_history_count(pawn_key);
@@ -85,8 +85,8 @@ impl<T: EventType> DualCommandReceiver<T> {
         reverse: bool,
     ) -> Option<SequenceIterator<Rc<Box<dyn Event<T>>>>> {
         match pawn_key {
-            PawnKey::Actor(_) => {
-                return self.actor_manager.command_history_iter(pawn_key, reverse);
+            PawnKey::State(_) => {
+                return self.state_manager.command_history_iter(pawn_key, reverse);
             },
             PawnKey::Entity(_) => {
                 return self.entity_manager.command_history_iter(pawn_key, reverse);
@@ -97,8 +97,8 @@ impl<T: EventType> DualCommandReceiver<T> {
     /// Queues Commands to be replayed from a given tick
     pub fn replay_commands(&mut self, history_tick: u16, pawn_key: &PawnKey) {
         match pawn_key {
-            PawnKey::Actor(_) => {
-                return self.actor_manager.replay_commands(history_tick, pawn_key);
+            PawnKey::State(_) => {
+                return self.state_manager.replay_commands(history_tick, pawn_key);
             },
             PawnKey::Entity(_) => {
                 return self.entity_manager.replay_commands(history_tick, pawn_key);
@@ -109,8 +109,8 @@ impl<T: EventType> DualCommandReceiver<T> {
     /// Removes command history for a given Pawn until a specific tick
     pub fn remove_history_until(&mut self, history_tick: u16, pawn_key: &PawnKey) {
         match pawn_key {
-            PawnKey::Actor(_) => {
-                return self.actor_manager.remove_history_until(history_tick, pawn_key);
+            PawnKey::State(_) => {
+                return self.state_manager.remove_history_until(history_tick, pawn_key);
             },
             PawnKey::Entity(_) => {
                 return self.entity_manager.remove_history_until(history_tick, pawn_key);
@@ -121,8 +121,8 @@ impl<T: EventType> DualCommandReceiver<T> {
     /// Perform initialization on Pawn creation
     pub fn pawn_init(&mut self, pawn_key: &PawnKey) {
         match pawn_key {
-            PawnKey::Actor(_) => {
-                return self.actor_manager.pawn_init(pawn_key);
+            PawnKey::State(_) => {
+                return self.state_manager.pawn_init(pawn_key);
             },
             PawnKey::Entity(_) => {
                 return self.entity_manager.pawn_init(pawn_key);
@@ -133,8 +133,8 @@ impl<T: EventType> DualCommandReceiver<T> {
     /// Perform cleanup on Pawn deletion
     pub fn pawn_cleanup(&mut self, pawn_key: &PawnKey) {
         match pawn_key {
-            PawnKey::Actor(_) => {
-                return self.actor_manager.pawn_cleanup(pawn_key);
+            PawnKey::State(_) => {
+                return self.state_manager.pawn_cleanup(pawn_key);
             },
             PawnKey::Entity(_) => {
                 return self.entity_manager.pawn_cleanup(pawn_key);

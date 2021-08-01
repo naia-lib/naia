@@ -2,19 +2,19 @@ use std::collections::HashMap;
 
 use macroquad::prelude::*;
 
-use naia_client::{ClientConfig, ClientEvent, Client, Ref, LocalActorKey};
+use naia_client::{ClientConfig, ClientEvent, Client, Ref, LocalObjectKey};
 
 use naia_demo_macroquad_shared::{
-    get_shared_config, manifest_load, behavior as shared_behavior, events as shared_events, state as shared_state,
+    get_shared_config, manifest_load, behavior as shared_behavior, events as shared_events, objects as shared_objects,
 };
 use shared_events::{Events, KeyCommand, Auth};
-use shared_state::{State, Point, Color};
+use shared_objects::{Objects, Point, Color};
 
 pub struct App {
-    client: Client<Events, State>,
-    pawn: Option<(LocalActorKey, Ref<Point>)>,
+    client: Client<Events, Objects>,
+    pawn: Option<(LocalObjectKey, Ref<Point>)>,
     queued_command: Option<KeyCommand>,
-    actors: HashMap<LocalActorKey, Ref<Point>>,
+    states: HashMap<LocalObjectKey, Ref<Point>>,
 }
 
 impl App {
@@ -33,7 +33,7 @@ impl App {
             client,
             pawn: None,
             queued_command: None,
-            actors: HashMap::new(),
+            states: HashMap::new(),
         }
     }
 
@@ -81,10 +81,10 @@ impl App {
                         }
                         ClientEvent::AssignPawn(local_key) => {
                             info!("assign pawn");
-                            if let Some(typed_actor) = self.client.get_pawn_mut(&local_key) {
-                                match typed_actor {
-                                    State::Point(actor_ref) => {
-                                        self.pawn = Some((local_key, actor_ref.clone()));
+                            if let Some(typed_state) = self.client.get_pawn_mut(&local_key) {
+                                match typed_state {
+                                    Objects::Point(state_ref) => {
+                                        self.pawn = Some((local_key, state_ref.clone()));
                                     }
                                 }
                             }
@@ -109,17 +109,17 @@ impl App {
                             }
                             _ => {}
                         },
-                        ClientEvent::CreateActor(local_key) => {
-                            if let Some(typed_actor) = self.client.get_actor(&local_key) {
-                                match typed_actor {
-                                    State::Point(actor_ref) => {
-                                        self.actors.insert(local_key, actor_ref.clone());
+                        ClientEvent::CreateState(local_key) => {
+                            if let Some(typed_state) = self.client.get_state(&local_key) {
+                                match typed_state {
+                                    Objects::Point(state_ref) => {
+                                        self.states.insert(local_key, state_ref.clone());
                                     }
                                 }
                             }
                         },
-                        ClientEvent::DeleteActor(local_key, _) => {
-                            self.actors.remove(&local_key);
+                        ClientEvent::DeleteState(local_key, _) => {
+                            self.states.remove(&local_key);
                         },
                         _ => {}
                     },
@@ -138,17 +138,17 @@ impl App {
         let square_size = 32.0;
 
         if self.client.has_connection() {
-            // draw actors
-            for (_, actor_ref) in &self.actors {
-                let point_actor = actor_ref.borrow();
-                let color = match point_actor.color.get() {
+            // draw states
+            for (_, state_ref) in &self.states {
+                let point_state = state_ref.borrow();
+                let color = match point_state.color.get() {
                     Color::Red => RED,
                     Color::Blue => BLUE,
                     Color::Yellow => YELLOW,
                 };
                 draw_rectangle(
-                    f32::from(*(point_actor.x.get())),
-                    f32::from(*(point_actor.y.get())),
+                    f32::from(*(point_state.x.get())),
+                    f32::from(*(point_state.y.get())),
                     square_size,
                     square_size,
                     color,
@@ -157,10 +157,10 @@ impl App {
 
             // draw pawns
             if let Some((_, pawn_ref)) = &self.pawn {
-                let point_actor = pawn_ref.borrow();
+                let point_state = pawn_ref.borrow();
                 draw_rectangle(
-                    f32::from(*(point_actor.x.get())),
-                    f32::from(*(point_actor.y.get())),
+                    f32::from(*(point_state.x.get())),
+                    f32::from(*(point_state.y.get())),
                     square_size,
                     square_size,
                     WHITE,

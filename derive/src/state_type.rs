@@ -10,7 +10,7 @@ cfg_if! {
     }
 }
 
-pub fn actor_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn state_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let type_name = input.ident;
@@ -35,9 +35,9 @@ pub fn actor_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
     };
 
     let gen = quote! {
-        use naia_shared::{ActorType, Actor, ActorEq, StateMask, PacketReader};
+        use naia_shared::{StateType, State, StateEq, DiffMask, PacketReader};
         #ref_imports
-        impl ActorType for #type_name {
+        impl StateType for #type_name {
             #read_full_method
             #read_partial_method
             #inner_ref_method
@@ -57,8 +57,8 @@ fn get_read_full_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idactor) => {
-                        idactor.borrow_mut().read_full(reader, packet_index);
+                    #type_name::#variant_name(idstate) => {
+                        idstate.borrow_mut().read_full(reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -88,8 +88,8 @@ fn get_read_partial_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idactor) => {
-                        idactor.borrow_mut().read_partial(state_mask, reader, packet_index);
+                    #type_name::#variant_name(idstate) => {
+                        idstate.borrow_mut().read_partial(diff_mask, reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -104,7 +104,7 @@ fn get_read_partial_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn read_partial(&mut self, state_mask: &StateMask, reader: &mut PacketReader, packet_index: u16) {
+        fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16) {
             match self {
                 #variants
             }
@@ -125,8 +125,8 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
                 );
 
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idactor) => {
-                        return #method_name(idactor.clone());
+                    #type_name::#variant_name(idstate) => {
+                        return #method_name(idstate.clone());
                     }
                 };
                 let new_output_result = quote! {
@@ -141,7 +141,7 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn inner_ref(&self) -> Ref<dyn Actor<#type_name>> {
+        fn inner_ref(&self) -> Ref<dyn State<#type_name>> {
             match self {
                 #variants
             }
@@ -170,13 +170,13 @@ fn get_conversion_methods(type_name: &Ident, data: &Data) -> TokenStream {
                     let new_output_right = {
                         if MULTITHREAD {
                             quote! {
-                                fn #method_name_raw(eref: Arc<Mutex<#variant_name>>) -> Arc<Mutex<dyn Actor<#type_name>>> {
+                                fn #method_name_raw(eref: Arc<Mutex<#variant_name>>) -> Arc<Mutex<dyn State<#type_name>>> {
                                     eref.clone()
                                 }
                             }
                         } else {
                             quote! {
-                                fn #method_name_raw(eref: Rc<RefCell<#variant_name>>) -> Rc<RefCell<dyn Actor<#type_name>>> {
+                                fn #method_name_raw(eref: Rc<RefCell<#variant_name>>) -> Rc<RefCell<dyn State<#type_name>>> {
                                     eref.clone()
                                 }
                             }
@@ -193,7 +193,7 @@ fn get_conversion_methods(type_name: &Ident, data: &Data) -> TokenStream {
 
                 {
                     let new_output_right = quote! {
-                        fn #method_name(eref: Ref<#variant_name>) -> Ref<dyn Actor<#type_name>> {
+                        fn #method_name(eref: Ref<#variant_name>) -> Ref<dyn State<#type_name>> {
                             let upcast_ref = #method_name_raw(eref.inner());
                             Ref::new_raw(upcast_ref)
                         }
@@ -218,10 +218,10 @@ fn get_equals_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idactor) => {
+                    #type_name::#variant_name(idstate) => {
                         match other {
-                            #type_name::#variant_name(other_idactor) => {
-                                return idactor.borrow().equals(&other_idactor.borrow());
+                            #type_name::#variant_name(other_idstate) => {
+                                return idstate.borrow().equals(&other_idstate.borrow());
                             }
                             _ => { return false; }
                         }
@@ -254,10 +254,10 @@ fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idactor) => {
+                    #type_name::#variant_name(idstate) => {
                         match other {
-                            #type_name::#variant_name(other_idactor) => {
-                                        return idactor.borrow_mut().mirror(&other_idactor.borrow());
+                            #type_name::#variant_name(other_idstate) => {
+                                        return idstate.borrow_mut().mirror(&other_idstate.borrow());
                                     }
                             _ => {}
                         }

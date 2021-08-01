@@ -1,9 +1,9 @@
-use naia_derive::Actor;
-use naia_shared::{Actor, Property};
+use naia_derive::State;
+use naia_shared::{State, Property};
 
 use super::Components;
 
-#[derive(Actor)]
+#[derive(State)]
 #[type_name = "Components"]
 pub struct Marker {
     pub name: Property<String>,

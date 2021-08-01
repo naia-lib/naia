@@ -14,7 +14,7 @@
 extern crate cfg_if;
 
 mod ack_manager;
-mod actors;
+mod state;
 mod connection;
 mod connection_config;
 mod ecs;
@@ -38,15 +38,15 @@ pub use naia_socket_shared::{
 };
 
 pub use ack_manager::AckManager;
-pub use actors::{
-    actor::{Actor, ActorEq},
-    actor_builder::ActorBuilder,
-    actor_message_type::ActorMessageType,
-    actor_mutator::ActorMutator,
-    actor_notifiable::ActorNotifiable,
-    actor_type::ActorType,
+pub use state::{
+    state::{State, StateEq},
+    state_builder::StateBuilder,
+    state_message_type::StateMessageType,
+    state_mutator::StateMutator,
+    state_notifiable::StateNotifiable,
+    state_type::StateType,
     property::Property,
-    state_mask::StateMask,
+    diff_mask::DiffMask,
 };
 pub use connection::Connection;
 pub use connection_config::ConnectionConfig;
@@ -58,7 +58,7 @@ pub use events::{
     event_type::EventType,
 };
 pub use ecs::{
-    keys::{EntityKey, LocalActorKey, LocalEntityKey, LocalComponentKey, PawnKey, NaiaKey}
+    keys::{EntityKey, LocalObjectKey, LocalEntityKey, LocalComponentKey, PawnKey, NaiaKey}
 };
 pub use host_tick_manager::HostTickManager;
 pub use host_type::HostType;

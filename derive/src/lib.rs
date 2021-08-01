@@ -1,5 +1,5 @@
 //! # Naia Derive
-//! Procedural macros to simplify implementation of Naia Event & Actor traits
+//! Procedural macros to simplify implementation of Naia Event & State traits
 
 #![deny(
     missing_docs,
@@ -13,21 +13,21 @@
 #[macro_use]
 extern crate cfg_if;
 
-mod actor;
-mod actor_type;
+mod state;
+mod state_type;
 mod event;
 mod event_type;
 mod utils;
 
-use actor::actor_impl;
-use actor_type::actor_type_impl;
+use state::state_impl;
+use state_type::state_type_impl;
 use event::event_impl;
 use event_type::event_type_impl;
 
-/// Derives the ActorType trait for a given enum
-#[proc_macro_derive(ActorType)]
-pub fn actor_type_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    actor_type_impl(input)
+/// Derives the StateType trait for a given enum
+#[proc_macro_derive(StateType)]
+pub fn state_type_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    state_type_impl(input)
 }
 
 /// Derives the EventType trait for a given enum
@@ -42,8 +42,8 @@ pub fn event_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     event_impl(input)
 }
 
-/// Derives the Actor trait for a given struct
-#[proc_macro_derive(Actor, attributes(type_name))]
-pub fn actor_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    actor_impl(input)
+/// Derives the State trait for a given struct
+#[proc_macro_derive(State, attributes(type_name))]
+pub fn state_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    state_impl(input)
 }

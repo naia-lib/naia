@@ -1,7 +1,7 @@
 use naia_shared::EntityKey;
 
 use super::{
-    actors::actor_key::actor_key::ActorKey,
+    state::object_key::object_key::ObjectKey,
     user::{user_key::UserKey, User},
 };
 
@@ -17,10 +17,10 @@ pub enum ServerEvent<T> {
     /// An Event emitted to the Server from a Client
     Event(UserKey, T),
     /// A Tick Event, the duration between Tick events is defined in the Config
-    /// object passed to the Server on initialization
+    /// state passed to the Server on initialization
     Tick,
     /// An Command emitted to the Server from a Client
-    Command(UserKey, ActorKey, T),
+    Command(UserKey, ObjectKey, T),
     /// An Command emitted to the Server from a Client, related to an Entity
     CommandEntity(UserKey, EntityKey, T),
 }

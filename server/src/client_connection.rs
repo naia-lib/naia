@@ -1,14 +1,14 @@
 use std::{collections::HashSet, net::SocketAddr};
 
 use naia_shared::{
-    Actor, ActorType, Connection, ConnectionConfig, Event, EventType, ManagerType, Manifest,
+    State, StateType, Connection, ConnectionConfig, Event, EventType, ManagerType, Manifest,
     PacketReader, PacketType, Ref, SequenceNumber, StandardHeader, EntityKey, PawnKey
 };
 
 use super::{
-    actors::{
-        actor_key::actor_key::ActorKey, mut_handler::MutHandler,
-        server_actor_manager::ServerActorManager,
+    state::{
+        object_key::object_key::ObjectKey, mut_handler::MutHandler,
+        server_state_manager::ServerStateManager,
     },
     command_receiver::CommandReceiver,
     ping_manager::PingManager,
@@ -16,14 +16,14 @@ use super::{
 };
 use crate::{ComponentKey, GlobalPawnKey};
 
-pub struct ClientConnection<T: EventType, U: ActorType> {
+pub struct ClientConnection<T: EventType, U: StateType> {
     connection: Connection<T>,
-    actor_manager: ServerActorManager<U>,
+    state_manager: ServerStateManager<U>,
     ping_manager: PingManager,
     command_receiver: CommandReceiver<T>,
 }
 
-impl<T: EventType, U: ActorType> ClientConnection<T, U> {
+impl<T: EventType, U: StateType> ClientConnection<T, U> {
     pub fn new(
         address: SocketAddr,
         mut_handler: Option<&Ref<MutHandler>>,
@@ -31,7 +31,7 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
     ) -> Self {
         ClientConnection {
             connection: Connection::new(address, connection_config),
-            actor_manager: ServerActorManager::new(address, mut_handler.unwrap()),
+            state_manager: ServerStateManager::new(address, mut_handler.unwrap()),
             ping_manager: PingManager::new(),
             command_receiver: CommandReceiver::new(),
         }
@@ -42,7 +42,7 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         host_tick: u16,
         manifest: &Manifest<T, U>,
     ) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_events() || self.actor_manager.has_outgoing_messages() {
+        if self.connection.has_outgoing_events() || self.state_manager.has_outgoing_messages() {
             let mut writer = ServerPacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
@@ -53,16 +53,16 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
                     break;
                 }
             }
-            while let Some(popped_actor_message) =
-                self.actor_manager.pop_outgoing_message(next_packet_index)
+            while let Some(popped_state_message) =
+                self.state_manager.pop_outgoing_message(next_packet_index)
             {
-                if !self.actor_manager.write_actor_message(
+                if !self.state_manager.write_state_message(
                     &mut writer,
                     manifest,
-                    &popped_actor_message,
+                    &popped_state_message,
                 ) {
-                    self.actor_manager
-                        .unpop_outgoing_message(next_packet_index, &popped_actor_message);
+                    self.state_manager
+                        .unpop_outgoing_message(next_packet_index, &popped_state_message);
                     break;
                 }
             }
@@ -112,32 +112,32 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         }
     }
 
-    pub fn has_actor(&self, key: &ActorKey) -> bool {
-        return self.actor_manager.has_actor(key);
+    pub fn has_state(&self, key: &ObjectKey) -> bool {
+        return self.state_manager.has_state(key);
     }
 
-    pub fn add_actor(&mut self, key: &ActorKey, actor: &Ref<dyn Actor<U>>) {
-        self.actor_manager.add_actor(key, actor);
+    pub fn add_state(&mut self, key: &ObjectKey, state: &Ref<dyn State<U>>) {
+        self.state_manager.add_state(key, state);
     }
 
-    pub fn remove_actor(&mut self, key: &ActorKey) {
-        self.actor_manager.remove_actor(key);
+    pub fn remove_state(&mut self, key: &ObjectKey) {
+        self.state_manager.remove_state(key);
     }
 
-    pub fn collect_actor_updates(&mut self) {
-        self.actor_manager.collect_actor_updates();
+    pub fn collect_state_updates(&mut self) {
+        self.state_manager.collect_state_updates();
     }
 
-    pub fn has_pawn(&self, key: &ActorKey) -> bool {
-        return self.actor_manager.has_pawn(key);
+    pub fn has_pawn(&self, key: &ObjectKey) -> bool {
+        return self.state_manager.has_pawn(key);
     }
 
-    pub fn add_pawn(&mut self, key: &ActorKey) {
-        self.actor_manager.add_pawn(key);
+    pub fn add_pawn(&mut self, key: &ObjectKey) {
+        self.state_manager.add_pawn(key);
     }
 
-    pub fn remove_pawn(&mut self, key: &ActorKey) {
-        self.actor_manager.remove_pawn(key);
+    pub fn remove_pawn(&mut self, key: &ObjectKey) {
+        self.state_manager.remove_pawn(key);
     }
 
     pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(GlobalPawnKey, T)> {
@@ -145,16 +145,16 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
             self.command_receiver.pop_incoming_command(server_tick)
         {
             match local_pawn_key {
-                PawnKey::Actor(local_actor_key) => {
+                PawnKey::State(local_object_key) => {
                     if let Some(global_pawn_key) =
-                        self.actor_manager.get_global_key_from_local(local_actor_key)
+                        self.state_manager.get_global_key_from_local(local_object_key)
                     {
-                        return Some((GlobalPawnKey::Actor(*global_pawn_key), command));
+                        return Some((GlobalPawnKey::State(*global_pawn_key), command));
                     }
                 }
                 PawnKey::Entity(local_entity_key) => {
                     if let Some(global_pawn_key) =
-                        self.actor_manager.get_global_entity_key_from_local(local_entity_key)
+                        self.state_manager.get_global_entity_key_from_local(local_entity_key)
                     {
                         return Some((GlobalPawnKey::Entity(*global_pawn_key), command));
                     }
@@ -172,35 +172,35 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
     // Entity management
 
     pub fn has_entity(&self, key: &EntityKey) -> bool {
-        return self.actor_manager.has_entity(key);
+        return self.state_manager.has_entity(key);
     }
 
-    pub fn add_entity(&mut self, key: &EntityKey, components_ref: &Ref<HashSet<ComponentKey>>, component_list: &Vec<(ComponentKey, Ref<dyn Actor<U>>)>) {
-        self.actor_manager.add_entity(key, components_ref, component_list);
+    pub fn add_entity(&mut self, key: &EntityKey, components_ref: &Ref<HashSet<ComponentKey>>, component_list: &Vec<(ComponentKey, Ref<dyn State<U>>)>) {
+        self.state_manager.add_entity(key, components_ref, component_list);
     }
 
     pub fn remove_entity(&mut self, key: &EntityKey) {
-        self.actor_manager.remove_entity(key);
+        self.state_manager.remove_entity(key);
     }
 
     pub fn has_pawn_entity(&self, key: &EntityKey) -> bool {
-        return self.actor_manager.has_pawn_entity(key);
+        return self.state_manager.has_pawn_entity(key);
     }
 
     pub fn add_pawn_entity(&mut self, key: &EntityKey) {
-        self.actor_manager.add_pawn_entity(key);
+        self.state_manager.add_pawn_entity(key);
     }
 
     pub fn remove_pawn_entity(&mut self, key: &EntityKey) {
-        self.actor_manager.remove_pawn_entity(key);
+        self.state_manager.remove_pawn_entity(key);
     }
 
-    pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Actor<U>>) {
-        self.actor_manager.add_component(entity_key, component_key, component_ref);
+    pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn State<U>>) {
+        self.state_manager.add_component(entity_key, component_key, component_ref);
     }
 
 //    pub fn remove_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey) {
-//        self.actor_manager.remove_component(entity_key, component_key);
+//        self.state_manager.remove_component(entity_key, component_key);
 //    }
 
     // Pass-through methods to underlying common connection
@@ -223,7 +223,7 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         self.connection
-            .process_incoming_header(header, &mut Some(&mut self.actor_manager));
+            .process_incoming_header(header, &mut Some(&mut self.state_manager));
     }
 
     pub fn process_outgoing_header(

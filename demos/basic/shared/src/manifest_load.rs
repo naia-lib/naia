@@ -10,9 +10,9 @@ pub fn manifest_load() -> Manifest<Events, Components> {
     manifest.register_event(Auth::get_builder());
     manifest.register_event(StringMessage::get_builder());
 
-    manifest.register_actor(Position::get_builder());
-    manifest.register_actor(Name::get_builder());
-    manifest.register_actor(Marker::get_builder());
+    manifest.register_state(Position::get_builder());
+    manifest.register_state(Name::get_builder());
+    manifest.register_state(Marker::get_builder());
 
     manifest
 }

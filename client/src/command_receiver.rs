@@ -3,9 +3,9 @@ use std::{
     rc::Rc,
 };
 
-use naia_shared::{wrapping_diff, ActorType, Event, EventType, SequenceBuffer, SequenceIterator, PawnKey};
+use naia_shared::{wrapping_diff, StateType, Event, EventType, SequenceBuffer, SequenceIterator, PawnKey};
 
-use super::client_actor_manager::ClientActorManager;
+use super::client_state_manager::ClientStateManager;
 
 const COMMAND_HISTORY_SIZE: u16 = 64;
 
@@ -35,22 +35,22 @@ impl<T: EventType> CommandReceiver<T> {
     }
 
     /// Gets the next queued Replayed Command
-    pub fn pop_command_replay<U: ActorType>(
+    pub fn pop_command_replay<U: StateType>(
         &mut self,
     ) -> Option<(u16, PawnKey, Rc<Box<dyn Event<T>>>)> {
         self.queued_command_replays.pop_front()
     }
 
     /// Process any necessary replayed Command
-    pub fn process_command_replay<U: ActorType>(
+    pub fn process_command_replay<U: StateType>(
         &mut self,
-        actor_manager: &mut ClientActorManager<U>,
+        state_manager: &mut ClientStateManager<U>,
     ) {
         for (pawn_key, history_tick) in self.replay_trigger.iter() {
             // set pawn to server authoritative state
             match pawn_key {
-                PawnKey::Actor(actor_key) => actor_manager.pawn_reset(actor_key),
-                PawnKey::Entity(entity_key) => actor_manager.pawn_reset_entity(entity_key),
+                PawnKey::State(object_key) => state_manager.pawn_reset(object_key),
+                PawnKey::Entity(entity_key) => state_manager.pawn_reset_entity(entity_key),
             }
 
             // trigger replay of historical commands

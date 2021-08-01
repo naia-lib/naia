@@ -4,25 +4,25 @@ use std::fmt;
 use crate::PacketReader;
 
 /// The State Mask is a variable-length byte array, where each bit represents
-/// the current state of a Property owned by an Actor. The Property state
+/// the current state of a Property owned by an State. The Property state
 /// tracked is whether it has been updated and needs to be synced with the
 /// remote Client
 #[derive(Debug, Clone)]
-pub struct StateMask {
+pub struct DiffMask {
     mask: Vec<u8>,
     bytes: u8,
 }
 
-impl StateMask {
-    /// Create a new StateMask with a given number of bytes
-    pub fn new(bytes: u8) -> StateMask {
-        StateMask {
+impl DiffMask {
+    /// Create a new DiffMask with a given number of bytes
+    pub fn new(bytes: u8) -> DiffMask {
+        DiffMask {
             bytes,
             mask: vec![0; bytes as usize],
         }
     }
 
-    /// Gets the bit at the specified position within the StateMask
+    /// Gets the bit at the specified position within the DiffMask
     pub fn get_bit(&self, index: u8) -> Option<bool> {
         if let Some(byte) = self.mask.get((index / 8) as usize) {
             let adjusted_index = index % 8;
@@ -32,7 +32,7 @@ impl StateMask {
         return None;
     }
 
-    /// Sets the bit at the specified position within the StateMask
+    /// Sets the bit at the specified position within the DiffMask
     pub fn set_bit(&mut self, index: u8, value: bool) {
         if let Some(byte) = self.mask.get_mut((index / 8) as usize) {
             let adjusted_index = index % 8;
@@ -45,12 +45,12 @@ impl StateMask {
         }
     }
 
-    /// Clears the whole StateMask
+    /// Clears the whole DiffMask
     pub fn clear(&mut self) {
         self.mask = vec![0; self.bytes as usize];
     }
 
-    /// Returns whether any bit has been set in the StateMask
+    /// Returns whether any bit has been set in the DiffMask
     pub fn is_clear(&self) -> bool {
         for byte in self.mask.iter() {
             if *byte != 0 {
@@ -60,18 +60,18 @@ impl StateMask {
         return true;
     }
 
-    /// Get the number of bytes required to represent the StateMask
+    /// Get the number of bytes required to represent the DiffMask
     pub fn byte_number(&self) -> u8 {
         return self.bytes;
     }
 
-    /// Gets a byte at the specified index in the StateMask
+    /// Gets a byte at the specified index in the DiffMask
     pub fn get_byte(&self, index: usize) -> u8 {
         return self.mask[index];
     }
 
-    /// Performs a NAND operation on the StateMask, with another StateMask
-    pub fn nand(&mut self, other: &StateMask) {
+    /// Performs a NAND operation on the DiffMask, with another DiffMask
+    pub fn nand(&mut self, other: &DiffMask) {
         //if other state mask has different capacity, do nothing
         if other.byte_number() != self.byte_number() {
             return;
@@ -85,8 +85,8 @@ impl StateMask {
         }
     }
 
-    /// Performs an OR operation on the StateMask, with another StateMask
-    pub fn or(&mut self, other: &StateMask) {
+    /// Performs an OR operation on the DiffMask, with another DiffMask
+    pub fn or(&mut self, other: &DiffMask) {
         //if other state mask has different capacity, do nothing
         if other.byte_number() != self.byte_number() {
             return;
@@ -100,7 +100,7 @@ impl StateMask {
         }
     }
 
-    /// Writes the StateMask into an outgoing byte stream
+    /// Writes the DiffMask into an outgoing byte stream
     pub fn write(&mut self, out_bytes: &mut Vec<u8>) {
         out_bytes.write_u8(self.bytes).unwrap();
         for x in 0..self.bytes {
@@ -108,18 +108,18 @@ impl StateMask {
         }
     }
 
-    /// Reads the StateMask from an incoming packet
-    pub fn read(reader: &mut PacketReader) -> StateMask {
+    /// Reads the DiffMask from an incoming packet
+    pub fn read(reader: &mut PacketReader) -> DiffMask {
         let bytes: u8 = reader.read_u8();
         let mut mask: Vec<u8> = Vec::new();
         for _ in 0..bytes {
             mask.push(reader.read_u8());
         }
-        StateMask { bytes, mask }
+        DiffMask { bytes, mask }
     }
 
-    /// Copies the StateMask into another StateMask
-    pub fn copy_contents(&mut self, other: &StateMask) {
+    /// Copies the DiffMask into another DiffMask
+    pub fn copy_contents(&mut self, other: &DiffMask) {
         //if other state mask has different capacity, do nothing
         if other.byte_number() != self.byte_number() {
             return;
@@ -134,7 +134,7 @@ impl StateMask {
     }
 }
 
-impl fmt::Display for StateMask {
+impl fmt::Display for DiffMask {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out_string: String = String::new();
         for y in 0..8 {
@@ -152,11 +152,11 @@ impl fmt::Display for StateMask {
 
 #[cfg(test)]
 mod single_byte_tests {
-    use crate::StateMask;
+    use crate::DiffMask;
 
     #[test]
     fn getset() {
-        let mut mask = StateMask::new(1);
+        let mut mask = DiffMask::new(1);
 
         mask.set_bit(0, true);
         mask.set_bit(2, true);
@@ -173,7 +173,7 @@ mod single_byte_tests {
 
     #[test]
     fn clear() {
-        let mut mask = StateMask::new(1);
+        let mut mask = DiffMask::new(1);
 
         mask.set_bit(0, true);
         mask.set_bit(2, true);
@@ -190,7 +190,7 @@ mod single_byte_tests {
 
     #[test]
     fn is_clear_true() {
-        let mut mask = StateMask::new(1);
+        let mut mask = DiffMask::new(1);
 
         mask.set_bit(2, true);
 
@@ -203,13 +203,13 @@ mod single_byte_tests {
 
     #[test]
     fn bytes() {
-        let mut mask = StateMask::new(1);
+        let mut mask = DiffMask::new(1);
         assert!(mask.byte_number() == 1);
     }
 
     #[test]
     fn get_byte() {
-        let mut mask = StateMask::new(1);
+        let mut mask = DiffMask::new(1);
         mask.set_bit(2, true);
         let byte = mask.get_byte(0);
         assert!(byte == 4);
@@ -217,11 +217,11 @@ mod single_byte_tests {
 
     #[test]
     fn nand() {
-        let mut mask_a = StateMask::new(1);
+        let mut mask_a = DiffMask::new(1);
         mask_a.set_bit(1, true);
         mask_a.set_bit(2, true);
 
-        let mut mask_b = StateMask::new(1);
+        let mut mask_b = DiffMask::new(1);
         mask_b.set_bit(1, true);
 
         mask_a.nand(&mask_b);
@@ -234,11 +234,11 @@ mod single_byte_tests {
 
     #[test]
     fn or() {
-        let mut mask_a = StateMask::new(1);
+        let mut mask_a = DiffMask::new(1);
         mask_a.set_bit(1, true);
         mask_a.set_bit(2, true);
 
-        let mut mask_b = StateMask::new(1);
+        let mut mask_b = DiffMask::new(1);
         mask_b.set_bit(2, true);
         mask_b.set_bit(3, true);
 
@@ -253,7 +253,7 @@ mod single_byte_tests {
 
     #[test]
     fn clone() {
-        let mut mask_a = StateMask::new(1);
+        let mut mask_a = DiffMask::new(1);
         mask_a.set_bit(1, true);
         mask_a.set_bit(4, true);
 
@@ -267,11 +267,11 @@ mod single_byte_tests {
 
 #[cfg(test)]
 mod double_byte_tests {
-    use crate::StateMask;
+    use crate::DiffMask;
 
     #[test]
     fn getset() {
-        let mut mask = StateMask::new(2);
+        let mut mask = DiffMask::new(2);
 
         mask.set_bit(0, true);
         mask.set_bit(4, true);
@@ -288,7 +288,7 @@ mod double_byte_tests {
 
     #[test]
     fn clear() {
-        let mut mask = StateMask::new(2);
+        let mut mask = DiffMask::new(2);
 
         mask.set_bit(0, true);
         mask.set_bit(4, true);
@@ -305,7 +305,7 @@ mod double_byte_tests {
 
     #[test]
     fn is_clear_true() {
-        let mut mask = StateMask::new(2);
+        let mut mask = DiffMask::new(2);
 
         mask.set_bit(9, true);
 
@@ -318,13 +318,13 @@ mod double_byte_tests {
 
     #[test]
     fn bytes() {
-        let mut mask = StateMask::new(2);
+        let mut mask = DiffMask::new(2);
         assert!(mask.byte_number() == 2);
     }
 
     #[test]
     fn get_byte() {
-        let mut mask = StateMask::new(2);
+        let mut mask = DiffMask::new(2);
         mask.set_bit(10, true);
         let byte = mask.get_byte(1);
         assert!(byte == 4);
@@ -332,13 +332,13 @@ mod double_byte_tests {
 
     #[test]
     fn nand() {
-        let mut mask_a = StateMask::new(2);
+        let mut mask_a = DiffMask::new(2);
         mask_a.set_bit(1, true);
         mask_a.set_bit(2, true);
         mask_a.set_bit(9, true);
         mask_a.set_bit(10, true);
 
-        let mut mask_b = StateMask::new(2);
+        let mut mask_b = DiffMask::new(2);
         mask_b.set_bit(1, true);
         mask_b.set_bit(9, true);
 
@@ -357,11 +357,11 @@ mod double_byte_tests {
 
     #[test]
     fn or() {
-        let mut mask_a = StateMask::new(2);
+        let mut mask_a = DiffMask::new(2);
         mask_a.set_bit(4, true);
         mask_a.set_bit(8, true);
 
-        let mut mask_b = StateMask::new(2);
+        let mut mask_b = DiffMask::new(2);
         mask_b.set_bit(8, true);
         mask_b.set_bit(12, true);
 
@@ -376,7 +376,7 @@ mod double_byte_tests {
 
     #[test]
     fn clone() {
-        let mut mask_a = StateMask::new(2);
+        let mut mask_a = DiffMask::new(2);
         mask_a.set_bit(2, true);
         mask_a.set_bit(10, true);
 

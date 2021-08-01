@@ -15,16 +15,16 @@ use naia_server_socket::{
     MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
 };
 pub use naia_shared::{
-    wrapping_diff, Actor, ActorMutator, ActorType, Connection, ConnectionConfig, Event, EventType,
+    wrapping_diff, State, StateMutator, StateType, Connection, ConnectionConfig, Event, EventType,
     HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType, Ref, SharedConfig,
-    Timer, Timestamp, LocalActorKey, StandardHeader, KeyGenerator, EntityKey
+    Timer, Timestamp, LocalObjectKey, StandardHeader, KeyGenerator, EntityKey
 };
 
 use crate::{ComponentKey, GlobalPawnKey};
 use super::{
-    actors::{
-        actor_key::actor_key::ActorKey, mut_handler::MutHandler,
-        server_actor_mutator::ServerActorMutator,
+    state::{
+        object_key::object_key::ObjectKey, mut_handler::MutHandler,
+        server_state_mutator::ServerStateMutator,
     },
     client_connection::ClientConnection,
     error::NaiaServerError,
@@ -38,15 +38,15 @@ use super::{
 
 
 /// A server that uses either UDP or WebRTC communication to send/receive events
-/// to/from connected clients, and syncs registered actors to clients to whom
-/// those actors are in-scope
-pub struct Server<T: EventType, U: ActorType> {
+/// to/from connected clients, and syncs registered states to clients to whom
+/// those states are in-scope
+pub struct Server<T: EventType, U: StateType> {
     connection_config: ConnectionConfig,
     manifest: Manifest<T, U>,
     socket: Box<dyn ServerSocketTrait>,
     sender: MessageSender,
-    global_state_store: DenseSlotMap<ActorKey, U>,
-    global_actor_set: HashSet<ActorKey>,
+    global_state_store: DenseSlotMap<ObjectKey, U>,
+    global_state_set: HashSet<ObjectKey>,
     auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
     mut_handler: Ref<MutHandler>,
     users: DenseSlotMap<UserKey, User>,
@@ -58,15 +58,15 @@ pub struct Server<T: EventType, U: ActorType> {
     connection_hash_key: hmac::Key,
     tick_manager: ServerTickManager,
     tick_timer: Interval,
-    actor_scope_map: HashMap<(RoomKey, UserKey, ActorKey), bool>,
+    state_scope_map: HashMap<(RoomKey, UserKey, ObjectKey), bool>,
     entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
     entity_key_generator: KeyGenerator<EntityKey>,
     entity_component_map: HashMap<EntityKey, Ref<HashSet<ComponentKey>>>,
     component_entity_map: HashMap<ComponentKey, EntityKey>,
 }
 
-impl<T: EventType, U: ActorType> Server<T, U> {
-    /// Create a new Server, given an address to listen at, an Event/Actor
+impl<T: EventType, U: StateType> Server<T, U> {
+    /// Create a new Server, given an address to listen at, an Event/State
     /// manifest, and an optional Config
     pub async fn new(
         manifest: Manifest<T, U>,
@@ -105,8 +105,8 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         Server {
             manifest,
             global_state_store: DenseSlotMap::with_key(),
-            global_actor_set: HashSet::new(),
-            actor_scope_map: HashMap::new(),
+            global_state_set: HashSet::new(),
+            state_scope_map: HashMap::new(),
             entity_scope_map: HashMap::new(),
             auth_func: None,
             mut_handler: MutHandler::new(),
@@ -142,7 +142,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
                             self.outstanding_disconnects.push_back(*user_key);
                         } else {
                             if connection.should_send_heartbeat() {
-                                // Don't try to refactor this to self.internal_send, doesn't seem to
+                                // Don't try to refstate this to self.internal_send, doesn't seem to
                                 // work cause of iter_mut()
                                 let payload = connection.process_outgoing_header(
                                     self.tick_manager.get_tick(),
@@ -186,10 +186,10 @@ impl<T: EventType, U: ActorType> Server<T, U> {
                     connection.get_incoming_command(self.tick_manager.get_tick())
                 {
                     match pawn_key {
-                        GlobalPawnKey::Actor(actor_key) => {
+                        GlobalPawnKey::State(object_key) => {
                             return Ok(ServerEvent::Command(
                                 *user_key,
-                                actor_key,
+                                object_key,
                                 command,
                             ));
                         }
@@ -337,9 +337,9 @@ impl<T: EventType, U: ActorType> Server<T, U> {
                                             let naia_id = reader.read_u16();
 
                                             match self.manifest.create_event(naia_id, &mut reader) {
-                                                Some(new_actor) => {
+                                                Some(new_state) => {
                                                     if !(auth_func.as_ref().as_ref())(
-                                                        &user_key, &new_actor,
+                                                        &user_key, &new_state,
                                                     ) {
                                                         self.users.remove(user_key);
                                                         continue;
@@ -489,12 +489,12 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         }
     }
 
-    /// Sends all Actor/Event messages to all Clients. If you don't call this
+    /// Sends all State/Event messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
     pub async fn send_all_updates(&mut self) {
-        // update actor scopes
-        self.update_actor_scopes();
+        // update state scopes
+        self.update_state_scopes();
 
         // update entity scopes
         self.update_entity_scopes();
@@ -502,7 +502,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         // loop through all connections, send packet
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
-                connection.collect_actor_updates();
+                connection.collect_state_updates();
                 while let Some(payload) =
                     connection.get_outgoing_packet(self.tick_manager.get_tick(), &self.manifest)
                 {
@@ -522,68 +522,68 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         }
     }
 
-    /// Register an Actor with the Server, whereby the Server will sync the
-    /// state of the Actor to all connected Clients for which the Actor is
-    /// in scope. Gives back an ActorKey which can be used to get the reference
-    /// to the Actor from the Server once again
-    pub fn register_actor(&mut self, actor: U) -> ActorKey {
-        let new_mutator_ref: Ref<ServerActorMutator> =
-            Ref::new(ServerActorMutator::new(&self.mut_handler));
-        actor
+    /// Register an State with the Server, whereby the Server will sync the
+    /// state of the State to all connected Clients for which the State is
+    /// in scope. Gives back an ObjectKey which can be used to get the reference
+    /// to the State from the Server once again
+    pub fn register_state(&mut self, state: U) -> ObjectKey {
+        let new_mutator_ref: Ref<ServerStateMutator> =
+            Ref::new(ServerStateMutator::new(&self.mut_handler));
+        state
             .inner_ref()
             .borrow_mut()
-            .set_mutator(&to_actor_mutator(&new_mutator_ref));
-        let actor_key = self.global_state_store.insert(actor);
-        self.global_actor_set.insert(actor_key);
-        new_mutator_ref.borrow_mut().set_actor_key(actor_key);
-        self.mut_handler.borrow_mut().register_actor(&actor_key);
-        return actor_key;
+            .set_mutator(&to_state_mutator(&new_mutator_ref));
+        let object_key = self.global_state_store.insert(state);
+        self.global_state_set.insert(object_key);
+        new_mutator_ref.borrow_mut().set_object_key(object_key);
+        self.mut_handler.borrow_mut().register_state(&object_key);
+        return object_key;
     }
 
-    /// Deregisters an Actor with the Server, deleting local copies of the
-    /// Actor on each Client
-    pub fn deregister_actor(&mut self, key: ActorKey) -> U {
-        if !self.global_actor_set.contains(&key) {
-            panic!("attempted to deregister an Actor which was never registered");
+    /// Deregisters an State with the Server, deleting local copies of the
+    /// State on each Client
+    pub fn deregister_state(&mut self, key: ObjectKey) -> U {
+        if !self.global_state_set.contains(&key) {
+            panic!("attempted to deregister an State which was never registered");
         }
 
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                Self::user_remove_actor(user_connection,
+                Self::user_remove_state(user_connection,
                                         &key);
             }
         }
 
-        self.mut_handler.borrow_mut().deregister_actor(&key);
-        self.global_actor_set.remove(&key);
+        self.mut_handler.borrow_mut().deregister_state(&key);
+        self.global_state_set.remove(&key);
         return self.global_state_store.remove(key)
-            .expect("actor not initialized correctly?");
+            .expect("state not initialized correctly?");
     }
 
-    /// Assigns an Actor to a specific User, making it a Pawn for that User
+    /// Assigns an State to a specific User, making it a Pawn for that User
     /// (meaning that the User will be able to issue Commands to that Pawn)
-    pub fn assign_pawn(&mut self, user_key: &UserKey, actor_key: &ActorKey) {
+    pub fn assign_pawn(&mut self, user_key: &UserKey, object_key: &ObjectKey) {
 
-        if let Some(actor) = self.global_state_store.get(*actor_key) {
+        if let Some(state) = self.global_state_store.get(*object_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-                Self::user_add_actor(user_connection,
-                                     actor_key,
-                                     &actor);
+                Self::user_add_state(user_connection,
+                                     object_key,
+                                     &state);
             }
         }
 
-        if self.global_actor_set.contains(actor_key) {
+        if self.global_state_set.contains(object_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-                user_connection.add_pawn(actor_key);
+                user_connection.add_pawn(object_key);
             }
         }
     }
 
     /// Unassigns a Pawn from a specific User (meaning that the User will be
     /// unable to issue Commands to that Pawn)
-    pub fn unassign_pawn(&mut self, user_key: &UserKey, actor_key: &ActorKey) {
+    pub fn unassign_pawn(&mut self, user_key: &UserKey, object_key: &ObjectKey) {
         if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-            user_connection.remove_pawn(actor_key);
+            user_connection.remove_pawn(object_key);
         }
     }
 
@@ -610,7 +610,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         self.entity_component_map.remove(key);
     }
 
-    /// Assigns an Actor to a specific User, making it a Pawn for that User
+    /// Assigns an State to a specific User, making it a Pawn for that User
     /// (meaning that the User will be able to issue Commands to that Pawn)
     pub fn assign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
         if self.entity_component_map.contains_key(entity_key) {
@@ -630,7 +630,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         }
     }
 
-    /// Register an Actor as a Component with the Server, whereby the Server will sync the
+    /// Register an State as a Component with the Server, whereby the Server will sync the
     /// state of the Component to all connected Clients for which the Component's Entity is
     /// in Scope.
     /// Gives back a ComponentKey which can be used to get the reference to the Component
@@ -642,7 +642,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         }
 
         let component_ref = component.inner_ref().clone();
-        let component_key: ComponentKey = self.register_actor(component);
+        let component_key: ComponentKey = self.register_state(component);
 
         // add component to connections already tracking entity
         for (user_key, _) in self.users.iter() {
@@ -675,36 +675,36 @@ impl<T: EventType, U: ActorType> Server<T, U> {
             .borrow_mut();
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                Self::user_remove_actor(user_connection,
+                Self::user_remove_state(user_connection,
                                         component_key);
             }
         }
 
         component_set.remove(component_key);
 
-        self.mut_handler.borrow_mut().deregister_actor(component_key);
+        self.mut_handler.borrow_mut().deregister_state(component_key);
         return self.global_state_store.remove(*component_key)
             .expect("component not initialized correctly?");
     }
 
-    /// Given an ActorKey, get a reference to a registered Actor being tracked
+    /// Given an ObjectKey, get a reference to a registered State being tracked
     /// by the Server
-    pub fn get_actor(&mut self, key: ActorKey) -> Option<&U> {
-        if self.global_actor_set.contains(&key) {
+    pub fn get_state(&mut self, key: ObjectKey) -> Option<&U> {
+        if self.global_state_set.contains(&key) {
             return self.global_state_store.get(key);
         } else {
             return None;
         }
     }
 
-    /// Iterate through all the Server's Actors
-    pub fn actors_iter(&self) -> std::collections::hash_set::Iter<ActorKey> {
-        return self.global_actor_set.iter();
+    /// Iterate through all the Server's States
+    pub fn states_iter(&self) -> std::collections::hash_set::Iter<ObjectKey> {
+        return self.global_state_set.iter();
     }
 
-    /// Get the number of Actors tracked by the Server
-    pub fn get_actors_count(&self) -> usize {
-        return self.global_actor_set.len();
+    /// Get the number of States tracked by the Server
+    pub fn get_states_count(&self) -> usize {
+        return self.global_state_set.len();
     }
 
     /// Creates a new Room on the Server, returns a Key which can be used to
@@ -739,26 +739,26 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         return self.rooms.len();
     }
 
-    /// Add an Actor to a Room, given the appropriate RoomKey & ActorKey
-    /// Actors will only ever be in-scope for Users which are in a Room with
+    /// Add an State to a Room, given the appropriate RoomKey & ObjectKey
+    /// States will only ever be in-scope for Users which are in a Room with
     /// them
-    pub fn room_add_actor(&mut self, room_key: &RoomKey, actor_key: &ActorKey) {
-        if self.global_actor_set.contains(actor_key) {
+    pub fn room_add_state(&mut self, room_key: &RoomKey, object_key: &ObjectKey) {
+        if self.global_state_set.contains(object_key) {
             if let Some(room) = self.rooms.get_mut(*room_key) {
-                room.add_actor(actor_key);
+                room.add_state(object_key);
             }
         }
     }
 
-    /// Remove an Actor from a Room, given the appropriate RoomKey & ActorKey
-    pub fn room_remove_actor(&mut self, room_key: &RoomKey, actor_key: &ActorKey) {
+    /// Remove an State from a Room, given the appropriate RoomKey & ObjectKey
+    pub fn room_remove_state(&mut self, room_key: &RoomKey, object_key: &ObjectKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
-            room.remove_actor(actor_key);
+            room.remove_state(object_key);
         }
     }
 
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
-    /// Actors will only ever be in-scope for Users which are in a Room with
+    /// States will only ever be in-scope for Users which are in a Room with
     /// them
     pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
@@ -789,26 +789,26 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         }
     }
 
-    /// Used to evaluate whether, given a User & Actor that are in the
-    /// same Room, said Actor should be in scope for the given User.
+    /// Used to evaluate whether, given a User & State that are in the
+    /// same Room, said State should be in scope for the given User.
     ///
-    /// While Rooms allow for a very simple scope to which an Actor can belong,
+    /// While Rooms allow for a very simple scope to which an State can belong,
     /// this provides complete customization for advanced scopes.
-    pub fn actor_set_scope(
+    pub fn state_set_scope(
         &mut self,
         room_key: &RoomKey,
         user_key: &UserKey,
-        actor_key: &ActorKey,
+        object_key: &ObjectKey,
         in_scope: bool,
     ) {
-        if !self.global_actor_set.contains(actor_key) {
+        if !self.global_state_set.contains(object_key) {
             return;
         }
-        let key = (*room_key, *user_key, *actor_key);
-        self.actor_scope_map.insert(key, in_scope);
+        let key = (*room_key, *user_key, *object_key);
+        self.state_scope_map.insert(key, in_scope);
     }
 
-    /// Similar to `actor_set_scope()` but for entities only
+    /// Similar to `state_set_scope()` but for entities only
     pub fn entity_set_scope(
         &mut self,
         room_key: &RoomKey,
@@ -820,18 +820,18 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         self.entity_scope_map.insert(key, in_scope);
     }
 
-    /// Return a collection of Actor Scope Sets, being a unique combination of
-    /// a related Room, User, and Actor, used to determine which actors to
+    /// Return a collection of State Scope Sets, being a unique combination of
+    /// a related Room, User, and State, used to determine which states to
     /// replicate to which users
-    pub fn actor_scope_sets(&self) -> Vec<(RoomKey, UserKey, ActorKey)> {
-        let mut list: Vec<(RoomKey, UserKey, ActorKey)> = Vec::new();
+    pub fn state_scope_sets(&self) -> Vec<(RoomKey, UserKey, ObjectKey)> {
+        let mut list: Vec<(RoomKey, UserKey, ObjectKey)> = Vec::new();
 
         // TODO: precache this, instead of generating a new list every call
         // likely this is called A LOT
         for (room_key, room) in self.rooms.iter() {
             for user_key in room.users_iter() {
-                for actor_key in room.actors_iter() {
-                    list.push((room_key, *user_key, *actor_key));
+                for object_key in room.states_iter() {
+                    list.push((room_key, *user_key, *object_key));
                 }
             }
         }
@@ -895,37 +895,37 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         self.tick_manager.get_tick()
     }
 
-    /// Returns true if a given User has an Actor with a given ActorKey in-scope currently
-    pub fn user_scope_has_actor(&self, user_key: &UserKey, actor_key: &ActorKey) -> bool {
+    /// Returns true if a given User has an State with a given ObjectKey in-scope currently
+    pub fn user_scope_has_state(&self, user_key: &UserKey, object_key: &ObjectKey) -> bool {
         if let Some(user_connection) = self.client_connections.get(user_key) {
-            return user_connection.has_actor(actor_key);
+            return user_connection.has_state(object_key);
         }
         return false;
     }
 
     // Private methods
 
-    fn update_actor_scopes(&mut self) {
+    fn update_state_scopes(&mut self) {
         for (room_key, room) in self.rooms.iter_mut() {
-            while let Some((removed_user, removed_actor)) = room.pop_actor_removal_queue() {
+            while let Some((removed_user, removed_state)) = room.pop_state_removal_queue() {
                 if let Some(user_connection) = self.client_connections.get_mut(&removed_user) {
-                    Self::user_remove_actor(user_connection,
-                                            &removed_actor);
+                    Self::user_remove_state(user_connection,
+                                            &removed_state);
                 }
             }
 
             for user_key in room.users_iter() {
-                for actor_key in room.actors_iter() {
+                for object_key in room.states_iter() {
                     if let Some(user_connection) = self.client_connections.get_mut(user_key)
                     {
-                        let currently_in_scope = user_connection.has_actor(actor_key);
+                        let currently_in_scope = user_connection.has_state(object_key);
 
                         let should_be_in_scope: bool;
-                        if user_connection.has_pawn(actor_key) {
+                        if user_connection.has_pawn(object_key) {
                             should_be_in_scope = true;
                         } else {
-                            let key = (room_key, *user_key, *actor_key);
-                            if let Some(in_scope) = self.actor_scope_map.get(&key) {
+                            let key = (room_key, *user_key, *object_key);
+                            if let Some(in_scope) = self.state_scope_map.get(&key) {
                                 should_be_in_scope = *in_scope;
                             } else {
                                 should_be_in_scope = false;
@@ -934,19 +934,19 @@ impl<T: EventType, U: ActorType> Server<T, U> {
 
                         if should_be_in_scope {
                             if !currently_in_scope {
-                                // add actor to the connections local scope
-                                if let Some(actor) = self.global_state_store.get(*actor_key)
+                                // add state to the connections local scope
+                                if let Some(state) = self.global_state_store.get(*object_key)
                                 {
-                                    Self::user_add_actor(user_connection,
-                                                         actor_key,
-                                                         &actor);
+                                    Self::user_add_state(user_connection,
+                                                         object_key,
+                                                         &state);
                                 }
                             }
                         } else {
                             if currently_in_scope {
-                                // remove actor from the connections local scope
-                                Self::user_remove_actor(user_connection,
-                                                        actor_key);
+                                // remove state from the connections local scope
+                                Self::user_remove_state(user_connection,
+                                                        object_key);
                             }
                         }
                     }
@@ -1005,26 +1005,26 @@ impl<T: EventType, U: ActorType> Server<T, U> {
         }
     }
 
-    fn user_add_actor(user_connection: &mut ClientConnection<T, U>,
-                      actor_key: &ActorKey,
-                      actor_ref: &U) {
-        //add actor to user connection
-        user_connection.add_actor(actor_key, &actor_ref.inner_ref());
+    fn user_add_state(user_connection: &mut ClientConnection<T, U>,
+                      object_key: &ObjectKey,
+                      state_ref: &U) {
+        //add state to user connection
+        user_connection.add_state(object_key, &state_ref.inner_ref());
     }
 
-    fn user_remove_actor(user_connection: &mut ClientConnection<T, U>,
-                         actor_key: &ActorKey) {
-        //remove actor from user connection
-        user_connection.remove_actor(actor_key);
+    fn user_remove_state(user_connection: &mut ClientConnection<T, U>,
+                         object_key: &ObjectKey) {
+        //remove state from user connection
+        user_connection.remove_state(object_key);
     }
 
-    fn user_add_entity(state_store: &DenseSlotMap<ActorKey, U>,
+    fn user_add_entity(state_store: &DenseSlotMap<ObjectKey, U>,
                        user_connection: &mut ClientConnection<T, U>,
                        entity_key: &EntityKey,
                        component_set_ref: &Ref<HashSet<ComponentKey>>) {
 
         // Get list of components first
-        let mut component_list: Vec<(ComponentKey, Ref<dyn Actor<U>>)> = Vec::new();
+        let mut component_list: Vec<(ComponentKey, Ref<dyn State<U>>)> = Vec::new();
         let component_set: &HashSet<ComponentKey> = &component_set_ref.borrow();
         for component_key in component_set {
             if let Some(component_ref) = state_store.get(*component_key) {
@@ -1045,7 +1045,7 @@ impl<T: EventType, U: ActorType> Server<T, U> {
     fn user_add_component(user_connection: &mut ClientConnection<T, U>,
                           entity_key: &EntityKey,
                           component_key: &ComponentKey,
-                          component_ref: &Ref<dyn Actor<U>>) {
+                          component_ref: &Ref<dyn State<U>>) {
         //add component to user connection
         user_connection.add_component(entity_key, component_key, component_ref);
     }
@@ -1085,18 +1085,18 @@ impl<T: EventType, U: ActorType> Server<T, U> {
 cfg_if! {
     if #[cfg(feature = "multithread")] {
         use std::sync::{Arc, Mutex};
-        fn to_actor_mutator_raw(eref: &Arc<Mutex<ServerActorMutator>>) -> Arc<Mutex<dyn ActorMutator>> {
+        fn to_state_mutator_raw(eref: &Arc<Mutex<ServerStateMutator>>) -> Arc<Mutex<dyn StateMutator>> {
             eref.clone()
         }
     } else {
         use std::cell::RefCell;
-        fn to_actor_mutator_raw(eref: &Rc<RefCell<ServerActorMutator>>) -> Rc<RefCell<dyn ActorMutator>> {
+        fn to_state_mutator_raw(eref: &Rc<RefCell<ServerStateMutator>>) -> Rc<RefCell<dyn StateMutator>> {
             eref.clone()
         }
     }
 }
 
-fn to_actor_mutator(eref: &Ref<ServerActorMutator>) -> Ref<dyn ActorMutator> {
-    let upcast_ref = to_actor_mutator_raw(&eref.inner());
+fn to_state_mutator(eref: &Ref<ServerStateMutator>) -> Ref<dyn StateMutator> {
+    let upcast_ref = to_state_mutator_raw(&eref.inner());
     Ref::new_raw(upcast_ref)
 }

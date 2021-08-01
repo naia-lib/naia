@@ -1,13 +1,13 @@
 use std::{net::SocketAddr, rc::Rc, collections::hash_map::Keys};
 
-use naia_shared::{ActorType, Connection, ConnectionConfig, Event, EventType, LocalActorKey,
+use naia_shared::{StateType, Connection, ConnectionConfig, Event, EventType, LocalObjectKey,
                   ManagerType, Manifest, PacketReader, PacketType, PawnKey, SequenceNumber,
                   StandardHeader, LocalEntityKey, LocalComponentKey};
 
 use crate::Packet;
 
 use super::{
-    client_actor_manager::ClientActorManager, client_actor_message::ClientActorMessage,
+    client_state_manager::ClientStateManager, client_state_message::ClientStateMessage,
     client_packet_writer::ClientPacketWriter,
     ping_manager::PingManager, tick_queue::TickQueue,
     client_tick_manager::ClientTickManager,
@@ -16,23 +16,23 @@ use super::{
 };
 
 #[derive(Debug)]
-pub struct ServerConnection<T: EventType, U: ActorType> {
+pub struct ServerConnection<T: EventType, U: StateType> {
     connection: Connection<T>,
-    actor_manager: ClientActorManager<U>,
+    state_manager: ClientStateManager<U>,
     ping_manager: PingManager,
     command_sender: DualCommandSender<T>,
     command_receiver: DualCommandReceiver<T>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
-impl<T: EventType, U: ActorType> ServerConnection<T, U> {
+impl<T: EventType, U: StateType> ServerConnection<T, U> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
     ) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
-            actor_manager: ClientActorManager::new(),
+            state_manager: ClientStateManager::new(),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
@@ -111,8 +111,8 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
                 ManagerType::Event => {
                     self.connection.process_event_data(&mut reader, manifest);
                 }
-                ManagerType::Actor => {
-                    self.actor_manager.process_data(
+                ManagerType::State => {
+                    self.state_manager.process_data(
                         manifest,
                         &mut self.command_receiver,
                         packet_tick,
@@ -144,51 +144,51 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
         return None;
     }
 
-    // Pass-through methods to underlying actor manager
-    pub fn get_incoming_actor_message(&mut self) -> Option<ClientActorMessage<U>> {
-        return self.actor_manager.pop_incoming_message();
+    // Pass-through methods to underlying state manager
+    pub fn get_incoming_state_message(&mut self) -> Option<ClientStateMessage<U>> {
+        return self.state_manager.pop_incoming_message();
     }
 
-    pub fn actor_keys(&self) -> Vec<LocalActorKey> {
-        return self.actor_manager.actor_keys();
+    pub fn object_keys(&self) -> Vec<LocalObjectKey> {
+        return self.state_manager.object_keys();
     }
 
     pub fn component_keys(&self) -> Vec<LocalComponentKey> {
-        return self.actor_manager.component_keys();
+        return self.state_manager.component_keys();
     }
 
-    pub fn get_actor(&self, key: &LocalActorKey) -> Option<&U> {
-        return self.actor_manager.get_actor(key);
+    pub fn get_state(&self, key: &LocalObjectKey) -> Option<&U> {
+        return self.state_manager.get_state(key);
     }
 
-    pub fn has_actor(&self, key: &LocalActorKey) -> bool {
-        return self.actor_manager.has_actor(key);
+    pub fn has_state(&self, key: &LocalObjectKey) -> bool {
+        return self.state_manager.has_state(key);
     }
 
     pub fn has_component(&self, key: &LocalComponentKey) -> bool {
-        return self.has_actor(key);
+        return self.has_state(key);
     }
 
-    pub fn pawn_keys(&self) -> Keys<LocalActorKey, U> {
-        return self.actor_manager.pawn_keys();
+    pub fn pawn_keys(&self) -> Keys<LocalObjectKey, U> {
+        return self.state_manager.pawn_keys();
     }
 
-    pub fn get_pawn(&self, key: &LocalActorKey) -> Option<&U> {
-        return self.actor_manager.get_pawn(key);
+    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&U> {
+        return self.state_manager.get_pawn(key);
     }
 
-    pub fn get_pawn_mut(&mut self, key: &LocalActorKey) -> Option<&U> {
-        return self.actor_manager.get_pawn(key);
+    pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&U> {
+        return self.state_manager.get_pawn(key);
     }
 
     pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
-        return self.actor_manager.has_entity(key);
+        return self.state_manager.has_entity(key);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
     pub fn frame_begin(&mut self, manifest: &Manifest<T, U>, tick_manager: &mut ClientTickManager) -> bool {
         if tick_manager.mark_frame() {
-            // then we apply all received updates to actors at once
+            // then we apply all received updates to states at once
             let target_tick = tick_manager.get_server_tick();
             while let Some((tick, packet_index, data_packet)) =
                 self.get_buffered_data_packet(target_tick)
@@ -263,8 +263,8 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
     }
 
     // command related
-    pub fn actor_queue_command(&mut self, actor_key: &LocalActorKey, command: &impl Event<T>) {
-        let pawn_key = PawnKey::Actor(*actor_key);
+    pub fn state_queue_command(&mut self, object_key: &LocalObjectKey, command: &impl Event<T>) {
+        let pawn_key = PawnKey::State(*object_key);
         return self.command_sender.queue_command(&pawn_key, command);
     }
 
@@ -276,7 +276,7 @@ impl<T: EventType, U: ActorType> ServerConnection<T, U> {
     pub fn process_replays(&mut self) {
         self
             .command_receiver
-            .process_command_replay::<U>(&mut self.actor_manager);
+            .process_command_replay::<U>(&mut self.state_manager);
 
     }
 

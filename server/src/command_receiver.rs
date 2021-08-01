@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_shared::{sequence_greater_than, ActorType, EventType, PawnKey, Manifest, PacketReader, SequenceBuffer, LocalActorKey, NaiaKey, LocalEntityKey};
+use naia_shared::{sequence_greater_than, StateType, EventType, PawnKey, Manifest, PacketReader, SequenceBuffer, LocalObjectKey, NaiaKey, LocalEntityKey};
 
 const COMMAND_BUFFER_MAX_SIZE: u16 = 64;
 
@@ -36,7 +36,7 @@ impl<T: EventType> CommandReceiver<T> {
 
     /// Given incoming packet data, read transmitted Command and store them to
     /// be returned to the application
-    pub fn process_data<U: ActorType>(
+    pub fn process_data<U: StateType>(
         &mut self,
         server_tick: u16,
         client_tick: u16,
@@ -46,11 +46,11 @@ impl<T: EventType> CommandReceiver<T> {
         let command_count = reader.read_u8();
         for _x in 0..command_count {
 
-            let is_actor = reader.read_u8() == 0;
+            let is_state = reader.read_u8() == 0;
             let local_key = reader.read_u16();
             let pawn_key = {
-                if is_actor {
-                    PawnKey::Actor(LocalActorKey::from_u16(local_key))
+                if is_state {
+                    PawnKey::State(LocalObjectKey::from_u16(local_key))
                 } else {
                     PawnKey::Entity(LocalEntityKey::from_u16(local_key))
                 }
