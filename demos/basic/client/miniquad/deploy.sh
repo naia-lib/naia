@@ -1,26 +1,25 @@
 #!/bin/bash
-xdg-open http://localhost:3113/
+#xdg-open http://localhost:3113/
 
 # replace 'client' & 'webserver' below with the appropriate directory names for your project
 client='naia-demo-basic-client-mq'
-webserver_dir='dev_http_server'
 
 get_reload_actions(){
   local OUTPUT=''
   local c=$1
-  local w=$2
-  FMT='rm -rf %s/dist &&
-  mkdir %s/dist &&
+  FMT='
   cargo build --target wasm32-unknown-unknown --target-dir target &&
-  cp target/wasm32-unknown-unknown/debug/%s.wasm %s/dist/%s.wasm &&
-  cp -a static/. %s/dist/ &&
-  cp -a js/. %s/dist/ &&
-  cd %s &&
+  cd ../../../dev_http_server
+  rm -rf dist &&
+  mkdir dist &&
+  cp ../basic/client/miniquad/target/wasm32-unknown-unknown/debug/%s.wasm dist/%s.wasm &&
+  cp -a ../basic/client/miniquad/static/. dist/ &&
+  cp -a ../basic/client/miniquad/js/. dist/ &&
   cargo run'
-  printf -v OUTPUT "$FMT" $w $w $c $w $c $w $w $w
+  printf -v OUTPUT "$FMT" $c $c
   echo $OUTPUT
 }
 
-cd demo/client/miniquad || exit
-actions="$(get_reload_actions $client $webserver_dir)"
-watchexec -r -s SIGKILL --ignore $webserver_dir/dist --ignore target --clear "$actions"
+cd demos/basic/client/miniquad || exit
+actions="$(get_reload_actions $client)"
+watchexec -r -s SIGKILL --ignore dev_http_server/dist --ignore target --clear "$actions"
