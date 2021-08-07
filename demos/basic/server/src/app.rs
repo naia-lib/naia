@@ -70,11 +70,11 @@ impl App {
                 server.room_add_entity(&main_room_key, &naia_key);
 
                 // Add position component to Entity
-                let position = Position::new((count * 4) as u8, 0).wrap();
+                let position = Position::new((count * 4) as u8, 0).state_wrap();
                 let _pos_key = server.add_component_to_entity(&naia_key, Components::Position(position.clone()));
 
                 // Add name component to Entity
-                let name = Name::new(first, last).wrap();
+                let name = Name::new(first, last).state_wrap();
                 let _name_key = server.add_component_to_entity(&naia_key, Components::Name(name.clone()));
 
                 // Add to World
@@ -156,7 +156,7 @@ impl App {
                                 if !self.has_marker.contains_key(naia_key) {
 
                                     // Add Marker component to Entity in Naia Server
-                                    let marker = Marker::new("new").wrap();
+                                    let marker = Marker::new("new").state_wrap();
                                     let component_key = self.server.add_component_to_entity(&naia_key,
                                                                         Components::Marker(marker.clone()));
 

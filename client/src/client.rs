@@ -161,13 +161,13 @@ impl<T: EventType, U: StateType> Client<T, U> {
                         PawnKey::State(object_key) => {
                             return Some(Ok(ClientEvent::ReplayCommand(
                                 object_key,
-                                command.as_ref().get_typed_copy(),
+                                command.as_ref().event_get_typed_copy(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(ClientEvent::ReplayCommandEntity(
                                 entity_key,
-                                command.as_ref().get_typed_copy(),
+                                command.as_ref().event_get_typed_copy(),
                             )));
                         }
                     }
@@ -178,13 +178,13 @@ impl<T: EventType, U: StateType> Client<T, U> {
                         PawnKey::State(object_key) => {
                             return Some(Ok(ClientEvent::NewCommand(
                                 object_key,
-                                command.as_ref().get_typed_copy(),
+                                command.as_ref().event_get_typed_copy(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(ClientEvent::NewCommandEntity(
                                 entity_key,
-                                command.as_ref().get_typed_copy(),
+                                command.as_ref().event_get_typed_copy(),
                             )));
                         }
                     }
@@ -266,10 +266,10 @@ impl<T: EventType, U: StateType> Client<T, U> {
                             }
                             // write auth event state if there is one
                             if let Some(auth_event) = &mut self.auth_event {
-                                let type_id = auth_event.get_type_id();
+                                let type_id = auth_event.event_get_type_id();
                                 let naia_id = self.manifest.get_event_naia_id(&type_id); // get naia id
                                 payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                                auth_event.write(&mut payload_bytes);
+                                auth_event.event_write(&mut payload_bytes);
                             }
                             Client::<T, U>::internal_send_connectionless(
                                 &mut self.sender,

@@ -38,7 +38,7 @@ impl<T: EventType, U: StateType> Manifest<T, U> {
     /// Register an EventBuilder to handle the creation of Event instances
     pub fn register_event(&mut self, event_builder: Box<dyn EventBuilder<T>>) {
         let new_naia_id = self.event_naia_id_count;
-        let type_id = event_builder.get_type_id();
+        let type_id = event_builder.event_get_type_id();
         self.event_type_map.insert(type_id, new_naia_id);
         self.event_builder_map.insert(new_naia_id, event_builder);
         self.event_naia_id_count += 1;
@@ -58,7 +58,7 @@ impl<T: EventType, U: StateType> Manifest<T, U> {
     /// an incoming packet
     pub fn create_event(&self, naia_id: u16, reader: &mut PacketReader) -> Option<T> {
         if let Some(event_builder) = self.event_builder_map.get(&naia_id) {
-            return Some(event_builder.as_ref().build(reader));
+            return Some(event_builder.as_ref().event_build(reader));
         }
 
         return None;
@@ -67,7 +67,7 @@ impl<T: EventType, U: StateType> Manifest<T, U> {
     /// Register an StateBuilder to handle the creation of State instances
     pub fn register_state(&mut self, state_builder: Box<dyn StateBuilder<U>>) {
         let new_naia_id = self.state_naia_id_count;
-        let type_id = state_builder.get_type_id();
+        let type_id = state_builder.state_get_type_id();
         self.state_type_map.insert(type_id, new_naia_id);
         self.state_builder_map.insert(new_naia_id, state_builder);
         self.state_naia_id_count += 1;
@@ -87,7 +87,7 @@ impl<T: EventType, U: StateType> Manifest<T, U> {
     /// an incoming packet
     pub fn create_state(&self, naia_id: u16, reader: &mut PacketReader) -> U {
         if let Some(state_builder) = self.state_builder_map.get(&naia_id) {
-            return state_builder.as_ref().build(reader);
+            return state_builder.as_ref().state_build(reader);
         }
 
         panic!("No StateBuilder registered for NaiaId: {}", naia_id);

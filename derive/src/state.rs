@@ -4,8 +4,6 @@ use syn::{
     parse_macro_input, DeriveInput, Ident, Type,
 };
 
-use super::utils;
-
 pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -14,9 +12,9 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         (state_name.to_string() + "Builder").as_str(),
         Span::call_site(),
     );
-    let type_name = utils::get_type_name(&input, "State");
+    let type_name = get_type_name(&input, "State");
 
-    let properties = utils::get_properties(&input);
+    let properties = get_properties(&input);
 
     let enum_name = format_ident!("{}Prop", state_name);
     let property_enum = get_property_enum(&enum_name, &properties);
@@ -24,7 +22,7 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let new_complete_method = get_new_complete_method(state_name, &enum_name, &properties);
     let read_to_type_method =
         get_read_to_type_method(&type_name, state_name, &enum_name, &properties);
-    let state_write_method = utils::get_write_method(&properties);
+    let state_write_method = get_write_method(&properties);
     let state_write_partial_method = get_write_partial_method(&enum_name, &properties);
     let state_read_full_method = get_read_full_method(&properties);
     let state_read_partial_method = get_read_partial_method(&enum_name, &properties);
@@ -43,28 +41,28 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             type_id: TypeId,
         }
         impl StateBuilder<#type_name> for #state_builder_name {
-            fn get_type_id(&self) -> TypeId {
+            fn state_get_type_id(&self) -> TypeId {
                 return self.type_id;
             }
-            fn build(&self, reader: &mut PacketReader) -> #type_name {
-                return #state_name::read_to_type(reader);
+            fn state_build(&self, reader: &mut PacketReader) -> #type_name {
+                return #state_name::state_read_to_type(reader);
             }
         }
         impl #state_name {
-            pub fn get_builder() -> Box<dyn StateBuilder<#type_name>> {
+            pub fn state_get_builder() -> Box<dyn StateBuilder<#type_name>> {
                 return Box::new(#state_builder_name {
                     type_id: TypeId::of::<#state_name>(),
                 });
             }
-            pub fn wrap(self) -> Ref<#state_name> {
+            pub fn state_wrap(self) -> Ref<#state_name> {
                 return Ref::new(self);
             }
             #new_complete_method
             #read_to_type_method
         }
         impl State<#type_name> for #state_name {
-            fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
-            fn get_type_id(&self) -> TypeId {
+            fn state_get_diff_mask_size(&self) -> u8 { #diff_mask_size }
+            fn state_get_type_id(&self) -> TypeId {
                 return TypeId::of::<#state_name>();
             }
             #set_mutator_method
@@ -129,7 +127,7 @@ fn get_set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn set_mutator(&mut self, mutator: &Ref<dyn StateMutator>) {
+        fn state_set_mutator(&mut self, mutator: &Ref<dyn StateMutator>) {
             #output
         }
     };
@@ -169,7 +167,7 @@ fn get_new_complete_method(
     }
 
     return quote! {
-        pub fn new_complete(#args) -> #state_name {
+        pub fn state_new_complete(#args) -> #state_name {
             #state_name {
                 #fields
             }
@@ -214,7 +212,7 @@ fn get_read_to_type_method(
     }
 
     return quote! {
-        fn read_to_type(reader: &mut PacketReader) -> #type_name {
+        fn state_read_to_type(reader: &mut PacketReader) -> #type_name {
             #prop_reads
 
             return #type_name::#state_name(Ref::new(#state_name {
@@ -241,8 +239,8 @@ fn get_get_typed_copy_method(
     }
 
     return quote! {
-        fn get_typed_copy(&self) -> #type_name {
-            let copied_state = #state_name::new_complete(#args).wrap();
+        fn state_get_typed_copy(&self) -> #type_name {
+            let copied_state = #state_name::state_new_complete(#args).state_wrap();
             return #type_name::#state_name(copied_state);
         }
     };
@@ -270,7 +268,7 @@ fn get_write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) 
     }
 
     return quote! {
-        fn write_partial(&self, diff_mask: &DiffMask, buffer: &mut Vec<u8>) {
+        fn state_write_partial(&self, diff_mask: &DiffMask, buffer: &mut Vec<u8>) {
 
             #output
         }
@@ -292,7 +290,7 @@ fn get_read_full_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn read_full(&mut self, reader: &mut PacketReader, packet_index: u16) {
+        fn state_read_full(&mut self, reader: &mut PacketReader, packet_index: u16) {
             #output
         }
     };
@@ -320,7 +318,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
     }
 
     return quote! {
-        fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16) {
+        fn state_read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16) {
             #output
         }
     };
@@ -341,7 +339,7 @@ fn get_equals_method(state_name: &Ident, properties: &Vec<(Ident, Type)>) -> Tok
     }
 
     return quote! {
-        fn equals(&self, other: &#state_name) -> bool {
+        fn state_equals(&self, other: &#state_name) -> bool {
             #output
             return true;
         }
@@ -363,7 +361,88 @@ fn get_mirror_method(state_name: &Ident, properties: &Vec<(Ident, Type)>) -> Tok
     }
 
     return quote! {
-        fn mirror(&mut self, other: &#state_name) {
+        fn state_mirror(&mut self, other: &#state_name) {
+            #output
+        }
+    };
+}
+
+use syn::{Data, Fields, GenericArgument, Lit, Meta, PathArguments};
+
+fn get_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
+    let mut fields = Vec::new();
+
+    if let Data::Struct(data_struct) = &input.data {
+        if let Fields::Named(fields_named) = &data_struct.fields {
+            for field in fields_named.named.iter() {
+                if let Some(property_name) = &field.ident {
+                    if let Type::Path(type_path) = &field.ty {
+                        if let PathArguments::AngleBracketed(angle_args) =
+                            &type_path.path.segments.first().unwrap().arguments
+                        {
+                            if let Some(GenericArgument::Type(property_type)) =
+                                angle_args.args.first()
+                            {
+                                fields.push((property_name.clone(), property_type.clone()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fields
+}
+
+fn get_type_name(input: &DeriveInput, type_type: &str) -> Ident {
+    let mut type_name_option: Option<Ident> = None;
+
+    let attrs = &input.attrs;
+    for option in attrs.into_iter() {
+        let option = option.parse_meta().unwrap();
+        match option {
+            Meta::NameValue(meta_name_value) => {
+                let path = meta_name_value.path;
+                let lit = meta_name_value.lit;
+                if let Some(ident) = path.get_ident() {
+                    if ident == "type_name" {
+                        if let Lit::Str(lit) = lit {
+                            let ident = Ident::new(lit.value().as_str(), Span::call_site());
+                            type_name_option = Some(ident);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    return type_name_option.expect(
+        format!(
+            "#[derive({})] requires an accompanying #[type_name = \"{} Type Name Here\"] attribute",
+            type_type, type_type
+        )
+        .as_str(),
+    );
+}
+
+fn get_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
+    let mut output = quote! {};
+
+    for (field_name, _) in properties.iter() {
+        let new_output_right = quote! {
+            Property::write(&self.#field_name, buffer);
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    return quote! {
+        fn state_write(&self, buffer: &mut Vec<u8>) {
             #output
         }
     };

@@ -58,7 +58,7 @@ fn get_read_full_method(type_name: &Ident, data: &Data) -> TokenStream {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
                     #type_name::#variant_name(idstate) => {
-                        idstate.borrow_mut().read_full(reader, packet_index);
+                        idstate.borrow_mut().state_read_full(reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -73,7 +73,7 @@ fn get_read_full_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn read_full(&mut self, reader: &mut PacketReader, packet_index: u16) {
+        fn state_read_full(&mut self, reader: &mut PacketReader, packet_index: u16) {
             match self {
                 #variants
             }
@@ -89,7 +89,7 @@ fn get_read_partial_method(type_name: &Ident, data: &Data) -> TokenStream {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
                     #type_name::#variant_name(idstate) => {
-                        idstate.borrow_mut().read_partial(diff_mask, reader, packet_index);
+                        idstate.borrow_mut().state_read_partial(diff_mask, reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -104,7 +104,7 @@ fn get_read_partial_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16) {
+        fn state_read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16) {
             match self {
                 #variants
             }
@@ -141,7 +141,7 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn inner_ref(&self) -> Ref<dyn State<#type_name>> {
+        fn state_inner_ref(&self) -> Ref<dyn State<#type_name>> {
             match self {
                 #variants
             }
@@ -221,7 +221,7 @@ fn get_equals_method(type_name: &Ident, data: &Data) -> TokenStream {
                     #type_name::#variant_name(idstate) => {
                         match other {
                             #type_name::#variant_name(other_idstate) => {
-                                return idstate.borrow().equals(&other_idstate.borrow());
+                                return idstate.borrow().state_equals(&other_idstate.borrow());
                             }
                             _ => { return false; }
                         }
@@ -239,7 +239,7 @@ fn get_equals_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn equals(&self, other: &#type_name) -> bool {
+        fn state_equals(&self, other: &#type_name) -> bool {
             match self {
                 #variants
             }
@@ -257,7 +257,7 @@ fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
                     #type_name::#variant_name(idstate) => {
                         match other {
                             #type_name::#variant_name(other_idstate) => {
-                                        return idstate.borrow_mut().mirror(&other_idstate.borrow());
+                                        return idstate.borrow_mut().state_mirror(&other_idstate.borrow());
                                     }
                             _ => {}
                         }
@@ -275,7 +275,7 @@ fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn mirror(&mut self, other: &#type_name) {
+        fn state_mirror(&mut self, other: &#type_name) {
             match self {
                 #variants
             }

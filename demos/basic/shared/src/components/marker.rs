@@ -11,7 +11,7 @@ pub struct Marker {
 
 impl Marker {
     pub fn new(name: &str) -> Self {
-        return Marker::new_complete(
+        return Marker::state_new_complete(
             name.to_string()
         );
     }
