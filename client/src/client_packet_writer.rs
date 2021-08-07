@@ -68,7 +68,7 @@ impl ClientPacketWriter {
         //Write command payload
         let mut command_payload_bytes = Vec::<u8>::new();
 
-        command.as_ref().write(&mut command_payload_bytes);
+        command.as_ref().event_write(&mut command_payload_bytes);
 
         // write past commands
         let past_commands_number = command_receiver
@@ -85,7 +85,7 @@ impl ClientPacketWriter {
                         // write the tick diff
                         command_payload_bytes.write_u8(diff_i8 as u8).unwrap();
                         // write the command payload
-                        past_command.write(&mut command_payload_bytes);
+                        past_command.event_write(&mut command_payload_bytes);
 
                         past_command_index += 1;
                     }
@@ -115,7 +115,7 @@ impl ClientPacketWriter {
             .write_u16::<BigEndian>(pawn_key.to_u16())
             .unwrap(); // write pawn key
 
-        let type_id = command.as_ref().get_type_id();
+        let type_id = command.as_ref().event_get_type_id();
         let naia_id = manifest.get_event_naia_id(&type_id); // get naia id
         command_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
         command_total_bytes.write_u8(past_command_index).unwrap(); // write past command number

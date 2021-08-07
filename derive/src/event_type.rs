@@ -14,12 +14,12 @@ pub fn event_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
         use std::any::TypeId;
         use naia_shared::{EventType, Event};
         impl EventType for #type_name {
-            fn write(&self, buffer: &mut Vec<u8>) {
+            fn event_write(&self, buffer: &mut Vec<u8>) {
                 match self {
                     #write_variants
                 }
             }
-            fn get_type_id(&self) -> TypeId {
+            fn event_get_type_id(&self) -> TypeId {
                 match self {
                     #get_type_id_variants
                 }
@@ -38,7 +38,7 @@ fn get_write_variants(type_name: &Ident, data: &Data) -> TokenStream {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
                     #type_name::#variant_name(idstate) => {
-                        idstate.write(buffer);
+                        idstate.event_write(buffer);
                     }
                 };
                 let new_output_result = quote! {
@@ -61,7 +61,7 @@ fn get_type_id_variants(type_name: &Ident, data: &Data) -> TokenStream {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
                     #type_name::#variant_name(idstate) => {
-                        return idstate.get_type_id();
+                        return idstate.event_get_type_id();
                     }
                 };
                 let new_output_result = quote! {

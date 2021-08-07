@@ -17,6 +17,6 @@ impl Auth {
     }
 
     pub fn new(username: &str, password: &str) -> Auth {
-        return Auth::new_complete(username.to_string(), password.to_string());
+        return Auth::event_new_complete(username.to_string(), password.to_string());
     }
 }

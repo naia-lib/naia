@@ -11,25 +11,25 @@ use crate::{PacketReader, Ref};
 /// synced, with a remote host
 pub trait State<T: StateType> {
     /// Gets the number of bytes of the State's State Mask
-    fn get_diff_mask_size(&self) -> u8;
+    fn state_get_diff_mask_size(&self) -> u8;
     /// Gets a copy of the State, wrapped in an StateType enum (which is the
     /// common protocol between the server/host)
-    fn get_typed_copy(&self) -> T;
+    fn state_get_typed_copy(&self) -> T;
     /// Gets the TypeId of the State's implementation, used to map to a
     /// registered StateType
-    fn get_type_id(&self) -> TypeId;
+    fn state_get_type_id(&self) -> TypeId;
     /// Writes data into an outgoing byte stream, sufficient to completely
     /// recreate the State on the client
-    fn write(&self, out_bytes: &mut Vec<u8>);
+    fn state_write(&self, out_bytes: &mut Vec<u8>);
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the State on the client
-    fn write_partial(&self, diff_mask: &DiffMask, out_bytes: &mut Vec<u8>);
+    fn state_write_partial(&self, diff_mask: &DiffMask, out_bytes: &mut Vec<u8>);
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// State with it's state on the Server
-    fn read_full(&mut self, reader: &mut PacketReader, packet_index: u16);
+    fn state_read_full(&mut self, reader: &mut PacketReader, packet_index: u16);
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// State with it's state on the Server
-    fn read_partial(
+    fn state_read_partial(
         &mut self,
         diff_mask: &DiffMask,
         reader: &mut PacketReader,
@@ -38,7 +38,7 @@ pub trait State<T: StateType> {
     /// Set the State's StateMutator, which keeps track of which Properties
     /// have been mutated, necessary to sync only the Properties that have
     /// changed with the client
-    fn set_mutator(&mut self, mutator: &Ref<dyn StateMutator>);
+    fn state_set_mutator(&mut self, mutator: &Ref<dyn StateMutator>);
 }
 
 //TODO: do we really need another trait here?
@@ -46,9 +46,9 @@ pub trait State<T: StateType> {
 /// to only compare Properties
 pub trait StateEq<T: StateType, Impl = Self>: State<T> {
     /// Compare properties in another State
-    fn equals(&self, other: &Impl) -> bool;
+    fn state_equals(&self, other: &Impl) -> bool;
     /// Sets the current State to the state of another State of the same type
-    fn mirror(&mut self, other: &Impl);
+    fn state_mirror(&mut self, other: &Impl);
 }
 
 impl<T: StateType> Debug for dyn State<T> {

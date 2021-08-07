@@ -13,7 +13,7 @@ pub struct Position {
 
 impl Position {
     pub fn new(x: u8, y: u8) -> Self {
-        return Position::new_complete(
+        return Position::state_new_complete(
             x,
             y,
         );

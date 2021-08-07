@@ -62,7 +62,7 @@ impl<T: EventType> EventManager<T> {
         match self.queued_outgoing_events.pop_front() {
             Some(event) => {
                 //place in transmission record if this is a gauranteed event
-                if Event::is_guaranteed(event.as_ref().as_ref()) {
+                if Event::event_is_guaranteed(event.as_ref().as_ref()) {
                     if !self.sent_events.contains_key(&packet_index) {
                         let sent_events_list: Vec<Rc<Box<dyn Event<T>>>> = Vec::new();
                         self.sent_events.insert(packet_index, sent_events_list);
@@ -84,7 +84,7 @@ impl<T: EventType> EventManager<T> {
     pub fn unpop_outgoing_event(&mut self, packet_index: u16, event: &Rc<Box<dyn Event<T>>>) {
         let cloned_event = event.clone();
 
-        if Event::is_guaranteed(event.as_ref().as_ref()) {
+        if Event::event_is_guaranteed(event.as_ref().as_ref()) {
             if let Some(sent_events_list) = self.sent_events.get_mut(&packet_index) {
                 sent_events_list.pop();
                 if sent_events_list.len() == 0 {
@@ -98,7 +98,7 @@ impl<T: EventType> EventManager<T> {
 
     /// Queues an Event to be transmitted to the remote host
     pub fn queue_outgoing_event(&mut self, event: &impl Event<T>) {
-        let clone = Rc::new(EventClone::clone_box(event));
+        let clone = Rc::new(EventClone::event_clone_box(event));
         self.queued_outgoing_events.push_back(clone);
     }
 

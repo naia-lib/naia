@@ -17,7 +17,6 @@ mod state;
 mod state_type;
 mod event;
 mod event_type;
-mod utils;
 
 use state::state_impl;
 use state_type::state_type_impl;
