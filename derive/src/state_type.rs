@@ -46,12 +46,12 @@ pub fn state_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
             #inner_ref_method
             #equals_method
             #mirror_method
-            fn event_write(&self, buffer: &mut Vec<u8>) {
+            fn write(&self, buffer: &mut Vec<u8>) {
                 match self {
                     #write_variants
                 }
             }
-            fn event_get_type_id(&self) -> TypeId {
+            fn get_type_id(&self) -> TypeId {
                 match self {
                     #get_type_id_variants
                 }
@@ -154,7 +154,7 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn state_inner_ref(&self) -> Ref<dyn State<#type_name>> {
+        fn inner_ref(&self) -> Ref<dyn State<#type_name>> {
             match self {
                 #variants
             }

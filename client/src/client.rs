@@ -266,10 +266,10 @@ impl<T: StateType> Client<T> {
                             }
                             // write auth event state if there is one
                             if let Some(auth_event) = &mut self.auth_event {
-                                let type_id = auth_event.event_get_type_id();
-                                let naia_id = self.manifest.get_state_naia_id(&type_id); // get naia id
+                                let type_id = auth_event.get_type_id();
+                                let naia_id = self.manifest.get_naia_id(&type_id); // get naia id
                                 payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                                auth_event.event_write(&mut payload_bytes);
+                                auth_event.write(&mut payload_bytes);
                             }
                             Client::<T>::internal_send_connectionless(
                                 &mut self.sender,

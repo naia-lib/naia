@@ -10,7 +10,7 @@ use std::{
 /// Handles the creation of new State instances
 pub trait StateBuilder<T: StateType> {
     /// Create a new State instance
-    fn state_build(&self, reader: &mut PacketReader) -> T;
+    fn build(&self, reader: &mut PacketReader) -> T;
     /// Gets the TypeId of the State the builder is able to build
     fn get_type_id(&self) -> TypeId;
 }

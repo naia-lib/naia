@@ -16,6 +16,6 @@ impl StringMessage {
     }
 
     pub fn new(message: String) -> StringMessage {
-        return StringMessage::state_new_complete(message);
+        return StringMessage::new_complete(message);
     }
 }

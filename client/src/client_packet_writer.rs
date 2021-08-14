@@ -116,7 +116,7 @@ impl ClientPacketWriter {
             .unwrap(); // write pawn key
 
         let type_id = command.as_ref().get_type_id();
-        let naia_id = manifest.get_state_naia_id(&type_id); // get naia id
+        let naia_id = manifest.get_naia_id(&type_id); // get naia id
         command_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
         command_total_bytes.write_u8(past_command_index).unwrap(); // write past command number
         command_total_bytes.append(&mut command_payload_bytes); // write payload
