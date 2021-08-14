@@ -8,7 +8,7 @@ use hecs::{Entity as HecsEntityKey, World};
 use naia_server::{Server, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey as NaiaEntityKey, Ref, State, ComponentKey};
 
 use naia_demo_basic_shared::{
-    get_shared_config, manifest_load,
+    get_shared_config,
     protocol::{Protocol, Position, Name, Marker, StringMessage},
 };
 
@@ -26,7 +26,7 @@ impl App {
     pub async fn new(server_config: ServerConfig) -> Self {
 
         let mut server = Server::new(
-            manifest_load(),
+            Protocol::load(),
             Some(server_config),
             get_shared_config(),
         )

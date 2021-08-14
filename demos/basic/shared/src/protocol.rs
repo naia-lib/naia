@@ -1,6 +1,6 @@
 
 use naia_derive::ProtocolType;
-use naia_shared::Ref;
+use naia_shared::{Ref, Manifest};
 
 mod auth;
 mod marker;
@@ -21,4 +21,18 @@ pub enum Protocol {
     Marker(Ref<Marker>),
     StringMessage(Ref<StringMessage>),
     Auth(Ref<Auth>),
+}
+
+impl Protocol {
+    pub fn load() -> Manifest<Protocol> {
+        let mut manifest = Manifest::<Protocol>::new();
+
+        manifest.register_state(Auth::get_builder());
+        manifest.register_state(StringMessage::get_builder());
+        manifest.register_state(Position::get_builder());
+        manifest.register_state(Name::get_builder());
+        manifest.register_state(Marker::get_builder());
+
+        manifest
+    }
 }
