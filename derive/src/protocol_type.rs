@@ -23,6 +23,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let mirror_method = get_mirror_method(&type_name, &input.data);
     let write_method = get_write_method(&type_name, &input.data);
     let get_type_id_method = get_type_id_method(&type_name, &input.data);
+    let load_method = get_load_method(&type_name, &input.data);
 
     let ref_imports = {
         if MULTITHREAD {
@@ -40,6 +41,9 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
         use std::any::TypeId;
         use naia_shared::{ProtocolType, State, StateEq, DiffMask, PacketReader};
         #ref_imports
+        impl #type_name {
+            #load_method
+        }
         impl ProtocolType for #type_name {
             #read_full_method
             #read_partial_method
@@ -346,6 +350,37 @@ fn get_type_id_method(type_name: &Ident, data: &Data) -> TokenStream {
             match self {
                 #variants
             }
+        }
+    };
+}
+
+fn get_load_method(type_name: &Ident, data: &Data) -> TokenStream {
+    let variants = match *data {
+        Data::Enum(ref data) => {
+            let mut output = quote! {};
+            for variant in data.variants.iter() {
+                let variant_name = &variant.ident;
+                let new_output_right = quote! {
+                    manifest.register_state(#variant_name::get_builder());
+                };
+                let new_output_result = quote! {
+                    #output
+                    #new_output_right
+                };
+                output = new_output_result;
+            }
+            output
+        }
+        _ => unimplemented!(),
+    };
+
+    return quote! {
+        pub fn load() -> Manifest<#type_name> {
+            let mut manifest = Manifest::<#type_name>::new();
+
+            #variants
+
+            manifest
         }
     };
 }
