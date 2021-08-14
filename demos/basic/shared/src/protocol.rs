@@ -22,17 +22,3 @@ pub enum Protocol {
     StringMessage(Ref<StringMessage>),
     Auth(Ref<Auth>),
 }
-
-impl Protocol {
-    pub fn load() -> Manifest<Protocol> {
-        let mut manifest = Manifest::<Protocol>::new();
-
-        manifest.register_state(Auth::get_builder());
-        manifest.register_state(StringMessage::get_builder());
-        manifest.register_state(Position::get_builder());
-        manifest.register_state(Name::get_builder());
-        manifest.register_state(Marker::get_builder());
-
-        manifest
-    }
-}

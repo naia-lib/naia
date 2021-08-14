@@ -55,17 +55,4 @@ impl<T: ProtocolType> Manifest<T> {
         // TODO: this shouldn't panic .. could crash the server
         panic!("No StateBuilder registered for NaiaId: {}", naia_id);
     }
-
-    /// Register both an StateBuilder and an EventBuilder to handle the
-    /// creation of both as a Pawn & Command, respectively. Pawns & Commands
-    /// should be used for any player-controlled state that requires clientside
-    /// prediction
-    pub fn register_pawn(
-        &mut self,
-        state_builder: Box<dyn StateBuilder<T>>,
-        event_builder: Box<dyn StateBuilder<T>>,
-    ) {
-        self.register_state(state_builder);
-        self.register_state(event_builder);
-    }
 }
