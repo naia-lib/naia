@@ -15,7 +15,7 @@ use naia_server_socket::{
     MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
 };
 pub use naia_shared::{
-    wrapping_diff, State, StateMutator, StateType, Connection, ConnectionConfig, Event, EventType,
+    wrapping_diff, State, StateMutator, Connection, ConnectionConfig, StateType,
     HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType, Ref, SharedConfig,
     Timer, Timestamp, LocalObjectKey, StandardHeader, KeyGenerator, EntityKey
 };
@@ -40,19 +40,19 @@ use super::{
 /// A server that uses either UDP or WebRTC communication to send/receive events
 /// to/from connected clients, and syncs registered states to clients to whom
 /// those states are in-scope
-pub struct Server<T: EventType, U: StateType> {
+pub struct Server<T: StateType> {
     connection_config: ConnectionConfig,
-    manifest: Manifest<T, U>,
+    manifest: Manifest<T>,
     socket: Box<dyn ServerSocketTrait>,
     sender: MessageSender,
-    global_state_store: DenseSlotMap<ObjectKey, U>,
+    global_state_store: DenseSlotMap<ObjectKey, T>,
     global_state_set: HashSet<ObjectKey>,
     auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
     mut_handler: Ref<MutHandler>,
     users: DenseSlotMap<UserKey, User>,
     rooms: DenseSlotMap<RoomKey, Room>,
     address_to_user_key_map: HashMap<SocketAddr, UserKey>,
-    client_connections: HashMap<UserKey, ClientConnection<T, U>>,
+    client_connections: HashMap<UserKey, ClientConnection<T>>,
     outstanding_disconnects: VecDeque<UserKey>,
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
@@ -65,11 +65,11 @@ pub struct Server<T: EventType, U: StateType> {
     component_entity_map: HashMap<ComponentKey, EntityKey>,
 }
 
-impl<T: EventType, U: StateType> Server<T, U> {
+impl<U: StateType> Server<U> {
     /// Create a new Server, given an address to listen at, an Event/State
     /// manifest, and an optional Config
     pub async fn new(
-        manifest: Manifest<T, U>,
+        manifest: Manifest<U>,
         server_config: Option<ServerConfig>,
         shared_config: SharedConfig,
     ) -> Self {
@@ -130,7 +130,7 @@ impl<T: EventType, U: StateType> Server<T, U> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub async fn receive(&mut self) -> Result<ServerEvent<T>, NaiaServerError> {
+    pub async fn receive(&mut self) -> Result<ServerEvent<U>, NaiaServerError> {
         loop {
             // heartbeats
             if self.heartbeat_timer.ringing() {
@@ -272,7 +272,7 @@ impl<T: EventType, U: StateType> Server<T, U> {
                                         payload_bytes.push(*hash_byte);
                                     }
 
-                                    Server::<T, U>::internal_send_connectionless(
+                                    Server::<U>::internal_send_connectionless(
                                         &mut self.sender,
                                         PacketType::ServerChallengeResponse,
                                         Packet::new(address, payload_bytes),
@@ -296,7 +296,7 @@ impl<T: EventType, U: StateType> Server<T, U> {
                                                     .get_mut(user_key)
                                                     .unwrap();
                                                 connection.process_incoming_header(&header);
-                                                Server::<T, U>::send_connect_accept_message(
+                                                Server::<U>::send_connect_accept_message(
                                                     &mut connection,
                                                     &mut self.sender,
                                                 )
@@ -361,7 +361,7 @@ impl<T: EventType, U: StateType> Server<T, U> {
                                             &self.connection_config,
                                         );
                                         new_connection.process_incoming_header(&header);
-                                        Server::<T, U>::send_connect_accept_message(
+                                        Server::<U>::send_connect_accept_message(
                                             &mut new_connection,
                                             &mut self.sender,
                                         )
@@ -483,7 +483,7 @@ impl<T: EventType, U: StateType> Server<T, U> {
 
     /// Queues up an Event to be sent to the Client associated with a given
     /// UserKey
-    pub fn queue_event(&mut self, user_key: &UserKey, event: &impl Event<T>) {
+    pub fn queue_event(&mut self, user_key: &UserKey, event: &impl State<U>) {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
             connection.queue_event(event);
         }
@@ -863,7 +863,7 @@ impl<T: EventType, U: StateType> Server<T, U> {
     ///
     /// The Event evaluated in this closure should match the Event used
     /// client-side in the NaiaClient::new() method
-    pub fn on_auth(&mut self, auth_func: Rc<Box<dyn Fn(&UserKey, &T) -> bool>>) {
+    pub fn on_auth(&mut self, auth_func: Rc<Box<dyn Fn(&UserKey, &U) -> bool>>) {
         self.auth_func = Some(auth_func);
     }
 
@@ -1005,21 +1005,21 @@ impl<T: EventType, U: StateType> Server<T, U> {
         }
     }
 
-    fn user_add_state(user_connection: &mut ClientConnection<T, U>,
+    fn user_add_state(user_connection: &mut ClientConnection<U>,
                       object_key: &ObjectKey,
                       state_ref: &U) {
         //add state to user connection
         user_connection.add_state(object_key, &state_ref.state_inner_ref());
     }
 
-    fn user_remove_state(user_connection: &mut ClientConnection<T, U>,
+    fn user_remove_state(user_connection: &mut ClientConnection<U>,
                          object_key: &ObjectKey) {
         //remove state from user connection
         user_connection.remove_state(object_key);
     }
 
     fn user_add_entity(state_store: &DenseSlotMap<ObjectKey, U>,
-                       user_connection: &mut ClientConnection<T, U>,
+                       user_connection: &mut ClientConnection<U>,
                        entity_key: &EntityKey,
                        component_set_ref: &Ref<HashSet<ComponentKey>>) {
 
@@ -1036,13 +1036,13 @@ impl<T: EventType, U: StateType> Server<T, U> {
         user_connection.add_entity(entity_key, component_set_ref, &component_list);
     }
 
-    fn user_remove_entity(user_connection: &mut ClientConnection<T, U>,
+    fn user_remove_entity(user_connection: &mut ClientConnection<U>,
                           entity_key: &EntityKey) {
         //remove entity from user connection
         user_connection.remove_entity(entity_key);
     }
 
-    fn user_add_component(user_connection: &mut ClientConnection<T, U>,
+    fn user_add_component(user_connection: &mut ClientConnection<U>,
                           entity_key: &EntityKey,
                           component_key: &ComponentKey,
                           component_ref: &Ref<dyn State<U>>) {
@@ -1051,7 +1051,7 @@ impl<T: EventType, U: StateType> Server<T, U> {
     }
 
     async fn send_connect_accept_message(
-        connection: &mut ClientConnection<T, U>,
+        connection: &mut ClientConnection<U>,
         sender: &mut MessageSender,
     ) {
         let payload =

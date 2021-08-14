@@ -26,7 +26,7 @@ impl<T: EventType> DualCommandSender<T> {
     }
 
     /// Gets the next queued Command to be transmitted
-    pub fn pop_command(&mut self) -> Option<(PawnKey, Rc<Box<dyn Event<T>>>)> {
+    pub fn pop_command(&mut self) -> Option<(PawnKey, Rc<Box<dyn State<T>>>)> {
         let state_command = self.state_manager.pop_command();
         if state_command.is_none() {
             return self.entity_manager.pop_command();
@@ -36,7 +36,7 @@ impl<T: EventType> DualCommandSender<T> {
 
     /// If  the last popped Command from the queue somehow wasn't able to be
     /// written into a packet, put the Command back into the front of the queue
-    pub fn unpop_command(&mut self, pawn_key: &PawnKey, command: &Rc<Box<dyn Event<T>>>) {
+    pub fn unpop_command(&mut self, pawn_key: &PawnKey, command: &Rc<Box<dyn State<T>>>) {
         match pawn_key {
             PawnKey::State(_) => {
                 self.state_manager.unpop_command(pawn_key, command);
@@ -48,7 +48,7 @@ impl<T: EventType> DualCommandSender<T> {
     }
 
     /// Queues an Command to be transmitted to the remote host
-    pub fn queue_command(&mut self, pawn_key: &PawnKey, command: &impl Event<T>) {
+    pub fn queue_command(&mut self, pawn_key: &PawnKey, command: &impl State<T>) {
         match pawn_key {
             PawnKey::State(_) => {
                 self.state_manager.queue_command(pawn_key, command);

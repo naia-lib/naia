@@ -39,7 +39,7 @@ pub use naia_socket_shared::{
 
 pub use ack_manager::AckManager;
 pub use state::{
-    state::{State, StateEq},
+    state::{State, StateEq, EventClone},
     state_builder::StateBuilder,
     state_message_type::StateMessageType,
     state_mutator::StateMutator,
@@ -51,11 +51,9 @@ pub use state::{
 pub use connection::Connection;
 pub use connection_config::ConnectionConfig;
 pub use events::{
-    event::{Event, EventClone},
     event_builder::EventBuilder,
     event_manager::EventManager,
     event_packet_writer::{EventPacketWriter, MTU_SIZE},
-    event_type::EventType,
 };
 pub use ecs::{
     keys::{EntityKey, LocalObjectKey, LocalEntityKey, LocalComponentKey, PawnKey, NaiaKey}

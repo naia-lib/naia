@@ -1,7 +1,7 @@
 use std::{collections::HashSet, net::SocketAddr};
 
 use naia_shared::{
-    State, StateType, Connection, ConnectionConfig, Event, EventType, ManagerType, Manifest,
+    State, StateType, Connection, ConnectionConfig, ManagerType, Manifest,
     PacketReader, PacketType, Ref, SequenceNumber, StandardHeader, EntityKey, PawnKey
 };
 
@@ -16,14 +16,14 @@ use super::{
 };
 use crate::{ComponentKey, GlobalPawnKey};
 
-pub struct ClientConnection<T: EventType, U: StateType> {
-    connection: Connection<T>,
+pub struct ClientConnection<U: StateType> {
+    connection: Connection<U>,
     state_manager: ServerStateManager<U>,
     ping_manager: PingManager,
-    command_receiver: CommandReceiver<T>,
+    command_receiver: CommandReceiver<U>,
 }
 
-impl<T: EventType, U: StateType> ClientConnection<T, U> {
+impl<U: StateType> ClientConnection<U> {
     pub fn new(
         address: SocketAddr,
         mut_handler: Option<&Ref<MutHandler>>,
@@ -40,7 +40,7 @@ impl<T: EventType, U: StateType> ClientConnection<T, U> {
     pub fn get_outgoing_packet(
         &mut self,
         host_tick: u16,
-        manifest: &Manifest<T, U>,
+        manifest: &Manifest<U>,
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() || self.state_manager.has_outgoing_messages() {
             let mut writer = ServerPacketWriter::new();
@@ -89,7 +89,7 @@ impl<T: EventType, U: StateType> ClientConnection<T, U> {
         &mut self,
         server_tick: u16,
         client_tick: u16,
-        manifest: &Manifest<T, U>,
+        manifest: &Manifest<U>,
         data: &[u8],
     ) {
         let mut reader = PacketReader::new(data);
@@ -140,7 +140,7 @@ impl<T: EventType, U: StateType> ClientConnection<T, U> {
         self.state_manager.remove_pawn(key);
     }
 
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(GlobalPawnKey, T)> {
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(GlobalPawnKey, U)> {
         if let Some((local_pawn_key, command)) =
             self.command_receiver.pop_incoming_command(server_tick)
         {
@@ -245,11 +245,11 @@ impl<T: EventType, U: StateType> ClientConnection<T, U> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_event(&mut self, event: &impl Event<T>) {
+    pub fn queue_event(&mut self, event: &impl State<U>) {
         return self.connection.queue_event(event);
     }
 
-    pub fn get_incoming_event(&mut self) -> Option<T> {
+    pub fn get_incoming_event(&mut self) -> Option<U> {
         return self.connection.get_incoming_event();
     }
 

@@ -1,12 +1,11 @@
 use std::{net::SocketAddr, rc::Rc};
 
-use crate::{wrapping_diff, Timer};
+use crate::{wrapping_diff, Timer, EventManager};
 
 use super::{
     ack_manager::AckManager,
-    state::{state_notifiable::StateNotifiable, state_type::StateType},
+    state::{state_notifiable::StateNotifiable, state_type::StateType, state::State},
     connection_config::ConnectionConfig,
-    events::{event::Event, event_manager::EventManager, event_type::EventType},
     manifest::Manifest,
     packet_type::PacketType,
     sequence_buffer::SequenceNumber,
@@ -17,7 +16,7 @@ use super::{
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
 #[derive(Debug)]
-pub struct Connection<T: EventType> {
+pub struct Connection<T: StateType> {
     address: SocketAddr,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
@@ -26,7 +25,7 @@ pub struct Connection<T: EventType> {
     last_received_tick: u16,
 }
 
-impl<T: EventType> Connection<T> {
+impl<T: StateType> Connection<T> {
     /// Create a new Connection, given the appropriate underlying managers
     pub fn new(address: SocketAddr, config: &ConnectionConfig) -> Self {
         return Connection {
@@ -121,7 +120,7 @@ impl<T: EventType> Connection<T> {
     }
 
     /// Queue up an event to be sent to the remote host
-    pub fn queue_event(&mut self, event: &impl Event<T>) {
+    pub fn queue_event(&mut self, event: &impl State<T>) {
         return self.event_manager.queue_outgoing_event(event);
     }
 
@@ -131,13 +130,13 @@ impl<T: EventType> Connection<T> {
     }
 
     /// Pop the next outgoing event from the queue
-    pub fn pop_outgoing_event(&mut self, next_packet_index: u16) -> Option<Rc<Box<dyn Event<T>>>> {
+    pub fn pop_outgoing_event(&mut self, next_packet_index: u16) -> Option<Rc<Box<dyn State<T>>>> {
         return self.event_manager.pop_outgoing_event(next_packet_index);
     }
 
     /// If for some reason the next outgoing event could not be written into a
     /// message and sent, place it back into the front of the queue
-    pub fn unpop_outgoing_event(&mut self, next_packet_index: u16, event: &Rc<Box<dyn Event<T>>>) {
+    pub fn unpop_outgoing_event(&mut self, next_packet_index: u16, event: &Rc<Box<dyn State<T>>>) {
         return self
             .event_manager
             .unpop_outgoing_event(next_packet_index, event);
@@ -145,10 +144,10 @@ impl<T: EventType> Connection<T> {
 
     /// Given an incoming packet which has been identified as an event, send the
     /// data to the EventManager for processing
-    pub fn process_event_data<U: StateType>(
+    pub fn process_event_data(
         &mut self,
         reader: &mut PacketReader,
-        manifest: &Manifest<T, U>,
+        manifest: &Manifest<T>,
     ) {
         return self.event_manager.process_data(reader, manifest);
     }

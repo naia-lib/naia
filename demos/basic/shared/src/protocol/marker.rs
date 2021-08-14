@@ -1,10 +1,10 @@
 use naia_derive::State;
 use naia_shared::{State, Property};
 
-use super::Components;
+use super::Protocol;
 
-#[derive(State)]
-#[type_name = "Components"]
+#[derive(State, Clone)]
+#[type_name = "Protocol"]
 pub struct Marker {
     pub name: Property<String>,
 }

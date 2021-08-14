@@ -2,7 +2,7 @@ use std::{any::TypeId, collections::HashMap};
 
 use crate::{
     state::{state_builder::StateBuilder, state_type::StateType},
-    events::{event_builder::EventBuilder, event_type::EventType},
+    events::event_builder::EventBuilder,
     PacketReader,
 };
 
@@ -11,17 +11,17 @@ use crate::{
 /// enums. Also is able to create new Event/States using registered Builders,
 /// given a specific TypeId.
 #[derive(Debug)]
-pub struct Manifest<T: EventType, U: StateType> {
+pub struct Manifest<T: StateType> {
     event_naia_id_count: u16,
     event_builder_map: HashMap<u16, Box<dyn EventBuilder<T>>>,
     event_type_map: HashMap<TypeId, u16>,
     ////
     state_naia_id_count: u16,
-    state_builder_map: HashMap<u16, Box<dyn StateBuilder<U>>>,
+    state_builder_map: HashMap<u16, Box<dyn StateBuilder<T>>>,
     state_type_map: HashMap<TypeId, u16>,
 }
 
-impl<T: EventType, U: StateType> Manifest<T, U> {
+impl<T: StateType> Manifest<T> {
     /// Create a new Manifest
     pub fn new() -> Self {
         Manifest {
@@ -65,7 +65,7 @@ impl<T: EventType, U: StateType> Manifest<T, U> {
     }
 
     /// Register an StateBuilder to handle the creation of State instances
-    pub fn register_state(&mut self, state_builder: Box<dyn StateBuilder<U>>) {
+    pub fn register_state(&mut self, state_builder: Box<dyn StateBuilder<T>>) {
         let new_naia_id = self.state_naia_id_count;
         let type_id = state_builder.state_get_type_id();
         self.state_type_map.insert(type_id, new_naia_id);
@@ -83,9 +83,9 @@ impl<T: EventType, U: StateType> Manifest<T, U> {
         return *naia_id;
     }
 
-    /// Creates an Event instance, given a NaiaId and a payload, typically from
+    /// Creates an State instance, given a NaiaId and a payload, typically from
     /// an incoming packet
-    pub fn create_state(&self, naia_id: u16, reader: &mut PacketReader) -> U {
+    pub fn create_state(&self, naia_id: u16, reader: &mut PacketReader) -> T {
         if let Some(state_builder) = self.state_builder_map.get(&naia_id) {
             return state_builder.as_ref().state_build(reader);
         }
@@ -99,7 +99,7 @@ impl<T: EventType, U: StateType> Manifest<T, U> {
     /// prediction
     pub fn register_pawn(
         &mut self,
-        state_builder: Box<dyn StateBuilder<U>>,
+        state_builder: Box<dyn StateBuilder<T>>,
         event_builder: Box<dyn EventBuilder<T>>,
     ) {
         self.register_state(state_builder);

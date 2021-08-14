@@ -21,7 +21,7 @@ impl<T: EventType> DualCommandReceiver<T> {
     }
 
     /// Gets the next queued Command
-    pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Rc<Box<dyn Event<T>>>)> {
+    pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Rc<Box<dyn State<T>>>)> {
         let state_command = self.state_manager.pop_command();
         if state_command.is_none() {
             return self.entity_manager.pop_command();
@@ -32,7 +32,7 @@ impl<T: EventType> DualCommandReceiver<T> {
     /// Gets the next queued Replayed Command
     pub fn pop_command_replay<U: StateType>(
         &mut self,
-    ) -> Option<(u16, PawnKey, Rc<Box<dyn Event<T>>>)> {
+    ) -> Option<(u16, PawnKey, Rc<Box<dyn State<T>>>)> {
         let state_command_replay = self.state_manager.pop_command_replay::<U>();
         if state_command_replay.is_none() {
             return self.entity_manager.pop_command_replay::<U>();
@@ -54,7 +54,7 @@ impl<T: EventType> DualCommandReceiver<T> {
         &mut self,
         host_tick: u16,
         pawn_key: &PawnKey,
-        command: &Rc<Box<dyn Event<T>>>,
+        command: &Rc<Box<dyn State<T>>>,
     ) {
         match pawn_key {
             PawnKey::State(_) => {
@@ -83,7 +83,7 @@ impl<T: EventType> DualCommandReceiver<T> {
         &self,
         pawn_key: &PawnKey,
         reverse: bool,
-    ) -> Option<SequenceIterator<Rc<Box<dyn Event<T>>>>> {
+    ) -> Option<SequenceIterator<Rc<Box<dyn State<T>>>>> {
         match pawn_key {
             PawnKey::State(_) => {
                 return self.state_manager.command_history_iter(pawn_key, reverse);

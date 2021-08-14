@@ -377,21 +377,21 @@ impl<T: EventType, U: StateType> Client<T, U> {
     }
 
     /// Queues up an Event to be sent to the Server
-    pub fn send_event(&mut self, event: &impl Event<T>) {
+    pub fn send_event(&mut self, event: &impl State<T>) {
         if let Some(connection) = &mut self.server_connection {
             connection.queue_event(event);
         }
     }
 
     /// Queues up a Pawn State Command to be sent to the Server
-    pub fn send_command(&mut self, pawn_object_key: &LocalObjectKey, command: &impl Event<T>) {
+    pub fn send_command(&mut self, pawn_object_key: &LocalObjectKey, command: &impl State<T>) {
         if let Some(connection) = &mut self.server_connection {
             connection.state_queue_command(pawn_object_key, command);
         }
     }
 
     /// Queues up a Pawn Entity Command to be sent to the Server
-    pub fn entity_send_command(&mut self, pawn_entity_key: &LocalEntityKey, command: &impl Event<T>) {
+    pub fn entity_send_command(&mut self, pawn_entity_key: &LocalEntityKey, command: &impl State<T>) {
         if let Some(connection) = &mut self.server_connection {
             connection.entity_queue_command(pawn_entity_key, command);
         }

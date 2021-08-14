@@ -44,7 +44,7 @@ pub fn event_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             #new_complete_method
             #read_to_type_method
         }
-        impl Event<#type_name> for #event_name {
+        impl State<#type_name> for #event_name {
             fn event_is_guaranteed(&self) -> bool {
                 #event_name::is_guaranteed()
             }

@@ -1,11 +1,11 @@
 
-use naia_derive::Event;
-use naia_shared::{Event, Property};
+use naia_derive::State;
+use naia_shared::{State, Property};
 
-use super::Events;
+use super::Protocol;
 
-#[derive(Event, Clone)]
-#[type_name = "Events"]
+#[derive(State, Clone)]
+#[type_name = "Protocol"]
 pub struct StringMessage {
     pub message: Property<String>,
 }
@@ -16,6 +16,6 @@ impl StringMessage {
     }
 
     pub fn new(message: String) -> StringMessage {
-        return StringMessage::event_new_complete(message);
+        return StringMessage::state_new_complete(message);
     }
 }

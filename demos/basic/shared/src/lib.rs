@@ -3,8 +3,7 @@ use std::net::SocketAddr;
 extern crate log;
 extern crate naia_derive;
 
-pub mod components;
-pub mod events;
+pub mod protocol;
 
 mod manifest_load;
 mod shared_config;

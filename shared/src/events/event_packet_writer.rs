@@ -1,8 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use crate::{
-    state::state_type::StateType,
-    events::{event::Event, event_type::EventType},
+    state::{state_type::StateType, state::State},
     manager_type::ManagerType,
     manifest::Manifest,
     standard_header::StandardHeader,
@@ -51,10 +50,10 @@ impl EventPacketWriter {
 
     /// Writes an Event into the Writer's internal buffer, which will eventually
     /// be put into the outgoing packet
-    pub fn write_event<T: EventType, U: StateType>(
+    pub fn write_event<T: StateType>(
         &mut self,
-        manifest: &Manifest<T, U>,
-        event: &Box<dyn Event<T>>,
+        manifest: &Manifest<T>,
+        event: &Box<dyn State<T>>,
     ) -> bool {
         //Write event payload
         let mut event_payload_bytes = Vec::<u8>::new();
