@@ -21,6 +21,8 @@ pub fn state_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
     let conversion_methods = get_conversion_methods(&type_name, &input.data);
     let equals_method = get_equals_method(&type_name, &input.data);
     let mirror_method = get_mirror_method(&type_name, &input.data);
+    let write_variants = get_write_variants(&type_name, &input.data);
+    let get_type_id_variants = get_type_id_variants(&type_name, &input.data);
 
     let ref_imports = {
         if MULTITHREAD {
@@ -35,6 +37,7 @@ pub fn state_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
     };
 
     let gen = quote! {
+        use std::any::TypeId;
         use naia_shared::{StateType, State, StateEq, DiffMask, PacketReader};
         #ref_imports
         impl StateType for #type_name {
@@ -43,6 +46,16 @@ pub fn state_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
             #inner_ref_method
             #equals_method
             #mirror_method
+            fn event_write(&self, buffer: &mut Vec<u8>) {
+                match self {
+                    #write_variants
+                }
+            }
+            fn event_get_type_id(&self) -> TypeId {
+                match self {
+                    #get_type_id_variants
+                }
+            }
         }
         #conversion_methods
     };
@@ -281,4 +294,50 @@ fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
             }
         }
     };
+}
+
+fn get_write_variants(type_name: &Ident, data: &Data) -> TokenStream {
+    match *data {
+        Data::Enum(ref data) => {
+            let mut output = quote! {};
+            for variant in data.variants.iter() {
+                let variant_name = &variant.ident;
+                let new_output_right = quote! {
+                    #type_name::#variant_name(idstate) => {
+                        idstate.borrow().state_write(buffer);
+                    }
+                };
+                let new_output_result = quote! {
+                    #output
+                    #new_output_right
+                };
+                output = new_output_result;
+            }
+            output
+        }
+        _ => unimplemented!(),
+    }
+}
+
+fn get_type_id_variants(type_name: &Ident, data: &Data) -> TokenStream {
+    match *data {
+        Data::Enum(ref data) => {
+            let mut output = quote! {};
+            for variant in data.variants.iter() {
+                let variant_name = &variant.ident;
+                let new_output_right = quote! {
+                    #type_name::#variant_name(idstate) => {
+                        return idstate.borrow().state_get_type_id();
+                    }
+                };
+                let new_output_result = quote! {
+                    #output
+                    #new_output_right
+                };
+                output = new_output_result;
+            }
+            output
+        }
+        _ => unimplemented!(),
+    }
 }

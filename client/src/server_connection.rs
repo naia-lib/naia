@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, rc::Rc, collections::hash_map::Keys};
 
-use naia_shared::{StateType, Connection, ConnectionConfig, Event, EventType, LocalObjectKey,
+use naia_shared::{State, StateType, Connection, ConnectionConfig, LocalObjectKey,
                   ManagerType, Manifest, PacketReader, PacketType, PawnKey, SequenceNumber,
                   StandardHeader, LocalEntityKey, LocalComponentKey};
 
@@ -16,16 +16,16 @@ use super::{
 };
 
 #[derive(Debug)]
-pub struct ServerConnection<T: EventType, U: StateType> {
+pub struct ServerConnection<T: StateType> {
     connection: Connection<T>,
-    state_manager: ClientStateManager<U>,
+    state_manager: ClientStateManager<T>,
     ping_manager: PingManager,
     command_sender: DualCommandSender<T>,
     command_receiver: DualCommandReceiver<T>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
-impl<T: EventType, U: StateType> ServerConnection<T, U> {
+impl<T: StateType> ServerConnection<T> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
@@ -46,7 +46,7 @@ impl<T: EventType, U: StateType> ServerConnection<T, U> {
     pub fn get_outgoing_packet(
         &mut self,
         host_tick: u16,
-        manifest: &Manifest<T, U>,
+        manifest: &Manifest<T>,
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() || self.command_sender.has_command() {
             let mut writer = ClientPacketWriter::new();
@@ -101,7 +101,7 @@ impl<T: EventType, U: StateType> ServerConnection<T, U> {
         &mut self,
         packet_tick: u16,
         packet_index: u16,
-        manifest: &Manifest<T, U>,
+        manifest: &Manifest<T>,
         data: &[u8],
     ) {
         let mut reader = PacketReader::new(data);
@@ -145,7 +145,7 @@ impl<T: EventType, U: StateType> ServerConnection<T, U> {
     }
 
     // Pass-through methods to underlying state manager
-    pub fn get_incoming_state_message(&mut self) -> Option<ClientStateMessage<U>> {
+    pub fn get_incoming_state_message(&mut self) -> Option<ClientStateMessage<T>> {
         return self.state_manager.pop_incoming_message();
     }
 
@@ -157,7 +157,7 @@ impl<T: EventType, U: StateType> ServerConnection<T, U> {
         return self.state_manager.component_keys();
     }
 
-    pub fn get_state(&self, key: &LocalObjectKey) -> Option<&U> {
+    pub fn get_state(&self, key: &LocalObjectKey) -> Option<&T> {
         return self.state_manager.get_state(key);
     }
 
@@ -169,15 +169,15 @@ impl<T: EventType, U: StateType> ServerConnection<T, U> {
         return self.has_state(key);
     }
 
-    pub fn pawn_keys(&self) -> Keys<LocalObjectKey, U> {
+    pub fn pawn_keys(&self) -> Keys<LocalObjectKey, T> {
         return self.state_manager.pawn_keys();
     }
 
-    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&U> {
+    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&T> {
         return self.state_manager.get_pawn(key);
     }
 
-    pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&U> {
+    pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&T> {
         return self.state_manager.get_pawn(key);
     }
 
@@ -186,7 +186,7 @@ impl<T: EventType, U: StateType> ServerConnection<T, U> {
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
-    pub fn frame_begin(&mut self, manifest: &Manifest<T, U>, tick_manager: &mut ClientTickManager) -> bool {
+    pub fn frame_begin(&mut self, manifest: &Manifest<T>, tick_manager: &mut ClientTickManager) -> bool {
         if tick_manager.mark_frame() {
             // then we apply all received updates to states at once
             let target_tick = tick_manager.get_server_tick();
@@ -276,14 +276,14 @@ impl<T: EventType, U: StateType> ServerConnection<T, U> {
     pub fn process_replays(&mut self) {
         self
             .command_receiver
-            .process_command_replay::<U>(&mut self.state_manager);
+            .process_command_replay::<T>(&mut self.state_manager);
 
     }
 
     pub fn get_incoming_replay(&mut self) -> Option<(PawnKey, Rc<Box<dyn State<T>>>)> {
         if let Some((_tick, pawn_key, command)) = self
             .command_receiver
-            .pop_command_replay::<U>()
+            .pop_command_replay::<T>()
         {
             return Some((pawn_key, command));
         }

@@ -9,12 +9,11 @@ use naia_server::{Server, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey
 
 use naia_demo_basic_shared::{
     get_shared_config, manifest_load,
-    components::{Components, Position, Name, Marker},
-    events::{Events, StringMessage},
+    protocol::{Protocol, Position, Name, Marker, StringMessage},
 };
 
 pub struct App {
-    server: Server<Events, Components>,
+    server: Server<Protocol>,
     world: World,
     main_room_key: RoomKey,
     tick_count: u32,
@@ -37,7 +36,8 @@ impl App {
         // used to reject a new connection if the correct credentials have not been
         // provided
         server.on_auth(Rc::new(Box::new(|_, auth_type| {
-            if let Events::Auth(auth) = auth_type {
+            if let Protocol::Auth(auth_ref) = auth_type {
+                let auth = auth_ref.borrow();
                 let username = auth.username.get();
                 let password = auth.password.get();
                 return username == "charlie" && password == "12345";
@@ -71,11 +71,11 @@ impl App {
 
                 // Add position component to Entity
                 let position = Position::new((count * 4) as u8, 0).state_wrap();
-                let _pos_key = server.add_component_to_entity(&naia_key, Components::Position(position.clone()));
+                let _pos_key = server.add_component_to_entity(&naia_key, Protocol::Position(position.clone()));
 
                 // Add name component to Entity
                 let name = Name::new(first, last).state_wrap();
-                let _name_key = server.add_component_to_entity(&naia_key, Components::Name(name.clone()));
+                let _name_key = server.add_component_to_entity(&naia_key, Protocol::Name(name.clone()));
 
                 // Add to World
                 let hecs_key = world.spawn((
@@ -115,7 +115,8 @@ impl App {
                         ServerEvent::Event(user_key, event_type) => {
                             if let Some(user) = self.server.get_user(&user_key) {
                                 match event_type {
-                                    Events::StringMessage(event) => {
+                                    Protocol::StringMessage(event_ref) => {
+                                        let event = event_ref.borrow();
                                         let message = event.message.get();
                                         info!("Naia Server recv <- {}: {}", user.address, message);
                                     }
@@ -158,7 +159,7 @@ impl App {
                                     // Add Marker component to Entity in Naia Server
                                     let marker = Marker::new("new").state_wrap();
                                     let component_key = self.server.add_component_to_entity(&naia_key,
-                                                                        Components::Marker(marker.clone()));
+                                                                        Protocol::Marker(marker.clone()));
 
                                     // Add to Hecs World
                                     self.world.insert_one(hecs_key, marker)
@@ -177,15 +178,16 @@ impl App {
                                     let component_ref = self.server.remove_component(&component_key);
 
                                     match component_ref {
-                                        Components::Position(position_ref) => {
+                                        Protocol::Position(position_ref) => {
                                             self.remove_component(&hecs_key, &position_ref);
                                         }
-                                        Components::Name(name_ref) => {
+                                        Protocol::Name(name_ref) => {
                                             self.remove_component(&hecs_key, &name_ref);
                                         }
-                                        Components::Marker(marker_ref) => {
+                                        Protocol::Marker(marker_ref) => {
                                             self.remove_component(&hecs_key, &marker_ref);
                                         }
+                                        _ => {}
                                     }
                                 }
                             }
@@ -231,7 +233,7 @@ impl App {
             }
     }
 
-    fn remove_component<T: 'static + State<Components>>(&mut self, hecs_entity_key: &HecsEntityKey, _component_ref: &Ref<T>) {
+    fn remove_component<T: 'static + State<Protocol>>(&mut self, hecs_entity_key: &HecsEntityKey, _component_ref: &Ref<T>) {
         self.world.remove_one::<Ref<T>>(*hecs_entity_key)
             .expect("error removing component");
     }

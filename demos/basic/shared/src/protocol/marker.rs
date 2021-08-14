@@ -10,6 +10,10 @@ pub struct Marker {
 }
 
 impl Marker {
+    fn is_guaranteed() -> bool {
+        false
+    }
+
     pub fn new(name: &str) -> Self {
         return Marker::state_new_complete(
             name.to_string()

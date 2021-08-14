@@ -34,8 +34,8 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let diff_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
 
     let gen = quote! {
-        use std::{any::{TypeId}, rc::Rc, cell::RefCell};
-        use naia_shared::{DiffMask, StateBuilder, StateMutator, StateEq, PacketReader, Ref};
+        use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
+        use naia_shared::{DiffMask, StateBuilder, StateMutator, StateEq, PacketReader, Ref, EventBuilder};
         #property_enum
         pub struct #state_builder_name {
             type_id: TypeId,
@@ -61,6 +61,9 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             #read_to_type_method
         }
         impl State<#type_name> for #state_name {
+            fn event_is_guaranteed(&self) -> bool {
+                #state_name::is_guaranteed()
+            }
             fn state_get_diff_mask_size(&self) -> u8 { #diff_mask_size }
             fn state_get_type_id(&self) -> TypeId {
                 return TypeId::of::<#state_name>();

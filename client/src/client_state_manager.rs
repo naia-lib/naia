@@ -3,23 +3,22 @@ use std::collections::{HashSet, HashMap, VecDeque, hash_map::Keys};
 
 use log::warn;
 
-use naia_shared::{StateType, EventType, LocalObjectKey, Manifest, PacketReader, DiffMask,
+use naia_shared::{StateType, LocalObjectKey, Manifest, PacketReader, DiffMask,
                   LocalEntityKey, StateMessageType, NaiaKey, LocalComponentKey, PawnKey};
 
 use super::{client_state_message::ClientStateMessage, dual_command_receiver::DualCommandReceiver};
 
 #[derive(Debug)]
-pub struct ClientStateManager<U: StateType> {
-    local_state_store:                  HashMap<LocalObjectKey, U>,
-    queued_incoming_messages:           VecDeque<ClientStateMessage<U>>,
-    pawn_store:                         HashMap<LocalObjectKey, U>,
+pub struct ClientStateManager<T: StateType> {
+    local_state_store:                  HashMap<LocalObjectKey, T>,
+    queued_incoming_messages:           VecDeque<ClientStateMessage<T>>,
+    pawn_store:                         HashMap<LocalObjectKey, T>,
     local_entity_store:                 HashMap<LocalEntityKey, HashSet<LocalComponentKey>>,
     pawn_entity_store:                  HashSet<LocalEntityKey>,
     component_entity_map:               HashMap<LocalComponentKey, LocalEntityKey>,
-    //reserved_add_component_messages:    HashMap<LocalEntityKey, LocalComponentKey>,
 }
 
-impl<U: StateType> ClientStateManager<U> {
+impl<T: StateType> ClientStateManager<T> {
     pub fn new() -> Self {
         ClientStateManager {
             queued_incoming_messages:           VecDeque::new(),
@@ -28,13 +27,12 @@ impl<U: StateType> ClientStateManager<U> {
             local_entity_store:                 HashMap::new(),
             pawn_entity_store:                  HashSet::new(),
             component_entity_map:               HashMap::new(),
-            //reserved_add_component_messages:    HashMap::new()
         }
     }
 
-    pub fn process_data<T: EventType>(
+    pub fn process_data(
         &mut self,
-        manifest: &Manifest<T, U>,
+        manifest: &Manifest<T>,
         command_receiver: &mut DualCommandReceiver<T>,
         packet_tick: u16,
         packet_index: u16,
@@ -282,7 +280,7 @@ impl<U: StateType> ClientStateManager<U> {
         }
     }
 
-    pub fn pop_incoming_message(&mut self) -> Option<ClientStateMessage<U>> {
+    pub fn pop_incoming_message(&mut self) -> Option<ClientStateMessage<T>> {
         return self.queued_incoming_messages.pop_front();
     }
 
@@ -304,7 +302,7 @@ impl<U: StateType> ClientStateManager<U> {
         output
     }
 
-    pub fn get_state(&self, key: &LocalObjectKey) -> Option<&U> {
+    pub fn get_state(&self, key: &LocalObjectKey) -> Option<&T> {
         return self.local_state_store.get(key);
     }
 
@@ -316,11 +314,11 @@ impl<U: StateType> ClientStateManager<U> {
         return self.local_entity_store.contains_key(key);
     }
 
-    pub fn pawn_keys(&self) -> Keys<LocalObjectKey, U> {
+    pub fn pawn_keys(&self) -> Keys<LocalObjectKey, T> {
         return self.pawn_store.keys();
     }
 
-    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&U> {
+    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&T> {
         return self.pawn_store.get(key);
     }
 
@@ -341,7 +339,7 @@ impl<U: StateType> ClientStateManager<U> {
 
     // internal
 
-    fn state_delete_cleanup<T: EventType>(&mut self, command_receiver: &mut DualCommandReceiver<T>,
+    fn state_delete_cleanup(&mut self, command_receiver: &mut DualCommandReceiver<T>,
                                           object_key: &LocalObjectKey) {
         if let Some(state) = self.local_state_store.remove(&object_key) {
 

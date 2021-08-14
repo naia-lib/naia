@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use naia_shared::{Event, EventClone, StateType, PawnKey};
+use naia_shared::{State, EventClone, StateType, PawnKey};
 
 /// Handles outgoing Commands
 #[derive(Debug)]

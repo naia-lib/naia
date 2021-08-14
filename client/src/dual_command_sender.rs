@@ -1,17 +1,17 @@
 use std::rc::Rc;
 
-use naia_shared::{Event, EventType, PawnKey};
+use naia_shared::{State, StateType, PawnKey};
 
 use super::command_sender::CommandSender;
 
 /// Handles outgoing Commands
 #[derive(Debug)]
-pub struct DualCommandSender<T: EventType> {
+pub struct DualCommandSender<T: StateType> {
     state_manager:  CommandSender<T>,
     entity_manager: CommandSender<T>,
 }
 
-impl<T: EventType> DualCommandSender<T> {
+impl<T: StateType> DualCommandSender<T> {
     /// Creates a new CommandSender
     pub fn new() -> Self {
         DualCommandSender {

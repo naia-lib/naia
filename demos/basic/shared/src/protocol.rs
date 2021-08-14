@@ -19,6 +19,6 @@ pub enum Protocol {
     Position(Ref<Position>),
     Name(Ref<Name>),
     Marker(Ref<Marker>),
-    StringMessage(StringMessage),
-    Auth(Auth),
+    StringMessage(Ref<StringMessage>),
+    Auth(Ref<Auth>),
 }
