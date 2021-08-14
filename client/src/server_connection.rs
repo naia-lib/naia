@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, rc::Rc, collections::hash_map::Keys};
 
-use naia_shared::{State, StateType, Connection, ConnectionConfig, LocalObjectKey,
+use naia_shared::{State, ProtocolType, Connection, ConnectionConfig, LocalObjectKey,
                   ManagerType, Manifest, PacketReader, PacketType, PawnKey, SequenceNumber,
                   StandardHeader, LocalEntityKey, LocalComponentKey};
 
@@ -16,7 +16,7 @@ use super::{
 };
 
 #[derive(Debug)]
-pub struct ServerConnection<T: StateType> {
+pub struct ServerConnection<T: ProtocolType> {
     connection: Connection<T>,
     state_manager: ClientStateManager<T>,
     ping_manager: PingManager,
@@ -25,7 +25,7 @@ pub struct ServerConnection<T: StateType> {
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
-impl<T: StateType> ServerConnection<T> {
+impl<T: ProtocolType> ServerConnection<T> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,

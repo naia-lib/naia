@@ -1,7 +1,7 @@
 use std::{collections::HashSet, net::SocketAddr};
 
 use naia_shared::{
-    State, StateType, Connection, ConnectionConfig, ManagerType, Manifest,
+    State, ProtocolType, Connection, ConnectionConfig, ManagerType, Manifest,
     PacketReader, PacketType, Ref, SequenceNumber, StandardHeader, EntityKey, PawnKey
 };
 
@@ -16,14 +16,14 @@ use super::{
 };
 use crate::{ComponentKey, GlobalPawnKey};
 
-pub struct ClientConnection<U: StateType> {
+pub struct ClientConnection<U: ProtocolType> {
     connection: Connection<U>,
     state_manager: ServerStateManager<U>,
     ping_manager: PingManager,
     command_receiver: CommandReceiver<U>,
 }
 
-impl<U: StateType> ClientConnection<U> {
+impl<U: ProtocolType> ClientConnection<U> {
     pub fn new(
         address: SocketAddr,
         mut_handler: Option<&Ref<MutHandler>>,

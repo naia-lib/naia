@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    state::{state::State, state_type::StateType, state::EventClone},
+    state::{state::State, protocol_type::ProtocolType, state::EventClone},
     manifest::Manifest,
     PacketReader,
 };
@@ -13,13 +13,13 @@ use crate::{
 /// Handles incoming/outgoing events, tracks the delivery status of Events so
 /// that guaranteed Events can be re-transmitted to the remote host
 #[derive(Debug)]
-pub struct EventManager<T: StateType> {
+pub struct EventManager<T: ProtocolType> {
     queued_outgoing_events: VecDeque<Rc<Box<dyn State<T>>>>,
     queued_incoming_events: VecDeque<T>,
     sent_events: HashMap<u16, Vec<Rc<Box<dyn State<T>>>>>,
 }
 
-impl<T: StateType> EventManager<T> {
+impl<T: ProtocolType> EventManager<T> {
     /// Creates a new EventManager
     pub fn new() -> Self {
         EventManager {

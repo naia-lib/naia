@@ -1,5 +1,5 @@
 
-use naia_derive::StateType;
+use naia_derive::ProtocolType;
 use naia_shared::Ref;
 
 mod auth;
@@ -14,7 +14,7 @@ pub use name::Name;
 pub use position::Position;
 pub use string_message::StringMessage;
 
-#[derive(StateType, Clone)]
+#[derive(ProtocolType, Clone)]
 pub enum Protocol {
     Position(Ref<Position>),
     Name(Ref<Name>),

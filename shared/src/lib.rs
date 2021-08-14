@@ -44,7 +44,7 @@ pub use state::{
     state_message_type::StateMessageType,
     state_mutator::StateMutator,
     state_notifiable::StateNotifiable,
-    state_type::StateType,
+    protocol_type::ProtocolType,
     property::Property,
     diff_mask::DiffMask,
 };

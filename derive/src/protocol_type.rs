@@ -10,7 +10,7 @@ cfg_if! {
     }
 }
 
-pub fn state_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let type_name = input.ident;
@@ -38,9 +38,9 @@ pub fn state_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
 
     let gen = quote! {
         use std::any::TypeId;
-        use naia_shared::{StateType, State, StateEq, DiffMask, PacketReader};
+        use naia_shared::{ProtocolType, State, StateEq, DiffMask, PacketReader};
         #ref_imports
-        impl StateType for #type_name {
+        impl ProtocolType for #type_name {
             #read_full_method
             #read_partial_method
             #inner_ref_method

@@ -7,7 +7,7 @@ use super::{
 };
 
 use super::{
-    state::{state_notifiable::StateNotifiable, state_type::StateType},
+    state::{state_notifiable::StateNotifiable, protocol_type::ProtocolType},
     events::event_manager::EventManager,
     packet_type::PacketType,
 };
@@ -49,7 +49,7 @@ impl AckManager {
 
     /// Process an incoming packet, handle notifications of delivered / dropped
     /// packets
-    pub fn process_incoming<T: StateType>(
+    pub fn process_incoming<T: ProtocolType>(
         &mut self,
         header: &StandardHeader,
         event_manager: &mut EventManager<T>,
@@ -117,7 +117,7 @@ impl AckManager {
         self.sequence_number = self.sequence_number.wrapping_add(1);
     }
 
-    fn notify_packet_delivered<T: StateType>(
+    fn notify_packet_delivered<T: ProtocolType>(
         &self,
         packet_sequence_number: u16,
         event_manager: &mut EventManager<T>,
@@ -129,7 +129,7 @@ impl AckManager {
         }
     }
 
-    fn notify_packet_dropped<T: StateType>(
+    fn notify_packet_dropped<T: ProtocolType>(
         &self,
         packet_sequence_number: u16,
         event_manager: &mut EventManager<T>,

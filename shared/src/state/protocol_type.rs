@@ -6,7 +6,7 @@ use crate::{PacketReader, Ref};
 
 /// An Enum with a variant for every State that can be synced between
 /// Client/Host
-pub trait StateType<Impl = Self>: Clone {
+pub trait ProtocolType<Impl = Self>: Clone {
     // event_write & get_type_id are ONLY currently used for reading/writing auth events..
     // maybe should do something different here
     /// Writes the typed Event into an outgoing byte stream
@@ -23,9 +23,9 @@ pub trait StateType<Impl = Self>: Clone {
         reader: &mut PacketReader,
         packet_index: u16,
     );
-    /// Convert StateType to an inner reference to the State
+    /// Convert ProtocolType to an inner reference to the State
     fn inner_ref(&self) -> Ref<dyn State<Impl>>;
-    /// Compare properties in another StateType
+    /// Compare properties in another ProtocolType
     fn equals(&self, other: &Impl) -> bool;
     /// Sets the current State to the state of another State of the same type
     fn mirror(&mut self, other: &Impl);

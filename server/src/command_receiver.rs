@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 
-use naia_shared::{sequence_greater_than, StateType, PawnKey, Manifest, PacketReader, SequenceBuffer, LocalObjectKey, NaiaKey, LocalEntityKey};
+use naia_shared::{sequence_greater_than, ProtocolType, PawnKey, Manifest, PacketReader, SequenceBuffer, LocalObjectKey, NaiaKey, LocalEntityKey};
 
 const COMMAND_BUFFER_MAX_SIZE: u16 = 64;
 
 /// Handles incoming commands, buffering them to be received on the correct tick
 #[derive(Debug)]
-pub struct CommandReceiver<T: StateType> {
+pub struct CommandReceiver<T: ProtocolType> {
     queued_incoming_commands: SequenceBuffer<HashMap<PawnKey, T>>,
 }
 
-impl<T: StateType> CommandReceiver<T> {
+impl<T: ProtocolType> CommandReceiver<T> {
     /// Creates a new CommandReceiver
     pub fn new() -> Self {
         CommandReceiver {

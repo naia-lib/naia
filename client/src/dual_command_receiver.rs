@@ -1,17 +1,17 @@
 use std::rc::Rc;
 
-use naia_shared::{State, StateType, SequenceIterator, PawnKey};
+use naia_shared::{State, ProtocolType, SequenceIterator, PawnKey};
 
 use super::{client_state_manager::ClientStateManager, command_receiver::CommandReceiver};
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
-pub struct DualCommandReceiver<T: StateType> {
+pub struct DualCommandReceiver<T: ProtocolType> {
     state_manager:  CommandReceiver<T>,
     entity_manager: CommandReceiver<T>,
 }
 
-impl<T: StateType> DualCommandReceiver<T> {
+impl<T: ProtocolType> DualCommandReceiver<T> {
     /// Creates a new DualCommandReceiver
     pub fn new() -> Self {
         DualCommandReceiver {
@@ -30,7 +30,7 @@ impl<T: StateType> DualCommandReceiver<T> {
     }
 
     /// Gets the next queued Replayed Command
-    pub fn pop_command_replay<U: StateType>(
+    pub fn pop_command_replay<U: ProtocolType>(
         &mut self,
     ) -> Option<(u16, PawnKey, Rc<Box<dyn State<T>>>)> {
         let state_command_replay = self.state_manager.pop_command_replay::<U>();
@@ -41,7 +41,7 @@ impl<T: StateType> DualCommandReceiver<T> {
     }
 
     /// Process any necessary replayed Command
-    pub fn process_command_replay<U: StateType>(
+    pub fn process_command_replay<U: ProtocolType>(
         &mut self,
         state_manager: &mut ClientStateManager<U>,
     ) {

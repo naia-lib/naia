@@ -7,7 +7,7 @@ use std::{
 
 use slotmap::SparseSecondaryMap;
 
-use naia_shared::{State, StateNotifiable, StateType, KeyGenerator, LocalObjectKey, Ref, DiffMask, EntityKey, LocalEntityKey};
+use naia_shared::{State, StateNotifiable, ProtocolType, KeyGenerator, LocalObjectKey, Ref, DiffMask, EntityKey, LocalEntityKey};
 
 use super::{
     object_key::{object_key::ObjectKey, ComponentKey},
@@ -27,7 +27,7 @@ use crate::server_packet_writer::ServerPacketWriter;
 /// Manages States/Entities for a given Client connection and keeps them in sync on the
 /// Client
 #[derive(Debug)]
-pub struct ServerStateManager<T: StateType> {
+pub struct ServerStateManager<T: ProtocolType> {
     address: SocketAddr,
     // objects
     object_key_generator: KeyGenerator<LocalObjectKey>,
@@ -53,7 +53,7 @@ pub struct ServerStateManager<T: StateType> {
     last_popped_diff_mask_list: Option<Vec<(ObjectKey, DiffMask)>>,
 }
 
-impl<T: StateType> ServerStateManager<T> {
+impl<T: ProtocolType> ServerStateManager<T> {
     /// Create a new ServerStateManager, given the client's address and a
     /// reference to a MutHandler associated with the Client
     pub fn new(address: SocketAddr, mut_handler: &Ref<MutHandler>) -> Self {
@@ -781,7 +781,7 @@ impl<T: StateType> ServerStateManager<T> {
     }
 }
 
-impl<T: StateType> StateNotifiable for ServerStateManager<T> {
+impl<T: ProtocolType> StateNotifiable for ServerStateManager<T> {
     fn notify_packet_delivered(&mut self, packet_index: u16) {
         let mut deleted_states: Vec<ObjectKey> = Vec::new();
 
@@ -944,7 +944,7 @@ impl<T: StateType> StateNotifiable for ServerStateManager<T> {
     }
 }
 
-fn state_delete<T: StateType>(queued_messages: &mut VecDeque<ServerStateMessage<T>>,
+fn state_delete<T: ProtocolType>(queued_messages: &mut VecDeque<ServerStateMessage<T>>,
                               object_record: &mut ObjectRecord,
                               object_key: &ObjectKey) {
     object_record.status = LocalityStatus::Deleting;
@@ -955,7 +955,7 @@ fn state_delete<T: StateType>(queued_messages: &mut VecDeque<ServerStateMessage<
         ));
 }
 
-fn entity_delete<T: StateType>(queued_messages: &mut VecDeque<ServerStateMessage<T>>,
+fn entity_delete<T: ProtocolType>(queued_messages: &mut VecDeque<ServerStateMessage<T>>,
                               entity_record: &mut EntityRecord,
                               entity_key: &EntityKey) {
     entity_record.status = LocalityStatus::Deleting;

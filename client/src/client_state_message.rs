@@ -1,7 +1,7 @@
-use naia_shared::{LocalObjectKey, LocalEntityKey, LocalComponentKey, StateType};
+use naia_shared::{LocalObjectKey, LocalEntityKey, LocalComponentKey, ProtocolType};
 
 #[derive(Debug, Clone)]
-pub enum ClientStateMessage<U: StateType> {
+pub enum ClientStateMessage<U: ProtocolType> {
     CreateState(LocalObjectKey),
     UpdateState(LocalObjectKey),
     DeleteState(LocalObjectKey, U),

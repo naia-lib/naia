@@ -1,9 +1,9 @@
-use naia_shared::{State, StateType, LocalObjectKey, Ref, DiffMask, LocalEntityKey, EntityKey, LocalComponentKey, StateMessageType};
+use naia_shared::{State, ProtocolType, LocalObjectKey, Ref, DiffMask, LocalEntityKey, EntityKey, LocalComponentKey, StateMessageType};
 
 use super::object_key::{object_key::ObjectKey, ComponentKey};
 
 #[derive(Debug)]
-pub enum ServerStateMessage<T: StateType> {
+pub enum ServerStateMessage<T: ProtocolType> {
     CreateState(ObjectKey, LocalObjectKey, Ref<dyn State<T>>),
     UpdateState(ObjectKey, LocalObjectKey, Ref<DiffMask>, Ref<dyn State<T>>),
     DeleteState(ObjectKey, LocalObjectKey),
@@ -17,7 +17,7 @@ pub enum ServerStateMessage<T: StateType> {
     AddComponent(LocalEntityKey, ComponentKey, LocalComponentKey, Ref<dyn State<T>>),
 }
 
-impl<T: StateType> ServerStateMessage<T> {
+impl<T: ProtocolType> ServerStateMessage<T> {
     pub fn as_type(&self) -> StateMessageType {
         match self {
             ServerStateMessage::CreateState(_, _, _) => StateMessageType::CreateState,
@@ -35,7 +35,7 @@ impl<T: StateType> ServerStateMessage<T> {
     }
 }
 
-impl<T: StateType> Clone for ServerStateMessage<T> {
+impl<T: ProtocolType> Clone for ServerStateMessage<T> {
     fn clone(&self) -> Self {
         match self {
             ServerStateMessage::CreateState(gk, lk, e) => {

@@ -1,7 +1,7 @@
 use std::{any::TypeId, collections::HashMap};
 
 use crate::{
-    state::{state_builder::StateBuilder, state_type::StateType},
+    state::{state_builder::StateBuilder, protocol_type::ProtocolType},
     PacketReader,
 };
 
@@ -10,13 +10,13 @@ use crate::{
 /// enums. Also is able to create new Event/States using registered Builders,
 /// given a specific TypeId.
 #[derive(Debug)]
-pub struct Manifest<T: StateType> {
+pub struct Manifest<T: ProtocolType> {
     naia_id_count: u16,
     builder_map: HashMap<u16, Box<dyn StateBuilder<T>>>,
     type_map: HashMap<TypeId, u16>,
 }
 
-impl<T: StateType> Manifest<T> {
+impl<T: ProtocolType> Manifest<T> {
     /// Create a new Manifest
     pub fn new() -> Self {
         Manifest {
