@@ -51,7 +51,6 @@ pub use state::{
 pub use connection::Connection;
 pub use connection_config::ConnectionConfig;
 pub use events::{
-    event_builder::EventBuilder,
     event_manager::EventManager,
     event_packet_writer::{EventPacketWriter, MTU_SIZE},
 };

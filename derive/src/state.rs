@@ -35,7 +35,7 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, StateBuilder, StateMutator, StateEq, PacketReader, Ref, EventBuilder};
+        use naia_shared::{DiffMask, StateBuilder, StateMutator, StateEq, PacketReader, Ref};
         #property_enum
         pub struct #state_builder_name {
             type_id: TypeId,
