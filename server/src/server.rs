@@ -336,19 +336,10 @@ impl<U: StateType> Server<U> {
                                         if let Some(auth_func) = &self.auth_func {
                                             let naia_id = reader.read_u16();
 
-                                            match self.manifest.create_event(naia_id, &mut reader) {
-                                                Some(new_state) => {
-                                                    if !(auth_func.as_ref().as_ref())(
-                                                        &user_key, &new_state,
-                                                    ) {
-                                                        self.users.remove(user_key);
-                                                        continue;
-                                                    }
-                                                }
-                                                _ => {
-                                                    self.users.remove(user_key);
-                                                    continue;
-                                                }
+                                            let new_state = self.manifest.create_state(naia_id, &mut reader);
+                                            if !(auth_func.as_ref().as_ref())(&user_key, &new_state) {
+                                                self.users.remove(user_key);
+                                                continue;
                                             }
                                         }
 

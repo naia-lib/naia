@@ -1,17 +1,17 @@
 use std::rc::Rc;
 
-use naia_shared::{StateType, Event, EventType, SequenceIterator, PawnKey};
+use naia_shared::{State, StateType, SequenceIterator, PawnKey};
 
 use super::{client_state_manager::ClientStateManager, command_receiver::CommandReceiver};
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
-pub struct DualCommandReceiver<T: EventType> {
+pub struct DualCommandReceiver<T: StateType> {
     state_manager:  CommandReceiver<T>,
     entity_manager: CommandReceiver<T>,
 }
 
-impl<T: EventType> DualCommandReceiver<T> {
+impl<T: StateType> DualCommandReceiver<T> {
     /// Creates a new DualCommandReceiver
     pub fn new() -> Self {
         DualCommandReceiver {

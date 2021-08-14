@@ -36,12 +36,12 @@ impl<T: StateType> CommandReceiver<T> {
 
     /// Given incoming packet data, read transmitted Command and store them to
     /// be returned to the application
-    pub fn process_data<U: StateType>(
+    pub fn process_data(
         &mut self,
         server_tick: u16,
         client_tick: u16,
         reader: &mut PacketReader,
-        manifest: &Manifest<U>,
+        manifest: &Manifest<T>,
     ) {
         let command_count = reader.read_u8();
         for _x in 0..command_count {
@@ -58,37 +58,30 @@ impl<T: StateType> CommandReceiver<T> {
             let naia_id: u16 = reader.read_u16();
             let past_commands_number: u8 = reader.read_u8();
 
-            if let Some(new_command) = manifest.create_event(naia_id, reader) {
-                if !self.queued_incoming_commands.exists(client_tick) {
-                    self.queued_incoming_commands
-                        .insert(client_tick, HashMap::new());
-                }
-                if let Some(map) = self.queued_incoming_commands.get_mut(client_tick) {
-                    map.insert(pawn_key, new_command);
-                }
-            } else {
-                panic!("using current manifest, can't create a new event with a NaiaId of {}", naia_id);
+            let new_command = manifest.create_state(naia_id, reader);
+            if !self.queued_incoming_commands.exists(client_tick) {
+                self.queued_incoming_commands
+                    .insert(client_tick, HashMap::new());
+            }
+            if let Some(map) = self.queued_incoming_commands.get_mut(client_tick) {
+                map.insert(pawn_key, new_command);
             }
 
             for _y in 0..past_commands_number {
                 let tick_diff = reader.read_u8();
                 let past_tick = client_tick.wrapping_sub(tick_diff.into());
 
-                match manifest.create_event(naia_id, reader) {
-                    Some(new_command) => {
-                        if sequence_greater_than(past_tick, server_tick) {
-                            if !self.queued_incoming_commands.exists(past_tick) {
-                                self.queued_incoming_commands
-                                    .insert(past_tick, HashMap::new());
-                            }
-                            if let Some(map) = self.queued_incoming_commands.get_mut(past_tick) {
-                                if !map.contains_key(&pawn_key) {
-                                    map.insert(pawn_key, new_command);
-                                }
-                            }
+                let new_command = manifest.create_state(naia_id, reader);
+                if sequence_greater_than(past_tick, server_tick) {
+                    if !self.queued_incoming_commands.exists(past_tick) {
+                        self.queued_incoming_commands
+                            .insert(past_tick, HashMap::new());
+                    }
+                    if let Some(map) = self.queued_incoming_commands.get_mut(past_tick) {
+                        if !map.contains_key(&pawn_key) {
+                            map.insert(pawn_key, new_command);
                         }
                     }
-                    _ => {}
                 }
             }
         }

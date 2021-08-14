@@ -5,7 +5,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 
 pub use naia_shared::{
-    StateType, ConnectionConfig, Event, EventType, HostTickManager, Instant, LocalObjectKey,
+    State, StateType, ConnectionConfig, HostTickManager, Instant, LocalObjectKey,
     ManagerType, Manifest, PacketReader, PacketType, SequenceIterator, SharedConfig,
     StandardHeader, Timer, Timestamp, PawnKey, LocalComponentKey, LocalEntityKey
 };
@@ -21,13 +21,13 @@ use super::{
 /// Client can send/receive events to/from a server, and has a pool of in-scope
 /// states that are synced with the server
 #[derive(Debug)]
-pub struct Client<T: EventType, U: StateType> {
-    manifest: Manifest<T, U>,
+pub struct Client<T: StateType> {
+    manifest: Manifest<T>,
     server_address: SocketAddr,
     connection_config: ConnectionConfig,
     socket: Box<dyn ClientSocketTrait>,
     sender: MessageSender,
-    server_connection: Option<ServerConnection<T, U>>,
+    server_connection: Option<ServerConnection<T>>,
     pre_connection_timestamp: Option<Timestamp>,
     pre_connection_digest: Option<Box<[u8]>>,
     handshake_timer: Timer,
@@ -36,11 +36,11 @@ pub struct Client<T: EventType, U: StateType> {
     tick_manager: ClientTickManager,
 }
 
-impl<T: EventType, U: StateType> Client<T, U> {
+impl<T: StateType> Client<T> {
     /// Create a new client, given the server's address, a shared manifest, an
     /// optional Config, and an optional Authentication event
     pub fn new(
-        manifest: Manifest<T, U>,
+        manifest: Manifest<T>,
         client_config: Option<ClientConfig>,
         shared_config: SharedConfig,
         auth: Option<T>,
@@ -88,7 +88,7 @@ impl<T: EventType, U: StateType> Client<T, U> {
     /// frame), in a loop until it returns None.
     /// Retrieves incoming events/updates, and performs updates to maintain the
     /// connection.
-    pub fn receive(&mut self) -> Option<Result<ClientEvent<T, U>, NaiaClientError>> {
+    pub fn receive(&mut self) -> Option<Result<ClientEvent<T>, NaiaClientError>> {
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
             Some(connection) => {
@@ -100,7 +100,7 @@ impl<T: EventType, U: StateType> Client<T, U> {
                 }
                 // receive state message
                 while let Some(message) = connection.get_incoming_state_message() {
-                    let event_opt: Option<ClientEvent::<T, U>> = {
+                    let event_opt: Option<ClientEvent::<T>> = {
                         match message {
                             ClientStateMessage::CreateState(local_key) => {
                                 Some(ClientEvent::CreateState(local_key))
@@ -161,13 +161,13 @@ impl<T: EventType, U: StateType> Client<T, U> {
                         PawnKey::State(object_key) => {
                             return Some(Ok(ClientEvent::ReplayCommand(
                                 object_key,
-                                command.as_ref().event_get_typed_copy(),
+                                command.as_ref().state_get_typed_copy(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(ClientEvent::ReplayCommandEntity(
                                 entity_key,
-                                command.as_ref().event_get_typed_copy(),
+                                command.as_ref().state_get_typed_copy(),
                             )));
                         }
                     }
@@ -178,13 +178,13 @@ impl<T: EventType, U: StateType> Client<T, U> {
                         PawnKey::State(object_key) => {
                             return Some(Ok(ClientEvent::NewCommand(
                                 object_key,
-                                command.as_ref().event_get_typed_copy(),
+                                command.as_ref().state_get_typed_copy(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(ClientEvent::NewCommandEntity(
                                 entity_key,
-                                command.as_ref().event_get_typed_copy(),
+                                command.as_ref().state_get_typed_copy(),
                             )));
                         }
                     }
@@ -247,7 +247,7 @@ impl<T: EventType, U: StateType> Client<T, U> {
                                 .as_mut()
                                 .unwrap()
                                 .write(&mut timestamp_bytes);
-                            Client::<T, U>::internal_send_connectionless(
+                            Client::<T>::internal_send_connectionless(
                                 &mut self.sender,
                                 PacketType::ClientChallengeRequest,
                                 Packet::new(timestamp_bytes),
@@ -267,11 +267,11 @@ impl<T: EventType, U: StateType> Client<T, U> {
                             // write auth event state if there is one
                             if let Some(auth_event) = &mut self.auth_event {
                                 let type_id = auth_event.event_get_type_id();
-                                let naia_id = self.manifest.get_event_naia_id(&type_id); // get naia id
+                                let naia_id = self.manifest.get_state_naia_id(&type_id); // get naia id
                                 payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                                 auth_event.event_write(&mut payload_bytes);
                             }
-                            Client::<T, U>::internal_send_connectionless(
+                            Client::<T>::internal_send_connectionless(
                                 &mut self.sender,
                                 PacketType::ClientConnectRequest,
                                 Packet::new(payload_bytes),
@@ -411,7 +411,7 @@ impl<T: EventType, U: StateType> Client<T, U> {
 
     /// Get a reference to an State currently in scope for the Client, given
     /// that State's Key
-    pub fn get_state(&self, key: &LocalObjectKey) -> Option<&U> {
+    pub fn get_state(&self, key: &LocalObjectKey) -> Option<&T> {
         if let Some(connection) = &self.server_connection {
             return connection.get_state(key);
         }
@@ -428,7 +428,7 @@ impl<T: EventType, U: StateType> Client<T, U> {
     }
 
     /// Component-themed alias for `get_state`
-    pub fn get_component(&self, key: &LocalComponentKey) -> Option<&U> {
+    pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
         return self.get_state(key);
     }
 
@@ -462,7 +462,7 @@ impl<T: EventType, U: StateType> Client<T, U> {
     // pawns
 
     /// Get a reference to a Pawn
-    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&U> {
+    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&T> {
         if let Some(connection) = &self.server_connection {
             return connection.get_pawn(key);
         }
@@ -470,7 +470,7 @@ impl<T: EventType, U: StateType> Client<T, U> {
     }
 
     /// Get a reference to a Pawn, used for setting it's state
-    pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&U> {
+    pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&T> {
         if let Some(connection) = self.server_connection.as_mut() {
             return connection.get_pawn_mut(key);
         }
@@ -542,7 +542,7 @@ impl<T: EventType, U: StateType> Client<T, U> {
     fn internal_send_with_connection(
         host_tick: u16,
         sender: &mut MessageSender,
-        connection: &mut ServerConnection<T, U>,
+        connection: &mut ServerConnection<T>,
         packet_type: PacketType,
         packet: Packet,
     ) {

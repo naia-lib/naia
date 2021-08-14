@@ -120,11 +120,8 @@ impl<T: StateType> EventManager<T> {
         for _x in 0..event_count {
             let naia_id: u16 = reader.read_u16();
 
-            if let Some(new_event) = manifest.create_event(naia_id, reader) {
-                self.queued_incoming_events.push_back(new_event);
-            } else {
-                panic!("using current manifest, can't create a new event with a NaiaId of {}", naia_id);
-            }
+            let new_event = manifest.create_state(naia_id, reader);
+            self.queued_incoming_events.push_back(new_event);
         }
     }
 }

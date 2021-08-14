@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use naia_shared::{wrapping_diff, StateType, Event, EventType, SequenceBuffer, SequenceIterator, PawnKey};
+use naia_shared::{wrapping_diff, State, StateType, SequenceBuffer, SequenceIterator, PawnKey};
 
 use super::client_state_manager::ClientStateManager;
 
@@ -11,14 +11,14 @@ const COMMAND_HISTORY_SIZE: u16 = 64;
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
-pub struct CommandReceiver<T: EventType> {
+pub struct CommandReceiver<T: StateType> {
     queued_incoming_commands: VecDeque<(u16, PawnKey, Rc<Box<dyn State<T>>>)>,
     command_history: HashMap<PawnKey, SequenceBuffer<Rc<Box<dyn State<T>>>>>,
     queued_command_replays: VecDeque<(u16, PawnKey, Rc<Box<dyn State<T>>>)>,
     replay_trigger: HashMap<PawnKey, u16>,
 }
 
-impl<T: EventType> CommandReceiver<T> {
+impl<T: StateType> CommandReceiver<T> {
     /// Creates a new CommandSender
     pub fn new() -> Self {
         CommandReceiver {

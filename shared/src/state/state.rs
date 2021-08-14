@@ -13,12 +13,6 @@ pub trait State<T: StateType>: EventClone<T> {
     /// Whether the Event is guaranteed for eventual delivery to the remote
     /// host.
     fn event_is_guaranteed(&self) -> bool;
-    /// Writes the current Event into an outgoing packet's byte stream
-    fn event_write(&self, out_bytes: &mut Vec<u8>);
-    /// Gets a copy of the Event, encapsulated within an EventType enum
-    fn event_get_typed_copy(&self) -> T;
-    /// Gets the TypeId of the Event
-    fn event_get_type_id(&self) -> TypeId;
     /// Gets the number of bytes of the State's State Mask
     fn state_get_diff_mask_size(&self) -> u8;
     /// Gets a copy of the State, wrapped in an StateType enum (which is the

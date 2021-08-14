@@ -1,8 +1,8 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, StateType, Event, EventPacketWriter, EventType, ManagerType,
-    Manifest, MTU_SIZE, PawnKey
+    wrapping_diff, StateType, EventPacketWriter, ManagerType,
+    Manifest, MTU_SIZE, PawnKey, State
 };
 
 use crate::dual_command_receiver::DualCommandReceiver;
@@ -57,10 +57,10 @@ impl ClientPacketWriter {
 
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_command<T: EventType, U: StateType>(
+    pub fn write_command<T: StateType>(
         &mut self,
         host_tick: u16,
-        manifest: &Manifest<T, U>,
+        manifest: &Manifest<T>,
         command_receiver: &DualCommandReceiver<T>,
         pawn_key: &PawnKey,
         command: &Box<dyn State<T>>,
@@ -68,7 +68,7 @@ impl ClientPacketWriter {
         //Write command payload
         let mut command_payload_bytes = Vec::<u8>::new();
 
-        command.as_ref().event_write(&mut command_payload_bytes);
+        command.as_ref().state_write(&mut command_payload_bytes);
 
         // write past commands
         let past_commands_number = command_receiver
@@ -85,7 +85,7 @@ impl ClientPacketWriter {
                         // write the tick diff
                         command_payload_bytes.write_u8(diff_i8 as u8).unwrap();
                         // write the command payload
-                        past_command.event_write(&mut command_payload_bytes);
+                        past_command.state_write(&mut command_payload_bytes);
 
                         past_command_index += 1;
                     }
@@ -115,8 +115,8 @@ impl ClientPacketWriter {
             .write_u16::<BigEndian>(pawn_key.to_u16())
             .unwrap(); // write pawn key
 
-        let type_id = command.as_ref().event_get_type_id();
-        let naia_id = manifest.get_event_naia_id(&type_id); // get naia id
+        let type_id = command.as_ref().state_get_type_id();
+        let naia_id = manifest.get_state_naia_id(&type_id); // get naia id
         command_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
         command_total_bytes.write_u8(past_command_index).unwrap(); // write past command number
         command_total_bytes.append(&mut command_payload_bytes); // write payload
@@ -136,9 +136,9 @@ impl ClientPacketWriter {
 
     /// Writes an Event into the Writer's internal buffer, which will eventually
     /// be put into the outgoing packet
-    pub fn write_event<T: EventType, U: StateType>(
+    pub fn write_event<T: StateType>(
         &mut self,
-        manifest: &Manifest<T, U>,
+        manifest: &Manifest<T>,
         event: &Box<dyn State<T>>,
     ) -> bool {
         return self.event_writer.write_event(manifest, event);
