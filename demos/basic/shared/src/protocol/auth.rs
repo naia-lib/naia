@@ -5,7 +5,6 @@ use naia_shared::{State, Property};
 use super::Protocol;
 
 #[derive(State, Clone)]
-#[type_name = "Protocol"]
 pub struct Auth {
     pub username: Property<String>,
     pub password: Property<String>,

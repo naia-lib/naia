@@ -12,7 +12,7 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         (state_name.to_string() + "Builder").as_str(),
         Span::call_site(),
     );
-    let type_name = get_type_name(&input, "State");
+    let type_name = get_type_name(&input);
 
     let properties = get_properties(&input);
 
@@ -398,7 +398,7 @@ fn get_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
     fields
 }
 
-fn get_type_name(input: &DeriveInput, type_type: &str) -> Ident {
+fn get_type_name(input: &DeriveInput) -> Ident {
     let mut type_name_option: Option<Ident> = None;
 
     let attrs = &input.attrs;
@@ -421,13 +421,11 @@ fn get_type_name(input: &DeriveInput, type_type: &str) -> Ident {
         }
     }
 
-    return type_name_option.expect(
-        format!(
-            "#[derive({})] requires an accompanying #[type_name = \"{} Type Name Here\"] attribute",
-            type_type, type_type
-        )
-        .as_str(),
-    );
+    if type_name_option.is_none() {
+        return Ident::new("Protocol", Span::call_site());
+    } else {
+        return type_name_option.unwrap();
+    }
 }
 
 fn get_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {

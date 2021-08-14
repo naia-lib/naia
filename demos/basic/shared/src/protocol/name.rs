@@ -13,7 +13,6 @@ pub struct Fullname {
 }
 
 #[derive(State, Clone)]
-#[type_name = "Protocol"]
 pub struct Name {
     pub full: Property<Fullname>,
 }
