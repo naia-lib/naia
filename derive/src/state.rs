@@ -22,10 +22,10 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let new_complete_method = get_new_complete_method(state_name, &enum_name, &properties);
     let read_to_type_method =
         get_read_to_type_method(&type_name, state_name, &enum_name, &properties);
-    let state_write_method = get_write_method(&properties);
-    let state_write_partial_method = get_write_partial_method(&enum_name, &properties);
-    let state_read_full_method = get_read_full_method(&properties);
-    let state_read_partial_method = get_read_partial_method(&enum_name, &properties);
+    let write_method = get_write_method(&properties);
+    let write_partial_method = get_write_partial_method(&enum_name, &properties);
+    let read_full_method = get_read_full_method(&properties);
+    let read_partial_method = get_read_partial_method(&enum_name, &properties);
     let set_mutator_method = get_set_mutator_method(&properties);
     let get_typed_copy_method = get_get_typed_copy_method(&type_name, state_name, &properties);
     let equals_method = get_equals_method(state_name, &properties);
@@ -41,7 +41,7 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             type_id: TypeId,
         }
         impl StateBuilder<#type_name> for #state_builder_name {
-            fn state_get_type_id(&self) -> TypeId {
+            fn get_type_id(&self) -> TypeId {
                 return self.type_id;
             }
             fn state_build(&self, reader: &mut PacketReader) -> #type_name {
@@ -61,18 +61,18 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             #read_to_type_method
         }
         impl State<#type_name> for #state_name {
-            fn event_is_guaranteed(&self) -> bool {
+            fn is_guaranteed(&self) -> bool {
                 #state_name::is_guaranteed()
             }
-            fn state_get_diff_mask_size(&self) -> u8 { #diff_mask_size }
-            fn state_get_type_id(&self) -> TypeId {
+            fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
+            fn get_type_id(&self) -> TypeId {
                 return TypeId::of::<#state_name>();
             }
             #set_mutator_method
-            #state_write_method
-            #state_write_partial_method
-            #state_read_full_method
-            #state_read_partial_method
+            #write_method
+            #write_partial_method
+            #read_full_method
+            #read_partial_method
             #get_typed_copy_method
         }
         impl StateEq<#type_name> for #state_name {
@@ -130,7 +130,7 @@ fn get_set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn state_set_mutator(&mut self, mutator: &Ref<dyn StateMutator>) {
+        fn set_mutator(&mut self, mutator: &Ref<dyn StateMutator>) {
             #output
         }
     };
@@ -242,7 +242,7 @@ fn get_get_typed_copy_method(
     }
 
     return quote! {
-        fn state_get_typed_copy(&self) -> #type_name {
+        fn get_typed_copy(&self) -> #type_name {
             let copied_state = #state_name::state_new_complete(#args).state_wrap();
             return #type_name::#state_name(copied_state);
         }
@@ -271,7 +271,7 @@ fn get_write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) 
     }
 
     return quote! {
-        fn state_write_partial(&self, diff_mask: &DiffMask, buffer: &mut Vec<u8>) {
+        fn write_partial(&self, diff_mask: &DiffMask, buffer: &mut Vec<u8>) {
 
             #output
         }
@@ -293,7 +293,7 @@ fn get_read_full_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn state_read_full(&mut self, reader: &mut PacketReader, packet_index: u16) {
+        fn read_full(&mut self, reader: &mut PacketReader, packet_index: u16) {
             #output
         }
     };
@@ -321,7 +321,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
     }
 
     return quote! {
-        fn state_read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16) {
+        fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16) {
             #output
         }
     };
@@ -342,7 +342,7 @@ fn get_equals_method(state_name: &Ident, properties: &Vec<(Ident, Type)>) -> Tok
     }
 
     return quote! {
-        fn state_equals(&self, other: &#state_name) -> bool {
+        fn equals(&self, other: &#state_name) -> bool {
             #output
             return true;
         }
@@ -364,7 +364,7 @@ fn get_mirror_method(state_name: &Ident, properties: &Vec<(Ident, Type)>) -> Tok
     }
 
     return quote! {
-        fn state_mirror(&mut self, other: &#state_name) {
+        fn mirror(&mut self, other: &#state_name) {
             #output
         }
     };
@@ -445,7 +445,7 @@ fn get_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn state_write(&self, buffer: &mut Vec<u8>) {
+        fn write(&self, buffer: &mut Vec<u8>) {
             #output
         }
     };

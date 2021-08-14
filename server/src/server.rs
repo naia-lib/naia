@@ -523,7 +523,7 @@ impl<U: StateType> Server<U> {
         state
             .state_inner_ref()
             .borrow_mut()
-            .state_set_mutator(&to_state_mutator(&new_mutator_ref));
+            .set_mutator(&to_state_mutator(&new_mutator_ref));
         let object_key = self.global_state_store.insert(state);
         self.global_state_set.insert(object_key);
         new_mutator_ref.borrow_mut().set_object_key(object_key);
