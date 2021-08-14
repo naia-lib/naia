@@ -4,7 +4,6 @@ use naia_shared::{State, Property};
 use super::Protocol;
 
 #[derive(State, Clone)]
-#[type_name = "Protocol"]
 pub struct Marker {
     pub name: Property<String>,
 }
