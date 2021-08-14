@@ -302,11 +302,11 @@ impl<T: ProtocolType> ClientStateManager<T> {
         output
     }
 
-    pub fn get_state(&self, key: &LocalObjectKey) -> Option<&T> {
+    pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
         return self.local_state_store.get(key);
     }
 
-    pub fn has_state(&self, key: &LocalObjectKey) -> bool {
+    pub fn has_object(&self, key: &LocalObjectKey) -> bool {
         return self.local_state_store.contains_key(key);
     }
 

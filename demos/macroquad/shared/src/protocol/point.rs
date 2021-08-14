@@ -3,7 +3,7 @@ use nanoserde::{DeBin, SerBin};
 use naia_derive::State;
 use naia_shared::{State, Property};
 
-use super::Objects;
+use super::Protocol;
 
 #[derive(Clone, PartialEq, DeBin, SerBin)]
 pub enum Color {
@@ -18,8 +18,7 @@ impl Default for Color {
     }
 }
 
-#[derive(State)]
-#[type_name = "Objects"]
+#[derive(State, Clone)]
 pub struct Point {
     pub x: Property<u16>,
     pub y: Property<u16>,

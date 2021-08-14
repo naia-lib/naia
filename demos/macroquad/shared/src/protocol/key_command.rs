@@ -1,10 +1,10 @@
-use naia_derive::Event;
-use naia_shared::{Event, Property};
 
-use super::Events;
+use naia_derive::State;
+use naia_shared::{State, Property};
 
-#[derive(Event, Clone)]
-#[type_name = "Events"]
+use super::Protocol;
+
+#[derive(State, Clone)]
 pub struct KeyCommand {
     pub w: Property<bool>,
     pub s: Property<bool>,

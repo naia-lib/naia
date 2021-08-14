@@ -112,8 +112,8 @@ impl<U: ProtocolType> ClientConnection<U> {
         }
     }
 
-    pub fn has_state(&self, key: &ObjectKey) -> bool {
-        return self.state_manager.has_state(key);
+    pub fn has_object(&self, key: &ObjectKey) -> bool {
+        return self.state_manager.has_object(key);
     }
 
     pub fn add_state(&mut self, key: &ObjectKey, state: &Ref<dyn State<U>>) {

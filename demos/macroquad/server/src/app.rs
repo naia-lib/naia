@@ -6,13 +6,11 @@ use std::{
 use naia_server::{ObjectKey, Server, Random, ServerConfig, ServerEvent, UserKey, RoomKey};
 
 use naia_demo_macroquad_shared::{
-    get_shared_config, manifest_load, behavior as shared_behavior, events as shared_events, objects as shared_objects,
+    get_shared_config, behavior as shared_behavior, protocol::{Protocol, Point, Color},
 };
-use shared_events::{Events};
-use shared_objects::{Objects, Point, Color};
 
 pub struct App {
-    server: Server<Events, Objects>,
+    server: Server<Protocol>,
     main_room_key: RoomKey,
     user_to_pawn_map: HashMap::<UserKey, ObjectKey>,
 }
@@ -21,14 +19,15 @@ impl App {
     pub async fn new(server_config: ServerConfig) -> Self {
 
         let mut server = Server::new(
-            manifest_load(),
+            Protocol::load(),
             Some(server_config),
             get_shared_config(),
         )
         .await;
 
         server.on_auth(Rc::new(Box::new(|_, auth_type| {
-            if let Events::Auth(auth_event) = auth_type {
+            if let Protocol::Auth(auth_ref) = auth_type {
+                let auth_event = auth_ref.borrow();
                 let username = auth_event.username.get();
                 let password = auth_event.password.get();
                 return username == "charlie" && password == "12345";
@@ -66,7 +65,7 @@ impl App {
                             let new_state =
                                 Point::new(x as u16, y as u16, state_color).wrap();
                             let new_object_key = self.server
-                                .register_state(Objects::Point(new_state.clone()));
+                                .register_state(Protocol::Point(new_state.clone()));
                             self.server.room_add_state(&self.main_room_key, &new_object_key);
                             self.server.assign_pawn(&user_key, &new_object_key);
                             self.user_to_pawn_map.insert(user_key, new_object_key);
@@ -82,12 +81,13 @@ impl App {
                         }
                     }
                     ServerEvent::Command(_, object_key, command_type) => match command_type {
-                        Events::KeyCommand(key_command) => {
-                            if let Some(typed_state) = self.server.get_state(object_key) {
+                        Protocol::KeyCommand(key_command) => {
+                            if let Some(typed_state) = self.server.get_object(object_key) {
                                 match typed_state {
-                                    Objects::Point(state) => {
+                                    Protocol::Point(state) => {
                                         shared_behavior::process_command(&key_command, state);
                                     }
+                                    _ => {}
                                 }
                             }
                         }

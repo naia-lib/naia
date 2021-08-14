@@ -1,10 +1,11 @@
 use naia_shared::Ref;
 
-use crate::{events::KeyCommand, objects::Point};
+use crate::{protocol::{KeyCommand, Point}};
 
 const SQUARE_SPEED: u16 = 8;
 
-pub fn process_command(key_command: &KeyCommand, point_ref: &Ref<Point>) {
+pub fn process_command(key_command_ref: &Ref<KeyCommand>, point_ref: &Ref<Point>) {
+    let key_command = key_command_ref.borrow();
     let old_x: u16;
     let old_y: u16;
     {
