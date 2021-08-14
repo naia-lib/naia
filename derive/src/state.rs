@@ -44,17 +44,17 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             fn get_type_id(&self) -> TypeId {
                 return self.type_id;
             }
-            fn state_build(&self, reader: &mut PacketReader) -> #type_name {
-                return #state_name::state_read_to_type(reader);
+            fn build(&self, reader: &mut PacketReader) -> #type_name {
+                return #state_name::read_to_type(reader);
             }
         }
         impl #state_name {
-            pub fn state_get_builder() -> Box<dyn StateBuilder<#type_name>> {
+            pub fn get_builder() -> Box<dyn StateBuilder<#type_name>> {
                 return Box::new(#state_builder_name {
                     type_id: TypeId::of::<#state_name>(),
                 });
             }
-            pub fn state_wrap(self) -> Ref<#state_name> {
+            pub fn wrap(self) -> Ref<#state_name> {
                 return Ref::new(self);
             }
             #new_complete_method
@@ -170,7 +170,7 @@ fn get_new_complete_method(
     }
 
     return quote! {
-        pub fn state_new_complete(#args) -> #state_name {
+        pub fn new_complete(#args) -> #state_name {
             #state_name {
                 #fields
             }
@@ -215,7 +215,7 @@ fn get_read_to_type_method(
     }
 
     return quote! {
-        fn state_read_to_type(reader: &mut PacketReader) -> #type_name {
+        fn read_to_type(reader: &mut PacketReader) -> #type_name {
             #prop_reads
 
             return #type_name::#state_name(Ref::new(#state_name {
@@ -243,7 +243,7 @@ fn get_get_typed_copy_method(
 
     return quote! {
         fn get_typed_copy(&self) -> #type_name {
-            let copied_state = #state_name::state_new_complete(#args).state_wrap();
+            let copied_state = #state_name::new_complete(#args).wrap();
             return #type_name::#state_name(copied_state);
         }
     };

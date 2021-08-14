@@ -521,7 +521,7 @@ impl<U: StateType> Server<U> {
         let new_mutator_ref: Ref<ServerStateMutator> =
             Ref::new(ServerStateMutator::new(&self.mut_handler));
         state
-            .state_inner_ref()
+            .inner_ref()
             .borrow_mut()
             .set_mutator(&to_state_mutator(&new_mutator_ref));
         let object_key = self.global_state_store.insert(state);
@@ -632,7 +632,7 @@ impl<U: StateType> Server<U> {
             panic!("attempted to add component to non-existent entity");
         }
 
-        let component_ref = component.state_inner_ref().clone();
+        let component_ref = component.inner_ref().clone();
         let component_key: ComponentKey = self.register_state(component);
 
         // add component to connections already tracking entity
@@ -1000,7 +1000,7 @@ impl<U: StateType> Server<U> {
                       object_key: &ObjectKey,
                       state_ref: &U) {
         //add state to user connection
-        user_connection.add_state(object_key, &state_ref.state_inner_ref());
+        user_connection.add_state(object_key, &state_ref.inner_ref());
     }
 
     fn user_remove_state(user_connection: &mut ClientConnection<U>,
@@ -1019,7 +1019,7 @@ impl<U: StateType> Server<U> {
         let component_set: &HashSet<ComponentKey> = &component_set_ref.borrow();
         for component_key in component_set {
             if let Some(component_ref) = state_store.get(*component_key) {
-                component_list.push((*component_key, component_ref.state_inner_ref().clone()));
+                component_list.push((*component_key, component_ref.inner_ref().clone()));
             }
         }
 

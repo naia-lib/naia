@@ -63,7 +63,7 @@ impl EventPacketWriter {
         let mut event_total_bytes = Vec::<u8>::new();
 
         let type_id = event.as_ref().get_type_id();
-        let naia_id = manifest.get_state_naia_id(&type_id); // get naia id
+        let naia_id = manifest.get_naia_id(&type_id); // get naia id
         event_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
         event_total_bytes.append(&mut event_payload_bytes); // write payload
 

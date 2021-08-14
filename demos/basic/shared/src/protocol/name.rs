@@ -24,7 +24,7 @@ impl Name {
     }
 
     pub fn new(first: &str, last: &str) -> Self {
-        return Name::state_new_complete(
+        return Name::new_complete(
             Fullname {
                 first:  first.to_string(),
                 last:   last.to_string(),

@@ -115,7 +115,7 @@ impl<T: StateType> ClientStateManager<T> {
 
                     if let Some(state_ref) = self.local_state_store.get_mut(&object_key) {
                         self.pawn_store
-                            .insert(object_key, state_ref.state_inner_ref().borrow().get_typed_copy());
+                            .insert(object_key, state_ref.inner_ref().borrow().get_typed_copy());
 
                         let pawn_key = PawnKey::State(object_key);
                         command_receiver.pawn_init(&pawn_key);

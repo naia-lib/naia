@@ -480,7 +480,7 @@ impl<T: StateType> ServerStateManager<T> {
 
                 //Write state "header"
                 let type_id = state.borrow().get_type_id();
-                let naia_id = manifest.get_state_naia_id(&type_id); // get naia id
+                let naia_id = manifest.get_naia_id(&type_id); // get naia id
                 state_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                 state_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
@@ -550,7 +550,7 @@ impl<T: StateType> ServerStateManager<T> {
 
                         //Write component "header"
                         let type_id = component_ref.borrow().get_type_id();
-                        let naia_id = manifest.get_state_naia_id(&type_id); // get naia id
+                        let naia_id = manifest.get_naia_id(&type_id); // get naia id
                         state_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                         state_total_bytes
                             .write_u16::<BigEndian>(local_component_key.to_u16())
@@ -588,7 +588,7 @@ impl<T: StateType> ServerStateManager<T> {
                     .write_u16::<BigEndian>(local_entity_key.to_u16())
                     .unwrap(); //write local entity key
                 let type_id = component.borrow().get_type_id();
-                let naia_id = manifest.get_state_naia_id(&type_id); // get naia id
+                let naia_id = manifest.get_naia_id(&type_id); // get naia id
                 state_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                 state_total_bytes
                     .write_u16::<BigEndian>(local_component_key.to_u16())

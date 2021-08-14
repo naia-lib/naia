@@ -24,7 +24,7 @@ impl App {
         info!("Naia Client Example Started");
 
         // This will be evaluated in the Server's 'on_auth()' method
-        let auth = Protocol::Auth(Auth::new("charlie", "12345").state_wrap());
+        let auth = Protocol::Auth(Auth::new("charlie", "12345").wrap());
 
         App {
             client: Client::new(
