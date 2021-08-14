@@ -14,7 +14,7 @@
 extern crate cfg_if;
 
 mod ack_manager;
-mod state;
+mod replicate;
 mod connection;
 mod connection_config;
 mod ecs;
@@ -38,12 +38,12 @@ pub use naia_socket_shared::{
 };
 
 pub use ack_manager::AckManager;
-pub use state::{
-    state::{State, StateEq, EventClone},
-    state_builder::StateBuilder,
-    state_message_type::StateMessageType,
-    state_mutator::StateMutator,
-    state_notifiable::StateNotifiable,
+pub use replicate::{
+    replicate::{Replicate, ReplicateEq, EventClone},
+    replicate_builder::ReplicateBuilder,
+    replicate_message_type::ReplicateMessageType,
+    replicate_mutator::ReplicateMutator,
+    replicate_notifiable::ReplicateNotifiable,
     protocol_type::ProtocolType,
     property::Property,
     diff_mask::DiffMask,

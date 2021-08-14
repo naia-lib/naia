@@ -46,11 +46,11 @@ impl<T: ProtocolType> CommandReceiver<T> {
         let command_count = reader.read_u8();
         for _x in 0..command_count {
 
-            let is_state = reader.read_u8() == 0;
+            let is_replicate = reader.read_u8() == 0;
             let local_key = reader.read_u16();
             let pawn_key = {
-                if is_state {
-                    PawnKey::State(LocalObjectKey::from_u16(local_key))
+                if is_replicate {
+                    PawnKey::Replicate(LocalObjectKey::from_u16(local_key))
                 } else {
                     PawnKey::Entity(LocalEntityKey::from_u16(local_key))
                 }
@@ -58,7 +58,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
             let naia_id: u16 = reader.read_u16();
             let past_commands_number: u8 = reader.read_u8();
 
-            let new_command = manifest.create_state(naia_id, reader);
+            let new_command = manifest.create_replicate(naia_id, reader);
             if !self.queued_incoming_commands.exists(client_tick) {
                 self.queued_incoming_commands
                     .insert(client_tick, HashMap::new());
@@ -71,7 +71,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
                 let tick_diff = reader.read_u8();
                 let past_tick = client_tick.wrapping_sub(tick_diff.into());
 
-                let new_command = manifest.create_state(naia_id, reader);
+                let new_command = manifest.create_replicate(naia_id, reader);
                 if sequence_greater_than(past_tick, server_tick) {
                     if !self.queued_incoming_commands.exists(past_tick) {
                         self.queued_incoming_commands

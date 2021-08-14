@@ -1,17 +1,17 @@
 /// Enum used as a shared network protocol, representing various message types
-/// related to States/Entities/Pawns/Components
+/// related to Replicates/Entities/Pawns/Components
 #[derive(Copy, Clone)]
 #[repr(u8)]
-pub enum StateMessageType {
-    /// Message indicating an State to be created
-    CreateState = 0,
-    /// Message indicating an State to be updated
-    UpdateState,
-    /// Message indicating an State to be deleted
-    DeleteState,
-    /// Message indicating an State to be assigned as a Pawn
+pub enum ReplicateMessageType {
+    /// Message indicating an Replicate to be created
+    CreateReplicate = 0,
+    /// Message indicating an Replicate to be updated
+    UpdateReplicate,
+    /// Message indicating an Replicate to be deleted
+    DeleteReplicate,
+    /// Message indicating an Replicate to be assigned as a Pawn
     AssignPawn,
-    /// Message indicating an State to be unassigned as a Pawn
+    /// Message indicating an Replicate to be unassigned as a Pawn
     UnassignPawn,
     /// Message indicating a Pawn to be updated
     UpdatePawn,
@@ -29,19 +29,19 @@ pub enum StateMessageType {
     Unknown
 }
 
-impl StateMessageType {
+impl ReplicateMessageType {
     /// Converts the message type to u8
     pub fn to_u8(&self) -> u8 {
         *self as u8
     }
 
-    /// Gets an StateMessageType from a u8
+    /// Gets an ReplicateMessageType from a u8
     #[allow(unsafe_code)]
     pub fn from_u8(v: u8) -> Self {
-        if v >= StateMessageType::Unknown as u8 {
-            return StateMessageType::Unknown;
+        if v >= ReplicateMessageType::Unknown as u8 {
+            return ReplicateMessageType::Unknown;
         }
-        let z: StateMessageType = unsafe { ::std::mem::transmute(v) };
+        let z: ReplicateMessageType = unsafe { ::std::mem::transmute(v) };
         z
     }
 }

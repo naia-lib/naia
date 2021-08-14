@@ -1,6 +1,6 @@
 //! # Naia Client
 //! A cross-platform client that can send/receive events to/from a server, and
-//! has a pool of in-scope states that are synced with the server.
+//! has a pool of in-scope replicates that are synced with the server.
 
 #![deny(
     missing_docs,
@@ -12,8 +12,8 @@
     unused_import_braces
 )]
 
-mod client_state_manager;
-mod client_state_message;
+mod client_replicate_manager;
+mod client_replicate_message;
 mod client_config;
 mod client_connection_state;
 mod client_event;
@@ -30,7 +30,7 @@ mod server_connection;
 mod tick_queue;
 
 pub use naia_shared::{find_my_ip_address, Instant, LinkConditionerConfig, Random, Ref,
-                      wrapping_diff, NaiaKey, LocalObjectKey, LocalEntityKey, State};
+                      wrapping_diff, NaiaKey, LocalObjectKey, LocalEntityKey, Replicate};
 
 pub use client_config::ClientConfig;
 pub use client_event::ClientEvent;

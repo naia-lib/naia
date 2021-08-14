@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use macroquad::prelude::*;
 
-use naia_client::{State, ClientConfig, ClientEvent, Client, Ref, LocalObjectKey};
+use naia_client::{Replicate, ClientConfig, ClientEvent, Client, Ref, LocalObjectKey};
 
 use naia_demo_macroquad_shared::{
     get_shared_config, behavior as shared_behavior, protocol::{Protocol, Point, Color, Auth, KeyCommand},
@@ -12,7 +12,7 @@ pub struct App {
     client: Client<Protocol>,
     pawn: Option<(LocalObjectKey, Ref<Point>)>,
     queued_command: Option<KeyCommand>,
-    states: HashMap<LocalObjectKey, Ref<Point>>,
+    replicates: HashMap<LocalObjectKey, Ref<Point>>,
 }
 
 impl App {
@@ -31,7 +31,7 @@ impl App {
             client,
             pawn: None,
             queued_command: None,
-            states: HashMap::new(),
+            replicates: HashMap::new(),
         }
     }
 
@@ -79,10 +79,10 @@ impl App {
                         }
                         ClientEvent::AssignPawn(local_key) => {
                             info!("assign pawn");
-                            if let Some(typed_state) = self.client.get_pawn_mut(&local_key) {
-                                match typed_state {
-                                    Protocol::Point(state_ref) => {
-                                        self.pawn = Some((local_key, state_ref.clone()));
+                            if let Some(typed_replicate) = self.client.get_pawn_mut(&local_key) {
+                                match typed_replicate {
+                                    Protocol::Point(replicate_ref) => {
+                                        self.pawn = Some((local_key, replicate_ref.clone()));
                                     }
                                     _ => {}
                                 }
@@ -109,17 +109,17 @@ impl App {
                             _ => {}
                         },
                         ClientEvent::CreateObject(local_key) => {
-                            if let Some(typed_state) = self.client.get_object(&local_key) {
-                                match typed_state {
-                                    Protocol::Point(state_ref) => {
-                                        self.states.insert(local_key, state_ref.clone());
+                            if let Some(typed_replicate) = self.client.get_object(&local_key) {
+                                match typed_replicate {
+                                    Protocol::Point(replicate_ref) => {
+                                        self.replicates.insert(local_key, replicate_ref.clone());
                                     }
                                     _ => {}
                                 }
                             }
                         },
                         ClientEvent::DeleteObject(local_key, _) => {
-                            self.states.remove(&local_key);
+                            self.replicates.remove(&local_key);
                         },
                         _ => {}
                     },
@@ -138,17 +138,17 @@ impl App {
         let square_size = 32.0;
 
         if self.client.has_connection() {
-            // draw states
-            for (_, state_ref) in &self.states {
-                let point_state = state_ref.borrow();
-                let color = match point_state.color.get() {
+            // draw replicates
+            for (_, replicate_ref) in &self.replicates {
+                let point_replicate = replicate_ref.borrow();
+                let color = match point_replicate.color.get() {
                     Color::Red => RED,
                     Color::Blue => BLUE,
                     Color::Yellow => YELLOW,
                 };
                 draw_rectangle(
-                    f32::from(*(point_state.x.get())),
-                    f32::from(*(point_state.y.get())),
+                    f32::from(*(point_replicate.x.get())),
+                    f32::from(*(point_replicate.y.get())),
                     square_size,
                     square_size,
                     color,
@@ -157,10 +157,10 @@ impl App {
 
             // draw pawns
             if let Some((_, pawn_ref)) = &self.pawn {
-                let point_state = pawn_ref.borrow();
+                let point_replicate = pawn_ref.borrow();
                 draw_rectangle(
-                    f32::from(*(point_state.x.get())),
-                    f32::from(*(point_state.y.get())),
+                    f32::from(*(point_replicate.x.get())),
+                    f32::from(*(point_replicate.y.get())),
                     square_size,
                     square_size,
                     WHITE,

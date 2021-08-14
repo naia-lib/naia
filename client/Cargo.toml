@@ -2,7 +2,7 @@
 name = "naia-client"
 version = "0.5.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-description = "Provides a cross-platform client that can send/receive events to/from a server, and has a pool of in-scope states that is synced with the server."
+description = "Provides a cross-platform client that can send/receive events to/from a server, and has a pool of in-scope replicates that is synced with the server."
 documentation = "https://docs.rs/naia-client"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"

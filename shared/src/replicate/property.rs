@@ -2,13 +2,13 @@ use nanoserde::{DeBin, SerBin};
 
 use crate::{wrapping_number::sequence_greater_than, PacketReader, Ref};
 
-use super::state_mutator::StateMutator;
+use super::replicate_mutator::ReplicateMutator;
 
-/// A Property of an State, that contains data which must be tracked for
+/// A Property of an Replicate, that contains data which must be tracked for
 /// updates, and synced to the Client
 #[derive(Clone)]
 pub struct Property<T: Clone + DeBin + SerBin + PartialEq> {
-    mutator: Option<Ref<dyn StateMutator>>,
+    mutator: Option<Ref<dyn ReplicateMutator>>,
     mutator_index: u8,
     pub(crate) inner: T,
     pub(crate) last_recv_index: u16,
@@ -46,8 +46,8 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
         self.inner = value;
     }
 
-    /// Set an StateMutator state to track changes to the Property
-    pub fn set_mutator(&mut self, mutator: &Ref<dyn StateMutator>) {
+    /// Set an ReplicateMutator replicate to track changes to the Property
+    pub fn set_mutator(&mut self, mutator: &Ref<dyn ReplicateMutator>) {
         self.mutator = Some(mutator.clone());
     }
 

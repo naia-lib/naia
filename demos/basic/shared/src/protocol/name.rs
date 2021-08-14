@@ -1,7 +1,7 @@
 use nanoserde::{DeBin, SerBin};
 
-use naia_derive::State;
-use naia_shared::{State, Property};
+use naia_derive::Replicate;
+use naia_shared::{Replicate, Property};
 
 use super::Protocol;
 
@@ -12,7 +12,7 @@ pub struct Fullname {
     pub last: String,
 }
 
-#[derive(State, Clone)]
+#[derive(Replicate, Clone)]
 pub struct Name {
     pub full: Property<Fullname>,
 }

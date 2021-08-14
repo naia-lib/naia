@@ -9,9 +9,9 @@ pub fn process_command(key_command_ref: &Ref<KeyCommand>, point_ref: &Ref<Point>
     let old_x: u16;
     let old_y: u16;
     {
-        let state_ref = point_ref.borrow();
-        old_x = *(state_ref.x.get());
-        old_y = *(state_ref.y.get());
+        let replicate_ref = point_ref.borrow();
+        old_x = *(replicate_ref.x.get());
+        old_y = *(replicate_ref.y.get());
     }
     if *key_command.w.get() {
         point_ref

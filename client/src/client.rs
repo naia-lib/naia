@@ -5,7 +5,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 
 pub use naia_shared::{
-    State, ProtocolType, ConnectionConfig, HostTickManager, Instant, LocalObjectKey,
+    Replicate, ProtocolType, ConnectionConfig, HostTickManager, Instant, LocalObjectKey,
     ManagerType, Manifest, PacketReader, PacketType, SequenceIterator, SharedConfig,
     StandardHeader, Timer, Timestamp, PawnKey, LocalComponentKey, LocalEntityKey
 };
@@ -15,11 +15,11 @@ use super::{
     client_event::ClientEvent, client_tick_manager::ClientTickManager, error::NaiaClientError,
     server_connection::ServerConnection, Packet,
     client_connection_state::{ClientConnectionState, ClientConnectionState::AwaitingChallengeResponse},
-    client_state_message::ClientStateMessage
+    client_replicate_message::ClientReplicateMessage
 };
 
 /// Client can send/receive events to/from a server, and has a pool of in-scope
-/// states that are synced with the server
+/// replicates that are synced with the server
 #[derive(Debug)]
 pub struct Client<T: ProtocolType> {
     manifest: Manifest<T>,
@@ -31,7 +31,7 @@ pub struct Client<T: ProtocolType> {
     pre_connection_timestamp: Option<Timestamp>,
     pre_connection_digest: Option<Box<[u8]>>,
     handshake_timer: Timer,
-    connection_state: ClientConnectionState,
+    connection_replicate: ClientConnectionState,
     auth_event: Option<T>,
     tick_manager: ClientTickManager,
 }
@@ -78,7 +78,7 @@ impl<T: ProtocolType> Client<T> {
             server_connection: None,
             pre_connection_timestamp: None,
             pre_connection_digest: None,
-            connection_state: AwaitingChallengeResponse,
+            connection_replicate: AwaitingChallengeResponse,
             auth_event: auth,
             tick_manager: ClientTickManager::new(shared_config.tick_interval),
         }
@@ -98,50 +98,50 @@ impl<T: ProtocolType> Client<T> {
                 if let Some(event) = connection.get_incoming_event() {
                     return Some(Ok(ClientEvent::Event(event)));
                 }
-                // receive state message
-                while let Some(message) = connection.get_incoming_state_message() {
+                // receive replicate message
+                while let Some(message) = connection.get_incoming_replicate_message() {
                     let event_opt: Option<ClientEvent::<T>> = {
                         match message {
-                            ClientStateMessage::CreateState(local_key) => {
+                            ClientReplicateMessage::CreateReplicate(local_key) => {
                                 Some(ClientEvent::CreateObject(local_key))
                             }
-                            ClientStateMessage::DeleteState(local_key, state) => {
-                                Some(ClientEvent::DeleteObject(local_key, state.clone()))
+                            ClientReplicateMessage::DeleteReplicate(local_key, replicate) => {
+                                Some(ClientEvent::DeleteObject(local_key, replicate.clone()))
                             }
-                            ClientStateMessage::UpdateState(local_key) => {
+                            ClientReplicateMessage::UpdateReplicate(local_key) => {
                                 Some(ClientEvent::UpdateObject(local_key))
                             }
-                            ClientStateMessage::AssignPawn(local_key) => {
+                            ClientReplicateMessage::AssignPawn(local_key) => {
                                 Some(ClientEvent::AssignPawn(local_key))
                             }
-                            ClientStateMessage::UnassignPawn(local_key) => {
+                            ClientReplicateMessage::UnassignPawn(local_key) => {
                                 Some(ClientEvent::UnassignPawn(local_key))
                             }
-                            ClientStateMessage::ResetPawn(local_key) => {
+                            ClientReplicateMessage::ResetPawn(local_key) => {
                                 Some(ClientEvent::ResetPawn(local_key))
                             }
-                            ClientStateMessage::CreateEntity(local_key, component_list) => {
+                            ClientReplicateMessage::CreateEntity(local_key, component_list) => {
                                 Some(ClientEvent::CreateEntity(local_key, component_list))
                             }
-                            ClientStateMessage::DeleteEntity(local_key) => {
+                            ClientReplicateMessage::DeleteEntity(local_key) => {
                                 Some(ClientEvent::DeleteEntity(local_key))
                             }
-                            ClientStateMessage::AssignPawnEntity(local_key) => {
+                            ClientReplicateMessage::AssignPawnEntity(local_key) => {
                                 Some(ClientEvent::AssignPawnEntity(local_key))
                             }
-                            ClientStateMessage::UnassignPawnEntity(local_key) => {
+                            ClientReplicateMessage::UnassignPawnEntity(local_key) => {
                                 Some(ClientEvent::UnassignPawnEntity(local_key))
                             }
-                            ClientStateMessage::ResetPawnEntity(local_key) => {
+                            ClientReplicateMessage::ResetPawnEntity(local_key) => {
                                 Some(ClientEvent::ResetPawnEntity(local_key))
                             }
-                            ClientStateMessage::AddComponent(entity_key, component_key) => {
+                            ClientReplicateMessage::AddComponent(entity_key, component_key) => {
                                 Some(ClientEvent::AddComponent(entity_key, component_key))
                             }
-                            ClientStateMessage::UpdateComponent(entity_key, component_key) => {
+                            ClientReplicateMessage::UpdateComponent(entity_key, component_key) => {
                                 Some(ClientEvent::UpdateComponent(entity_key, component_key))
                             }
-                            ClientStateMessage::RemoveComponent(entity_key, component_key, component) => {
+                            ClientReplicateMessage::RemoveComponent(entity_key, component_key, component) => {
                                 Some(ClientEvent::RemoveComponent(entity_key, component_key, component.clone()))
                             }
                         }
@@ -158,7 +158,7 @@ impl<T: ProtocolType> Client<T> {
                 // receive replay command
                 if let Some((pawn_key, command)) = connection.get_incoming_replay() {
                     match pawn_key {
-                        PawnKey::State(object_key) => {
+                        PawnKey::Replicate(object_key) => {
                             return Some(Ok(ClientEvent::ReplayCommand(
                                 object_key,
                                 command.as_ref().get_typed_copy(),
@@ -175,7 +175,7 @@ impl<T: ProtocolType> Client<T> {
                 // receive command
                 if let Some((pawn_key, command)) = connection.get_incoming_command() {
                     match pawn_key {
-                        PawnKey::State(object_key) => {
+                        PawnKey::Replicate(object_key) => {
                             return Some(Ok(ClientEvent::NewCommand(
                                 object_key,
                                 command.as_ref().get_typed_copy(),
@@ -199,7 +199,7 @@ impl<T: ProtocolType> Client<T> {
                     self.server_connection = None;
                     self.pre_connection_timestamp = None;
                     self.pre_connection_digest = None;
-                    self.connection_state = AwaitingChallengeResponse;
+                    self.connection_replicate = AwaitingChallengeResponse;
                     return Some(Ok(ClientEvent::Disconnection));
                 } else {
                     // send heartbeats
@@ -236,7 +236,7 @@ impl<T: ProtocolType> Client<T> {
             }
             None => {
                 if self.handshake_timer.ringing() {
-                    match self.connection_state {
+                    match self.connection_replicate {
                         ClientConnectionState::AwaitingChallengeResponse => {
                             if self.pre_connection_timestamp.is_none() {
                                 self.pre_connection_timestamp = Some(Timestamp::now());
@@ -264,7 +264,7 @@ impl<T: ProtocolType> Client<T> {
                             {
                                 payload_bytes.push(*digest_byte);
                             }
-                            // write auth event state if there is one
+                            // write auth event replicate if there is one
                             if let Some(auth_event) = &mut self.auth_event {
                                 let type_id = auth_event.get_type_id();
                                 let naia_id = self.manifest.get_naia_id(&type_id); // get naia id
@@ -321,7 +321,7 @@ impl<T: ProtocolType> Client<T> {
                             let (header, payload) = StandardHeader::read(packet.payload());
                             match header.packet_type() {
                                 PacketType::ServerChallengeResponse => {
-                                    if self.connection_state
+                                    if self.connection_replicate
                                         == ClientConnectionState::AwaitingChallengeResponse
                                     {
                                         if let Some(my_timestamp) = self.pre_connection_timestamp {
@@ -342,7 +342,7 @@ impl<T: ProtocolType> Client<T> {
 
                                                 self.tick_manager.set_initial_tick(server_tick);
 
-                                                self.connection_state =
+                                                self.connection_replicate =
                                                     ClientConnectionState::AwaitingConnectResponse;
                                             }
                                         }
@@ -357,7 +357,7 @@ impl<T: ProtocolType> Client<T> {
                                     );
 
                                     self.server_connection = Some(server_connection);
-                                    self.connection_state = ClientConnectionState::Connected;
+                                    self.connection_replicate = ClientConnectionState::Connected;
                                     return Some(Ok(ClientEvent::Connection));
                                 }
                                 _ => {}
@@ -377,21 +377,21 @@ impl<T: ProtocolType> Client<T> {
     }
 
     /// Queues up an Event to be sent to the Server
-    pub fn send_event(&mut self, event: &impl State<T>, guaranteed_delivery: bool) {
+    pub fn send_event(&mut self, event: &impl Replicate<T>, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
             connection.queue_event(event, guaranteed_delivery);
         }
     }
 
-    /// Queues up a Pawn State Command to be sent to the Server
-    pub fn send_command(&mut self, pawn_object_key: &LocalObjectKey, command: &impl State<T>) {
+    /// Queues up a Pawn Replicate Command to be sent to the Server
+    pub fn send_command(&mut self, pawn_object_key: &LocalObjectKey, command: &impl Replicate<T>) {
         if let Some(connection) = &mut self.server_connection {
-            connection.state_queue_command(pawn_object_key, command);
+            connection.replicate_queue_command(pawn_object_key, command);
         }
     }
 
     /// Queues up a Pawn Entity Command to be sent to the Server
-    pub fn entity_send_command(&mut self, pawn_entity_key: &LocalEntityKey, command: &impl State<T>) {
+    pub fn entity_send_command(&mut self, pawn_entity_key: &LocalEntityKey, command: &impl Replicate<T>) {
         if let Some(connection) = &mut self.server_connection {
             connection.entity_queue_command(pawn_entity_key, command);
         }
@@ -407,7 +407,7 @@ impl<T: ProtocolType> Client<T> {
         return self.server_connection.is_some();
     }
 
-    // states
+    // replicates
 
     /// Get a reference to an Object currently in scope for the Client, given
     /// that Object's Key
@@ -441,7 +441,7 @@ impl<T: ProtocolType> Client<T> {
         return false;
     }
 
-    /// Return an iterator to the collection of keys to all States tracked by
+    /// Return an iterator to the collection of keys to all Replicates tracked by
     /// the Client
     pub fn object_keys(&self) -> Option<Vec<LocalObjectKey>> {
         if let Some(connection) = &self.server_connection {
@@ -469,7 +469,7 @@ impl<T: ProtocolType> Client<T> {
         return None;
     }
 
-    /// Get a reference to a Pawn, used for setting it's state
+    /// Get a reference to a Pawn, used for setting it's replicate
     pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&T> {
         if let Some(connection) = self.server_connection.as_mut() {
             return connection.get_pawn_mut(key);

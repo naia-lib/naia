@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use crate::{
-    state::{protocol_type::ProtocolType, state::State},
+    replicate::{protocol_type::ProtocolType, replicate::Replicate},
     manager_type::ManagerType,
     manifest::Manifest,
     standard_header::StandardHeader,
@@ -10,7 +10,7 @@ use crate::{
 /// The maximum of bytes that can be used for the payload of a given packet. (See #38 of http://ithare.com/64-network-dos-and-donts-for-game-engines-part-v-udp/)
 pub const MTU_SIZE: usize = 508 - StandardHeader::bytes_number();
 
-/// Handles writing of Event & State data into an outgoing packet
+/// Handles writing of Event & Replicate data into an outgoing packet
 pub struct EventPacketWriter {
     event_working_bytes: Vec<u8>,
     event_count: u8,
@@ -33,7 +33,7 @@ impl EventPacketWriter {
 
     /// Gets the bytes to write into an outgoing packet
     pub fn get_bytes(&mut self, out_bytes: &mut Vec<u8>) {
-        //Write manager "header" (manager type & state count)
+        //Write manager "header" (manager type & replicate count)
         if self.event_count != 0 {
             out_bytes.write_u8(ManagerType::Event as u8).unwrap(); // write manager type
             out_bytes.write_u8(self.event_count).unwrap(); // write number of events in the following message
@@ -53,7 +53,7 @@ impl EventPacketWriter {
     pub fn write_event<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,
-        event: &Box<dyn State<T>>,
+        event: &Box<dyn Replicate<T>>,
     ) -> bool {
         //Write event payload
         let mut event_payload_bytes = Vec::<u8>::new();

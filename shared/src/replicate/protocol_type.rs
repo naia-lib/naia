@@ -1,10 +1,10 @@
 use std::any::TypeId;
 
-use super::{state::State, diff_mask::DiffMask};
+use super::{replicate::Replicate, diff_mask::DiffMask};
 
 use crate::{PacketReader, Ref};
 
-/// An Enum with a variant for every State that can be synced between
+/// An Enum with a variant for every Replicate that can be synced between
 /// Client/Host
 pub trait ProtocolType<Impl = Self>: Clone {
     // event_write & get_type_id are ONLY currently used for reading/writing auth events..
@@ -23,10 +23,10 @@ pub trait ProtocolType<Impl = Self>: Clone {
         reader: &mut PacketReader,
         packet_index: u16,
     );
-    /// Convert ProtocolType to an inner reference to the State
-    fn inner_ref(&self) -> Ref<dyn State<Impl>>;
+    /// Convert ProtocolType to an inner reference to the Replicate
+    fn inner_ref(&self) -> Ref<dyn Replicate<Impl>>;
     /// Compare properties in another ProtocolType
     fn equals(&self, other: &Impl) -> bool;
-    /// Sets the current State to the state of another State of the same type
+    /// Sets the current Replicate to the replicate of another Replicate of the same type
     fn mirror(&mut self, other: &Impl);
 }

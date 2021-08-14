@@ -39,7 +39,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
     let gen = quote! {
         use std::any::TypeId;
-        use naia_shared::{ProtocolType, State, StateEq, DiffMask, PacketReader};
+        use naia_shared::{ProtocolType, Replicate, ReplicateEq, DiffMask, PacketReader};
         #ref_imports
         impl #type_name {
             #load_method
@@ -66,8 +66,8 @@ fn get_read_full_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idstate) => {
-                        idstate.borrow_mut().read_full(reader, packet_index);
+                    #type_name::#variant_name(idreplicate) => {
+                        idreplicate.borrow_mut().read_full(reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -97,8 +97,8 @@ fn get_read_partial_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idstate) => {
-                        idstate.borrow_mut().read_partial(diff_mask, reader, packet_index);
+                    #type_name::#variant_name(idreplicate) => {
+                        idreplicate.borrow_mut().read_partial(diff_mask, reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -134,8 +134,8 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
                 );
 
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idstate) => {
-                        return #method_name(idstate.clone());
+                    #type_name::#variant_name(idreplicate) => {
+                        return #method_name(idreplicate.clone());
                     }
                 };
                 let new_output_result = quote! {
@@ -150,7 +150,7 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn inner_ref(&self) -> Ref<dyn State<#type_name>> {
+        fn inner_ref(&self) -> Ref<dyn Replicate<#type_name>> {
             match self {
                 #variants
             }
@@ -179,13 +179,13 @@ fn get_conversion_methods(type_name: &Ident, data: &Data) -> TokenStream {
                     let new_output_right = {
                         if MULTITHREAD {
                             quote! {
-                                fn #method_name_raw(eref: Arc<Mutex<#variant_name>>) -> Arc<Mutex<dyn State<#type_name>>> {
+                                fn #method_name_raw(eref: Arc<Mutex<#variant_name>>) -> Arc<Mutex<dyn Replicate<#type_name>>> {
                                     eref.clone()
                                 }
                             }
                         } else {
                             quote! {
-                                fn #method_name_raw(eref: Rc<RefCell<#variant_name>>) -> Rc<RefCell<dyn State<#type_name>>> {
+                                fn #method_name_raw(eref: Rc<RefCell<#variant_name>>) -> Rc<RefCell<dyn Replicate<#type_name>>> {
                                     eref.clone()
                                 }
                             }
@@ -202,7 +202,7 @@ fn get_conversion_methods(type_name: &Ident, data: &Data) -> TokenStream {
 
                 {
                     let new_output_right = quote! {
-                        fn #method_name(eref: Ref<#variant_name>) -> Ref<dyn State<#type_name>> {
+                        fn #method_name(eref: Ref<#variant_name>) -> Ref<dyn Replicate<#type_name>> {
                             let upcast_ref = #method_name_raw(eref.inner());
                             Ref::new_raw(upcast_ref)
                         }
@@ -227,10 +227,10 @@ fn get_equals_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idstate) => {
+                    #type_name::#variant_name(idreplicate) => {
                         match other {
-                            #type_name::#variant_name(other_idstate) => {
-                                return idstate.borrow().equals(&other_idstate.borrow());
+                            #type_name::#variant_name(other_idreplicate) => {
+                                return idreplicate.borrow().equals(&other_idreplicate.borrow());
                             }
                             _ => { return false; }
                         }
@@ -263,10 +263,10 @@ fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idstate) => {
+                    #type_name::#variant_name(idreplicate) => {
                         match other {
-                            #type_name::#variant_name(other_idstate) => {
-                                        return idstate.borrow_mut().mirror(&other_idstate.borrow());
+                            #type_name::#variant_name(other_idreplicate) => {
+                                        return idreplicate.borrow_mut().mirror(&other_idreplicate.borrow());
                                     }
                             _ => {}
                         }
@@ -299,8 +299,8 @@ fn get_write_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idstate) => {
-                        idstate.borrow().write(buffer);
+                    #type_name::#variant_name(idreplicate) => {
+                        idreplicate.borrow().write(buffer);
                     }
                 };
                 let new_output_result = quote! {
@@ -330,8 +330,8 @@ fn get_type_id_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idstate) => {
-                        return idstate.borrow().get_type_id();
+                    #type_name::#variant_name(idreplicate) => {
+                        return idreplicate.borrow().get_type_id();
                     }
                 };
                 let new_output_result = quote! {
@@ -361,7 +361,7 @@ fn get_load_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    manifest.register_state(#variant_name::get_builder());
+                    manifest.register_replicate(#variant_name::get_builder());
                 };
                 let new_output_result = quote! {
                     #output

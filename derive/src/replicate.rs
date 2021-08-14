@@ -4,66 +4,66 @@ use syn::{
     parse_macro_input, DeriveInput, Ident, Type,
 };
 
-pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    let state_name = &input.ident;
-    let state_builder_name = Ident::new(
-        (state_name.to_string() + "Builder").as_str(),
+    let replicate_name = &input.ident;
+    let replicate_builder_name = Ident::new(
+        (replicate_name.to_string() + "Builder").as_str(),
         Span::call_site(),
     );
     let type_name = get_type_name(&input);
 
     let properties = get_properties(&input);
 
-    let enum_name = format_ident!("{}Prop", state_name);
+    let enum_name = format_ident!("{}Prop", replicate_name);
     let property_enum = get_property_enum(&enum_name, &properties);
 
-    let new_complete_method = get_new_complete_method(state_name, &enum_name, &properties);
+    let new_complete_method = get_new_complete_method(replicate_name, &enum_name, &properties);
     let read_to_type_method =
-        get_read_to_type_method(&type_name, state_name, &enum_name, &properties);
+        get_read_to_type_method(&type_name, replicate_name, &enum_name, &properties);
     let write_method = get_write_method(&properties);
     let write_partial_method = get_write_partial_method(&enum_name, &properties);
     let read_full_method = get_read_full_method(&properties);
     let read_partial_method = get_read_partial_method(&enum_name, &properties);
     let set_mutator_method = get_set_mutator_method(&properties);
-    let get_typed_copy_method = get_get_typed_copy_method(&type_name, state_name, &properties);
-    let equals_method = get_equals_method(state_name, &properties);
-    let mirror_method = get_mirror_method(state_name, &properties);
+    let get_typed_copy_method = get_get_typed_copy_method(&type_name, replicate_name, &properties);
+    let equals_method = get_equals_method(replicate_name, &properties);
+    let mirror_method = get_mirror_method(replicate_name, &properties);
 
     let diff_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, StateBuilder, StateMutator, StateEq, PacketReader, Ref};
+        use naia_shared::{DiffMask, ReplicateBuilder, ReplicateMutator, ReplicateEq, PacketReader, Ref};
         #property_enum
-        pub struct #state_builder_name {
+        pub struct #replicate_builder_name {
             type_id: TypeId,
         }
-        impl StateBuilder<#type_name> for #state_builder_name {
+        impl ReplicateBuilder<#type_name> for #replicate_builder_name {
             fn get_type_id(&self) -> TypeId {
                 return self.type_id;
             }
             fn build(&self, reader: &mut PacketReader) -> #type_name {
-                return #state_name::read_to_type(reader);
+                return #replicate_name::read_to_type(reader);
             }
         }
-        impl #state_name {
-            pub fn get_builder() -> Box<dyn StateBuilder<#type_name>> {
-                return Box::new(#state_builder_name {
-                    type_id: TypeId::of::<#state_name>(),
+        impl #replicate_name {
+            pub fn get_builder() -> Box<dyn ReplicateBuilder<#type_name>> {
+                return Box::new(#replicate_builder_name {
+                    type_id: TypeId::of::<#replicate_name>(),
                 });
             }
-            pub fn wrap(self) -> Ref<#state_name> {
+            pub fn wrap(self) -> Ref<#replicate_name> {
                 return Ref::new(self);
             }
             #new_complete_method
             #read_to_type_method
         }
-        impl State<#type_name> for #state_name {
+        impl Replicate<#type_name> for #replicate_name {
             fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
             fn get_type_id(&self) -> TypeId {
-                return TypeId::of::<#state_name>();
+                return TypeId::of::<#replicate_name>();
             }
             #set_mutator_method
             #write_method
@@ -72,7 +72,7 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             #read_partial_method
             #get_typed_copy_method
         }
-        impl StateEq<#type_name> for #state_name {
+        impl ReplicateEq<#type_name> for #replicate_name {
             #equals_method
             #mirror_method
         }
@@ -127,14 +127,14 @@ fn get_set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn set_mutator(&mut self, mutator: &Ref<dyn StateMutator>) {
+        fn set_mutator(&mut self, mutator: &Ref<dyn ReplicateMutator>) {
             #output
         }
     };
 }
 
 fn get_new_complete_method(
-    state_name: &Ident,
+    replicate_name: &Ident,
     enum_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
@@ -167,8 +167,8 @@ fn get_new_complete_method(
     }
 
     return quote! {
-        pub fn new_complete(#args) -> #state_name {
-            #state_name {
+        pub fn new_complete(#args) -> #replicate_name {
+            #replicate_name {
                 #fields
             }
         }
@@ -177,7 +177,7 @@ fn get_new_complete_method(
 
 fn get_read_to_type_method(
     type_name: &Ident,
-    state_name: &Ident,
+    replicate_name: &Ident,
     enum_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
@@ -215,7 +215,7 @@ fn get_read_to_type_method(
         fn read_to_type(reader: &mut PacketReader) -> #type_name {
             #prop_reads
 
-            return #type_name::#state_name(Ref::new(#state_name {
+            return #type_name::#replicate_name(Ref::new(#replicate_name {
                 #prop_names
             }));
         }
@@ -224,7 +224,7 @@ fn get_read_to_type_method(
 
 fn get_get_typed_copy_method(
     type_name: &Ident,
-    state_name: &Ident,
+    replicate_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
     let mut args = quote! {};
@@ -240,8 +240,8 @@ fn get_get_typed_copy_method(
 
     return quote! {
         fn get_typed_copy(&self) -> #type_name {
-            let copied_state = #state_name::new_complete(#args).wrap();
-            return #type_name::#state_name(copied_state);
+            let copied_replicate = #replicate_name::new_complete(#args).wrap();
+            return #type_name::#replicate_name(copied_replicate);
         }
     };
 }
@@ -324,7 +324,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
     };
 }
 
-fn get_equals_method(state_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn get_equals_method(replicate_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
@@ -339,14 +339,14 @@ fn get_equals_method(state_name: &Ident, properties: &Vec<(Ident, Type)>) -> Tok
     }
 
     return quote! {
-        fn equals(&self, other: &#state_name) -> bool {
+        fn equals(&self, other: &#replicate_name) -> bool {
             #output
             return true;
         }
     };
 }
 
-fn get_mirror_method(state_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn get_mirror_method(replicate_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
@@ -361,7 +361,7 @@ fn get_mirror_method(state_name: &Ident, properties: &Vec<(Ident, Type)>) -> Tok
     }
 
     return quote! {
-        fn mirror(&mut self, other: &#state_name) {
+        fn mirror(&mut self, other: &#replicate_name) {
             #output
         }
     };

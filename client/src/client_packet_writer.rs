@@ -2,14 +2,14 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
     wrapping_diff, ProtocolType, EventPacketWriter, ManagerType,
-    Manifest, MTU_SIZE, PawnKey, State
+    Manifest, MTU_SIZE, PawnKey, Replicate
 };
 
 use crate::dual_command_receiver::DualCommandReceiver;
 
 const MAX_PAST_COMMANDS: u8 = 3;
 
-/// Handles writing of Event & State data into an outgoing packet
+/// Handles writing of Event & Replicate data into an outgoing packet
 pub struct ClientPacketWriter {
     command_working_bytes: Vec<u8>,
     command_count: u8,
@@ -36,7 +36,7 @@ impl ClientPacketWriter {
     pub fn get_bytes(&mut self) -> Box<[u8]> {
         let mut out_bytes = Vec::<u8>::new();
 
-        //Write manager "header" (manager type & state count)
+        //Write manager "header" (manager type & replicate count)
         if self.command_count != 0 {
             out_bytes.write_u8(ManagerType::Command as u8).unwrap(); // write manager type
             out_bytes.write_u8(self.command_count).unwrap(); // write number of events in the following message
@@ -63,7 +63,7 @@ impl ClientPacketWriter {
         manifest: &Manifest<T>,
         command_receiver: &DualCommandReceiver<T>,
         pawn_key: &PawnKey,
-        command: &Box<dyn State<T>>,
+        command: &Box<dyn Replicate<T>>,
     ) -> bool {
         //Write command payload
         let mut command_payload_bytes = Vec::<u8>::new();
@@ -100,7 +100,7 @@ impl ClientPacketWriter {
 
 
         match pawn_key {
-            PawnKey::State(_) => {
+            PawnKey::Replicate(_) => {
                 command_total_bytes
                     .write_u8(0)
                     .unwrap(); // write pawn type
@@ -139,7 +139,7 @@ impl ClientPacketWriter {
     pub fn write_event<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,
-        event: &Box<dyn State<T>>,
+        event: &Box<dyn Replicate<T>>,
     ) -> bool {
         return self.event_writer.write_event(manifest, event);
     }
