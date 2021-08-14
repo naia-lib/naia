@@ -474,9 +474,9 @@ impl<U: ProtocolType> Server<U> {
 
     /// Queues up an Event to be sent to the Client associated with a given
     /// UserKey
-    pub fn queue_event(&mut self, user_key: &UserKey, event: &impl State<U>) {
+    pub fn queue_event(&mut self, user_key: &UserKey, event: &impl State<U>, guaranteed_delivery: bool) {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
-            connection.queue_event(event);
+            connection.queue_event(event, guaranteed_delivery);
         }
     }
 

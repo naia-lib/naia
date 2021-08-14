@@ -11,10 +11,6 @@ pub struct StringMessage {
 }
 
 impl StringMessage {
-    fn is_guaranteed() -> bool {
-        true
-    }
-
     pub fn new(message: String) -> StringMessage {
         return StringMessage::new_complete(message);
     }

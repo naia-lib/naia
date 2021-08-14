@@ -11,10 +11,6 @@ pub struct Position {
 }
 
 impl Position {
-    fn is_guaranteed() -> bool {
-        false
-    }
-
     pub fn new(x: u8, y: u8) -> Self {
         return Position::new_complete(
             x,

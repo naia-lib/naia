@@ -55,16 +55,17 @@ impl App {
                             info!("Client disconnected from: {}", self.client.server_address());
                         }
                         ClientEvent::Event(event_type) => match event_type {
-                            Protocol::StringMessage(message_ref) => {
-                                let _message = message_ref.borrow().message.get();
-                                //info!("Client received event: {}", message);
+                            Protocol::StringMessage(_message_ref) => {
+                                //let message = message_ref.borrow();
+                                //let message_inner = message.message.get();
+                                //info!("Client received event: {}", message_inner);
 
                                 let new_message =
                                     format!("Client Packet ({})", self.server_event_count);
                                 //info!("Client send: {}", new_message);
 
                                 let string_event = StringMessage::new(new_message);
-                                self.client.send_event(&string_event);
+                                self.client.send_event(&string_event, true);
                                 self.server_event_count += 1;
                             }
                             _ => {}

@@ -14,9 +14,10 @@ use crate::{
 /// that guaranteed Events can be re-transmitted to the remote host
 #[derive(Debug)]
 pub struct EventManager<T: ProtocolType> {
-    queued_outgoing_events: VecDeque<Rc<Box<dyn State<T>>>>,
+    queued_outgoing_events: VecDeque<(bool, Rc<Box<dyn State<T>>>)>,
     queued_incoming_events: VecDeque<T>,
-    sent_events: HashMap<u16, Vec<Rc<Box<dyn State<T>>>>>,
+    sent_guaranteed_events: HashMap<u16, Vec<Rc<Box<dyn State<T>>>>>,
+    last_popped_event_guarantee: bool,
 }
 
 impl<T: ProtocolType> EventManager<T> {
@@ -25,25 +26,26 @@ impl<T: ProtocolType> EventManager<T> {
         EventManager {
             queued_outgoing_events: VecDeque::new(),
             queued_incoming_events: VecDeque::new(),
-            sent_events: HashMap::new(),
+            sent_guaranteed_events: HashMap::new(),
+            last_popped_event_guarantee: false,
         }
     }
 
     /// Occurs when a packet has been notified as delivered. Stops tracking the
     /// status of Events in that packet.
     pub fn notify_packet_delivered(&mut self, packet_index: u16) {
-        self.sent_events.remove(&packet_index);
+        self.sent_guaranteed_events.remove(&packet_index);
     }
 
     /// Occurs when a packet has been notified as having been dropped. Queues up
     /// any guaranteed Events that were lost in the packet for retransmission.
     pub fn notify_packet_dropped(&mut self, packet_index: u16) {
-        if let Some(dropped_events_list) = self.sent_events.get(&packet_index) {
+        if let Some(dropped_events_list) = self.sent_guaranteed_events.get(&packet_index) {
             for dropped_event in dropped_events_list.into_iter() {
-                self.queued_outgoing_events.push_back(dropped_event.clone());
+                self.queued_outgoing_events.push_back((true, dropped_event.clone()));
             }
 
-            self.sent_events.remove(&packet_index);
+            self.sent_guaranteed_events.remove(&packet_index);
         }
     }
 
@@ -56,18 +58,20 @@ impl<T: ProtocolType> EventManager<T> {
     /// Gets the next queued Event to be transmitted
     pub fn pop_outgoing_event(&mut self, packet_index: u16) -> Option<Rc<Box<dyn State<T>>>> {
         match self.queued_outgoing_events.pop_front() {
-            Some(event) => {
+            Some((guaranteed, event)) => {
                 //place in transmission record if this is a gauranteed event
-                if State::is_guaranteed(event.as_ref().as_ref()) {
-                    if !self.sent_events.contains_key(&packet_index) {
+                if guaranteed {
+                    if !self.sent_guaranteed_events.contains_key(&packet_index) {
                         let sent_events_list: Vec<Rc<Box<dyn State<T>>>> = Vec::new();
-                        self.sent_events.insert(packet_index, sent_events_list);
+                        self.sent_guaranteed_events.insert(packet_index, sent_events_list);
                     }
 
-                    if let Some(sent_events_list) = self.sent_events.get_mut(&packet_index) {
+                    if let Some(sent_events_list) = self.sent_guaranteed_events.get_mut(&packet_index) {
                         sent_events_list.push(event.clone());
                     }
                 }
+
+                self.last_popped_event_guarantee = guaranteed;
 
                 Some(event)
             }
@@ -80,22 +84,22 @@ impl<T: ProtocolType> EventManager<T> {
     pub fn unpop_outgoing_event(&mut self, packet_index: u16, event: &Rc<Box<dyn State<T>>>) {
         let cloned_event = event.clone();
 
-        if State::is_guaranteed(event.as_ref().as_ref()) {
-            if let Some(sent_events_list) = self.sent_events.get_mut(&packet_index) {
+        if self.last_popped_event_guarantee {
+            if let Some(sent_events_list) = self.sent_guaranteed_events.get_mut(&packet_index) {
                 sent_events_list.pop();
                 if sent_events_list.len() == 0 {
-                    self.sent_events.remove(&packet_index);
+                    self.sent_guaranteed_events.remove(&packet_index);
                 }
             }
         }
 
-        self.queued_outgoing_events.push_front(cloned_event);
+        self.queued_outgoing_events.push_front((self.last_popped_event_guarantee, cloned_event));
     }
 
     /// Queues an Event to be transmitted to the remote host
-    pub fn queue_outgoing_event(&mut self, event: &impl State<T>) {
+    pub fn queue_outgoing_event(&mut self, event: &impl State<T>, guaranteed_delivery: bool) {
         let clone = Rc::new(EventClone::clone_box(event));
-        self.queued_outgoing_events.push_back(clone);
+        self.queued_outgoing_events.push_back((guaranteed_delivery, clone));
     }
 
     /// Returns whether any Events have been received that must be handed to the

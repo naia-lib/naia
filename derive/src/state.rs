@@ -61,9 +61,6 @@ pub fn state_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             #read_to_type_method
         }
         impl State<#type_name> for #state_name {
-            fn is_guaranteed(&self) -> bool {
-                #state_name::is_guaranteed()
-            }
             fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
             fn get_type_id(&self) -> TypeId {
                 return TypeId::of::<#state_name>();
