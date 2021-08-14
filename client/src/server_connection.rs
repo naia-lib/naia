@@ -157,16 +157,16 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.state_manager.component_keys();
     }
 
-    pub fn get_state(&self, key: &LocalObjectKey) -> Option<&T> {
-        return self.state_manager.get_state(key);
+    pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
+        return self.state_manager.get_object(key);
     }
 
-    pub fn has_state(&self, key: &LocalObjectKey) -> bool {
-        return self.state_manager.has_state(key);
+    pub fn has_object(&self, key: &LocalObjectKey) -> bool {
+        return self.state_manager.has_object(key);
     }
 
     pub fn has_component(&self, key: &LocalComponentKey) -> bool {
-        return self.has_state(key);
+        return self.has_object(key);
     }
 
     pub fn pawn_keys(&self) -> Keys<LocalObjectKey, T> {

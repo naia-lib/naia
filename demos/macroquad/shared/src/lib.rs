@@ -3,13 +3,11 @@ extern crate naia_derive;
 
 use std::net::SocketAddr;
 
-pub mod events;
-pub mod behavior;
-pub mod objects;
-mod manifest_load;
 mod shared_config;
 
-pub use manifest_load::manifest_load;
+pub mod protocol;
+pub mod behavior;
+
 pub use shared_config::get_shared_config;
 
 pub fn get_server_address() -> SocketAddr {

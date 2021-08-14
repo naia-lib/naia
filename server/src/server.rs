@@ -678,9 +678,9 @@ impl<U: ProtocolType> Server<U> {
             .expect("component not initialized correctly?");
     }
 
-    /// Given an ObjectKey, get a reference to a registered State being tracked
+    /// Given an ObjectKey, get a reference to a registered Object being tracked
     /// by the Server
-    pub fn get_state(&mut self, key: ObjectKey) -> Option<&U> {
+    pub fn get_object(&mut self, key: ObjectKey) -> Option<&U> {
         if self.global_state_set.contains(&key) {
             return self.global_state_store.get(key);
         } else {
@@ -886,10 +886,10 @@ impl<U: ProtocolType> Server<U> {
         self.tick_manager.get_tick()
     }
 
-    /// Returns true if a given User has an State with a given ObjectKey in-scope currently
-    pub fn user_scope_has_state(&self, user_key: &UserKey, object_key: &ObjectKey) -> bool {
+    /// Returns true if a given User has an Object with a given ObjectKey in-scope currently
+    pub fn user_scope_has_object(&self, user_key: &UserKey, object_key: &ObjectKey) -> bool {
         if let Some(user_connection) = self.client_connections.get(user_key) {
-            return user_connection.has_state(object_key);
+            return user_connection.has_object(object_key);
         }
         return false;
     }
@@ -909,7 +909,7 @@ impl<U: ProtocolType> Server<U> {
                 for object_key in room.states_iter() {
                     if let Some(user_connection) = self.client_connections.get_mut(user_key)
                     {
-                        let currently_in_scope = user_connection.has_state(object_key);
+                        let currently_in_scope = user_connection.has_object(object_key);
 
                         let should_be_in_scope: bool;
                         if user_connection.has_pawn(object_key) {

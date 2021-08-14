@@ -245,7 +245,7 @@ impl<T: ProtocolType> ServerStateManager<T> {
         }
     }
 
-    pub fn has_state(&self, key: &ObjectKey) -> bool {
+    pub fn has_object(&self, key: &ObjectKey) -> bool {
         return self.local_object_store.contains_key(*key);
     }
 

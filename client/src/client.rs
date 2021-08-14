@@ -103,13 +103,13 @@ impl<T: ProtocolType> Client<T> {
                     let event_opt: Option<ClientEvent::<T>> = {
                         match message {
                             ClientStateMessage::CreateState(local_key) => {
-                                Some(ClientEvent::CreateState(local_key))
+                                Some(ClientEvent::CreateObject(local_key))
                             }
                             ClientStateMessage::DeleteState(local_key, state) => {
-                                Some(ClientEvent::DeleteState(local_key, state.clone()))
+                                Some(ClientEvent::DeleteObject(local_key, state.clone()))
                             }
                             ClientStateMessage::UpdateState(local_key) => {
-                                Some(ClientEvent::UpdateState(local_key))
+                                Some(ClientEvent::UpdateObject(local_key))
                             }
                             ClientStateMessage::AssignPawn(local_key) => {
                                 Some(ClientEvent::AssignPawn(local_key))
@@ -409,27 +409,27 @@ impl<T: ProtocolType> Client<T> {
 
     // states
 
-    /// Get a reference to an State currently in scope for the Client, given
-    /// that State's Key
-    pub fn get_state(&self, key: &LocalObjectKey) -> Option<&T> {
+    /// Get a reference to an Object currently in scope for the Client, given
+    /// that Object's Key
+    pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
         if let Some(connection) = &self.server_connection {
-            return connection.get_state(key);
+            return connection.get_object(key);
         }
         return None;
     }
 
-    /// Get whether or not the State currently in scope for the Client, given
-    /// that State's Key
-    pub fn has_state(&self, key: &LocalObjectKey) -> bool {
+    /// Get whether or not the Object currently in scope for the Client, given
+    /// that Object's Key
+    pub fn has_object(&self, key: &LocalObjectKey) -> bool {
         if let Some(connection) = &self.server_connection {
-            return connection.has_state(key);
+            return connection.has_object(key);
         }
         return false;
     }
 
-    /// Component-themed alias for `get_state`
+    /// Component-themed alias for `get_object`
     pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
-        return self.get_state(key);
+        return self.get_object(key);
     }
 
     /// Get whether or not the Component currently in scope for the Client, given

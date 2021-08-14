@@ -29,13 +29,13 @@ pub enum ClientEvent<T: ProtocolType> {
     /// A Command which is replayed to extrapolate from recently received
     /// authoritative state
     ReplayCommand(LocalObjectKey, T),
-    /// Occurs when an State on the Server has come into scope for the Client
-    CreateState(LocalObjectKey),
-    /// Occurs when an State has had a state change on the Server while in
+    /// Occurs when an Object on the Server has come into scope for the Client
+    CreateObject(LocalObjectKey),
+    /// Occurs when an Object has had a state change on the Server while in
     /// scope for the Client
-    UpdateState(LocalObjectKey),
-    /// Occurs when an State on the Server has left the Client's scope
-    DeleteState(LocalObjectKey, T),
+    UpdateObject(LocalObjectKey),
+    /// Occurs when an Object on the Server has left the Client's scope
+    DeleteObject(LocalObjectKey, T),
     /// Occurs when an Entity on the Server has come into scope for the Client,
     /// and should be added to the local client's ECS "world"
     CreateEntity(LocalEntityKey, Vec<LocalComponentKey>),
