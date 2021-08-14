@@ -214,7 +214,7 @@ impl App {
                                 info!("Naia Server send -> {}: {}", user.address, new_message);
 
                                 let message_event = StringMessage::new(new_message);
-                                self.server.queue_event(&user_key, &message_event);
+                                self.server.queue_event(&user_key, &message_event, true);
                             }
 
                             // VERY IMPORTANT! Calling this actually sends all State/Event data

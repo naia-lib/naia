@@ -13,10 +13,6 @@ pub struct KeyCommand {
 }
 
 impl KeyCommand {
-    fn is_guaranteed() -> bool {
-        false
-    }
-
     pub fn new(w: bool, s: bool, a: bool, d: bool) -> KeyCommand {
         return KeyCommand::new_complete(w, s, a, d);
     }

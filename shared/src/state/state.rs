@@ -10,9 +10,6 @@ use crate::{PacketReader, Ref};
 /// An State is a container of Properties that can be scoped, tracked, and
 /// synced, with a remote host
 pub trait State<T: ProtocolType>: EventClone<T> {
-    /// Whether the Event is guaranteed for eventual delivery to the remote
-    /// host.
-    fn is_guaranteed(&self) -> bool;
     /// Gets the number of bytes of the State's State Mask
     fn get_diff_mask_size(&self) -> u8;
     /// Gets a copy of the State, wrapped in an ProtocolType enum (which is the

@@ -18,10 +18,6 @@ pub struct Name {
 }
 
 impl Name {
-    fn is_guaranteed() -> bool {
-        false
-    }
-
     pub fn new(first: &str, last: &str) -> Self {
         return Name::new_complete(
             Fullname {

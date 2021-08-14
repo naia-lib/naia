@@ -245,8 +245,8 @@ impl<U: ProtocolType> ClientConnection<U> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_event(&mut self, event: &impl State<U>) {
-        return self.connection.queue_event(event);
+    pub fn queue_event(&mut self, event: &impl State<U>, guaranteed_delivery: bool) {
+        return self.connection.queue_event(event, guaranteed_delivery);
     }
 
     pub fn get_incoming_event(&mut self) -> Option<U> {

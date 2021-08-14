@@ -377,9 +377,9 @@ impl<T: ProtocolType> Client<T> {
     }
 
     /// Queues up an Event to be sent to the Server
-    pub fn send_event(&mut self, event: &impl State<T>) {
+    pub fn send_event(&mut self, event: &impl State<T>, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
-            connection.queue_event(event);
+            connection.queue_event(event, guaranteed_delivery);
         }
     }
 

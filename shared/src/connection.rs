@@ -120,8 +120,8 @@ impl<T: ProtocolType> Connection<T> {
     }
 
     /// Queue up an event to be sent to the remote host
-    pub fn queue_event(&mut self, event: &impl State<T>) {
-        return self.event_manager.queue_outgoing_event(event);
+    pub fn queue_event(&mut self, event: &impl State<T>, guaranteed_delivery: bool) {
+        return self.event_manager.queue_outgoing_event(event, guaranteed_delivery);
     }
 
     /// Returns whether there are events to be sent to the remote host
