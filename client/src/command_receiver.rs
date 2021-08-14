@@ -12,9 +12,9 @@ const COMMAND_HISTORY_SIZE: u16 = 64;
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
 pub struct CommandReceiver<T: EventType> {
-    queued_incoming_commands: VecDeque<(u16, PawnKey, Rc<Box<dyn Event<T>>>)>,
-    command_history: HashMap<PawnKey, SequenceBuffer<Rc<Box<dyn Event<T>>>>>,
-    queued_command_replays: VecDeque<(u16, PawnKey, Rc<Box<dyn Event<T>>>)>,
+    queued_incoming_commands: VecDeque<(u16, PawnKey, Rc<Box<dyn State<T>>>)>,
+    command_history: HashMap<PawnKey, SequenceBuffer<Rc<Box<dyn State<T>>>>>,
+    queued_command_replays: VecDeque<(u16, PawnKey, Rc<Box<dyn State<T>>>)>,
     replay_trigger: HashMap<PawnKey, u16>,
 }
 
@@ -30,14 +30,14 @@ impl<T: EventType> CommandReceiver<T> {
     }
 
     /// Gets the next queued Command
-    pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Rc<Box<dyn Event<T>>>)> {
+    pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Rc<Box<dyn State<T>>>)> {
         self.queued_incoming_commands.pop_front()
     }
 
     /// Gets the next queued Replayed Command
     pub fn pop_command_replay<U: StateType>(
         &mut self,
-    ) -> Option<(u16, PawnKey, Rc<Box<dyn Event<T>>>)> {
+    ) -> Option<(u16, PawnKey, Rc<Box<dyn State<T>>>)> {
         self.queued_command_replays.pop_front()
     }
 
@@ -76,7 +76,7 @@ impl<T: EventType> CommandReceiver<T> {
         &mut self,
         host_tick: u16,
         pawn_key: &PawnKey,
-        command: &Rc<Box<dyn Event<T>>>,
+        command: &Rc<Box<dyn State<T>>>,
     ) {
         self.queued_incoming_commands
             .push_back((host_tick, *pawn_key, command.clone()));
@@ -99,7 +99,7 @@ impl<T: EventType> CommandReceiver<T> {
         &self,
         pawn_key: &PawnKey,
         reverse: bool,
-    ) -> Option<SequenceIterator<Rc<Box<dyn Event<T>>>>> {
+    ) -> Option<SequenceIterator<Rc<Box<dyn State<T>>>>> {
         if let Some(command_buffer) = self.command_history.get(&pawn_key) {
             return Some(command_buffer.iter(reverse));
         }

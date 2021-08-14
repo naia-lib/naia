@@ -20,7 +20,7 @@ use super::{
 
 use byteorder::{BigEndian, WriteBytesExt};
 
-use naia_shared::{EventType, Manifest, MTU_SIZE, NaiaKey};
+use naia_shared::{Manifest, MTU_SIZE, NaiaKey};
 
 use crate::server_packet_writer::ServerPacketWriter;
 
@@ -459,10 +459,10 @@ impl<T: StateType> ServerStateManager<T> {
         }
     }
 
-    pub fn write_state_message<U: EventType>(
+    pub fn write_state_message(
         &self,
         packet_writer: &mut ServerPacketWriter,
-        manifest: &Manifest<U, T>,
+        manifest: &Manifest<T>,
         message: &ServerStateMessage<T>,
     ) -> bool {
         let mut state_total_bytes = Vec::<u8>::new();

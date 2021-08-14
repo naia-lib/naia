@@ -1,11 +1,10 @@
 
 use naia_shared::Manifest;
 
-use super::components::{Components, Position, Name, Marker};
-use super::events::{Events, StringMessage, Auth};
+use super::protocol::{Protocol, Position, Name, Marker, StringMessage, Auth};
 
-pub fn manifest_load() -> Manifest<Events, Components> {
-    let mut manifest = Manifest::<Events, Components>::new();
+pub fn manifest_load() -> Manifest<Protocol> {
+    let mut manifest = Manifest::<Protocol>::new();
 
     manifest.register_event(Auth::event_get_builder());
     manifest.register_event(StringMessage::event_get_builder());

@@ -63,7 +63,7 @@ impl ClientPacketWriter {
         manifest: &Manifest<T, U>,
         command_receiver: &DualCommandReceiver<T>,
         pawn_key: &PawnKey,
-        command: &Box<dyn Event<T>>,
+        command: &Box<dyn State<T>>,
     ) -> bool {
         //Write command payload
         let mut command_payload_bytes = Vec::<u8>::new();
@@ -139,7 +139,7 @@ impl ClientPacketWriter {
     pub fn write_event<T: EventType, U: StateType>(
         &mut self,
         manifest: &Manifest<T, U>,
-        event: &Box<dyn Event<T>>,
+        event: &Box<dyn State<T>>,
     ) -> bool {
         return self.event_writer.write_event(manifest, event);
     }

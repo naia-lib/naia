@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 
-use naia_shared::{sequence_greater_than, StateType, EventType, PawnKey, Manifest, PacketReader, SequenceBuffer, LocalObjectKey, NaiaKey, LocalEntityKey};
+use naia_shared::{sequence_greater_than, StateType, PawnKey, Manifest, PacketReader, SequenceBuffer, LocalObjectKey, NaiaKey, LocalEntityKey};
 
 const COMMAND_BUFFER_MAX_SIZE: u16 = 64;
 
 /// Handles incoming commands, buffering them to be received on the correct tick
 #[derive(Debug)]
-pub struct CommandReceiver<T: EventType> {
+pub struct CommandReceiver<T: StateType> {
     queued_incoming_commands: SequenceBuffer<HashMap<PawnKey, T>>,
 }
 
-impl<T: EventType> CommandReceiver<T> {
+impl<T: StateType> CommandReceiver<T> {
     /// Creates a new CommandReceiver
     pub fn new() -> Self {
         CommandReceiver {
@@ -41,7 +41,7 @@ impl<T: EventType> CommandReceiver<T> {
         server_tick: u16,
         client_tick: u16,
         reader: &mut PacketReader,
-        manifest: &Manifest<T, U>,
+        manifest: &Manifest<U>,
     ) {
         let command_count = reader.read_u8();
         for _x in 0..command_count {

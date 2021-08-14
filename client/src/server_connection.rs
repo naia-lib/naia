@@ -250,7 +250,7 @@ impl<T: EventType, U: StateType> ServerConnection<T, U> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_event(&mut self, event: &impl Event<T>) {
+    pub fn queue_event(&mut self, event: &impl State<T>) {
         return self.connection.queue_event(event);
     }
 
@@ -263,12 +263,12 @@ impl<T: EventType, U: StateType> ServerConnection<T, U> {
     }
 
     // command related
-    pub fn state_queue_command(&mut self, object_key: &LocalObjectKey, command: &impl Event<T>) {
+    pub fn state_queue_command(&mut self, object_key: &LocalObjectKey, command: &impl State<T>) {
         let pawn_key = PawnKey::State(*object_key);
         return self.command_sender.queue_command(&pawn_key, command);
     }
 
-    pub fn entity_queue_command(&mut self, entity_key: &LocalEntityKey, command: &impl Event<T>) {
+    pub fn entity_queue_command(&mut self, entity_key: &LocalEntityKey, command: &impl State<T>) {
         let pawn_key = PawnKey::Entity(*entity_key);
         return self.command_sender.queue_command(&pawn_key, command);
     }
@@ -280,7 +280,7 @@ impl<T: EventType, U: StateType> ServerConnection<T, U> {
 
     }
 
-    pub fn get_incoming_replay(&mut self) -> Option<(PawnKey, Rc<Box<dyn Event<T>>>)> {
+    pub fn get_incoming_replay(&mut self) -> Option<(PawnKey, Rc<Box<dyn State<T>>>)> {
         if let Some((_tick, pawn_key, command)) = self
             .command_receiver
             .pop_command_replay::<U>()
@@ -291,7 +291,7 @@ impl<T: EventType, U: StateType> ServerConnection<T, U> {
         return None;
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<(PawnKey, Rc<Box<dyn Event<T>>>)> {
+    pub fn get_incoming_command(&mut self) -> Option<(PawnKey, Rc<Box<dyn State<T>>>)> {
         if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command() {
             return Some((pawn_key, command));
         }

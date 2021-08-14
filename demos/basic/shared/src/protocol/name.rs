@@ -3,7 +3,7 @@ use nanoserde::{DeBin, SerBin};
 use naia_derive::State;
 use naia_shared::{State, Property};
 
-use super::Components;
+use super::Protocol;
 
 // Here's an example of a Custom Property
 #[derive(Default, PartialEq, Clone, DeBin, SerBin)]
@@ -12,8 +12,8 @@ pub struct Fullname {
     pub last: String,
 }
 
-#[derive(State)]
-#[type_name = "Components"]
+#[derive(State, Clone)]
+#[type_name = "Protocol"]
 pub struct Name {
     pub full: Property<Fullname>,
 }

@@ -5,11 +5,7 @@ use std::{
 };
 
 use crate::{
-    state::state_type::StateType,
-    events::{
-        event::{Event, EventClone},
-        event_type::EventType,
-    },
+    state::{state::State, state_type::StateType, state::EventClone},
     manifest::Manifest,
     PacketReader,
 };
@@ -17,13 +13,13 @@ use crate::{
 /// Handles incoming/outgoing events, tracks the delivery status of Events so
 /// that guaranteed Events can be re-transmitted to the remote host
 #[derive(Debug)]
-pub struct EventManager<T: EventType> {
-    queued_outgoing_events: VecDeque<Rc<Box<dyn Event<T>>>>,
+pub struct EventManager<T: StateType> {
+    queued_outgoing_events: VecDeque<Rc<Box<dyn State<T>>>>,
     queued_incoming_events: VecDeque<T>,
-    sent_events: HashMap<u16, Vec<Rc<Box<dyn Event<T>>>>>,
+    sent_events: HashMap<u16, Vec<Rc<Box<dyn State<T>>>>>,
 }
 
-impl<T: EventType> EventManager<T> {
+impl<T: StateType> EventManager<T> {
     /// Creates a new EventManager
     pub fn new() -> Self {
         EventManager {
@@ -58,13 +54,13 @@ impl<T: EventType> EventManager<T> {
     }
 
     /// Gets the next queued Event to be transmitted
-    pub fn pop_outgoing_event(&mut self, packet_index: u16) -> Option<Rc<Box<dyn Event<T>>>> {
+    pub fn pop_outgoing_event(&mut self, packet_index: u16) -> Option<Rc<Box<dyn State<T>>>> {
         match self.queued_outgoing_events.pop_front() {
             Some(event) => {
                 //place in transmission record if this is a gauranteed event
-                if Event::event_is_guaranteed(event.as_ref().as_ref()) {
+                if State::event_is_guaranteed(event.as_ref().as_ref()) {
                     if !self.sent_events.contains_key(&packet_index) {
-                        let sent_events_list: Vec<Rc<Box<dyn Event<T>>>> = Vec::new();
+                        let sent_events_list: Vec<Rc<Box<dyn State<T>>>> = Vec::new();
                         self.sent_events.insert(packet_index, sent_events_list);
                     }
 
@@ -81,10 +77,10 @@ impl<T: EventType> EventManager<T> {
 
     /// If  the last popped Event from the queue somehow wasn't able to be
     /// written into a packet, put the Event back into the front of the queue
-    pub fn unpop_outgoing_event(&mut self, packet_index: u16, event: &Rc<Box<dyn Event<T>>>) {
+    pub fn unpop_outgoing_event(&mut self, packet_index: u16, event: &Rc<Box<dyn State<T>>>) {
         let cloned_event = event.clone();
 
-        if Event::event_is_guaranteed(event.as_ref().as_ref()) {
+        if State::event_is_guaranteed(event.as_ref().as_ref()) {
             if let Some(sent_events_list) = self.sent_events.get_mut(&packet_index) {
                 sent_events_list.pop();
                 if sent_events_list.len() == 0 {
@@ -97,7 +93,7 @@ impl<T: EventType> EventManager<T> {
     }
 
     /// Queues an Event to be transmitted to the remote host
-    pub fn queue_outgoing_event(&mut self, event: &impl Event<T>) {
+    pub fn queue_outgoing_event(&mut self, event: &impl State<T>) {
         let clone = Rc::new(EventClone::event_clone_box(event));
         self.queued_outgoing_events.push_back(clone);
     }
@@ -115,10 +111,10 @@ impl<T: EventType> EventManager<T> {
 
     /// Given incoming packet data, read transmitted Events and store them to be
     /// returned to the application
-    pub fn process_data<U: StateType>(
+    pub fn process_data(
         &mut self,
         reader: &mut PacketReader,
-        manifest: &Manifest<T, U>)
+        manifest: &Manifest<T>)
     {
         let event_count = reader.read_u8();
         for _x in 0..event_count {
