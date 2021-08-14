@@ -7,7 +7,7 @@ use hecs::{Entity as HecsEntityKey, World, EntityBuilder as HecsEntityBuilder};
 use naia_client::{ClientConfig, ClientEvent, Client, NaiaKey, LocalEntityKey as NaiaEntityKey, Ref, State};
 
 use naia_demo_basic_shared::{
-    get_shared_config, manifest_load,
+    get_shared_config,
     protocol::{Protocol, Auth, StringMessage},
 };
 
@@ -24,11 +24,11 @@ impl App {
         info!("Naia Client Example Started");
 
         // This will be evaluated in the Server's 'on_auth()' method
-        let auth = Protocol::Auth(Auth::new("charlie", "12345").wrap());
+        let auth = Auth::new("charlie", "12345").get_typed_copy();
 
         App {
             client: Client::new(
-                manifest_load(),
+                Protocol::load(),
                 Some(client_config),
                 get_shared_config(),
                 Some(auth),

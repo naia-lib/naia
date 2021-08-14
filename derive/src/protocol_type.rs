@@ -21,8 +21,8 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let conversion_methods = get_conversion_methods(&type_name, &input.data);
     let equals_method = get_equals_method(&type_name, &input.data);
     let mirror_method = get_mirror_method(&type_name, &input.data);
-    let write_variants = get_write_variants(&type_name, &input.data);
-    let get_type_id_variants = get_type_id_variants(&type_name, &input.data);
+    let write_method = get_write_method(&type_name, &input.data);
+    let get_type_id_method = get_type_id_method(&type_name, &input.data);
 
     let ref_imports = {
         if MULTITHREAD {
@@ -46,16 +46,8 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
             #inner_ref_method
             #equals_method
             #mirror_method
-            fn write(&self, buffer: &mut Vec<u8>) {
-                match self {
-                    #write_variants
-                }
-            }
-            fn get_type_id(&self) -> TypeId {
-                match self {
-                    #get_type_id_variants
-                }
-            }
+            #write_method
+            #get_type_id_method
         }
         #conversion_methods
     };
@@ -296,8 +288,8 @@ fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 }
 
-fn get_write_variants(type_name: &Ident, data: &Data) -> TokenStream {
-    match *data {
+fn get_write_method(type_name: &Ident, data: &Data) -> TokenStream {
+    let variants = match *data {
         Data::Enum(ref data) => {
             let mut output = quote! {};
             for variant in data.variants.iter() {
@@ -316,11 +308,19 @@ fn get_write_variants(type_name: &Ident, data: &Data) -> TokenStream {
             output
         }
         _ => unimplemented!(),
-    }
+    };
+
+    return quote! {
+        fn write(&self, buffer: &mut Vec<u8>) {
+            match self {
+                #variants
+            }
+        }
+    };
 }
 
-fn get_type_id_variants(type_name: &Ident, data: &Data) -> TokenStream {
-    match *data {
+fn get_type_id_method(type_name: &Ident, data: &Data) -> TokenStream {
+    let variants = match *data {
         Data::Enum(ref data) => {
             let mut output = quote! {};
             for variant in data.variants.iter() {
@@ -339,5 +339,13 @@ fn get_type_id_variants(type_name: &Ident, data: &Data) -> TokenStream {
             output
         }
         _ => unimplemented!(),
-    }
+    };
+
+    return quote! {
+        fn get_type_id(&self) -> TypeId {
+            match self {
+                #variants
+            }
+        }
+    };
 }
