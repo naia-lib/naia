@@ -1,6 +1,6 @@
 use byteorder::WriteBytesExt;
 
-use naia_shared::{StateType, State, EventPacketWriter, ManagerType, Manifest};
+use naia_shared::{ProtocolType, State, EventPacketWriter, ManagerType, Manifest};
 
 /// Handles writing of Event & State data into an outgoing packet
 pub struct ServerPacketWriter {
@@ -55,7 +55,7 @@ impl ServerPacketWriter {
 
     /// Writes an Event into the Writer's internal buffer, which will eventually
     /// be put into the outgoing packet
-    pub fn write_event<T: StateType>(
+    pub fn write_event<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,
         event: &Box<dyn State<T>>,

@@ -3,13 +3,13 @@ use std::collections::{HashSet, HashMap, VecDeque, hash_map::Keys};
 
 use log::warn;
 
-use naia_shared::{StateType, LocalObjectKey, Manifest, PacketReader, DiffMask,
+use naia_shared::{ProtocolType, LocalObjectKey, Manifest, PacketReader, DiffMask,
                   LocalEntityKey, StateMessageType, NaiaKey, LocalComponentKey, PawnKey};
 
 use super::{client_state_message::ClientStateMessage, dual_command_receiver::DualCommandReceiver};
 
 #[derive(Debug)]
-pub struct ClientStateManager<T: StateType> {
+pub struct ClientStateManager<T: ProtocolType> {
     local_state_store:                  HashMap<LocalObjectKey, T>,
     queued_incoming_messages:           VecDeque<ClientStateMessage<T>>,
     pawn_store:                         HashMap<LocalObjectKey, T>,
@@ -18,7 +18,7 @@ pub struct ClientStateManager<T: StateType> {
     component_entity_map:               HashMap<LocalComponentKey, LocalEntityKey>,
 }
 
-impl<T: StateType> ClientStateManager<T> {
+impl<T: ProtocolType> ClientStateManager<T> {
     pub fn new() -> Self {
         ClientStateManager {
             queued_incoming_messages:           VecDeque::new(),

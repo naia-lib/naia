@@ -3,23 +3,23 @@ use std::{
     fmt::{Debug, Formatter, Result},
 };
 
-use super::{state_mutator::StateMutator, state_type::StateType, diff_mask::DiffMask};
+use super::{state_mutator::StateMutator, protocol_type::ProtocolType, diff_mask::DiffMask};
 
 use crate::{PacketReader, Ref};
 
 /// An State is a container of Properties that can be scoped, tracked, and
 /// synced, with a remote host
-pub trait State<T: StateType>: EventClone<T> {
+pub trait State<T: ProtocolType>: EventClone<T> {
     /// Whether the Event is guaranteed for eventual delivery to the remote
     /// host.
     fn is_guaranteed(&self) -> bool;
     /// Gets the number of bytes of the State's State Mask
     fn get_diff_mask_size(&self) -> u8;
-    /// Gets a copy of the State, wrapped in an StateType enum (which is the
+    /// Gets a copy of the State, wrapped in an ProtocolType enum (which is the
     /// common protocol between the server/host)
     fn get_typed_copy(&self) -> T;
     /// Gets the TypeId of the State's implementation, used to map to a
-    /// registered StateType
+    /// registered ProtocolType
     fn get_type_id(&self) -> TypeId;
     /// Writes data into an outgoing byte stream, sufficient to completely
     /// recreate the State on the client
@@ -47,38 +47,38 @@ pub trait State<T: StateType>: EventClone<T> {
 //TODO: do we really need another trait here?
 /// Handles equality of States.. can't just derive PartialEq because we want
 /// to only compare Properties
-pub trait StateEq<T: StateType, Impl = Self>: State<T> {
+pub trait StateEq<T: ProtocolType, Impl = Self>: State<T> {
     /// Compare properties in another State
     fn equals(&self, other: &Impl) -> bool;
     /// Sets the current State to the state of another State of the same type
     fn mirror(&mut self, other: &Impl);
 }
 
-impl<T: StateType> Debug for dyn State<T> {
+impl<T: ProtocolType> Debug for dyn State<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str("State")
     }
 }
 
 /// A Boxed Event must be able to clone itself
-pub trait EventClone<T: StateType> {
+pub trait EventClone<T: ProtocolType> {
     /// Clone the Boxed Event
     fn clone_box(&self) -> Box<dyn State<T>>;
 }
 
-impl<Z: StateType, T: 'static + State<Z> + Clone> EventClone<Z> for T {
+impl<Z: ProtocolType, T: 'static + State<Z> + Clone> EventClone<Z> for T {
     fn clone_box(&self) -> Box<dyn State<Z>> {
         Box::new(self.clone())
     }
 }
 
-impl<T: StateType> Clone for Box<dyn State<T>> {
+impl<T: ProtocolType> Clone for Box<dyn State<T>> {
     fn clone(&self) -> Box<dyn State<T>> {
         EventClone::clone_box(self.as_ref())
     }
 }
 
-//impl<T: StateType> Debug for Box<dyn State<T>> {
+//impl<T: ProtocolType> Debug for Box<dyn State<T>> {
 //    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
 //        f.write_str("Boxed Event")
 //    }

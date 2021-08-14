@@ -1,9 +1,9 @@
-use naia_shared::{LocalObjectKey, LocalEntityKey, LocalComponentKey, StateType};
+use naia_shared::{LocalObjectKey, LocalEntityKey, LocalComponentKey, ProtocolType};
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
 #[derive(Debug)]
-pub enum ClientEvent<T: StateType> {
+pub enum ClientEvent<T: ProtocolType> {
     /// Occurs when the Client has successfully established a connection with
     /// the Server
     Connection,

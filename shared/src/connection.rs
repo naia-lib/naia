@@ -4,7 +4,7 @@ use crate::{wrapping_diff, Timer, EventManager};
 
 use super::{
     ack_manager::AckManager,
-    state::{state_notifiable::StateNotifiable, state_type::StateType, state::State},
+    state::{state_notifiable::StateNotifiable, protocol_type::ProtocolType, state::State},
     connection_config::ConnectionConfig,
     manifest::Manifest,
     packet_type::PacketType,
@@ -16,7 +16,7 @@ use super::{
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
 #[derive(Debug)]
-pub struct Connection<T: StateType> {
+pub struct Connection<T: ProtocolType> {
     address: SocketAddr,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
@@ -25,7 +25,7 @@ pub struct Connection<T: StateType> {
     last_received_tick: u16,
 }
 
-impl<T: StateType> Connection<T> {
+impl<T: ProtocolType> Connection<T> {
     /// Create a new Connection, given the appropriate underlying managers
     pub fn new(address: SocketAddr, config: &ConnectionConfig) -> Self {
         return Connection {

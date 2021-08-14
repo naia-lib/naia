@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use crate::{
-    state::{state_type::StateType, state::State},
+    state::{protocol_type::ProtocolType, state::State},
     manager_type::ManagerType,
     manifest::Manifest,
     standard_header::StandardHeader,
@@ -50,7 +50,7 @@ impl EventPacketWriter {
 
     /// Writes an Event into the Writer's internal buffer, which will eventually
     /// be put into the outgoing packet
-    pub fn write_event<T: StateType>(
+    pub fn write_event<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,
         event: &Box<dyn State<T>>,

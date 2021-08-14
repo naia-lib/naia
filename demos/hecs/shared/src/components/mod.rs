@@ -1,5 +1,5 @@
 
-use naia_derive::StateType;
+use naia_derive::ProtocolType;
 use naia_shared::Ref;
 
 mod position;
@@ -11,7 +11,7 @@ pub use name::Name;
 mod marker;
 pub use marker::Marker;
 
-#[derive(StateType, Clone)]
+#[derive(ProtocolType, Clone)]
 pub enum Components {
     Position(Ref<Position>),
     Name(Ref<Name>),

@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, StateType, EventPacketWriter, ManagerType,
+    wrapping_diff, ProtocolType, EventPacketWriter, ManagerType,
     Manifest, MTU_SIZE, PawnKey, State
 };
 
@@ -57,7 +57,7 @@ impl ClientPacketWriter {
 
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_command<T: StateType>(
+    pub fn write_command<T: ProtocolType>(
         &mut self,
         host_tick: u16,
         manifest: &Manifest<T>,
@@ -136,7 +136,7 @@ impl ClientPacketWriter {
 
     /// Writes an Event into the Writer's internal buffer, which will eventually
     /// be put into the outgoing packet
-    pub fn write_event<T: StateType>(
+    pub fn write_event<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,
         event: &Box<dyn State<T>>,

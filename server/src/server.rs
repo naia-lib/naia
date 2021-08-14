@@ -15,7 +15,7 @@ use naia_server_socket::{
     MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
 };
 pub use naia_shared::{
-    wrapping_diff, State, StateMutator, Connection, ConnectionConfig, StateType,
+    wrapping_diff, State, StateMutator, Connection, ConnectionConfig, ProtocolType,
     HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType, Ref, SharedConfig,
     Timer, Timestamp, LocalObjectKey, StandardHeader, KeyGenerator, EntityKey
 };
@@ -40,7 +40,7 @@ use super::{
 /// A server that uses either UDP or WebRTC communication to send/receive events
 /// to/from connected clients, and syncs registered states to clients to whom
 /// those states are in-scope
-pub struct Server<T: StateType> {
+pub struct Server<T: ProtocolType> {
     connection_config: ConnectionConfig,
     manifest: Manifest<T>,
     socket: Box<dyn ServerSocketTrait>,
@@ -65,7 +65,7 @@ pub struct Server<T: StateType> {
     component_entity_map: HashMap<ComponentKey, EntityKey>,
 }
 
-impl<U: StateType> Server<U> {
+impl<U: ProtocolType> Server<U> {
     /// Create a new Server, given an address to listen at, an Event/State
     /// manifest, and an optional Config
     pub async fn new(

@@ -1,14 +1,14 @@
 use std::{collections::HashMap, rc::Rc};
 
-use naia_shared::{State, EventClone, StateType, PawnKey};
+use naia_shared::{State, EventClone, ProtocolType, PawnKey};
 
 /// Handles outgoing Commands
 #[derive(Debug)]
-pub struct CommandSender<T: StateType> {
+pub struct CommandSender<T: ProtocolType> {
     queued_outgoing_command: HashMap<PawnKey, Rc<Box<dyn State<T>>>>,
 }
 
-impl<T: StateType> CommandSender<T> {
+impl<T: ProtocolType> CommandSender<T> {
     /// Creates a new CommandSender
     pub fn new() -> Self {
         CommandSender {

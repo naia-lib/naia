@@ -5,7 +5,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 
 pub use naia_shared::{
-    State, StateType, ConnectionConfig, HostTickManager, Instant, LocalObjectKey,
+    State, ProtocolType, ConnectionConfig, HostTickManager, Instant, LocalObjectKey,
     ManagerType, Manifest, PacketReader, PacketType, SequenceIterator, SharedConfig,
     StandardHeader, Timer, Timestamp, PawnKey, LocalComponentKey, LocalEntityKey
 };
@@ -21,7 +21,7 @@ use super::{
 /// Client can send/receive events to/from a server, and has a pool of in-scope
 /// states that are synced with the server
 #[derive(Debug)]
-pub struct Client<T: StateType> {
+pub struct Client<T: ProtocolType> {
     manifest: Manifest<T>,
     server_address: SocketAddr,
     connection_config: ConnectionConfig,
@@ -36,7 +36,7 @@ pub struct Client<T: StateType> {
     tick_manager: ClientTickManager,
 }
 
-impl<T: StateType> Client<T> {
+impl<T: ProtocolType> Client<T> {
     /// Create a new client, given the server's address, a shared manifest, an
     /// optional Config, and an optional Authentication event
     pub fn new(
