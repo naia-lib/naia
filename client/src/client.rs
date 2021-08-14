@@ -161,13 +161,13 @@ impl<T: StateType> Client<T> {
                         PawnKey::State(object_key) => {
                             return Some(Ok(ClientEvent::ReplayCommand(
                                 object_key,
-                                command.as_ref().state_get_typed_copy(),
+                                command.as_ref().get_typed_copy(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(ClientEvent::ReplayCommandEntity(
                                 entity_key,
-                                command.as_ref().state_get_typed_copy(),
+                                command.as_ref().get_typed_copy(),
                             )));
                         }
                     }
@@ -178,13 +178,13 @@ impl<T: StateType> Client<T> {
                         PawnKey::State(object_key) => {
                             return Some(Ok(ClientEvent::NewCommand(
                                 object_key,
-                                command.as_ref().state_get_typed_copy(),
+                                command.as_ref().get_typed_copy(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(ClientEvent::NewCommandEntity(
                                 entity_key,
-                                command.as_ref().state_get_typed_copy(),
+                                command.as_ref().get_typed_copy(),
                             )));
                         }
                     }

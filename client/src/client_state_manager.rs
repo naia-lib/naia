@@ -86,7 +86,7 @@ impl<T: StateType> ClientStateManager<T> {
                         // State is not a Pawn
                         let diff_mask: DiffMask = DiffMask::read(reader);
 
-                        state_ref.state_read_partial(&diff_mask, reader, packet_index);
+                        state_ref.read_partial(&diff_mask, reader, packet_index);
 
                         if let Some(entity_key) = self.component_entity_map.get(&object_key) {
                             // State is a Component
@@ -115,7 +115,7 @@ impl<T: StateType> ClientStateManager<T> {
 
                     if let Some(state_ref) = self.local_state_store.get_mut(&object_key) {
                         self.pawn_store
-                            .insert(object_key, state_ref.state_inner_ref().borrow().state_get_typed_copy());
+                            .insert(object_key, state_ref.state_inner_ref().borrow().get_typed_copy());
 
                         let pawn_key = PawnKey::State(object_key);
                         command_receiver.pawn_init(&pawn_key);
@@ -141,7 +141,7 @@ impl<T: StateType> ClientStateManager<T> {
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
                     if let Some(state_ref) = self.local_state_store.get_mut(&object_key) {
-                        state_ref.state_read_full(reader, packet_index);
+                        state_ref.read_full(reader, packet_index);
 
                         let pawn_key = PawnKey::State(object_key);
 
@@ -325,7 +325,7 @@ impl<T: StateType> ClientStateManager<T> {
     pub fn pawn_reset(&mut self, key: &LocalObjectKey) {
         if let Some(state_ref) = self.local_state_store.get(key) {
             if let Some(pawn_ref) = self.pawn_store.get_mut(key) {
-                pawn_ref.state_mirror(state_ref);
+                pawn_ref.mirror(state_ref);
             }
         }
         self.queued_incoming_messages

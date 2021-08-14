@@ -12,7 +12,7 @@ pub trait StateBuilder<T: StateType> {
     /// Create a new State instance
     fn state_build(&self, reader: &mut PacketReader) -> T;
     /// Gets the TypeId of the State the builder is able to build
-    fn state_get_type_id(&self) -> TypeId;
+    fn get_type_id(&self) -> TypeId;
 }
 
 impl<T: StateType> Debug for Box<dyn StateBuilder<T>> {

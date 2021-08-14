@@ -29,7 +29,7 @@ impl<T: StateType> Manifest<T> {
     /// Register an StateBuilder to handle the creation of State instances
     pub fn register_state(&mut self, state_builder: Box<dyn StateBuilder<T>>) {
         let new_naia_id = self.state_naia_id_count;
-        let type_id = state_builder.state_get_type_id();
+        let type_id = state_builder.get_type_id();
         self.state_type_map.insert(type_id, new_naia_id);
         self.state_builder_map.insert(new_naia_id, state_builder);
         self.state_naia_id_count += 1;

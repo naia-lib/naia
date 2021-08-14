@@ -46,7 +46,7 @@ impl<T: StateType> CommandSender<T> {
 
     /// Queues an Command to be transmitted to the remote host
     pub fn queue_command(&mut self, pawn_key: &PawnKey, command: &impl State<T>) {
-        let cloned_command = Rc::new(EventClone::event_clone_box(command));
+        let cloned_command = Rc::new(EventClone::clone_box(command));
         self.queued_outgoing_command
             .insert(*pawn_key, cloned_command);
     }

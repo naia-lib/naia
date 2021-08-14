@@ -476,10 +476,10 @@ impl<T: StateType> ServerStateManager<T> {
             ServerStateMessage::CreateState(_, local_key, state) => {
                 //write state payload
                 let mut state_payload_bytes = Vec::<u8>::new();
-                state.borrow().state_write(&mut state_payload_bytes);
+                state.borrow().write(&mut state_payload_bytes);
 
                 //Write state "header"
-                let type_id = state.borrow().state_get_type_id();
+                let type_id = state.borrow().get_type_id();
                 let naia_id = manifest.get_state_naia_id(&type_id); // get naia id
                 state_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                 state_total_bytes
@@ -497,7 +497,7 @@ impl<T: StateType> ServerStateManager<T> {
                 let mut state_payload_bytes = Vec::<u8>::new();
                 state
                     .borrow()
-                    .state_write_partial(&diff_mask.borrow(), &mut state_payload_bytes);
+                    .write_partial(&diff_mask.borrow(), &mut state_payload_bytes);
 
                 //Write state "header"
                 state_total_bytes
@@ -519,7 +519,7 @@ impl<T: StateType> ServerStateManager<T> {
             ServerStateMessage::UpdatePawn(_, local_key, _, state) => {
                 //write state payload
                 let mut state_payload_bytes = Vec::<u8>::new();
-                state.borrow().state_write(&mut state_payload_bytes);
+                state.borrow().write(&mut state_payload_bytes);
 
                 //Write state "header"
                 state_total_bytes
@@ -546,10 +546,10 @@ impl<T: StateType> ServerStateManager<T> {
                     for (_, local_component_key, component_ref) in component_list {
                         //write component payload
                         let mut component_payload_bytes = Vec::<u8>::new();
-                        component_ref.borrow().state_write(&mut component_payload_bytes);
+                        component_ref.borrow().write(&mut component_payload_bytes);
 
                         //Write component "header"
-                        let type_id = component_ref.borrow().state_get_type_id();
+                        let type_id = component_ref.borrow().get_type_id();
                         let naia_id = manifest.get_state_naia_id(&type_id); // get naia id
                         state_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                         state_total_bytes
@@ -581,13 +581,13 @@ impl<T: StateType> ServerStateManager<T> {
             ServerStateMessage::AddComponent(local_entity_key, _, local_component_key, component) => {
                 //write component payload
                 let mut component_payload_bytes = Vec::<u8>::new();
-                component.borrow().state_write(&mut component_payload_bytes);
+                component.borrow().write(&mut component_payload_bytes);
 
                 //Write component "header"
                 state_total_bytes
                     .write_u16::<BigEndian>(local_entity_key.to_u16())
                     .unwrap(); //write local entity key
-                let type_id = component.borrow().state_get_type_id();
+                let type_id = component.borrow().get_type_id();
                 let naia_id = manifest.get_state_naia_id(&type_id); // get naia id
                 state_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                 state_total_bytes
@@ -623,7 +623,7 @@ impl<T: StateType> ServerStateManager<T> {
             self.local_object_store.insert(*key, state.clone());
             let local_key: LocalObjectKey = self.object_key_generator.generate();
             self.local_to_global_object_key_map.insert(local_key, *key);
-            let diff_mask_size = state.borrow().state_get_diff_mask_size();
+            let diff_mask_size = state.borrow().get_diff_mask_size();
             let object_record = ObjectRecord::new(local_key, diff_mask_size, status);
             self.mut_handler.borrow_mut().register_mask(
                 &self.address,
