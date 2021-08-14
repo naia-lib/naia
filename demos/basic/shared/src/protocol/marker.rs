@@ -1,9 +1,9 @@
-use naia_derive::State;
-use naia_shared::{State, Property};
+use naia_derive::Replicate;
+use naia_shared::{Replicate, Property};
 
 use super::Protocol;
 
-#[derive(State, Clone)]
+#[derive(Replicate, Clone)]
 pub struct Marker {
     pub name: Property<String>,
 }

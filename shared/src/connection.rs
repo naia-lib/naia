@@ -4,7 +4,7 @@ use crate::{wrapping_diff, Timer, EventManager};
 
 use super::{
     ack_manager::AckManager,
-    state::{state_notifiable::StateNotifiable, protocol_type::ProtocolType, state::State},
+    replicate::{replicate_notifiable::ReplicateNotifiable, protocol_type::ProtocolType, replicate::Replicate},
     connection_config::ConnectionConfig,
     manifest::Manifest,
     packet_type::PacketType,
@@ -67,13 +67,13 @@ impl<T: ProtocolType> Connection<T> {
     pub fn process_incoming_header(
         &mut self,
         header: &StandardHeader,
-        state_notifiable: &mut Option<&mut dyn StateNotifiable>,
+        replicate_notifiable: &mut Option<&mut dyn ReplicateNotifiable>,
     ) {
         if wrapping_diff(self.last_received_tick, header.host_tick()) > 0 {
             self.last_received_tick = header.host_tick();
         }
         self.ack_manager
-            .process_incoming(&header, &mut self.event_manager, state_notifiable);
+            .process_incoming(&header, &mut self.event_manager, replicate_notifiable);
     }
 
     /// Given a packet payload, start tracking the packet via it's index, attach
@@ -120,7 +120,7 @@ impl<T: ProtocolType> Connection<T> {
     }
 
     /// Queue up an event to be sent to the remote host
-    pub fn queue_event(&mut self, event: &impl State<T>, guaranteed_delivery: bool) {
+    pub fn queue_event(&mut self, event: &impl Replicate<T>, guaranteed_delivery: bool) {
         return self.event_manager.queue_outgoing_event(event, guaranteed_delivery);
     }
 
@@ -130,13 +130,13 @@ impl<T: ProtocolType> Connection<T> {
     }
 
     /// Pop the next outgoing event from the queue
-    pub fn pop_outgoing_event(&mut self, next_packet_index: u16) -> Option<Rc<Box<dyn State<T>>>> {
+    pub fn pop_outgoing_event(&mut self, next_packet_index: u16) -> Option<Rc<Box<dyn Replicate<T>>>> {
         return self.event_manager.pop_outgoing_event(next_packet_index);
     }
 
     /// If for some reason the next outgoing event could not be written into a
     /// message and sent, place it back into the front of the queue
-    pub fn unpop_outgoing_event(&mut self, next_packet_index: u16, event: &Rc<Box<dyn State<T>>>) {
+    pub fn unpop_outgoing_event(&mut self, next_packet_index: u16, event: &Rc<Box<dyn Replicate<T>>>) {
         return self
             .event_manager
             .unpop_outgoing_event(next_packet_index, event);

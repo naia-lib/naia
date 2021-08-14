@@ -4,7 +4,7 @@ use log::{info, warn};
 
 use hecs::{Entity as HecsEntityKey, World, EntityBuilder as HecsEntityBuilder};
 
-use naia_client::{ClientConfig, ClientEvent, Client, NaiaKey, LocalEntityKey as NaiaEntityKey, Ref, State};
+use naia_client::{ClientConfig, ClientEvent, Client, NaiaKey, LocalEntityKey as NaiaEntityKey, Ref, Replicate};
 
 use naia_demo_basic_shared::{
     get_shared_config, manifest_load,
@@ -165,7 +165,7 @@ impl App {
         }
     }
 
-    fn remove_component<T: 'static + State<Components>>(&mut self, hecs_entity_key: &HecsEntityKey, _component_ref: &Ref<T>) {
+    fn remove_component<T: 'static + Replicate<Components>>(&mut self, hecs_entity_key: &HecsEntityKey, _component_ref: &Ref<T>) {
         self.world.remove_one::<Ref<T>>(*hecs_entity_key)
             .expect("error removing component");
     }

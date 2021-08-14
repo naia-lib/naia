@@ -1,4 +1,4 @@
-/// The key that represents an State in the Client's scope, that is being
+/// The key that represents an Replicate in the Client's scope, that is being
 /// synced to the Client
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct LocalObjectKey(u16);
@@ -58,8 +58,8 @@ impl NaiaKey for LocalEntityKey {
 /// Pawn Key
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum PawnKey {
-    /// State
-    State(LocalObjectKey),
+    /// Replicate
+    Replicate(LocalObjectKey),
     /// Entity
     Entity(LocalEntityKey),
 }
@@ -68,7 +68,7 @@ impl PawnKey {
     /// Convert to u16
     pub fn to_u16(&self) -> u16 {
         match self {
-            PawnKey::State(key) => key.to_u16(),
+            PawnKey::Replicate(key) => key.to_u16(),
             PawnKey::Entity(key) => key.to_u16(),
         }
     }

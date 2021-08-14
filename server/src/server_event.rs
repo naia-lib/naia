@@ -1,7 +1,7 @@
 use naia_shared::EntityKey;
 
 use super::{
-    state::object_key::object_key::ObjectKey,
+    replicate::object_key::object_key::ObjectKey,
     user::{user_key::UserKey, User},
 };
 
@@ -17,7 +17,7 @@ pub enum ServerEvent<T> {
     /// An Event emitted to the Server from a Client
     Event(UserKey, T),
     /// A Tick Event, the duration between Tick events is defined in the Config
-    /// state passed to the Server on initialization
+    /// replicate passed to the Server on initialization
     Tick,
     /// An Command emitted to the Server from a Client
     Command(UserKey, ObjectKey, T),

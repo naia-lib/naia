@@ -7,7 +7,7 @@ use std::{
 
 use slotmap::SparseSecondaryMap;
 
-use naia_shared::{State, StateNotifiable, ProtocolType, KeyGenerator, LocalObjectKey, Ref, DiffMask, EntityKey, LocalEntityKey};
+use naia_shared::{Replicate, ReplicateNotifiable, ProtocolType, KeyGenerator, LocalObjectKey, Ref, DiffMask, EntityKey, LocalEntityKey};
 
 use super::{
     object_key::{object_key::ObjectKey, ComponentKey},
@@ -15,7 +15,7 @@ use super::{
     locality_status::LocalityStatus,
     entity_record::EntityRecord,
     mut_handler::MutHandler,
-    server_state_message::ServerStateMessage,
+    server_replicate_message::ServerReplicateMessage,
 };
 
 use byteorder::{BigEndian, WriteBytesExt};
@@ -24,14 +24,14 @@ use naia_shared::{Manifest, MTU_SIZE, NaiaKey};
 
 use crate::server_packet_writer::ServerPacketWriter;
 
-/// Manages States/Entities for a given Client connection and keeps them in sync on the
+/// Manages Replicates/Entities for a given Client connection and keeps them in sync on the
 /// Client
 #[derive(Debug)]
-pub struct ServerStateManager<T: ProtocolType> {
+pub struct ServerReplicateManager<T: ProtocolType> {
     address: SocketAddr,
     // objects
     object_key_generator: KeyGenerator<LocalObjectKey>,
-    local_object_store: SparseSecondaryMap<ObjectKey, Ref<dyn State<T>>>,
+    local_object_store: SparseSecondaryMap<ObjectKey, Ref<dyn Replicate<T>>>,
     local_to_global_object_key_map: HashMap<LocalObjectKey, ObjectKey>,
     object_records: SparseSecondaryMap<ObjectKey, ObjectRecord>,
     pawn_object_store: HashSet<ObjectKey>,
@@ -43,8 +43,8 @@ pub struct ServerStateManager<T: ProtocolType> {
     pawn_entity_store: HashSet<EntityKey>,
     delayed_entity_deletions: HashSet<EntityKey>,
     // messages / updates / ect
-    queued_messages: VecDeque<ServerStateMessage<T>>,
-    sent_messages: HashMap<u16, Vec<ServerStateMessage<T>>>,
+    queued_messages: VecDeque<ServerReplicateMessage<T>>,
+    sent_messages: HashMap<u16, Vec<ServerReplicateMessage<T>>>,
     sent_updates: HashMap<u16, HashMap<ObjectKey, Ref<DiffMask>>>,
     last_update_packet_index: u16,
     last_last_update_packet_index: u16,
@@ -53,13 +53,13 @@ pub struct ServerStateManager<T: ProtocolType> {
     last_popped_diff_mask_list: Option<Vec<(ObjectKey, DiffMask)>>,
 }
 
-impl<T: ProtocolType> ServerStateManager<T> {
-    /// Create a new ServerStateManager, given the client's address and a
+impl<T: ProtocolType> ServerReplicateManager<T> {
+    /// Create a new ServerReplicateManager, given the client's address and a
     /// reference to a MutHandler associated with the Client
     pub fn new(address: SocketAddr, mut_handler: &Ref<MutHandler>) -> Self {
-        ServerStateManager {
+        ServerReplicateManager {
             address,
-            // states
+            // replicates
             object_key_generator: KeyGenerator::new(),
             local_object_store: SparseSecondaryMap::new(),
             local_to_global_object_key_map: HashMap::new(),
@@ -88,20 +88,20 @@ impl<T: ProtocolType> ServerStateManager<T> {
         return self.queued_messages.len() != 0;
     }
 
-    pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<ServerStateMessage<T>> {
+    pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<ServerReplicateMessage<T>> {
         let queued_message_opt = self.queued_messages.pop_front();
         if queued_message_opt.is_none() {
             return None;
         }
         let mut message = queued_message_opt.unwrap();
 
-        let replacement_message: Option<ServerStateMessage<T>> = {
+        let replacement_message: Option<ServerReplicateMessage<T>> = {
             match &message {
-                ServerStateMessage::CreateEntity(global_entity_key, local_entity_key, _) => {
+                ServerReplicateMessage::CreateEntity(global_entity_key, local_entity_key, _) => {
                     let mut component_list = Vec::new();
 
                     let entity_record = self.local_entity_store.get(global_entity_key)
-                        .expect("trying to pop an state message for an entity which has not been initialized correctly");
+                        .expect("trying to pop an replicate message for an entity which has not been initialized correctly");
 
                     let components: &HashSet<ComponentKey> = &entity_record.components_ref.borrow();
                     for global_component_key in components {
@@ -112,7 +112,7 @@ impl<T: ProtocolType> ServerStateManager<T> {
                         component_list.push((*global_component_key, component_record.local_key, component_ref.clone()));
                     }
 
-                    Some(ServerStateMessage::CreateEntity(*global_entity_key, *local_entity_key, Some(component_list)))
+                    Some(ServerReplicateMessage::CreateEntity(*global_entity_key, *local_entity_key, Some(component_list)))
                 }
                 _ => None
             }
@@ -130,15 +130,15 @@ impl<T: ProtocolType> ServerStateManager<T> {
             sent_messages_list.push(message.clone());
         }
 
-        //clear state mask of state if need be
+        //clear replicate mask of replicate if need be
         match &message {
-            ServerStateMessage::CreateState(global_key, _, _) => {
-                self.pop_create_state_diff_mask(global_key);
+            ServerReplicateMessage::CreateReplicate(global_key, _, _) => {
+                self.pop_create_replicate_diff_mask(global_key);
             }
-            ServerStateMessage::AddComponent(_, global_key, _, _) => {
-                self.pop_create_state_diff_mask(global_key);
+            ServerReplicateMessage::AddComponent(_, global_key, _, _) => {
+                self.pop_create_replicate_diff_mask(global_key);
             }
-            ServerStateMessage::CreateEntity(_, _, components_list_opt) => {
+            ServerReplicateMessage::CreateEntity(_, _, components_list_opt) => {
                 if let Some(components_list) = components_list_opt {
                     let mut diff_mask_list: Vec<(ComponentKey, DiffMask)> = Vec::new();
                     for (global_component_key, _, _) in components_list {
@@ -147,16 +147,16 @@ impl<T: ProtocolType> ServerStateManager<T> {
                         }
                         self.mut_handler
                             .borrow_mut()
-                            .clear_state(&self.address, global_component_key);
+                            .clear_replicate(&self.address, global_component_key);
                     }
                     self.last_popped_diff_mask_list = Some(diff_mask_list);
                 }
             }
-            ServerStateMessage::UpdateState(global_key, local_key, diff_mask, state) => {
-                return Some(self.pop_update_state_diff_mask(false, packet_index, global_key, local_key, diff_mask, state));
+            ServerReplicateMessage::UpdateReplicate(global_key, local_key, diff_mask, replicate) => {
+                return Some(self.pop_update_replicate_diff_mask(false, packet_index, global_key, local_key, diff_mask, replicate));
             }
-            ServerStateMessage::UpdatePawn(global_key, local_key, diff_mask, state) => {
-                return Some(self.pop_update_state_diff_mask(true, packet_index, global_key, local_key, diff_mask, state));
+            ServerReplicateMessage::UpdatePawn(global_key, local_key, diff_mask, replicate) => {
+                return Some(self.pop_update_replicate_diff_mask(true, packet_index, global_key, local_key, diff_mask, replicate));
             }
             _ => {}
         }
@@ -164,7 +164,7 @@ impl<T: ProtocolType> ServerStateManager<T> {
         return Some(message);
     }
 
-    pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: &ServerStateMessage<T>) {
+    pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: &ServerReplicateMessage<T>) {
         info!("unpopping");
         if let Some(sent_messages_list) = self.sent_messages.get_mut(&packet_index) {
             sent_messages_list.pop();
@@ -174,16 +174,16 @@ impl<T: ProtocolType> ServerStateManager<T> {
         }
 
         match &message {
-            ServerStateMessage::CreateState(global_key, _, _) => {
-                self.unpop_create_state_diff_mask(global_key);
+            ServerReplicateMessage::CreateReplicate(global_key, _, _) => {
+                self.unpop_create_replicate_diff_mask(global_key);
             }
-            ServerStateMessage::AddComponent(_, global_key, _, _) => {
-                self.unpop_create_state_diff_mask(global_key);
+            ServerReplicateMessage::AddComponent(_, global_key, _, _) => {
+                self.unpop_create_replicate_diff_mask(global_key);
             }
-            ServerStateMessage::CreateEntity(_, _, _) => {
+            ServerReplicateMessage::CreateEntity(_, _, _) => {
                 if let Some(last_popped_diff_mask_list) = &self.last_popped_diff_mask_list {
                     for (global_component_key, last_popped_diff_mask) in last_popped_diff_mask_list {
-                        self.mut_handler.borrow_mut().set_state(
+                        self.mut_handler.borrow_mut().set_replicate(
                             &self.address,
                             global_component_key,
                             &last_popped_diff_mask,
@@ -191,13 +191,13 @@ impl<T: ProtocolType> ServerStateManager<T> {
                     }
                 }
             }
-            ServerStateMessage::UpdateState(global_key, local_key, _, state) => {
-                let cloned_message = self.unpop_update_state_diff_mask(false, packet_index, global_key, local_key, state);
+            ServerReplicateMessage::UpdateReplicate(global_key, local_key, _, replicate) => {
+                let cloned_message = self.unpop_update_replicate_diff_mask(false, packet_index, global_key, local_key, replicate);
                 self.queued_messages.push_front(cloned_message);
                 return;
             }
-            ServerStateMessage::UpdatePawn(global_key, local_key, _, state) => {
-                let cloned_message = self.unpop_update_state_diff_mask(true, packet_index, global_key, local_key, state);
+            ServerReplicateMessage::UpdatePawn(global_key, local_key, _, replicate) => {
+                let cloned_message = self.unpop_update_replicate_diff_mask(true, packet_index, global_key, local_key, replicate);
                 self.queued_messages.push_front(cloned_message);
                 return;
             }
@@ -207,20 +207,20 @@ impl<T: ProtocolType> ServerStateManager<T> {
         self.queued_messages.push_front(message.clone());
     }
 
-    // States
+    // Replicates
 
-    pub fn add_state(&mut self, key: &ObjectKey, state: &Ref<dyn State<T>>) {
-        let local_key = self.state_init(key, state, LocalityStatus::Creating);
+    pub fn add_replicate(&mut self, key: &ObjectKey, replicate: &Ref<dyn Replicate<T>>) {
+        let local_key = self.replicate_init(key, replicate, LocalityStatus::Creating);
 
         self.queued_messages
-            .push_back(ServerStateMessage::CreateState(
+            .push_back(ServerReplicateMessage::CreateReplicate(
                 *key,
                 local_key,
-                state.clone(),
+                replicate.clone(),
             ));
     }
 
-    pub fn remove_state(&mut self, key: &ObjectKey) {
+    pub fn remove_replicate(&mut self, key: &ObjectKey) {
 
         if self.has_pawn(key) {
             self.remove_pawn(key);
@@ -234,14 +234,14 @@ impl<T: ProtocolType> ServerStateManager<T> {
                 }
                 LocalityStatus::Created => {
                     // send deletion message
-                    state_delete(&mut self.queued_messages, object_record, key);
+                    replicate_delete(&mut self.queued_messages, object_record, key);
                 }
                 LocalityStatus::Deleting => {
                     // deletion in progress, do nothing
                 }
             }
         } else {
-            panic!("attempting to remove an state from a connection within which it does not exist");
+            panic!("attempting to remove an replicate from a connection within which it does not exist");
         }
     }
 
@@ -257,11 +257,11 @@ impl<T: ProtocolType> ServerStateManager<T> {
                 self.pawn_object_store.insert(*key);
                 if let Some(object_record) = self.object_records.get_mut(*key) {
                     self.queued_messages
-                        .push_back(ServerStateMessage::AssignPawn(*key, object_record.local_key));
+                        .push_back(ServerReplicateMessage::AssignPawn(*key, object_record.local_key));
                 }
             }
         } else {
-            panic!("user connection does not have local state to make into a pawn!");
+            panic!("user connection does not have local replicate to make into a pawn!");
         }
     }
 
@@ -269,13 +269,13 @@ impl<T: ProtocolType> ServerStateManager<T> {
         if self.pawn_object_store.remove(key) {
             if let Some(object_record) = self.object_records.get_mut(*key) {
                 self.queued_messages
-                    .push_back(ServerStateMessage::UnassignPawn(
+                    .push_back(ServerReplicateMessage::UnassignPawn(
                         *key,
                         object_record.local_key,
                     ));
             }
         } else {
-            panic!("attempt to unassign a pawn state from a connection to which it is not assigned as a pawn in the first place")
+            panic!("attempt to unassign a pawn replicate from a connection to which it is not assigned as a pawn in the first place")
         }
     }
 
@@ -287,11 +287,11 @@ impl<T: ProtocolType> ServerStateManager<T> {
 
     pub fn add_entity(&mut self, global_key: &EntityKey,
                       components_ref: &Ref<HashSet<ComponentKey>>,
-                      component_list: &Vec<(ComponentKey, Ref<dyn State<T>>)>) {
+                      component_list: &Vec<(ComponentKey, Ref<dyn Replicate<T>>)>) {
         if !self.local_entity_store.contains_key(global_key) {
             // first, add components
             for (component_key, component_ref) in component_list {
-                self.state_init(component_key, component_ref, LocalityStatus::Creating);
+                self.replicate_init(component_key, component_ref, LocalityStatus::Creating);
             }
 
             // then, add entity
@@ -300,7 +300,7 @@ impl<T: ProtocolType> ServerStateManager<T> {
             let entity_record = EntityRecord::new(local_key, components_ref);
             self.local_entity_store.insert(*global_key, entity_record);
             self.queued_messages
-                .push_back(ServerStateMessage::CreateEntity(
+                .push_back(ServerReplicateMessage::CreateEntity(
                     *global_key,
                     local_key,
                     None,
@@ -326,7 +326,7 @@ impl<T: ProtocolType> ServerStateManager<T> {
                     // send deletion message
                     entity_delete(&mut self.queued_messages, entity_record, key);
 
-                    // Entity deletion IS Component deletion, so update those state records accordingly
+                    // Entity deletion IS Component deletion, so update those replicate records accordingly
                     let component_set: &HashSet<ComponentKey> = &entity_record.components_ref.borrow();
                     for component_key in component_set {
                         self.pawn_object_store.remove(component_key);
@@ -357,7 +357,7 @@ impl<T: ProtocolType> ServerStateManager<T> {
                     .unwrap()
                     .local_key;
                 self.queued_messages
-                    .push_back(ServerStateMessage::AssignPawnEntity(*key, local_key));
+                    .push_back(ServerReplicateMessage::AssignPawnEntity(*key, local_key));
             } else {
                 warn!("attempting to assign a pawn entity twice");
             }
@@ -374,7 +374,7 @@ impl<T: ProtocolType> ServerStateManager<T> {
                 .local_key;
 
             self.queued_messages
-                .push_back(ServerStateMessage::UnassignPawnEntity(
+                .push_back(ServerReplicateMessage::UnassignPawnEntity(
                     *key,
                     local_key,
                 ));
@@ -390,12 +390,12 @@ impl<T: ProtocolType> ServerStateManager<T> {
     // Components
 
     // called when the entity already exists in this connection
-    pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn State<T>>) {
+    pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Replicate<T>>) {
         if !self.local_entity_store.contains_key(entity_key) {
             panic!("attempting to add component to entity that does not yet exist for this connection");
         }
 
-        let local_component_key = self.state_init(component_key, component_ref, LocalityStatus::Creating);
+        let local_component_key = self.replicate_init(component_key, component_ref, LocalityStatus::Creating);
 
         let entity_record = self.local_entity_store.get(entity_key).unwrap();
 
@@ -406,7 +406,7 @@ impl<T: ProtocolType> ServerStateManager<T> {
             LocalityStatus::Created => {
                 // send add component message
                 self.queued_messages
-                    .push_back(ServerStateMessage::AddComponent(
+                    .push_back(ServerReplicateMessage::AddComponent(
                         entity_record.local_key,
                         *component_key,
                         local_component_key,
@@ -429,29 +429,29 @@ impl<T: ProtocolType> ServerStateManager<T> {
         return self.local_to_global_entity_key_map.get(&local_key);
     }
 
-    pub fn collect_state_updates(&mut self) {
+    pub fn collect_replicate_updates(&mut self) {
         for (key, record) in self.object_records.iter() {
             if record.status == LocalityStatus::Created
                 && !record.get_diff_mask().borrow().is_clear()
             {
-                if let Some(state_ref) = self.local_object_store.get(key) {
+                if let Some(replicate_ref) = self.local_object_store.get(key) {
                     if self.pawn_object_store.contains(&key) {
                         // handle as a pawn
                         self.queued_messages
-                            .push_back(ServerStateMessage::UpdatePawn(
+                            .push_back(ServerReplicateMessage::UpdatePawn(
                                 key,
                                 record.local_key,
                                 record.get_diff_mask().clone(),
-                                state_ref.clone(),
+                                replicate_ref.clone(),
                             ));
                     } else {
-                        // handle as an state
+                        // handle as an replicate
                         self.queued_messages
-                            .push_back(ServerStateMessage::UpdateState(
+                            .push_back(ServerReplicateMessage::UpdateReplicate(
                                 key,
                                 record.local_key,
                                 record.get_diff_mask().clone(),
-                                state_ref.clone(),
+                                replicate_ref.clone(),
                             ));
                     }
                 }
@@ -459,76 +459,76 @@ impl<T: ProtocolType> ServerStateManager<T> {
         }
     }
 
-    pub fn write_state_message(
+    pub fn write_replicate_message(
         &self,
         packet_writer: &mut ServerPacketWriter,
         manifest: &Manifest<T>,
-        message: &ServerStateMessage<T>,
+        message: &ServerReplicateMessage<T>,
     ) -> bool {
-        let mut state_total_bytes = Vec::<u8>::new();
+        let mut replicate_total_bytes = Vec::<u8>::new();
 
-        //Write state message type
-        state_total_bytes
+        //Write replicate message type
+        replicate_total_bytes
                     .write_u8(message.as_type().to_u8())
-                    .unwrap(); // write state message type
+                    .unwrap(); // write replicate message type
 
         match message {
-            ServerStateMessage::CreateState(_, local_key, state) => {
-                //write state payload
-                let mut state_payload_bytes = Vec::<u8>::new();
-                state.borrow().write(&mut state_payload_bytes);
+            ServerReplicateMessage::CreateReplicate(_, local_key, replicate) => {
+                //write replicate payload
+                let mut replicate_payload_bytes = Vec::<u8>::new();
+                replicate.borrow().write(&mut replicate_payload_bytes);
 
-                //Write state "header"
-                let type_id = state.borrow().get_type_id();
+                //Write replicate "header"
+                let type_id = replicate.borrow().get_type_id();
                 let naia_id = manifest.get_naia_id(&type_id); // get naia id
-                state_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                state_total_bytes
+                replicate_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
+                replicate_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
-                state_total_bytes.append(&mut state_payload_bytes); // write payload
+                replicate_total_bytes.append(&mut replicate_payload_bytes); // write payload
             }
-            ServerStateMessage::DeleteState(_, local_key) => {
-                state_total_bytes
+            ServerReplicateMessage::DeleteReplicate(_, local_key) => {
+                replicate_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            ServerStateMessage::UpdateState(_, local_key, diff_mask, state) => {
-                //write state payload
-                let mut state_payload_bytes = Vec::<u8>::new();
-                state
+            ServerReplicateMessage::UpdateReplicate(_, local_key, diff_mask, replicate) => {
+                //write replicate payload
+                let mut replicate_payload_bytes = Vec::<u8>::new();
+                replicate
                     .borrow()
-                    .write_partial(&diff_mask.borrow(), &mut state_payload_bytes);
+                    .write_partial(&diff_mask.borrow(), &mut replicate_payload_bytes);
 
-                //Write state "header"
-                state_total_bytes
+                //Write replicate "header"
+                replicate_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
-                diff_mask.borrow_mut().write(&mut state_total_bytes); // write state mask
-                state_total_bytes.append(&mut state_payload_bytes); // write payload
+                diff_mask.borrow_mut().write(&mut replicate_total_bytes); // write replicate mask
+                replicate_total_bytes.append(&mut replicate_payload_bytes); // write payload
             }
-            ServerStateMessage::AssignPawn(_, local_key) => {
-                state_total_bytes
-                    .write_u16::<BigEndian>(local_key.to_u16())
-                    .unwrap(); //write local key
-            }
-            ServerStateMessage::UnassignPawn(_, local_key) => {
-                state_total_bytes
+            ServerReplicateMessage::AssignPawn(_, local_key) => {
+                replicate_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            ServerStateMessage::UpdatePawn(_, local_key, _, state) => {
-                //write state payload
-                let mut state_payload_bytes = Vec::<u8>::new();
-                state.borrow().write(&mut state_payload_bytes);
+            ServerReplicateMessage::UnassignPawn(_, local_key) => {
+                replicate_total_bytes
+                    .write_u16::<BigEndian>(local_key.to_u16())
+                    .unwrap(); //write local key
+            }
+            ServerReplicateMessage::UpdatePawn(_, local_key, _, replicate) => {
+                //write replicate payload
+                let mut replicate_payload_bytes = Vec::<u8>::new();
+                replicate.borrow().write(&mut replicate_payload_bytes);
 
-                //Write state "header"
-                state_total_bytes
+                //Write replicate "header"
+                replicate_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
-                state_total_bytes.append(&mut state_payload_bytes); // write payload
+                replicate_total_bytes.append(&mut replicate_payload_bytes); // write payload
             }
-            ServerStateMessage::CreateEntity(_, local_entity_key, component_list_opt) => {
-                state_total_bytes
+            ServerReplicateMessage::CreateEntity(_, local_entity_key, component_list_opt) => {
+                replicate_total_bytes
                     .write_u16::<BigEndian>(local_entity_key.to_u16())
                     .unwrap(); //write local entity key
 
@@ -539,7 +539,7 @@ impl<T: ProtocolType> ServerStateManager<T> {
                     if components_num > 255 {
                         panic!("no entity should have so many components... fix this");
                     }
-                    state_total_bytes
+                    replicate_total_bytes
                         .write_u8(components_num as u8)
                         .unwrap(); //write number of components
 
@@ -551,65 +551,65 @@ impl<T: ProtocolType> ServerStateManager<T> {
                         //Write component "header"
                         let type_id = component_ref.borrow().get_type_id();
                         let naia_id = manifest.get_naia_id(&type_id); // get naia id
-                        state_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                        state_total_bytes
+                        replicate_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
+                        replicate_total_bytes
                             .write_u16::<BigEndian>(local_component_key.to_u16())
                             .unwrap(); //write local key
-                        state_total_bytes.append(&mut component_payload_bytes); // write payload
+                        replicate_total_bytes.append(&mut component_payload_bytes); // write payload
                     }
                 } else {
-                    state_total_bytes
+                    replicate_total_bytes
                         .write_u8(0)
                         .unwrap();
                 }
             }
-            ServerStateMessage::DeleteEntity(_, local_key) => {
-                state_total_bytes
+            ServerReplicateMessage::DeleteEntity(_, local_key) => {
+                replicate_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            ServerStateMessage::AssignPawnEntity(_, local_key) => {
-                state_total_bytes
+            ServerReplicateMessage::AssignPawnEntity(_, local_key) => {
+                replicate_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            ServerStateMessage::UnassignPawnEntity(_, local_key) => {
-                state_total_bytes
+            ServerReplicateMessage::UnassignPawnEntity(_, local_key) => {
+                replicate_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            ServerStateMessage::AddComponent(local_entity_key, _, local_component_key, component) => {
+            ServerReplicateMessage::AddComponent(local_entity_key, _, local_component_key, component) => {
                 //write component payload
                 let mut component_payload_bytes = Vec::<u8>::new();
                 component.borrow().write(&mut component_payload_bytes);
 
                 //Write component "header"
-                state_total_bytes
+                replicate_total_bytes
                     .write_u16::<BigEndian>(local_entity_key.to_u16())
                     .unwrap(); //write local entity key
                 let type_id = component.borrow().get_type_id();
                 let naia_id = manifest.get_naia_id(&type_id); // get naia id
-                state_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                state_total_bytes
+                replicate_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
+                replicate_total_bytes
                     .write_u16::<BigEndian>(local_component_key.to_u16())
                     .unwrap(); //write local component key
-                state_total_bytes.append(&mut component_payload_bytes); // write payload
+                replicate_total_bytes.append(&mut component_payload_bytes); // write payload
             }
         }
 
         let mut hypothetical_next_payload_size =
-            packet_writer.bytes_number() + state_total_bytes.len();
-        if packet_writer.state_message_count == 0 {
+            packet_writer.bytes_number() + replicate_total_bytes.len();
+        if packet_writer.replicate_message_count == 0 {
             hypothetical_next_payload_size += 2;
         }
         if hypothetical_next_payload_size < MTU_SIZE {
-            if packet_writer.state_message_count == 255 {
+            if packet_writer.replicate_message_count == 255 {
                 return false;
             }
-            packet_writer.state_message_count = packet_writer.state_message_count.wrapping_add(1);
+            packet_writer.replicate_message_count = packet_writer.replicate_message_count.wrapping_add(1);
             packet_writer
-                .state_working_bytes
-                .append(&mut state_total_bytes);
+                .replicate_working_bytes
+                .append(&mut replicate_total_bytes);
             return true;
         } else {
             return false;
@@ -618,12 +618,12 @@ impl<T: ProtocolType> ServerStateManager<T> {
 
     // Private methods
 
-    fn state_init(&mut self, key: &ObjectKey, state: &Ref<dyn State<T>>, status: LocalityStatus) -> LocalObjectKey {
+    fn replicate_init(&mut self, key: &ObjectKey, replicate: &Ref<dyn Replicate<T>>, status: LocalityStatus) -> LocalObjectKey {
         if !self.local_object_store.contains_key(*key) {
-            self.local_object_store.insert(*key, state.clone());
+            self.local_object_store.insert(*key, replicate.clone());
             let local_key: LocalObjectKey = self.object_key_generator.generate();
             self.local_to_global_object_key_map.insert(local_key, *key);
-            let diff_mask_size = state.borrow().get_diff_mask_size();
+            let diff_mask_size = replicate.borrow().get_diff_mask_size();
             let object_record = ObjectRecord::new(local_key, diff_mask_size, status);
             self.mut_handler.borrow_mut().register_mask(
                 &self.address,
@@ -633,14 +633,14 @@ impl<T: ProtocolType> ServerStateManager<T> {
             self.object_records.insert(*key, object_record);
             return local_key;
         } else {
-            // Should panic, as this is not dependent on any unreliable transport fstate
-            panic!("attempted to add state twice..");
+            // Should panic, as this is not dependent on any unreliable transport freplicate
+            panic!("attempted to add replicate twice..");
         }
     }
 
-    fn state_cleanup(&mut self, global_object_key: &ObjectKey) {
+    fn replicate_cleanup(&mut self, global_object_key: &ObjectKey) {
         if let Some(object_record) = self.object_records.remove(*global_object_key) {
-            // actually delete the state from local records
+            // actually delete the replicate from local records
             let local_object_key = object_record.local_key;
             self.mut_handler
                 .borrow_mut()
@@ -651,22 +651,22 @@ impl<T: ProtocolType> ServerStateManager<T> {
             self.pawn_object_store.remove(&global_object_key);
         } else {
             // likely due to duplicate delivered deletion messages
-            warn!("attempting to clean up state from connection inside which it is not present");
+            warn!("attempting to clean up replicate from connection inside which it is not present");
         }
     }
 
-    fn pop_create_state_diff_mask(&mut self, global_key: &ObjectKey) {
+    fn pop_create_replicate_diff_mask(&mut self, global_key: &ObjectKey) {
         if let Some(record) = self.object_records.get(*global_key) {
             self.last_popped_diff_mask = Some(record.get_diff_mask().borrow().clone());
         }
         self.mut_handler
             .borrow_mut()
-            .clear_state(&self.address, global_key);
+            .clear_replicate(&self.address, global_key);
     }
 
-    fn unpop_create_state_diff_mask(&mut self, global_key: &ObjectKey) {
+    fn unpop_create_replicate_diff_mask(&mut self, global_key: &ObjectKey) {
         if let Some(last_popped_diff_mask) = &self.last_popped_diff_mask {
-            self.mut_handler.borrow_mut().set_state(
+            self.mut_handler.borrow_mut().set_replicate(
                 &self.address,
                 global_key,
                 &last_popped_diff_mask,
@@ -674,68 +674,68 @@ impl<T: ProtocolType> ServerStateManager<T> {
         }
     }
 
-    fn pop_update_state_diff_mask(&mut self,
+    fn pop_update_replicate_diff_mask(&mut self,
                                    is_pawn: bool,
                                    packet_index: u16,
                                    global_key: &ObjectKey,
                                    local_key: &LocalObjectKey,
                                    diff_mask: &Ref<DiffMask>,
-                                   state: &Ref<dyn State<T>>) -> ServerStateMessage<T> {
+                                   replicate: &Ref<dyn Replicate<T>>) -> ServerReplicateMessage<T> {
         let locked_diff_mask =
-            self.process_state_update(packet_index, global_key, diff_mask);
+            self.process_replicate_update(packet_index, global_key, diff_mask);
         // return new Update message to be written
         if is_pawn {
-            return ServerStateMessage::UpdatePawn(
+            return ServerReplicateMessage::UpdatePawn(
                 *global_key,
                 *local_key,
                 locked_diff_mask,
-                state.clone(),
+                replicate.clone(),
             );
         } else {
-            return ServerStateMessage::UpdateState(
+            return ServerReplicateMessage::UpdateReplicate(
                 *global_key,
                 *local_key,
                 locked_diff_mask,
-                state.clone(),
+                replicate.clone(),
             );
         }
     }
 
-    fn unpop_update_state_diff_mask(&mut self,
+    fn unpop_update_replicate_diff_mask(&mut self,
                                    is_pawn: bool,
                                    packet_index: u16,
                                    global_key: &ObjectKey,
                                    local_key: &LocalObjectKey,
-                                   state: &Ref<dyn State<T>>) -> ServerStateMessage<T> {
-        let original_diff_mask = self.undo_state_update(&packet_index, &global_key);
+                                   replicate: &Ref<dyn Replicate<T>>) -> ServerReplicateMessage<T> {
+        let original_diff_mask = self.undo_replicate_update(&packet_index, &global_key);
         if is_pawn {
-            return ServerStateMessage::UpdatePawn(
+            return ServerReplicateMessage::UpdatePawn(
                 *global_key,
                 *local_key,
                 original_diff_mask,
-                state.clone(),
+                replicate.clone(),
             );
         } else {
-            return ServerStateMessage::UpdateState(
+            return ServerReplicateMessage::UpdateReplicate(
                 *global_key,
                 *local_key,
                 original_diff_mask,
-                state.clone(),
+                replicate.clone(),
             );
         }
     }
 
-    fn process_state_update(
+    fn process_replicate_update(
         &mut self,
         packet_index: u16,
         global_key: &ObjectKey,
         diff_mask: &Ref<DiffMask>,
     ) -> Ref<DiffMask> {
-        // previously the state mask was the CURRENT state mask for the state,
+        // previously the replicate mask was the CURRENT replicate mask for the replicate,
         // we want to lock that in so we know exactly what we're writing
         let locked_diff_mask = Ref::new(diff_mask.borrow().clone());
 
-        // place state mask in a special transmission record - like map
+        // place replicate mask in a special transmission record - like map
         if !self.sent_updates.contains_key(&packet_index) {
             let sent_updates_map: HashMap<ObjectKey, Ref<DiffMask>> = HashMap::new();
             self.sent_updates.insert(packet_index, sent_updates_map);
@@ -747,16 +747,16 @@ impl<T: ProtocolType> ServerStateManager<T> {
             sent_updates_map.insert(*global_key, locked_diff_mask.clone());
         }
 
-        // having copied the state mask for this update, clear the state
+        // having copied the replicate mask for this update, clear the replicate
         self.last_popped_diff_mask = Some(diff_mask.borrow().clone());
         self.mut_handler
             .borrow_mut()
-            .clear_state(&self.address, global_key);
+            .clear_replicate(&self.address, global_key);
 
         locked_diff_mask
     }
 
-    fn undo_state_update(&mut self, packet_index: &u16, global_key: &ObjectKey) -> Ref<DiffMask> {
+    fn undo_replicate_update(&mut self, packet_index: &u16, global_key: &ObjectKey) -> Ref<DiffMask> {
         if let Some(sent_updates_map) = self.sent_updates.get_mut(packet_index) {
             sent_updates_map.remove(global_key);
             if sent_updates_map.len() == 0 {
@@ -766,7 +766,7 @@ impl<T: ProtocolType> ServerStateManager<T> {
 
         self.last_update_packet_index = self.last_last_update_packet_index;
         if let Some(last_popped_diff_mask) = &self.last_popped_diff_mask {
-            self.mut_handler.borrow_mut().set_state(
+            self.mut_handler.borrow_mut().set_replicate(
                 &self.address,
                 global_key,
                 &last_popped_diff_mask,
@@ -781,35 +781,35 @@ impl<T: ProtocolType> ServerStateManager<T> {
     }
 }
 
-impl<T: ProtocolType> StateNotifiable for ServerStateManager<T> {
+impl<T: ProtocolType> ReplicateNotifiable for ServerReplicateManager<T> {
     fn notify_packet_delivered(&mut self, packet_index: u16) {
-        let mut deleted_states: Vec<ObjectKey> = Vec::new();
+        let mut deleted_replicates: Vec<ObjectKey> = Vec::new();
 
         if let Some(delivered_messages_list) = self.sent_messages.remove(&packet_index) {
             for delivered_message in delivered_messages_list.into_iter() {
                 match delivered_message {
-                    ServerStateMessage::CreateState(global_key, _, _) => {
+                    ServerReplicateMessage::CreateReplicate(global_key, _, _) => {
                         let object_record = self.object_records.get_mut(global_key)
-                            .expect("created state does not have an object_record ... initialization error?");
+                            .expect("created replicate does not have an object_record ... initialization error?");
 
                         // do we need to delete this now?
                         if self.delayed_object_deletions.remove(&global_key) {
-                            state_delete(&mut self.queued_messages, object_record, &global_key);
+                            replicate_delete(&mut self.queued_messages, object_record, &global_key);
                         } else {
                             // we do not need to delete just yet
                             object_record.status = LocalityStatus::Created;
                         }
                     }
-                    ServerStateMessage::DeleteState(global_object_key, _) => {
-                        deleted_states.push(global_object_key);
+                    ServerReplicateMessage::DeleteReplicate(global_object_key, _) => {
+                        deleted_replicates.push(global_object_key);
                     }
-                    ServerStateMessage::UpdateState(_, _, _, _)
-                    | ServerStateMessage::UpdatePawn(_, _, _, _) => {
+                    ServerReplicateMessage::UpdateReplicate(_, _, _, _)
+                    | ServerReplicateMessage::UpdatePawn(_, _, _, _) => {
                         self.sent_updates.remove(&packet_index);
                     }
-                    ServerStateMessage::AssignPawn(_, _) => {}
-                    ServerStateMessage::UnassignPawn(_, _) => {}
-                    ServerStateMessage::CreateEntity(global_entity_key, _, component_list_opt) => {
+                    ServerReplicateMessage::AssignPawn(_, _) => {}
+                    ServerReplicateMessage::UnassignPawn(_, _) => {}
+                    ServerReplicateMessage::CreateEntity(global_entity_key, _, component_list_opt) => {
                         let entity_record = self.local_entity_store.get_mut(&global_entity_key)
                             .expect("created entity does not have a entity_record ... initialization error?");
 
@@ -841,7 +841,7 @@ impl<T: ProtocolType> StateNotifiable for ServerStateManager<T> {
                                     let component_ref = self.local_object_store.get(*component_key)
                                         .expect("component not created correctly?");
                                     self.queued_messages
-                                        .push_back(ServerStateMessage::AddComponent(
+                                        .push_back(ServerReplicateMessage::AddComponent(
                                             entity_record.local_key,
                                             *component_key,
                                             component_record.local_key,
@@ -851,7 +851,7 @@ impl<T: ProtocolType> StateNotifiable for ServerStateManager<T> {
                             }
                         }
                     }
-                    ServerStateMessage::DeleteEntity(global_key, local_key) => {
+                    ServerReplicateMessage::DeleteEntity(global_key, local_key) => {
                         let entity_record = self.local_entity_store.remove(&global_key).expect("deletion of nonexistent entity!");
 
                         // actually delete the entity from local records
@@ -859,20 +859,20 @@ impl<T: ProtocolType> StateNotifiable for ServerStateManager<T> {
                         self.entity_key_generator.recycle_key(&local_key);
                         self.pawn_entity_store.remove(&global_key);
 
-                        // delete all associated component states
+                        // delete all associated component replicates
                         let component_set: &HashSet<ComponentKey> = &entity_record.components_ref.borrow();
                         for component_key in component_set {
-                            deleted_states.push(*component_key);
+                            deleted_replicates.push(*component_key);
                         }
                     }
-                    ServerStateMessage::AssignPawnEntity(_, _) => {}
-                    ServerStateMessage::UnassignPawnEntity(_, _) => {}
-                    ServerStateMessage::AddComponent(_, global_component_key, _, _) => {
+                    ServerReplicateMessage::AssignPawnEntity(_, _) => {}
+                    ServerReplicateMessage::UnassignPawnEntity(_, _) => {}
+                    ServerReplicateMessage::AddComponent(_, global_component_key, _, _) => {
                         let component_record = self.object_records.get_mut(global_component_key)
                             .expect("added component does not have a record .. initiation problem?");
                         // do we need to delete this now?
                         if self.delayed_object_deletions.remove(&global_component_key) {
-                            state_delete(&mut self.queued_messages, component_record, &global_component_key);
+                            replicate_delete(&mut self.queued_messages, component_record, &global_component_key);
                         } else {
                             // we do not need to delete just yet
                             component_record.status = LocalityStatus::Created;
@@ -882,8 +882,8 @@ impl<T: ProtocolType> StateNotifiable for ServerStateManager<T> {
             }
         }
 
-        for deleted_object_key in deleted_states {
-            self.state_cleanup(&deleted_object_key);
+        for deleted_object_key in deleted_replicates {
+            self.replicate_cleanup(&deleted_object_key);
         }
     }
 
@@ -892,20 +892,20 @@ impl<T: ProtocolType> StateNotifiable for ServerStateManager<T> {
             for dropped_message in dropped_messages_list.into_iter() {
                 match dropped_message {
                     // gauranteed delivery messages
-                    ServerStateMessage::CreateState(_, _, _)
-                    | ServerStateMessage::DeleteState(_, _)
-                    | ServerStateMessage::AssignPawn(_, _)
-                    | ServerStateMessage::UnassignPawn(_, _)
-                    | ServerStateMessage::CreateEntity(_, _, _)
-                    | ServerStateMessage::DeleteEntity(_, _)
-                    | ServerStateMessage::AssignPawnEntity(_, _)
-                    | ServerStateMessage::UnassignPawnEntity(_, _)
-                    | ServerStateMessage::AddComponent(_, _, _, _) => {
+                    ServerReplicateMessage::CreateReplicate(_, _, _)
+                    | ServerReplicateMessage::DeleteReplicate(_, _)
+                    | ServerReplicateMessage::AssignPawn(_, _)
+                    | ServerReplicateMessage::UnassignPawn(_, _)
+                    | ServerReplicateMessage::CreateEntity(_, _, _)
+                    | ServerReplicateMessage::DeleteEntity(_, _)
+                    | ServerReplicateMessage::AssignPawnEntity(_, _)
+                    | ServerReplicateMessage::UnassignPawnEntity(_, _)
+                    | ServerReplicateMessage::AddComponent(_, _, _, _) => {
                         self.queued_messages.push_back(dropped_message.clone());
                     }
                     // non-gauranteed delivery messages
-                    ServerStateMessage::UpdateState(global_key, _, _, _)
-                    | ServerStateMessage::UpdatePawn(global_key, _, _, _) => {
+                    ServerReplicateMessage::UpdateReplicate(global_key, _, _, _)
+                    | ServerReplicateMessage::UpdatePawn(global_key, _, _, _) => {
                         if let Some(diff_mask_map) = self.sent_updates.get(&dropped_packet_index) {
                             if let Some(diff_mask) = diff_mask_map.get(global_key) {
                                 let mut new_diff_mask = diff_mask.borrow().clone();
@@ -944,23 +944,23 @@ impl<T: ProtocolType> StateNotifiable for ServerStateManager<T> {
     }
 }
 
-fn state_delete<T: ProtocolType>(queued_messages: &mut VecDeque<ServerStateMessage<T>>,
+fn replicate_delete<T: ProtocolType>(queued_messages: &mut VecDeque<ServerReplicateMessage<T>>,
                               object_record: &mut ObjectRecord,
                               object_key: &ObjectKey) {
     object_record.status = LocalityStatus::Deleting;
 
-    queued_messages.push_back(ServerStateMessage::DeleteState(
+    queued_messages.push_back(ServerReplicateMessage::DeleteReplicate(
             *object_key,
             object_record.local_key,
         ));
 }
 
-fn entity_delete<T: ProtocolType>(queued_messages: &mut VecDeque<ServerStateMessage<T>>,
+fn entity_delete<T: ProtocolType>(queued_messages: &mut VecDeque<ServerReplicateMessage<T>>,
                               entity_record: &mut EntityRecord,
                               entity_key: &EntityKey) {
     entity_record.status = LocalityStatus::Deleting;
 
-    queued_messages.push_back(ServerStateMessage::DeleteEntity(
+    queued_messages.push_back(ServerReplicateMessage::DeleteEntity(
         *entity_key,
         entity_record.local_key,
     ));

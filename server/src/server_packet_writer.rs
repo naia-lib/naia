@@ -1,14 +1,14 @@
 use byteorder::WriteBytesExt;
 
-use naia_shared::{ProtocolType, State, EventPacketWriter, ManagerType, Manifest};
+use naia_shared::{ProtocolType, Replicate, EventPacketWriter, ManagerType, Manifest};
 
-/// Handles writing of Event & State data into an outgoing packet
+/// Handles writing of Event & Replicate data into an outgoing packet
 pub struct ServerPacketWriter {
     event_writer: EventPacketWriter,
-    /// bytes representing outgoing State messages / updates
-    pub state_working_bytes: Vec<u8>,
-    /// number of State messages to be written
-    pub state_message_count: u8,
+    /// bytes representing outgoing Replicate messages / updates
+    pub replicate_working_bytes: Vec<u8>,
+    /// number of Replicate messages to be written
+    pub replicate_message_count: u8,
 }
 
 impl ServerPacketWriter {
@@ -17,14 +17,14 @@ impl ServerPacketWriter {
     pub fn new() -> ServerPacketWriter {
         ServerPacketWriter {
             event_writer: EventPacketWriter::new(),
-            state_working_bytes: Vec::<u8>::new(),
-            state_message_count: 0,
+            replicate_working_bytes: Vec::<u8>::new(),
+            replicate_message_count: 0,
         }
     }
 
     /// Returns whether the writer has bytes to write into the outgoing packet
     pub fn has_bytes(&self) -> bool {
-        return self.event_writer.has_bytes() || self.state_message_count != 0;
+        return self.event_writer.has_bytes() || self.replicate_message_count != 0;
     }
 
     /// Gets the bytes to write into an outgoing packet
@@ -33,15 +33,15 @@ impl ServerPacketWriter {
 
         self.event_writer.get_bytes(&mut out_bytes);
 
-        //Write manager "header" (manager type & state count)
-        if self.state_message_count != 0 {
-            out_bytes.write_u8(ManagerType::State as u8).unwrap(); // write
+        //Write manager "header" (manager type & replicate count)
+        if self.replicate_message_count != 0 {
+            out_bytes.write_u8(ManagerType::Replicate as u8).unwrap(); // write
                                                                    // manager
                                                                    // type
-            out_bytes.write_u8(self.state_message_count).unwrap(); // write number of messages
-            out_bytes.append(&mut self.state_working_bytes); // write event payload
+            out_bytes.write_u8(self.replicate_message_count).unwrap(); // write number of messages
+            out_bytes.append(&mut self.replicate_working_bytes); // write event payload
 
-            self.state_message_count = 0;
+            self.replicate_message_count = 0;
         }
 
         out_bytes.into_boxed_slice()
@@ -50,7 +50,7 @@ impl ServerPacketWriter {
     /// Get the number of bytes which is ready to be written into an outgoing
     /// packet
     pub fn bytes_number(&self) -> usize {
-        return self.event_writer.bytes_number() + self.state_working_bytes.len();
+        return self.event_writer.bytes_number() + self.replicate_working_bytes.len();
     }
 
     /// Writes an Event into the Writer's internal buffer, which will eventually
@@ -58,7 +58,7 @@ impl ServerPacketWriter {
     pub fn write_event<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,
-        event: &Box<dyn State<T>>,
+        event: &Box<dyn Replicate<T>>,
     ) -> bool {
         return self.event_writer.write_event(manifest, event);
     }

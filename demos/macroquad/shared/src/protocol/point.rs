@@ -1,7 +1,7 @@
 use nanoserde::{DeBin, SerBin};
 
-use naia_derive::State;
-use naia_shared::{State, Property};
+use naia_derive::Replicate;
+use naia_shared::{Replicate, Property};
 
 use super::Protocol;
 
@@ -18,7 +18,7 @@ impl Default for Color {
     }
 }
 
-#[derive(State, Clone)]
+#[derive(Replicate, Clone)]
 pub struct Point {
     pub x: Property<u16>,
     pub y: Property<u16>,

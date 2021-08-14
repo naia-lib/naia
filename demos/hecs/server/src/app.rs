@@ -5,7 +5,7 @@ use std::{
 
 use hecs::{Entity as HecsEntityKey, World};
 
-use naia_server::{Server, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey as NaiaEntityKey, Ref, State, ComponentKey};
+use naia_server::{Server, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey as NaiaEntityKey, Ref, Replicate, ComponentKey};
 
 use naia_demo_basic_shared::{
     get_shared_config, manifest_load,
@@ -215,7 +215,7 @@ impl App {
                                 self.server.queue_event(&user_key, &message_event);
                             }
 
-                            // VERY IMPORTANT! Calling this actually sends all State/Event data
+                            // VERY IMPORTANT! Calling this actually sends all Replicate/Event data
                             // packets to all Clients that require it. If you don't call this
                             // method, the Server will never communicate with it's connected Clients
                             self.server.send_all_updates().await;
@@ -231,7 +231,7 @@ impl App {
             }
     }
 
-    fn remove_component<T: 'static + State<Components>>(&mut self, hecs_entity_key: &HecsEntityKey, _component_ref: &Ref<T>) {
+    fn remove_component<T: 'static + Replicate<Components>>(&mut self, hecs_entity_key: &HecsEntityKey, _component_ref: &Ref<T>) {
         self.world.remove_one::<Ref<T>>(*hecs_entity_key)
             .expect("error removing component");
     }

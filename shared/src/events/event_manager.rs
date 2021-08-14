@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    state::{state::State, protocol_type::ProtocolType, state::EventClone},
+    replicate::{replicate::Replicate, protocol_type::ProtocolType, replicate::EventClone},
     manifest::Manifest,
     PacketReader,
 };
@@ -14,9 +14,9 @@ use crate::{
 /// that guaranteed Events can be re-transmitted to the remote host
 #[derive(Debug)]
 pub struct EventManager<T: ProtocolType> {
-    queued_outgoing_events: VecDeque<(bool, Rc<Box<dyn State<T>>>)>,
+    queued_outgoing_events: VecDeque<(bool, Rc<Box<dyn Replicate<T>>>)>,
     queued_incoming_events: VecDeque<T>,
-    sent_guaranteed_events: HashMap<u16, Vec<Rc<Box<dyn State<T>>>>>,
+    sent_guaranteed_events: HashMap<u16, Vec<Rc<Box<dyn Replicate<T>>>>>,
     last_popped_event_guarantee: bool,
 }
 
@@ -56,13 +56,13 @@ impl<T: ProtocolType> EventManager<T> {
     }
 
     /// Gets the next queued Event to be transmitted
-    pub fn pop_outgoing_event(&mut self, packet_index: u16) -> Option<Rc<Box<dyn State<T>>>> {
+    pub fn pop_outgoing_event(&mut self, packet_index: u16) -> Option<Rc<Box<dyn Replicate<T>>>> {
         match self.queued_outgoing_events.pop_front() {
             Some((guaranteed, event)) => {
                 //place in transmission record if this is a gauranteed event
                 if guaranteed {
                     if !self.sent_guaranteed_events.contains_key(&packet_index) {
-                        let sent_events_list: Vec<Rc<Box<dyn State<T>>>> = Vec::new();
+                        let sent_events_list: Vec<Rc<Box<dyn Replicate<T>>>> = Vec::new();
                         self.sent_guaranteed_events.insert(packet_index, sent_events_list);
                     }
 
@@ -81,7 +81,7 @@ impl<T: ProtocolType> EventManager<T> {
 
     /// If  the last popped Event from the queue somehow wasn't able to be
     /// written into a packet, put the Event back into the front of the queue
-    pub fn unpop_outgoing_event(&mut self, packet_index: u16, event: &Rc<Box<dyn State<T>>>) {
+    pub fn unpop_outgoing_event(&mut self, packet_index: u16, event: &Rc<Box<dyn Replicate<T>>>) {
         let cloned_event = event.clone();
 
         if self.last_popped_event_guarantee {
@@ -97,7 +97,7 @@ impl<T: ProtocolType> EventManager<T> {
     }
 
     /// Queues an Event to be transmitted to the remote host
-    pub fn queue_outgoing_event(&mut self, event: &impl State<T>, guaranteed_delivery: bool) {
+    pub fn queue_outgoing_event(&mut self, event: &impl Replicate<T>, guaranteed_delivery: bool) {
         let clone = Rc::new(EventClone::clone_box(event));
         self.queued_outgoing_events.push_back((guaranteed_delivery, clone));
     }
@@ -124,7 +124,7 @@ impl<T: ProtocolType> EventManager<T> {
         for _x in 0..event_count {
             let naia_id: u16 = reader.read_u16();
 
-            let new_event = manifest.create_state(naia_id, reader);
+            let new_event = manifest.create_replicate(naia_id, reader);
             self.queued_incoming_events.push_back(new_event);
         }
     }

@@ -1,14 +1,14 @@
 use std::{collections::HashSet, net::SocketAddr};
 
 use naia_shared::{
-    State, ProtocolType, Connection, ConnectionConfig, ManagerType, Manifest,
+    Replicate, ProtocolType, Connection, ConnectionConfig, ManagerType, Manifest,
     PacketReader, PacketType, Ref, SequenceNumber, StandardHeader, EntityKey, PawnKey
 };
 
 use super::{
-    state::{
+    replicate::{
         object_key::object_key::ObjectKey, mut_handler::MutHandler,
-        server_state_manager::ServerStateManager,
+        server_replicate_manager::ServerReplicateManager,
     },
     command_receiver::CommandReceiver,
     ping_manager::PingManager,
@@ -18,7 +18,7 @@ use crate::{ComponentKey, GlobalPawnKey};
 
 pub struct ClientConnection<U: ProtocolType> {
     connection: Connection<U>,
-    state_manager: ServerStateManager<U>,
+    replicate_manager: ServerReplicateManager<U>,
     ping_manager: PingManager,
     command_receiver: CommandReceiver<U>,
 }
@@ -31,7 +31,7 @@ impl<U: ProtocolType> ClientConnection<U> {
     ) -> Self {
         ClientConnection {
             connection: Connection::new(address, connection_config),
-            state_manager: ServerStateManager::new(address, mut_handler.unwrap()),
+            replicate_manager: ServerReplicateManager::new(address, mut_handler.unwrap()),
             ping_manager: PingManager::new(),
             command_receiver: CommandReceiver::new(),
         }
@@ -42,7 +42,7 @@ impl<U: ProtocolType> ClientConnection<U> {
         host_tick: u16,
         manifest: &Manifest<U>,
     ) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_events() || self.state_manager.has_outgoing_messages() {
+        if self.connection.has_outgoing_events() || self.replicate_manager.has_outgoing_messages() {
             let mut writer = ServerPacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
@@ -53,16 +53,16 @@ impl<U: ProtocolType> ClientConnection<U> {
                     break;
                 }
             }
-            while let Some(popped_state_message) =
-                self.state_manager.pop_outgoing_message(next_packet_index)
+            while let Some(popped_replicate_message) =
+                self.replicate_manager.pop_outgoing_message(next_packet_index)
             {
-                if !self.state_manager.write_state_message(
+                if !self.replicate_manager.write_replicate_message(
                     &mut writer,
                     manifest,
-                    &popped_state_message,
+                    &popped_replicate_message,
                 ) {
-                    self.state_manager
-                        .unpop_outgoing_message(next_packet_index, &popped_state_message);
+                    self.replicate_manager
+                        .unpop_outgoing_message(next_packet_index, &popped_replicate_message);
                     break;
                 }
             }
@@ -113,31 +113,31 @@ impl<U: ProtocolType> ClientConnection<U> {
     }
 
     pub fn has_object(&self, key: &ObjectKey) -> bool {
-        return self.state_manager.has_object(key);
+        return self.replicate_manager.has_object(key);
     }
 
-    pub fn add_state(&mut self, key: &ObjectKey, state: &Ref<dyn State<U>>) {
-        self.state_manager.add_state(key, state);
+    pub fn add_replicate(&mut self, key: &ObjectKey, replicate: &Ref<dyn Replicate<U>>) {
+        self.replicate_manager.add_replicate(key, replicate);
     }
 
-    pub fn remove_state(&mut self, key: &ObjectKey) {
-        self.state_manager.remove_state(key);
+    pub fn remove_replicate(&mut self, key: &ObjectKey) {
+        self.replicate_manager.remove_replicate(key);
     }
 
-    pub fn collect_state_updates(&mut self) {
-        self.state_manager.collect_state_updates();
+    pub fn collect_replicate_updates(&mut self) {
+        self.replicate_manager.collect_replicate_updates();
     }
 
     pub fn has_pawn(&self, key: &ObjectKey) -> bool {
-        return self.state_manager.has_pawn(key);
+        return self.replicate_manager.has_pawn(key);
     }
 
     pub fn add_pawn(&mut self, key: &ObjectKey) {
-        self.state_manager.add_pawn(key);
+        self.replicate_manager.add_pawn(key);
     }
 
     pub fn remove_pawn(&mut self, key: &ObjectKey) {
-        self.state_manager.remove_pawn(key);
+        self.replicate_manager.remove_pawn(key);
     }
 
     pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(GlobalPawnKey, U)> {
@@ -145,16 +145,16 @@ impl<U: ProtocolType> ClientConnection<U> {
             self.command_receiver.pop_incoming_command(server_tick)
         {
             match local_pawn_key {
-                PawnKey::State(local_object_key) => {
+                PawnKey::Replicate(local_object_key) => {
                     if let Some(global_pawn_key) =
-                        self.state_manager.get_global_key_from_local(local_object_key)
+                        self.replicate_manager.get_global_key_from_local(local_object_key)
                     {
-                        return Some((GlobalPawnKey::State(*global_pawn_key), command));
+                        return Some((GlobalPawnKey::Replicate(*global_pawn_key), command));
                     }
                 }
                 PawnKey::Entity(local_entity_key) => {
                     if let Some(global_pawn_key) =
-                        self.state_manager.get_global_entity_key_from_local(local_entity_key)
+                        self.replicate_manager.get_global_entity_key_from_local(local_entity_key)
                     {
                         return Some((GlobalPawnKey::Entity(*global_pawn_key), command));
                     }
@@ -172,35 +172,35 @@ impl<U: ProtocolType> ClientConnection<U> {
     // Entity management
 
     pub fn has_entity(&self, key: &EntityKey) -> bool {
-        return self.state_manager.has_entity(key);
+        return self.replicate_manager.has_entity(key);
     }
 
-    pub fn add_entity(&mut self, key: &EntityKey, components_ref: &Ref<HashSet<ComponentKey>>, component_list: &Vec<(ComponentKey, Ref<dyn State<U>>)>) {
-        self.state_manager.add_entity(key, components_ref, component_list);
+    pub fn add_entity(&mut self, key: &EntityKey, components_ref: &Ref<HashSet<ComponentKey>>, component_list: &Vec<(ComponentKey, Ref<dyn Replicate<U>>)>) {
+        self.replicate_manager.add_entity(key, components_ref, component_list);
     }
 
     pub fn remove_entity(&mut self, key: &EntityKey) {
-        self.state_manager.remove_entity(key);
+        self.replicate_manager.remove_entity(key);
     }
 
     pub fn has_pawn_entity(&self, key: &EntityKey) -> bool {
-        return self.state_manager.has_pawn_entity(key);
+        return self.replicate_manager.has_pawn_entity(key);
     }
 
     pub fn add_pawn_entity(&mut self, key: &EntityKey) {
-        self.state_manager.add_pawn_entity(key);
+        self.replicate_manager.add_pawn_entity(key);
     }
 
     pub fn remove_pawn_entity(&mut self, key: &EntityKey) {
-        self.state_manager.remove_pawn_entity(key);
+        self.replicate_manager.remove_pawn_entity(key);
     }
 
-    pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn State<U>>) {
-        self.state_manager.add_component(entity_key, component_key, component_ref);
+    pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Replicate<U>>) {
+        self.replicate_manager.add_component(entity_key, component_key, component_ref);
     }
 
 //    pub fn remove_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey) {
-//        self.state_manager.remove_component(entity_key, component_key);
+//        self.replicate_manager.remove_component(entity_key, component_key);
 //    }
 
     // Pass-through methods to underlying common connection
@@ -223,7 +223,7 @@ impl<U: ProtocolType> ClientConnection<U> {
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         self.connection
-            .process_incoming_header(header, &mut Some(&mut self.state_manager));
+            .process_incoming_header(header, &mut Some(&mut self.replicate_manager));
     }
 
     pub fn process_outgoing_header(
@@ -245,7 +245,7 @@ impl<U: ProtocolType> ClientConnection<U> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_event(&mut self, event: &impl State<U>, guaranteed_delivery: bool) {
+    pub fn queue_event(&mut self, event: &impl Replicate<U>, guaranteed_delivery: bool) {
         return self.connection.queue_event(event, guaranteed_delivery);
     }
 

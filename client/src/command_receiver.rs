@@ -3,18 +3,18 @@ use std::{
     rc::Rc,
 };
 
-use naia_shared::{wrapping_diff, State, ProtocolType, SequenceBuffer, SequenceIterator, PawnKey};
+use naia_shared::{wrapping_diff, Replicate, ProtocolType, SequenceBuffer, SequenceIterator, PawnKey};
 
-use super::client_state_manager::ClientStateManager;
+use super::client_replicate_manager::ClientReplicateManager;
 
 const COMMAND_HISTORY_SIZE: u16 = 64;
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
 pub struct CommandReceiver<T: ProtocolType> {
-    queued_incoming_commands: VecDeque<(u16, PawnKey, Rc<Box<dyn State<T>>>)>,
-    command_history: HashMap<PawnKey, SequenceBuffer<Rc<Box<dyn State<T>>>>>,
-    queued_command_replays: VecDeque<(u16, PawnKey, Rc<Box<dyn State<T>>>)>,
+    queued_incoming_commands: VecDeque<(u16, PawnKey, Rc<Box<dyn Replicate<T>>>)>,
+    command_history: HashMap<PawnKey, SequenceBuffer<Rc<Box<dyn Replicate<T>>>>>,
+    queued_command_replays: VecDeque<(u16, PawnKey, Rc<Box<dyn Replicate<T>>>)>,
     replay_trigger: HashMap<PawnKey, u16>,
 }
 
@@ -30,27 +30,27 @@ impl<T: ProtocolType> CommandReceiver<T> {
     }
 
     /// Gets the next queued Command
-    pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Rc<Box<dyn State<T>>>)> {
+    pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Rc<Box<dyn Replicate<T>>>)> {
         self.queued_incoming_commands.pop_front()
     }
 
     /// Gets the next queued Replayed Command
     pub fn pop_command_replay<U: ProtocolType>(
         &mut self,
-    ) -> Option<(u16, PawnKey, Rc<Box<dyn State<T>>>)> {
+    ) -> Option<(u16, PawnKey, Rc<Box<dyn Replicate<T>>>)> {
         self.queued_command_replays.pop_front()
     }
 
     /// Process any necessary replayed Command
     pub fn process_command_replay<U: ProtocolType>(
         &mut self,
-        state_manager: &mut ClientStateManager<U>,
+        replicate_manager: &mut ClientReplicateManager<U>,
     ) {
         for (pawn_key, history_tick) in self.replay_trigger.iter() {
-            // set pawn to server authoritative state
+            // set pawn to server authoritative replicate
             match pawn_key {
-                PawnKey::State(object_key) => state_manager.pawn_reset(object_key),
-                PawnKey::Entity(entity_key) => state_manager.pawn_reset_entity(entity_key),
+                PawnKey::Replicate(object_key) => replicate_manager.pawn_reset(object_key),
+                PawnKey::Entity(entity_key) => replicate_manager.pawn_reset_entity(entity_key),
             }
 
             // trigger replay of historical commands
@@ -76,7 +76,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
         &mut self,
         host_tick: u16,
         pawn_key: &PawnKey,
-        command: &Rc<Box<dyn State<T>>>,
+        command: &Rc<Box<dyn Replicate<T>>>,
     ) {
         self.queued_incoming_commands
             .push_back((host_tick, *pawn_key, command.clone()));
@@ -99,7 +99,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
         &self,
         pawn_key: &PawnKey,
         reverse: bool,
-    ) -> Option<SequenceIterator<Rc<Box<dyn State<T>>>>> {
+    ) -> Option<SequenceIterator<Rc<Box<dyn Replicate<T>>>>> {
         if let Some(command_buffer) = self.command_history.get(&pawn_key) {
             return Some(command_buffer.iter(reverse));
         }

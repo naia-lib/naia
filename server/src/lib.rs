@@ -1,7 +1,7 @@
 //! # Naia Server
 //! A server that uses either UDP or WebRTC communication to send/receive events
-//! to/from connected clients, and syncs registered states to clients to whom
-//! those states are in-scope.
+//! to/from connected clients, and syncs registered replicates to clients to whom
+//! those replicates are in-scope.
 
 #![deny(
     missing_docs,
@@ -28,10 +28,10 @@ compile_error!("Naia Server can only use UDP or WebRTC, you must pick one");
 compile_error!("Naia Server requires either the 'use-udp' or 'use-webrtc' feature to be enabled, you must pick one.");
 
 pub use naia_shared::{
-    find_my_ip_address, State, LocalObjectKey, ProtocolType, LinkConditionerConfig, Random, Ref, SharedConfig, EntityKey,
+    find_my_ip_address, Replicate, LocalObjectKey, ProtocolType, LinkConditionerConfig, Random, Ref, SharedConfig, EntityKey,
 };
 
-mod state;
+mod replicate;
 mod client_connection;
 mod command_receiver;
 mod error;
@@ -45,7 +45,7 @@ mod server_packet_writer;
 mod server_tick_manager;
 mod user;
 
-pub use state::object_key::{object_key::ObjectKey, ComponentKey, GlobalPawnKey};
+pub use replicate::object_key::{object_key::ObjectKey, ComponentKey, GlobalPawnKey};
 pub use server::Server;
 pub use room::room_key::RoomKey;
 pub use server_config::{ServerConfig, ServerAddresses};

@@ -1,13 +1,13 @@
 use std::{net::SocketAddr, rc::Rc, collections::hash_map::Keys};
 
-use naia_shared::{State, ProtocolType, Connection, ConnectionConfig, LocalObjectKey,
+use naia_shared::{Replicate, ProtocolType, Connection, ConnectionConfig, LocalObjectKey,
                   ManagerType, Manifest, PacketReader, PacketType, PawnKey, SequenceNumber,
                   StandardHeader, LocalEntityKey, LocalComponentKey};
 
 use crate::Packet;
 
 use super::{
-    client_state_manager::ClientStateManager, client_state_message::ClientStateMessage,
+    client_replicate_manager::ClientReplicateManager, client_replicate_message::ClientReplicateMessage,
     client_packet_writer::ClientPacketWriter,
     ping_manager::PingManager, tick_queue::TickQueue,
     client_tick_manager::ClientTickManager,
@@ -18,7 +18,7 @@ use super::{
 #[derive(Debug)]
 pub struct ServerConnection<T: ProtocolType> {
     connection: Connection<T>,
-    state_manager: ClientStateManager<T>,
+    replicate_manager: ClientReplicateManager<T>,
     ping_manager: PingManager,
     command_sender: DualCommandSender<T>,
     command_receiver: DualCommandReceiver<T>,
@@ -32,7 +32,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     ) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
-            state_manager: ClientStateManager::new(),
+            replicate_manager: ClientReplicateManager::new(),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
@@ -111,8 +111,8 @@ impl<T: ProtocolType> ServerConnection<T> {
                 ManagerType::Event => {
                     self.connection.process_event_data(&mut reader, manifest);
                 }
-                ManagerType::State => {
-                    self.state_manager.process_data(
+                ManagerType::Replicate => {
+                    self.replicate_manager.process_data(
                         manifest,
                         &mut self.command_receiver,
                         packet_tick,
@@ -144,25 +144,25 @@ impl<T: ProtocolType> ServerConnection<T> {
         return None;
     }
 
-    // Pass-through methods to underlying state manager
-    pub fn get_incoming_state_message(&mut self) -> Option<ClientStateMessage<T>> {
-        return self.state_manager.pop_incoming_message();
+    // Pass-through methods to underlying replicate manager
+    pub fn get_incoming_replicate_message(&mut self) -> Option<ClientReplicateMessage<T>> {
+        return self.replicate_manager.pop_incoming_message();
     }
 
     pub fn object_keys(&self) -> Vec<LocalObjectKey> {
-        return self.state_manager.object_keys();
+        return self.replicate_manager.object_keys();
     }
 
     pub fn component_keys(&self) -> Vec<LocalComponentKey> {
-        return self.state_manager.component_keys();
+        return self.replicate_manager.component_keys();
     }
 
     pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
-        return self.state_manager.get_object(key);
+        return self.replicate_manager.get_object(key);
     }
 
     pub fn has_object(&self, key: &LocalObjectKey) -> bool {
-        return self.state_manager.has_object(key);
+        return self.replicate_manager.has_object(key);
     }
 
     pub fn has_component(&self, key: &LocalComponentKey) -> bool {
@@ -170,25 +170,25 @@ impl<T: ProtocolType> ServerConnection<T> {
     }
 
     pub fn pawn_keys(&self) -> Keys<LocalObjectKey, T> {
-        return self.state_manager.pawn_keys();
+        return self.replicate_manager.pawn_keys();
     }
 
     pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&T> {
-        return self.state_manager.get_pawn(key);
+        return self.replicate_manager.get_pawn(key);
     }
 
     pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&T> {
-        return self.state_manager.get_pawn(key);
+        return self.replicate_manager.get_pawn(key);
     }
 
     pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
-        return self.state_manager.has_entity(key);
+        return self.replicate_manager.has_entity(key);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
     pub fn frame_begin(&mut self, manifest: &Manifest<T>, tick_manager: &mut ClientTickManager) -> bool {
         if tick_manager.mark_frame() {
-            // then we apply all received updates to states at once
+            // then we apply all received updates to replicates at once
             let target_tick = tick_manager.get_server_tick();
             while let Some((tick, packet_index, data_packet)) =
                 self.get_buffered_data_packet(target_tick)
@@ -250,7 +250,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_event(&mut self, event: &impl State<T>, guaranteed_delivery: bool) {
+    pub fn queue_event(&mut self, event: &impl Replicate<T>, guaranteed_delivery: bool) {
         return self.connection.queue_event(event, guaranteed_delivery);
     }
 
@@ -263,12 +263,12 @@ impl<T: ProtocolType> ServerConnection<T> {
     }
 
     // command related
-    pub fn state_queue_command(&mut self, object_key: &LocalObjectKey, command: &impl State<T>) {
-        let pawn_key = PawnKey::State(*object_key);
+    pub fn replicate_queue_command(&mut self, object_key: &LocalObjectKey, command: &impl Replicate<T>) {
+        let pawn_key = PawnKey::Replicate(*object_key);
         return self.command_sender.queue_command(&pawn_key, command);
     }
 
-    pub fn entity_queue_command(&mut self, entity_key: &LocalEntityKey, command: &impl State<T>) {
+    pub fn entity_queue_command(&mut self, entity_key: &LocalEntityKey, command: &impl Replicate<T>) {
         let pawn_key = PawnKey::Entity(*entity_key);
         return self.command_sender.queue_command(&pawn_key, command);
     }
@@ -276,11 +276,11 @@ impl<T: ProtocolType> ServerConnection<T> {
     pub fn process_replays(&mut self) {
         self
             .command_receiver
-            .process_command_replay::<T>(&mut self.state_manager);
+            .process_command_replay::<T>(&mut self.replicate_manager);
 
     }
 
-    pub fn get_incoming_replay(&mut self) -> Option<(PawnKey, Rc<Box<dyn State<T>>>)> {
+    pub fn get_incoming_replay(&mut self) -> Option<(PawnKey, Rc<Box<dyn Replicate<T>>>)> {
         if let Some((_tick, pawn_key, command)) = self
             .command_receiver
             .pop_command_replay::<T>()
@@ -291,7 +291,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         return None;
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<(PawnKey, Rc<Box<dyn State<T>>>)> {
+    pub fn get_incoming_command(&mut self) -> Option<(PawnKey, Rc<Box<dyn Replicate<T>>>)> {
         if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command() {
             return Some((pawn_key, command));
         }

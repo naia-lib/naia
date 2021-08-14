@@ -1,6 +1,6 @@
 /// Represents a manager that must be notified when packets have been dropped or
 /// delivered
-pub trait StateNotifiable {
+pub trait ReplicateNotifiable {
     /// Notifies the manager that a packet has been delivered
     fn notify_packet_delivered(&mut self, packet_index: u16);
     /// Notifies the manager that a packet has been dropped
