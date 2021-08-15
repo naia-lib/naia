@@ -1,36 +1,36 @@
 /// Enum used as a shared network protocol, representing various message types
-/// related to Replicates/Entities/Pawns/Components
+/// related to Objects/Entities/Pawns/Components
 #[derive(Copy, Clone)]
 #[repr(u8)]
 pub enum ReplicateActionType {
-    /// Message indicating an Replicate to be created
+    /// Action indicating an Object to be created
     CreateObject = 0,
-    /// Message indicating an Replicate to be updated
+    /// Action indicating a Replicate to be updated
     UpdateReplicate,
-    /// Message indicating an Replicate to be deleted
+    /// Action indicating a Replicate to be deleted
     DeleteReplicate,
-    /// Message indicating an Replicate to be assigned as a Pawn
+    /// Action indicating an Object to be assigned as a Pawn
     AssignPawn,
-    /// Message indicating an Replicate to be unassigned as a Pawn
+    /// Action indicating an Object to be unassigned as a Pawn
     UnassignPawn,
-    /// Message indicating a Pawn to be updated
+    /// Action indicating a Pawn to be updated
     UpdatePawn,
-    /// Message indicating an Entity to be created
+    /// Action indicating an Entity to be created
     CreateEntity,
-    /// Message indicating an Entity to be deleted
+    /// Action indicating an Entity to be deleted
     DeleteEntity,
-    /// Message indicating an Entity to be assigned as a Pawn
+    /// Action indicating an Entity to be assigned as a Pawn
     AssignPawnEntity,
-    /// Message indicating an Entity to be unassigned as a Pawn
+    /// Action indicating an Entity to be unassigned as a Pawn
     UnassignPawnEntity,
-    /// Message indicating a Component to be added to an Entity
+    /// Action indicating a Component to be added to an Entity
     AddComponent,
     /// Unknown / Undefined message, should always be last variant in this list
     Unknown
 }
 
 impl ReplicateActionType {
-    /// Converts the message type to u8
+    /// Converts the action type to u8
     pub fn to_u8(&self) -> u8 {
         *self as u8
     }

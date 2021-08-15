@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    replicate::{replicate::Replicate, protocol_type::ProtocolType, replicate::MessageClone},
+    replicate::{replicate::Replicate, protocol_type::ProtocolType, replicate::BoxClone},
     manifest::Manifest,
     PacketReader,
 };
@@ -98,7 +98,7 @@ impl<T: ProtocolType> MessageManager<T> {
 
     /// Queues an Message to be transmitted to the remote host
     pub fn queue_outgoing_message(&mut self, message: &impl Replicate<T>, guaranteed_delivery: bool) {
-        let clone = Rc::new(MessageClone::clone_box(message));
+        let clone = Rc::new(BoxClone::box_clone(message));
         self.queued_outgoing_messages.push_back((guaranteed_delivery, clone));
     }
 

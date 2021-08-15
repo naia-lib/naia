@@ -3,7 +3,7 @@
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum PacketType {
-    /// A packet containing Event/Replicate data
+    /// A packet containing Message/Object/Entity/Component data
     Data = 1,
     /// A packet sent to maintain the connection by preventing a timeout
     Heartbeat = 2,

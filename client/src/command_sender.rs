@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use naia_shared::{Replicate, MessageClone, ProtocolType, PawnKey};
+use naia_shared::{Replicate, BoxClone, ProtocolType, PawnKey};
 
 /// Handles outgoing Commands
 #[derive(Debug)]
@@ -46,7 +46,7 @@ impl<T: ProtocolType> CommandSender<T> {
 
     /// Queues an Command to be transmitted to the remote host
     pub fn queue_command(&mut self, pawn_key: &PawnKey, command: &impl Replicate<T>) {
-        let cloned_command = Rc::new(MessageClone::clone_box(command));
+        let cloned_command = Rc::new(BoxClone::box_clone(command));
         self.queued_outgoing_command
             .insert(*pawn_key, cloned_command);
     }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_shared::{sequence_greater_than, ProtocolType, PawnKey, Manifest, PacketReader, SequenceBuffer, LocalReplicateKey, NaiaKey, LocalEntityKey};
+use naia_shared::{sequence_greater_than, ProtocolType, PawnKey, Manifest, PacketReader, SequenceBuffer, LocalObjectKey, NaiaKey, LocalEntityKey};
 
 const COMMAND_BUFFER_MAX_SIZE: u16 = 64;
 
@@ -46,11 +46,11 @@ impl<T: ProtocolType> CommandReceiver<T> {
         let command_count = reader.read_u8();
         for _x in 0..command_count {
 
-            let is_replicate = reader.read_u8() == 0;
+            let is_object = reader.read_u8() == 0;
             let local_key = reader.read_u16();
             let pawn_key = {
-                if is_replicate {
-                    PawnKey::Object(LocalReplicateKey::from_u16(local_key))
+                if is_object {
+                    PawnKey::Object(LocalObjectKey::from_u16(local_key))
                 } else {
                     PawnKey::Entity(LocalEntityKey::from_u16(local_key))
                 }

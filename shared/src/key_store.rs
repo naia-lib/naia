@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use std::collections::VecDeque;
 
-use super::ecs::keys::NaiaKey;
+use super::keys::NaiaKey;
 
 /// Simple implementation of a store that manages a recycling pool of u16 keys
 #[derive(Debug)]

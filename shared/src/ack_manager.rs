@@ -8,7 +8,7 @@ use super::{
 
 use super::{
     replicate::{replicate_notifiable::ReplicateNotifiable, protocol_type::ProtocolType},
-    messages::message_manager::MessageManager,
+    message_manager::MessageManager,
     packet_type::PacketType,
 };
 
