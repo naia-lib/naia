@@ -3,9 +3,9 @@
 
 use std::time::{Duration, Instant};
 
-use actix::{AsyncContext, Replicate, ReplicateContext, StreamHandler};
+use actix::{Actor, AsyncContext, ReplicateContext, StreamHandler};
 use actix_web::{web, Error, HttpRequest, HttpResponse};
-use actix_web_replicates::ws;
+use actix_web_actors::ws;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_millis(500);
 const CLIENT_TIMEOUT: Duration = Duration::from_millis(5000);
@@ -18,7 +18,7 @@ struct MyWebSocket {
     hb: Instant,
 }
 
-impl Replicate for MyWebSocket {
+impl Actor for MyWebSocket {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
@@ -31,7 +31,7 @@ impl MyWebSocket {
         Self { hb: Instant::now() }
     }
 
-    fn hb(&self, ctx: &mut <Self as Replicate>::Context) {
+    fn hb(&self, ctx: &mut <Self as Actor>::Context) {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
                 ctx.stop();

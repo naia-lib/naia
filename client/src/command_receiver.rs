@@ -7,7 +7,7 @@ use naia_shared::{
     wrapping_diff, PawnKey, ProtocolType, Replicate, SequenceBuffer, SequenceIterator,
 };
 
-use super::replicate_manager::ReplicateManager;
+use super::replica_manager::Replicamanager;
 
 const COMMAND_HISTORY_SIZE: u16 = 64;
 
@@ -46,13 +46,13 @@ impl<T: ProtocolType> CommandReceiver<T> {
     /// Process any necessary replayed Command
     pub fn process_command_replay<U: ProtocolType>(
         &mut self,
-        replicate_manager: &mut ReplicateManager<U>,
+        replica_manager: &mut Replicamanager<U>,
     ) {
         for (pawn_key, history_tick) in self.replay_trigger.iter() {
-            // set pawn to server authoritative replicate
+            // set pawn to server authoritative object/entity
             match pawn_key {
-                PawnKey::Object(object_key) => replicate_manager.pawn_reset(object_key),
-                PawnKey::Entity(entity_key) => replicate_manager.pawn_reset_entity(entity_key),
+                PawnKey::Object(object_key) => replica_manager.pawn_reset(object_key),
+                PawnKey::Entity(entity_key) => replica_manager.pawn_reset_entity(entity_key),
             }
 
             // trigger replay of historical commands

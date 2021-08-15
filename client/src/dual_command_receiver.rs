@@ -2,12 +2,12 @@ use std::rc::Rc;
 
 use naia_shared::{PawnKey, ProtocolType, Replicate, SequenceIterator};
 
-use super::{command_receiver::CommandReceiver, replicate_manager::ReplicateManager};
+use super::{command_receiver::CommandReceiver, replica_manager::Replicamanager};
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
 pub struct DualCommandReceiver<T: ProtocolType> {
-    replicate_manager: CommandReceiver<T>,
+    replica_manager: CommandReceiver<T>,
     entity_manager: CommandReceiver<T>,
 }
 
@@ -15,43 +15,43 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     /// Creates a new DualCommandReceiver
     pub fn new() -> Self {
         DualCommandReceiver {
-            replicate_manager: CommandReceiver::new(),
+            replica_manager: CommandReceiver::new(),
             entity_manager: CommandReceiver::new(),
         }
     }
 
     /// Gets the next queued Command
     pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Rc<Box<dyn Replicate<T>>>)> {
-        let replicate_command = self.replicate_manager.pop_command();
-        if replicate_command.is_none() {
+        let command = self.replica_manager.pop_command();
+        if command.is_none() {
             return self.entity_manager.pop_command();
         }
-        return replicate_command;
+        return command;
     }
 
     /// Gets the next queued Replayed Command
     pub fn pop_command_replay<U: ProtocolType>(
         &mut self,
     ) -> Option<(u16, PawnKey, Rc<Box<dyn Replicate<T>>>)> {
-        let replicate_command_replay = self.replicate_manager.pop_command_replay::<U>();
-        if replicate_command_replay.is_none() {
+        let command_replay = self.replica_manager.pop_command_replay::<U>();
+        if command_replay.is_none() {
             return self.entity_manager.pop_command_replay::<U>();
         }
-        return replicate_command_replay;
+        return command_replay;
     }
 
     /// Process any necessary replayed Command
     pub fn process_command_replay<U: ProtocolType>(
         &mut self,
-        replicate_manager: &mut ReplicateManager<U>,
+        replica_manager: &mut Replicamanager<U>,
     ) {
-        self.replicate_manager
-            .process_command_replay::<U>(replicate_manager);
+        self.replica_manager
+            .process_command_replay::<U>(replica_manager);
         self.entity_manager
-            .process_command_replay::<U>(replicate_manager);
+            .process_command_replay::<U>(replica_manager);
     }
 
-    /// Queues a Pawn Replicate Command to be ran locally on the Client
+    /// Queues a Pawn Command to be ran locally on the Client
     pub fn queue_command(
         &mut self,
         host_tick: u16,
@@ -60,7 +60,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     ) {
         match pawn_key {
             PawnKey::Object(_) => {
-                self.replicate_manager
+                self.replica_manager
                     .queue_command(host_tick, pawn_key, command);
             }
             PawnKey::Entity(_) => {
@@ -74,7 +74,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     pub fn command_history_count(&self, pawn_key: &PawnKey) -> u8 {
         match pawn_key {
             PawnKey::Object(_) => {
-                return self.replicate_manager.command_history_count(pawn_key);
+                return self.replica_manager.command_history_count(pawn_key);
             }
             PawnKey::Entity(_) => {
                 return self.entity_manager.command_history_count(pawn_key);
@@ -90,9 +90,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     ) -> Option<SequenceIterator<Rc<Box<dyn Replicate<T>>>>> {
         match pawn_key {
             PawnKey::Object(_) => {
-                return self
-                    .replicate_manager
-                    .command_history_iter(pawn_key, reverse);
+                return self.replica_manager.command_history_iter(pawn_key, reverse);
             }
             PawnKey::Entity(_) => {
                 return self.entity_manager.command_history_iter(pawn_key, reverse);
@@ -104,9 +102,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     pub fn replay_commands(&mut self, history_tick: u16, pawn_key: &PawnKey) {
         match pawn_key {
             PawnKey::Object(_) => {
-                return self
-                    .replicate_manager
-                    .replay_commands(history_tick, pawn_key);
+                return self.replica_manager.replay_commands(history_tick, pawn_key);
             }
             PawnKey::Entity(_) => {
                 return self.entity_manager.replay_commands(history_tick, pawn_key);
@@ -119,7 +115,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
         match pawn_key {
             PawnKey::Object(_) => {
                 return self
-                    .replicate_manager
+                    .replica_manager
                     .remove_history_until(history_tick, pawn_key);
             }
             PawnKey::Entity(_) => {
@@ -134,7 +130,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     pub fn pawn_init(&mut self, pawn_key: &PawnKey) {
         match pawn_key {
             PawnKey::Object(_) => {
-                return self.replicate_manager.pawn_init(pawn_key);
+                return self.replica_manager.pawn_init(pawn_key);
             }
             PawnKey::Entity(_) => {
                 return self.entity_manager.pawn_init(pawn_key);
@@ -146,7 +142,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     pub fn pawn_cleanup(&mut self, pawn_key: &PawnKey) {
         match pawn_key {
             PawnKey::Object(_) => {
-                return self.replicate_manager.pawn_cleanup(pawn_key);
+                return self.replica_manager.pawn_cleanup(pawn_key);
             }
             PawnKey::Entity(_) => {
                 return self.entity_manager.pawn_cleanup(pawn_key);
