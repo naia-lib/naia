@@ -1,7 +1,7 @@
 /// The key that represents a Object/Component in the Client's scope, that is
 /// being synced to the Client
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct LocalReplicateKey(u16);
+pub struct LocalReplicaKey(u16);
 
 /// The key that authoritatively represents an Entity in the Server
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -14,11 +14,11 @@ pub struct LocalEntityKey(u16);
 
 /// The key that represents an Object in the Client's scope, that is being
 /// synced to the Client
-pub type LocalObjectKey = LocalReplicateKey;
+pub type LocalObjectKey = LocalReplicaKey;
 
 /// The key that represents an Component in the Client's scope, that is being
 /// synced to the Client
-pub type LocalComponentKey = LocalReplicateKey;
+pub type LocalComponentKey = LocalReplicaKey;
 
 // FromU16
 
@@ -30,9 +30,9 @@ pub trait NaiaKey<Impl = Self>: Eq + PartialEq + Clone + Copy {
     fn to_u16(&self) -> u16;
 }
 
-impl NaiaKey for LocalReplicateKey {
+impl NaiaKey for LocalReplicaKey {
     fn from_u16(k: u16) -> Self {
-        LocalReplicateKey(k)
+        LocalReplicaKey(k)
     }
 
     fn to_u16(&self) -> u16 {

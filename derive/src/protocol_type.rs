@@ -361,7 +361,7 @@ fn get_load_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    manifest.register_replicate(#variant_name::get_builder());
+                    manifest.register_replica(#variant_name::get_builder());
                 };
                 let new_output_result = quote! {
                     #output

@@ -1,6 +1,6 @@
 use naia_shared::{
-    DiffMask, EntityKey, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicateKey,
-    ProtocolType, Ref, Replicate, ReplicateActionType,
+    DiffMask, EntityKey, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicaKey,
+    ProtocolType, Ref, ReplicaActionType, Replicate,
 };
 
 use super::keys::{ComponentKey, ObjectKey};
@@ -10,11 +10,11 @@ pub enum ReplicateAction<T: ProtocolType> {
     CreateObject(ObjectKey, LocalObjectKey, Ref<dyn Replicate<T>>),
     UpdateReplicate(
         ObjectKey,
-        LocalReplicateKey,
+        LocalReplicaKey,
         Ref<DiffMask>,
         Ref<dyn Replicate<T>>,
     ),
-    DeleteReplicate(ObjectKey, LocalReplicateKey),
+    DeleteReplicate(ObjectKey, LocalReplicaKey),
     AssignPawn(ObjectKey, LocalObjectKey),
     UnassignPawn(ObjectKey, LocalObjectKey),
     UpdatePawn(
@@ -40,19 +40,19 @@ pub enum ReplicateAction<T: ProtocolType> {
 }
 
 impl<T: ProtocolType> ReplicateAction<T> {
-    pub fn as_type(&self) -> ReplicateActionType {
+    pub fn as_type(&self) -> ReplicaActionType {
         match self {
-            ReplicateAction::CreateObject(_, _, _) => ReplicateActionType::CreateObject,
-            ReplicateAction::DeleteReplicate(_, _) => ReplicateActionType::DeleteReplicate,
-            ReplicateAction::UpdateReplicate(_, _, _, _) => ReplicateActionType::UpdateReplicate,
-            ReplicateAction::AssignPawn(_, _) => ReplicateActionType::AssignPawn,
-            ReplicateAction::UnassignPawn(_, _) => ReplicateActionType::UnassignPawn,
-            ReplicateAction::UpdatePawn(_, _, _, _) => ReplicateActionType::UpdatePawn,
-            ReplicateAction::CreateEntity(_, _, _) => ReplicateActionType::CreateEntity,
-            ReplicateAction::DeleteEntity(_, _) => ReplicateActionType::DeleteEntity,
-            ReplicateAction::AssignPawnEntity(_, _) => ReplicateActionType::AssignPawnEntity,
-            ReplicateAction::UnassignPawnEntity(_, _) => ReplicateActionType::UnassignPawnEntity,
-            ReplicateAction::AddComponent(_, _, _, _) => ReplicateActionType::AddComponent,
+            ReplicateAction::CreateObject(_, _, _) => ReplicaActionType::CreateObject,
+            ReplicateAction::DeleteReplicate(_, _) => ReplicaActionType::DeleteReplica,
+            ReplicateAction::UpdateReplicate(_, _, _, _) => ReplicaActionType::UpdateReplica,
+            ReplicateAction::AssignPawn(_, _) => ReplicaActionType::AssignPawn,
+            ReplicateAction::UnassignPawn(_, _) => ReplicaActionType::UnassignPawn,
+            ReplicateAction::UpdatePawn(_, _, _, _) => ReplicaActionType::UpdatePawn,
+            ReplicateAction::CreateEntity(_, _, _) => ReplicaActionType::CreateEntity,
+            ReplicateAction::DeleteEntity(_, _) => ReplicaActionType::DeleteEntity,
+            ReplicateAction::AssignPawnEntity(_, _) => ReplicaActionType::AssignPawnEntity,
+            ReplicateAction::UnassignPawnEntity(_, _) => ReplicaActionType::UnassignPawnEntity,
+            ReplicateAction::AddComponent(_, _, _, _) => ReplicaActionType::AddComponent,
         }
     }
 }

@@ -11,9 +11,9 @@ pub fn manifest_load() -> Manifest<Events, Components> {
     manifest.register_event(Auth::get_builder());
     manifest.register_event(StringMessage::get_builder());
 
-    manifest.register_replicate(Position::get_builder());
-    manifest.register_replicate(Name::get_builder());
-    manifest.register_replicate(Marker::get_builder());
+    manifest.register_replica(Position::get_builder());
+    manifest.register_replica(Name::get_builder());
+    manifest.register_replica(Marker::get_builder());
 
     manifest
 }

@@ -16,8 +16,8 @@ use naia_server_socket::{
 };
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, EntityKey, HostTickManager, Instant, KeyGenerator,
-    LocalReplicateKey, ManagerType, Manifest, PacketReader, PacketType, ProtocolType, Ref,
-    Replicate, SharedConfig, SharedReplicateMutator, StandardHeader, Timer, Timestamp,
+    LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
+    ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
 };
 
 use super::{
@@ -26,9 +26,9 @@ use super::{
     event::Event,
     interval::Interval,
     replicate::{
-        keys::{replicate_key::ReplicateKey, ObjectKey},
+        keys::{replicate_key::ReplicaKey, ObjectKey},
         mut_handler::MutHandler,
-        replicate_mutator::ReplicateMutator,
+        property_mutator::PropertyMutator,
     },
     room::{room_key::RoomKey, Room},
     server_config::ServerConfig,
@@ -45,7 +45,7 @@ pub struct Server<T: ProtocolType> {
     manifest: Manifest<T>,
     socket: Box<dyn ServerSocketTrait>,
     sender: MessageSender,
-    global_replicate_store: DenseSlotMap<ReplicateKey, T>,
+    global_replicate_store: DenseSlotMap<ReplicaKey, T>,
     global_object_set: HashSet<ObjectKey>,
     auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
     mut_handler: Ref<MutHandler>,
@@ -327,9 +327,8 @@ impl<U: ProtocolType> Server<U> {
                                         if let Some(auth_func) = &self.auth_func {
                                             let naia_id = reader.read_u16();
 
-                                            let auth_message = self
-                                                .manifest
-                                                .create_replicate(naia_id, &mut reader);
+                                            let auth_message =
+                                                self.manifest.create_replica(naia_id, &mut reader);
                                             if !(auth_func.as_ref().as_ref())(
                                                 &user_key,
                                                 &auth_message,
@@ -517,18 +516,16 @@ impl<U: ProtocolType> Server<U> {
     /// is in scope. Gives back an ObjectKey which can be used to get the
     /// reference to the Object from the Server once again
     pub fn register_object(&mut self, object: U) -> ObjectKey {
-        let new_mutator_ref: Ref<ReplicateMutator> =
-            Ref::new(ReplicateMutator::new(&self.mut_handler));
+        let new_mutator_ref: Ref<PropertyMutator> =
+            Ref::new(PropertyMutator::new(&self.mut_handler));
         object
             .inner_ref()
             .borrow_mut()
-            .set_mutator(&to_replicate_mutator(&new_mutator_ref));
+            .set_mutator(&to_property_mutator(&new_mutator_ref));
         let object_key = self.global_replicate_store.insert(object);
         self.global_object_set.insert(object_key);
         new_mutator_ref.borrow_mut().set_object_key(object_key);
-        self.mut_handler
-            .borrow_mut()
-            .register_replicate(&object_key);
+        self.mut_handler.borrow_mut().register_replica(&object_key);
         return object_key;
     }
 
@@ -545,7 +542,7 @@ impl<U: ProtocolType> Server<U> {
             }
         }
 
-        self.mut_handler.borrow_mut().deregister_replicate(&key);
+        self.mut_handler.borrow_mut().deregister_replica(&key);
         self.global_object_set.remove(&key);
         return self
             .global_replicate_store
@@ -683,7 +680,7 @@ impl<U: ProtocolType> Server<U> {
 
         self.mut_handler
             .borrow_mut()
-            .deregister_replicate(component_key);
+            .deregister_replica(component_key);
         return self
             .global_replicate_store
             .remove(*component_key)
@@ -1089,18 +1086,18 @@ impl<U: ProtocolType> Server<U> {
 cfg_if! {
     if #[cfg(feature = "multithread")] {
         use std::sync::{Arc, Mutex};
-        fn to_replicate_mutator_raw(eref: &Arc<Mutex<ReplicateMutator>>) -> Arc<Mutex<dyn SharedReplicateMutator>> {
+        fn to_property_mutator_raw(eref: &Arc<Mutex<PropertyMutator>>) -> Arc<Mutex<dyn PropertyMutate>> {
             eref.clone()
         }
     } else {
         use std::cell::RefCell;
-        fn to_replicate_mutator_raw(eref: &Rc<RefCell<ReplicateMutator>>) -> Rc<RefCell<dyn SharedReplicateMutator>> {
+        fn to_property_mutator_raw(eref: &Rc<RefCell<PropertyMutator>>) -> Rc<RefCell<dyn PropertyMutate>> {
             eref.clone()
         }
     }
 }
 
-fn to_replicate_mutator(eref: &Ref<ReplicateMutator>) -> Ref<dyn SharedReplicateMutator> {
-    let upcast_ref = to_replicate_mutator_raw(&eref.inner());
+fn to_property_mutator(eref: &Ref<PropertyMutator>) -> Ref<dyn PropertyMutate> {
+    let upcast_ref = to_property_mutator_raw(&eref.inner());
     Ref::new_raw(upcast_ref)
 }

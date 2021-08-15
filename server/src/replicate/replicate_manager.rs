@@ -10,15 +10,15 @@ use slotmap::SparseSecondaryMap;
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    DiffMask, EntityKey, KeyGenerator, LocalEntityKey, LocalReplicateKey, Manifest, NaiaKey,
-    ProtocolType, Ref, Replicate, ReplicateNotifiable, MTU_SIZE,
+    DiffMask, EntityKey, KeyGenerator, LocalEntityKey, LocalReplicaKey, Manifest, NaiaKey,
+    PacketNotifiable, ProtocolType, Ref, Replicate, MTU_SIZE,
 };
 
 use crate::packet_writer::PacketWriter;
 
 use super::{
     entity_record::EntityRecord,
-    keys::{replicate_key::ReplicateKey, ComponentKey, ObjectKey},
+    keys::{replicate_key::ReplicaKey, ComponentKey, ObjectKey},
     locality_status::LocalityStatus,
     mut_handler::MutHandler,
     replicate_action::ReplicateAction,
@@ -31,11 +31,11 @@ use super::{
 pub struct ReplicateManager<T: ProtocolType> {
     address: SocketAddr,
     // replicates
-    replicate_key_generator: KeyGenerator<LocalReplicateKey>,
-    local_replicate_store: SparseSecondaryMap<ReplicateKey, Ref<dyn Replicate<T>>>,
-    local_to_global_replicate_key_map: HashMap<LocalReplicateKey, ReplicateKey>,
-    replicate_records: SparseSecondaryMap<ReplicateKey, ReplicateRecord>,
-    delayed_replicate_deletions: HashSet<ReplicateKey>,
+    replicate_key_generator: KeyGenerator<LocalReplicaKey>,
+    local_replicate_store: SparseSecondaryMap<ReplicaKey, Ref<dyn Replicate<T>>>,
+    local_to_global_replicate_key_map: HashMap<LocalReplicaKey, ReplicaKey>,
+    replicate_records: SparseSecondaryMap<ReplicaKey, ReplicateRecord>,
+    delayed_replicate_deletions: HashSet<ReplicaKey>,
     // objects
     pawn_object_store: HashSet<ObjectKey>,
     // entities
@@ -47,12 +47,12 @@ pub struct ReplicateManager<T: ProtocolType> {
     // messages / updates / ect
     queued_messages: VecDeque<ReplicateAction<T>>,
     sent_messages: HashMap<u16, Vec<ReplicateAction<T>>>,
-    sent_updates: HashMap<u16, HashMap<ReplicateKey, Ref<DiffMask>>>,
+    sent_updates: HashMap<u16, HashMap<ReplicaKey, Ref<DiffMask>>>,
     last_update_packet_index: u16,
     last_last_update_packet_index: u16,
     mut_handler: Ref<MutHandler>,
     last_popped_diff_mask: Option<DiffMask>,
-    last_popped_diff_mask_list: Option<Vec<(ReplicateKey, DiffMask)>>,
+    last_popped_diff_mask_list: Option<Vec<(ReplicaKey, DiffMask)>>,
 }
 
 impl<T: ProtocolType> ReplicateManager<T> {
@@ -143,10 +143,10 @@ impl<T: ProtocolType> ReplicateManager<T> {
         //clear replicate mask of replicate if need be
         match &message {
             ReplicateAction::CreateObject(global_key, _, _) => {
-                self.pop_create_replicate_diff_mask(global_key);
+                self.pop_create_replica_diff_mask(global_key);
             }
             ReplicateAction::AddComponent(_, global_key, _, _) => {
-                self.pop_create_replicate_diff_mask(global_key);
+                self.pop_create_replica_diff_mask(global_key);
             }
             ReplicateAction::CreateEntity(_, _, components_list_opt) => {
                 if let Some(components_list) = components_list_opt {
@@ -202,10 +202,10 @@ impl<T: ProtocolType> ReplicateManager<T> {
 
         match &message {
             ReplicateAction::CreateObject(global_key, _, _) => {
-                self.unpop_create_replicate_diff_mask(global_key);
+                self.unpop_create_replica_diff_mask(global_key);
             }
             ReplicateAction::AddComponent(_, global_key, _, _) => {
-                self.unpop_create_replicate_diff_mask(global_key);
+                self.unpop_create_replica_diff_mask(global_key);
             }
             ReplicateAction::CreateEntity(_, _, _) => {
                 if let Some(last_popped_diff_mask_list) = &self.last_popped_diff_mask_list {
@@ -472,7 +472,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
 
     // Ect..
 
-    pub fn get_global_key_from_local(&self, local_key: LocalReplicateKey) -> Option<&ObjectKey> {
+    pub fn get_global_key_from_local(&self, local_key: LocalReplicaKey) -> Option<&ObjectKey> {
         return self.local_to_global_replicate_key_map.get(&local_key);
     }
 
@@ -681,10 +681,10 @@ impl<T: ProtocolType> ReplicateManager<T> {
         key: &ObjectKey,
         replicate: &Ref<dyn Replicate<T>>,
         status: LocalityStatus,
-    ) -> LocalReplicateKey {
+    ) -> LocalReplicaKey {
         if !self.local_replicate_store.contains_key(*key) {
             self.local_replicate_store.insert(*key, replicate.clone());
-            let local_key: LocalReplicateKey = self.replicate_key_generator.generate();
+            let local_key: LocalReplicaKey = self.replicate_key_generator.generate();
             self.local_to_global_replicate_key_map
                 .insert(local_key, *key);
             let diff_mask_size = replicate.borrow().get_diff_mask_size();
@@ -722,7 +722,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
         }
     }
 
-    fn pop_create_replicate_diff_mask(&mut self, global_key: &ObjectKey) {
+    fn pop_create_replica_diff_mask(&mut self, global_key: &ObjectKey) {
         if let Some(record) = self.replicate_records.get(*global_key) {
             self.last_popped_diff_mask = Some(record.get_diff_mask().borrow().clone());
         }
@@ -731,7 +731,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
             .clear_replicate(&self.address, global_key);
     }
 
-    fn unpop_create_replicate_diff_mask(&mut self, global_key: &ObjectKey) {
+    fn unpop_create_replica_diff_mask(&mut self, global_key: &ObjectKey) {
         if let Some(last_popped_diff_mask) = &self.last_popped_diff_mask {
             self.mut_handler.borrow_mut().set_replicate(
                 &self.address,
@@ -746,7 +746,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
         is_pawn: bool,
         packet_index: u16,
         global_key: &ObjectKey,
-        local_key: &LocalReplicateKey,
+        local_key: &LocalReplicaKey,
         diff_mask: &Ref<DiffMask>,
         replicate: &Ref<dyn Replicate<T>>,
     ) -> ReplicateAction<T> {
@@ -774,7 +774,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
         is_pawn: bool,
         packet_index: u16,
         global_key: &ObjectKey,
-        local_key: &LocalReplicateKey,
+        local_key: &LocalReplicaKey,
         replicate: &Ref<dyn Replicate<T>>,
     ) -> ReplicateAction<T> {
         let original_diff_mask = self.undo_replicate_update(&packet_index, &global_key);
@@ -856,7 +856,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
     }
 }
 
-impl<T: ProtocolType> ReplicateNotifiable for ReplicateManager<T> {
+impl<T: ProtocolType> PacketNotifiable for ReplicateManager<T> {
     fn notify_packet_delivered(&mut self, packet_index: u16) {
         let mut deleted_replicates: Vec<ObjectKey> = Vec::new();
 

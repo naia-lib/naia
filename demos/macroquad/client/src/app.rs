@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use macroquad::prelude::*;
 
-use naia_client::{Client, ClientConfig, Event, LocalReplicateKey, Ref, Replicate};
+use naia_client::{Client, ClientConfig, Event, LocalReplicaKey, Ref, Replicate};
 
 use naia_demo_macroquad_shared::{
     behavior as shared_behavior, get_shared_config,
@@ -11,9 +11,9 @@ use naia_demo_macroquad_shared::{
 
 pub struct App {
     client: Client<Protocol>,
-    pawn: Option<(LocalReplicateKey, Ref<Square>)>,
+    pawn: Option<(LocalReplicaKey, Ref<Square>)>,
     queued_command: Option<KeyCommand>,
-    square_map: HashMap<LocalReplicateKey, Ref<Square>>,
+    square_map: HashMap<LocalReplicaKey, Ref<Square>>,
 }
 
 impl App {

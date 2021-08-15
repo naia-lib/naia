@@ -3,15 +3,15 @@ use std::collections::{hash_map::Keys, HashMap, HashSet, VecDeque};
 use log::warn;
 
 use naia_shared::{
-    DiffMask, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicateKey, Manifest,
-    NaiaKey, PacketReader, PawnKey, ProtocolType, ReplicateActionType,
+    DiffMask, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicaKey, Manifest,
+    NaiaKey, PacketReader, PawnKey, ProtocolType, ReplicaActionType,
 };
 
 use super::{dual_command_receiver::DualCommandReceiver, replicate_action::ReplicateAction};
 
 #[derive(Debug)]
 pub struct ReplicateManager<T: ProtocolType> {
-    local_replicate_store: HashMap<LocalReplicateKey, T>,
+    local_replicate_store: HashMap<LocalReplicaKey, T>,
     queued_incoming_messages: VecDeque<ReplicateAction<T>>,
     pawn_store: HashMap<LocalObjectKey, T>,
     local_entity_store: HashMap<LocalEntityKey, HashSet<LocalComponentKey>>,
@@ -42,15 +42,15 @@ impl<T: ProtocolType> ReplicateManager<T> {
         let replicate_action_count = reader.read_u8();
 
         for _ in 0..replicate_action_count {
-            let message_type = ReplicateActionType::from_u8(reader.read_u8());
+            let message_type = ReplicaActionType::from_u8(reader.read_u8());
 
             match message_type {
-                ReplicateActionType::CreateObject => {
+                ReplicaActionType::CreateObject => {
                     // Object Creation
                     let naia_id: u16 = reader.read_u16();
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
-                    let new_replicate = manifest.create_replicate(naia_id, reader);
+                    let new_replicate = manifest.create_replica(naia_id, reader);
                     if !self.local_replicate_store.contains_key(&object_key) {
                         self.local_replicate_store.insert(object_key, new_replicate);
 
@@ -61,9 +61,9 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         warn!("attempted to insert duplicate local object key");
                     }
                 }
-                ReplicateActionType::DeleteReplicate => {
+                ReplicaActionType::DeleteReplica => {
                     // Replicate Deletion
-                    let replicate_key = LocalReplicateKey::from_u16(reader.read_u16());
+                    let replicate_key = LocalReplicaKey::from_u16(reader.read_u16());
 
                     if self.component_entity_map.contains_key(&replicate_key) {
                         // Replicate is a Component
@@ -81,9 +81,9 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         self.object_delete_cleanup(command_receiver, &replicate_key);
                     }
                 }
-                ReplicateActionType::UpdateReplicate => {
+                ReplicaActionType::UpdateReplica => {
                     // Replicate Update
-                    let replicate_key = LocalReplicateKey::from_u16(reader.read_u16());
+                    let replicate_key = LocalReplicaKey::from_u16(reader.read_u16());
 
                     if let Some(replicate_ref) = self.local_replicate_store.get_mut(&replicate_key)
                     {
@@ -114,7 +114,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         }
                     }
                 }
-                ReplicateActionType::AssignPawn => {
+                ReplicaActionType::AssignPawn => {
                     // Assign Pawn
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
@@ -129,7 +129,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                             .push_back(ReplicateAction::AssignPawn(object_key));
                     }
                 }
-                ReplicateActionType::UnassignPawn => {
+                ReplicaActionType::UnassignPawn => {
                     // Unassign Pawn
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
                     if self.pawn_store.contains_key(&object_key) {
@@ -141,7 +141,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                     self.queued_incoming_messages
                         .push_back(ReplicateAction::UnassignPawn(object_key));
                 }
-                ReplicateActionType::UpdatePawn => {
+                ReplicaActionType::UpdatePawn => {
                     // Pawn Update
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
@@ -159,7 +159,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                             .push_back(ReplicateAction::UpdateObject(object_key));
                     }
                 }
-                ReplicateActionType::CreateEntity => {
+                ReplicaActionType::CreateEntity => {
                     // Entity Creation
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     let components_num = reader.read_u8();
@@ -170,7 +170,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         for _ in 0..components_num {
                             let naia_id: u16 = reader.read_u16();
                             let _component_key = reader.read_u16();
-                            manifest.create_replicate(naia_id, reader);
+                            manifest.create_replica(naia_id, reader);
                         }
                     } else {
                         let mut component_list: Vec<LocalComponentKey> = Vec::new();
@@ -181,7 +181,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                             let naia_id: u16 = reader.read_u16();
                             let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                            let new_replicate = manifest.create_replicate(naia_id, reader);
+                            let new_replicate = manifest.create_replica(naia_id, reader);
                             if self.local_replicate_store.contains_key(&component_key) {
                                 panic!("attempted to insert duplicate component");
                             } else {
@@ -199,7 +199,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                             .push_back(ReplicateAction::CreateEntity(entity_key, component_list));
                     }
                 }
-                ReplicateActionType::DeleteEntity => {
+                ReplicaActionType::DeleteEntity => {
                     // Entity Deletion
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
 
@@ -226,7 +226,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         );
                     }
                 }
-                ReplicateActionType::AssignPawnEntity => {
+                ReplicaActionType::AssignPawnEntity => {
                     // Assign Pawn Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if self.local_entity_store.contains_key(&entity_key) {
@@ -239,7 +239,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                             .push_back(ReplicateAction::AssignPawnEntity(entity_key));
                     }
                 }
-                ReplicateActionType::UnassignPawnEntity => {
+                ReplicaActionType::UnassignPawnEntity => {
                     // Unassign Pawn Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if self.pawn_entity_store.contains(&entity_key) {
@@ -250,13 +250,13 @@ impl<T: ProtocolType> ReplicateManager<T> {
                     self.queued_incoming_messages
                         .push_back(ReplicateAction::UnassignPawnEntity(entity_key));
                 }
-                ReplicateActionType::AddComponent => {
+                ReplicaActionType::AddComponent => {
                     // Add Component to Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     let naia_id: u16 = reader.read_u16();
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                    let new_component = manifest.create_replicate(naia_id, reader);
+                    let new_component = manifest.create_replica(naia_id, reader);
                     if self.local_replicate_store.contains_key(&component_key) {
                         // its possible we received a very late duplicate message
                         warn!(
@@ -290,7 +290,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         }
                     }
                 }
-                ReplicateActionType::Unknown => {
+                ReplicaActionType::Unknown => {
                     panic!("received unknown type of replicate message");
                 }
             }
