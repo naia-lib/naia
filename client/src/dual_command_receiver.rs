@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
-use naia_shared::{Replicate, ProtocolType, SequenceIterator, PawnKey};
+use naia_shared::{PawnKey, ProtocolType, Replicate, SequenceIterator};
 
-use super::{replicate_manager::ReplicateManager, command_receiver::CommandReceiver};
+use super::{command_receiver::CommandReceiver, replicate_manager::ReplicateManager};
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
 pub struct DualCommandReceiver<T: ProtocolType> {
-    replicate_manager:  CommandReceiver<T>,
+    replicate_manager: CommandReceiver<T>,
     entity_manager: CommandReceiver<T>,
 }
 
@@ -15,7 +15,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     /// Creates a new DualCommandReceiver
     pub fn new() -> Self {
         DualCommandReceiver {
-            replicate_manager:  CommandReceiver::new(),
+            replicate_manager: CommandReceiver::new(),
             entity_manager: CommandReceiver::new(),
         }
     }
@@ -45,8 +45,10 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
         &mut self,
         replicate_manager: &mut ReplicateManager<U>,
     ) {
-        self.replicate_manager.process_command_replay::<U>(replicate_manager);
-        self.entity_manager.process_command_replay::<U>(replicate_manager);
+        self.replicate_manager
+            .process_command_replay::<U>(replicate_manager);
+        self.entity_manager
+            .process_command_replay::<U>(replicate_manager);
     }
 
     /// Queues a Pawn Replicate Command to be ran locally on the Client
@@ -58,10 +60,12 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     ) {
         match pawn_key {
             PawnKey::Object(_) => {
-                self.replicate_manager.queue_command(host_tick, pawn_key, command);
-            },
+                self.replicate_manager
+                    .queue_command(host_tick, pawn_key, command);
+            }
             PawnKey::Entity(_) => {
-                self.entity_manager.queue_command(host_tick, pawn_key, command);
+                self.entity_manager
+                    .queue_command(host_tick, pawn_key, command);
             }
         }
     }
@@ -71,7 +75,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
         match pawn_key {
             PawnKey::Object(_) => {
                 return self.replicate_manager.command_history_count(pawn_key);
-            },
+            }
             PawnKey::Entity(_) => {
                 return self.entity_manager.command_history_count(pawn_key);
             }
@@ -86,8 +90,10 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     ) -> Option<SequenceIterator<Rc<Box<dyn Replicate<T>>>>> {
         match pawn_key {
             PawnKey::Object(_) => {
-                return self.replicate_manager.command_history_iter(pawn_key, reverse);
-            },
+                return self
+                    .replicate_manager
+                    .command_history_iter(pawn_key, reverse);
+            }
             PawnKey::Entity(_) => {
                 return self.entity_manager.command_history_iter(pawn_key, reverse);
             }
@@ -98,8 +104,10 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     pub fn replay_commands(&mut self, history_tick: u16, pawn_key: &PawnKey) {
         match pawn_key {
             PawnKey::Object(_) => {
-                return self.replicate_manager.replay_commands(history_tick, pawn_key);
-            },
+                return self
+                    .replicate_manager
+                    .replay_commands(history_tick, pawn_key);
+            }
             PawnKey::Entity(_) => {
                 return self.entity_manager.replay_commands(history_tick, pawn_key);
             }
@@ -110,10 +118,14 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     pub fn remove_history_until(&mut self, history_tick: u16, pawn_key: &PawnKey) {
         match pawn_key {
             PawnKey::Object(_) => {
-                return self.replicate_manager.remove_history_until(history_tick, pawn_key);
-            },
+                return self
+                    .replicate_manager
+                    .remove_history_until(history_tick, pawn_key);
+            }
             PawnKey::Entity(_) => {
-                return self.entity_manager.remove_history_until(history_tick, pawn_key);
+                return self
+                    .entity_manager
+                    .remove_history_until(history_tick, pawn_key);
             }
         }
     }
@@ -123,7 +135,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
         match pawn_key {
             PawnKey::Object(_) => {
                 return self.replicate_manager.pawn_init(pawn_key);
-            },
+            }
             PawnKey::Entity(_) => {
                 return self.entity_manager.pawn_init(pawn_key);
             }
@@ -135,7 +147,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
         match pawn_key {
             PawnKey::Object(_) => {
                 return self.replicate_manager.pawn_cleanup(pawn_key);
-            },
+            }
             PawnKey::Entity(_) => {
                 return self.entity_manager.pawn_cleanup(pawn_key);
             }

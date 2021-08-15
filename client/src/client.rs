@@ -5,17 +5,20 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 
 pub use naia_shared::{
-    Replicate, ProtocolType, ConnectionConfig, HostTickManager, Instant, LocalReplicateKey,
-    ManagerType, Manifest, PacketReader, PacketType, SequenceIterator, SharedConfig,
-    StandardHeader, Timer, Timestamp, PawnKey, LocalComponentKey, LocalEntityKey, LocalObjectKey,
+    ConnectionConfig, HostTickManager, Instant, LocalComponentKey, LocalEntityKey, LocalObjectKey,
+    LocalReplicateKey, ManagerType, Manifest, PacketReader, PacketType, PawnKey, ProtocolType,
+    Replicate, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
 };
 
 use super::{
     client_config::ClientConfig,
-    event::Event, tick_manager::TickManager, error::NaiaClientError,
-    server_connection::ServerConnection, Packet,
     connection_state::{ConnectionState, ConnectionState::AwaitingChallengeResponse},
-    replicate_action::ReplicateAction
+    error::NaiaClientError,
+    event::Event,
+    replicate_action::ReplicateAction,
+    server_connection::ServerConnection,
+    tick_manager::TickManager,
+    Packet,
 };
 
 /// Client can send/receive events to/from a server, and has a pool of in-scope
@@ -100,7 +103,7 @@ impl<T: ProtocolType> Client<T> {
                 }
                 // receive replicate action
                 while let Some(action) = connection.get_incoming_replicate_action() {
-                    let event_opt: Option<Event::<T>> = {
+                    let event_opt: Option<Event<T>> = {
                         match action {
                             ReplicateAction::CreateObject(local_key) => {
                                 Some(Event::CreateObject(local_key))
@@ -141,9 +144,15 @@ impl<T: ProtocolType> Client<T> {
                             ReplicateAction::UpdateComponent(entity_key, component_key) => {
                                 Some(Event::UpdateComponent(entity_key, component_key))
                             }
-                            ReplicateAction::RemoveComponent(entity_key, component_key, component) => {
-                                Some(Event::RemoveComponent(entity_key, component_key, component.clone()))
-                            }
+                            ReplicateAction::RemoveComponent(
+                                entity_key,
+                                component_key,
+                                component,
+                            ) => Some(Event::RemoveComponent(
+                                entity_key,
+                                component_key,
+                                component.clone(),
+                            )),
                         }
                     };
                     match event_opt {
@@ -224,9 +233,9 @@ impl<T: ProtocolType> Client<T> {
                         );
                     }
                     // send a packet
-                    while let Some(payload) = connection.get_outgoing_packet(
-                            self.tick_manager.get_client_tick(),
-                            &self.manifest) {
+                    while let Some(payload) = connection
+                        .get_outgoing_packet(self.tick_manager.get_client_tick(), &self.manifest)
+                    {
                         self.sender
                             .send(Packet::new_raw(payload))
                             .expect("send failed!");
@@ -391,7 +400,11 @@ impl<T: ProtocolType> Client<T> {
     }
 
     /// Queues up a Pawn Entity Command to be sent to the Server
-    pub fn entity_send_command(&mut self, pawn_entity_key: &LocalEntityKey, command: &impl Replicate<T>) {
+    pub fn entity_send_command(
+        &mut self,
+        pawn_entity_key: &LocalEntityKey,
+        command: &impl Replicate<T>,
+    ) {
         if let Some(connection) = &mut self.server_connection {
             connection.entity_queue_command(pawn_entity_key, command);
         }
@@ -432,8 +445,8 @@ impl<T: ProtocolType> Client<T> {
         return self.get_object(key);
     }
 
-    /// Get whether or not the Component currently in scope for the Client, given
-    /// that Component's Key
+    /// Get whether or not the Component currently in scope for the Client,
+    /// given that Component's Key
     pub fn has_component(&self, key: &LocalComponentKey) -> bool {
         if let Some(connection) = &self.server_connection {
             return connection.has_component(key);
@@ -441,8 +454,8 @@ impl<T: ProtocolType> Client<T> {
         return false;
     }
 
-    /// Return an iterator to the collection of keys to all Replicates tracked by
-    /// the Client
+    /// Return an iterator to the collection of keys to all Replicates tracked
+    /// by the Client
     pub fn object_keys(&self) -> Option<Vec<LocalObjectKey>> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.object_keys());
@@ -450,8 +463,8 @@ impl<T: ProtocolType> Client<T> {
         return None;
     }
 
-    /// Return an iterator to the collection of keys to all Components tracked by
-    /// the Client
+    /// Return an iterator to the collection of keys to all Components tracked
+    /// by the Client
     pub fn component_keys(&self) -> Option<Vec<LocalComponentKey>> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.component_keys());

@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
-use naia_shared::{Replicate, ProtocolType, PawnKey};
+use naia_shared::{PawnKey, ProtocolType, Replicate};
 
 use super::command_sender::CommandSender;
 
 /// Handles outgoing Commands
 #[derive(Debug)]
 pub struct DualCommandSender<T: ProtocolType> {
-    replicate_manager:  CommandSender<T>,
+    replicate_manager: CommandSender<T>,
     entity_manager: CommandSender<T>,
 }
 
@@ -15,7 +15,7 @@ impl<T: ProtocolType> DualCommandSender<T> {
     /// Creates a new CommandSender
     pub fn new() -> Self {
         DualCommandSender {
-            replicate_manager:  CommandSender::new(),
+            replicate_manager: CommandSender::new(),
             entity_manager: CommandSender::new(),
         }
     }
@@ -40,7 +40,7 @@ impl<T: ProtocolType> DualCommandSender<T> {
         match pawn_key {
             PawnKey::Object(_) => {
                 self.replicate_manager.unpop_command(pawn_key, command);
-            },
+            }
             PawnKey::Entity(_) => {
                 self.entity_manager.unpop_command(pawn_key, command);
             }
@@ -52,7 +52,7 @@ impl<T: ProtocolType> DualCommandSender<T> {
         match pawn_key {
             PawnKey::Object(_) => {
                 self.replicate_manager.queue_command(pawn_key, command);
-            },
+            }
             PawnKey::Entity(_) => {
                 self.entity_manager.queue_command(pawn_key, command);
             }

@@ -1,6 +1,6 @@
 /// Every data packet transmitted has data specific to either the Message or
-/// Replicate managers. This value is written to differentiate those parts of the
-/// payload.
+/// Replicate managers. This value is written to differentiate those parts of
+/// the payload.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum ManagerType {

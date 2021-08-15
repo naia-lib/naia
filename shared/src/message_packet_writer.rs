@@ -1,9 +1,9 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use crate::{
-    replicate::{protocol_type::ProtocolType, replicate::Replicate},
     manager_type::ManagerType,
     manifest::Manifest,
+    replicate::{protocol_type::ProtocolType, replicate::Replicate},
     standard_header::StandardHeader,
 };
 
@@ -17,8 +17,8 @@ pub struct MessagePacketWriter {
 }
 
 impl MessagePacketWriter {
-    /// Construct a new instance of `MessagePacketWriter`, the given `buffer` will
-    /// be used to read information from.
+    /// Construct a new instance of `MessagePacketWriter`, the given `buffer`
+    /// will be used to read information from.
     pub fn new() -> MessagePacketWriter {
         MessagePacketWriter {
             message_working_bytes: Vec::<u8>::new(),
@@ -48,8 +48,8 @@ impl MessagePacketWriter {
         return self.message_working_bytes.len();
     }
 
-    /// Writes an Message into the Writer's internal buffer, which will eventually
-    /// be put into the outgoing packet
+    /// Writes an Message into the Writer's internal buffer, which will
+    /// eventually be put into the outgoing packet
     pub fn write_message<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,

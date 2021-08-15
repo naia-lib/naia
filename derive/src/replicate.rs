@@ -1,8 +1,6 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{
-    parse_macro_input, DeriveInput, Ident, Type,
-};
+use syn::{parse_macro_input, DeriveInput, Ident, Type};
 
 pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

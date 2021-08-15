@@ -5,8 +5,8 @@ use std::net::SocketAddr;
 
 mod shared_config;
 
-pub mod protocol;
 pub mod behavior;
+pub mod protocol;
 
 pub use shared_config::get_shared_config;
 

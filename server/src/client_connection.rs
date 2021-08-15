@@ -1,18 +1,15 @@
 use std::{collections::HashSet, net::SocketAddr};
 
 use naia_shared::{
-    Replicate, ProtocolType, Connection, ConnectionConfig, ManagerType, Manifest,
-    PacketReader, PacketType, Ref, SequenceNumber, StandardHeader, EntityKey, PawnKey
+    Connection, ConnectionConfig, EntityKey, ManagerType, Manifest, PacketReader, PacketType,
+    PawnKey, ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
 };
 
 use super::{
-    replicate::{
-        keys::ObjectKey, mut_handler::MutHandler,
-        replicate_manager::ReplicateManager,
-    },
     command_receiver::CommandReceiver,
-    ping_manager::PingManager,
     packet_writer::PacketWriter,
+    ping_manager::PingManager,
+    replicate::{keys::ObjectKey, mut_handler::MutHandler, replicate_manager::ReplicateManager},
 };
 use crate::{ComponentKey, GlobalPawnKey};
 
@@ -42,19 +39,22 @@ impl<U: ProtocolType> ClientConnection<U> {
         host_tick: u16,
         manifest: &Manifest<U>,
     ) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_messages() || self.replicate_manager.has_outgoing_actions() {
+        if self.connection.has_outgoing_messages() || self.replicate_manager.has_outgoing_actions()
+        {
             let mut writer = PacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
-            while let Some(popped_message) = self.connection.pop_outgoing_message(next_packet_index) {
+            while let Some(popped_message) = self.connection.pop_outgoing_message(next_packet_index)
+            {
                 if !writer.write_message(manifest, &popped_message) {
                     self.connection
                         .unpop_outgoing_message(next_packet_index, &popped_message);
                     break;
                 }
             }
-            while let Some(popped_replicate_action) =
-                self.replicate_manager.pop_outgoing_action(next_packet_index)
+            while let Some(popped_replicate_action) = self
+                .replicate_manager
+                .pop_outgoing_action(next_packet_index)
             {
                 if !self.replicate_manager.write_replicate_action(
                     &mut writer,
@@ -146,21 +146,22 @@ impl<U: ProtocolType> ClientConnection<U> {
         {
             match local_pawn_key {
                 PawnKey::Object(local_object_key) => {
-                    if let Some(global_pawn_key) =
-                        self.replicate_manager.get_global_key_from_local(local_object_key)
+                    if let Some(global_pawn_key) = self
+                        .replicate_manager
+                        .get_global_key_from_local(local_object_key)
                     {
                         return Some((GlobalPawnKey::Object(*global_pawn_key), command));
                     }
                 }
                 PawnKey::Entity(local_entity_key) => {
-                    if let Some(global_pawn_key) =
-                        self.replicate_manager.get_global_entity_key_from_local(local_entity_key)
+                    if let Some(global_pawn_key) = self
+                        .replicate_manager
+                        .get_global_entity_key_from_local(local_entity_key)
                     {
                         return Some((GlobalPawnKey::Entity(*global_pawn_key), command));
                     }
                 }
             }
-
         }
         return None;
     }
@@ -175,8 +176,14 @@ impl<U: ProtocolType> ClientConnection<U> {
         return self.replicate_manager.has_entity(key);
     }
 
-    pub fn add_entity(&mut self, key: &EntityKey, components_ref: &Ref<HashSet<ComponentKey>>, component_list: &Vec<(ComponentKey, Ref<dyn Replicate<U>>)>) {
-        self.replicate_manager.add_entity(key, components_ref, component_list);
+    pub fn add_entity(
+        &mut self,
+        key: &EntityKey,
+        components_ref: &Ref<HashSet<ComponentKey>>,
+        component_list: &Vec<(ComponentKey, Ref<dyn Replicate<U>>)>,
+    ) {
+        self.replicate_manager
+            .add_entity(key, components_ref, component_list);
     }
 
     pub fn remove_entity(&mut self, key: &EntityKey) {
@@ -195,8 +202,14 @@ impl<U: ProtocolType> ClientConnection<U> {
         self.replicate_manager.remove_pawn_entity(key);
     }
 
-    pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Replicate<U>>) {
-        self.replicate_manager.add_component(entity_key, component_key, component_ref);
+    pub fn add_component(
+        &mut self,
+        entity_key: &EntityKey,
+        component_key: &ComponentKey,
+        component_ref: &Ref<dyn Replicate<U>>,
+    ) {
+        self.replicate_manager
+            .add_component(entity_key, component_key, component_ref);
     }
 
     // Pass-through methods to underlying common connection

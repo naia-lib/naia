@@ -2,13 +2,15 @@ use std::collections::HashMap;
 
 use log::{info, warn};
 
-use hecs::{Entity as HecsEntityKey, World, EntityBuilder as HecsEntityBuilder};
+use hecs::{Entity as HecsEntityKey, EntityBuilder as HecsEntityBuilder, World};
 
-use naia_client::{ClientConfig, Event, Client, NaiaKey, LocalEntityKey as NaiaEntityKey, Ref, Replicate};
+use naia_client::{
+    Client, ClientConfig, Event, LocalEntityKey as NaiaEntityKey, NaiaKey, Ref, Replicate,
+};
 
 use naia_demo_basic_shared::{
     get_shared_config,
-    protocol::{Protocol, Auth, StringMessage},
+    protocol::{Auth, Protocol, StringMessage},
 };
 
 pub struct App {
@@ -60,8 +62,7 @@ impl App {
                                 //let message_inner = message.message.get();
                                 //info!("Client received message: {}", message_inner);
 
-                                let new_message =
-                                    format!("Client Packet ({})", self.message_count);
+                                let new_message = format!("Client Packet ({})", self.message_count);
                                 //info!("Client send: {}", new_message);
 
                                 let string_message = StringMessage::new(new_message);
@@ -75,8 +76,14 @@ impl App {
 
                             // initialize w/ starting components
                             for component_key in component_keys {
-                                info!("init component: {}, to entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
-                                let component = self.client.get_component(&component_key)
+                                info!(
+                                    "init component: {}, to entity: {}",
+                                    component_key.to_u16(),
+                                    naia_entity_key.to_u16()
+                                );
+                                let component = self
+                                    .client
+                                    .get_component(&component_key)
                                     .expect("attempting to add non-existent component to entity")
                                     .clone();
                                 match component {
@@ -95,45 +102,64 @@ impl App {
 
                             let hecs_entity_key = self.world.spawn(self.entity_builder.build());
                             self.entity_key_map.insert(naia_entity_key, hecs_entity_key);
-                        },
+                        }
                         Event::DeleteEntity(naia_entity_key) => {
                             info!("deletion of entity: {}", naia_entity_key.to_u16());
-                            if let Some(hecs_entity_key) = self.entity_key_map.remove(&naia_entity_key) {
-                                self.world.despawn(hecs_entity_key)
+                            if let Some(hecs_entity_key) =
+                                self.entity_key_map.remove(&naia_entity_key)
+                            {
+                                self.world
+                                    .despawn(hecs_entity_key)
                                     .expect("unsuccessful despawn of entity");
                             } else {
                                 warn!("attempted deletion of non-existent entity");
                             }
-                        },
+                        }
                         Event::AddComponent(naia_entity_key, component_key) => {
-                            info!("add component: {}, to entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
+                            info!(
+                                "add component: {}, to entity: {}",
+                                component_key.to_u16(),
+                                naia_entity_key.to_u16()
+                            );
 
-                            let hecs_entity_key = *self.entity_key_map.get(&naia_entity_key)
+                            let hecs_entity_key = *self
+                                .entity_key_map
+                                .get(&naia_entity_key)
                                 .expect("attempting to add new component to non-existent entity");
 
-                            let component = self.client.get_component(&component_key)
+                            let component = self
+                                .client
+                                .get_component(&component_key)
                                 .expect("attempting to add non-existent component to entity")
                                 .clone();
                             match component {
                                 Protocol::Position(position_ref) => {
-                                    self.world.insert_one(hecs_entity_key, position_ref)
+                                    self.world
+                                        .insert_one(hecs_entity_key, position_ref)
                                         .expect("error inserting component");
                                 }
                                 Protocol::Name(name_ref) => {
-                                    self.world.insert_one(hecs_entity_key, name_ref)
+                                    self.world
+                                        .insert_one(hecs_entity_key, name_ref)
                                         .expect("error inserting component");
                                 }
                                 Protocol::Marker(marker_ref) => {
-                                    self.world.insert_one(hecs_entity_key, marker_ref)
+                                    self.world
+                                        .insert_one(hecs_entity_key, marker_ref)
                                         .expect("error inserting component");
                                 }
                                 _ => {}
                             }
-                        },
+                        }
                         Event::RemoveComponent(naia_entity_key, component_key, component_ref) => {
-                            info!("remove component: {}, from entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
+                            info!(
+                                "remove component: {}, from entity: {}",
+                                component_key.to_u16(),
+                                naia_entity_key.to_u16()
+                            );
                             if self.entity_key_map.contains_key(&naia_entity_key) {
-                                let hecs_entity_key = *self.entity_key_map.get(&naia_entity_key).unwrap();
+                                let hecs_entity_key =
+                                    *self.entity_key_map.get(&naia_entity_key).unwrap();
 
                                 match component_ref {
                                     Protocol::Position(position_ref) => {
@@ -147,14 +173,13 @@ impl App {
                                     }
                                     _ => {}
                                 }
-
                             } else {
                                 warn!("attempting to remove component from non-existent entity");
                             }
-                        },
+                        }
                         Event::Tick => {
                             //info!("tick event");
-                        },
+                        }
                         _ => {}
                     },
                     Err(err) => {
@@ -168,8 +193,13 @@ impl App {
         }
     }
 
-    fn remove_component<T: 'static + Replicate<Protocol>>(&mut self, hecs_entity_key: &HecsEntityKey, _component_ref: &Ref<T>) {
-        self.world.remove_one::<Ref<T>>(*hecs_entity_key)
+    fn remove_component<T: 'static + Replicate<Protocol>>(
+        &mut self,
+        hecs_entity_key: &HecsEntityKey,
+        _component_ref: &Ref<T>,
+    ) {
+        self.world
+            .remove_one::<Ref<T>>(*hecs_entity_key)
             .expect("error removing component");
     }
 }

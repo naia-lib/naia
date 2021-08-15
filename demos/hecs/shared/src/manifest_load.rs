@@ -1,8 +1,9 @@
-
 use naia_shared::Manifest;
 
-use super::components::{Components, Position, Name, Marker};
-use super::messages::{Events, StringMessage, Auth};
+use super::{
+    components::{Components, Marker, Name, Position},
+    messages::{Auth, Events, StringMessage},
+};
 
 pub fn manifest_load() -> Manifest<Events, Components> {
     let mut manifest = Manifest::<Events, Components>::new();

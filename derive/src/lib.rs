@@ -1,5 +1,6 @@
 //! # Naia Derive
-//! Procedural macros to simplify implementation of Naia Event & Replicate traits
+//! Procedural macros to simplify implementation of Naia Event & Replicate
+//! traits
 
 #![deny(
     missing_docs,
@@ -13,11 +14,11 @@
 #[macro_use]
 extern crate cfg_if;
 
-mod replicate;
 mod protocol_type;
+mod replicate;
 
-use replicate::replicate_impl;
 use protocol_type::protocol_type_impl;
+use replicate::replicate_impl;
 
 /// Derives the ProtocolType trait for a given enum
 #[proc_macro_derive(ProtocolType)]

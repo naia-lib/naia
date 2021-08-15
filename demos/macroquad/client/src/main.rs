@@ -12,7 +12,6 @@ use app::App;
 
 #[macroquad::main("NaiaMacroquadExample")]
 async fn main() {
-
     info!("Naia Macroquad Client Example Started");
 
     let mut client_config = ClientConfig::default();

@@ -1,4 +1,4 @@
-use std::{default::Default, time::Duration, net::SocketAddr,};
+use std::{default::Default, net::SocketAddr, time::Duration};
 
 /// A collection of IP addresses describing which IP to listen on for new
 /// sessions, which to dedicate to UDP traffic, and which to advertise publicly

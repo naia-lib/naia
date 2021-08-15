@@ -1,29 +1,22 @@
-use std::{
-    collections::HashMap,
-    rc::Rc,
-};
+use std::{collections::HashMap, rc::Rc};
 
-use naia_server::{ObjectKey, Server, Random, ServerConfig, Event, UserKey, RoomKey};
+use naia_server::{Event, ObjectKey, Random, RoomKey, Server, ServerConfig, UserKey};
 
 use naia_demo_macroquad_shared::{
-    get_shared_config, behavior as shared_behavior, protocol::{Protocol, Square, Color},
+    behavior as shared_behavior, get_shared_config,
+    protocol::{Color, Protocol, Square},
 };
 
 pub struct App {
     server: Server<Protocol>,
     main_room_key: RoomKey,
-    user_to_pawn_map: HashMap::<UserKey, ObjectKey>,
+    user_to_pawn_map: HashMap<UserKey, ObjectKey>,
 }
 
 impl App {
     pub async fn new(server_config: ServerConfig) -> Self {
-
-        let mut server = Server::new(
-            Protocol::load(),
-            Some(server_config),
-            get_shared_config(),
-        )
-        .await;
+        let mut server =
+            Server::new(Protocol::load(), Some(server_config), get_shared_config()).await;
 
         server.on_auth(Rc::new(Box::new(|_, auth_type| {
             if let Protocol::Auth(auth_ref) = auth_type {
@@ -62,11 +55,12 @@ impl App {
                                 _ => Color::Blue,
                             };
 
-                            let new_square =
-                                Square::new(x as u16, y as u16, square_color).wrap();
-                            let new_object_key = self.server
+                            let new_square = Square::new(x as u16, y as u16, square_color).wrap();
+                            let new_object_key = self
+                                .server
                                 .register_object(Protocol::Square(new_square.clone()));
-                            self.server.room_add_object(&self.main_room_key, &new_object_key);
+                            self.server
+                                .room_add_object(&self.main_room_key, &new_object_key);
                             self.server.assign_pawn(&user_key, &new_object_key);
                             self.user_to_pawn_map.insert(user_key, new_object_key);
                         }
@@ -75,7 +69,8 @@ impl App {
                         info!("Naia Server disconnected from: {:?}", user.address);
                         self.server.room_remove_user(&self.main_room_key, &user_key);
                         if let Some(object_key) = self.user_to_pawn_map.remove(&user_key) {
-                            self.server.room_remove_object(&self.main_room_key, &object_key);
+                            self.server
+                                .room_remove_object(&self.main_room_key, &object_key);
                             self.server.unassign_pawn(&user_key, &object_key);
                             self.server.deregister_object(object_key);
                         }
@@ -96,14 +91,14 @@ impl App {
                     Event::Tick => {
                         // Update scopes of objects
                         for (room_key, user_key, object_key) in self.server.object_scope_sets() {
-                            self.server.object_set_scope(&room_key, &user_key, &object_key, true);
+                            self.server
+                                .object_set_scope(&room_key, &user_key, &object_key, true);
                         }
 
                         // VERY IMPORTANT! Calling this actually sends all update data
                         // packets to all Clients that require it. If you don't call this
                         // method, the Server will never communicate with it's connected Clients
                         self.server.send_all_updates().await;
-
                     }
                     _ => {}
                 }

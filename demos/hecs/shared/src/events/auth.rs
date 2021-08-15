@@ -1,4 +1,3 @@
-
 use naia_derive::Event;
 use naia_shared::{Event, Property};
 

@@ -36,7 +36,8 @@ impl Room {
     pub fn remove_object(&mut self, object_key: &ObjectKey) {
         self.objects.remove(object_key);
         for user_key in self.users.iter() {
-            self.object_removal_queue.push_back((*user_key, *object_key));
+            self.object_removal_queue
+                .push_back((*user_key, *object_key));
         }
     }
 
@@ -51,7 +52,8 @@ impl Room {
     pub fn unsubscribe_user(&mut self, user_key: &UserKey) {
         self.users.remove(user_key);
         for object_key in self.objects.iter() {
-            self.object_removal_queue.push_back((*user_key, *object_key));
+            self.object_removal_queue
+                .push_back((*user_key, *object_key));
         }
     }
 
@@ -70,7 +72,8 @@ impl Room {
     pub fn remove_entity(&mut self, object_key: &EntityKey) {
         self.entities.remove(object_key);
         for user_key in self.users.iter() {
-            self.entity_removal_queue.push_back((*user_key, *object_key));
+            self.entity_removal_queue
+                .push_back((*user_key, *object_key));
         }
     }
 

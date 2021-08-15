@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use naia_shared::{sequence_greater_than, ProtocolType, PawnKey, Manifest, PacketReader, SequenceBuffer, LocalObjectKey, NaiaKey, LocalEntityKey};
+use naia_shared::{
+    sequence_greater_than, LocalEntityKey, LocalObjectKey, Manifest, NaiaKey, PacketReader,
+    PawnKey, ProtocolType, SequenceBuffer,
+};
 
 const COMMAND_BUFFER_MAX_SIZE: u16 = 64;
 
@@ -45,7 +48,6 @@ impl<T: ProtocolType> CommandReceiver<T> {
     ) {
         let command_count = reader.read_u8();
         for _x in 0..command_count {
-
             let is_object = reader.read_u8() == 0;
             let local_key = reader.read_u16();
             let pawn_key = {

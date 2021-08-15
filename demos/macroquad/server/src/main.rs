@@ -1,9 +1,7 @@
 #[macro_use]
 extern crate log;
 
-use std::{
-    time::Duration,
-};
+use std::time::Duration;
 
 use log::LevelFilter;
 use simple_logger::SimpleLogger;
@@ -18,11 +16,11 @@ use app::App;
 
 fn main() -> io::Result<()> {
     SimpleLogger::new()
-            .with_level(LevelFilter::Info)
-            .init()
-            .expect("A logger was already initialized");
+        .with_level(LevelFilter::Info)
+        .init()
+        .expect("A logger was already initialized");
 
-        info!("Naia Server Example Started");
+    info!("Naia Server Example Started");
 
     let mut server_config = ServerConfig::default();
 

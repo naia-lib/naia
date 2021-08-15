@@ -14,17 +14,17 @@
 extern crate cfg_if;
 
 mod ack_manager;
-mod replicate;
 mod connection;
 mod connection_config;
-mod keys;
-mod message_manager;
-mod message_packet_writer;
 mod host_tick_manager;
 mod key_store;
+mod keys;
 mod manager_type;
 mod manifest;
+mod message_manager;
+mod message_packet_writer;
 mod packet_type;
+mod replicate;
 mod sequence_buffer;
 mod shared_config;
 mod standard_header;
@@ -38,26 +38,29 @@ pub use naia_socket_shared::{
 };
 
 pub use ack_manager::AckManager;
-pub use replicate::{
-    replicate::{Replicate, ReplicateEq, BoxClone},
-    replicate_builder::ReplicateBuilder,
-    replicate_action_type::ReplicateActionType,
-    shared_replicate_mutator::SharedReplicateMutator,
-    replicate_notifiable::ReplicateNotifiable,
-    protocol_type::ProtocolType,
-    property::Property,
-    diff_mask::DiffMask,
-};
 pub use connection::Connection;
 pub use connection_config::ConnectionConfig;
-pub use message_manager::MessageManager;
-pub use message_packet_writer::{MessagePacketWriter, MTU_SIZE};
-pub use keys::{EntityKey, LocalReplicateKey, LocalEntityKey, LocalObjectKey, LocalComponentKey, PawnKey, NaiaKey};
 pub use host_tick_manager::HostTickManager;
 pub use key_store::KeyGenerator;
+pub use keys::{
+    EntityKey, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicateKey, NaiaKey,
+    PawnKey,
+};
 pub use manager_type::ManagerType;
 pub use manifest::Manifest;
+pub use message_manager::MessageManager;
+pub use message_packet_writer::{MessagePacketWriter, MTU_SIZE};
 pub use packet_type::PacketType;
+pub use replicate::{
+    diff_mask::DiffMask,
+    property::Property,
+    protocol_type::ProtocolType,
+    replicate::{BoxClone, Replicate, ReplicateEq},
+    replicate_action_type::ReplicateActionType,
+    replicate_builder::ReplicateBuilder,
+    replicate_notifiable::ReplicateNotifiable,
+    shared_replicate_mutator::SharedReplicateMutator,
+};
 pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
 pub use shared_config::SharedConfig;
 pub use standard_header::StandardHeader;

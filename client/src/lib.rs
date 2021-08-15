@@ -12,27 +12,29 @@
     unused_import_braces
 )]
 
-mod replicate_manager;
-mod replicate_action;
+mod client;
 mod client_config;
-mod connection_state;
-mod event;
-mod packet_writer;
-mod tick_manager;
 mod command_receiver;
 mod command_sender;
+mod connection_state;
 mod dual_command_receiver;
 mod dual_command_sender;
 mod error;
-mod client;
+mod event;
+mod packet_writer;
 mod ping_manager;
+mod replicate_action;
+mod replicate_manager;
 mod server_connection;
+mod tick_manager;
 mod tick_queue;
 
-pub use naia_shared::{find_my_ip_address, Instant, LinkConditionerConfig, Random, Ref,
-                      wrapping_diff, NaiaKey, LocalReplicateKey, LocalObjectKey, LocalComponentKey, LocalEntityKey, Replicate};
+pub use naia_shared::{
+    find_my_ip_address, wrapping_diff, Instant, LinkConditionerConfig, LocalComponentKey,
+    LocalEntityKey, LocalObjectKey, LocalReplicateKey, NaiaKey, Random, Ref, Replicate,
+};
 
+pub use client::Client;
 pub use client_config::ClientConfig;
 pub use event::Event;
-pub use client::Client;
 pub use naia_client_socket::Packet;

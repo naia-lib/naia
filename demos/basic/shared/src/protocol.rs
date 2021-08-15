@@ -1,6 +1,5 @@
-
 use naia_derive::ProtocolType;
-use naia_shared::{Ref, Manifest};
+use naia_shared::{Manifest, Ref};
 
 mod auth;
 mod marker;

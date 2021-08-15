@@ -1,4 +1,3 @@
-
 cfg_if! {
     if #[cfg(feature = "multithread")] {
         /// Tracks which Properties have changed and need to be queued for syncing with
@@ -18,4 +17,3 @@ cfg_if! {
         }
     }
 }
-

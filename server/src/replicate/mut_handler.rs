@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::SocketAddr};
 
-use naia_shared::{Ref, DiffMask};
+use naia_shared::{DiffMask, Ref};
 
 use super::keys::replicate_key::ReplicateKey;
 
@@ -48,7 +48,10 @@ impl MutHandler {
     }
 
     pub fn register_replicate(&mut self, replicate_key: &ReplicateKey) {
-        if self.replicate_diff_mask_list_map.contains_key(replicate_key) {
+        if self
+            .replicate_diff_mask_list_map
+            .contains_key(replicate_key)
+        {
             panic!("Replicate cannot register with server more than once!");
         }
         self.replicate_diff_mask_list_map
