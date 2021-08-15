@@ -18,7 +18,7 @@ pub struct App {
 impl App {
     pub fn new(client_config: ClientConfig) -> Self {
 
-        let auth = Auth::new("charlie", "12345").get_typed_copy();
+        let auth = Auth::new("charlie", "12345").to_protocol();
 
         let client = Client::new(
             Protocol::load(),

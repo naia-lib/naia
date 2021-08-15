@@ -115,7 +115,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
 
                     if let Some(object_ref) = self.local_replicate_store.get_mut(&object_key) {
                         self.pawn_store
-                            .insert(object_key, object_ref.inner_ref().borrow().get_typed_copy());
+                            .insert(object_key, object_ref.inner_ref().borrow().to_protocol());
 
                         let pawn_key = PawnKey::Object(object_key);
                         command_receiver.pawn_init(&pawn_key);
