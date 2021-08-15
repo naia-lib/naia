@@ -9,7 +9,7 @@
 * [x] Basic DoS mitigation
 * [x] Connection / Disconnection events
 * [x] Customizable Client authentication
-* [x] Unguaranteed & guaranteed Events sent between hosts
+* [x] Unguaranteed & guaranteed Messages sent between hosts
 * [x] Replicates sync with Clients when "in scope"
 * [x] Rooms restrict syncing to their contained Users & Replicates
 * [x] Customizable scoping function for advanced usage
@@ -17,7 +17,7 @@
 * [x] Client Tick events
 * [x] Synced Tick between Server/Client
 * [x] Support Client prediction of Replicates
-* [x] Send consecutive copies of Events (see Tribes 2 Networking Model's "MoveManager")
+* [x] Send consecutive copies of Messages (see Tribes 2 Networking Model's "MoveManager")
 
 ## Planned
 This list is not sorted by order of priority
@@ -28,9 +28,9 @@ This list is not sorted by order of priority
 * [ ] Congestion Control
 * [ ] Custom Property read/write implementation
 * [ ] "Deep" Replicate property syncing
-* [ ] Ordered Guaranteed Events?
-* [ ] Event/Replicate Priority (indicates certain updates should be sent earlier than others)
-* [ ] Dynamic Event/Replicate Priority based on scope evaluation (conditionally raise priority on Replicates)
+* [ ] Ordered Guaranteed Messages?
+* [ ] Replicate Priority (indicates certain updates should be sent earlier than others)
+* [ ] Dynamic Replicate Priority based on scope evaluation (conditionally raise priority on Replicates)
 * [ ] Set independent Replicate update rate
 * [ ] Horizontally scale Servers
 * [ ] Support Debugging / Logging / Metrics visualizations

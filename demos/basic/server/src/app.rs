@@ -112,12 +112,12 @@ impl App {
                         Event::Disconnection(_, user) => {
                             info!("Naia Server disconnected from: {:?}", user.address);
                         }
-                        Event::Event(user_key, event_type) => {
+                        Event::Message(user_key, message_type) => {
                             if let Some(user) = self.server.get_user(&user_key) {
-                                match event_type {
-                                    Protocol::StringMessage(event_ref) => {
-                                        let event = event_ref.borrow();
-                                        let message = event.message.get();
+                                match message_type {
+                                    Protocol::StringMessage(message_ref) => {
+                                        let message = message_ref.borrow();
+                                        let message = message.message.get();
                                         info!("Naia Server recv <- {}: {}", user.address, message);
                                     }
                                     _ => {}
@@ -214,7 +214,7 @@ impl App {
                                 info!("Naia Server send -> {}: {}", user.address, new_message);
 
                                 let message_event = StringMessage::new(new_message);
-                                self.server.queue_event(&user_key, &message_event, true);
+                                self.server.queue_message(&user_key, &message_event, true);
                             }
 
                             // VERY IMPORTANT! Calling this actually sends all Replicate/Event data

@@ -9,7 +9,7 @@ use naia_client::{ClientConfig, ClientEvent, Client, NaiaKey, LocalEntityKey as 
 use naia_demo_basic_shared::{
     get_shared_config, manifest_load,
     components::Components,
-    events::{Events, Auth, StringMessage},
+    messages::{Events, Auth, StringMessage},
 };
 
 pub struct App {

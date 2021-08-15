@@ -15,7 +15,7 @@ use super::{
     event::Event, tick_manager::TickManager, error::NaiaClientError,
     server_connection::ServerConnection, Packet,
     connection_state::{ConnectionState, ConnectionState::AwaitingChallengeResponse},
-    replicate_message::ReplicateMessage
+    replicate_action::ReplicateAction
 };
 
 /// Client can send/receive events to/from a server, and has a pool of in-scope
@@ -96,52 +96,52 @@ impl<T: ProtocolType> Client<T> {
                 connection.process_replays();
                 // receive event
                 if let Some(event) = connection.get_incoming_event() {
-                    return Some(Ok(Event::Event(event)));
+                    return Some(Ok(Event::Message(event)));
                 }
                 // receive replicate message
-                while let Some(message) = connection.get_incoming_replicate_message() {
+                while let Some(message) = connection.get_incoming_replicate_action() {
                     let event_opt: Option<Event::<T>> = {
                         match message {
-                            ReplicateMessage::CreateReplicate(local_key) => {
+                            ReplicateAction::CreateReplicate(local_key) => {
                                 Some(Event::CreateObject(local_key))
                             }
-                            ReplicateMessage::DeleteReplicate(local_key, replicate) => {
+                            ReplicateAction::DeleteReplicate(local_key, replicate) => {
                                 Some(Event::DeleteObject(local_key, replicate.clone()))
                             }
-                            ReplicateMessage::UpdateReplicate(local_key) => {
+                            ReplicateAction::UpdateReplicate(local_key) => {
                                 Some(Event::UpdateObject(local_key))
                             }
-                            ReplicateMessage::AssignPawn(local_key) => {
+                            ReplicateAction::AssignPawn(local_key) => {
                                 Some(Event::AssignPawn(local_key))
                             }
-                            ReplicateMessage::UnassignPawn(local_key) => {
+                            ReplicateAction::UnassignPawn(local_key) => {
                                 Some(Event::UnassignPawn(local_key))
                             }
-                            ReplicateMessage::ResetPawn(local_key) => {
+                            ReplicateAction::ResetPawn(local_key) => {
                                 Some(Event::ResetPawn(local_key))
                             }
-                            ReplicateMessage::CreateEntity(local_key, component_list) => {
+                            ReplicateAction::CreateEntity(local_key, component_list) => {
                                 Some(Event::CreateEntity(local_key, component_list))
                             }
-                            ReplicateMessage::DeleteEntity(local_key) => {
+                            ReplicateAction::DeleteEntity(local_key) => {
                                 Some(Event::DeleteEntity(local_key))
                             }
-                            ReplicateMessage::AssignPawnEntity(local_key) => {
+                            ReplicateAction::AssignPawnEntity(local_key) => {
                                 Some(Event::AssignPawnEntity(local_key))
                             }
-                            ReplicateMessage::UnassignPawnEntity(local_key) => {
+                            ReplicateAction::UnassignPawnEntity(local_key) => {
                                 Some(Event::UnassignPawnEntity(local_key))
                             }
-                            ReplicateMessage::ResetPawnEntity(local_key) => {
+                            ReplicateAction::ResetPawnEntity(local_key) => {
                                 Some(Event::ResetPawnEntity(local_key))
                             }
-                            ReplicateMessage::AddComponent(entity_key, component_key) => {
+                            ReplicateAction::AddComponent(entity_key, component_key) => {
                                 Some(Event::AddComponent(entity_key, component_key))
                             }
-                            ReplicateMessage::UpdateComponent(entity_key, component_key) => {
+                            ReplicateAction::UpdateComponent(entity_key, component_key) => {
                                 Some(Event::UpdateComponent(entity_key, component_key))
                             }
-                            ReplicateMessage::RemoveComponent(entity_key, component_key, component) => {
+                            ReplicateAction::RemoveComponent(entity_key, component_key, component) => {
                                 Some(Event::RemoveComponent(entity_key, component_key, component.clone()))
                             }
                         }
@@ -376,10 +376,10 @@ impl<T: ProtocolType> Client<T> {
         return None;
     }
 
-    /// Queues up an Event to be sent to the Server
-    pub fn send_event(&mut self, event: &impl Replicate<T>, guaranteed_delivery: bool) {
+    /// Queues up an Message to be sent to the Server
+    pub fn send_message(&mut self, replicate: &impl Replicate<T>, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
-            connection.queue_event(event, guaranteed_delivery);
+            connection.queue_message(replicate, guaranteed_delivery);
         }
     }
 

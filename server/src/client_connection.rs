@@ -42,27 +42,27 @@ impl<U: ProtocolType> ClientConnection<U> {
         host_tick: u16,
         manifest: &Manifest<U>,
     ) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_events() || self.replicate_manager.has_outgoing_messages() {
+        if self.connection.has_outgoing_messages() || self.replicate_manager.has_outgoing_actions() {
             let mut writer = PacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
-            while let Some(popped_event) = self.connection.pop_outgoing_event(next_packet_index) {
-                if !writer.write_event(manifest, &popped_event) {
+            while let Some(popped_message) = self.connection.pop_outgoing_message(next_packet_index) {
+                if !writer.write_message(manifest, &popped_message) {
                     self.connection
-                        .unpop_outgoing_event(next_packet_index, &popped_event);
+                        .unpop_outgoing_message(next_packet_index, &popped_message);
                     break;
                 }
             }
-            while let Some(popped_replicate_message) =
-                self.replicate_manager.pop_outgoing_message(next_packet_index)
+            while let Some(popped_replicate_action) =
+                self.replicate_manager.pop_outgoing_action(next_packet_index)
             {
-                if !self.replicate_manager.write_replicate_message(
+                if !self.replicate_manager.write_replicate_action(
                     &mut writer,
                     manifest,
-                    &popped_replicate_message,
+                    &popped_replicate_action,
                 ) {
                     self.replicate_manager
-                        .unpop_outgoing_message(next_packet_index, &popped_replicate_message);
+                        .unpop_outgoing_action(next_packet_index, &popped_replicate_action);
                     break;
                 }
             }
@@ -104,8 +104,8 @@ impl<U: ProtocolType> ClientConnection<U> {
                         manifest,
                     );
                 }
-                ManagerType::Event => {
-                    self.connection.process_event_data(&mut reader, manifest);
+                ManagerType::Message => {
+                    self.connection.process_message_data(&mut reader, manifest);
                 }
                 _ => {}
             }
@@ -245,12 +245,12 @@ impl<U: ProtocolType> ClientConnection<U> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_event(&mut self, event: &impl Replicate<U>, guaranteed_delivery: bool) {
-        return self.connection.queue_event(event, guaranteed_delivery);
+    pub fn queue_message(&mut self, message: &impl Replicate<U>, guaranteed_delivery: bool) {
+        return self.connection.queue_message(message, guaranteed_delivery);
     }
 
-    pub fn get_incoming_event(&mut self) -> Option<U> {
-        return self.connection.get_incoming_event();
+    pub fn get_incoming_message(&mut self) -> Option<U> {
+        return self.connection.get_incoming_message();
     }
 
     pub fn get_address(&self) -> SocketAddr {

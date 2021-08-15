@@ -13,7 +13,7 @@
 )]
 
 mod replicate_manager;
-mod replicate_message;
+mod replicate_action;
 mod client_config;
 mod connection_state;
 mod event;

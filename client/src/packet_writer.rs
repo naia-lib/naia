@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, ProtocolType, EventPacketWriter, ManagerType,
+    wrapping_diff, ProtocolType, MessagePacketWriter, ManagerType,
     Manifest, MTU_SIZE, PawnKey, Replicate
 };
 
@@ -9,11 +9,11 @@ use crate::dual_command_receiver::DualCommandReceiver;
 
 const MAX_PAST_COMMANDS: u8 = 3;
 
-/// Handles writing of Event & Replicate data into an outgoing packet
+/// Handles writing of Replicate data into an outgoing packet
 pub struct PacketWriter {
     command_working_bytes: Vec<u8>,
     command_count: u8,
-    event_writer: EventPacketWriter,
+    message_writer: MessagePacketWriter,
 }
 
 impl PacketWriter {
@@ -23,13 +23,13 @@ impl PacketWriter {
         PacketWriter {
             command_working_bytes: Vec::<u8>::new(),
             command_count: 0,
-            event_writer: EventPacketWriter::new(),
+            message_writer: MessagePacketWriter::new(),
         }
     }
 
     /// Returns whether the writer has bytes to write into the outgoing packet
     pub fn has_bytes(&self) -> bool {
-        return self.command_count != 0 || self.event_writer.has_bytes();
+        return self.command_count != 0 || self.message_writer.has_bytes();
     }
 
     /// Gets the bytes to write into an outgoing packet
@@ -39,12 +39,12 @@ impl PacketWriter {
         //Write manager "header" (manager type & replicate count)
         if self.command_count != 0 {
             out_bytes.write_u8(ManagerType::Command as u8).unwrap(); // write manager type
-            out_bytes.write_u8(self.command_count).unwrap(); // write number of events in the following message
+            out_bytes.write_u8(self.command_count).unwrap(); // write number of commands in the following message
             out_bytes.append(&mut self.command_working_bytes); // write event payload
             self.command_count = 0;
         }
 
-        self.event_writer.get_bytes(&mut out_bytes);
+        self.message_writer.get_bytes(&mut out_bytes);
 
         out_bytes.into_boxed_slice()
     }
@@ -52,7 +52,7 @@ impl PacketWriter {
     /// Get the number of bytes which is ready to be written into an outgoing
     /// packet
     pub fn bytes_number(&self) -> usize {
-        return self.command_working_bytes.len() + self.event_writer.bytes_number();
+        return self.command_working_bytes.len() + self.message_writer.bytes_number();
     }
 
     /// Writes a Command into the Writer's internal buffer, which will
@@ -141,6 +141,6 @@ impl PacketWriter {
         manifest: &Manifest<T>,
         event: &Box<dyn Replicate<T>>,
     ) -> bool {
-        return self.event_writer.write_event(manifest, event);
+        return self.message_writer.write_message(manifest, event);
     }
 }

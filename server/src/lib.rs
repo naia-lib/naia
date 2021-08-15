@@ -1,5 +1,5 @@
 //! # Naia Server
-//! A server that uses either UDP or WebRTC communication to send/receive events
+//! A server that uses either UDP or WebRTC communication to send/receive messages
 //! to/from connected clients, and syncs registered replicates to clients to whom
 //! those replicates are in-scope.
 

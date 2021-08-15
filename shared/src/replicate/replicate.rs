@@ -9,7 +9,7 @@ use crate::{PacketReader, Ref};
 
 /// An Replicate is a container of Properties that can be scoped, tracked, and
 /// synced, with a remote host
-pub trait Replicate<T: ProtocolType>: EventClone<T> {
+pub trait Replicate<T: ProtocolType>: MessageClone<T> {
     /// Gets the number of bytes of the Replicate's Replicate Mask
     fn get_diff_mask_size(&self) -> u8;
     /// Gets a copy of the Replicate, wrapped in an ProtocolType enum (which is the
@@ -58,12 +58,12 @@ impl<T: ProtocolType> Debug for dyn Replicate<T> {
 }
 
 /// A Boxed Event must be able to clone itself
-pub trait EventClone<T: ProtocolType> {
+pub trait MessageClone<T: ProtocolType> {
     /// Clone the Boxed Event
     fn clone_box(&self) -> Box<dyn Replicate<T>>;
 }
 
-impl<Z: ProtocolType, T: 'static + Replicate<Z> + Clone> EventClone<Z> for T {
+impl<Z: ProtocolType, T: 'static + Replicate<Z> + Clone> MessageClone<Z> for T {
     fn clone_box(&self) -> Box<dyn Replicate<Z>> {
         Box::new(self.clone())
     }
@@ -71,12 +71,12 @@ impl<Z: ProtocolType, T: 'static + Replicate<Z> + Clone> EventClone<Z> for T {
 
 impl<T: ProtocolType> Clone for Box<dyn Replicate<T>> {
     fn clone(&self) -> Box<dyn Replicate<T>> {
-        EventClone::clone_box(self.as_ref())
+        MessageClone::clone_box(self.as_ref())
     }
 }
 
 //impl<T: ProtocolType> Debug for Box<dyn Replicate<T>> {
 //    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-//        f.write_str("Boxed Event")
+//        f.write_str("Boxed Message")
 //    }
 //}
