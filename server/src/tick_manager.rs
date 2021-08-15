@@ -4,15 +4,15 @@ use naia_shared::HostTickManager;
 
 /// Manages the current tick for the host
 #[derive(Debug)]
-pub struct ServerTickManager {
+pub struct TickManager {
     tick_interval: Duration,
     current_tick: u16,
 }
 
-impl ServerTickManager {
+impl TickManager {
     /// Create a new HostTickManager with a given tick interval duration
     pub fn new(tick_interval: Duration) -> Self {
-        ServerTickManager {
+        TickManager {
             tick_interval,
             current_tick: 0,
         }
@@ -24,7 +24,7 @@ impl ServerTickManager {
     }
 }
 
-impl HostTickManager for ServerTickManager {
+impl HostTickManager for TickManager {
     fn get_tick(&self) -> u16 {
         self.current_tick
     }

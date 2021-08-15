@@ -15,7 +15,7 @@ use naia_server_socket::{
     MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
 };
 pub use naia_shared::{
-    wrapping_diff, Replicate, ReplicateMutator, Connection, ConnectionConfig, ProtocolType,
+    wrapping_diff, Replicate, SharedReplicateMutator, Connection, ConnectionConfig, ProtocolType,
     HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType, Ref, SharedConfig,
     Timer, Timestamp, LocalObjectKey, StandardHeader, KeyGenerator, EntityKey
 };
@@ -24,15 +24,15 @@ use crate::{ComponentKey, GlobalPawnKey};
 use super::{
     replicate::{
         object_key::object_key::ObjectKey, mut_handler::MutHandler,
-        server_replicate_mutator::ServerReplicateMutator,
+        replicate_mutator::ReplicateMutator,
     },
     client_connection::ClientConnection,
     error::NaiaServerError,
     interval::Interval,
     room::{room_key::RoomKey, Room},
     server_config::ServerConfig,
-    server_event::ServerEvent,
-    server_tick_manager::ServerTickManager,
+    event::Event,
+    tick_manager::TickManager,
     user::{user_key::UserKey, User},
 };
 
@@ -56,7 +56,7 @@ pub struct Server<T: ProtocolType> {
     outstanding_disconnects: VecDeque<UserKey>,
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
-    tick_manager: ServerTickManager,
+    tick_manager: TickManager,
     tick_timer: Interval,
     replicate_scope_map: HashMap<(RoomKey, UserKey, ObjectKey), bool>,
     entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
@@ -120,7 +120,7 @@ impl<U: ProtocolType> Server<U> {
             address_to_user_key_map: HashMap::new(),
             outstanding_disconnects: VecDeque::new(),
             heartbeat_timer,
-            tick_manager: ServerTickManager::new(shared_config.tick_interval),
+            tick_manager: TickManager::new(shared_config.tick_interval),
             tick_timer: Interval::new(shared_config.tick_interval),
             entity_key_generator: KeyGenerator::new(),
             entity_component_map: HashMap::new(),
@@ -130,7 +130,7 @@ impl<U: ProtocolType> Server<U> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub async fn receive(&mut self) -> Result<ServerEvent<U>, NaiaServerError> {
+    pub async fn receive(&mut self) -> Result<Event<U>, NaiaServerError> {
         loop {
             // heartbeats
             if self.heartbeat_timer.ringing() {
@@ -174,7 +174,7 @@ impl<U: ProtocolType> Server<U> {
                 self.users.remove(user_key);
                 self.client_connections.remove(&user_key);
 
-                return Ok(ServerEvent::Disconnection(user_key, user_clone));
+                return Ok(Event::Disconnection(user_key, user_clone));
             }
 
             // TODO: have 1 single queue for commands/events from all users, as it's
@@ -187,14 +187,14 @@ impl<U: ProtocolType> Server<U> {
                 {
                     match pawn_key {
                         GlobalPawnKey::Replicate(object_key) => {
-                            return Ok(ServerEvent::Command(
+                            return Ok(Event::Command(
                                 *user_key,
                                 object_key,
                                 command,
                             ));
                         }
                         GlobalPawnKey::Entity(entity_key) => {
-                            return Ok(ServerEvent::CommandEntity(
+                            return Ok(Event::CommandEntity(
                                 *user_key,
                                 entity_key,
                                 command,
@@ -204,7 +204,7 @@ impl<U: ProtocolType> Server<U> {
                 }
                 //receive events from anyone
                 if let Some(event) = connection.get_incoming_event() {
-                    return Ok(ServerEvent::Event(*user_key, event));
+                    return Ok(Event::Event(*user_key, event));
                 }
             }
 
@@ -358,7 +358,7 @@ impl<U: ProtocolType> Server<U> {
                                         )
                                         .await;
                                         self.client_connections.insert(user_key, new_connection);
-                                        return Ok(ServerEvent::Connection(user_key));
+                                        return Ok(Event::Connection(user_key));
                                     }
                                 }
                                 PacketType::Data => {
@@ -453,7 +453,7 @@ impl<U: ProtocolType> Server<U> {
                             // self.address_to_user_key_map.get(&address).copied() {
                             //                            self.client_connections.remove(&user_key);
                             //                            output =
-                            // Some(Ok(ServerEvent::Disconnection(user_key)));
+                            // Some(Ok(Event::Disconnection(user_key)));
                             //                            continue;
                             //                        }
                             //                    }
@@ -464,7 +464,7 @@ impl<U: ProtocolType> Server<U> {
                 }
                 Next::Tick => {
                     self.tick_manager.increment_tick();
-                    return Ok(ServerEvent::Tick);
+                    return Ok(Event::Tick);
                 }
             }
         }
@@ -518,8 +518,8 @@ impl<U: ProtocolType> Server<U> {
     /// in scope. Gives back an ObjectKey which can be used to get the reference
     /// to the Replicate from the Server once again
     pub fn register_replicate(&mut self, replicate: U) -> ObjectKey {
-        let new_mutator_ref: Ref<ServerReplicateMutator> =
-            Ref::new(ServerReplicateMutator::new(&self.mut_handler));
+        let new_mutator_ref: Ref<ReplicateMutator> =
+            Ref::new(ReplicateMutator::new(&self.mut_handler));
         replicate
             .inner_ref()
             .borrow_mut()
@@ -1076,18 +1076,18 @@ impl<U: ProtocolType> Server<U> {
 cfg_if! {
     if #[cfg(feature = "multithread")] {
         use std::sync::{Arc, Mutex};
-        fn to_replicate_mutator_raw(eref: &Arc<Mutex<ServerReplicateMutator>>) -> Arc<Mutex<dyn ReplicateMutator>> {
+        fn to_replicate_mutator_raw(eref: &Arc<Mutex<ReplicateMutator>>) -> Arc<Mutex<dyn SharedReplicateMutator>> {
             eref.clone()
         }
     } else {
         use std::cell::RefCell;
-        fn to_replicate_mutator_raw(eref: &Rc<RefCell<ServerReplicateMutator>>) -> Rc<RefCell<dyn ReplicateMutator>> {
+        fn to_replicate_mutator_raw(eref: &Rc<RefCell<ReplicateMutator>>) -> Rc<RefCell<dyn SharedReplicateMutator>> {
             eref.clone()
         }
     }
 }
 
-fn to_replicate_mutator(eref: &Ref<ServerReplicateMutator>) -> Ref<dyn ReplicateMutator> {
+fn to_replicate_mutator(eref: &Ref<ReplicateMutator>) -> Ref<dyn SharedReplicateMutator> {
     let upcast_ref = to_replicate_mutator_raw(&eref.inner());
     Ref::new_raw(upcast_ref)
 }

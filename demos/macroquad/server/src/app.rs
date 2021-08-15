@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use naia_server::{ObjectKey, Server, Random, ServerConfig, ServerEvent, UserKey, RoomKey};
+use naia_server::{ObjectKey, Server, Random, ServerConfig, Event, UserKey, RoomKey};
 
 use naia_demo_macroquad_shared::{
     get_shared_config, behavior as shared_behavior, protocol::{Protocol, Point, Color},
@@ -48,7 +48,7 @@ impl App {
         match self.server.receive().await {
             Ok(event) => {
                 match event {
-                    ServerEvent::Connection(user_key) => {
+                    Event::Connection(user_key) => {
                         self.server.room_add_user(&self.main_room_key, &user_key);
                         if let Some(user) = self.server.get_user(&user_key) {
                             info!("Naia Server connected to: {}", user.address);
@@ -71,7 +71,7 @@ impl App {
                             self.user_to_pawn_map.insert(user_key, new_object_key);
                         }
                     }
-                    ServerEvent::Disconnection(user_key, user) => {
+                    Event::Disconnection(user_key, user) => {
                         info!("Naia Server disconnected from: {:?}", user.address);
                         self.server.room_remove_user(&self.main_room_key, &user_key);
                         if let Some(object_key) = self.user_to_pawn_map.remove(&user_key) {
@@ -80,7 +80,7 @@ impl App {
                             self.server.deregister_replicate(object_key);
                         }
                     }
-                    ServerEvent::Command(_, object_key, command_type) => match command_type {
+                    Event::Command(_, object_key, command_type) => match command_type {
                         Protocol::KeyCommand(key_command) => {
                             if let Some(typed_replicate) = self.server.get_object(object_key) {
                                 match typed_replicate {
@@ -93,7 +93,7 @@ impl App {
                         }
                         _ => {}
                     },
-                    ServerEvent::Tick => {
+                    Event::Tick => {
                         // Update scopes of entities
                             for (room_key, user_key, object_key) in self.server.replicate_scope_sets() {
                                 self.server.replicate_set_scope(&room_key, &user_key, &object_key, true);

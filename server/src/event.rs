@@ -7,7 +7,7 @@ use super::{
 
 /// An Event that is emitted as a result of some communication with a Client, or
 /// a Tick event
-pub enum ServerEvent<T> {
+pub enum Event<T> {
     /// Occurs when a new Client has successfully established a connection with
     /// the Server
     Connection(UserKey),

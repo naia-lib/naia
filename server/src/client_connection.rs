@@ -8,17 +8,17 @@ use naia_shared::{
 use super::{
     replicate::{
         object_key::object_key::ObjectKey, mut_handler::MutHandler,
-        server_replicate_manager::ServerReplicateManager,
+        replicate_manager::ReplicateManager,
     },
     command_receiver::CommandReceiver,
     ping_manager::PingManager,
-    server_packet_writer::ServerPacketWriter,
+    packet_writer::PacketWriter,
 };
 use crate::{ComponentKey, GlobalPawnKey};
 
 pub struct ClientConnection<U: ProtocolType> {
     connection: Connection<U>,
-    replicate_manager: ServerReplicateManager<U>,
+    replicate_manager: ReplicateManager<U>,
     ping_manager: PingManager,
     command_receiver: CommandReceiver<U>,
 }
@@ -31,7 +31,7 @@ impl<U: ProtocolType> ClientConnection<U> {
     ) -> Self {
         ClientConnection {
             connection: Connection::new(address, connection_config),
-            replicate_manager: ServerReplicateManager::new(address, mut_handler.unwrap()),
+            replicate_manager: ReplicateManager::new(address, mut_handler.unwrap()),
             ping_manager: PingManager::new(),
             command_receiver: CommandReceiver::new(),
         }
@@ -43,7 +43,7 @@ impl<U: ProtocolType> ClientConnection<U> {
         manifest: &Manifest<U>,
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() || self.replicate_manager.has_outgoing_messages() {
-            let mut writer = ServerPacketWriter::new();
+            let mut writer = PacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
             while let Some(popped_event) = self.connection.pop_outgoing_event(next_packet_index) {

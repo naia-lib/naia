@@ -1,15 +1,15 @@
-use naia_shared::{ReplicateMutator, Ref};
+use naia_shared::{SharedReplicateMutator, Ref};
 
 use super::{object_key::object_key::ObjectKey, mut_handler::MutHandler};
 
-pub struct ServerReplicateMutator {
+pub struct ReplicateMutator {
     key: Option<ObjectKey>,
     mut_handler: Ref<MutHandler>,
 }
 
-impl ServerReplicateMutator {
+impl ReplicateMutator {
     pub fn new(mut_handler: &Ref<MutHandler>) -> Self {
-        ServerReplicateMutator {
+        ReplicateMutator {
             key: None,
             mut_handler: mut_handler.clone(),
         }
@@ -20,7 +20,7 @@ impl ServerReplicateMutator {
     }
 }
 
-impl ReplicateMutator for ServerReplicateMutator {
+impl SharedReplicateMutator for ReplicateMutator {
     fn mutate(&mut self, property_index: u8) {
         if let Some(key) = self.key {
             self.mut_handler.borrow_mut().mutate(&key, property_index);

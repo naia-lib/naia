@@ -3,7 +3,7 @@ use std::{
     fmt::{Debug, Formatter, Result},
 };
 
-use super::{replicate_mutator::ReplicateMutator, protocol_type::ProtocolType, diff_mask::DiffMask};
+use super::{shared_replicate_mutator::SharedReplicateMutator, protocol_type::ProtocolType, diff_mask::DiffMask};
 
 use crate::{PacketReader, Ref};
 
@@ -38,7 +38,7 @@ pub trait Replicate<T: ProtocolType>: EventClone<T> {
     /// Set the Replicate's ReplicateMutator, which keeps track of which Properties
     /// have been mutated, necessary to sync only the Properties that have
     /// changed with the client
-    fn set_mutator(&mut self, mutator: &Ref<dyn ReplicateMutator>);
+    fn set_mutator(&mut self, mutator: &Ref<dyn SharedReplicateMutator>);
 }
 
 //TODO: do we really need another trait here?
