@@ -62,8 +62,8 @@ impl NaiaKey for LocalEntityKey {
 /// Pawn Key
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum PawnKey {
-    /// Replicate
-    Replicate(LocalReplicateKey),
+    /// Object
+    Object(LocalObjectKey),
     /// Entity
     Entity(LocalEntityKey),
 }
@@ -72,7 +72,7 @@ impl PawnKey {
     /// Convert to u16
     pub fn to_u16(&self) -> u16 {
         match self {
-            PawnKey::Replicate(key) => key.to_u16(),
+            PawnKey::Object(key) => key.to_u16(),
             PawnKey::Entity(key) => key.to_u16(),
         }
     }

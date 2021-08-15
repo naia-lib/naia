@@ -145,7 +145,7 @@ impl<U: ProtocolType> ClientConnection<U> {
             self.command_receiver.pop_incoming_command(server_tick)
         {
             match local_pawn_key {
-                PawnKey::Replicate(local_object_key) => {
+                PawnKey::Object(local_object_key) => {
                     if let Some(global_pawn_key) =
                         self.replicate_manager.get_global_key_from_local(local_object_key)
                     {

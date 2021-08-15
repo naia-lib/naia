@@ -1,13 +1,13 @@
-use naia_shared::{LocalReplicateKey, LocalEntityKey, LocalComponentKey, ProtocolType};
+use naia_shared::{LocalObjectKey, LocalEntityKey, LocalComponentKey, ProtocolType};
 
 #[derive(Debug, Clone)]
 pub enum ReplicateAction<U: ProtocolType> {
-    CreateReplicate(LocalReplicateKey),
-    UpdateReplicate(LocalReplicateKey),
-    DeleteReplicate(LocalReplicateKey, U),
-    AssignPawn(LocalReplicateKey),
-    UnassignPawn(LocalReplicateKey),
-    ResetPawn(LocalReplicateKey),
+    CreateObject(LocalObjectKey),
+    UpdateObject(LocalObjectKey),
+    DeleteObject(LocalObjectKey, U),
+    AssignPawn(LocalObjectKey),
+    UnassignPawn(LocalObjectKey),
+    ResetPawn(LocalObjectKey),
     CreateEntity(LocalEntityKey, Vec<LocalComponentKey>),
     DeleteEntity(LocalEntityKey),
     AssignPawnEntity(LocalEntityKey),

@@ -38,7 +38,7 @@ impl<T: ProtocolType> DualCommandSender<T> {
     /// written into a packet, put the Command back into the front of the queue
     pub fn unpop_command(&mut self, pawn_key: &PawnKey, command: &Rc<Box<dyn Replicate<T>>>) {
         match pawn_key {
-            PawnKey::Replicate(_) => {
+            PawnKey::Object(_) => {
                 self.replicate_manager.unpop_command(pawn_key, command);
             },
             PawnKey::Entity(_) => {
@@ -50,7 +50,7 @@ impl<T: ProtocolType> DualCommandSender<T> {
     /// Queues an Command to be transmitted to the remote host
     pub fn queue_command(&mut self, pawn_key: &PawnKey, command: &impl Replicate<T>) {
         match pawn_key {
-            PawnKey::Replicate(_) => {
+            PawnKey::Object(_) => {
                 self.replicate_manager.queue_command(pawn_key, command);
             },
             PawnKey::Entity(_) => {

@@ -1,8 +1,8 @@
 use std::{net::SocketAddr, rc::Rc, collections::hash_map::Keys};
 
-use naia_shared::{Replicate, ProtocolType, Connection, ConnectionConfig, LocalReplicateKey,
+use naia_shared::{Replicate, ProtocolType, Connection, ConnectionConfig,
                   ManagerType, Manifest, PacketReader, PacketType, PawnKey, SequenceNumber,
-                  StandardHeader, LocalEntityKey, LocalComponentKey};
+                  StandardHeader, LocalEntityKey, LocalObjectKey, LocalComponentKey};
 
 use crate::Packet;
 
@@ -68,10 +68,10 @@ impl<T: ProtocolType> ServerConnection<T> {
                 }
             }
 
-            // Events
+            // Messages
             let next_packet_index: u16 = self.get_next_packet_index();
             while let Some(popped_event) = self.connection.pop_outgoing_message(next_packet_index) {
-                if !writer.write_event(manifest, &popped_event) {
+                if !writer.write_message(manifest, &popped_event) {
                     self.connection
                         .unpop_outgoing_message(next_packet_index, &popped_event);
                     break;
@@ -149,7 +149,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.replicate_manager.pop_incoming_message();
     }
 
-    pub fn object_keys(&self) -> Vec<LocalReplicateKey> {
+    pub fn object_keys(&self) -> Vec<LocalObjectKey> {
         return self.replicate_manager.object_keys();
     }
 
@@ -157,11 +157,11 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.replicate_manager.component_keys();
     }
 
-    pub fn get_object(&self, key: &LocalReplicateKey) -> Option<&T> {
+    pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
         return self.replicate_manager.get_object(key);
     }
 
-    pub fn has_object(&self, key: &LocalReplicateKey) -> bool {
+    pub fn has_object(&self, key: &LocalObjectKey) -> bool {
         return self.replicate_manager.has_object(key);
     }
 
@@ -169,15 +169,15 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.has_object(key);
     }
 
-    pub fn pawn_keys(&self) -> Keys<LocalReplicateKey, T> {
+    pub fn pawn_keys(&self) -> Keys<LocalObjectKey, T> {
         return self.replicate_manager.pawn_keys();
     }
 
-    pub fn get_pawn(&self, key: &LocalReplicateKey) -> Option<&T> {
+    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&T> {
         return self.replicate_manager.get_pawn(key);
     }
 
-    pub fn get_pawn_mut(&mut self, key: &LocalReplicateKey) -> Option<&T> {
+    pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&T> {
         return self.replicate_manager.get_pawn(key);
     }
 
@@ -263,8 +263,8 @@ impl<T: ProtocolType> ServerConnection<T> {
     }
 
     // command related
-    pub fn replicate_queue_command(&mut self, object_key: &LocalReplicateKey, command: &impl Replicate<T>) {
-        let pawn_key = PawnKey::Replicate(*object_key);
+    pub fn replicate_queue_command(&mut self, object_key: &LocalObjectKey, command: &impl Replicate<T>) {
+        let pawn_key = PawnKey::Object(*object_key);
         return self.command_sender.queue_command(&pawn_key, command);
     }
 
