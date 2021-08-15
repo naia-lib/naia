@@ -7,9 +7,9 @@ use super::{
 };
 
 use super::{
-    replicate::{replicate_notifiable::ReplicateNotifiable, protocol_type::ProtocolType},
     message_manager::MessageManager,
     packet_type::PacketType,
+    replicate::{protocol_type::ProtocolType, replicate_notifiable::ReplicateNotifiable},
 };
 
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
@@ -85,13 +85,21 @@ impl AckManager {
             if let Some(sent_packet) = self.sent_packets.get(&ack_sequence) {
                 if remote_ack_field & 1 == 1 {
                     if sent_packet.packet_type == PacketType::Data {
-                        self.notify_packet_delivered(ack_sequence, message_manager, replicate_notifiable);
+                        self.notify_packet_delivered(
+                            ack_sequence,
+                            message_manager,
+                            replicate_notifiable,
+                        );
                     }
 
                     self.sent_packets.remove(&ack_sequence);
                 } else {
                     if sent_packet.packet_type == PacketType::Data {
-                        self.notify_packet_dropped(ack_sequence, message_manager, replicate_notifiable);
+                        self.notify_packet_dropped(
+                            ack_sequence,
+                            message_manager,
+                            replicate_notifiable,
+                        );
                     }
                     self.sent_packets.remove(&ack_sequence);
                 }

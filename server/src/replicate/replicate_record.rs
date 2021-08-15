@@ -1,4 +1,4 @@
-use naia_shared::{LocalReplicateKey, Ref, DiffMask};
+use naia_shared::{DiffMask, LocalReplicateKey, Ref};
 
 use super::locality_status::LocalityStatus;
 
@@ -10,7 +10,11 @@ pub struct ReplicateRecord {
 }
 
 impl ReplicateRecord {
-    pub fn new(local_key: LocalReplicateKey, diff_mask_size: u8, status: LocalityStatus) -> ReplicateRecord {
+    pub fn new(
+        local_key: LocalReplicateKey,
+        diff_mask_size: u8,
+        status: LocalityStatus,
+    ) -> ReplicateRecord {
         ReplicateRecord {
             local_key,
             diff_mask: Ref::new(DiffMask::new(diff_mask_size)),

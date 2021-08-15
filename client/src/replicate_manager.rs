@@ -1,32 +1,33 @@
-
-use std::collections::{HashSet, HashMap, VecDeque, hash_map::Keys};
+use std::collections::{hash_map::Keys, HashMap, HashSet, VecDeque};
 
 use log::warn;
 
-use naia_shared::{ProtocolType, LocalReplicateKey, Manifest, PacketReader, DiffMask,
-                  LocalEntityKey, ReplicateActionType, NaiaKey, LocalObjectKey, LocalComponentKey, PawnKey};
+use naia_shared::{
+    DiffMask, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicateKey, Manifest,
+    NaiaKey, PacketReader, PawnKey, ProtocolType, ReplicateActionType,
+};
 
-use super::{replicate_action::ReplicateAction, dual_command_receiver::DualCommandReceiver};
+use super::{dual_command_receiver::DualCommandReceiver, replicate_action::ReplicateAction};
 
 #[derive(Debug)]
 pub struct ReplicateManager<T: ProtocolType> {
-    local_replicate_store:              HashMap<LocalReplicateKey, T>,
-    queued_incoming_messages:           VecDeque<ReplicateAction<T>>,
-    pawn_store:                         HashMap<LocalObjectKey, T>,
-    local_entity_store:                 HashMap<LocalEntityKey, HashSet<LocalComponentKey>>,
-    pawn_entity_store:                  HashSet<LocalEntityKey>,
-    component_entity_map:               HashMap<LocalComponentKey, LocalEntityKey>,
+    local_replicate_store: HashMap<LocalReplicateKey, T>,
+    queued_incoming_messages: VecDeque<ReplicateAction<T>>,
+    pawn_store: HashMap<LocalObjectKey, T>,
+    local_entity_store: HashMap<LocalEntityKey, HashSet<LocalComponentKey>>,
+    pawn_entity_store: HashSet<LocalEntityKey>,
+    component_entity_map: HashMap<LocalComponentKey, LocalEntityKey>,
 }
 
 impl<T: ProtocolType> ReplicateManager<T> {
     pub fn new() -> Self {
         ReplicateManager {
-            queued_incoming_messages:           VecDeque::new(),
-            local_replicate_store:              HashMap::new(),
-            pawn_store:                         HashMap::new(),
-            local_entity_store:                 HashMap::new(),
-            pawn_entity_store:                  HashSet::new(),
-            component_entity_map:               HashMap::new(),
+            queued_incoming_messages: VecDeque::new(),
+            local_replicate_store: HashMap::new(),
+            pawn_store: HashMap::new(),
+            local_entity_store: HashMap::new(),
+            pawn_entity_store: HashSet::new(),
+            component_entity_map: HashMap::new(),
         }
     }
 
@@ -67,7 +68,9 @@ impl<T: ProtocolType> ReplicateManager<T> {
                     if self.component_entity_map.contains_key(&replicate_key) {
                         // Replicate is a Component
                         let entity_key = self.component_entity_map.remove(&replicate_key).unwrap();
-                        let component_set = self.local_entity_store.get_mut(&entity_key)
+                        let component_set = self
+                            .local_entity_store
+                            .get_mut(&entity_key)
                             .expect("entity not instantiated properly?");
                         if !component_set.remove(&replicate_key) {
                             panic!("trying to delete non-existent component");
@@ -82,8 +85,8 @@ impl<T: ProtocolType> ReplicateManager<T> {
                     // Replicate Update
                     let replicate_key = LocalReplicateKey::from_u16(reader.read_u16());
 
-                    if let Some(replicate_ref) = self.local_replicate_store.get_mut(&replicate_key) {
-
+                    if let Some(replicate_ref) = self.local_replicate_store.get_mut(&replicate_key)
+                    {
                         let diff_mask: DiffMask = DiffMask::read(reader);
 
                         replicate_ref.read_partial(&diff_mask, reader, packet_index);
@@ -96,12 +99,14 @@ impl<T: ProtocolType> ReplicateManager<T> {
                                 let pawn_key = PawnKey::Entity(*entity_key);
                                 command_receiver.replay_commands(packet_tick, &pawn_key);
 
-                                // remove command history until the tick that has already been checked
+                                // remove command history until the tick that has already been
+                                // checked
                                 command_receiver.remove_history_until(packet_tick, &pawn_key);
                             }
 
-                            self.queued_incoming_messages
-                                .push_back(ReplicateAction::UpdateComponent(*entity_key, replicate_key));
+                            self.queued_incoming_messages.push_back(
+                                ReplicateAction::UpdateComponent(*entity_key, replicate_key),
+                            );
                         } else {
                             // Replicate is an Object
                             self.queued_incoming_messages
@@ -180,7 +185,8 @@ impl<T: ProtocolType> ReplicateManager<T> {
                             if self.local_replicate_store.contains_key(&component_key) {
                                 panic!("attempted to insert duplicate component");
                             } else {
-                                self.local_replicate_store.insert(component_key, new_replicate);
+                                self.local_replicate_store
+                                    .insert(component_key, new_replicate);
                                 self.component_entity_map.insert(component_key, entity_key);
                                 component_list.push(component_key);
                                 component_set.insert(component_key);
@@ -198,7 +204,6 @@ impl<T: ProtocolType> ReplicateManager<T> {
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
 
                     if let Some(component_set) = self.local_entity_store.remove(&entity_key) {
-
                         if self.pawn_entity_store.take(&entity_key).is_some() {
                             let pawn_key = PawnKey::Entity(entity_key);
                             command_receiver.pawn_cleanup(&pawn_key);
@@ -215,15 +220,17 @@ impl<T: ProtocolType> ReplicateManager<T> {
                             .push_back(ReplicateAction::DeleteEntity(entity_key));
                     } else {
                         // its possible we received a very late duplicate message
-                        warn!("received message attempting to delete nonexistent entity: {}", entity_key.to_u16());
+                        warn!(
+                            "received message attempting to delete nonexistent entity: {}",
+                            entity_key.to_u16()
+                        );
                     }
                 }
                 ReplicateActionType::AssignPawnEntity => {
                     // Assign Pawn Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if self.local_entity_store.contains_key(&entity_key) {
-                        self.pawn_entity_store
-                            .insert(entity_key);
+                        self.pawn_entity_store.insert(entity_key);
 
                         let pawn_key = PawnKey::Entity(entity_key);
                         command_receiver.pawn_init(&pawn_key);
@@ -252,24 +259,34 @@ impl<T: ProtocolType> ReplicateManager<T> {
                     let new_component = manifest.create_replicate(naia_id, reader);
                     if self.local_replicate_store.contains_key(&component_key) {
                         // its possible we received a very late duplicate message
-                        warn!("attempting to add duplicate local component key: {}, into entity: {}",
-                               component_key.to_u16(), entity_key.to_u16());
+                        warn!(
+                            "attempting to add duplicate local component key: {}, into entity: {}",
+                            component_key.to_u16(),
+                            entity_key.to_u16()
+                        );
                     } else {
                         if !self.local_entity_store.contains_key(&entity_key) {
                             // its possible we received a very late duplicate message
-                            warn!("attempting to add a component: {}, to nonexistent entity: {}",
-                                  component_key.to_u16(),
-                                  entity_key.to_u16());
+                            warn!(
+                                "attempting to add a component: {}, to nonexistent entity: {}",
+                                component_key.to_u16(),
+                                entity_key.to_u16()
+                            );
                         } else {
-                            self.local_replicate_store.insert(component_key, new_component);
+                            self.local_replicate_store
+                                .insert(component_key, new_component);
 
                             self.component_entity_map.insert(component_key, entity_key);
-                            let component_set = self.local_entity_store.get_mut(&entity_key).unwrap();
+                            let component_set =
+                                self.local_entity_store.get_mut(&entity_key).unwrap();
 
                             component_set.insert(component_key);
 
                             self.queued_incoming_messages
-                                .push_back(ReplicateAction::AddComponent(entity_key, component_key));
+                                .push_back(ReplicateAction::AddComponent(
+                                    entity_key,
+                                    component_key,
+                                ));
                         }
                     }
                 }
@@ -339,10 +356,12 @@ impl<T: ProtocolType> ReplicateManager<T> {
 
     // internal
 
-    fn object_delete_cleanup(&mut self, command_receiver: &mut DualCommandReceiver<T>,
-                             object_key: &LocalObjectKey) {
+    fn object_delete_cleanup(
+        &mut self,
+        command_receiver: &mut DualCommandReceiver<T>,
+        object_key: &LocalObjectKey,
+    ) {
         if let Some(replicate) = self.local_replicate_store.remove(&object_key) {
-
             if self.pawn_store.contains_key(&object_key) {
                 self.pawn_store.remove(&object_key);
                 let pawn_key = PawnKey::Object(*object_key);
@@ -354,10 +373,18 @@ impl<T: ProtocolType> ReplicateManager<T> {
         }
     }
 
-    fn component_delete_cleanup(&mut self, entity_key: &LocalEntityKey, component_key: &LocalComponentKey) {
+    fn component_delete_cleanup(
+        &mut self,
+        entity_key: &LocalEntityKey,
+        component_key: &LocalComponentKey,
+    ) {
         if let Some(component) = self.local_replicate_store.remove(&component_key) {
             self.queued_incoming_messages
-                .push_back(ReplicateAction::RemoveComponent(*entity_key, *component_key, component));
+                .push_back(ReplicateAction::RemoveComponent(
+                    *entity_key,
+                    *component_key,
+                    component,
+                ));
         }
     }
 }

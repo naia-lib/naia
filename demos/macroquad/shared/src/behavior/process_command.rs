@@ -1,6 +1,6 @@
 use naia_shared::Ref;
 
-use crate::{protocol::{KeyCommand, Square}};
+use crate::protocol::{KeyCommand, Square};
 
 const SQUARE_SPEED: u16 = 8;
 

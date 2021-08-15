@@ -1,6 +1,5 @@
-
 use naia_derive::Replicate;
-use naia_shared::{Replicate, Property};
+use naia_shared::{Property, Replicate};
 
 use super::Protocol;
 
@@ -12,9 +11,6 @@ pub struct Position {
 
 impl Position {
     pub fn new(x: u8, y: u8) -> Self {
-        return Position::new_complete(
-            x,
-            y,
-        );
+        return Position::new_complete(x, y);
     }
 }

@@ -1,4 +1,4 @@
-use std::{default::Default, time::Duration, net::SocketAddr};
+use std::{default::Default, net::SocketAddr, time::Duration};
 
 /// Contains Config properties which will be used by a Server or Client
 #[derive(Clone, Debug)]

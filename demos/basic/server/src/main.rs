@@ -1,9 +1,7 @@
 #[macro_use]
 extern crate log;
 
-use std::{
-    time::Duration,
-};
+use std::time::Duration;
 
 use log::LevelFilter;
 use simple_logger::SimpleLogger;
@@ -18,11 +16,11 @@ use app::App;
 
 fn main() -> io::Result<()> {
     SimpleLogger::new()
-            .with_level(LevelFilter::Info)
-            .init()
-            .expect("A logger was already initialized");
+        .with_level(LevelFilter::Info)
+        .init()
+        .expect("A logger was already initialized");
 
-        info!("Naia Server Example Started");
+    info!("Naia Server Example Started");
 
     let mut server_config = ServerConfig::default();
 
@@ -38,7 +36,6 @@ fn main() -> io::Result<()> {
             .parse()
             .expect("could not parse advertised public WebRTC data address/port"),
     );
-
 
     server_config.heartbeat_interval = Duration::from_secs(2);
     // Keep in mind that the disconnect timeout duration should always be at least

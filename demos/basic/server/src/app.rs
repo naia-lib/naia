@@ -1,15 +1,15 @@
-use std::{
-    rc::Rc,
-    collections::HashMap,
-};
+use std::{collections::HashMap, rc::Rc};
 
 use hecs::{Entity as HecsEntityKey, World};
 
-use naia_server::{Server, ServerConfig, Event, UserKey, RoomKey, EntityKey as NaiaEntityKey, Ref, Replicate, ComponentKey};
+use naia_server::{
+    ComponentKey, EntityKey as NaiaEntityKey, Event, Ref, Replicate, RoomKey, Server, ServerConfig,
+    UserKey,
+};
 
 use naia_demo_basic_shared::{
     get_shared_config,
-    protocol::{Protocol, Position, Name, Marker, StringMessage},
+    protocol::{Marker, Name, Position, Protocol, StringMessage},
 };
 
 pub struct App {
@@ -19,18 +19,13 @@ pub struct App {
     tick_count: u32,
     naia_to_hecs_key_map: HashMap<NaiaEntityKey, HecsEntityKey>,
     hecs_to_naia_key_map: HashMap<HecsEntityKey, NaiaEntityKey>,
-    has_marker: HashMap<NaiaEntityKey, ComponentKey>
+    has_marker: HashMap<NaiaEntityKey, ComponentKey>,
 }
 
 impl App {
     pub async fn new(server_config: ServerConfig) -> Self {
-
-        let mut server = Server::new(
-            Protocol::load(),
-            Some(server_config),
-            get_shared_config(),
-        )
-        .await;
+        let mut server =
+            Server::new(Protocol::load(), Some(server_config), get_shared_config()).await;
 
         // This method is called during the connection handshake process, and can be
         // used to reject a new connection if the correct credentials have not been
@@ -71,17 +66,16 @@ impl App {
 
                 // Add position component to Entity
                 let position = Position::new((count * 4) as u8, 0).wrap();
-                let _pos_key = server.add_component_to_entity(&naia_key, Protocol::Position(position.clone()));
+                let _pos_key =
+                    server.add_component_to_entity(&naia_key, Protocol::Position(position.clone()));
 
                 // Add name component to Entity
                 let name = Name::new(first, last).wrap();
-                let _name_key = server.add_component_to_entity(&naia_key, Protocol::Name(name.clone()));
+                let _name_key =
+                    server.add_component_to_entity(&naia_key, Protocol::Name(name.clone()));
 
                 // Add to World
-                let hecs_key = world.spawn((
-                    Ref::clone(&name),
-                    Ref::clone(&position),
-                ));
+                let hecs_key = world.spawn((Ref::clone(&name), Ref::clone(&position)));
 
                 naia_to_hecs_key_map.insert(naia_key, hecs_key);
                 hecs_to_naia_key_map.insert(hecs_key, naia_key);
@@ -101,140 +95,157 @@ impl App {
 
     pub async fn update(&mut self) {
         match self.server.receive().await {
-                Ok(event) => {
-                    match event {
-                        Event::Connection(user_key) => {
-                            self.server.room_add_user(&self.main_room_key, &user_key);
-                            if let Some(user) = self.server.get_user(&user_key) {
-                                info!("Naia Server connected to: {}", user.address);
+            Ok(event) => {
+                match event {
+                    Event::Connection(user_key) => {
+                        self.server.room_add_user(&self.main_room_key, &user_key);
+                        if let Some(user) = self.server.get_user(&user_key) {
+                            info!("Naia Server connected to: {}", user.address);
+                        }
+                    }
+                    Event::Disconnection(_, user) => {
+                        info!("Naia Server disconnected from: {:?}", user.address);
+                    }
+                    Event::Message(user_key, message_type) => {
+                        if let Some(user) = self.server.get_user(&user_key) {
+                            match message_type {
+                                Protocol::StringMessage(message_ref) => {
+                                    let message = message_ref.borrow();
+                                    let message = message.message.get();
+                                    info!("Naia Server recv <- {}: {}", user.address, message);
+                                }
+                                _ => {}
                             }
                         }
-                        Event::Disconnection(_, user) => {
-                            info!("Naia Server disconnected from: {:?}", user.address);
+                    }
+                    Event::Tick => {
+                        // Game logic, march entities across the screen
+                        let mut entities_to_add: Vec<HecsEntityKey> = Vec::new();
+                        let mut entities_to_remove: Vec<HecsEntityKey> = Vec::new();
+
+                        for (hecs_entity_key, position_ref) in
+                            self.world.query_mut::<&Ref<Position>>()
+                        {
+                            let mut position = position_ref.borrow_mut();
+                            let mut x = *position.x.get();
+                            x += 1;
+                            if x > 125 {
+                                x = 0;
+                                let mut y = *position.y.get();
+                                y = y.wrapping_add(1);
+                                position.y.set(y);
+                            }
+                            if x == 40 {
+                                entities_to_add.push(hecs_entity_key);
+                            }
+                            if x == 75 {
+                                entities_to_remove.push(hecs_entity_key);
+                            }
+                            position.x.set(x);
                         }
-                        Event::Message(user_key, message_type) => {
-                            if let Some(user) = self.server.get_user(&user_key) {
-                                match message_type {
-                                    Protocol::StringMessage(message_ref) => {
-                                        let message = message_ref.borrow();
-                                        let message = message.message.get();
-                                        info!("Naia Server recv <- {}: {}", user.address, message);
+
+                        // add marker
+                        while let Some(hecs_key) = entities_to_add.pop() {
+                            let naia_key = self
+                                .hecs_to_naia_key_map
+                                .get(&hecs_key)
+                                .expect("hecs <-> naia map not working ..");
+
+                            if !self.has_marker.contains_key(naia_key) {
+                                // Add Marker component to Entity in Naia Server
+                                let marker = Marker::new("new").wrap();
+                                let component_key = self.server.add_component_to_entity(
+                                    &naia_key,
+                                    Protocol::Marker(marker.clone()),
+                                );
+
+                                // Add to Hecs World
+                                self.world
+                                    .insert_one(hecs_key, marker)
+                                    .expect("error inserting!");
+
+                                self.has_marker.insert(*naia_key, component_key);
+                            }
+                        }
+
+                        // remove marker
+                        while let Some(hecs_key) = entities_to_remove.pop() {
+                            let naia_key = self
+                                .hecs_to_naia_key_map
+                                .get(&hecs_key)
+                                .expect("hecs <-> naia map not working ..");
+
+                            if let Some(component_key) = self.has_marker.remove(naia_key) {
+                                let component_ref = self.server.remove_component(&component_key);
+
+                                match component_ref {
+                                    Protocol::Position(position_ref) => {
+                                        self.remove_component(&hecs_key, &position_ref);
+                                    }
+                                    Protocol::Name(name_ref) => {
+                                        self.remove_component(&hecs_key, &name_ref);
+                                    }
+                                    Protocol::Marker(marker_ref) => {
+                                        self.remove_component(&hecs_key, &marker_ref);
                                     }
                                     _ => {}
                                 }
                             }
                         }
-                        Event::Tick => {
 
-                            // Game logic, march entities across the screen
-                            let mut entities_to_add: Vec<HecsEntityKey> = Vec::new();
-                            let mut entities_to_remove: Vec<HecsEntityKey> = Vec::new();
-
-                            for (hecs_entity_key, position_ref) in self.world.query_mut::<&Ref<Position>>() {
-                                let mut position = position_ref.borrow_mut();
-                                let mut x = *position.x.get();
-                                x += 1;
-                                if x > 125 {
-                                    x = 0;
-                                    let mut y = *position.y.get();
-                                    y = y.wrapping_add(1);
-                                    position.y.set(y);
-                                }
-                                if x == 40 {
-                                    entities_to_add.push(hecs_entity_key);
-                                }
-                                if x == 75 {
-                                    entities_to_remove.push(hecs_entity_key);
-                                }
-                                position.x.set(x);
-                            }
-
-                            // add marker
-                            while let Some(hecs_key) = entities_to_add.pop() {
-                                let naia_key = self.hecs_to_naia_key_map.get(&hecs_key)
-                                    .expect("hecs <-> naia map not working ..");
-
-                                if !self.has_marker.contains_key(naia_key) {
-
-                                    // Add Marker component to Entity in Naia Server
-                                    let marker = Marker::new("new").wrap();
-                                    let component_key = self.server.add_component_to_entity(&naia_key,
-                                                                        Protocol::Marker(marker.clone()));
-
-                                    // Add to Hecs World
-                                    self.world.insert_one(hecs_key, marker)
-                                        .expect("error inserting!");
-
-                                    self.has_marker.insert(*naia_key, component_key);
+                        // Update scopes of entities
+                        for (room_key, user_key, entity_key) in self.server.entity_scope_sets() {
+                            if let Some(entity) = self.naia_to_hecs_key_map.get(&entity_key) {
+                                if let Ok(pos_ref) = self.world.get::<Ref<Position>>(*entity) {
+                                    let x = *pos_ref.borrow().x.get();
+                                    let in_scope = x >= 5 && x <= 100;
+                                    self.server.entity_set_scope(
+                                        &room_key,
+                                        &user_key,
+                                        &entity_key,
+                                        in_scope,
+                                    );
                                 }
                             }
-
-                            // remove marker
-                            while let Some(hecs_key) = entities_to_remove.pop() {
-                                let naia_key = self.hecs_to_naia_key_map.get(&hecs_key)
-                                    .expect("hecs <-> naia map not working ..");
-
-                                if let Some(component_key) = self.has_marker.remove(naia_key) {
-                                    let component_ref = self.server.remove_component(&component_key);
-
-                                    match component_ref {
-                                        Protocol::Position(position_ref) => {
-                                            self.remove_component(&hecs_key, &position_ref);
-                                        }
-                                        Protocol::Name(name_ref) => {
-                                            self.remove_component(&hecs_key, &name_ref);
-                                        }
-                                        Protocol::Marker(marker_ref) => {
-                                            self.remove_component(&hecs_key, &marker_ref);
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                            }
-
-                            // Update scopes of entities
-                            for (room_key, user_key, entity_key) in self.server.entity_scope_sets() {
-                                if let Some(entity) = self.naia_to_hecs_key_map.get(&entity_key) {
-                                    if let Ok(pos_ref) = self.world.get::<Ref<Position>>(*entity) {
-                                        let x = *pos_ref.borrow().x.get();
-                                        let in_scope = x >= 5 && x <= 100;
-                                        self.server.entity_set_scope(&room_key, &user_key, &entity_key, in_scope);
-                                    }
-                                }
-                            }
-
-                            // Event Sending
-                            let mut iter_vec: Vec<UserKey> = Vec::new();
-                            for (user_key, _) in self.server.users_iter() {
-                                iter_vec.push(user_key);
-                            }
-                            for user_key in iter_vec {
-                                let user = self.server.get_user(&user_key).unwrap();
-                                let new_message = format!("Server Packet (tick {})", self.tick_count);
-                                info!("Naia Server send -> {}: {}", user.address, new_message);
-
-                                let message_event = StringMessage::new(new_message);
-                                self.server.queue_message(&user_key, &message_event, true);
-                            }
-
-                            // VERY IMPORTANT! Calling this actually sends all Replicate/Event data
-                            // packets to all Clients that require it. If you don't call this
-                            // method, the Server will never communicate with it's connected Clients
-                            self.server.send_all_updates().await;
-
-                            self.tick_count = self.tick_count.wrapping_add(1);
                         }
-                        _ => {}
+
+                        // Event Sending
+                        let mut iter_vec: Vec<UserKey> = Vec::new();
+                        for (user_key, _) in self.server.users_iter() {
+                            iter_vec.push(user_key);
+                        }
+                        for user_key in iter_vec {
+                            let user = self.server.get_user(&user_key).unwrap();
+                            let new_message = format!("Server Packet (tick {})", self.tick_count);
+                            info!("Naia Server send -> {}: {}", user.address, new_message);
+
+                            let message_event = StringMessage::new(new_message);
+                            self.server.queue_message(&user_key, &message_event, true);
+                        }
+
+                        // VERY IMPORTANT! Calling this actually sends all Replicate/Event data
+                        // packets to all Clients that require it. If you don't call this
+                        // method, the Server will never communicate with it's connected Clients
+                        self.server.send_all_updates().await;
+
+                        self.tick_count = self.tick_count.wrapping_add(1);
                     }
-                }
-                Err(error) => {
-                    info!("Naia Server Error: {}", error);
+                    _ => {}
                 }
             }
+            Err(error) => {
+                info!("Naia Server Error: {}", error);
+            }
+        }
     }
 
-    fn remove_component<T: 'static + Replicate<Protocol>>(&mut self, hecs_entity_key: &HecsEntityKey, _component_ref: &Ref<T>) {
-        self.world.remove_one::<Ref<T>>(*hecs_entity_key)
+    fn remove_component<T: 'static + Replicate<Protocol>>(
+        &mut self,
+        hecs_entity_key: &HecsEntityKey,
+        _component_ref: &Ref<T>,
+    ) {
+        self.world
+            .remove_one::<Ref<T>>(*hecs_entity_key)
             .expect("error removing component");
     }
 }

@@ -1,8 +1,8 @@
-pub(crate) mod keys;
-pub(crate) mod replicate_record;
 pub(crate) mod entity_record;
-pub(crate) mod mut_handler;
-pub(crate) mod replicate_manager;
-pub(crate) mod replicate_action;
-pub(crate) mod replicate_mutator;
+pub(crate) mod keys;
 pub(crate) mod locality_status;
+pub(crate) mod mut_handler;
+pub(crate) mod replicate_action;
+pub(crate) mod replicate_manager;
+pub(crate) mod replicate_mutator;
+pub(crate) mod replicate_record;

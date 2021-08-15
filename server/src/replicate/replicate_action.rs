@@ -1,20 +1,42 @@
-use naia_shared::{Replicate, ProtocolType, LocalReplicateKey, LocalObjectKey, Ref, DiffMask, LocalEntityKey, EntityKey, LocalComponentKey, ReplicateActionType};
+use naia_shared::{
+    DiffMask, EntityKey, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicateKey,
+    ProtocolType, Ref, Replicate, ReplicateActionType,
+};
 
-use super::keys::{ObjectKey, ComponentKey};
+use super::keys::{ComponentKey, ObjectKey};
 
 #[derive(Debug)]
 pub enum ReplicateAction<T: ProtocolType> {
     CreateObject(ObjectKey, LocalObjectKey, Ref<dyn Replicate<T>>),
-    UpdateReplicate(ObjectKey, LocalReplicateKey, Ref<DiffMask>, Ref<dyn Replicate<T>>),
+    UpdateReplicate(
+        ObjectKey,
+        LocalReplicateKey,
+        Ref<DiffMask>,
+        Ref<dyn Replicate<T>>,
+    ),
     DeleteReplicate(ObjectKey, LocalReplicateKey),
     AssignPawn(ObjectKey, LocalObjectKey),
     UnassignPawn(ObjectKey, LocalObjectKey),
-    UpdatePawn(ObjectKey, LocalObjectKey, Ref<DiffMask>, Ref<dyn Replicate<T>>),
-    CreateEntity(EntityKey, LocalEntityKey, Option<Vec<(ComponentKey, LocalComponentKey, Ref<dyn Replicate<T>>)>>),
+    UpdatePawn(
+        ObjectKey,
+        LocalObjectKey,
+        Ref<DiffMask>,
+        Ref<dyn Replicate<T>>,
+    ),
+    CreateEntity(
+        EntityKey,
+        LocalEntityKey,
+        Option<Vec<(ComponentKey, LocalComponentKey, Ref<dyn Replicate<T>>)>>,
+    ),
     DeleteEntity(EntityKey, LocalEntityKey),
     AssignPawnEntity(EntityKey, LocalEntityKey),
     UnassignPawnEntity(EntityKey, LocalEntityKey),
-    AddComponent(LocalEntityKey, ComponentKey, LocalComponentKey, Ref<dyn Replicate<T>>),
+    AddComponent(
+        LocalEntityKey,
+        ComponentKey,
+        LocalComponentKey,
+        Ref<dyn Replicate<T>>,
+    ),
 }
 
 impl<T: ProtocolType> ReplicateAction<T> {
@@ -68,7 +90,7 @@ impl<T: ProtocolType> Clone for ReplicateAction<T> {
             ReplicateAction::UnassignPawnEntity(gk, lk) => {
                 ReplicateAction::UnassignPawnEntity(gk.clone(), lk.clone())
             }
-            ReplicateAction::AddComponent(lek, gck,lck, r) => {
+            ReplicateAction::AddComponent(lek, gck, lck, r) => {
                 ReplicateAction::AddComponent(lek.clone(), gck.clone(), lck.clone(), r.clone())
             }
         }

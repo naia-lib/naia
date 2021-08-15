@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use macroquad::prelude::*;
 
-use naia_client::{Replicate, ClientConfig, Event, Client, Ref, LocalReplicateKey};
+use naia_client::{Client, ClientConfig, Event, LocalReplicateKey, Ref, Replicate};
 
 use naia_demo_macroquad_shared::{
-    get_shared_config, behavior as shared_behavior, protocol::{Protocol, Square, Color, Auth, KeyCommand},
+    behavior as shared_behavior, get_shared_config,
+    protocol::{Auth, Color, KeyCommand, Protocol, Square},
 };
 
 pub struct App {
@@ -17,7 +18,6 @@ pub struct App {
 
 impl App {
     pub fn new(client_config: ClientConfig) -> Self {
-
         let auth = Auth::new("charlie", "12345").to_protocol();
 
         let client = Client::new(
@@ -117,10 +117,10 @@ impl App {
                                     _ => {}
                                 }
                             }
-                        },
+                        }
                         Event::DeleteObject(local_key, _) => {
                             self.square_map.remove(&local_key);
-                        },
+                        }
                         _ => {}
                     },
                     Err(err) => {

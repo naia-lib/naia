@@ -1,4 +1,4 @@
-use naia_shared::{LocalObjectKey, LocalEntityKey, LocalComponentKey, ProtocolType};
+use naia_shared::{LocalComponentKey, LocalEntityKey, LocalObjectKey, ProtocolType};
 
 #[derive(Debug, Clone)]
 pub enum ReplicateAction<U: ProtocolType> {

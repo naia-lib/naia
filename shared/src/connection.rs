@@ -1,13 +1,16 @@
 use std::{net::SocketAddr, rc::Rc};
 
-use crate::{wrapping_diff, Timer, MessageManager};
+use crate::{wrapping_diff, MessageManager, Timer};
 
 use super::{
     ack_manager::AckManager,
-    replicate::{replicate_notifiable::ReplicateNotifiable, protocol_type::ProtocolType, replicate::Replicate},
     connection_config::ConnectionConfig,
     manifest::Manifest,
     packet_type::PacketType,
+    replicate::{
+        protocol_type::ProtocolType, replicate::Replicate,
+        replicate_notifiable::ReplicateNotifiable,
+    },
     sequence_buffer::SequenceNumber,
     standard_header::StandardHeader,
     PacketReader,
@@ -121,7 +124,9 @@ impl<T: ProtocolType> Connection<T> {
 
     /// Queue up a message to be sent to the remote host
     pub fn queue_message(&mut self, message: &impl Replicate<T>, guaranteed_delivery: bool) {
-        return self.message_manager.queue_outgoing_message(message, guaranteed_delivery);
+        return self
+            .message_manager
+            .queue_outgoing_message(message, guaranteed_delivery);
     }
 
     /// Returns whether there are messages to be sent to the remote host
@@ -130,25 +135,28 @@ impl<T: ProtocolType> Connection<T> {
     }
 
     /// Pop the next outgoing message from the queue
-    pub fn pop_outgoing_message(&mut self, next_packet_index: u16) -> Option<Rc<Box<dyn Replicate<T>>>> {
+    pub fn pop_outgoing_message(
+        &mut self,
+        next_packet_index: u16,
+    ) -> Option<Rc<Box<dyn Replicate<T>>>> {
         return self.message_manager.pop_outgoing_message(next_packet_index);
     }
 
     /// If for some reason the next outgoing message could not be written into a
     /// message and sent, place it back into the front of the queue
-    pub fn unpop_outgoing_message(&mut self, next_packet_index: u16, message: &Rc<Box<dyn Replicate<T>>>) {
+    pub fn unpop_outgoing_message(
+        &mut self,
+        next_packet_index: u16,
+        message: &Rc<Box<dyn Replicate<T>>>,
+    ) {
         return self
             .message_manager
             .unpop_outgoing_message(next_packet_index, message);
     }
 
-    /// Given an incoming packet which has been identified as an message, send the
-    /// data to the MessageManager for processing
-    pub fn process_message_data(
-        &mut self,
-        reader: &mut PacketReader,
-        manifest: &Manifest<T>,
-    ) {
+    /// Given an incoming packet which has been identified as an message, send
+    /// the data to the MessageManager for processing
+    pub fn process_message_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<T>) {
         return self.message_manager.process_data(reader, manifest);
     }
 

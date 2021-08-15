@@ -1,4 +1,3 @@
-
 use naia_derive::EventType;
 
 mod auth;

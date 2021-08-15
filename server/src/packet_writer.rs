@@ -1,6 +1,6 @@
 use byteorder::WriteBytesExt;
 
-use naia_shared::{ProtocolType, Replicate, MessagePacketWriter, ManagerType, Manifest};
+use naia_shared::{ManagerType, Manifest, MessagePacketWriter, ProtocolType, Replicate};
 
 /// Handles writing of Message/Object/Component data into an outgoing packet
 pub struct PacketWriter {
@@ -36,8 +36,8 @@ impl PacketWriter {
         //Write manager "header" (manager type & replicate count)
         if self.replicate_action_count != 0 {
             out_bytes.write_u8(ManagerType::Replicate as u8).unwrap(); // write
-                                                                   // manager
-                                                                   // type
+                                                                       // manager
+                                                                       // type
             out_bytes.write_u8(self.replicate_action_count).unwrap(); // write number of messages
             out_bytes.append(&mut self.replicate_working_bytes); // write replicate payload
 
@@ -53,8 +53,8 @@ impl PacketWriter {
         return self.message_writer.bytes_number() + self.replicate_working_bytes.len();
     }
 
-    /// Writes an Message into the Writer's internal buffer, which will eventually
-    /// be put into the outgoing packet
+    /// Writes an Message into the Writer's internal buffer, which will
+    /// eventually be put into the outgoing packet
     pub fn write_message<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,

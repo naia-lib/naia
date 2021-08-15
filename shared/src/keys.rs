@@ -1,5 +1,5 @@
-/// The key that represents a Object/Component in the Client's scope, that is being
-/// synced to the Client
+/// The key that represents a Object/Component in the Client's scope, that is
+/// being synced to the Client
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct LocalReplicateKey(u16);
 
@@ -34,6 +34,7 @@ impl NaiaKey for LocalReplicateKey {
     fn from_u16(k: u16) -> Self {
         LocalReplicateKey(k)
     }
+
     fn to_u16(&self) -> u16 {
         self.0
     }
@@ -43,6 +44,7 @@ impl NaiaKey for EntityKey {
     fn from_u16(k: u16) -> Self {
         EntityKey(k)
     }
+
     fn to_u16(&self) -> u16 {
         self.0
     }
@@ -52,6 +54,7 @@ impl NaiaKey for LocalEntityKey {
     fn from_u16(k: u16) -> Self {
         LocalEntityKey(k)
     }
+
     fn to_u16(&self) -> u16 {
         self.0
     }

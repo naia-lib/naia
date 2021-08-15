@@ -1,4 +1,4 @@
-use naia_shared::{LocalObjectKey, LocalEntityKey, LocalComponentKey, ProtocolType};
+use naia_shared::{LocalComponentKey, LocalEntityKey, LocalObjectKey, ProtocolType};
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
@@ -18,8 +18,8 @@ pub enum Event<T: ProtocolType> {
     /// Occurs when an Object has been assigned to the local host as a Pawn,
     /// meaning it can receive Commands from the Client
     AssignPawn(LocalObjectKey),
-    /// Occurs when a Pawn Object has been unassigned from the local host, meaning it
-    /// cannot receive Commands from this Client
+    /// Occurs when a Pawn Object has been unassigned from the local host,
+    /// meaning it cannot receive Commands from this Client
     UnassignPawn(LocalObjectKey),
     /// Occurs when a Pawn Object needs to be reset to the local Object's state
     ResetPawn(LocalObjectKey),
@@ -39,27 +39,28 @@ pub enum Event<T: ProtocolType> {
     /// Occurs when an Entity on the Server has come into scope for the Client,
     /// and should be added to the local client's ECS "world"
     CreateEntity(LocalEntityKey, Vec<LocalComponentKey>),
-    /// Occurs when an Entity on the Server has left the Client's scope, and should be removed from the local client's ECS "world"
+    /// Occurs when an Entity on the Server has left the Client's scope, and
+    /// should be removed from the local client's ECS "world"
     DeleteEntity(LocalEntityKey),
     /// Occurs when a Component should be added to a given Entity
     AddComponent(LocalEntityKey, LocalComponentKey),
-    /// Occurs when a Component has had a replicate change on the Server while the
-    /// Entity it is attached to has come into scope for the Client
+    /// Occurs when a Component has had a replicate change on the Server while
+    /// the Entity it is attached to has come into scope for the Client
     UpdateComponent(LocalEntityKey, LocalComponentKey),
     /// Occurs when a Component should be removed from the given Entity
     RemoveComponent(LocalEntityKey, LocalComponentKey, T),
     /// Occurs when an Entity has been assigned to the local host as a Pawn,
     /// meaning it can receive Commands from the Client
     AssignPawnEntity(LocalEntityKey),
-    /// Occurs when a Pawn Entity has been unassigned from the local host, meaning it
-    /// cannot receive Commands from this Client
+    /// Occurs when a Pawn Entity has been unassigned from the local host,
+    /// meaning it cannot receive Commands from this Client
     UnassignPawnEntity(LocalEntityKey),
     /// Occurs when a Pawn Entity needs to be reset to local replicate
     ResetPawnEntity(LocalEntityKey),
-    /// An Pawn Entity Command received which is to be simulated on the Client as well as on
-    /// the Server
+    /// An Pawn Entity Command received which is to be simulated on the Client
+    /// as well as on the Server
     NewCommandEntity(LocalEntityKey, T),
-    /// An Pawn Entity Command which is replayed to extrapolate from recently received
-    /// authoritative replicate
+    /// An Pawn Entity Command which is replayed to extrapolate from recently
+    /// received authoritative replicate
     ReplayCommandEntity(LocalEntityKey, T),
 }

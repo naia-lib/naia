@@ -1,18 +1,17 @@
-use std::{net::SocketAddr, rc::Rc, collections::hash_map::Keys};
+use std::{collections::hash_map::Keys, net::SocketAddr, rc::Rc};
 
-use naia_shared::{Replicate, ProtocolType, Connection, ConnectionConfig,
-                  ManagerType, Manifest, PacketReader, PacketType, PawnKey, SequenceNumber,
-                  StandardHeader, LocalEntityKey, LocalObjectKey, LocalComponentKey};
+use naia_shared::{
+    Connection, ConnectionConfig, LocalComponentKey, LocalEntityKey, LocalObjectKey, ManagerType,
+    Manifest, PacketReader, PacketType, PawnKey, ProtocolType, Replicate, SequenceNumber,
+    StandardHeader,
+};
 
 use crate::Packet;
 
 use super::{
-    replicate_manager::ReplicateManager, replicate_action::ReplicateAction,
-    packet_writer::PacketWriter,
-    ping_manager::PingManager, tick_queue::TickQueue,
-    tick_manager::TickManager,
-    dual_command_sender::DualCommandSender,
-    dual_command_receiver::DualCommandReceiver
+    dual_command_receiver::DualCommandReceiver, dual_command_sender::DualCommandSender,
+    packet_writer::PacketWriter, ping_manager::PingManager, replicate_action::ReplicateAction,
+    replicate_manager::ReplicateManager, tick_manager::TickManager, tick_queue::TickQueue,
 };
 
 #[derive(Debug)]
@@ -26,10 +25,7 @@ pub struct ServerConnection<T: ProtocolType> {
 }
 
 impl<T: ProtocolType> ServerConnection<T> {
-    pub fn new(
-        address: SocketAddr,
-        connection_config: &ConnectionConfig,
-    ) -> Self {
+    pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
             replicate_manager: ReplicateManager::new(),
@@ -263,28 +259,31 @@ impl<T: ProtocolType> ServerConnection<T> {
     }
 
     // command related
-    pub fn replicate_queue_command(&mut self, object_key: &LocalObjectKey, command: &impl Replicate<T>) {
+    pub fn replicate_queue_command(
+        &mut self,
+        object_key: &LocalObjectKey,
+        command: &impl Replicate<T>,
+    ) {
         let pawn_key = PawnKey::Object(*object_key);
         return self.command_sender.queue_command(&pawn_key, command);
     }
 
-    pub fn entity_queue_command(&mut self, entity_key: &LocalEntityKey, command: &impl Replicate<T>) {
+    pub fn entity_queue_command(
+        &mut self,
+        entity_key: &LocalEntityKey,
+        command: &impl Replicate<T>,
+    ) {
         let pawn_key = PawnKey::Entity(*entity_key);
         return self.command_sender.queue_command(&pawn_key, command);
     }
 
     pub fn process_replays(&mut self) {
-        self
-            .command_receiver
+        self.command_receiver
             .process_command_replay::<T>(&mut self.replicate_manager);
-
     }
 
     pub fn get_incoming_replay(&mut self) -> Option<(PawnKey, Rc<Box<dyn Replicate<T>>>)> {
-        if let Some((_tick, pawn_key, command)) = self
-            .command_receiver
-            .pop_command_replay::<T>()
-        {
+        if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command_replay::<T>() {
             return Some((pawn_key, command));
         }
 

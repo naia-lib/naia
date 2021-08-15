@@ -3,7 +3,10 @@ use std::{
     fmt::{Debug, Formatter, Result},
 };
 
-use super::{shared_replicate_mutator::SharedReplicateMutator, protocol_type::ProtocolType, diff_mask::DiffMask};
+use super::{
+    diff_mask::DiffMask, protocol_type::ProtocolType,
+    shared_replicate_mutator::SharedReplicateMutator,
+};
 
 use crate::{PacketReader, Ref};
 
@@ -12,8 +15,8 @@ use crate::{PacketReader, Ref};
 pub trait Replicate<T: ProtocolType>: BoxClone<T> {
     /// Gets the number of bytes of the Message/Object/Component's DiffMask
     fn get_diff_mask_size(&self) -> u8;
-    /// Gets a copy of the Message/Object/Component, wrapped in an ProtocolType enum (which is the
-    /// common protocol between the server/host)
+    /// Gets a copy of the Message/Object/Component, wrapped in an ProtocolType
+    /// enum (which is the common protocol between the server/host)
     fn to_protocol(&self) -> T;
     /// Gets the TypeId of the Message/Object/Component, used to map to a
     /// registered ProtocolType
@@ -29,25 +32,21 @@ pub trait Replicate<T: ProtocolType>: BoxClone<T> {
     fn read_full(&mut self, reader: &mut PacketReader, packet_index: u16);
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Message/Object/Component with it's replicate on the Server
-    fn read_partial(
-        &mut self,
-        diff_mask: &DiffMask,
-        reader: &mut PacketReader,
-        packet_index: u16,
-    );
-    /// Set the Message/Object/Component's ReplicateMutator, which keeps track of which Properties
-    /// have been mutated, necessary to sync only the Properties that have
-    /// changed with the client
+    fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16);
+    /// Set the Message/Object/Component's ReplicateMutator, which keeps track
+    /// of which Properties have been mutated, necessary to sync only the
+    /// Properties that have changed with the client
     fn set_mutator(&mut self, mutator: &Ref<dyn SharedReplicateMutator>);
 }
 
 //TODO: do we really need another trait here?
-/// Handles equality of Messages/Objects/Components.. can't just derive PartialEq because we want
-/// to only compare Properties
+/// Handles equality of Messages/Objects/Components.. can't just derive
+/// PartialEq because we want to only compare Properties
 pub trait ReplicateEq<T: ProtocolType, Impl = Self>: Replicate<T> {
     /// Compare properties in another Replicate
     fn equals(&self, other: &Impl) -> bool;
-    /// Sets the current Replicate to the replicate of another Replicate of the same type
+    /// Sets the current Replicate to the replicate of another Replicate of the
+    /// same type
     fn mirror(&mut self, other: &Impl);
 }
 

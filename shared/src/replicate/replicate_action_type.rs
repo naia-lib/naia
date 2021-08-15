@@ -26,7 +26,7 @@ pub enum ReplicateActionType {
     /// Action indicating a Component to be added to an Entity
     AddComponent,
     /// Unknown / Undefined message, should always be last variant in this list
-    Unknown
+    Unknown,
 }
 
 impl ReplicateActionType {
@@ -45,4 +45,3 @@ impl ReplicateActionType {
         z
     }
 }
-

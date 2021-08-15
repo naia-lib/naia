@@ -3,7 +3,9 @@ use std::{
     rc::Rc,
 };
 
-use naia_shared::{wrapping_diff, Replicate, ProtocolType, SequenceBuffer, SequenceIterator, PawnKey};
+use naia_shared::{
+    wrapping_diff, PawnKey, ProtocolType, Replicate, SequenceBuffer, SequenceIterator,
+};
 
 use super::replicate_manager::ReplicateManager;
 

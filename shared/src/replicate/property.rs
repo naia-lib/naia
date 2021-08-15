@@ -30,7 +30,8 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
         return &self.inner;
     }
 
-    /// Gets a mutable reference to the value contained by the Property, queue to update
+    /// Gets a mutable reference to the value contained by the Property, queue
+    /// to update
     pub fn get_mut(&mut self) -> &mut T {
         if let Some(mutator) = &self.mutator {
             mutator.borrow_mut().mutate(self.mutator_index);
@@ -81,8 +82,8 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
 
         if sequence_greater_than(packet_index, self.last_recv_index) {
             self.last_recv_index = packet_index;
-            self.inner = DeBin::deserialize_bin(&buffer[start..end])
-                .expect("error deserializing property");
+            self.inner =
+                DeBin::deserialize_bin(&buffer[start..end]).expect("error deserializing property");
         }
 
         cursor.set_position(end as u64);

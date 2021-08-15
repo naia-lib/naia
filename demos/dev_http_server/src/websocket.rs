@@ -3,7 +3,7 @@
 
 use std::time::{Duration, Instant};
 
-use actix::{Replicate, ReplicateContext, AsyncContext, StreamHandler};
+use actix::{AsyncContext, Replicate, ReplicateContext, StreamHandler};
 use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_replicates::ws;
 

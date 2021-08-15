@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use naia_shared::{Replicate, BoxClone, ProtocolType, PawnKey};
+use naia_shared::{BoxClone, PawnKey, ProtocolType, Replicate};
 
 /// Handles outgoing Commands
 #[derive(Debug)]

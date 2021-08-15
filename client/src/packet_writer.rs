@@ -1,8 +1,8 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, ProtocolType, MessagePacketWriter, ManagerType,
-    Manifest, MTU_SIZE, PawnKey, Replicate
+    wrapping_diff, ManagerType, Manifest, MessagePacketWriter, PawnKey, ProtocolType, Replicate,
+    MTU_SIZE,
 };
 
 use crate::dual_command_receiver::DualCommandReceiver;
@@ -98,17 +98,12 @@ impl PacketWriter {
         //Write command "header"
         let mut command_total_bytes = Vec::<u8>::new();
 
-
         match pawn_key {
             PawnKey::Object(_) => {
-                command_total_bytes
-                    .write_u8(0)
-                    .unwrap(); // write pawn type
+                command_total_bytes.write_u8(0).unwrap(); // write pawn type
             }
             PawnKey::Entity(_) => {
-                command_total_bytes
-                    .write_u8(255)
-                    .unwrap(); // write pawn type
+                command_total_bytes.write_u8(255).unwrap(); // write pawn type
             }
         }
         command_total_bytes
@@ -134,8 +129,8 @@ impl PacketWriter {
         }
     }
 
-    /// Writes a Message into the Writer's internal buffer, which will eventually
-    /// be put into the outgoing packet
+    /// Writes a Message into the Writer's internal buffer, which will
+    /// eventually be put into the outgoing packet
     pub fn write_message<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,

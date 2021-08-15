@@ -1,4 +1,4 @@
-use naia_shared::{SharedReplicateMutator, Ref};
+use naia_shared::{Ref, SharedReplicateMutator};
 
 use super::{keys::replicate_key::ReplicateKey, mut_handler::MutHandler};
 

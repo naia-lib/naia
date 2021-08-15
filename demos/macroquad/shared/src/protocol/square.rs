@@ -1,7 +1,7 @@
 use nanoserde::{DeBin, SerBin};
 
 use naia_derive::Replicate;
-use naia_shared::{Replicate, Property};
+use naia_shared::{Property, Replicate};
 
 use super::Protocol;
 

@@ -1,4 +1,3 @@
-
 use naia_derive::ProtocolType;
 use naia_shared::Ref;
 
