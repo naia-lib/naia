@@ -1,5 +1,5 @@
 pub(crate) mod keys;
-pub(crate) mod object_record;
+pub(crate) mod replicate_record;
 pub(crate) mod entity_record;
 pub(crate) mod mut_handler;
 pub(crate) mod replicate_manager;

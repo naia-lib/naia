@@ -58,8 +58,8 @@ impl PacketWriter {
     pub fn write_message<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,
-        replicate: &Box<dyn Replicate<T>>,
+        message: &Box<dyn Replicate<T>>,
     ) -> bool {
-        return self.message_writer.write_message(manifest, replicate);
+        return self.message_writer.write_message(manifest, message);
     }
 }

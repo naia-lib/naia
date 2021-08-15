@@ -536,7 +536,7 @@ impl<U: ProtocolType> Server<U> {
     /// Object on each Client
     pub fn deregister_object(&mut self, key: ObjectKey) -> U {
         if !self.global_object_set.contains(&key) {
-            panic!("attempted to deregister an Replicate which was never registered");
+            panic!("attempted to deregister an Object which was never registered");
         }
 
         for (user_key, _) in self.users.iter() {
@@ -556,11 +556,11 @@ impl<U: ProtocolType> Server<U> {
     /// (meaning that the User will be able to issue Commands to that Pawn)
     pub fn assign_pawn(&mut self, user_key: &UserKey, object_key: &ObjectKey) {
 
-        if let Some(replicate) = self.global_replicate_store.get(*object_key) {
+        if let Some(object) = self.global_replicate_store.get(*object_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                 Self::user_add_object(user_connection,
                                       object_key,
-                                      &replicate);
+                                      &object);
             }
         }
 
@@ -602,7 +602,7 @@ impl<U: ProtocolType> Server<U> {
         self.entity_component_map.remove(key);
     }
 
-    /// Assigns an Replicate to a specific User, making it a Pawn for that User
+    /// Assigns an Entity to a specific User, making it a Pawn for that User
     /// (meaning that the User will be able to issue Commands to that Pawn)
     pub fn assign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
         if self.entity_component_map.contains_key(entity_key) {
@@ -622,7 +622,7 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    /// Register an Replicate as a Component with the Server, whereby the Server will sync the
+    /// Register a Component with the Server, whereby the Server will sync the
     /// replicate of the Component to all connected Clients for which the Component's Entity is
     /// in Scope.
     /// Gives back a ComponentKey which can be used to get the reference to the Component
@@ -750,7 +750,7 @@ impl<U: ProtocolType> Server<U> {
     }
 
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
-    /// Replicates will only ever be in-scope for Users which are in a Room with
+    /// Objects/Entities will only ever be in-scope for Users which are in a Room with
     /// them
     pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
