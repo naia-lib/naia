@@ -6,7 +6,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let input = parse_macro_input!(input as DeriveInput);
 
     let replicate_name = &input.ident;
-    let replicate_builder_name = Ident::new(
+    let replica_builder_name = Ident::new(
         (replicate_name.to_string() + "Builder").as_str(),
         Span::call_site(),
     );
@@ -33,12 +33,12 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicateBuilder, SharedReplicateMutator, ReplicateEq, PacketReader, Ref};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateEq, PacketReader, Ref};
         #property_enum
-        pub struct #replicate_builder_name {
+        pub struct #replica_builder_name {
             type_id: TypeId,
         }
-        impl ReplicateBuilder<#type_name> for #replicate_builder_name {
+        impl ReplicaBuilder<#type_name> for #replica_builder_name {
             fn get_type_id(&self) -> TypeId {
                 return self.type_id;
             }
@@ -47,8 +47,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             }
         }
         impl #replicate_name {
-            pub fn get_builder() -> Box<dyn ReplicateBuilder<#type_name>> {
-                return Box::new(#replicate_builder_name {
+            pub fn get_builder() -> Box<dyn ReplicaBuilder<#type_name>> {
+                return Box::new(#replica_builder_name {
                     type_id: TypeId::of::<#replicate_name>(),
                 });
             }
@@ -125,7 +125,7 @@ fn get_set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn set_mutator(&mut self, mutator: &Ref<dyn SharedReplicateMutator>) {
+        fn set_mutator(&mut self, mutator: &Ref<dyn PropertyMutate>) {
             #output
         }
     };

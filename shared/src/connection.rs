@@ -3,16 +3,9 @@ use std::{net::SocketAddr, rc::Rc};
 use crate::{wrapping_diff, MessageManager, Timer};
 
 use super::{
-    ack_manager::AckManager,
-    connection_config::ConnectionConfig,
-    manifest::Manifest,
-    packet_type::PacketType,
-    replicate::{
-        protocol_type::ProtocolType, replicate::Replicate,
-        replicate_notifiable::ReplicateNotifiable,
-    },
-    sequence_buffer::SequenceNumber,
-    standard_header::StandardHeader,
+    ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
+    packet_notifiable::PacketNotifiable, packet_type::PacketType, protocol_type::ProtocolType,
+    replicate::Replicate, sequence_buffer::SequenceNumber, standard_header::StandardHeader,
     PacketReader,
 };
 
@@ -70,13 +63,13 @@ impl<T: ProtocolType> Connection<T> {
     pub fn process_incoming_header(
         &mut self,
         header: &StandardHeader,
-        replicate_notifiable: &mut Option<&mut dyn ReplicateNotifiable>,
+        packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         if wrapping_diff(self.last_received_tick, header.host_tick()) > 0 {
             self.last_received_tick = header.host_tick();
         }
         self.ack_manager
-            .process_incoming(&header, &mut self.message_manager, replicate_notifiable);
+            .process_incoming(&header, &mut self.message_manager, packet_notifiable);
     }
 
     /// Given a packet payload, start tracking the packet via it's index, attach

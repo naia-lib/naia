@@ -6,11 +6,9 @@ use std::{
 
 use crate::{
     manifest::Manifest,
-    replicate::{
-        protocol_type::ProtocolType,
-        replicate::{BoxClone, Replicate},
-    },
-    PacketReader,
+    protocol_type::ProtocolType,
+    replicate::{BoxClone, Replicate},
+    PacketNotifiable, PacketReader,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -31,25 +29,6 @@ impl<T: ProtocolType> MessageManager<T> {
             queued_incoming_messages: VecDeque::new(),
             sent_guaranteed_messages: HashMap::new(),
             last_popped_message_guarantee: false,
-        }
-    }
-
-    /// Occurs when a packet has been notified as delivered. Stops tracking the
-    /// status of Messages in that packet.
-    pub fn notify_packet_delivered(&mut self, packet_index: u16) {
-        self.sent_guaranteed_messages.remove(&packet_index);
-    }
-
-    /// Occurs when a packet has been notified as having been dropped. Queues up
-    /// any guaranteed Messages that were lost in the packet for retransmission.
-    pub fn notify_packet_dropped(&mut self, packet_index: u16) {
-        if let Some(dropped_messages_list) = self.sent_guaranteed_messages.get(&packet_index) {
-            for dropped_message in dropped_messages_list.into_iter() {
-                self.queued_outgoing_messages
-                    .push_back((true, dropped_message.clone()));
-            }
-
-            self.sent_guaranteed_messages.remove(&packet_index);
         }
     }
 
@@ -137,8 +116,29 @@ impl<T: ProtocolType> MessageManager<T> {
         for _x in 0..message_count {
             let naia_id: u16 = reader.read_u16();
 
-            let new_message = manifest.create_replicate(naia_id, reader);
+            let new_message = manifest.create_replica(naia_id, reader);
             self.queued_incoming_messages.push_back(new_message);
+        }
+    }
+}
+
+impl<T: ProtocolType> PacketNotifiable for MessageManager<T> {
+    /// Occurs when a packet has been notified as delivered. Stops tracking the
+    /// status of Messages in that packet.
+    fn notify_packet_delivered(&mut self, packet_index: u16) {
+        self.sent_guaranteed_messages.remove(&packet_index);
+    }
+
+    /// Occurs when a packet has been notified as having been dropped. Queues up
+    /// any guaranteed Messages that were lost in the packet for retransmission.
+    fn notify_packet_dropped(&mut self, packet_index: u16) {
+        if let Some(dropped_messages_list) = self.sent_guaranteed_messages.get(&packet_index) {
+            for dropped_message in dropped_messages_list.into_iter() {
+                self.queued_outgoing_messages
+                    .push_back((true, dropped_message.clone()));
+            }
+
+            self.sent_guaranteed_messages.remove(&packet_index);
         }
     }
 }

@@ -1,9 +1,6 @@
 use std::{any::TypeId, collections::HashMap};
 
-use crate::{
-    replicate::{protocol_type::ProtocolType, replicate_builder::ReplicateBuilder},
-    PacketReader,
-};
+use crate::{protocol_type::ProtocolType, replica_builder::ReplicaBuilder, PacketReader};
 
 /// Contains the shared protocol between Client & Server, with a data that is
 /// able to map Message/Object/Component TypeIds to their representation within
@@ -12,7 +9,7 @@ use crate::{
 #[derive(Debug)]
 pub struct Manifest<T: ProtocolType> {
     naia_id_count: u16,
-    builder_map: HashMap<u16, Box<dyn ReplicateBuilder<T>>>,
+    builder_map: HashMap<u16, Box<dyn ReplicaBuilder<T>>>,
     type_map: HashMap<TypeId, u16>,
 }
 
@@ -26,13 +23,13 @@ impl<T: ProtocolType> Manifest<T> {
         }
     }
 
-    /// Register an ReplicateBuilder to handle the creation of
+    /// Register a ReplicaBuilder to handle the creation of
     /// Messages/Objects/Components instances
-    pub fn register_replicate(&mut self, replicate_builder: Box<dyn ReplicateBuilder<T>>) {
+    pub fn register_replica(&mut self, replica_builder: Box<dyn ReplicaBuilder<T>>) {
         let new_naia_id = self.naia_id_count;
-        let type_id = replicate_builder.get_type_id();
+        let type_id = replica_builder.get_type_id();
         self.type_map.insert(type_id, new_naia_id);
-        self.builder_map.insert(new_naia_id, replicate_builder);
+        self.builder_map.insert(new_naia_id, replica_builder);
         self.naia_id_count += 1;
     }
 
@@ -48,12 +45,12 @@ impl<T: ProtocolType> Manifest<T> {
 
     /// Creates a Message/Object/Component instance, given a NaiaId and a
     /// payload, typically from an incoming packet
-    pub fn create_replicate(&self, naia_id: u16, reader: &mut PacketReader) -> T {
-        if let Some(replicate_builder) = self.builder_map.get(&naia_id) {
-            return replicate_builder.as_ref().build(reader);
+    pub fn create_replica(&self, naia_id: u16, reader: &mut PacketReader) -> T {
+        if let Some(replica_builder) = self.builder_map.get(&naia_id) {
+            return replica_builder.as_ref().build(reader);
         }
 
         // TODO: this shouldn't panic .. could crash the server
-        panic!("No ReplicateBuilder registered for NaiaId: {}", naia_id);
+        panic!("No ReplicaBuilder registered for NaiaId: {}", naia_id);
     }
 }

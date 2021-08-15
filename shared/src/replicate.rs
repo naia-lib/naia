@@ -3,14 +3,11 @@ use std::{
     fmt::{Debug, Formatter, Result},
 };
 
-use super::{
-    diff_mask::DiffMask, protocol_type::ProtocolType,
-    shared_replicate_mutator::SharedReplicateMutator,
-};
+use super::{diff_mask::DiffMask, property_mutate::PropertyMutate, protocol_type::ProtocolType};
 
 use crate::{PacketReader, Ref};
 
-/// An Replicate is a Message/Object/Component, or otherwise, a container
+/// A Replica is a Message/Object/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
 pub trait Replicate<T: ProtocolType>: BoxClone<T> {
     /// Gets the number of bytes of the Message/Object/Component's DiffMask
@@ -33,10 +30,10 @@ pub trait Replicate<T: ProtocolType>: BoxClone<T> {
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Message/Object/Component with it's replicate on the Server
     fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16);
-    /// Set the Message/Object/Component's ReplicateMutator, which keeps track
+    /// Set the Message/Object/Component's PropertyMutator, which keeps track
     /// of which Properties have been mutated, necessary to sync only the
     /// Properties that have changed with the client
-    fn set_mutator(&mut self, mutator: &Ref<dyn SharedReplicateMutator>);
+    fn set_mutator(&mut self, mutator: &Ref<dyn PropertyMutate>);
 }
 
 //TODO: do we really need another trait here?
@@ -45,7 +42,7 @@ pub trait Replicate<T: ProtocolType>: BoxClone<T> {
 pub trait ReplicateEq<T: ProtocolType, Impl = Self>: Replicate<T> {
     /// Compare properties in another Replicate
     fn equals(&self, other: &Impl) -> bool;
-    /// Sets the current Replicate to the replicate of another Replicate of the
+    /// Sets the current Replica to the state of another Replica of the
     /// same type
     fn mirror(&mut self, other: &Impl);
 }

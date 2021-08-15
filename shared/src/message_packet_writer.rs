@@ -1,10 +1,8 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use crate::{
-    manager_type::ManagerType,
-    manifest::Manifest,
-    replicate::{protocol_type::ProtocolType, replicate::Replicate},
-    standard_header::StandardHeader,
+    manager_type::ManagerType, manifest::Manifest, protocol_type::ProtocolType,
+    replicate::Replicate, standard_header::StandardHeader,
 };
 
 /// The maximum of bytes that can be used for the payload of a given packet. (See #38 of http://ithare.com/64-network-dos-and-donts-for-game-engines-part-v-udp/)

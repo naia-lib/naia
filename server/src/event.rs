@@ -17,7 +17,7 @@ pub enum Event<T> {
     /// A Message emitted to the Server from a Client
     Message(UserKey, T),
     /// A Tick Event, the duration between Tick events is defined in the Config
-    /// replicate passed to the Server on initialization
+    /// passed to the Server on initialization
     Tick,
     /// A Command emitted to the Server from a Client
     Command(UserKey, ObjectKey, T),

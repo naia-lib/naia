@@ -16,6 +16,7 @@ extern crate cfg_if;
 mod ack_manager;
 mod connection;
 mod connection_config;
+mod diff_mask;
 mod host_tick_manager;
 mod key_store;
 mod keys;
@@ -23,7 +24,13 @@ mod manager_type;
 mod manifest;
 mod message_manager;
 mod message_packet_writer;
+mod packet_notifiable;
 mod packet_type;
+mod property;
+mod property_mutate;
+mod protocol_type;
+mod replica_action_type;
+mod replica_builder;
 mod replicate;
 mod sequence_buffer;
 mod shared_config;
@@ -40,27 +47,25 @@ pub use naia_socket_shared::{
 pub use ack_manager::AckManager;
 pub use connection::Connection;
 pub use connection_config::ConnectionConfig;
+pub use diff_mask::DiffMask;
 pub use host_tick_manager::HostTickManager;
 pub use key_store::KeyGenerator;
 pub use keys::{
-    EntityKey, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicateKey, NaiaKey,
+    EntityKey, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicaKey, NaiaKey,
     PawnKey,
 };
 pub use manager_type::ManagerType;
 pub use manifest::Manifest;
 pub use message_manager::MessageManager;
 pub use message_packet_writer::{MessagePacketWriter, MTU_SIZE};
+pub use packet_notifiable::PacketNotifiable;
 pub use packet_type::PacketType;
-pub use replicate::{
-    diff_mask::DiffMask,
-    property::Property,
-    protocol_type::ProtocolType,
-    replicate::{BoxClone, Replicate, ReplicateEq},
-    replicate_action_type::ReplicateActionType,
-    replicate_builder::ReplicateBuilder,
-    replicate_notifiable::ReplicateNotifiable,
-    shared_replicate_mutator::SharedReplicateMutator,
-};
+pub use property::Property;
+pub use property_mutate::PropertyMutate;
+pub use protocol_type::ProtocolType;
+pub use replica_action_type::ReplicaActionType;
+pub use replica_builder::ReplicaBuilder;
+pub use replicate::{BoxClone, Replicate, ReplicateEq};
 pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
 pub use shared_config::SharedConfig;
 pub use standard_header::StandardHeader;

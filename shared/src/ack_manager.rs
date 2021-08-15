@@ -7,9 +7,8 @@ use super::{
 };
 
 use super::{
-    message_manager::MessageManager,
-    packet_type::PacketType,
-    replicate::{protocol_type::ProtocolType, replicate_notifiable::ReplicateNotifiable},
+    message_manager::MessageManager, packet_notifiable::PacketNotifiable, packet_type::PacketType,
+    protocol_type::ProtocolType,
 };
 
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
@@ -53,7 +52,7 @@ impl AckManager {
         &mut self,
         header: &StandardHeader,
         message_manager: &mut MessageManager<T>,
-        replicate_notifiable: &mut Option<&mut dyn ReplicateNotifiable>,
+        packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         let remote_seq_num = header.local_packet_index();
         let remote_ack_seq = header.last_remote_packet_index();
@@ -71,7 +70,7 @@ impl AckManager {
         // the current `remote_ack_seq` was (clearly) received so we should remove it
         if let Some(sent_packet) = self.sent_packets.get(&remote_ack_seq) {
             if sent_packet.packet_type == PacketType::Data {
-                self.notify_packet_delivered(remote_ack_seq, message_manager, replicate_notifiable);
+                self.notify_packet_delivered(remote_ack_seq, message_manager, packet_notifiable);
             }
 
             self.sent_packets.remove(&remote_ack_seq);
@@ -88,7 +87,7 @@ impl AckManager {
                         self.notify_packet_delivered(
                             ack_sequence,
                             message_manager,
-                            replicate_notifiable,
+                            packet_notifiable,
                         );
                     }
 
@@ -98,7 +97,7 @@ impl AckManager {
                         self.notify_packet_dropped(
                             ack_sequence,
                             message_manager,
-                            replicate_notifiable,
+                            packet_notifiable,
                         );
                     }
                     self.sent_packets.remove(&ack_sequence);
@@ -129,10 +128,10 @@ impl AckManager {
         &self,
         packet_sequence_number: u16,
         message_manager: &mut MessageManager<T>,
-        replicate_notifiable: &mut Option<&mut dyn ReplicateNotifiable>,
+        packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         message_manager.notify_packet_delivered(packet_sequence_number);
-        if let Some(notifiable) = replicate_notifiable {
+        if let Some(notifiable) = packet_notifiable {
             notifiable.notify_packet_delivered(packet_sequence_number);
         }
     }
@@ -141,10 +140,10 @@ impl AckManager {
         &self,
         packet_sequence_number: u16,
         message_manager: &mut MessageManager<T>,
-        replicate_notifiable: &mut Option<&mut dyn ReplicateNotifiable>,
+        packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         message_manager.notify_packet_dropped(packet_sequence_number);
-        if let Some(notifiable) = replicate_notifiable {
+        if let Some(notifiable) = packet_notifiable {
             notifiable.notify_packet_dropped(packet_sequence_number);
         }
     }

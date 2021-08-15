@@ -2,13 +2,13 @@
 /// related to Objects/Entities/Pawns/Components
 #[derive(Copy, Clone)]
 #[repr(u8)]
-pub enum ReplicateActionType {
+pub enum ReplicaActionType {
     /// Action indicating an Object to be created
     CreateObject = 0,
-    /// Action indicating a Replicate to be updated
-    UpdateReplicate,
-    /// Action indicating a Replicate to be deleted
-    DeleteReplicate,
+    /// Action indicating a Replica to be updated
+    UpdateReplica,
+    /// Action indicating a Replica to be deleted
+    DeleteReplica,
     /// Action indicating an Object to be assigned as a Pawn
     AssignPawn,
     /// Action indicating an Object to be unassigned as a Pawn
@@ -29,19 +29,19 @@ pub enum ReplicateActionType {
     Unknown,
 }
 
-impl ReplicateActionType {
+impl ReplicaActionType {
     /// Converts the action type to u8
     pub fn to_u8(&self) -> u8 {
         *self as u8
     }
 
-    /// Gets an ReplicateActionType from a u8
+    /// Gets an ReplicaActionType from a u8
     #[allow(unsafe_code)]
     pub fn from_u8(v: u8) -> Self {
-        if v >= ReplicateActionType::Unknown as u8 {
-            return ReplicateActionType::Unknown;
+        if v >= ReplicaActionType::Unknown as u8 {
+            return ReplicaActionType::Unknown;
         }
-        let z: ReplicateActionType = unsafe { ::std::mem::transmute(v) };
+        let z: ReplicaActionType = unsafe { ::std::mem::transmute(v) };
         z
     }
 }
