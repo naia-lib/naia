@@ -55,7 +55,7 @@ pub use messages::{
     message_packet_writer::{MessagePacketWriter, MTU_SIZE},
 };
 pub use ecs::{
-    keys::{EntityKey, LocalObjectKey, LocalEntityKey, LocalComponentKey, PawnKey, NaiaKey}
+    keys::{EntityKey, LocalReplicateKey, LocalEntityKey, LocalObjectKey, LocalComponentKey, PawnKey, NaiaKey}
 };
 pub use host_tick_manager::HostTickManager;
 pub use host_type::HostType;

@@ -28,7 +28,7 @@ compile_error!("Naia Server can only use UDP or WebRTC, you must pick one");
 compile_error!("Naia Server requires either the 'use-udp' or 'use-webrtc' feature to be enabled, you must pick one.");
 
 pub use naia_shared::{
-    find_my_ip_address, Replicate, LocalObjectKey, ProtocolType, LinkConditionerConfig, Random, Ref, SharedConfig, EntityKey,
+    find_my_ip_address, Replicate, LocalReplicateKey, ProtocolType, LinkConditionerConfig, Random, Ref, SharedConfig, EntityKey,
 };
 
 mod replicate;
@@ -45,7 +45,7 @@ mod packet_writer;
 mod tick_manager;
 mod user;
 
-pub use replicate::object_key::{object_key::ObjectKey, ComponentKey, GlobalPawnKey};
+pub use replicate::keys::{replicate_key::ReplicateKey, ObjectKey, ComponentKey, GlobalPawnKey};
 pub use server::Server;
 pub use room::room_key::RoomKey;
 pub use server_config::{ServerConfig, ServerAddresses};

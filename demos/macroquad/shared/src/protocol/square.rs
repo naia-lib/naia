@@ -19,14 +19,14 @@ impl Default for Color {
 }
 
 #[derive(Replicate, Clone)]
-pub struct Point {
+pub struct Square {
     pub x: Property<u16>,
     pub y: Property<u16>,
     pub color: Property<Color>,
 }
 
-impl Point {
-    pub fn new(x: u16, y: u16, color: Color) -> Point {
-        return Point::new_complete(x, y, color);
+impl Square {
+    pub fn new(x: u16, y: u16, color: Color) -> Square {
+        return Square::new_complete(x, y, color);
     }
 }

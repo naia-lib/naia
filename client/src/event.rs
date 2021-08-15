@@ -1,4 +1,4 @@
-use naia_shared::{LocalObjectKey, LocalEntityKey, LocalComponentKey, ProtocolType};
+use naia_shared::{LocalReplicateKey, LocalEntityKey, LocalComponentKey, ProtocolType};
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
@@ -17,25 +17,25 @@ pub enum Event<T: ProtocolType> {
     Tick,
     /// Occurs when an Replicate has been assigned to the local host as a Pawn,
     /// meaning it can receive Commands from the Client
-    AssignPawn(LocalObjectKey),
+    AssignPawn(LocalReplicateKey),
     /// Occurs when a Pawn Replicate has been unassigned from the local host, meaning it
     /// cannot receive Commands from this Client
-    UnassignPawn(LocalObjectKey),
+    UnassignPawn(LocalReplicateKey),
     /// Occurs when a Pawn Replicate needs to be reset to local replicate
-    ResetPawn(LocalObjectKey),
+    ResetPawn(LocalReplicateKey),
     /// A Command received which is to be simulated on the Client as well as on
     /// the Server
-    NewCommand(LocalObjectKey, T),
+    NewCommand(LocalReplicateKey, T),
     /// A Command which is replayed to extrapolate from recently received
     /// authoritative replicate
-    ReplayCommand(LocalObjectKey, T),
+    ReplayCommand(LocalReplicateKey, T),
     /// Occurs when an Object on the Server has come into scope for the Client
-    CreateObject(LocalObjectKey),
+    CreateObject(LocalReplicateKey),
     /// Occurs when an Object has had a replicate change on the Server while in
     /// scope for the Client
-    UpdateObject(LocalObjectKey),
+    UpdateObject(LocalReplicateKey),
     /// Occurs when an Object on the Server has left the Client's scope
-    DeleteObject(LocalObjectKey, T),
+    DeleteObject(LocalReplicateKey, T),
     /// Occurs when an Entity on the Server has come into scope for the Client,
     /// and should be added to the local client's ECS "world"
     CreateEntity(LocalEntityKey, Vec<LocalComponentKey>),

@@ -3,16 +3,16 @@ use std::collections::{HashSet, HashMap, VecDeque, hash_map::Keys};
 
 use log::warn;
 
-use naia_shared::{ProtocolType, LocalObjectKey, Manifest, PacketReader, DiffMask,
+use naia_shared::{ProtocolType, LocalReplicateKey, Manifest, PacketReader, DiffMask,
                   LocalEntityKey, ReplicateActionType, NaiaKey, LocalComponentKey, PawnKey};
 
 use super::{replicate_action::ReplicateAction, dual_command_receiver::DualCommandReceiver};
 
 #[derive(Debug)]
 pub struct ReplicateManager<T: ProtocolType> {
-    local_replicate_store:              HashMap<LocalObjectKey, T>,
+    local_replicate_store:              HashMap<LocalReplicateKey, T>,
     queued_incoming_messages:           VecDeque<ReplicateAction<T>>,
-    pawn_store:                         HashMap<LocalObjectKey, T>,
+    pawn_store:                         HashMap<LocalReplicateKey, T>,
     local_entity_store:                 HashMap<LocalEntityKey, HashSet<LocalComponentKey>>,
     pawn_entity_store:                  HashSet<LocalEntityKey>,
     component_entity_map:               HashMap<LocalComponentKey, LocalEntityKey>,
@@ -44,10 +44,10 @@ impl<T: ProtocolType> ReplicateManager<T> {
             let message_type = ReplicateActionType::from_u8(reader.read_u8());
 
             match message_type {
-                ReplicateActionType::CreateReplicate => {
+                ReplicateActionType::CreateObject => {
                     // Replicate Creation
                     let naia_id: u16 = reader.read_u16();
-                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
+                    let object_key = LocalReplicateKey::from_u16(reader.read_u16());
 
                     let new_replicate = manifest.create_replicate(naia_id, reader);
                     if !self.local_replicate_store.contains_key(&object_key) {
@@ -60,9 +60,9 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         warn!("attempted to insert duplicate local replicate key");
                     }
                 }
-                ReplicateActionType::DeleteReplicate => {
+                ReplicateActionType::DeleteObject => {
                     // Replicate Deletion
-                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
+                    let object_key = LocalReplicateKey::from_u16(reader.read_u16());
 
                     if self.component_entity_map.contains_key(&object_key) {
                         // Replicate is a Component
@@ -78,9 +78,9 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         self.replicate_delete_cleanup(command_receiver, &object_key);
                     }
                 }
-                ReplicateActionType::UpdateReplicate => {
+                ReplicateActionType::UpdateObject => {
                     // Replicate Update
-                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
+                    let object_key = LocalReplicateKey::from_u16(reader.read_u16());
 
                     if let Some(replicate_ref) = self.local_replicate_store.get_mut(&object_key) {
                         // Replicate is not a Pawn
@@ -111,7 +111,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                 }
                 ReplicateActionType::AssignPawn => {
                     // Assign Pawn
-                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
+                    let object_key = LocalReplicateKey::from_u16(reader.read_u16());
 
                     if let Some(replicate_ref) = self.local_replicate_store.get_mut(&object_key) {
                         self.pawn_store
@@ -126,7 +126,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                 }
                 ReplicateActionType::UnassignPawn => {
                     // Unassign Pawn
-                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
+                    let object_key = LocalReplicateKey::from_u16(reader.read_u16());
                     if self.pawn_store.contains_key(&object_key) {
                         self.pawn_store.remove(&object_key);
 
@@ -138,7 +138,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                 }
                 ReplicateActionType::UpdatePawn => {
                     // Pawn Update
-                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
+                    let object_key = LocalReplicateKey::from_u16(reader.read_u16());
 
                     if let Some(replicate_ref) = self.local_replicate_store.get_mut(&object_key) {
                         replicate_ref.read_full(reader, packet_index);
@@ -247,7 +247,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                     // Add Component to Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     let naia_id: u16 = reader.read_u16();
-                    let component_key = LocalObjectKey::from_u16(reader.read_u16());
+                    let component_key = LocalReplicateKey::from_u16(reader.read_u16());
 
                     let new_component = manifest.create_replicate(naia_id, reader);
                     if self.local_replicate_store.contains_key(&component_key) {
@@ -284,8 +284,8 @@ impl<T: ProtocolType> ReplicateManager<T> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn object_keys(&self) -> Vec<LocalObjectKey> {
-        let mut output: Vec<LocalObjectKey> = Vec::new();
+    pub fn object_keys(&self) -> Vec<LocalReplicateKey> {
+        let mut output: Vec<LocalReplicateKey> = Vec::new();
         for key in self.local_replicate_store.keys() {
             if !self.component_entity_map.contains_key(key) {
                 output.push(*key);
@@ -302,11 +302,11 @@ impl<T: ProtocolType> ReplicateManager<T> {
         output
     }
 
-    pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
+    pub fn get_object(&self, key: &LocalReplicateKey) -> Option<&T> {
         return self.local_replicate_store.get(key);
     }
 
-    pub fn has_object(&self, key: &LocalObjectKey) -> bool {
+    pub fn has_object(&self, key: &LocalReplicateKey) -> bool {
         return self.local_replicate_store.contains_key(key);
     }
 
@@ -314,15 +314,15 @@ impl<T: ProtocolType> ReplicateManager<T> {
         return self.local_entity_store.contains_key(key);
     }
 
-    pub fn pawn_keys(&self) -> Keys<LocalObjectKey, T> {
+    pub fn pawn_keys(&self) -> Keys<LocalReplicateKey, T> {
         return self.pawn_store.keys();
     }
 
-    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&T> {
+    pub fn get_pawn(&self, key: &LocalReplicateKey) -> Option<&T> {
         return self.pawn_store.get(key);
     }
 
-    pub fn pawn_reset(&mut self, key: &LocalObjectKey) {
+    pub fn pawn_reset(&mut self, key: &LocalReplicateKey) {
         if let Some(replicate_ref) = self.local_replicate_store.get(key) {
             if let Some(pawn_ref) = self.pawn_store.get_mut(key) {
                 pawn_ref.mirror(replicate_ref);
@@ -340,7 +340,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
     // internal
 
     fn replicate_delete_cleanup(&mut self, command_receiver: &mut DualCommandReceiver<T>,
-                                          object_key: &LocalObjectKey) {
+                                          object_key: &LocalReplicateKey) {
         if let Some(replicate) = self.local_replicate_store.remove(&object_key) {
 
             if self.pawn_store.contains_key(&object_key) {

@@ -7,7 +7,7 @@ use naia_shared::{
 
 use super::{
     replicate::{
-        object_key::object_key::ObjectKey, mut_handler::MutHandler,
+        keys::ObjectKey, mut_handler::MutHandler,
         replicate_manager::ReplicateManager,
     },
     command_receiver::CommandReceiver,
@@ -116,11 +116,11 @@ impl<U: ProtocolType> ClientConnection<U> {
         return self.replicate_manager.has_object(key);
     }
 
-    pub fn add_replicate(&mut self, key: &ObjectKey, replicate: &Ref<dyn Replicate<U>>) {
+    pub fn add_object(&mut self, key: &ObjectKey, replicate: &Ref<dyn Replicate<U>>) {
         self.replicate_manager.add_replicate(key, replicate);
     }
 
-    pub fn remove_replicate(&mut self, key: &ObjectKey) {
+    pub fn remove_object(&mut self, key: &ObjectKey) {
         self.replicate_manager.remove_replicate(key);
     }
 
@@ -149,7 +149,7 @@ impl<U: ProtocolType> ClientConnection<U> {
                     if let Some(global_pawn_key) =
                         self.replicate_manager.get_global_key_from_local(local_object_key)
                     {
-                        return Some((GlobalPawnKey::Replicate(*global_pawn_key), command));
+                        return Some((GlobalPawnKey::Object(*global_pawn_key), command));
                     }
                 }
                 PawnKey::Entity(local_entity_key) => {

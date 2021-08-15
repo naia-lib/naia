@@ -2,13 +2,13 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use naia_shared::{Ref, DiffMask};
 
-use super::object_key::object_key::ObjectKey;
+use super::keys::replicate_key::ReplicateKey;
 
 use indexmap::IndexMap;
 
 #[derive(Debug)]
 pub struct MutHandler {
-    replicate_diff_mask_list_map: HashMap<ObjectKey, IndexMap<SocketAddr, Ref<DiffMask>>>,
+    replicate_diff_mask_list_map: HashMap<ReplicateKey, IndexMap<SocketAddr, Ref<DiffMask>>>,
 }
 
 impl MutHandler {
@@ -18,16 +18,16 @@ impl MutHandler {
         })
     }
 
-    pub fn mutate(&mut self, object_key: &ObjectKey, property_index: u8) {
-        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(object_key) {
+    pub fn mutate(&mut self, replicate_key: &ReplicateKey, property_index: u8) {
+        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(replicate_key) {
             for (_, mask_ref) in diff_mask_list.iter_mut() {
                 mask_ref.borrow_mut().set_bit(property_index, true);
             }
         }
     }
 
-    pub fn clear_replicate(&mut self, address: &SocketAddr, object_key: &ObjectKey) {
-        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(object_key) {
+    pub fn clear_replicate(&mut self, address: &SocketAddr, replicate_key: &ReplicateKey) {
+        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(replicate_key) {
             if let Some(mask_ref) = diff_mask_list.get(address) {
                 mask_ref.borrow_mut().clear();
             }
@@ -37,41 +37,41 @@ impl MutHandler {
     pub fn set_replicate(
         &mut self,
         address: &SocketAddr,
-        object_key: &ObjectKey,
+        replicate_key: &ReplicateKey,
         other_replicate: &DiffMask,
     ) {
-        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(object_key) {
+        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(replicate_key) {
             if let Some(mask_ref) = diff_mask_list.get(address) {
                 mask_ref.borrow_mut().copy_contents(other_replicate);
             }
         }
     }
 
-    pub fn register_replicate(&mut self, object_key: &ObjectKey) {
-        if self.replicate_diff_mask_list_map.contains_key(object_key) {
+    pub fn register_replicate(&mut self, replicate_key: &ReplicateKey) {
+        if self.replicate_diff_mask_list_map.contains_key(replicate_key) {
             panic!("Replicate cannot register with server more than once!");
         }
         self.replicate_diff_mask_list_map
-            .insert(*object_key, IndexMap::new());
+            .insert(*replicate_key, IndexMap::new());
     }
 
-    pub fn deregister_replicate(&mut self, object_key: &ObjectKey) {
-        self.replicate_diff_mask_list_map.remove(object_key);
+    pub fn deregister_replicate(&mut self, replicate_key: &ReplicateKey) {
+        self.replicate_diff_mask_list_map.remove(replicate_key);
     }
 
     pub fn register_mask(
         &mut self,
         address: &SocketAddr,
-        object_key: &ObjectKey,
+        replicate_key: &ReplicateKey,
         mask: &Ref<DiffMask>,
     ) {
-        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(object_key) {
+        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(replicate_key) {
             diff_mask_list.insert(*address, mask.clone());
         }
     }
 
-    pub fn deregister_mask(&mut self, address: &SocketAddr, object_key: &ObjectKey) {
-        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(object_key) {
+    pub fn deregister_mask(&mut self, address: &SocketAddr, replicate_key: &ReplicateKey) {
+        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(replicate_key) {
             diff_mask_list.remove(address);
         }
     }

@@ -4,11 +4,11 @@
 #[repr(u8)]
 pub enum ReplicateActionType {
     /// Message indicating an Replicate to be created
-    CreateReplicate = 0,
+    CreateObject = 0,
     /// Message indicating an Replicate to be updated
-    UpdateReplicate,
+    UpdateObject,
     /// Message indicating an Replicate to be deleted
-    DeleteReplicate,
+    DeleteObject,
     /// Message indicating an Replicate to be assigned as a Pawn
     AssignPawn,
     /// Message indicating an Replicate to be unassigned as a Pawn

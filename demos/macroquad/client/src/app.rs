@@ -2,17 +2,17 @@ use std::collections::HashMap;
 
 use macroquad::prelude::*;
 
-use naia_client::{Replicate, ClientConfig, Event, Client, Ref, LocalObjectKey};
+use naia_client::{Replicate, ClientConfig, Event, Client, Ref, LocalReplicateKey};
 
 use naia_demo_macroquad_shared::{
-    get_shared_config, behavior as shared_behavior, protocol::{Protocol, Point, Color, Auth, KeyCommand},
+    get_shared_config, behavior as shared_behavior, protocol::{Protocol, Square, Color, Auth, KeyCommand},
 };
 
 pub struct App {
     client: Client<Protocol>,
-    pawn: Option<(LocalObjectKey, Ref<Point>)>,
+    pawn: Option<(LocalReplicateKey, Ref<Square>)>,
     queued_command: Option<KeyCommand>,
-    replicates: HashMap<LocalObjectKey, Ref<Point>>,
+    square_map: HashMap<LocalReplicateKey, Ref<Square>>,
 }
 
 impl App {
@@ -31,7 +31,7 @@ impl App {
             client,
             pawn: None,
             queued_command: None,
-            replicates: HashMap::new(),
+            square_map: HashMap::new(),
         }
     }
 
@@ -79,10 +79,10 @@ impl App {
                         }
                         Event::AssignPawn(local_key) => {
                             info!("assign pawn");
-                            if let Some(typed_replicate) = self.client.get_pawn_mut(&local_key) {
-                                match typed_replicate {
-                                    Protocol::Point(replicate_ref) => {
-                                        self.pawn = Some((local_key, replicate_ref.clone()));
+                            if let Some(typed_object) = self.client.get_pawn_mut(&local_key) {
+                                match typed_object {
+                                    Protocol::Square(square_ref) => {
+                                        self.pawn = Some((local_key, square_ref.clone()));
                                     }
                                     _ => {}
                                 }
@@ -109,10 +109,10 @@ impl App {
                             _ => {}
                         },
                         Event::CreateObject(local_key) => {
-                            if let Some(typed_replicate) = self.client.get_object(&local_key) {
-                                match typed_replicate {
-                                    Protocol::Point(replicate_ref) => {
-                                        self.replicates.insert(local_key, replicate_ref.clone());
+                            if let Some(typed_object) = self.client.get_object(&local_key) {
+                                match typed_object {
+                                    Protocol::Square(square_ref) => {
+                                        self.replicates.insert(local_key, square_ref.clone());
                                     }
                                     _ => {}
                                 }
@@ -139,16 +139,16 @@ impl App {
 
         if self.client.has_connection() {
             // draw replicates
-            for (_, replicate_ref) in &self.replicates {
-                let point_replicate = replicate_ref.borrow();
-                let color = match point_replicate.color.get() {
+            for (_, square_ref) in &self.replicates {
+                let square = square_ref.borrow();
+                let color = match square.color.get() {
                     Color::Red => RED,
                     Color::Blue => BLUE,
                     Color::Yellow => YELLOW,
                 };
                 draw_rectangle(
-                    f32::from(*(point_replicate.x.get())),
-                    f32::from(*(point_replicate.y.get())),
+                    f32::from(*(square.x.get())),
+                    f32::from(*(square.y.get())),
                     square_size,
                     square_size,
                     color,
@@ -157,10 +157,10 @@ impl App {
 
             // draw pawns
             if let Some((_, pawn_ref)) = &self.pawn {
-                let point_replicate = pawn_ref.borrow();
+                let square = pawn_ref.borrow();
                 draw_rectangle(
-                    f32::from(*(point_replicate.x.get())),
-                    f32::from(*(point_replicate.y.get())),
+                    f32::from(*(square.x.get())),
+                    f32::from(*(square.y.get())),
                     square_size,
                     square_size,
                     WHITE,

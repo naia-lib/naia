@@ -1,9 +1,9 @@
 use naia_shared::{SharedReplicateMutator, Ref};
 
-use super::{object_key::object_key::ObjectKey, mut_handler::MutHandler};
+use super::{keys::replicate_key::ReplicateKey, mut_handler::MutHandler};
 
 pub struct ReplicateMutator {
-    key: Option<ObjectKey>,
+    key: Option<ReplicateKey>,
     mut_handler: Ref<MutHandler>,
 }
 
@@ -15,7 +15,7 @@ impl ReplicateMutator {
         }
     }
 
-    pub fn set_object_key(&mut self, key: ObjectKey) {
+    pub fn set_object_key(&mut self, key: ReplicateKey) {
         self.key = Some(key);
     }
 }

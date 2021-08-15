@@ -8,7 +8,7 @@
 
 Demonstrates using [naia](https://github.com/naia-rs/naia) with [macroquad](https://github.com/not-fl3/macroquad) to create a 2D multiplayer web game.
 
-Run the server, then open a couple of clients. Each client is assigned their own square. Move around with WSAD. The white controlled square demonstrates how the client runs ahead of the server's simulation, and is reconciled with server replicate when clientside-prediction makes an error.
+Run the server, then open a couple of clients. Each client is assigned their own square. Move around with WSAD. The white controlled square demonstrates how the client runs ahead of the server's simulation, and is reconciled with server when clientside-prediction makes an error.
 
 ### Server:
 
