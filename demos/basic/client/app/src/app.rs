@@ -16,7 +16,7 @@ pub struct App {
     world: World,
     entity_builder: HecsEntityBuilder,
     entity_key_map: HashMap<NaiaEntityKey, HecsEntityKey>,
-    server_event_count: u32,
+    event_count: u32,
 }
 
 impl App {
@@ -36,7 +36,7 @@ impl App {
             world: World::new(),
             entity_builder: HecsEntityBuilder::new(),
             entity_key_map: HashMap::new(),
-            server_event_count: 0,
+            event_count: 0,
         }
     }
 
@@ -61,12 +61,12 @@ impl App {
                                 //info!("Client received event: {}", message_inner);
 
                                 let new_message =
-                                    format!("Client Packet ({})", self.server_event_count);
+                                    format!("Client Packet ({})", self.event_count);
                                 //info!("Client send: {}", new_message);
 
                                 let string_event = StringMessage::new(new_message);
                                 self.client.send_event(&string_event, true);
-                                self.server_event_count += 1;
+                                self.event_count += 1;
                             }
                             _ => {}
                         },

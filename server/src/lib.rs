@@ -40,14 +40,14 @@ mod server;
 mod ping_manager;
 mod room;
 mod server_config;
-mod server_event;
-mod server_packet_writer;
-mod server_tick_manager;
+mod event;
+mod packet_writer;
+mod tick_manager;
 mod user;
 
 pub use replicate::object_key::{object_key::ObjectKey, ComponentKey, GlobalPawnKey};
 pub use server::Server;
 pub use room::room_key::RoomKey;
 pub use server_config::{ServerConfig, ServerAddresses};
-pub use server_event::ServerEvent;
+pub use event::Event;
 pub use user::user_key::UserKey;

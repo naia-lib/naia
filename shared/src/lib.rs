@@ -42,7 +42,7 @@ pub use replicate::{
     replicate::{Replicate, ReplicateEq, EventClone},
     replicate_builder::ReplicateBuilder,
     replicate_message_type::ReplicateMessageType,
-    replicate_mutator::ReplicateMutator,
+    shared_replicate_mutator::SharedReplicateMutator,
     replicate_notifiable::ReplicateNotifiable,
     protocol_type::ProtocolType,
     property::Property,

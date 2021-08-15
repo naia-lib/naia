@@ -35,7 +35,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicateBuilder, ReplicateMutator, ReplicateEq, PacketReader, Ref};
+        use naia_shared::{DiffMask, ReplicateBuilder, SharedReplicateMutator, ReplicateEq, PacketReader, Ref};
         #property_enum
         pub struct #replicate_builder_name {
             type_id: TypeId,
@@ -127,7 +127,7 @@ fn get_set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn set_mutator(&mut self, mutator: &Ref<dyn ReplicateMutator>) {
+        fn set_mutator(&mut self, mutator: &Ref<dyn SharedReplicateMutator>) {
             #output
         }
     };

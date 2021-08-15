@@ -5,7 +5,7 @@ use std::{
 
 use hecs::{Entity as HecsEntityKey, World};
 
-use naia_server::{Server, ServerConfig, ServerEvent, UserKey, RoomKey, EntityKey as NaiaEntityKey, Ref, Replicate, ComponentKey};
+use naia_server::{Server, ServerConfig, Event, UserKey, RoomKey, EntityKey as NaiaEntityKey, Ref, Replicate, ComponentKey};
 
 use naia_demo_basic_shared::{
     get_shared_config, manifest_load,
@@ -103,16 +103,16 @@ impl App {
         match self.server.receive().await {
                 Ok(event) => {
                     match event {
-                        ServerEvent::Connection(user_key) => {
+                        Event::Connection(user_key) => {
                             self.server.room_add_user(&self.main_room_key, &user_key);
                             if let Some(user) = self.server.get_user(&user_key) {
                                 info!("Naia Server connected to: {}", user.address);
                             }
                         }
-                        ServerEvent::Disconnection(_, user) => {
+                        Event::Disconnection(_, user) => {
                             info!("Naia Server disconnected from: {:?}", user.address);
                         }
-                        ServerEvent::Event(user_key, event_type) => {
+                        Event::Event(user_key, event_type) => {
                             if let Some(user) = self.server.get_user(&user_key) {
                                 match event_type {
                                     Events::StringMessage(event) => {
@@ -123,7 +123,7 @@ impl App {
                                 }
                             }
                         }
-                        ServerEvent::Tick => {
+                        Event::Tick => {
 
                             // Game logic, march entities across the screen
                             let mut entities_to_add: Vec<HecsEntityKey> = Vec::new();

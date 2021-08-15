@@ -3,7 +3,7 @@ use byteorder::WriteBytesExt;
 use naia_shared::{ProtocolType, Replicate, EventPacketWriter, ManagerType, Manifest};
 
 /// Handles writing of Event & Replicate data into an outgoing packet
-pub struct ServerPacketWriter {
+pub struct PacketWriter {
     event_writer: EventPacketWriter,
     /// bytes representing outgoing Replicate messages / updates
     pub replicate_working_bytes: Vec<u8>,
@@ -11,11 +11,11 @@ pub struct ServerPacketWriter {
     pub replicate_message_count: u8,
 }
 
-impl ServerPacketWriter {
+impl PacketWriter {
     /// Construct a new instance of `PacketReader`, the given `buffer` will be
     /// used to read information from.
-    pub fn new() -> ServerPacketWriter {
-        ServerPacketWriter {
+    pub fn new() -> PacketWriter {
+        PacketWriter {
             event_writer: EventPacketWriter::new(),
             replicate_working_bytes: Vec::<u8>::new(),
             replicate_message_count: 0,
