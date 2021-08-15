@@ -33,7 +33,7 @@ impl MessagePacketWriter {
 
     /// Gets the bytes to write into an outgoing packet
     pub fn get_bytes(&mut self, out_bytes: &mut Vec<u8>) {
-        //Write manager "header" (manager type & replicate count)
+        //Write manager "header" (manager type & message count)
         if self.message_count != 0 {
             out_bytes.write_u8(ManagerType::Message as u8).unwrap(); // write manager type
             out_bytes.write_u8(self.message_count).unwrap(); // write number of messages in the following message
