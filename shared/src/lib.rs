@@ -51,8 +51,7 @@ pub use diff_mask::DiffMask;
 pub use host_tick_manager::HostTickManager;
 pub use key_store::KeyGenerator;
 pub use keys::{
-    EntityKey, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicaKey, NaiaKey,
-    PawnKey,
+    EntityKey, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicaKey, NaiaKey, PawnKey,
 };
 pub use manager_type::ManagerType;
 pub use manifest::Manifest;
