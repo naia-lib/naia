@@ -57,7 +57,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
         command: &Rc<Box<dyn Replicate<T>>>,
     ) {
         match pawn_key {
-            PawnKey::Replicate(_) => {
+            PawnKey::Object(_) => {
                 self.replicate_manager.queue_command(host_tick, pawn_key, command);
             },
             PawnKey::Entity(_) => {
@@ -69,7 +69,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     /// Get number of Commands in the command history for a given Pawn
     pub fn command_history_count(&self, pawn_key: &PawnKey) -> u8 {
         match pawn_key {
-            PawnKey::Replicate(_) => {
+            PawnKey::Object(_) => {
                 return self.replicate_manager.command_history_count(pawn_key);
             },
             PawnKey::Entity(_) => {
@@ -85,7 +85,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
         reverse: bool,
     ) -> Option<SequenceIterator<Rc<Box<dyn Replicate<T>>>>> {
         match pawn_key {
-            PawnKey::Replicate(_) => {
+            PawnKey::Object(_) => {
                 return self.replicate_manager.command_history_iter(pawn_key, reverse);
             },
             PawnKey::Entity(_) => {
@@ -97,7 +97,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     /// Queues Commands to be replayed from a given tick
     pub fn replay_commands(&mut self, history_tick: u16, pawn_key: &PawnKey) {
         match pawn_key {
-            PawnKey::Replicate(_) => {
+            PawnKey::Object(_) => {
                 return self.replicate_manager.replay_commands(history_tick, pawn_key);
             },
             PawnKey::Entity(_) => {
@@ -109,7 +109,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     /// Removes command history for a given Pawn until a specific tick
     pub fn remove_history_until(&mut self, history_tick: u16, pawn_key: &PawnKey) {
         match pawn_key {
-            PawnKey::Replicate(_) => {
+            PawnKey::Object(_) => {
                 return self.replicate_manager.remove_history_until(history_tick, pawn_key);
             },
             PawnKey::Entity(_) => {
@@ -121,7 +121,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     /// Perform initialization on Pawn creation
     pub fn pawn_init(&mut self, pawn_key: &PawnKey) {
         match pawn_key {
-            PawnKey::Replicate(_) => {
+            PawnKey::Object(_) => {
                 return self.replicate_manager.pawn_init(pawn_key);
             },
             PawnKey::Entity(_) => {
@@ -133,7 +133,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     /// Perform cleanup on Pawn deletion
     pub fn pawn_cleanup(&mut self, pawn_key: &PawnKey) {
         match pawn_key {
-            PawnKey::Replicate(_) => {
+            PawnKey::Object(_) => {
                 return self.replicate_manager.pawn_cleanup(pawn_key);
             },
             PawnKey::Entity(_) => {

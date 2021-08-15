@@ -100,7 +100,7 @@ impl PacketWriter {
 
 
         match pawn_key {
-            PawnKey::Replicate(_) => {
+            PawnKey::Object(_) => {
                 command_total_bytes
                     .write_u8(0)
                     .unwrap(); // write pawn type
@@ -134,13 +134,13 @@ impl PacketWriter {
         }
     }
 
-    /// Writes an Event into the Writer's internal buffer, which will eventually
+    /// Writes a Message into the Writer's internal buffer, which will eventually
     /// be put into the outgoing packet
-    pub fn write_event<T: ProtocolType>(
+    pub fn write_message<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,
-        event: &Box<dyn Replicate<T>>,
+        message: &Box<dyn Replicate<T>>,
     ) -> bool {
-        return self.message_writer.write_message(manifest, event);
+        return self.message_writer.write_message(manifest, message);
     }
 }

@@ -21,8 +21,8 @@ impl<T: ProtocolType> ReplicateAction<T> {
     pub fn as_type(&self) -> ReplicateActionType {
         match self {
             ReplicateAction::CreateObject(_, _, _) => ReplicateActionType::CreateObject,
-            ReplicateAction::DeleteObject(_, _) => ReplicateActionType::DeleteObject,
-            ReplicateAction::UpdateObject(_, _, _, _) => ReplicateActionType::UpdateObject,
+            ReplicateAction::DeleteObject(_, _) => ReplicateActionType::DeleteReplicate,
+            ReplicateAction::UpdateObject(_, _, _, _) => ReplicateActionType::UpdateReplicate,
             ReplicateAction::AssignPawn(_, _) => ReplicateActionType::AssignPawn,
             ReplicateAction::UnassignPawn(_, _) => ReplicateActionType::UnassignPawn,
             ReplicateAction::UpdatePawn(_, _, _, _) => ReplicateActionType::UpdatePawn,

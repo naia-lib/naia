@@ -112,14 +112,14 @@ impl App {
                             if let Some(typed_object) = self.client.get_object(&local_key) {
                                 match typed_object {
                                     Protocol::Square(square_ref) => {
-                                        self.replicates.insert(local_key, square_ref.clone());
+                                        self.square_map.insert(local_key, square_ref.clone());
                                     }
                                     _ => {}
                                 }
                             }
                         },
                         Event::DeleteObject(local_key, _) => {
-                            self.replicates.remove(&local_key);
+                            self.square_map.remove(&local_key);
                         },
                         _ => {}
                     },
@@ -139,7 +139,7 @@ impl App {
 
         if self.client.has_connection() {
             // draw replicates
-            for (_, square_ref) in &self.replicates {
+            for (_, square_ref) in &self.square_map {
                 let square = square_ref.borrow();
                 let color = match square.color.get() {
                     Color::Red => RED,

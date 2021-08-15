@@ -30,7 +30,7 @@ mod server_connection;
 mod tick_queue;
 
 pub use naia_shared::{find_my_ip_address, Instant, LinkConditionerConfig, Random, Ref,
-                      wrapping_diff, NaiaKey, LocalReplicateKey, LocalEntityKey, Replicate};
+                      wrapping_diff, NaiaKey, LocalReplicateKey, LocalObjectKey, LocalComponentKey, LocalEntityKey, Replicate};
 
 pub use client_config::ClientConfig;
 pub use event::Event;

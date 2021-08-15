@@ -7,7 +7,7 @@ use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 pub use naia_shared::{
     Replicate, ProtocolType, ConnectionConfig, HostTickManager, Instant, LocalReplicateKey,
     ManagerType, Manifest, PacketReader, PacketType, SequenceIterator, SharedConfig,
-    StandardHeader, Timer, Timestamp, PawnKey, LocalComponentKey, LocalEntityKey
+    StandardHeader, Timer, Timestamp, PawnKey, LocalComponentKey, LocalEntityKey, LocalObjectKey,
 };
 
 use super::{
@@ -98,17 +98,17 @@ impl<T: ProtocolType> Client<T> {
                 if let Some(event) = connection.get_incoming_event() {
                     return Some(Ok(Event::Message(event)));
                 }
-                // receive replicate message
-                while let Some(message) = connection.get_incoming_replicate_action() {
+                // receive replicate action
+                while let Some(action) = connection.get_incoming_replicate_action() {
                     let event_opt: Option<Event::<T>> = {
-                        match message {
-                            ReplicateAction::CreateReplicate(local_key) => {
+                        match action {
+                            ReplicateAction::CreateObject(local_key) => {
                                 Some(Event::CreateObject(local_key))
                             }
-                            ReplicateAction::DeleteReplicate(local_key, replicate) => {
+                            ReplicateAction::DeleteObject(local_key, replicate) => {
                                 Some(Event::DeleteObject(local_key, replicate.clone()))
                             }
-                            ReplicateAction::UpdateReplicate(local_key) => {
+                            ReplicateAction::UpdateObject(local_key) => {
                                 Some(Event::UpdateObject(local_key))
                             }
                             ReplicateAction::AssignPawn(local_key) => {
@@ -158,7 +158,7 @@ impl<T: ProtocolType> Client<T> {
                 // receive replay command
                 if let Some((pawn_key, command)) = connection.get_incoming_replay() {
                     match pawn_key {
-                        PawnKey::Replicate(object_key) => {
+                        PawnKey::Object(object_key) => {
                             return Some(Ok(Event::ReplayCommand(
                                 object_key,
                                 command.as_ref().get_typed_copy(),
@@ -175,7 +175,7 @@ impl<T: ProtocolType> Client<T> {
                 // receive command
                 if let Some((pawn_key, command)) = connection.get_incoming_command() {
                     match pawn_key {
-                        PawnKey::Replicate(object_key) => {
+                        PawnKey::Object(object_key) => {
                             return Some(Ok(Event::NewCommand(
                                 object_key,
                                 command.as_ref().get_typed_copy(),
@@ -377,14 +377,14 @@ impl<T: ProtocolType> Client<T> {
     }
 
     /// Queues up an Message to be sent to the Server
-    pub fn send_message(&mut self, replicate: &impl Replicate<T>, guaranteed_delivery: bool) {
+    pub fn send_message(&mut self, message: &impl Replicate<T>, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
-            connection.queue_message(replicate, guaranteed_delivery);
+            connection.queue_message(message, guaranteed_delivery);
         }
     }
 
-    /// Queues up a Pawn Replicate Command to be sent to the Server
-    pub fn send_command(&mut self, pawn_object_key: &LocalReplicateKey, command: &impl Replicate<T>) {
+    /// Queues up a Pawn Object Command to be sent to the Server
+    pub fn send_command(&mut self, pawn_object_key: &LocalObjectKey, command: &impl Replicate<T>) {
         if let Some(connection) = &mut self.server_connection {
             connection.replicate_queue_command(pawn_object_key, command);
         }
@@ -407,11 +407,11 @@ impl<T: ProtocolType> Client<T> {
         return self.server_connection.is_some();
     }
 
-    // replicates
+    // objects
 
     /// Get a reference to an Object currently in scope for the Client, given
     /// that Object's Key
-    pub fn get_object(&self, key: &LocalReplicateKey) -> Option<&T> {
+    pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
         if let Some(connection) = &self.server_connection {
             return connection.get_object(key);
         }
@@ -420,7 +420,7 @@ impl<T: ProtocolType> Client<T> {
 
     /// Get whether or not the Object currently in scope for the Client, given
     /// that Object's Key
-    pub fn has_object(&self, key: &LocalReplicateKey) -> bool {
+    pub fn has_object(&self, key: &LocalObjectKey) -> bool {
         if let Some(connection) = &self.server_connection {
             return connection.has_object(key);
         }
@@ -443,7 +443,7 @@ impl<T: ProtocolType> Client<T> {
 
     /// Return an iterator to the collection of keys to all Replicates tracked by
     /// the Client
-    pub fn object_keys(&self) -> Option<Vec<LocalReplicateKey>> {
+    pub fn object_keys(&self) -> Option<Vec<LocalObjectKey>> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.object_keys());
         }
@@ -452,7 +452,7 @@ impl<T: ProtocolType> Client<T> {
 
     /// Return an iterator to the collection of keys to all Components tracked by
     /// the Client
-    pub fn component_keys(&self) -> Option<Vec<LocalReplicateKey>> {
+    pub fn component_keys(&self) -> Option<Vec<LocalComponentKey>> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.component_keys());
         }
@@ -462,7 +462,7 @@ impl<T: ProtocolType> Client<T> {
     // pawns
 
     /// Get a reference to a Pawn
-    pub fn get_pawn(&self, key: &LocalReplicateKey) -> Option<&T> {
+    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&T> {
         if let Some(connection) = &self.server_connection {
             return connection.get_pawn(key);
         }
@@ -470,7 +470,7 @@ impl<T: ProtocolType> Client<T> {
     }
 
     /// Get a reference to a Pawn, used for setting it's replicate
-    pub fn get_pawn_mut(&mut self, key: &LocalReplicateKey) -> Option<&T> {
+    pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&T> {
         if let Some(connection) = self.server_connection.as_mut() {
             return connection.get_pawn_mut(key);
         }
@@ -479,13 +479,13 @@ impl<T: ProtocolType> Client<T> {
 
     /// Return an iterator to the collection of keys to all Pawns tracked by
     /// the Client
-    pub fn pawn_keys(&self) -> Option<Vec<LocalReplicateKey>> {
+    pub fn pawn_keys(&self) -> Option<Vec<LocalObjectKey>> {
         if let Some(connection) = &self.server_connection {
             return Some(
                 connection
                     .pawn_keys()
                     .cloned()
-                    .collect::<Vec<LocalReplicateKey>>(),
+                    .collect::<Vec<LocalObjectKey>>(),
             );
         }
         return None;

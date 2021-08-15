@@ -50,7 +50,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
             let local_key = reader.read_u16();
             let pawn_key = {
                 if is_replicate {
-                    PawnKey::Replicate(LocalReplicateKey::from_u16(local_key))
+                    PawnKey::Object(LocalReplicateKey::from_u16(local_key))
                 } else {
                     PawnKey::Entity(LocalEntityKey::from_u16(local_key))
                 }
