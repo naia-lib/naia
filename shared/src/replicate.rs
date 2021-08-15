@@ -25,10 +25,10 @@ pub trait Replicate<T: ProtocolType>: BoxClone<T> {
     /// mutated Properties of the Message/Object/Component on the client
     fn write_partial(&self, diff_mask: &DiffMask, out_bytes: &mut Vec<u8>);
     /// Reads data from an incoming packet, sufficient to sync the in-memory
-    /// Message/Object/Component with it's replicate on the Server
+    /// Message/Object/Component with it's replica on the Server
     fn read_full(&mut self, reader: &mut PacketReader, packet_index: u16);
     /// Reads data from an incoming packet, sufficient to sync the in-memory
-    /// Message/Object/Component with it's replicate on the Server
+    /// Message/Object/Component with it's replica on the Server
     fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16);
     /// Set the Message/Object/Component's PropertyMutator, which keeps track
     /// of which Properties have been mutated, necessary to sync only the

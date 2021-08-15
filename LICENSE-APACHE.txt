@@ -27,9 +27,9 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
    including but not limited to software source code, documentation
    source, and configuration files.
 
-   "Replicate" form shall mean any form resulting from mechanical
+   "Actor" form shall mean any form resulting from mechanical
    transformation or translation of a Source form, including but
-   not limited to compiled replicate code, generated documentation,
+   not limited to compiled Actor code, generated documentation,
    and conversions to other media types.
 
    "Work" shall mean the work of authorship, whether in Source or
@@ -73,7 +73,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 3. Grant of Patent License. Subject to the terms and conditions of
    this License, each Contributor hereby grants to You a perpetual,
    worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-   (except as replicated in this section) patent license to make, have made,
+   (except as stated in this section) patent license to make, have made,
    use, offer to sell, sell, import, and otherwise transfer the Work,
    where such license applies only to those patent claims licensable
    by such Contributor that are necessarily infringed by their
@@ -120,14 +120,14 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
        that such additional attribution notices cannot be construed
        as modifying the License.
 
-   You may add Your own copyright replicatement to Your modifications and
+   You may add Your own copyright statement to Your modifications and
    may provide additional or different license terms and conditions
    for use, reproduction, or distribution of Your modifications, or
    for any such Derivative Works as a whole, provided Your use,
    reproduction, and distribution of the Work otherwise complies with
-   the conditions replicated in this License.
+   the conditions stated in this License.
 
-5. Submission of Contributions. Unless You explicitly replicate otherwise,
+5. Submission of Contributions. Unless You explicitly state otherwise,
    any Contribution intentionally submitted for inclusion in the Work
    by You to the Licensor shall be under the terms and conditions of
    this License, without any additional terms or conditions.

@@ -40,7 +40,7 @@ impl PacketWriter {
         if self.command_count != 0 {
             out_bytes.write_u8(ManagerType::Command as u8).unwrap(); // write manager type
             out_bytes.write_u8(self.command_count).unwrap(); // write number of commands in the following message
-            out_bytes.append(&mut self.command_working_bytes); // write event payload
+            out_bytes.append(&mut self.command_working_bytes); // write command payload
             self.command_count = 0;
         }
 
