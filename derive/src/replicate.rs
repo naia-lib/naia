@@ -5,35 +5,35 @@ use syn::{parse_macro_input, DeriveInput, Ident, Type};
 pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    let replicate_name = &input.ident;
+    let replica_name = &input.ident;
     let replica_builder_name = Ident::new(
-        (replicate_name.to_string() + "Builder").as_str(),
+        (replica_name.to_string() + "Builder").as_str(),
         Span::call_site(),
     );
     let type_name = get_type_name(&input);
 
     let properties = get_properties(&input);
 
-    let enum_name = format_ident!("{}Prop", replicate_name);
+    let enum_name = format_ident!("{}Prop", replica_name);
     let property_enum = get_property_enum(&enum_name, &properties);
 
-    let new_complete_method = get_new_complete_method(replicate_name, &enum_name, &properties);
+    let new_complete_method = get_new_complete_method(replica_name, &enum_name, &properties);
     let read_to_type_method =
-        get_read_to_type_method(&type_name, replicate_name, &enum_name, &properties);
+        get_read_to_type_method(&type_name, replica_name, &enum_name, &properties);
     let write_method = get_write_method(&properties);
     let write_partial_method = get_write_partial_method(&enum_name, &properties);
     let read_full_method = get_read_full_method(&properties);
     let read_partial_method = get_read_partial_method(&enum_name, &properties);
     let set_mutator_method = get_set_mutator_method(&properties);
-    let to_protocol_method = get_to_protocol_method(&type_name, replicate_name, &properties);
-    let equals_method = get_equals_method(replicate_name, &properties);
-    let mirror_method = get_mirror_method(replicate_name, &properties);
+    let to_protocol_method = get_to_protocol_method(&type_name, replica_name, &properties);
+    let equals_method = get_equals_method(replica_name, &properties);
+    let mirror_method = get_mirror_method(replica_name, &properties);
 
     let diff_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateEq, PacketReader, Ref};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicaEq, PacketReader, Ref};
         #property_enum
         pub struct #replica_builder_name {
             type_id: TypeId,
@@ -43,25 +43,25 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                 return self.type_id;
             }
             fn build(&self, reader: &mut PacketReader) -> #type_name {
-                return #replicate_name::read_to_type(reader);
+                return #replica_name::read_to_type(reader);
             }
         }
-        impl #replicate_name {
+        impl #replica_name {
             pub fn get_builder() -> Box<dyn ReplicaBuilder<#type_name>> {
                 return Box::new(#replica_builder_name {
-                    type_id: TypeId::of::<#replicate_name>(),
+                    type_id: TypeId::of::<#replica_name>(),
                 });
             }
-            pub fn wrap(self) -> Ref<#replicate_name> {
+            pub fn wrap(self) -> Ref<#replica_name> {
                 return Ref::new(self);
             }
             #new_complete_method
             #read_to_type_method
         }
-        impl Replicate<#type_name> for #replicate_name {
+        impl Replicate<#type_name> for #replica_name {
             fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
             fn get_type_id(&self) -> TypeId {
-                return TypeId::of::<#replicate_name>();
+                return TypeId::of::<#replica_name>();
             }
             #set_mutator_method
             #write_method
@@ -70,7 +70,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #read_partial_method
             #to_protocol_method
         }
-        impl ReplicateEq<#type_name> for #replicate_name {
+        impl ReplicaEq<#type_name> for #replica_name {
             #equals_method
             #mirror_method
         }
@@ -132,7 +132,7 @@ fn get_set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
 }
 
 fn get_new_complete_method(
-    replicate_name: &Ident,
+    replica_name: &Ident,
     enum_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
@@ -165,8 +165,8 @@ fn get_new_complete_method(
     }
 
     return quote! {
-        pub fn new_complete(#args) -> #replicate_name {
-            #replicate_name {
+        pub fn new_complete(#args) -> #replica_name {
+            #replica_name {
                 #fields
             }
         }
@@ -175,7 +175,7 @@ fn get_new_complete_method(
 
 fn get_read_to_type_method(
     type_name: &Ident,
-    replicate_name: &Ident,
+    replica_name: &Ident,
     enum_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
@@ -213,7 +213,7 @@ fn get_read_to_type_method(
         fn read_to_type(reader: &mut PacketReader) -> #type_name {
             #prop_reads
 
-            return #type_name::#replicate_name(Ref::new(#replicate_name {
+            return #type_name::#replica_name(Ref::new(#replica_name {
                 #prop_names
             }));
         }
@@ -222,7 +222,7 @@ fn get_read_to_type_method(
 
 fn get_to_protocol_method(
     type_name: &Ident,
-    replicate_name: &Ident,
+    replica_name: &Ident,
     properties: &Vec<(Ident, Type)>,
 ) -> TokenStream {
     let mut args = quote! {};
@@ -238,8 +238,8 @@ fn get_to_protocol_method(
 
     return quote! {
         fn to_protocol(&self) -> #type_name {
-            let copied_replicate = #replicate_name::new_complete(#args).wrap();
-            return #type_name::#replicate_name(copied_replicate);
+            let copied_replica = #replica_name::new_complete(#args).wrap();
+            return #type_name::#replica_name(copied_replica);
         }
     };
 }
@@ -322,7 +322,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
     };
 }
 
-fn get_equals_method(replicate_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn get_equals_method(replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
@@ -337,14 +337,14 @@ fn get_equals_method(replicate_name: &Ident, properties: &Vec<(Ident, Type)>) ->
     }
 
     return quote! {
-        fn equals(&self, other: &#replicate_name) -> bool {
+        fn equals(&self, other: &#replica_name) -> bool {
             #output
             return true;
         }
     };
 }
 
-fn get_mirror_method(replicate_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn get_mirror_method(replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
@@ -359,7 +359,7 @@ fn get_mirror_method(replicate_name: &Ident, properties: &Vec<(Ident, Type)>) ->
     }
 
     return quote! {
-        fn mirror(&mut self, other: &#replicate_name) {
+        fn mirror(&mut self, other: &#replica_name) {
             #output
         }
     };

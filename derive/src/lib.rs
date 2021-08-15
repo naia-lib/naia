@@ -1,6 +1,6 @@
 //! # Naia Derive
-//! Procedural macros to simplify implementation of Naia Event & Replicate
-//! traits
+//! Procedural macros to simplify implementation of Naia Replicate &
+//! ProtocolType traits
 
 #![deny(
     missing_docs,

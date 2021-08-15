@@ -39,7 +39,7 @@ pub trait Replicate<T: ProtocolType>: BoxClone<T> {
 //TODO: do we really need another trait here?
 /// Handles equality of Messages/Objects/Components.. can't just derive
 /// PartialEq because we want to only compare Properties
-pub trait ReplicateEq<T: ProtocolType, Impl = Self>: Replicate<T> {
+pub trait ReplicaEq<T: ProtocolType, Impl = Self>: Replicate<T> {
     /// Compare properties in another Replicate
     fn equals(&self, other: &Impl) -> bool;
     /// Sets the current Replica to the state of another Replica of the

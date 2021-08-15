@@ -1,6 +1,7 @@
 //! # Naia Client
-//! A cross-platform client that can send/receive events to/from a server, and
-//! has a pool of in-scope replicates that are synced with the server.
+//! A cross-platform client that can send/receive messages to/from a server, and
+//! has a pool of in-scope Objects/Entities/Components that are synced with the
+//! server.
 
 #![deny(
     missing_docs,
@@ -23,8 +24,8 @@ mod error;
 mod event;
 mod packet_writer;
 mod ping_manager;
-mod replicate_action;
-mod replicate_manager;
+mod replica_action;
+mod replica_manager;
 mod server_connection;
 mod tick_manager;
 mod tick_queue;

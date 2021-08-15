@@ -39,7 +39,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
     let gen = quote! {
         use std::any::TypeId;
-        use naia_shared::{ProtocolType, Replicate, ReplicateEq, DiffMask, PacketReader};
+        use naia_shared::{ProtocolType, Replicate, ReplicaEq, DiffMask, PacketReader};
         #ref_imports
         impl #type_name {
             #load_method
@@ -66,8 +66,8 @@ fn get_read_full_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idreplicate) => {
-                        idreplicate.borrow_mut().read_full(reader, packet_index);
+                    #type_name::#variant_name(replica_ref) => {
+                        replica_ref.borrow_mut().read_full(reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -97,8 +97,8 @@ fn get_read_partial_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idreplicate) => {
-                        idreplicate.borrow_mut().read_partial(diff_mask, reader, packet_index);
+                    #type_name::#variant_name(replica_ref) => {
+                        replica_ref.borrow_mut().read_partial(diff_mask, reader, packet_index);
                     }
                 };
                 let new_output_result = quote! {
@@ -134,8 +134,8 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
                 );
 
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idreplicate) => {
-                        return #method_name(idreplicate.clone());
+                    #type_name::#variant_name(replica_ref) => {
+                        return #method_name(replica_ref.clone());
                     }
                 };
                 let new_output_result = quote! {
@@ -227,10 +227,10 @@ fn get_equals_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idreplicate) => {
+                    #type_name::#variant_name(replica_ref) => {
                         match other {
-                            #type_name::#variant_name(other_idreplicate) => {
-                                return idreplicate.borrow().equals(&other_idreplicate.borrow());
+                            #type_name::#variant_name(other_ref) => {
+                                return replica_ref.borrow().equals(&other_ref.borrow());
                             }
                             _ => { return false; }
                         }
@@ -263,10 +263,10 @@ fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idreplicate) => {
+                    #type_name::#variant_name(replica_ref) => {
                         match other {
-                            #type_name::#variant_name(other_idreplicate) => {
-                                        return idreplicate.borrow_mut().mirror(&other_idreplicate.borrow());
+                            #type_name::#variant_name(other_ref) => {
+                                        return replica_ref.borrow_mut().mirror(&other_ref.borrow());
                                     }
                             _ => {}
                         }
@@ -299,8 +299,8 @@ fn get_write_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idreplicate) => {
-                        idreplicate.borrow().write(buffer);
+                    #type_name::#variant_name(replica_ref) => {
+                        replica_ref.borrow().write(buffer);
                     }
                 };
                 let new_output_result = quote! {
@@ -330,8 +330,8 @@ fn get_type_id_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    #type_name::#variant_name(idreplicate) => {
-                        return idreplicate.borrow().get_type_id();
+                    #type_name::#variant_name(replica_ref) => {
+                        return replica_ref.borrow().get_type_id();
                     }
                 };
                 let new_output_result = quote! {

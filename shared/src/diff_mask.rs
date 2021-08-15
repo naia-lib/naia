@@ -4,7 +4,7 @@ use std::fmt;
 use crate::PacketReader;
 
 /// The DiffMask is a variable-length byte array, where each bit represents
-/// the current state of a Property owned by a Replicate.
+/// the current state of a Property owned by a Replica.
 /// The Property tracks whether it has been updated and needs to be synced
 /// with the remote Client
 #[derive(Debug, Clone)]

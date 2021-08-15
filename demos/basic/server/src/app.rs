@@ -209,7 +209,7 @@ impl App {
                             }
                         }
 
-                        // Event Sending
+                        // Message Sending
                         let mut iter_vec: Vec<UserKey> = Vec::new();
                         for (user_key, _) in self.server.users_iter() {
                             iter_vec.push(user_key);
@@ -219,11 +219,11 @@ impl App {
                             let new_message = format!("Server Packet (tick {})", self.tick_count);
                             info!("Naia Server send -> {}: {}", user.address, new_message);
 
-                            let message_event = StringMessage::new(new_message);
-                            self.server.queue_message(&user_key, &message_event, true);
+                            let message = StringMessage::new(new_message);
+                            self.server.queue_message(&user_key, &message, true);
                         }
 
-                        // VERY IMPORTANT! Calling this actually sends all Replicate/Event data
+                        // VERY IMPORTANT! Calling this actually sends all update data
                         // packets to all Clients that require it. If you don't call this
                         // method, the Server will never communicate with it's connected Clients
                         self.server.send_all_updates().await;

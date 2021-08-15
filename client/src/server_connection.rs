@@ -10,14 +10,14 @@ use crate::Packet;
 
 use super::{
     dual_command_receiver::DualCommandReceiver, dual_command_sender::DualCommandSender,
-    packet_writer::PacketWriter, ping_manager::PingManager, replicate_action::ReplicateAction,
-    replicate_manager::ReplicateManager, tick_manager::TickManager, tick_queue::TickQueue,
+    packet_writer::PacketWriter, ping_manager::PingManager, replica_action::ReplicaAction,
+    replica_manager::Replicamanager, tick_manager::TickManager, tick_queue::TickQueue,
 };
 
 #[derive(Debug)]
 pub struct ServerConnection<T: ProtocolType> {
     connection: Connection<T>,
-    replicate_manager: ReplicateManager<T>,
+    replica_manager: Replicamanager<T>,
     ping_manager: PingManager,
     command_sender: DualCommandSender<T>,
     command_receiver: DualCommandReceiver<T>,
@@ -28,7 +28,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
-            replicate_manager: ReplicateManager::new(),
+            replica_manager: Replicamanager::new(),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
@@ -66,10 +66,11 @@ impl<T: ProtocolType> ServerConnection<T> {
 
             // Messages
             let next_packet_index: u16 = self.get_next_packet_index();
-            while let Some(popped_event) = self.connection.pop_outgoing_message(next_packet_index) {
-                if !writer.write_message(manifest, &popped_event) {
+            while let Some(popped_message) = self.connection.pop_outgoing_message(next_packet_index)
+            {
+                if !writer.write_message(manifest, &popped_message) {
                     self.connection
-                        .unpop_outgoing_message(next_packet_index, &popped_event);
+                        .unpop_outgoing_message(next_packet_index, &popped_message);
                     break;
                 }
             }
@@ -108,7 +109,7 @@ impl<T: ProtocolType> ServerConnection<T> {
                     self.connection.process_message_data(&mut reader, manifest);
                 }
                 ManagerType::Replica => {
-                    self.replicate_manager.process_data(
+                    self.replica_manager.process_data(
                         manifest,
                         &mut self.command_receiver,
                         packet_tick,
@@ -140,25 +141,25 @@ impl<T: ProtocolType> ServerConnection<T> {
         return None;
     }
 
-    // Pass-through methods to underlying replicate manager
-    pub fn get_incoming_replicate_action(&mut self) -> Option<ReplicateAction<T>> {
-        return self.replicate_manager.pop_incoming_message();
+    // Pass-through methods to underlying replica manager
+    pub fn get_incoming_replica_action(&mut self) -> Option<ReplicaAction<T>> {
+        return self.replica_manager.pop_incoming_message();
     }
 
     pub fn object_keys(&self) -> Vec<LocalObjectKey> {
-        return self.replicate_manager.object_keys();
+        return self.replica_manager.object_keys();
     }
 
     pub fn component_keys(&self) -> Vec<LocalComponentKey> {
-        return self.replicate_manager.component_keys();
+        return self.replica_manager.component_keys();
     }
 
     pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
-        return self.replicate_manager.get_object(key);
+        return self.replica_manager.get_object(key);
     }
 
     pub fn has_object(&self, key: &LocalObjectKey) -> bool {
-        return self.replicate_manager.has_object(key);
+        return self.replica_manager.has_object(key);
     }
 
     pub fn has_component(&self, key: &LocalComponentKey) -> bool {
@@ -166,25 +167,25 @@ impl<T: ProtocolType> ServerConnection<T> {
     }
 
     pub fn pawn_keys(&self) -> Keys<LocalObjectKey, T> {
-        return self.replicate_manager.pawn_keys();
+        return self.replica_manager.pawn_keys();
     }
 
     pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&T> {
-        return self.replicate_manager.get_pawn(key);
+        return self.replica_manager.get_pawn(key);
     }
 
     pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&T> {
-        return self.replicate_manager.get_pawn(key);
+        return self.replica_manager.get_pawn(key);
     }
 
     pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
-        return self.replicate_manager.has_entity(key);
+        return self.replica_manager.has_entity(key);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
     pub fn frame_begin(&mut self, manifest: &Manifest<T>, tick_manager: &mut TickManager) -> bool {
         if tick_manager.mark_frame() {
-            // then we apply all received updates to replicates at once
+            // then we apply all received updates to replicas at once
             let target_tick = tick_manager.get_server_tick();
             while let Some((tick, packet_index, data_packet)) =
                 self.get_buffered_data_packet(target_tick)
@@ -246,11 +247,11 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message(&mut self, event: &impl Replicate<T>, guaranteed_delivery: bool) {
-        return self.connection.queue_message(event, guaranteed_delivery);
+    pub fn queue_message(&mut self, message: &impl Replicate<T>, guaranteed_delivery: bool) {
+        return self.connection.queue_message(message, guaranteed_delivery);
     }
 
-    pub fn get_incoming_event(&mut self) -> Option<T> {
+    pub fn get_incoming_message(&mut self) -> Option<T> {
         return self.connection.get_incoming_message();
     }
 
@@ -259,7 +260,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     }
 
     // command related
-    pub fn replicate_queue_command(
+    pub fn object_queue_command(
         &mut self,
         object_key: &LocalObjectKey,
         command: &impl Replicate<T>,
@@ -279,7 +280,7 @@ impl<T: ProtocolType> ServerConnection<T> {
 
     pub fn process_replays(&mut self) {
         self.command_receiver
-            .process_command_replay::<T>(&mut self.replicate_manager);
+            .process_command_replay::<T>(&mut self.replica_manager);
     }
 
     pub fn get_incoming_replay(&mut self) -> Option<(PawnKey, Rc<Box<dyn Replicate<T>>>)> {
