@@ -1,4 +1,4 @@
-/// The key that represents an Replicate in the Client's scope, that is being
+/// The key that represents a Object/Component in the Client's scope, that is being
 /// synced to the Client
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct LocalReplicateKey(u16);
