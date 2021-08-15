@@ -2,7 +2,7 @@
 /// related to Replicates/Entities/Pawns/Components
 #[derive(Copy, Clone)]
 #[repr(u8)]
-pub enum ReplicateMessageType {
+pub enum ReplicateActionType {
     /// Message indicating an Replicate to be created
     CreateReplicate = 0,
     /// Message indicating an Replicate to be updated
@@ -29,19 +29,19 @@ pub enum ReplicateMessageType {
     Unknown
 }
 
-impl ReplicateMessageType {
+impl ReplicateActionType {
     /// Converts the message type to u8
     pub fn to_u8(&self) -> u8 {
         *self as u8
     }
 
-    /// Gets an ReplicateMessageType from a u8
+    /// Gets an ReplicateActionType from a u8
     #[allow(unsafe_code)]
     pub fn from_u8(v: u8) -> Self {
-        if v >= ReplicateMessageType::Unknown as u8 {
-            return ReplicateMessageType::Unknown;
+        if v >= ReplicateActionType::Unknown as u8 {
+            return ReplicateActionType::Unknown;
         }
-        let z: ReplicateMessageType = unsafe { ::std::mem::transmute(v) };
+        let z: ReplicateActionType = unsafe { ::std::mem::transmute(v) };
         z
     }
 }

@@ -4,14 +4,14 @@ use std::collections::{HashSet, HashMap, VecDeque, hash_map::Keys};
 use log::warn;
 
 use naia_shared::{ProtocolType, LocalObjectKey, Manifest, PacketReader, DiffMask,
-                  LocalEntityKey, ReplicateMessageType, NaiaKey, LocalComponentKey, PawnKey};
+                  LocalEntityKey, ReplicateActionType, NaiaKey, LocalComponentKey, PawnKey};
 
-use super::{replicate_message::ReplicateMessage, dual_command_receiver::DualCommandReceiver};
+use super::{replicate_action::ReplicateAction, dual_command_receiver::DualCommandReceiver};
 
 #[derive(Debug)]
 pub struct ReplicateManager<T: ProtocolType> {
     local_replicate_store:              HashMap<LocalObjectKey, T>,
-    queued_incoming_messages:           VecDeque<ReplicateMessage<T>>,
+    queued_incoming_messages:           VecDeque<ReplicateAction<T>>,
     pawn_store:                         HashMap<LocalObjectKey, T>,
     local_entity_store:                 HashMap<LocalEntityKey, HashSet<LocalComponentKey>>,
     pawn_entity_store:                  HashSet<LocalEntityKey>,
@@ -38,13 +38,13 @@ impl<T: ProtocolType> ReplicateManager<T> {
         packet_index: u16,
         reader: &mut PacketReader,
     ) {
-        let replicate_message_count = reader.read_u8();
+        let replicate_action_count = reader.read_u8();
 
-        for _ in 0..replicate_message_count {
-            let message_type = ReplicateMessageType::from_u8(reader.read_u8());
+        for _ in 0..replicate_action_count {
+            let message_type = ReplicateActionType::from_u8(reader.read_u8());
 
             match message_type {
-                ReplicateMessageType::CreateReplicate => {
+                ReplicateActionType::CreateReplicate => {
                     // Replicate Creation
                     let naia_id: u16 = reader.read_u16();
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
@@ -54,13 +54,13 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         self.local_replicate_store.insert(object_key, new_replicate);
 
                         self.queued_incoming_messages
-                            .push_back(ReplicateMessage::CreateReplicate(object_key));
+                            .push_back(ReplicateAction::CreateReplicate(object_key));
                     } else {
                         // may have received a duplicate message
                         warn!("attempted to insert duplicate local replicate key");
                     }
                 }
-                ReplicateMessageType::DeleteReplicate => {
+                ReplicateActionType::DeleteReplicate => {
                     // Replicate Deletion
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
@@ -78,7 +78,7 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         self.replicate_delete_cleanup(command_receiver, &object_key);
                     }
                 }
-                ReplicateMessageType::UpdateReplicate => {
+                ReplicateActionType::UpdateReplicate => {
                     // Replicate Update
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
@@ -101,15 +101,15 @@ impl<T: ProtocolType> ReplicateManager<T> {
                             }
 
                             self.queued_incoming_messages
-                                .push_back(ReplicateMessage::UpdateComponent(*entity_key, object_key));
+                                .push_back(ReplicateAction::UpdateComponent(*entity_key, object_key));
                         } else {
                             // Replicate is an Replicate
                             self.queued_incoming_messages
-                                .push_back(ReplicateMessage::UpdateReplicate(object_key));
+                                .push_back(ReplicateAction::UpdateReplicate(object_key));
                         }
                     }
                 }
-                ReplicateMessageType::AssignPawn => {
+                ReplicateActionType::AssignPawn => {
                     // Assign Pawn
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
@@ -121,10 +121,10 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         command_receiver.pawn_init(&pawn_key);
 
                         self.queued_incoming_messages
-                            .push_back(ReplicateMessage::AssignPawn(object_key));
+                            .push_back(ReplicateAction::AssignPawn(object_key));
                     }
                 }
-                ReplicateMessageType::UnassignPawn => {
+                ReplicateActionType::UnassignPawn => {
                     // Unassign Pawn
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
                     if self.pawn_store.contains_key(&object_key) {
@@ -134,9 +134,9 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         command_receiver.pawn_cleanup(&pawn_key);
                     }
                     self.queued_incoming_messages
-                        .push_back(ReplicateMessage::UnassignPawn(object_key));
+                        .push_back(ReplicateAction::UnassignPawn(object_key));
                 }
-                ReplicateMessageType::UpdatePawn => {
+                ReplicateActionType::UpdatePawn => {
                     // Pawn Update
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
@@ -151,10 +151,10 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         command_receiver.remove_history_until(packet_tick, &pawn_key);
 
                         self.queued_incoming_messages
-                            .push_back(ReplicateMessage::UpdateReplicate(object_key));
+                            .push_back(ReplicateAction::UpdateReplicate(object_key));
                     }
                 }
-                ReplicateMessageType::CreateEntity => {
+                ReplicateActionType::CreateEntity => {
                     // Entity Creation
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     let components_num = reader.read_u8();
@@ -190,10 +190,10 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         self.local_entity_store.insert(entity_key, component_set);
 
                         self.queued_incoming_messages
-                            .push_back(ReplicateMessage::CreateEntity(entity_key, component_list));
+                            .push_back(ReplicateAction::CreateEntity(entity_key, component_list));
                     }
                 }
-                ReplicateMessageType::DeleteEntity => {
+                ReplicateActionType::DeleteEntity => {
                     // Entity Deletion
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
 
@@ -212,13 +212,13 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         }
 
                         self.queued_incoming_messages
-                            .push_back(ReplicateMessage::DeleteEntity(entity_key));
+                            .push_back(ReplicateAction::DeleteEntity(entity_key));
                     } else {
                         // its possible we received a very late duplicate message
                         warn!("received message attempting to delete nonexistent entity: {}", entity_key.to_u16());
                     }
                 }
-                ReplicateMessageType::AssignPawnEntity => {
+                ReplicateActionType::AssignPawnEntity => {
                     // Assign Pawn Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if self.local_entity_store.contains_key(&entity_key) {
@@ -229,10 +229,10 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         command_receiver.pawn_init(&pawn_key);
 
                         self.queued_incoming_messages
-                            .push_back(ReplicateMessage::AssignPawnEntity(entity_key));
+                            .push_back(ReplicateAction::AssignPawnEntity(entity_key));
                     }
                 }
-                ReplicateMessageType::UnassignPawnEntity => {
+                ReplicateActionType::UnassignPawnEntity => {
                     // Unassign Pawn Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if self.pawn_entity_store.contains(&entity_key) {
@@ -241,9 +241,9 @@ impl<T: ProtocolType> ReplicateManager<T> {
                         command_receiver.pawn_cleanup(&pawn_key);
                     }
                     self.queued_incoming_messages
-                        .push_back(ReplicateMessage::UnassignPawnEntity(entity_key));
+                        .push_back(ReplicateAction::UnassignPawnEntity(entity_key));
                 }
-                ReplicateMessageType::AddComponent => {
+                ReplicateActionType::AddComponent => {
                     // Add Component to Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     let naia_id: u16 = reader.read_u16();
@@ -269,18 +269,18 @@ impl<T: ProtocolType> ReplicateManager<T> {
                             component_set.insert(component_key);
 
                             self.queued_incoming_messages
-                                .push_back(ReplicateMessage::AddComponent(entity_key, component_key));
+                                .push_back(ReplicateAction::AddComponent(entity_key, component_key));
                         }
                     }
                 }
-                ReplicateMessageType::Unknown => {
+                ReplicateActionType::Unknown => {
                     panic!("received unknown type of replicate message");
                 }
             }
         }
     }
 
-    pub fn pop_incoming_message(&mut self) -> Option<ReplicateMessage<T>> {
+    pub fn pop_incoming_message(&mut self) -> Option<ReplicateAction<T>> {
         return self.queued_incoming_messages.pop_front();
     }
 
@@ -329,12 +329,12 @@ impl<T: ProtocolType> ReplicateManager<T> {
             }
         }
         self.queued_incoming_messages
-            .push_back(ReplicateMessage::ResetPawn(*key));
+            .push_back(ReplicateAction::ResetPawn(*key));
     }
 
     pub fn pawn_reset_entity(&mut self, key: &LocalEntityKey) {
         self.queued_incoming_messages
-            .push_back(ReplicateMessage::ResetPawnEntity(*key));
+            .push_back(ReplicateAction::ResetPawnEntity(*key));
     }
 
     // internal
@@ -350,14 +350,14 @@ impl<T: ProtocolType> ReplicateManager<T> {
             }
 
             self.queued_incoming_messages
-                .push_back(ReplicateMessage::DeleteReplicate(*object_key, replicate));
+                .push_back(ReplicateAction::DeleteReplicate(*object_key, replicate));
         }
     }
 
     fn component_delete_cleanup(&mut self, entity_key: &LocalEntityKey, component_key: &LocalComponentKey) {
         if let Some(component) = self.local_replicate_store.remove(&component_key) {
             self.queued_incoming_messages
-                .push_back(ReplicateMessage::RemoveComponent(*entity_key, *component_key, component));
+                .push_back(ReplicateAction::RemoveComponent(*entity_key, *component_key, component));
         }
     }
 }

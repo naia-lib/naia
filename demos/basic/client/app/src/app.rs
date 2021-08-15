@@ -16,7 +16,7 @@ pub struct App {
     world: World,
     entity_builder: HecsEntityBuilder,
     entity_key_map: HashMap<NaiaEntityKey, HecsEntityKey>,
-    event_count: u32,
+    message_count: u32,
 }
 
 impl App {
@@ -36,7 +36,7 @@ impl App {
             world: World::new(),
             entity_builder: HecsEntityBuilder::new(),
             entity_key_map: HashMap::new(),
-            event_count: 0,
+            message_count: 0,
         }
     }
 
@@ -54,19 +54,19 @@ impl App {
                         Event::Disconnection => {
                             info!("Client disconnected from: {}", self.client.server_address());
                         }
-                        Event::Event(event_type) => match event_type {
+                        Event::Message(message_type) => match message_type {
                             Protocol::StringMessage(_message_ref) => {
                                 //let message = message_ref.borrow();
                                 //let message_inner = message.message.get();
-                                //info!("Client received event: {}", message_inner);
+                                //info!("Client received message: {}", message_inner);
 
                                 let new_message =
-                                    format!("Client Packet ({})", self.event_count);
+                                    format!("Client Packet ({})", self.message_count);
                                 //info!("Client send: {}", new_message);
 
-                                let string_event = StringMessage::new(new_message);
-                                self.client.send_event(&string_event, true);
-                                self.event_count += 1;
+                                let string_message = StringMessage::new(new_message);
+                                self.client.send_message(&string_message, true);
+                                self.message_count += 1;
                             }
                             _ => {}
                         },

@@ -37,7 +37,7 @@ use super::{
 };
 
 
-/// A server that uses either UDP or WebRTC communication to send/receive events
+/// A server that uses either UDP or WebRTC communication to send/receive messages
 /// to/from connected clients, and syncs registered replicates to clients to whom
 /// those replicates are in-scope
 pub struct Server<T: ProtocolType> {
@@ -66,7 +66,7 @@ pub struct Server<T: ProtocolType> {
 }
 
 impl<U: ProtocolType> Server<U> {
-    /// Create a new Server, given an address to listen at, an Event/Replicate
+    /// Create a new Server, given an address to listen at, a Replicate
     /// manifest, and an optional Config
     pub async fn new(
         manifest: Manifest<U>,
@@ -177,7 +177,7 @@ impl<U: ProtocolType> Server<U> {
                 return Ok(Event::Disconnection(user_key, user_clone));
             }
 
-            // TODO: have 1 single queue for commands/events from all users, as it's
+            // TODO: have 1 single queue for commands/messages from all users, as it's
             // possible this current technique unfairly favors the 1st users in
             // self.client_connections
             for (user_key, connection) in self.client_connections.iter_mut() {
@@ -202,9 +202,9 @@ impl<U: ProtocolType> Server<U> {
                         }
                     }
                 }
-                //receive events from anyone
-                if let Some(event) = connection.get_incoming_event() {
-                    return Ok(Event::Event(*user_key, event));
+                //receive messages from anyone
+                if let Some(message) = connection.get_incoming_message() {
+                    return Ok(Event::Message(*user_key, message));
                 }
             }
 
@@ -472,15 +472,15 @@ impl<U: ProtocolType> Server<U> {
 
 
 
-    /// Queues up an Event to be sent to the Client associated with a given
+    /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn queue_event(&mut self, user_key: &UserKey, event: &impl Replicate<U>, guaranteed_delivery: bool) {
+    pub fn queue_message(&mut self, user_key: &UserKey, message: &impl Replicate<U>, guaranteed_delivery: bool) {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
-            connection.queue_event(event, guaranteed_delivery);
+            connection.queue_message(message, guaranteed_delivery);
         }
     }
 
-    /// Sends all Replicate/Event messages to all Clients. If you don't call this
+    /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
     pub async fn send_all_updates(&mut self) {
@@ -852,7 +852,7 @@ impl<U: ProtocolType> Server<U> {
     /// Registers a closure which will be called during the handshake process
     /// with a new Client
     ///
-    /// The Event evaluated in this closure should match the Event used
+    /// The Message evaluated in this closure should match the Message used
     /// client-side in the NaiaClient::new() method
     pub fn on_auth(&mut self, auth_func: Rc<Box<dyn Fn(&UserKey, &U) -> bool>>) {
         self.auth_func = Some(auth_func);

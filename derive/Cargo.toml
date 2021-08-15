@@ -2,7 +2,7 @@
 name = "naia-derive"
 version = "0.3.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-description = "Procedural macros to simplify implementation of Naia Event & Replicate traits"
+description = "Procedural macros to simplify implementation of Naia Replicate & ProtocolType traits"
 documentation = "https://docs.rs/naia-derive"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"

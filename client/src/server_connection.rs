@@ -7,7 +7,7 @@ use naia_shared::{Replicate, ProtocolType, Connection, ConnectionConfig, LocalOb
 use crate::Packet;
 
 use super::{
-    replicate_manager::ReplicateManager, replicate_message::ReplicateMessage,
+    replicate_manager::ReplicateManager, replicate_action::ReplicateAction,
     packet_writer::PacketWriter,
     ping_manager::PingManager, tick_queue::TickQueue,
     tick_manager::TickManager,
@@ -48,7 +48,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         host_tick: u16,
         manifest: &Manifest<T>,
     ) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_events() || self.command_sender.has_command() {
+        if self.connection.has_outgoing_messages() || self.command_sender.has_command() {
             let mut writer = PacketWriter::new();
 
             // Commands
@@ -70,10 +70,10 @@ impl<T: ProtocolType> ServerConnection<T> {
 
             // Events
             let next_packet_index: u16 = self.get_next_packet_index();
-            while let Some(popped_event) = self.connection.pop_outgoing_event(next_packet_index) {
+            while let Some(popped_event) = self.connection.pop_outgoing_message(next_packet_index) {
                 if !writer.write_event(manifest, &popped_event) {
                     self.connection
-                        .unpop_outgoing_event(next_packet_index, &popped_event);
+                        .unpop_outgoing_message(next_packet_index, &popped_event);
                     break;
                 }
             }
@@ -108,8 +108,8 @@ impl<T: ProtocolType> ServerConnection<T> {
         while reader.has_more() {
             let manager_type: ManagerType = reader.read_u8().into();
             match manager_type {
-                ManagerType::Event => {
-                    self.connection.process_event_data(&mut reader, manifest);
+                ManagerType::Message => {
+                    self.connection.process_message_data(&mut reader, manifest);
                 }
                 ManagerType::Replicate => {
                     self.replicate_manager.process_data(
@@ -145,7 +145,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     }
 
     // Pass-through methods to underlying replicate manager
-    pub fn get_incoming_replicate_message(&mut self) -> Option<ReplicateMessage<T>> {
+    pub fn get_incoming_replicate_action(&mut self) -> Option<ReplicateAction<T>> {
         return self.replicate_manager.pop_incoming_message();
     }
 
@@ -250,12 +250,12 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_event(&mut self, event: &impl Replicate<T>, guaranteed_delivery: bool) {
-        return self.connection.queue_event(event, guaranteed_delivery);
+    pub fn queue_message(&mut self, event: &impl Replicate<T>, guaranteed_delivery: bool) {
+        return self.connection.queue_message(event, guaranteed_delivery);
     }
 
     pub fn get_incoming_event(&mut self) -> Option<T> {
-        return self.connection.get_incoming_event();
+        return self.connection.get_incoming_message();
     }
 
     pub fn get_last_received_tick(&self) -> u16 {

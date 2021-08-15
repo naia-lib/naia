@@ -6,8 +6,8 @@ use crate::{
 };
 
 /// Contains the shared protocol between Client & Server, with a data that is
-/// able to map Event/Replicate TypeIds to their representation within specified
-/// enums. Also is able to create new Event/Replicates using registered Builders,
+/// able to map Replicate TypeIds to their representation within specified
+/// enums. Also is able to create new Replicates using registered Builders,
 /// given a specific TypeId.
 #[derive(Debug)]
 pub struct Manifest<T: ProtocolType> {

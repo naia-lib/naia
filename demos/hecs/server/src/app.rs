@@ -10,7 +10,7 @@ use naia_server::{Server, ServerConfig, Event, UserKey, RoomKey, EntityKey as Na
 use naia_demo_basic_shared::{
     get_shared_config, manifest_load,
     components::{Components, Position, Name, Marker},
-    events::{Events, StringMessage},
+    messages::{Events, StringMessage},
 };
 
 pub struct App {
@@ -212,7 +212,7 @@ impl App {
                                 info!("Naia Server send -> {}: {}", user.address, new_message);
 
                                 let message_event = StringMessage::new(new_message);
-                                self.server.queue_event(&user_key, &message_event);
+                                self.server.queue_message(&user_key, &message_event);
                             }
 
                             // VERY IMPORTANT! Calling this actually sends all Replicate/Event data

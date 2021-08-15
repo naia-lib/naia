@@ -18,7 +18,7 @@ mod replicate;
 mod connection;
 mod connection_config;
 mod ecs;
-mod events;
+mod messages;
 mod host_tick_manager;
 mod host_type;
 mod key_store;
@@ -39,9 +39,9 @@ pub use naia_socket_shared::{
 
 pub use ack_manager::AckManager;
 pub use replicate::{
-    replicate::{Replicate, ReplicateEq, EventClone},
+    replicate::{Replicate, ReplicateEq, MessageClone},
     replicate_builder::ReplicateBuilder,
-    replicate_message_type::ReplicateMessageType,
+    replicate_action_type::ReplicateActionType,
     shared_replicate_mutator::SharedReplicateMutator,
     replicate_notifiable::ReplicateNotifiable,
     protocol_type::ProtocolType,
@@ -50,9 +50,9 @@ pub use replicate::{
 };
 pub use connection::Connection;
 pub use connection_config::ConnectionConfig;
-pub use events::{
-    event_manager::EventManager,
-    event_packet_writer::{EventPacketWriter, MTU_SIZE},
+pub use messages::{
+    message_manager::MessageManager,
+    message_packet_writer::{MessagePacketWriter, MTU_SIZE},
 };
 pub use ecs::{
     keys::{EntityKey, LocalObjectKey, LocalEntityKey, LocalComponentKey, PawnKey, NaiaKey}

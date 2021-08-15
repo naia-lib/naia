@@ -10,8 +10,8 @@ pub enum Event<T: ProtocolType> {
     /// Occurs when the Client has lost connection with the Server, usually as a
     /// result of a timeout
     Disconnection,
-    /// An Event emitted to the Client from the Server
-    Event(T),
+    /// An Message emitted to the Client from the Server
+    Message(T),
     /// A Tick Event, the duration between Tick events is defined in the Config
     /// replicate passed to the Client on initialization
     Tick,
