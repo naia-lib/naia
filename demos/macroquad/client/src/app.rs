@@ -138,7 +138,7 @@ impl App {
         let square_size = 32.0;
 
         if self.client.has_connection() {
-            // draw replicates
+            // draw squares
             for (_, square_ref) in &self.square_map {
                 let square = square_ref.borrow();
                 let color = match square.color.get() {
@@ -155,7 +155,7 @@ impl App {
                 );
             }
 
-            // draw pawns
+            // draw pawn
             if let Some((_, pawn_ref)) = &self.pawn {
                 let square = pawn_ref.borrow();
                 draw_rectangle(

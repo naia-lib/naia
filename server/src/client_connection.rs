@@ -116,12 +116,12 @@ impl<U: ProtocolType> ClientConnection<U> {
         return self.replicate_manager.has_object(key);
     }
 
-    pub fn add_object(&mut self, key: &ObjectKey, replicate: &Ref<dyn Replicate<U>>) {
-        self.replicate_manager.add_replicate(key, replicate);
+    pub fn add_object(&mut self, key: &ObjectKey, object: &Ref<dyn Replicate<U>>) {
+        self.replicate_manager.add_object(key, object);
     }
 
     pub fn remove_object(&mut self, key: &ObjectKey) {
-        self.replicate_manager.remove_replicate(key);
+        self.replicate_manager.remove_object(key);
     }
 
     pub fn collect_replicate_updates(&mut self) {
@@ -198,10 +198,6 @@ impl<U: ProtocolType> ClientConnection<U> {
     pub fn add_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey, component_ref: &Ref<dyn Replicate<U>>) {
         self.replicate_manager.add_component(entity_key, component_key, component_ref);
     }
-
-//    pub fn remove_component(&mut self, entity_key: &EntityKey, component_key: &ComponentKey) {
-//        self.replicate_manager.remove_component(entity_key, component_key);
-//    }
 
     // Pass-through methods to underlying common connection
 
