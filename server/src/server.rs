@@ -16,8 +16,8 @@ use naia_server_socket::{
 };
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, EntityKey, HostTickManager, Instant, KeyGenerator,
-    LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
-    ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
+    LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, ProtocolType,
+    Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
 };
 
 use super::{
@@ -25,11 +25,9 @@ use super::{
     error::NaiaServerError,
     event::Event,
     interval::Interval,
-    replicate::{
-        keys::{replica_key::ReplicaKey, ObjectKey},
-        mut_handler::MutHandler,
-        property_mutator::PropertyMutator,
-    },
+    keys::{replica_key::ReplicaKey, ObjectKey},
+    mut_handler::MutHandler,
+    property_mutator::PropertyMutator,
     room::{room_key::RoomKey, Room},
     server_config::ServerConfig,
     tick_manager::TickManager,

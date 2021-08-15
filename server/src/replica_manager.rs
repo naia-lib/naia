@@ -252,12 +252,11 @@ impl<T: ProtocolType> ReplicaManager<T> {
     pub fn add_object(&mut self, key: &ObjectKey, object: &Ref<dyn Replicate<T>>) {
         let local_key = self.replica_init(key, object, LocalityStatus::Creating);
 
-        self.queued_messages
-            .push_back(ReplicaAction::CreateObject(
-                *key,
-                local_key,
-                object.clone(),
-            ));
+        self.queued_messages.push_back(ReplicaAction::CreateObject(
+            *key,
+            local_key,
+            object.clone(),
+        ));
     }
 
     pub fn remove_object(&mut self, key: &ObjectKey) {
@@ -280,7 +279,9 @@ impl<T: ProtocolType> ReplicaManager<T> {
                 }
             }
         } else {
-            panic!("attempting to remove a replica from a connection within which it does not exist");
+            panic!(
+                "attempting to remove a replica from a connection within which it does not exist"
+            );
         }
     }
 
@@ -295,10 +296,8 @@ impl<T: ProtocolType> ReplicaManager<T> {
             if !self.pawn_object_store.contains(key) {
                 self.pawn_object_store.insert(*key);
                 if let Some(replica_record) = self.replica_records.get_mut(*key) {
-                    self.queued_messages.push_back(ReplicaAction::AssignPawn(
-                        *key,
-                        replica_record.local_key,
-                    ));
+                    self.queued_messages
+                        .push_back(ReplicaAction::AssignPawn(*key, replica_record.local_key));
                 }
             }
         } else {
@@ -310,10 +309,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
         if self.pawn_object_store.remove(key) {
             if let Some(replica_record) = self.replica_records.get_mut(*key) {
                 self.queued_messages
-                    .push_back(ReplicaAction::UnassignPawn(
-                        *key,
-                        replica_record.local_key,
-                    ));
+                    .push_back(ReplicaAction::UnassignPawn(*key, replica_record.local_key));
             }
         } else {
             panic!("attempt to unassign a pawn object from a connection to which it is not assigned as a pawn in the first place")
@@ -344,8 +340,11 @@ impl<T: ProtocolType> ReplicaManager<T> {
                 .insert(local_key, *global_key);
             let entity_record = EntityRecord::new(local_key, components_ref);
             self.local_entity_store.insert(*global_key, entity_record);
-            self.queued_messages
-                .push_back(ReplicaAction::CreateEntity(*global_key, local_key, None));
+            self.queued_messages.push_back(ReplicaAction::CreateEntity(
+                *global_key,
+                local_key,
+                None,
+            ));
         } else {
             panic!("added entity twice");
         }
@@ -373,9 +372,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
                     for component_key in component_set {
                         self.pawn_object_store.remove(component_key);
 
-                        if let Some(replica_record) =
-                            self.replica_records.get_mut(*component_key)
-                        {
+                        if let Some(replica_record) = self.replica_records.get_mut(*component_key) {
                             replica_record.status = LocalityStatus::Deleting;
                         }
                     }
@@ -456,13 +453,12 @@ impl<T: ProtocolType> ReplicaManager<T> {
             }
             LocalityStatus::Created => {
                 // send add component message
-                self.queued_messages
-                    .push_back(ReplicaAction::AddComponent(
-                        entity_record.local_key,
-                        *component_key,
-                        local_component_key,
-                        component_ref.clone(),
-                    ));
+                self.queued_messages.push_back(ReplicaAction::AddComponent(
+                    entity_record.local_key,
+                    *component_key,
+                    local_component_key,
+                    component_ref.clone(),
+                ));
             }
             LocalityStatus::Deleting => {
                 // deletion in progress, do nothing
@@ -499,13 +495,12 @@ impl<T: ProtocolType> ReplicaManager<T> {
                         ));
                     } else {
                         // handle as a replica (object or component)
-                        self.queued_messages
-                            .push_back(ReplicaAction::UpdateReplica(
-                                key,
-                                record.local_key,
-                                record.get_diff_mask().clone(),
-                                replica_ref.clone(),
-                            ));
+                        self.queued_messages.push_back(ReplicaAction::UpdateReplica(
+                            key,
+                            record.local_key,
+                            record.get_diff_mask().clone(),
+                            replica_ref.clone(),
+                        ));
                     }
                 }
             }
@@ -534,13 +529,12 @@ impl<T: ProtocolType> ReplicaManager<T> {
                 //Write replica "header"
                 let type_id = replica.borrow().get_type_id();
                 let naia_id = manifest.get_naia_id(&type_id); // get naia id
-                replica_total_bytes
-                    .write_u16::<BigEndian>(naia_id)
-                    .unwrap(); // write naia id
+                replica_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                 replica_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
-                replica_total_bytes.append(&mut replica_payload_bytes); // write payload
+                replica_total_bytes.append(&mut replica_payload_bytes); // write
+                                                                        // payload
             }
             ReplicaAction::DeleteReplica(_, local_key) => {
                 replica_total_bytes
@@ -559,7 +553,8 @@ impl<T: ProtocolType> ReplicaManager<T> {
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
                 diff_mask.borrow_mut().write(&mut replica_total_bytes); // write diff mask
-                replica_total_bytes.append(&mut replica_payload_bytes); // write payload
+                replica_total_bytes.append(&mut replica_payload_bytes); // write
+                                                                        // payload
             }
             ReplicaAction::AssignPawn(_, local_key) => {
                 replica_total_bytes
@@ -580,7 +575,8 @@ impl<T: ProtocolType> ReplicaManager<T> {
                 replica_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
-                replica_total_bytes.append(&mut replica_payload_bytes); // write payload
+                replica_total_bytes.append(&mut replica_payload_bytes); // write
+                                                                        // payload
             }
             ReplicaAction::CreateEntity(_, local_entity_key, component_list_opt) => {
                 replica_total_bytes
@@ -593,9 +589,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
                     if components_num > 255 {
                         panic!("no entity should have so many components... fix this");
                     }
-                    replica_total_bytes
-                        .write_u8(components_num as u8)
-                        .unwrap(); //write number of components
+                    replica_total_bytes.write_u8(components_num as u8).unwrap(); //write number of components
 
                     for (_, local_component_key, component_ref) in component_list {
                         //write component payload
@@ -605,9 +599,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
                         //Write component "header"
                         let type_id = component_ref.borrow().get_type_id();
                         let naia_id = manifest.get_naia_id(&type_id); // get naia id
-                        replica_total_bytes
-                            .write_u16::<BigEndian>(naia_id)
-                            .unwrap(); // write naia id
+                        replica_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                         replica_total_bytes
                             .write_u16::<BigEndian>(local_component_key.to_u16())
                             .unwrap(); //write local key
@@ -644,9 +636,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
                     .unwrap(); //write local entity key
                 let type_id = component.borrow().get_type_id();
                 let naia_id = manifest.get_naia_id(&type_id); // get naia id
-                replica_total_bytes
-                    .write_u16::<BigEndian>(naia_id)
-                    .unwrap(); // write naia id
+                replica_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                 replica_total_bytes
                     .write_u16::<BigEndian>(local_component_key.to_u16())
                     .unwrap(); //write local component key
@@ -663,8 +653,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
             if packet_writer.replica_action_count == 255 {
                 return false;
             }
-            packet_writer.replica_action_count =
-                packet_writer.replica_action_count.wrapping_add(1);
+            packet_writer.replica_action_count = packet_writer.replica_action_count.wrapping_add(1);
             packet_writer
                 .replica_working_bytes
                 .append(&mut replica_total_bytes);
@@ -685,8 +674,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
         if !self.local_replica_store.contains_key(*key) {
             self.local_replica_store.insert(*key, replica.clone());
             let local_key: LocalReplicaKey = self.replica_key_generator.generate();
-            self.local_to_global_replica_key_map
-                .insert(local_key, *key);
+            self.local_to_global_replica_key_map.insert(local_key, *key);
             let diff_mask_size = replica.borrow().get_diff_mask_size();
             let replica_record = ReplicaRecord::new(local_key, diff_mask_size, status);
             self.mut_handler.borrow_mut().register_mask(
@@ -716,9 +704,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
             self.pawn_object_store.remove(&global_object_key);
         } else {
             // likely due to duplicate delivered deletion messages
-            warn!(
-                "attempting to clean up replica from connection inside which it is not present"
-            );
+            warn!("attempting to clean up replica from connection inside which it is not present");
         }
     }
 
@@ -827,11 +813,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
         locked_diff_mask
     }
 
-    fn undo_replica_update(
-        &mut self,
-        packet_index: &u16,
-        global_key: &ObjectKey,
-    ) -> Ref<DiffMask> {
+    fn undo_replica_update(&mut self, packet_index: &u16, global_key: &ObjectKey) -> Ref<DiffMask> {
         if let Some(sent_updates_map) = self.sent_updates.get_mut(packet_index) {
             sent_updates_map.remove(global_key);
             if sent_updates_map.len() == 0 {
@@ -869,11 +851,7 @@ impl<T: ProtocolType> PacketNotifiable for ReplicaManager<T> {
 
                         // do we need to delete this now?
                         if self.delayed_replica_deletions.remove(&global_key) {
-                            replica_delete(
-                                &mut self.queued_messages,
-                                replica_record,
-                                &global_key,
-                            );
+                            replica_delete(&mut self.queued_messages, replica_record, &global_key);
                         } else {
                             // we do not need to delete just yet
                             replica_record.status = LocalityStatus::Created;
@@ -931,13 +909,12 @@ impl<T: ProtocolType> PacketNotifiable for ReplicaManager<T> {
                                         .local_replica_store
                                         .get(*component_key)
                                         .expect("component not created correctly?");
-                                    self.queued_messages
-                                        .push_back(ReplicaAction::AddComponent(
-                                            entity_record.local_key,
-                                            *component_key,
-                                            component_record.local_key,
-                                            component_ref.clone(),
-                                        ));
+                                    self.queued_messages.push_back(ReplicaAction::AddComponent(
+                                        entity_record.local_key,
+                                        *component_key,
+                                        component_record.local_key,
+                                        component_ref.clone(),
+                                    ));
                                 }
                             }
                         }
@@ -968,10 +945,7 @@ impl<T: ProtocolType> PacketNotifiable for ReplicaManager<T> {
                                 "added component does not have a record .. initiation problem?",
                             );
                         // do we need to delete this now?
-                        if self
-                            .delayed_replica_deletions
-                            .remove(&global_component_key)
-                        {
+                        if self.delayed_replica_deletions.remove(&global_component_key) {
                             replica_delete(
                                 &mut self.queued_messages,
                                 component_record,
@@ -1053,10 +1027,7 @@ fn replica_delete<T: ProtocolType>(
 ) {
     record.status = LocalityStatus::Deleting;
 
-    queued_messages.push_back(ReplicaAction::DeleteReplica(
-        *object_key,
-        record.local_key,
-    ));
+    queued_messages.push_back(ReplicaAction::DeleteReplica(*object_key, record.local_key));
 }
 
 fn entity_delete<T: ProtocolType>(

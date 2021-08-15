@@ -6,10 +6,8 @@ use naia_shared::{
 };
 
 use super::{
-    command_receiver::CommandReceiver,
-    packet_writer::PacketWriter,
-    ping_manager::PingManager,
-    replicate::{keys::ObjectKey, mut_handler::MutHandler, replica_manager::ReplicaManager},
+    command_receiver::CommandReceiver, keys::ObjectKey, mut_handler::MutHandler,
+    packet_writer::PacketWriter, ping_manager::PingManager, replica_manager::ReplicaManager,
 };
 use crate::{ComponentKey, GlobalPawnKey};
 
@@ -39,8 +37,7 @@ impl<U: ProtocolType> ClientConnection<U> {
         host_tick: u16,
         manifest: &Manifest<U>,
     ) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_messages() || self.replica_manager.has_outgoing_actions()
-        {
+        if self.connection.has_outgoing_messages() || self.replica_manager.has_outgoing_actions() {
             let mut writer = PacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
@@ -52,9 +49,8 @@ impl<U: ProtocolType> ClientConnection<U> {
                     break;
                 }
             }
-            while let Some(popped_replica_action) = self
-                .replica_manager
-                .pop_outgoing_action(next_packet_index)
+            while let Some(popped_replica_action) =
+                self.replica_manager.pop_outgoing_action(next_packet_index)
             {
                 if !self.replica_manager.write_replica_action(
                     &mut writer,

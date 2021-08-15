@@ -48,10 +48,7 @@ impl MutHandler {
     }
 
     pub fn register_replica(&mut self, replica_key: &ReplicaKey) {
-        if self
-            .replica_diff_mask_list_map
-            .contains_key(replica_key)
-        {
+        if self.replica_diff_mask_list_map.contains_key(replica_key) {
             panic!("Replica cannot register with server more than once!");
         }
         self.replica_diff_mask_list_map

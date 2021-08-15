@@ -36,8 +36,8 @@ impl PacketWriter {
         //Write manager "header" (manager type & replica count)
         if self.replica_action_count != 0 {
             out_bytes.write_u8(ManagerType::Replica as u8).unwrap(); // write
-                                                                       // manager
-                                                                       // type
+                                                                     // manager
+                                                                     // type
             out_bytes.write_u8(self.replica_action_count).unwrap(); // write number of messages
             out_bytes.append(&mut self.replica_working_bytes); // write replica payload
 

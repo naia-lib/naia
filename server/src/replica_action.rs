@@ -69,9 +69,7 @@ impl<T: ProtocolType> Clone for ReplicaAction<T> {
             ReplicaAction::UpdateReplica(gk, lk, sm, e) => {
                 ReplicaAction::UpdateReplica(gk.clone(), lk.clone(), sm.clone(), e.clone())
             }
-            ReplicaAction::AssignPawn(gk, lk) => {
-                ReplicaAction::AssignPawn(gk.clone(), lk.clone())
-            }
+            ReplicaAction::AssignPawn(gk, lk) => ReplicaAction::AssignPawn(gk.clone(), lk.clone()),
             ReplicaAction::UnassignPawn(gk, lk) => {
                 ReplicaAction::UnassignPawn(gk.clone(), lk.clone())
             }
