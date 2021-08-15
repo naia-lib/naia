@@ -9,7 +9,7 @@ use crate::dual_command_receiver::DualCommandReceiver;
 
 const MAX_PAST_COMMANDS: u8 = 3;
 
-/// Handles writing of Replicate data into an outgoing packet
+/// Handles writing of Message/Command data into an outgoing packet
 pub struct PacketWriter {
     command_working_bytes: Vec<u8>,
     command_count: u8,
@@ -36,7 +36,7 @@ impl PacketWriter {
     pub fn get_bytes(&mut self) -> Box<[u8]> {
         let mut out_bytes = Vec::<u8>::new();
 
-        //Write manager "header" (manager type & replicate count)
+        //Write manager "header" (manager type & command count)
         if self.command_count != 0 {
             out_bytes.write_u8(ManagerType::Command as u8).unwrap(); // write manager type
             out_bytes.write_u8(self.command_count).unwrap(); // write number of commands in the following message

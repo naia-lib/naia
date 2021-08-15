@@ -4,8 +4,8 @@ use crate::{wrapping_number::sequence_greater_than, PacketReader, Ref};
 
 use super::shared_replicate_mutator::SharedReplicateMutator;
 
-/// A Property of an Replicate, that contains data which must be tracked for
-/// updates, and synced to the Client
+/// A Property of an Object/Component/Message, that contains data
+/// which must be tracked for updates
 #[derive(Clone)]
 pub struct Property<T: Clone + DeBin + SerBin + PartialEq> {
     mutator: Option<Ref<dyn SharedReplicateMutator>>,

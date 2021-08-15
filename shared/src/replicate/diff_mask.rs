@@ -3,10 +3,10 @@ use std::fmt;
 
 use crate::PacketReader;
 
-/// The Replicate Mask is a variable-length byte array, where each bit represents
-/// the current replicate of a Property owned by an Replicate. The Property replicate
-/// tracked is whether it has been updated and needs to be synced with the
-/// remote Client
+/// The DiffMask is a variable-length byte array, where each bit represents
+/// the current state of a Property owned by a Replicate.
+/// The Property tracks whether it has been updated and needs to be synced
+/// with the remote Client
 #[derive(Debug, Clone)]
 pub struct DiffMask {
     mask: Vec<u8>,
@@ -72,7 +72,7 @@ impl DiffMask {
 
     /// Performs a NAND operation on the DiffMask, with another DiffMask
     pub fn nand(&mut self, other: &DiffMask) {
-        //if other replicate mask has different capacity, do nothing
+        //if other diff mask has different capacity, do nothing
         if other.byte_number() != self.byte_number() {
             return;
         }
@@ -87,7 +87,7 @@ impl DiffMask {
 
     /// Performs an OR operation on the DiffMask, with another DiffMask
     pub fn or(&mut self, other: &DiffMask) {
-        //if other replicate mask has different capacity, do nothing
+        //if other diff mask has different capacity, do nothing
         if other.byte_number() != self.byte_number() {
             return;
         }
@@ -120,7 +120,7 @@ impl DiffMask {
 
     /// Copies the DiffMask into another DiffMask
     pub fn copy_contents(&mut self, other: &DiffMask) {
-        //if other replicate mask has different capacity, do nothing
+        //if other diff mask has different capacity, do nothing
         if other.byte_number() != self.byte_number() {
             return;
         }
