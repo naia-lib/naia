@@ -7,7 +7,7 @@ pub enum ManagerType {
     /// A MessageManager
     Message = 1,
     /// A ReplicateManager
-    Replicate = 2,
+    Replica = 2,
     /// A CommandManager
     Command = 3,
     /// Unknown Manager
@@ -18,7 +18,7 @@ impl From<u8> for ManagerType {
     fn from(orig: u8) -> Self {
         match orig {
             1 => return ManagerType::Message,
-            2 => return ManagerType::Replicate,
+            2 => return ManagerType::Replica,
             3 => return ManagerType::Command,
             _ => return ManagerType::Unknown,
         };

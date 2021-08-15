@@ -2,79 +2,79 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use naia_shared::{DiffMask, Ref};
 
-use super::keys::replicate_key::ReplicaKey;
+use super::keys::replica_key::ReplicaKey;
 
 use indexmap::IndexMap;
 
 #[derive(Debug)]
 pub struct MutHandler {
-    replicate_diff_mask_list_map: HashMap<ReplicaKey, IndexMap<SocketAddr, Ref<DiffMask>>>,
+    replica_diff_mask_list_map: HashMap<ReplicaKey, IndexMap<SocketAddr, Ref<DiffMask>>>,
 }
 
 impl MutHandler {
     pub fn new() -> Ref<MutHandler> {
         Ref::new(MutHandler {
-            replicate_diff_mask_list_map: HashMap::new(),
+            replica_diff_mask_list_map: HashMap::new(),
         })
     }
 
-    pub fn mutate(&mut self, replicate_key: &ReplicaKey, property_index: u8) {
-        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(replicate_key) {
+    pub fn mutate(&mut self, replica_key: &ReplicaKey, property_index: u8) {
+        if let Some(diff_mask_list) = self.replica_diff_mask_list_map.get_mut(replica_key) {
             for (_, mask_ref) in diff_mask_list.iter_mut() {
                 mask_ref.borrow_mut().set_bit(property_index, true);
             }
         }
     }
 
-    pub fn clear_replicate(&mut self, address: &SocketAddr, replicate_key: &ReplicaKey) {
-        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(replicate_key) {
+    pub fn clear_replica(&mut self, address: &SocketAddr, replica_key: &ReplicaKey) {
+        if let Some(diff_mask_list) = self.replica_diff_mask_list_map.get_mut(replica_key) {
             if let Some(mask_ref) = diff_mask_list.get(address) {
                 mask_ref.borrow_mut().clear();
             }
         }
     }
 
-    pub fn set_replicate(
+    pub fn set_replica(
         &mut self,
         address: &SocketAddr,
-        replicate_key: &ReplicaKey,
-        other_replicate: &DiffMask,
+        replica_key: &ReplicaKey,
+        other_replica: &DiffMask,
     ) {
-        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(replicate_key) {
+        if let Some(diff_mask_list) = self.replica_diff_mask_list_map.get_mut(replica_key) {
             if let Some(mask_ref) = diff_mask_list.get(address) {
-                mask_ref.borrow_mut().copy_contents(other_replicate);
+                mask_ref.borrow_mut().copy_contents(other_replica);
             }
         }
     }
 
-    pub fn register_replica(&mut self, replicate_key: &ReplicaKey) {
+    pub fn register_replica(&mut self, replica_key: &ReplicaKey) {
         if self
-            .replicate_diff_mask_list_map
-            .contains_key(replicate_key)
+            .replica_diff_mask_list_map
+            .contains_key(replica_key)
         {
-            panic!("Replicate cannot register with server more than once!");
+            panic!("Replica cannot register with server more than once!");
         }
-        self.replicate_diff_mask_list_map
-            .insert(*replicate_key, IndexMap::new());
+        self.replica_diff_mask_list_map
+            .insert(*replica_key, IndexMap::new());
     }
 
-    pub fn deregister_replica(&mut self, replicate_key: &ReplicaKey) {
-        self.replicate_diff_mask_list_map.remove(replicate_key);
+    pub fn deregister_replica(&mut self, replica_key: &ReplicaKey) {
+        self.replica_diff_mask_list_map.remove(replica_key);
     }
 
     pub fn register_mask(
         &mut self,
         address: &SocketAddr,
-        replicate_key: &ReplicaKey,
+        replica_key: &ReplicaKey,
         mask: &Ref<DiffMask>,
     ) {
-        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(replicate_key) {
+        if let Some(diff_mask_list) = self.replica_diff_mask_list_map.get_mut(replica_key) {
             diff_mask_list.insert(*address, mask.clone());
         }
     }
 
-    pub fn deregister_mask(&mut self, address: &SocketAddr, replicate_key: &ReplicaKey) {
-        if let Some(diff_mask_list) = self.replicate_diff_mask_list_map.get_mut(replicate_key) {
+    pub fn deregister_mask(&mut self, address: &SocketAddr, replica_key: &ReplicaKey) {
+        if let Some(diff_mask_list) = self.replica_diff_mask_list_map.get_mut(replica_key) {
             diff_mask_list.remove(address);
         }
     }

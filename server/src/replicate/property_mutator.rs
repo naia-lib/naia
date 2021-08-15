@@ -1,6 +1,6 @@
 use naia_shared::{PropertyMutate, Ref};
 
-use super::{keys::replicate_key::ReplicaKey, mut_handler::MutHandler};
+use super::{keys::replica_key::ReplicaKey, mut_handler::MutHandler};
 
 pub struct PropertyMutator {
     key: Option<ReplicaKey>,

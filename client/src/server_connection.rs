@@ -107,7 +107,7 @@ impl<T: ProtocolType> ServerConnection<T> {
                 ManagerType::Message => {
                     self.connection.process_message_data(&mut reader, manifest);
                 }
-                ManagerType::Replicate => {
+                ManagerType::Replica => {
                     self.replicate_manager.process_data(
                         manifest,
                         &mut self.command_receiver,
