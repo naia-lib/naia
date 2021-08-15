@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use naia_shared::{Replicate, ProtocolType, SequenceIterator, PawnKey};
 
-use super::{client_replicate_manager::ClientReplicateManager, command_receiver::CommandReceiver};
+use super::{replicate_manager::ReplicateManager, command_receiver::CommandReceiver};
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
@@ -43,7 +43,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     /// Process any necessary replayed Command
     pub fn process_command_replay<U: ProtocolType>(
         &mut self,
-        replicate_manager: &mut ClientReplicateManager<U>,
+        replicate_manager: &mut ReplicateManager<U>,
     ) {
         self.replicate_manager.process_command_replay::<U>(replicate_manager);
         self.entity_manager.process_command_replay::<U>(replicate_manager);

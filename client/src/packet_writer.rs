@@ -10,17 +10,17 @@ use crate::dual_command_receiver::DualCommandReceiver;
 const MAX_PAST_COMMANDS: u8 = 3;
 
 /// Handles writing of Event & Replicate data into an outgoing packet
-pub struct ClientPacketWriter {
+pub struct PacketWriter {
     command_working_bytes: Vec<u8>,
     command_count: u8,
     event_writer: EventPacketWriter,
 }
 
-impl ClientPacketWriter {
+impl PacketWriter {
     /// Construct a new instance of `PacketReader`, the given `buffer` will be
     /// used to read information from.
-    pub fn new() -> ClientPacketWriter {
-        ClientPacketWriter {
+    pub fn new() -> PacketWriter {
+        PacketWriter {
             command_working_bytes: Vec::<u8>::new(),
             command_count: 0,
             event_writer: EventPacketWriter::new(),

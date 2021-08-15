@@ -4,7 +4,7 @@ use naia_shared::{wrapping_diff, Instant};
 
 /// Manages the current tick for the host
 #[derive(Debug)]
-pub struct ClientTickManager {
+pub struct TickManager {
     tick_interval: Duration,
     tick_interval_f32: f32,
     server_tick: u16,
@@ -16,10 +16,10 @@ pub struct ClientTickManager {
     accumulator: f32,
 }
 
-impl ClientTickManager {
+impl TickManager {
     /// Create a new HostTickManager with a given tick interval duration
     pub fn new(tick_interval: Duration) -> Self {
-        ClientTickManager {
+        TickManager {
             tick_interval,
             tick_interval_f32: tick_interval.as_nanos() as f32 / 1000000000.0,
             server_tick: 1,

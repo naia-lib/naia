@@ -7,10 +7,10 @@ use naia_shared::{Replicate, ProtocolType, Connection, ConnectionConfig, LocalOb
 use crate::Packet;
 
 use super::{
-    client_replicate_manager::ClientReplicateManager, client_replicate_message::ClientReplicateMessage,
-    client_packet_writer::ClientPacketWriter,
+    replicate_manager::ReplicateManager, replicate_message::ReplicateMessage,
+    packet_writer::PacketWriter,
     ping_manager::PingManager, tick_queue::TickQueue,
-    client_tick_manager::ClientTickManager,
+    tick_manager::TickManager,
     dual_command_sender::DualCommandSender,
     dual_command_receiver::DualCommandReceiver
 };
@@ -18,7 +18,7 @@ use super::{
 #[derive(Debug)]
 pub struct ServerConnection<T: ProtocolType> {
     connection: Connection<T>,
-    replicate_manager: ClientReplicateManager<T>,
+    replicate_manager: ReplicateManager<T>,
     ping_manager: PingManager,
     command_sender: DualCommandSender<T>,
     command_receiver: DualCommandReceiver<T>,
@@ -32,7 +32,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     ) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
-            replicate_manager: ClientReplicateManager::new(),
+            replicate_manager: ReplicateManager::new(),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
@@ -49,7 +49,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         manifest: &Manifest<T>,
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_events() || self.command_sender.has_command() {
-            let mut writer = ClientPacketWriter::new();
+            let mut writer = PacketWriter::new();
 
             // Commands
             while let Some((pawn_key, command)) = self.command_sender.pop_command() {
@@ -145,7 +145,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     }
 
     // Pass-through methods to underlying replicate manager
-    pub fn get_incoming_replicate_message(&mut self) -> Option<ClientReplicateMessage<T>> {
+    pub fn get_incoming_replicate_message(&mut self) -> Option<ReplicateMessage<T>> {
         return self.replicate_manager.pop_incoming_message();
     }
 
@@ -186,7 +186,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
-    pub fn frame_begin(&mut self, manifest: &Manifest<T>, tick_manager: &mut ClientTickManager) -> bool {
+    pub fn frame_begin(&mut self, manifest: &Manifest<T>, tick_manager: &mut TickManager) -> bool {
         if tick_manager.mark_frame() {
             // then we apply all received updates to replicates at once
             let target_tick = tick_manager.get_server_tick();
@@ -221,7 +221,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     pub fn process_incoming_header(
         &mut self,
         header: &StandardHeader,
-        tick_manager: &mut ClientTickManager,
+        tick_manager: &mut TickManager,
     ) {
         tick_manager.record_server_tick(
             header.host_tick(),

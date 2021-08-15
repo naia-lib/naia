@@ -6,23 +6,23 @@ use log::warn;
 use naia_shared::{ProtocolType, LocalObjectKey, Manifest, PacketReader, DiffMask,
                   LocalEntityKey, ReplicateMessageType, NaiaKey, LocalComponentKey, PawnKey};
 
-use super::{client_replicate_message::ClientReplicateMessage, dual_command_receiver::DualCommandReceiver};
+use super::{replicate_message::ReplicateMessage, dual_command_receiver::DualCommandReceiver};
 
 #[derive(Debug)]
-pub struct ClientReplicateManager<T: ProtocolType> {
-    local_replicate_store:                  HashMap<LocalObjectKey, T>,
-    queued_incoming_messages:           VecDeque<ClientReplicateMessage<T>>,
+pub struct ReplicateManager<T: ProtocolType> {
+    local_replicate_store:              HashMap<LocalObjectKey, T>,
+    queued_incoming_messages:           VecDeque<ReplicateMessage<T>>,
     pawn_store:                         HashMap<LocalObjectKey, T>,
     local_entity_store:                 HashMap<LocalEntityKey, HashSet<LocalComponentKey>>,
     pawn_entity_store:                  HashSet<LocalEntityKey>,
     component_entity_map:               HashMap<LocalComponentKey, LocalEntityKey>,
 }
 
-impl<T: ProtocolType> ClientReplicateManager<T> {
+impl<T: ProtocolType> ReplicateManager<T> {
     pub fn new() -> Self {
-        ClientReplicateManager {
+        ReplicateManager {
             queued_incoming_messages:           VecDeque::new(),
-            local_replicate_store:                  HashMap::new(),
+            local_replicate_store:              HashMap::new(),
             pawn_store:                         HashMap::new(),
             local_entity_store:                 HashMap::new(),
             pawn_entity_store:                  HashSet::new(),
@@ -54,7 +54,7 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
                         self.local_replicate_store.insert(object_key, new_replicate);
 
                         self.queued_incoming_messages
-                            .push_back(ClientReplicateMessage::CreateReplicate(object_key));
+                            .push_back(ReplicateMessage::CreateReplicate(object_key));
                     } else {
                         // may have received a duplicate message
                         warn!("attempted to insert duplicate local replicate key");
@@ -101,11 +101,11 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
                             }
 
                             self.queued_incoming_messages
-                                .push_back(ClientReplicateMessage::UpdateComponent(*entity_key, object_key));
+                                .push_back(ReplicateMessage::UpdateComponent(*entity_key, object_key));
                         } else {
                             // Replicate is an Replicate
                             self.queued_incoming_messages
-                                .push_back(ClientReplicateMessage::UpdateReplicate(object_key));
+                                .push_back(ReplicateMessage::UpdateReplicate(object_key));
                         }
                     }
                 }
@@ -121,7 +121,7 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
                         command_receiver.pawn_init(&pawn_key);
 
                         self.queued_incoming_messages
-                            .push_back(ClientReplicateMessage::AssignPawn(object_key));
+                            .push_back(ReplicateMessage::AssignPawn(object_key));
                     }
                 }
                 ReplicateMessageType::UnassignPawn => {
@@ -134,7 +134,7 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
                         command_receiver.pawn_cleanup(&pawn_key);
                     }
                     self.queued_incoming_messages
-                        .push_back(ClientReplicateMessage::UnassignPawn(object_key));
+                        .push_back(ReplicateMessage::UnassignPawn(object_key));
                 }
                 ReplicateMessageType::UpdatePawn => {
                     // Pawn Update
@@ -151,7 +151,7 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
                         command_receiver.remove_history_until(packet_tick, &pawn_key);
 
                         self.queued_incoming_messages
-                            .push_back(ClientReplicateMessage::UpdateReplicate(object_key));
+                            .push_back(ReplicateMessage::UpdateReplicate(object_key));
                     }
                 }
                 ReplicateMessageType::CreateEntity => {
@@ -190,7 +190,7 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
                         self.local_entity_store.insert(entity_key, component_set);
 
                         self.queued_incoming_messages
-                            .push_back(ClientReplicateMessage::CreateEntity(entity_key, component_list));
+                            .push_back(ReplicateMessage::CreateEntity(entity_key, component_list));
                     }
                 }
                 ReplicateMessageType::DeleteEntity => {
@@ -212,7 +212,7 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
                         }
 
                         self.queued_incoming_messages
-                            .push_back(ClientReplicateMessage::DeleteEntity(entity_key));
+                            .push_back(ReplicateMessage::DeleteEntity(entity_key));
                     } else {
                         // its possible we received a very late duplicate message
                         warn!("received message attempting to delete nonexistent entity: {}", entity_key.to_u16());
@@ -229,7 +229,7 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
                         command_receiver.pawn_init(&pawn_key);
 
                         self.queued_incoming_messages
-                            .push_back(ClientReplicateMessage::AssignPawnEntity(entity_key));
+                            .push_back(ReplicateMessage::AssignPawnEntity(entity_key));
                     }
                 }
                 ReplicateMessageType::UnassignPawnEntity => {
@@ -241,7 +241,7 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
                         command_receiver.pawn_cleanup(&pawn_key);
                     }
                     self.queued_incoming_messages
-                        .push_back(ClientReplicateMessage::UnassignPawnEntity(entity_key));
+                        .push_back(ReplicateMessage::UnassignPawnEntity(entity_key));
                 }
                 ReplicateMessageType::AddComponent => {
                     // Add Component to Entity
@@ -269,7 +269,7 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
                             component_set.insert(component_key);
 
                             self.queued_incoming_messages
-                                .push_back(ClientReplicateMessage::AddComponent(entity_key, component_key));
+                                .push_back(ReplicateMessage::AddComponent(entity_key, component_key));
                         }
                     }
                 }
@@ -280,7 +280,7 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
         }
     }
 
-    pub fn pop_incoming_message(&mut self) -> Option<ClientReplicateMessage<T>> {
+    pub fn pop_incoming_message(&mut self) -> Option<ReplicateMessage<T>> {
         return self.queued_incoming_messages.pop_front();
     }
 
@@ -329,12 +329,12 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
             }
         }
         self.queued_incoming_messages
-            .push_back(ClientReplicateMessage::ResetPawn(*key));
+            .push_back(ReplicateMessage::ResetPawn(*key));
     }
 
     pub fn pawn_reset_entity(&mut self, key: &LocalEntityKey) {
         self.queued_incoming_messages
-            .push_back(ClientReplicateMessage::ResetPawnEntity(*key));
+            .push_back(ReplicateMessage::ResetPawnEntity(*key));
     }
 
     // internal
@@ -350,14 +350,14 @@ impl<T: ProtocolType> ClientReplicateManager<T> {
             }
 
             self.queued_incoming_messages
-                .push_back(ClientReplicateMessage::DeleteReplicate(*object_key, replicate));
+                .push_back(ReplicateMessage::DeleteReplicate(*object_key, replicate));
         }
     }
 
     fn component_delete_cleanup(&mut self, entity_key: &LocalEntityKey, component_key: &LocalComponentKey) {
         if let Some(component) = self.local_replicate_store.remove(&component_key) {
             self.queued_incoming_messages
-                .push_back(ClientReplicateMessage::RemoveComponent(*entity_key, *component_key, component));
+                .push_back(ReplicateMessage::RemoveComponent(*entity_key, *component_key, component));
         }
     }
 }

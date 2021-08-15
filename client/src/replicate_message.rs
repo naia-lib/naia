@@ -1,7 +1,7 @@
 use naia_shared::{LocalObjectKey, LocalEntityKey, LocalComponentKey, ProtocolType};
 
 #[derive(Debug, Clone)]
-pub enum ClientReplicateMessage<U: ProtocolType> {
+pub enum ReplicateMessage<U: ProtocolType> {
     CreateReplicate(LocalObjectKey),
     UpdateReplicate(LocalObjectKey),
     DeleteReplicate(LocalObjectKey, U),
