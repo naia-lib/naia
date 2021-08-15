@@ -17,13 +17,14 @@ use naia_server_socket::{
 pub use naia_shared::{
     wrapping_diff, Replicate, SharedReplicateMutator, Connection, ConnectionConfig, ProtocolType,
     HostTickManager, Instant, ManagerType, Manifest, PacketReader, PacketType, Ref, SharedConfig,
-    Timer, Timestamp, LocalObjectKey, StandardHeader, KeyGenerator, EntityKey
+    Timer, Timestamp, LocalReplicateKey, StandardHeader, KeyGenerator, EntityKey
 };
 
 use crate::{ComponentKey, GlobalPawnKey};
 use super::{
     replicate::{
-        object_key::object_key::ObjectKey, mut_handler::MutHandler,
+        keys::{replicate_key::ReplicateKey, ObjectKey},
+        mut_handler::MutHandler,
         replicate_mutator::ReplicateMutator,
     },
     client_connection::ClientConnection,
@@ -38,15 +39,15 @@ use super::{
 
 
 /// A server that uses either UDP or WebRTC communication to send/receive messages
-/// to/from connected clients, and syncs registered replicates to clients to whom
-/// those replicates are in-scope
+/// to/from connected clients, and syncs registered objects/entities to clients to whom
+/// they are in-scope
 pub struct Server<T: ProtocolType> {
     connection_config: ConnectionConfig,
     manifest: Manifest<T>,
     socket: Box<dyn ServerSocketTrait>,
     sender: MessageSender,
-    global_replicate_store: DenseSlotMap<ObjectKey, T>,
-    global_replicate_set: HashSet<ObjectKey>,
+    global_replicate_store: DenseSlotMap<ReplicateKey, T>,
+    global_object_set: HashSet<ObjectKey>,
     auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
     mut_handler: Ref<MutHandler>,
     users: DenseSlotMap<UserKey, User>,
@@ -58,7 +59,7 @@ pub struct Server<T: ProtocolType> {
     connection_hash_key: hmac::Key,
     tick_manager: TickManager,
     tick_timer: Interval,
-    replicate_scope_map: HashMap<(RoomKey, UserKey, ObjectKey), bool>,
+    object_scope_map: HashMap<(RoomKey, UserKey, ObjectKey), bool>,
     entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
     entity_key_generator: KeyGenerator<EntityKey>,
     entity_component_map: HashMap<EntityKey, Ref<HashSet<ComponentKey>>>,
@@ -105,8 +106,8 @@ impl<U: ProtocolType> Server<U> {
         Server {
             manifest,
             global_replicate_store: DenseSlotMap::with_key(),
-            global_replicate_set: HashSet::new(),
-            replicate_scope_map: HashMap::new(),
+            global_object_set: HashSet::new(),
+            object_scope_map: HashMap::new(),
             entity_scope_map: HashMap::new(),
             auth_func: None,
             mut_handler: MutHandler::new(),
@@ -142,7 +143,7 @@ impl<U: ProtocolType> Server<U> {
                             self.outstanding_disconnects.push_back(*user_key);
                         } else {
                             if connection.should_send_heartbeat() {
-                                // Don't try to refreplicate this to self.internal_send, doesn't seem to
+                                // Don't try to refactor this to self.internal_send, doesn't seem to
                                 // work cause of iter_mut()
                                 let payload = connection.process_outgoing_header(
                                     self.tick_manager.get_tick(),
@@ -186,7 +187,7 @@ impl<U: ProtocolType> Server<U> {
                     connection.get_incoming_command(self.tick_manager.get_tick())
                 {
                     match pawn_key {
-                        GlobalPawnKey::Replicate(object_key) => {
+                        GlobalPawnKey::Object(object_key) => {
                             return Ok(Event::Command(
                                 *user_key,
                                 object_key,
@@ -336,8 +337,8 @@ impl<U: ProtocolType> Server<U> {
                                         if let Some(auth_func) = &self.auth_func {
                                             let naia_id = reader.read_u16();
 
-                                            let new_replicate = self.manifest.create_replicate(naia_id, &mut reader);
-                                            if !(auth_func.as_ref().as_ref())(&user_key, &new_replicate) {
+                                            let auth_message = self.manifest.create_replicate(naia_id, &mut reader);
+                                            if !(auth_func.as_ref().as_ref())(&user_key, &auth_message) {
                                                 self.users.remove(user_key);
                                                 continue;
                                             }
@@ -484,8 +485,8 @@ impl<U: ProtocolType> Server<U> {
     /// method, the Server will never communicate with it's connected
     /// Clients
     pub async fn send_all_updates(&mut self) {
-        // update replicate scopes
-        self.update_replicate_scopes();
+        // update object scopes
+        self.update_object_scopes();
 
         // update entity scopes
         self.update_entity_scopes();
@@ -513,57 +514,57 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    /// Register an Replicate with the Server, whereby the Server will sync the
-    /// replicate of the Replicate to all connected Clients for which the Replicate is
+    /// Register an Object with the Server, whereby the Server will sync
+    /// replicates of the Object to all connected Clients for which the Object is
     /// in scope. Gives back an ObjectKey which can be used to get the reference
-    /// to the Replicate from the Server once again
-    pub fn register_replicate(&mut self, replicate: U) -> ObjectKey {
+    /// to the Object from the Server once again
+    pub fn register_object(&mut self, object: U) -> ObjectKey {
         let new_mutator_ref: Ref<ReplicateMutator> =
             Ref::new(ReplicateMutator::new(&self.mut_handler));
-        replicate
+        object
             .inner_ref()
             .borrow_mut()
             .set_mutator(&to_replicate_mutator(&new_mutator_ref));
-        let object_key = self.global_replicate_store.insert(replicate);
-        self.global_replicate_set.insert(object_key);
+        let object_key = self.global_replicate_store.insert(object);
+        self.global_object_set.insert(object_key);
         new_mutator_ref.borrow_mut().set_object_key(object_key);
         self.mut_handler.borrow_mut().register_replicate(&object_key);
         return object_key;
     }
 
-    /// Deregisters an Replicate with the Server, deleting local copies of the
-    /// Replicate on each Client
-    pub fn deregister_replicate(&mut self, key: ObjectKey) -> U {
-        if !self.global_replicate_set.contains(&key) {
+    /// Deregisters an Object with the Server, deleting local replicates of the
+    /// Object on each Client
+    pub fn deregister_object(&mut self, key: ObjectKey) -> U {
+        if !self.global_object_set.contains(&key) {
             panic!("attempted to deregister an Replicate which was never registered");
         }
 
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                Self::user_remove_replicate(user_connection,
-                                        &key);
+                Self::user_remove_object(user_connection,
+                                         &key);
             }
         }
 
         self.mut_handler.borrow_mut().deregister_replicate(&key);
-        self.global_replicate_set.remove(&key);
+        self.global_object_set.remove(&key);
         return self.global_replicate_store.remove(key)
             .expect("replicate not initialized correctly?");
     }
 
-    /// Assigns an Replicate to a specific User, making it a Pawn for that User
+    /// Assigns an Object to a specific User, making it a Pawn for that User
     /// (meaning that the User will be able to issue Commands to that Pawn)
     pub fn assign_pawn(&mut self, user_key: &UserKey, object_key: &ObjectKey) {
 
         if let Some(replicate) = self.global_replicate_store.get(*object_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-                Self::user_add_replicate(user_connection,
-                                     object_key,
-                                     &replicate);
+                Self::user_add_object(user_connection,
+                                      object_key,
+                                      &replicate);
             }
         }
 
-        if self.global_replicate_set.contains(object_key) {
+        if self.global_object_set.contains(object_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                 user_connection.add_pawn(object_key);
             }
@@ -633,7 +634,7 @@ impl<U: ProtocolType> Server<U> {
         }
 
         let component_ref = component.inner_ref().clone();
-        let component_key: ComponentKey = self.register_replicate(component);
+        let component_key: ComponentKey = self.register_object(component);
 
         // add component to connections already tracking entity
         for (user_key, _) in self.users.iter() {
@@ -666,8 +667,8 @@ impl<U: ProtocolType> Server<U> {
             .borrow_mut();
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                Self::user_remove_replicate(user_connection,
-                                        component_key);
+                Self::user_remove_object(user_connection,
+                                         component_key);
             }
         }
 
@@ -681,21 +682,21 @@ impl<U: ProtocolType> Server<U> {
     /// Given an ObjectKey, get a reference to a registered Object being tracked
     /// by the Server
     pub fn get_object(&mut self, key: ObjectKey) -> Option<&U> {
-        if self.global_replicate_set.contains(&key) {
+        if self.global_object_set.contains(&key) {
             return self.global_replicate_store.get(key);
         } else {
             return None;
         }
     }
 
-    /// Iterate through all the Server's Replicates
-    pub fn replicates_iter(&self) -> std::collections::hash_set::Iter<ObjectKey> {
-        return self.global_replicate_set.iter();
+    /// Iterate through all the Server's Objects
+    pub fn objects_iter(&self) -> std::collections::hash_set::Iter<ObjectKey> {
+        return self.global_object_set.iter();
     }
 
-    /// Get the number of Replicates tracked by the Server
-    pub fn get_replicates_count(&self) -> usize {
-        return self.global_replicate_set.len();
+    /// Get the number of Objects tracked by the Server
+    pub fn get_objects_count(&self) -> usize {
+        return self.global_object_set.len();
     }
 
     /// Creates a new Room on the Server, returns a Key which can be used to
@@ -730,21 +731,21 @@ impl<U: ProtocolType> Server<U> {
         return self.rooms.len();
     }
 
-    /// Add an Replicate to a Room, given the appropriate RoomKey & ObjectKey
-    /// Replicates will only ever be in-scope for Users which are in a Room with
+    /// Add an Object to a Room, given the appropriate RoomKey & ObjectKey
+    /// Objects will only ever be in-scope for Users which are in a Room with
     /// them
-    pub fn room_add_replicate(&mut self, room_key: &RoomKey, object_key: &ObjectKey) {
-        if self.global_replicate_set.contains(object_key) {
+    pub fn room_add_object(&mut self, room_key: &RoomKey, object_key: &ObjectKey) {
+        if self.global_object_set.contains(object_key) {
             if let Some(room) = self.rooms.get_mut(*room_key) {
-                room.add_replicate(object_key);
+                room.add_object(object_key);
             }
         }
     }
 
-    /// Remove an Replicate from a Room, given the appropriate RoomKey & ObjectKey
-    pub fn room_remove_replicate(&mut self, room_key: &RoomKey, object_key: &ObjectKey) {
+    /// Remove an Object from a Room, given the appropriate RoomKey & ObjectKey
+    pub fn room_remove_object(&mut self, room_key: &RoomKey, object_key: &ObjectKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
-            room.remove_replicate(object_key);
+            room.remove_object(object_key);
         }
     }
 
@@ -780,26 +781,26 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    /// Used to evaluate whether, given a User & Replicate that are in the
-    /// same Room, said Replicate should be in scope for the given User.
+    /// Used to evaluate whether, given a User & Object that are in the
+    /// same Room, said Object should be in scope for the given User.
     ///
-    /// While Rooms allow for a very simple scope to which an Replicate can belong,
+    /// While Rooms allow for a very simple scope to which an Object can belong,
     /// this provides complete customization for advanced scopes.
-    pub fn replicate_set_scope(
+    pub fn object_set_scope(
         &mut self,
         room_key: &RoomKey,
         user_key: &UserKey,
         object_key: &ObjectKey,
         in_scope: bool,
     ) {
-        if !self.global_replicate_set.contains(object_key) {
+        if !self.global_object_set.contains(object_key) {
             return;
         }
         let key = (*room_key, *user_key, *object_key);
-        self.replicate_scope_map.insert(key, in_scope);
+        self.object_scope_map.insert(key, in_scope);
     }
 
-    /// Similar to `replicate_set_scope()` but for entities only
+    /// Similar to `object_set_scope()` but for entities only
     pub fn entity_set_scope(
         &mut self,
         room_key: &RoomKey,
@@ -811,17 +812,17 @@ impl<U: ProtocolType> Server<U> {
         self.entity_scope_map.insert(key, in_scope);
     }
 
-    /// Return a collection of Replicate Scope Sets, being a unique combination of
-    /// a related Room, User, and Replicate, used to determine which replicates to
+    /// Return a collection of Object Scope Sets, being a unique combination of
+    /// a related Room, User, and Object, used to determine which objects to
     /// replicate to which users
-    pub fn replicate_scope_sets(&self) -> Vec<(RoomKey, UserKey, ObjectKey)> {
+    pub fn object_scope_sets(&self) -> Vec<(RoomKey, UserKey, ObjectKey)> {
         let mut list: Vec<(RoomKey, UserKey, ObjectKey)> = Vec::new();
 
         // TODO: precache this, instead of generating a new list every call
         // likely this is called A LOT
         for (room_key, room) in self.rooms.iter() {
             for user_key in room.users_iter() {
-                for object_key in room.replicates_iter() {
+                for object_key in room.objects_iter() {
                     list.push((room_key, *user_key, *object_key));
                 }
             }
@@ -896,17 +897,17 @@ impl<U: ProtocolType> Server<U> {
 
     // Private methods
 
-    fn update_replicate_scopes(&mut self) {
+    fn update_object_scopes(&mut self) {
         for (room_key, room) in self.rooms.iter_mut() {
-            while let Some((removed_user, removed_replicate)) = room.pop_replicate_removal_queue() {
+            while let Some((removed_user, removed_object)) = room.pop_object_removal_queue() {
                 if let Some(user_connection) = self.client_connections.get_mut(&removed_user) {
-                    Self::user_remove_replicate(user_connection,
-                                            &removed_replicate);
+                    Self::user_remove_object(user_connection,
+                                             &removed_object);
                 }
             }
 
             for user_key in room.users_iter() {
-                for object_key in room.replicates_iter() {
+                for object_key in room.objects_iter() {
                     if let Some(user_connection) = self.client_connections.get_mut(user_key)
                     {
                         let currently_in_scope = user_connection.has_object(object_key);
@@ -916,7 +917,7 @@ impl<U: ProtocolType> Server<U> {
                             should_be_in_scope = true;
                         } else {
                             let key = (room_key, *user_key, *object_key);
-                            if let Some(in_scope) = self.replicate_scope_map.get(&key) {
+                            if let Some(in_scope) = self.object_scope_map.get(&key) {
                                 should_be_in_scope = *in_scope;
                             } else {
                                 should_be_in_scope = false;
@@ -925,19 +926,19 @@ impl<U: ProtocolType> Server<U> {
 
                         if should_be_in_scope {
                             if !currently_in_scope {
-                                // add replicate to the connections local scope
-                                if let Some(replicate) = self.global_replicate_store.get(*object_key)
+                                // add object to the connections local scope
+                                if let Some(object) = self.global_replicate_store.get(*object_key)
                                 {
-                                    Self::user_add_replicate(user_connection,
-                                                         object_key,
-                                                         &replicate);
+                                    Self::user_add_object(user_connection,
+                                                          object_key,
+                                                          &object);
                                 }
                             }
                         } else {
                             if currently_in_scope {
-                                // remove replicate from the connections local scope
-                                Self::user_remove_replicate(user_connection,
-                                                        object_key);
+                                // remove object from the connections local scope
+                                Self::user_remove_object(user_connection,
+                                                         object_key);
                             }
                         }
                     }
@@ -996,20 +997,20 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    fn user_add_replicate(user_connection: &mut ClientConnection<U>,
-                      object_key: &ObjectKey,
-                      replicate_ref: &U) {
-        //add replicate to user connection
-        user_connection.add_replicate(object_key, &replicate_ref.inner_ref());
+    fn user_add_object(user_connection: &mut ClientConnection<U>,
+                       object_key: &ObjectKey,
+                       object_ref: &U) {
+        //add object to user connection
+        user_connection.add_object(object_key, &object_ref.inner_ref());
     }
 
-    fn user_remove_replicate(user_connection: &mut ClientConnection<U>,
-                         object_key: &ObjectKey) {
-        //remove replicate from user connection
-        user_connection.remove_replicate(object_key);
+    fn user_remove_object(user_connection: &mut ClientConnection<U>,
+                          object_key: &ObjectKey) {
+        //remove object from user connection
+        user_connection.remove_object(object_key);
     }
 
-    fn user_add_entity(replicate_store: &DenseSlotMap<ObjectKey, U>,
+    fn user_add_entity(object_store: &DenseSlotMap<ObjectKey, U>,
                        user_connection: &mut ClientConnection<U>,
                        entity_key: &EntityKey,
                        component_set_ref: &Ref<HashSet<ComponentKey>>) {
@@ -1018,7 +1019,7 @@ impl<U: ProtocolType> Server<U> {
         let mut component_list: Vec<(ComponentKey, Ref<dyn Replicate<U>>)> = Vec::new();
         let component_set: &HashSet<ComponentKey> = &component_set_ref.borrow();
         for component_key in component_set {
-            if let Some(component_ref) = replicate_store.get(*component_key) {
+            if let Some(component_ref) = object_store.get(*component_key) {
                 component_list.push((*component_key, component_ref.inner_ref().clone()));
             }
         }

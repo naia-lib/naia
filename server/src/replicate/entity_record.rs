@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use naia_shared::{LocalEntityKey, Ref};
 
-use super::{locality_status::LocalityStatus, object_key::ComponentKey};
+use super::{locality_status::LocalityStatus, keys::ComponentKey};
 
 #[derive(Debug)]
 pub struct EntityRecord {

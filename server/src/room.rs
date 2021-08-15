@@ -1,6 +1,6 @@
 use std::collections::{hash_set::Iter, HashSet, VecDeque};
 
-use super::{replicate::object_key::object_key::ObjectKey, user::user_key::UserKey};
+use super::{replicate::keys::ObjectKey, user::user_key::UserKey};
 use naia_shared::EntityKey;
 
 #[allow(missing_docs)]
@@ -12,8 +12,8 @@ pub mod room_key {
 
 pub struct Room {
     users: HashSet<UserKey>,
-    replicates: HashSet<ObjectKey>,
-    replicate_removal_queue: VecDeque<(UserKey, ObjectKey)>,
+    objects: HashSet<ObjectKey>,
+    object_removal_queue: VecDeque<(UserKey, ObjectKey)>,
     entities: HashSet<EntityKey>,
     entity_removal_queue: VecDeque<(UserKey, EntityKey)>,
 }
@@ -22,26 +22,26 @@ impl Room {
     pub fn new() -> Room {
         Room {
             users: HashSet::new(),
-            replicates: HashSet::new(),
-            replicate_removal_queue: VecDeque::new(),
+            objects: HashSet::new(),
+            object_removal_queue: VecDeque::new(),
             entities: HashSet::new(),
             entity_removal_queue: VecDeque::new(),
         }
     }
 
-    pub fn add_replicate(&mut self, object_key: &ObjectKey) {
-        self.replicates.insert(*object_key);
+    pub fn add_object(&mut self, object_key: &ObjectKey) {
+        self.objects.insert(*object_key);
     }
 
-    pub fn remove_replicate(&mut self, object_key: &ObjectKey) {
-        self.replicates.remove(object_key);
+    pub fn remove_object(&mut self, object_key: &ObjectKey) {
+        self.objects.remove(object_key);
         for user_key in self.users.iter() {
-            self.replicate_removal_queue.push_back((*user_key, *object_key));
+            self.object_removal_queue.push_back((*user_key, *object_key));
         }
     }
 
-    pub fn replicates_iter(&self) -> Iter<ObjectKey> {
-        return self.replicates.iter();
+    pub fn objects_iter(&self) -> Iter<ObjectKey> {
+        return self.objects.iter();
     }
 
     pub fn subscribe_user(&mut self, user_key: &UserKey) {
@@ -50,8 +50,8 @@ impl Room {
 
     pub fn unsubscribe_user(&mut self, user_key: &UserKey) {
         self.users.remove(user_key);
-        for object_key in self.replicates.iter() {
-            self.replicate_removal_queue.push_back((*user_key, *object_key));
+        for object_key in self.objects.iter() {
+            self.object_removal_queue.push_back((*user_key, *object_key));
         }
     }
 
@@ -59,8 +59,8 @@ impl Room {
         return self.users.iter();
     }
 
-    pub fn pop_replicate_removal_queue(&mut self) -> Option<(UserKey, ObjectKey)> {
-        return self.replicate_removal_queue.pop_front();
+    pub fn pop_object_removal_queue(&mut self) -> Option<(UserKey, ObjectKey)> {
+        return self.object_removal_queue.pop_front();
     }
 
     pub fn add_entity(&mut self, object_key: &EntityKey) {

@@ -6,7 +6,7 @@ use std::{
 use naia_server::{ObjectKey, Server, Random, ServerConfig, Event, UserKey, RoomKey};
 
 use naia_demo_macroquad_shared::{
-    get_shared_config, behavior as shared_behavior, protocol::{Protocol, Point, Color},
+    get_shared_config, behavior as shared_behavior, protocol::{Protocol, Square, Color},
 };
 
 pub struct App {
@@ -56,16 +56,16 @@ impl App {
                             let x = Random::gen_range_u32(0, 50) * 16;
                             let y = Random::gen_range_u32(0, 37) * 16;
 
-                            let replicate_color = match self.server.get_users_count() % 3 {
+                            let square_color = match self.server.get_users_count() % 3 {
                                 0 => Color::Yellow,
                                 1 => Color::Red,
                                 _ => Color::Blue,
                             };
 
-                            let new_replicate =
-                                Point::new(x as u16, y as u16, replicate_color).wrap();
+                            let new_square =
+                                Square::new(x as u16, y as u16, square_color).wrap();
                             let new_object_key = self.server
-                                .register_replicate(Protocol::Point(new_replicate.clone()));
+                                .register_replicate(Protocol::Square(new_square.clone()));
                             self.server.room_add_replicate(&self.main_room_key, &new_object_key);
                             self.server.assign_pawn(&user_key, &new_object_key);
                             self.user_to_pawn_map.insert(user_key, new_object_key);
@@ -82,10 +82,10 @@ impl App {
                     }
                     Event::Command(_, object_key, command_type) => match command_type {
                         Protocol::KeyCommand(key_command) => {
-                            if let Some(typed_replicate) = self.server.get_object(object_key) {
-                                match typed_replicate {
-                                    Protocol::Point(replicate) => {
-                                        shared_behavior::process_command(&key_command, replicate);
+                            if let Some(typed_object) = self.server.get_object(object_key) {
+                                match typed_object {
+                                    Protocol::Square(square_ref) => {
+                                        shared_behavior::process_command(&key_command, square_ref);
                                     }
                                     _ => {}
                                 }
@@ -99,7 +99,7 @@ impl App {
                                 self.server.replicate_set_scope(&room_key, &user_key, &object_key, true);
                             }
 
-                        // VERY IMPORTANT! Calling this actually sends all Replicate/Event data
+                        // VERY IMPORTANT! Calling this actually sends all update data
                         // packets to all Clients that require it. If you don't call this
                         // method, the Server will never communicate with it's connected Clients
                         self.server.send_all_updates().await;

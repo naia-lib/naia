@@ -1,7 +1,7 @@
 use naia_shared::EntityKey;
 
 use super::{
-    replicate::object_key::object_key::ObjectKey,
+    replicate::keys::ObjectKey,
     user::{user_key::UserKey, User},
 };
 
