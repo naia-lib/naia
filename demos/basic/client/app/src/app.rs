@@ -24,7 +24,7 @@ impl App {
         info!("Naia Client Example Started");
 
         // This will be evaluated in the Server's 'on_auth()' method
-        let auth = Auth::new("charlie", "12345").get_typed_copy();
+        let auth = Auth::new("charlie", "12345").to_protocol();
 
         App {
             client: Client::new(

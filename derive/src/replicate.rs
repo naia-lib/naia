@@ -27,7 +27,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let read_full_method = get_read_full_method(&properties);
     let read_partial_method = get_read_partial_method(&enum_name, &properties);
     let set_mutator_method = get_set_mutator_method(&properties);
-    let get_typed_copy_method = get_get_typed_copy_method(&type_name, replicate_name, &properties);
+    let to_protocol_method = get_to_protocol_method(&type_name, replicate_name, &properties);
     let equals_method = get_equals_method(replicate_name, &properties);
     let mirror_method = get_mirror_method(replicate_name, &properties);
 
@@ -70,7 +70,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #write_partial_method
             #read_full_method
             #read_partial_method
-            #get_typed_copy_method
+            #to_protocol_method
         }
         impl ReplicateEq<#type_name> for #replicate_name {
             #equals_method
@@ -222,7 +222,7 @@ fn get_read_to_type_method(
     };
 }
 
-fn get_get_typed_copy_method(
+fn get_to_protocol_method(
     type_name: &Ident,
     replicate_name: &Ident,
     properties: &Vec<(Ident, Type)>,
@@ -239,7 +239,7 @@ fn get_get_typed_copy_method(
     }
 
     return quote! {
-        fn get_typed_copy(&self) -> #type_name {
+        fn to_protocol(&self) -> #type_name {
             let copied_replicate = #replicate_name::new_complete(#args).wrap();
             return #type_name::#replicate_name(copied_replicate);
         }

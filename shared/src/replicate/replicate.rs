@@ -14,7 +14,7 @@ pub trait Replicate<T: ProtocolType>: MessageClone<T> {
     fn get_diff_mask_size(&self) -> u8;
     /// Gets a copy of the Replicate, wrapped in an ProtocolType enum (which is the
     /// common protocol between the server/host)
-    fn get_typed_copy(&self) -> T;
+    fn to_protocol(&self) -> T;
     /// Gets the TypeId of the Replicate's implementation, used to map to a
     /// registered ProtocolType
     fn get_type_id(&self) -> TypeId;
