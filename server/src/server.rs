@@ -26,7 +26,7 @@ use super::{
     event::Event,
     interval::Interval,
     replicate::{
-        keys::{replicate_key::ReplicaKey, ObjectKey},
+        keys::{replica_key::ReplicaKey, ObjectKey},
         mut_handler::MutHandler,
         property_mutator::PropertyMutator,
     },
@@ -45,7 +45,7 @@ pub struct Server<T: ProtocolType> {
     manifest: Manifest<T>,
     socket: Box<dyn ServerSocketTrait>,
     sender: MessageSender,
-    global_replicate_store: DenseSlotMap<ReplicaKey, T>,
+    global_replica_store: DenseSlotMap<ReplicaKey, T>,
     global_object_set: HashSet<ObjectKey>,
     auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
     mut_handler: Ref<MutHandler>,
@@ -66,7 +66,7 @@ pub struct Server<T: ProtocolType> {
 }
 
 impl<U: ProtocolType> Server<U> {
-    /// Create a new Server, given an address to listen at, a Replicate
+    /// Create a new Server, given an address to listen at, a Replica
     /// manifest, and an optional Config
     pub async fn new(
         manifest: Manifest<U>,
@@ -104,7 +104,7 @@ impl<U: ProtocolType> Server<U> {
 
         Server {
             manifest,
-            global_replicate_store: DenseSlotMap::with_key(),
+            global_replica_store: DenseSlotMap::with_key(),
             global_object_set: HashSet::new(),
             object_scope_map: HashMap::new(),
             entity_scope_map: HashMap::new(),
@@ -491,7 +491,7 @@ impl<U: ProtocolType> Server<U> {
         // loop through all connections, send packet
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
-                connection.collect_replicate_updates();
+                connection.collect_replica_updates();
                 while let Some(payload) =
                     connection.get_outgoing_packet(self.tick_manager.get_tick(), &self.manifest)
                 {
@@ -512,7 +512,7 @@ impl<U: ProtocolType> Server<U> {
     }
 
     /// Register an Object with the Server, whereby the Server will sync
-    /// replicates of the Object to all connected Clients for which the Object
+    /// replicas of the Object to all connected Clients for which the Object
     /// is in scope. Gives back an ObjectKey which can be used to get the
     /// reference to the Object from the Server once again
     pub fn register_object(&mut self, object: U) -> ObjectKey {
@@ -522,14 +522,14 @@ impl<U: ProtocolType> Server<U> {
             .inner_ref()
             .borrow_mut()
             .set_mutator(&to_property_mutator(&new_mutator_ref));
-        let object_key = self.global_replicate_store.insert(object);
+        let object_key = self.global_replica_store.insert(object);
         self.global_object_set.insert(object_key);
         new_mutator_ref.borrow_mut().set_object_key(object_key);
         self.mut_handler.borrow_mut().register_replica(&object_key);
         return object_key;
     }
 
-    /// Deregisters an Object with the Server, deleting local replicates of the
+    /// Deregisters an Object with the Server, deleting local replicas of the
     /// Object on each Client
     pub fn deregister_object(&mut self, key: ObjectKey) -> U {
         if !self.global_object_set.contains(&key) {
@@ -545,15 +545,15 @@ impl<U: ProtocolType> Server<U> {
         self.mut_handler.borrow_mut().deregister_replica(&key);
         self.global_object_set.remove(&key);
         return self
-            .global_replicate_store
+            .global_replica_store
             .remove(key)
-            .expect("replicate not initialized correctly?");
+            .expect("replica not initialized correctly?");
     }
 
     /// Assigns an Object to a specific User, making it a Pawn for that User
     /// (meaning that the User will be able to issue Commands to that Pawn)
     pub fn assign_pawn(&mut self, user_key: &UserKey, object_key: &ObjectKey) {
-        if let Some(object) = self.global_replicate_store.get(*object_key) {
+        if let Some(object) = self.global_replica_store.get(*object_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                 Self::user_add_object(user_connection, object_key, &object);
             }
@@ -575,7 +575,7 @@ impl<U: ProtocolType> Server<U> {
     }
 
     /// Register an Entity with the Server, whereby the Server will sync the
-    /// replicate of all the given Entity's Components to all connected Clients
+    /// replica of all the given Entity's Components to all connected Clients
     /// for which the Entity is in scope. Gives back an EntityKey which can
     /// be used to get the reference to the Entity from the Server once
     /// again
@@ -619,7 +619,7 @@ impl<U: ProtocolType> Server<U> {
     }
 
     /// Register a Component with the Server, whereby the Server will sync the
-    /// replicate of the Component to all connected Clients for which the
+    /// replica of the Component to all connected Clients for which the
     /// Component's Entity is in Scope.
     /// Gives back a ComponentKey which can be used to get the reference to the
     /// Component from the Server once again
@@ -682,7 +682,7 @@ impl<U: ProtocolType> Server<U> {
             .borrow_mut()
             .deregister_replica(component_key);
         return self
-            .global_replicate_store
+            .global_replica_store
             .remove(*component_key)
             .expect("component not initialized correctly?");
     }
@@ -691,7 +691,7 @@ impl<U: ProtocolType> Server<U> {
     /// by the Server
     pub fn get_object(&mut self, key: ObjectKey) -> Option<&U> {
         if self.global_object_set.contains(&key) {
-            return self.global_replicate_store.get(key);
+            return self.global_replica_store.get(key);
         } else {
             return None;
         }
@@ -934,7 +934,7 @@ impl<U: ProtocolType> Server<U> {
                         if should_be_in_scope {
                             if !currently_in_scope {
                                 // add object to the connections local scope
-                                if let Some(object) = self.global_replicate_store.get(*object_key) {
+                                if let Some(object) = self.global_replica_store.get(*object_key) {
                                     Self::user_add_object(user_connection, object_key, &object);
                                 }
                             }
@@ -984,7 +984,7 @@ impl<U: ProtocolType> Server<U> {
 
                                     // add entity to the connections local scope
                                     Self::user_add_entity(
-                                        &self.global_replicate_store,
+                                        &self.global_replica_store,
                                         user_connection,
                                         entity_key,
                                         &component_set_ref,

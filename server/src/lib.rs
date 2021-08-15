@@ -1,7 +1,7 @@
 //! # Naia Server
 //! A server that uses either UDP or WebRTC communication to send/receive
-//! messages to/from connected clients, and syncs registered replicates to
-//! clients to whom those replicates are in-scope.
+//! messages to/from connected clients, and syncs registered Objects/Entities/Components to
+//! clients to whom they are in-scope.
 
 #![deny(
     missing_docs,
@@ -47,7 +47,7 @@ mod tick_manager;
 mod user;
 
 pub use event::Event;
-pub use replicate::keys::{replicate_key::ReplicaKey, ComponentKey, GlobalPawnKey, ObjectKey};
+pub use replicate::keys::{replica_key::ReplicaKey, ComponentKey, GlobalPawnKey, ObjectKey};
 pub use room::room_key::RoomKey;
 pub use server::Server;
 pub use server_config::{ServerAddresses, ServerConfig};
