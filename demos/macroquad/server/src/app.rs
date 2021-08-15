@@ -20,9 +20,9 @@ impl App {
 
         server.on_auth(Rc::new(Box::new(|_, auth_type| {
             if let Protocol::Auth(auth_ref) = auth_type {
-                let auth_event = auth_ref.borrow();
-                let username = auth_event.username.get();
-                let password = auth_event.password.get();
+                let auth_message = auth_ref.borrow();
+                let username = auth_message.username.get();
+                let password = auth_message.password.get();
                 return username == "charlie" && password == "12345";
             }
             return false;

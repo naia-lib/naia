@@ -89,8 +89,7 @@ impl<T: ProtocolType> Client<T> {
 
     /// Must call this regularly (preferably at the beginning of every draw
     /// frame), in a loop until it returns None.
-    /// Retrieves incoming events/updates, and performs updates to maintain the
-    /// connection.
+    /// Retrieves incoming update data, and maintains the connection.
     pub fn receive(&mut self) -> Option<Result<Event<T>, NaiaClientError>> {
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
@@ -98,8 +97,8 @@ impl<T: ProtocolType> Client<T> {
                 // process replays
                 connection.process_replays();
                 // receive message
-                if let Some(event) = connection.get_incoming_message() {
-                    return Some(Ok(Event::Message(event)));
+                if let Some(message) = connection.get_incoming_message() {
+                    return Some(Ok(Event::Message(message)));
                 }
                 // receive replica action
                 while let Some(action) = connection.get_incoming_replica_action() {
