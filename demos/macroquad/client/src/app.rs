@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use macroquad::prelude::*;
 
-use naia_client::{Replicate, ClientConfig, ClientEvent, Client, Ref, LocalObjectKey};
+use naia_client::{Replicate, ClientConfig, Event, Client, Ref, LocalObjectKey};
 
 use naia_demo_macroquad_shared::{
     get_shared_config, behavior as shared_behavior, protocol::{Protocol, Point, Color, Auth, KeyCommand},
@@ -64,20 +64,20 @@ impl App {
             if let Some(result) = self.client.receive() {
                 match result {
                     Ok(event) => match event {
-                        ClientEvent::Connection => {
+                        Event::Connection => {
                             info!("Client connected to: {}", self.client.server_address());
                         }
-                        ClientEvent::Disconnection => {
+                        Event::Disconnection => {
                             info!("Client disconnected from: {}", self.client.server_address());
                         }
-                        ClientEvent::Tick => {
+                        Event::Tick => {
                             if let Some((pawn_key, _)) = self.pawn {
                                 if let Some(command) = self.queued_command.take() {
                                     self.client.send_command(&pawn_key, &command);
                                 }
                             }
                         }
-                        ClientEvent::AssignPawn(local_key) => {
+                        Event::AssignPawn(local_key) => {
                             info!("assign pawn");
                             if let Some(typed_replicate) = self.client.get_pawn_mut(&local_key) {
                                 match typed_replicate {
@@ -88,11 +88,11 @@ impl App {
                                 }
                             }
                         }
-                        ClientEvent::UnassignPawn(_) => {
+                        Event::UnassignPawn(_) => {
                             self.pawn = None;
                             info!("unassign pawn");
                         }
-                        ClientEvent::NewCommand(_, command_type) => match command_type {
+                        Event::NewCommand(_, command_type) => match command_type {
                             Protocol::KeyCommand(key_command) => {
                                 if let Some((_, pawn_ref)) = &self.pawn {
                                     shared_behavior::process_command(&key_command, &pawn_ref);
@@ -100,7 +100,7 @@ impl App {
                             }
                             _ => {}
                         },
-                        ClientEvent::ReplayCommand(_, command_type) => match command_type {
+                        Event::ReplayCommand(_, command_type) => match command_type {
                             Protocol::KeyCommand(key_command) => {
                                 if let Some((_, pawn_ref)) = &self.pawn {
                                     shared_behavior::process_command(&key_command, &pawn_ref);
@@ -108,7 +108,7 @@ impl App {
                             }
                             _ => {}
                         },
-                        ClientEvent::CreateObject(local_key) => {
+                        Event::CreateObject(local_key) => {
                             if let Some(typed_replicate) = self.client.get_object(&local_key) {
                                 match typed_replicate {
                                     Protocol::Point(replicate_ref) => {
@@ -118,7 +118,7 @@ impl App {
                                 }
                             }
                         },
-                        ClientEvent::DeleteObject(local_key, _) => {
+                        Event::DeleteObject(local_key, _) => {
                             self.replicates.remove(&local_key);
                         },
                         _ => {}

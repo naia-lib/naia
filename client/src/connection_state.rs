@@ -1,5 +1,5 @@
 #[derive(Debug, PartialEq)]
-pub enum ClientConnectionState {
+pub enum ConnectionState {
     AwaitingChallengeResponse,
     AwaitingConnectResponse,
     Connected,

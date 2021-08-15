@@ -4,7 +4,7 @@ use log::{info, warn};
 
 use hecs::{Entity as HecsEntityKey, World, EntityBuilder as HecsEntityBuilder};
 
-use naia_client::{ClientConfig, ClientEvent, Client, NaiaKey, LocalEntityKey as NaiaEntityKey, Ref, Replicate};
+use naia_client::{ClientConfig, Event, Client, NaiaKey, LocalEntityKey as NaiaEntityKey, Ref, Replicate};
 
 use naia_demo_basic_shared::{
     get_shared_config,
@@ -48,13 +48,13 @@ impl App {
             if let Some(result) = self.client.receive() {
                 match result {
                     Ok(event) => match event {
-                        ClientEvent::Connection => {
+                        Event::Connection => {
                             info!("Client connected to: {}", self.client.server_address());
                         }
-                        ClientEvent::Disconnection => {
+                        Event::Disconnection => {
                             info!("Client disconnected from: {}", self.client.server_address());
                         }
-                        ClientEvent::Event(event_type) => match event_type {
+                        Event::Event(event_type) => match event_type {
                             Protocol::StringMessage(_message_ref) => {
                                 //let message = message_ref.borrow();
                                 //let message_inner = message.message.get();
@@ -70,7 +70,7 @@ impl App {
                             }
                             _ => {}
                         },
-                        ClientEvent::CreateEntity(naia_entity_key, component_keys) => {
+                        Event::CreateEntity(naia_entity_key, component_keys) => {
                             info!("creation of entity: {}", naia_entity_key.to_u16());
 
                             // initialize w/ starting components
@@ -96,7 +96,7 @@ impl App {
                             let hecs_entity_key = self.world.spawn(self.entity_builder.build());
                             self.entity_key_map.insert(naia_entity_key, hecs_entity_key);
                         },
-                        ClientEvent::DeleteEntity(naia_entity_key) => {
+                        Event::DeleteEntity(naia_entity_key) => {
                             info!("deletion of entity: {}", naia_entity_key.to_u16());
                             if let Some(hecs_entity_key) = self.entity_key_map.remove(&naia_entity_key) {
                                 self.world.despawn(hecs_entity_key)
@@ -105,7 +105,7 @@ impl App {
                                 warn!("attempted deletion of non-existent entity");
                             }
                         },
-                        ClientEvent::AddComponent(naia_entity_key, component_key) => {
+                        Event::AddComponent(naia_entity_key, component_key) => {
                             info!("add component: {}, to entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
 
                             let hecs_entity_key = *self.entity_key_map.get(&naia_entity_key)
@@ -130,7 +130,7 @@ impl App {
                                 _ => {}
                             }
                         },
-                        ClientEvent::RemoveComponent(naia_entity_key, component_key, component_ref) => {
+                        Event::RemoveComponent(naia_entity_key, component_key, component_ref) => {
                             info!("remove component: {}, from entity: {}", component_key.to_u16(), naia_entity_key.to_u16());
                             if self.entity_key_map.contains_key(&naia_entity_key) {
                                 let hecs_entity_key = *self.entity_key_map.get(&naia_entity_key).unwrap();
@@ -152,7 +152,7 @@ impl App {
                                 warn!("attempting to remove component from non-existent entity");
                             }
                         },
-                        ClientEvent::Tick => {
+                        Event::Tick => {
                             //info!("tick event");
                         },
                         _ => {}
