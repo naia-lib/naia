@@ -250,7 +250,7 @@ impl<U: ProtocolType> ClientConnection<U> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message(&mut self, message: &impl Replicate<U>, guaranteed_delivery: bool) {
+    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<U>>, guaranteed_delivery: bool) {
         return self.connection.queue_message(message, guaranteed_delivery);
     }
 

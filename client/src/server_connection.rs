@@ -1,8 +1,8 @@
-use std::{collections::hash_map::Keys, net::SocketAddr, rc::Rc};
+use std::{collections::hash_map::Keys, net::SocketAddr};
 
 use naia_shared::{
     Connection, ConnectionConfig, LocalComponentKey, LocalEntityKey, LocalObjectKey, ManagerType,
-    Manifest, PacketReader, PacketType, PawnKey, ProtocolType, Replicate, SequenceNumber,
+    Manifest, PacketReader, PacketType, PawnKey, ProtocolType, Ref, Replicate, SequenceNumber,
     StandardHeader,
 };
 
@@ -247,7 +247,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message(&mut self, message: &impl Replicate<T>, guaranteed_delivery: bool) {
+    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<T>>, guaranteed_delivery: bool) {
         return self.connection.queue_message(message, guaranteed_delivery);
     }
 
@@ -263,7 +263,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     pub fn object_queue_command(
         &mut self,
         object_key: &LocalObjectKey,
-        command: &impl Replicate<T>,
+        command: &Ref<dyn Replicate<T>>,
     ) {
         let pawn_key = PawnKey::Object(*object_key);
         return self.command_sender.queue_command(&pawn_key, command);
@@ -272,7 +272,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     pub fn entity_queue_command(
         &mut self,
         entity_key: &LocalEntityKey,
-        command: &impl Replicate<T>,
+        command: &Ref<dyn Replicate<T>>,
     ) {
         let pawn_key = PawnKey::Entity(*entity_key);
         return self.command_sender.queue_command(&pawn_key, command);
@@ -283,7 +283,7 @@ impl<T: ProtocolType> ServerConnection<T> {
             .process_command_replay::<T>(&mut self.replica_manager);
     }
 
-    pub fn get_incoming_replay(&mut self) -> Option<(PawnKey, Rc<Box<dyn Replicate<T>>>)> {
+    pub fn get_incoming_replay(&mut self) -> Option<(PawnKey, Ref<dyn Replicate<T>>)> {
         if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command_replay::<T>() {
             return Some((pawn_key, command));
         }
@@ -291,7 +291,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         return None;
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<(PawnKey, Rc<Box<dyn Replicate<T>>>)> {
+    pub fn get_incoming_command(&mut self) -> Option<(PawnKey, Ref<dyn Replicate<T>>)> {
         if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command() {
             return Some((pawn_key, command));
         }

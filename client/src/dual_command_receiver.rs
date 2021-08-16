@@ -1,6 +1,4 @@
-use std::rc::Rc;
-
-use naia_shared::{PawnKey, ProtocolType, Replicate, SequenceIterator};
+use naia_shared::{PawnKey, ProtocolType, Ref, Replicate, SequenceIterator};
 
 use super::{command_receiver::CommandReceiver, replica_manager::ReplicaManager};
 
@@ -21,7 +19,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     }
 
     /// Gets the next queued Command
-    pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Rc<Box<dyn Replicate<T>>>)> {
+    pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Ref<dyn Replicate<T>>)> {
         let command = self.replica_manager.pop_command();
         if command.is_none() {
             return self.entity_manager.pop_command();
@@ -32,7 +30,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
     /// Gets the next queued Replayed Command
     pub fn pop_command_replay<U: ProtocolType>(
         &mut self,
-    ) -> Option<(u16, PawnKey, Rc<Box<dyn Replicate<T>>>)> {
+    ) -> Option<(u16, PawnKey, Ref<dyn Replicate<T>>)> {
         let command_replay = self.replica_manager.pop_command_replay::<U>();
         if command_replay.is_none() {
             return self.entity_manager.pop_command_replay::<U>();
@@ -56,7 +54,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
         &mut self,
         host_tick: u16,
         pawn_key: &PawnKey,
-        command: &Rc<Box<dyn Replicate<T>>>,
+        command: &Ref<dyn Replicate<T>>,
     ) {
         match pawn_key {
             PawnKey::Object(_) => {
@@ -87,7 +85,7 @@ impl<T: ProtocolType> DualCommandReceiver<T> {
         &self,
         pawn_key: &PawnKey,
         reverse: bool,
-    ) -> Option<SequenceIterator<Rc<Box<dyn Replicate<T>>>>> {
+    ) -> Option<SequenceIterator<Ref<dyn Replicate<T>>>> {
         match pawn_key {
             PawnKey::Object(_) => {
                 return self.replica_manager.command_history_iter(pawn_key, reverse);

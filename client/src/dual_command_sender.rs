@@ -1,6 +1,4 @@
-use std::rc::Rc;
-
-use naia_shared::{PawnKey, ProtocolType, Replicate};
+use naia_shared::{PawnKey, ProtocolType, Ref, Replicate};
 
 use super::command_sender::CommandSender;
 
@@ -26,7 +24,7 @@ impl<T: ProtocolType> DualCommandSender<T> {
     }
 
     /// Gets the next queued Command to be transmitted
-    pub fn pop_command(&mut self) -> Option<(PawnKey, Rc<Box<dyn Replicate<T>>>)> {
+    pub fn pop_command(&mut self) -> Option<(PawnKey, Ref<dyn Replicate<T>>)> {
         let command = self.replica_manager.pop_command();
         if command.is_none() {
             return self.entity_manager.pop_command();
@@ -36,7 +34,7 @@ impl<T: ProtocolType> DualCommandSender<T> {
 
     /// If  the last popped Command from the queue somehow wasn't able to be
     /// written into a packet, put the Command back into the front of the queue
-    pub fn unpop_command(&mut self, pawn_key: &PawnKey, command: &Rc<Box<dyn Replicate<T>>>) {
+    pub fn unpop_command(&mut self, pawn_key: &PawnKey, command: &Ref<dyn Replicate<T>>) {
         match pawn_key {
             PawnKey::Object(_) => {
                 self.replica_manager.unpop_command(pawn_key, command);
@@ -48,7 +46,7 @@ impl<T: ProtocolType> DualCommandSender<T> {
     }
 
     /// Queues an Command to be transmitted to the remote host
-    pub fn queue_command(&mut self, pawn_key: &PawnKey, command: &impl Replicate<T>) {
+    pub fn queue_command(&mut self, pawn_key: &PawnKey, command: &Ref<dyn Replicate<T>>) {
         match pawn_key {
             PawnKey::Object(_) => {
                 self.replica_manager.queue_command(pawn_key, command);

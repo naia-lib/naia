@@ -1,8 +1,8 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, ManagerType, Manifest, MessagePacketWriter, PawnKey, ProtocolType, Replicate,
-    MTU_SIZE,
+    wrapping_diff, ManagerType, Manifest, MessagePacketWriter, PawnKey, ProtocolType, Ref,
+    Replicate, MTU_SIZE,
 };
 
 use crate::dual_command_receiver::DualCommandReceiver;
@@ -63,12 +63,12 @@ impl PacketWriter {
         manifest: &Manifest<T>,
         command_receiver: &DualCommandReceiver<T>,
         pawn_key: &PawnKey,
-        command: &Box<dyn Replicate<T>>,
+        command: &Ref<dyn Replicate<T>>,
     ) -> bool {
         //Write command payload
         let mut command_payload_bytes = Vec::<u8>::new();
 
-        command.as_ref().write(&mut command_payload_bytes);
+        command.borrow().write(&mut command_payload_bytes);
 
         // write past commands
         let past_commands_number = command_receiver
@@ -85,7 +85,7 @@ impl PacketWriter {
                         // write the tick diff
                         command_payload_bytes.write_u8(diff_i8 as u8).unwrap();
                         // write the command payload
-                        past_command.write(&mut command_payload_bytes);
+                        past_command.borrow().write(&mut command_payload_bytes);
 
                         past_command_index += 1;
                     }
@@ -110,7 +110,7 @@ impl PacketWriter {
             .write_u16::<BigEndian>(pawn_key.to_u16())
             .unwrap(); // write pawn key
 
-        let type_id = command.as_ref().get_type_id();
+        let type_id = command.borrow().get_type_id();
         let naia_id = manifest.get_naia_id(&type_id); // get naia id
         command_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
         command_total_bytes.write_u8(past_command_index).unwrap(); // write past command number
@@ -134,7 +134,7 @@ impl PacketWriter {
     pub fn write_message<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,
-        message: &Box<dyn Replicate<T>>,
+        message: &Ref<dyn Replicate<T>>,
     ) -> bool {
         return self.message_writer.write_message(manifest, message);
     }

@@ -1,7 +1,7 @@
-use std::{collections::HashMap, rc::Rc, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use naia_server::{
-    Event, ObjectKey, Random, Replicate, RoomKey, Server, ServerAddresses, ServerConfig, UserKey,
+    Event, ObjectKey, Random, RoomKey, Server, ServerAddresses, ServerConfig, UserKey
 };
 
 use naia_macroquad_demo_shared::{
@@ -42,16 +42,6 @@ impl App {
         let mut server =
             Server::new(Protocol::load(), Some(server_config), get_shared_config()).await;
 
-        server.on_auth(Rc::new(Box::new(|_, auth_type| {
-            if let Protocol::Auth(auth_ref) = auth_type {
-                let auth_message = auth_ref.borrow();
-                let username = auth_message.username.get();
-                let password = auth_message.password.get();
-                return username == "charlie" && password == "12345";
-            }
-            return false;
-        })));
-
         let main_room_key = server.create_room();
 
         App {
@@ -65,6 +55,18 @@ impl App {
         match self.server.receive().await {
             Ok(event) => {
                 match event {
+                    Event::Authorization(user_key, Protocol::Auth(auth_ref)) => {
+                        let auth_message = auth_ref.borrow();
+                        let username = auth_message.username.get();
+                        let password = auth_message.password.get();
+                        if username == "charlie" && password == "12345" {
+                            // Accept incoming connection
+                            self.server.accept_connection(&user_key);
+                        } else {
+                            // Reject incoming connection
+                            self.server.reject_connection(&user_key);
+                        }
+                    }
                     Event::Connection(user_key) => {
                         self.server.room_add_user(&self.main_room_key, &user_key);
                         if let Some(user) = self.server.get_user(&user_key) {
@@ -80,8 +82,8 @@ impl App {
                             };
 
                             let square =
-                                Square::new(x as u16, y as u16, square_color).copy_to_protocol();
-                            let square_key = self.server.register_object(square);
+                                Square::new(x as u16, y as u16, square_color);
+                            let square_key = self.server.register_object(&Protocol::SquareConvert(square));
                             self.server
                                 .room_add_object(&self.main_room_key, &square_key);
                             self.server.assign_pawn(&user_key, &square_key);

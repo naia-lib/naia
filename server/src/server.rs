@@ -45,12 +45,12 @@ pub struct Server<T: ProtocolType> {
     sender: MessageSender,
     global_replica_store: DenseSlotMap<ReplicaKey, T>,
     global_object_set: HashSet<ObjectKey>,
-    auth_func: Option<Rc<Box<dyn Fn(&UserKey, &T) -> bool>>>,
     mut_handler: Ref<MutHandler>,
     users: DenseSlotMap<UserKey, User>,
     rooms: DenseSlotMap<RoomKey, Room>,
     address_to_user_key_map: HashMap<SocketAddr, UserKey>,
     client_connections: HashMap<UserKey, ClientConnection<T>>,
+    outstanding_connects: VecDeque<UserKey>,
     outstanding_disconnects: VecDeque<UserKey>,
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
@@ -106,7 +106,6 @@ impl<U: ProtocolType> Server<U> {
             global_object_set: HashSet::new(),
             object_scope_map: HashMap::new(),
             entity_scope_map: HashMap::new(),
-            auth_func: None,
             mut_handler: MutHandler::new(),
             socket: server_socket,
             sender,
@@ -116,6 +115,7 @@ impl<U: ProtocolType> Server<U> {
             connection_hash_key,
             client_connections: clients_map,
             address_to_user_key_map: HashMap::new(),
+            outstanding_connects: VecDeque::new(),
             outstanding_disconnects: VecDeque::new(),
             heartbeat_timer,
             tick_manager: TickManager::new(shared_config.tick_interval),
@@ -159,7 +159,29 @@ impl<U: ProtocolType> Server<U> {
                 }
             }
 
-            // timeouts
+            // new connections
+            if let Some(user_key) = self.outstanding_connects.pop_front() {
+                if let Some(user) = self.users.get(user_key) {
+                    self.address_to_user_key_map.insert(user.address, user_key);
+
+                    let mut new_connection = ClientConnection::new(
+                        user.address,
+                        Some(&self.mut_handler),
+                        &self.connection_config,
+                    );
+                    //new_connection.process_incoming_header(&header);
+                    Server::<U>::send_connect_accept_message(
+                        &mut new_connection,
+                        &mut self.sender,
+                    )
+                        .await;
+                    self.client_connections.insert(user_key, new_connection);
+
+                    return Ok(Event::Connection(user_key));
+                }
+            }
+
+            // new disconnections
             if let Some(user_key) = self.outstanding_disconnects.pop_front() {
                 for (_, room) in self.rooms.iter_mut() {
                     room.unsubscribe_user(&user_key);
@@ -321,37 +343,13 @@ impl<U: ProtocolType> Server<U> {
                                         let user = User::new(address, timestamp);
                                         let user_key = self.users.insert(user);
 
-                                        // Call auth function if there is one
-                                        if let Some(auth_func) = &self.auth_func {
-                                            let naia_id = reader.read_u16();
+                                        // Return authorization event
+                                        let naia_id = reader.read_u16();
 
-                                            let auth_message =
-                                                self.manifest.create_replica(naia_id, &mut reader);
-                                            if !(auth_func.as_ref().as_ref())(
-                                                &user_key,
-                                                &auth_message,
-                                            ) {
-                                                self.users.remove(user_key);
-                                                continue;
-                                            }
-                                        }
+                                        let auth_message =
+                                            self.manifest.create_replica(naia_id, &mut reader);
 
-                                        self.address_to_user_key_map.insert(address, user_key);
-
-                                        // Success! Create new connection
-                                        let mut new_connection = ClientConnection::new(
-                                            address,
-                                            Some(&self.mut_handler),
-                                            &self.connection_config,
-                                        );
-                                        new_connection.process_incoming_header(&header);
-                                        Server::<U>::send_connect_accept_message(
-                                            &mut new_connection,
-                                            &mut self.sender,
-                                        )
-                                        .await;
-                                        self.client_connections.insert(user_key, new_connection);
-                                        return Ok(Event::Connection(user_key));
+                                        return Ok(Event::Authorization(user_key, auth_message));
                                     }
                                 }
                                 PacketType::Data => {
@@ -463,12 +461,28 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
+    /// Accepts an incoming Client User, allowing them to establish a connection with the Server
+    pub fn accept_connection(
+        &mut self,
+        user_key: &UserKey,
+    ) {
+        self.outstanding_connects.push_back(*user_key);
+    }
+
+    /// Rejects an incoming Client User, terminating their attempt to establish a connection with the Server
+    pub fn reject_connection(
+        &mut self,
+        user_key: &UserKey,
+    ) {
+        self.users.remove(*user_key);
+    }
+
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
     pub fn queue_message(
         &mut self,
         user_key: &UserKey,
-        message: &impl Replicate<U>,
+        message: &Ref<dyn Replicate<U>>,
         guaranteed_delivery: bool,
     ) {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
@@ -513,14 +527,15 @@ impl<U: ProtocolType> Server<U> {
     /// replicas of the Object to all connected Clients for which the Object
     /// is in scope. Gives back an ObjectKey which can be used to get the
     /// reference to the Object from the Server once again
-    pub fn register_object(&mut self, object: U) -> ObjectKey {
+    pub fn register_object(&mut self, object: &Ref<dyn Replicate<U>>) -> ObjectKey {
+        let protocolized_object = object.borrow().copy_to_protocol();
         let new_mutator_ref: Ref<PropertyMutator> =
             Ref::new(PropertyMutator::new(&self.mut_handler));
-        object
+        protocolized_object
             .inner_ref()
             .borrow_mut()
             .set_mutator(&to_property_mutator(&new_mutator_ref));
-        let object_key = self.global_replica_store.insert(object);
+        let object_key = self.global_replica_store.insert(protocolized_object);
         self.global_object_set.insert(object_key);
         new_mutator_ref.borrow_mut().set_object_key(object_key);
         self.mut_handler.borrow_mut().register_replica(&object_key);
@@ -624,13 +639,14 @@ impl<U: ProtocolType> Server<U> {
     pub fn add_component_to_entity(
         &mut self,
         entity_key: &EntityKey,
-        component: U,
+        component: &Ref<dyn Replicate<U>>,
     ) -> ComponentKey {
         if !self.entity_component_map.contains_key(&entity_key) {
             panic!("attempted to add component to non-existent entity");
         }
 
-        let component_ref = component.inner_ref().clone();
+        let protocolized_component = component.borrow().copy_to_protocol();
+        let component_ref = protocolized_component.inner_ref().clone();
         let component_key: ComponentKey = self.register_object(component);
 
         // add component to connections already tracking entity
@@ -854,15 +870,6 @@ impl<U: ProtocolType> Server<U> {
         }
 
         return list;
-    }
-
-    /// Registers a closure which will be called during the handshake process
-    /// with a new Client
-    ///
-    /// The Message evaluated in this closure should match the Message used
-    /// client-side in the NaiaClient::new() method
-    pub fn on_auth(&mut self, auth_func: Rc<Box<dyn Fn(&UserKey, &U) -> bool>>) {
-        self.auth_func = Some(auth_func);
     }
 
     /// Iterate through all currently connected Users

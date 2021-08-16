@@ -8,6 +8,9 @@ use super::{
 /// An Event that is emitted as a result of some communication with a Client, or
 /// a Tick event
 pub enum Event<T> {
+    /// Occurs when a Client attempts to establish a connection with the Server.
+    /// Used accept or reject incoming Clients
+    Authorization(UserKey, T),
     /// Occurs when a new Client has successfully established a connection with
     /// the Server
     Connection(UserKey),

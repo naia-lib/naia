@@ -2,7 +2,7 @@ use std::{collections::HashMap, time::Duration};
 
 use macroquad::prelude::*;
 
-use naia_client::{Client, ClientConfig, Event, LocalReplicaKey, Ref, Replicate};
+use naia_client::{Client, ClientConfig, Event, LocalReplicaKey, Ref};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
@@ -14,7 +14,7 @@ const SQUARE_SIZE: f32 = 32.0;
 pub struct App {
     client: Client<Protocol>,
     pawn: Option<(LocalReplicaKey, Ref<Square>)>,
-    queued_command: Option<KeyCommand>,
+    queued_command: Option<Ref<KeyCommand>>,
     square_map: HashMap<LocalReplicaKey, Ref<Square>>,
 }
 
@@ -32,14 +32,14 @@ impl App {
         client_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         // This will be evaluated in the Server's 'on_auth()' method
-        let auth = Auth::new("charlie", "12345").copy_to_protocol();
+        let auth = Auth::new("charlie", "12345");
 
         App {
             client: Client::new(
                 Protocol::load(),
                 Some(client_config),
                 get_shared_config(),
-                Some(auth),
+                Some(Protocol::AuthConvert(auth)),
             ),
             pawn: None,
             queued_command: None,
@@ -54,7 +54,8 @@ impl App {
         let a = is_key_down(KeyCode::A);
         let d = is_key_down(KeyCode::D);
 
-        if let Some(command) = &mut self.queued_command {
+        if let Some(command_ref) = &mut self.queued_command {
+            let mut command = command_ref.borrow_mut();
             if w {
                 command.w.set(true);
             }
@@ -85,7 +86,7 @@ impl App {
                         Event::Tick => {
                             if let Some((pawn_key, _)) = self.pawn {
                                 if let Some(command) = self.queued_command.take() {
-                                    self.client.send_object_command(&pawn_key, &command);
+                                    self.client.send_object_command(&pawn_key, &Protocol::KeyCommandConvert(command));
                                 }
                             }
                         }

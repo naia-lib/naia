@@ -1,5 +1,5 @@
 use naia_derive::Replicate;
-use naia_shared::{Property, Replicate};
+use naia_shared::Property;
 
 use super::Protocol;
 
@@ -10,7 +10,7 @@ pub struct Auth {
 }
 
 impl Auth {
-    pub fn new(username: &str, password: &str) -> Auth {
+    pub fn new(username: &str, password: &str) -> Ref<Auth> {
         return Auth::new_complete(username.to_string(), password.to_string());
     }
 }

@@ -1,5 +1,5 @@
 use naia_derive::Replicate;
-use naia_shared::{Property, Replicate};
+use naia_shared::Property;
 
 use super::Protocol;
 
@@ -12,7 +12,7 @@ pub struct KeyCommand {
 }
 
 impl KeyCommand {
-    pub fn new(w: bool, s: bool, a: bool, d: bool) -> KeyCommand {
+    pub fn new(w: bool, s: bool, a: bool, d: bool) -> Ref<KeyCommand> {
         return KeyCommand::new_complete(w, s, a, d);
     }
 }
