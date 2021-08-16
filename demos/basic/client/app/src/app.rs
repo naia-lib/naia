@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use log::{info, warn};
 
@@ -10,6 +10,7 @@ use naia_client::{
 
 use naia_demo_basic_shared::{
     get_shared_config,
+    get_server_address,
     protocol::{Auth, Protocol, StringMessage},
 };
 
@@ -22,8 +23,21 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(client_config: ClientConfig) -> App {
+    pub fn new() -> App {
         info!("Naia Client Example Started");
+
+        let mut client_config = ClientConfig::default();
+
+        // Put your Server's IP Address here!, can't easily find this automatically from
+        // the browser
+        client_config.server_address = get_server_address();
+
+        client_config.heartbeat_interval = Duration::from_secs(2);
+        // Keep in mind that the disconnect timeout duration should always be at least
+        // 2x greater than the heartbeat interval, to make it so at the worst case, the
+        // server would need to miss 2 heartbeat signals before disconnecting from a
+        // given client
+        client_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         // This will be evaluated in the Server's 'on_auth()' method
         let auth = Auth::new("charlie", "12345").to_protocol();
