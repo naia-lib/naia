@@ -1,11 +1,10 @@
-
-// Websocket stuff here implements hot reloading (RIP webpack-dev-server..)
-const wsUri = (window.location.protocol=='https:'&&'wss://'||'ws://')+window.location.host + '/livereload/';
-conn = new WebSocket(wsUri);
-conn.onclose = function() {
+// Implementing auto reloading via websockets
+const wsURL = (window.location.protocol=='https:' && 'wss://' || 'ws://') + window.location.host + '/livereload/';
+const ws = new WebSocket(wsURL);
+ws.onclose = function() {
     setInterval(function() {
-        let conn2 = new WebSocket(wsUri);
-        conn2.onopen = function() {
+        const temp_ws = new WebSocket(wsURL);
+        temp_ws.onopen = function() {
             location.reload();
         };
     }, 500);

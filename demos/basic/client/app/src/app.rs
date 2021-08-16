@@ -18,6 +18,7 @@ pub struct App {
 
 impl App {
     pub fn new() -> App {
+
         info!("Basic Naia Client Demo started");
 
         let mut client_config = ClientConfig::default();

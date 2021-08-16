@@ -6,7 +6,7 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [[bin]]
-name = "naia-demo-macroquad-client"
+name = "naia-macroquad-client-demo"
 path = "src/main.rs"
 
 [features]

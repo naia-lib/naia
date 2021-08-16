@@ -1,14 +1,14 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc, time::Duration};
 
 use hecs::{Entity as HecsEntityKey, World};
 
 use naia_server::{
-    ComponentKey, EntityKey as NaiaEntityKey, Event, Ref, Replicate, RoomKey, Server, ServerConfig,
+    ComponentKey, EntityKey as NaiaEntityKey, Event, Ref, Replicate, RoomKey, Server, ServerAddresses, ServerConfig,
     UserKey,
 };
 
 use naia_hecs_demo_shared::{
-    get_shared_config,
+    get_shared_config, get_server_address,
     protocol::{Marker, Name, Position, Protocol, StringMessage},
 };
 
@@ -23,7 +23,32 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new(server_config: ServerConfig) -> Self {
+    pub async fn new() -> Self {
+
+        info!("Naia Hecs Server Demo started");
+
+        let mut server_config = ServerConfig::default();
+
+        server_config.socket_addresses = ServerAddresses::new(
+            // IP Address to listen on for the signaling portion of WebRTC
+            get_server_address(),
+            // IP Address to listen on for UDP WebRTC data channels
+            "127.0.0.1:14192"
+                .parse()
+                .expect("could not parse WebRTC data address/port"),
+            // The public WebRTC IP address to advertise
+            "127.0.0.1:14192"
+                .parse()
+                .expect("could not parse advertised public WebRTC data address/port"),
+        );
+
+        server_config.heartbeat_interval = Duration::from_secs(2);
+        // Keep in mind that the disconnect timeout duration should always be at least
+        // 2x greater than the heartbeat interval, to make it so at the worst case, the
+        // server would need to miss 2 heartbeat signals before disconnecting from a
+        // given client
+        server_config.disconnection_timeout_duration = Duration::from_secs(5);
+
         let mut server =
             Server::new(Protocol::load(), Some(server_config), get_shared_config()).await;
 

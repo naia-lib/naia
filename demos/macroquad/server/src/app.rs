@@ -1,9 +1,9 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc, time::Duration};
 
-use naia_server::{Event, ObjectKey, Random, RoomKey, Server, ServerConfig, UserKey};
+use naia_server::{Event, ObjectKey, Random, RoomKey, Server, ServerAddresses, ServerConfig, UserKey};
 
 use naia_macroquad_demo_shared::{
-    behavior as shared_behavior, get_shared_config,
+    behavior as shared_behavior, get_shared_config, get_server_address,
     protocol::{Color, Protocol, Square},
 };
 
@@ -14,7 +14,32 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new(server_config: ServerConfig) -> Self {
+    pub async fn new() -> Self {
+
+        info!("Naia Macroquad Server Demo started");
+
+        let mut server_config = ServerConfig::default();
+
+        server_config.socket_addresses = ServerAddresses::new(
+            // IP Address to listen on for the signaling portion of WebRTC
+            get_server_address(),
+            // IP Address to listen on for UDP WebRTC data channels
+            "127.0.0.1:14192"
+                .parse()
+                .expect("could not parse WebRTC data address/port"),
+            // The public WebRTC IP address to advertise
+            "127.0.0.1:14192"
+                .parse()
+                .expect("could not parse advertised public WebRTC data address/port"),
+        );
+
+        server_config.heartbeat_interval = Duration::from_secs(2);
+        // Keep in mind that the disconnect timeout duration should always be at least
+        // 2x greater than the heartbeat interval, to make it so at the worst case, the
+        // server would need to miss 2 heartbeat signals before disconnecting from a
+        // given client
+        server_config.disconnection_timeout_duration = Duration::from_secs(5);
+
         let mut server =
             Server::new(Protocol::load(), Some(server_config), get_shared_config()).await;
 
@@ -72,12 +97,12 @@ impl App {
                             self.server
                                 .room_remove_object(&self.main_room_key, &object_key);
                             self.server.unassign_pawn(&user_key, &object_key);
-                            self.server.deregister_object(object_key);
+                            self.server.deregister_object(&object_key);
                         }
                     }
                     Event::Command(_, object_key, command_type) => match command_type {
                         Protocol::KeyCommand(key_command) => {
-                            if let Some(typed_object) = self.server.get_object(object_key) {
+                            if let Some(typed_object) = self.server.get_object(&object_key) {
                                 match typed_object {
                                     Protocol::Square(square_ref) => {
                                         shared_behavior::process_command(&key_command, square_ref);
@@ -89,6 +114,8 @@ impl App {
                         _ => {}
                     },
                     Event::Tick => {
+                        // All game logic should happen here, on a tick event
+
                         // Update scopes of objects
                         for (room_key, user_key, object_key) in self.server.object_scope_sets() {
                             self.server
@@ -104,7 +131,7 @@ impl App {
                 }
             }
             Err(error) => {
-                info!("Naia Server Error: {}", error);
+                info!("Naia Server error: {}", error);
             }
         }
     }

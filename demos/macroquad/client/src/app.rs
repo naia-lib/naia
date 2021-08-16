@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use macroquad::prelude::*;
 
 use naia_client::{Client, ClientConfig, Event, LocalReplicaKey, Ref, Replicate};
 
 use naia_macroquad_demo_shared::{
-    behavior as shared_behavior, get_shared_config,
+    behavior as shared_behavior, get_shared_config, get_server_address,
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
 };
 
@@ -17,7 +17,16 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(client_config: ClientConfig) -> Self {
+    pub fn new() -> Self {
+
+        info!("Naia Macroquad Client Demo started");
+
+        let mut client_config = ClientConfig::default();
+
+        client_config.server_address = get_server_address();
+        client_config.heartbeat_interval = Duration::from_secs(2);
+        client_config.disconnection_timeout_duration = Duration::from_secs(5);
+
         let auth = Auth::new("charlie", "12345").to_protocol();
 
         let client = Client::new(
