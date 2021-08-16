@@ -5,11 +5,11 @@ use super::Protocol;
 
 #[derive(Replicate, Clone)]
 pub struct StringMessage {
-    pub message: Property<String>,
+    pub contents: Property<String>,
 }
 
 impl StringMessage {
-    pub fn new(message: String) -> StringMessage {
-        return StringMessage::new_complete(message);
+    pub fn new(contents: String) -> StringMessage {
+        return StringMessage::new_complete(contents);
     }
 }
