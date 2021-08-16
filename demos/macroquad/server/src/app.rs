@@ -1,9 +1,11 @@
 use std::{collections::HashMap, rc::Rc, time::Duration};
 
-use naia_server::{Event, ObjectKey, Random, RoomKey, Server, ServerAddresses, ServerConfig, UserKey, Replicate};
+use naia_server::{
+    Event, ObjectKey, Random, Replicate, RoomKey, Server, ServerAddresses, ServerConfig, UserKey,
+};
 
 use naia_macroquad_demo_shared::{
-    behavior as shared_behavior, get_shared_config, get_server_address,
+    behavior as shared_behavior, get_server_address, get_shared_config,
     protocol::{Color, Protocol, Square},
 };
 
@@ -15,7 +17,6 @@ pub struct App {
 
 impl App {
     pub async fn new() -> Self {
-
         info!("Naia Macroquad Server Demo started");
 
         let mut server_config = ServerConfig::default();
@@ -33,8 +34,9 @@ impl App {
         );
         server_config.heartbeat_interval = Duration::from_secs(2);
         // Keep in mind that the disconnect timeout duration should always be at least
-        // 2x greater than the client's heartbeat interval, to make it so that at the worst case, the
-        // server would need to miss 2 client heartbeats before disconnecting them
+        // 2x greater than the client's heartbeat interval, to make it so that at the
+        // worst case, the server would need to miss 2 client heartbeats before
+        // disconnecting them
         server_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         let mut server =
@@ -77,10 +79,9 @@ impl App {
                                 _ => Color::Blue,
                             };
 
-                            let square = Square::new(x as u16, y as u16, square_color).to_protocol();
-                            let square_key = self
-                                .server
-                                .register_object(square);
+                            let square =
+                                Square::new(x as u16, y as u16, square_color).to_protocol();
+                            let square_key = self.server.register_object(square);
                             self.server
                                 .room_add_object(&self.main_room_key, &square_key);
                             self.server.assign_pawn(&user_key, &square_key);
@@ -99,11 +100,13 @@ impl App {
                     }
                     Event::Command(_, object_key, protocol) => {
                         if let Protocol::KeyCommand(key_command) = protocol {
-                            if let Some(Protocol::Square(square_ref)) = self.server.get_object(&object_key) {
+                            if let Some(Protocol::Square(square_ref)) =
+                                self.server.get_object(&object_key)
+                            {
                                 shared_behavior::process_command(&key_command, square_ref);
                             }
                         }
-                    },
+                    }
                     Event::Tick => {
                         // All game logic should happen here, on a tick event
 

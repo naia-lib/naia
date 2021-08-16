@@ -5,7 +5,7 @@ use macroquad::prelude::*;
 use naia_client::{Client, ClientConfig, Event, LocalReplicaKey, Ref, Replicate};
 
 use naia_macroquad_demo_shared::{
-    behavior as shared_behavior, get_shared_config, get_server_address,
+    behavior as shared_behavior, get_server_address, get_shared_config,
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
 };
 
@@ -20,15 +20,15 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-
         info!("Naia Macroquad Client Demo started");
 
         let mut client_config = ClientConfig::default();
         client_config.server_address = get_server_address();
         client_config.heartbeat_interval = Duration::from_secs(2);
         // Keep in mind that the disconnect timeout duration should always be at least
-        // 2x greater than the server's heartbeat interval, to make it so that at the worst case, the
-        // client would need to miss 2 server heartbeats before disconnecting from them
+        // 2x greater than the server's heartbeat interval, to make it so that at the
+        // worst case, the client would need to miss 2 server heartbeats before
+        // disconnecting from them
         client_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         // This will be evaluated in the Server's 'on_auth()' method
@@ -91,7 +91,9 @@ impl App {
                         }
                         Event::AssignPawn(local_key) => {
                             info!("assign pawn");
-                            if let Some(Protocol::Square(square_ref)) = self.client.get_pawn_mut(&local_key) {
+                            if let Some(Protocol::Square(square_ref)) =
+                                self.client.get_pawn_mut(&local_key)
+                            {
                                 self.pawn = Some((local_key, square_ref.clone()));
                             }
                         }
@@ -99,16 +101,17 @@ impl App {
                             self.pawn = None;
                             info!("unassign pawn");
                         }
-                        Event::NewCommand(_, protocol) |
-                        Event::ReplayCommand(_, protocol) => {
+                        Event::NewCommand(_, protocol) | Event::ReplayCommand(_, protocol) => {
                             if let Protocol::KeyCommand(key_command) = protocol {
                                 if let Some((_, pawn_ref)) = &self.pawn {
                                     shared_behavior::process_command(&key_command, &pawn_ref);
                                 }
                             }
-                        },
+                        }
                         Event::CreateObject(local_key) => {
-                            if let Some(Protocol::Square(square_ref)) = self.client.get_object(&local_key) {
+                            if let Some(Protocol::Square(square_ref)) =
+                                self.client.get_object(&local_key)
+                            {
                                 self.square_map.insert(local_key, square_ref.clone());
                             }
                         }

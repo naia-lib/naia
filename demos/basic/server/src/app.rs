@@ -1,9 +1,6 @@
 use std::{rc::Rc, time::Duration};
 
-use naia_server::{
-    Event, Replicate, RoomKey, Server,
-    ServerAddresses, ServerConfig, UserKey,
-};
+use naia_server::{Event, Replicate, RoomKey, Server, ServerAddresses, ServerConfig, UserKey};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
@@ -18,7 +15,6 @@ pub struct App {
 
 impl App {
     pub async fn new() -> Self {
-
         info!("Basic Naia Server Demo started");
 
         let mut server_config = ServerConfig::default();
@@ -36,8 +32,9 @@ impl App {
         );
         server_config.heartbeat_interval = Duration::from_secs(2);
         // Keep in mind that the disconnect timeout duration should always be at least
-        // 2x greater than the client's heartbeat interval, to make it so that at the worst case, the
-        // server would need to miss 2 client heartbeats before disconnecting them
+        // 2x greater than the client's heartbeat interval, to make it so that at the
+        // worst case, the server would need to miss 2 client heartbeats before
+        // disconnecting them
         server_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         let mut server =
@@ -124,8 +121,12 @@ impl App {
                         }
                         for user_key in iter_vec {
                             let user = self.server.get_user(&user_key).unwrap();
-                            let new_message_contents = format!("Server Message ({})", self.tick_count);
-                            info!("Server send to   ({}) -> {}", user.address, new_message_contents);
+                            let new_message_contents =
+                                format!("Server Message ({})", self.tick_count);
+                            info!(
+                                "Server send to   ({}) -> {}",
+                                user.address, new_message_contents
+                            );
 
                             let new_message = StringMessage::new(new_message_contents);
                             self.server.queue_message(&user_key, &new_message, true);
@@ -133,14 +134,18 @@ impl App {
 
                         // Iterate through Characters, marching them from (0,0) to (20, N)
                         for object_key in self.server.objects_iter() {
-                            if let Some(Protocol::Character(character_ref)) = self.server.get_object(object_key) {
+                            if let Some(Protocol::Character(character_ref)) =
+                                self.server.get_object(object_key)
+                            {
                                 character_ref.borrow_mut().step();
                             }
                         }
 
                         // Update scopes of objects
                         for (room_key, user_key, object_key) in self.server.object_scope_sets() {
-                            if let Some(Protocol::Character(character_ref)) = self.server.get_object(&object_key) {
+                            if let Some(Protocol::Character(character_ref)) =
+                                self.server.get_object(&object_key)
+                            {
                                 let x = *character_ref.borrow().x.get();
                                 let in_scope = x >= 5 && x <= 15;
                                 self.server.object_set_scope(
