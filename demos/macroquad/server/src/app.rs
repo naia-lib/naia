@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc, time::Duration};
 
-use naia_server::{Event, ObjectKey, Random, RoomKey, Server, ServerAddresses, ServerConfig, UserKey};
+use naia_server::{Event, ObjectKey, Random, RoomKey, Server, ServerAddresses, ServerConfig, UserKey, Replicate};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_shared_config, get_server_address,
@@ -19,7 +19,6 @@ impl App {
         info!("Naia Macroquad Server Demo started");
 
         let mut server_config = ServerConfig::default();
-
         server_config.socket_addresses = ServerAddresses::new(
             // IP Address to listen on for the signaling portion of WebRTC
             get_server_address(),
@@ -32,12 +31,10 @@ impl App {
                 .parse()
                 .expect("could not parse advertised public WebRTC data address/port"),
         );
-
         server_config.heartbeat_interval = Duration::from_secs(2);
         // Keep in mind that the disconnect timeout duration should always be at least
-        // 2x greater than the heartbeat interval, to make it so at the worst case, the
-        // server would need to miss 2 heartbeat signals before disconnecting from a
-        // given client
+        // 2x greater than the client's heartbeat interval, to make it so that at the worst case, the
+        // server would need to miss 2 client heartbeats before disconnecting them
         server_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         let mut server =
@@ -80,14 +77,14 @@ impl App {
                                 _ => Color::Blue,
                             };
 
-                            let new_square = Square::new(x as u16, y as u16, square_color).wrap();
-                            let new_object_key = self
+                            let square = Square::new(x as u16, y as u16, square_color).to_protocol();
+                            let square_key = self
                                 .server
-                                .register_object(Protocol::Square(new_square.clone()));
+                                .register_object(square);
                             self.server
-                                .room_add_object(&self.main_room_key, &new_object_key);
-                            self.server.assign_pawn(&user_key, &new_object_key);
-                            self.user_to_pawn_map.insert(user_key, new_object_key);
+                                .room_add_object(&self.main_room_key, &square_key);
+                            self.server.assign_pawn(&user_key, &square_key);
+                            self.user_to_pawn_map.insert(user_key, square_key);
                         }
                     }
                     Event::Disconnection(user_key, user) => {
@@ -100,18 +97,12 @@ impl App {
                             self.server.deregister_object(&object_key);
                         }
                     }
-                    Event::Command(_, object_key, command_type) => match command_type {
-                        Protocol::KeyCommand(key_command) => {
-                            if let Some(typed_object) = self.server.get_object(&object_key) {
-                                match typed_object {
-                                    Protocol::Square(square_ref) => {
-                                        shared_behavior::process_command(&key_command, square_ref);
-                                    }
-                                    _ => {}
-                                }
+                    Event::Command(_, object_key, protocol) => {
+                        if let Protocol::KeyCommand(key_command) = protocol {
+                            if let Some(Protocol::Square(square_ref)) = self.server.get_object(&object_key) {
+                                shared_behavior::process_command(&key_command, square_ref);
                             }
                         }
-                        _ => {}
                     },
                     Event::Tick => {
                         // All game logic should happen here, on a tick event

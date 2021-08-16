@@ -22,7 +22,6 @@ impl App {
         info!("Basic Naia Server Demo started");
 
         let mut server_config = ServerConfig::default();
-
         server_config.socket_addresses = ServerAddresses::new(
             // IP Address to listen on for the signaling portion of WebRTC
             get_server_address(),
@@ -35,12 +34,10 @@ impl App {
                 .parse()
                 .expect("could not parse advertised public WebRTC data address/port"),
         );
-
         server_config.heartbeat_interval = Duration::from_secs(2);
         // Keep in mind that the disconnect timeout duration should always be at least
-        // 2x greater than the heartbeat interval, to make it so at the worst case, the
-        // server would need to miss 2 heartbeat signals before disconnecting from a
-        // given client
+        // 2x greater than the client's heartbeat interval, to make it so that at the worst case, the
+        // server would need to miss 2 client heartbeats before disconnecting them
         server_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         let mut server =

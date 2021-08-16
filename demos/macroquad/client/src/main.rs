@@ -11,8 +11,6 @@ async fn main() {
     let mut app = App::new();
 
     loop {
-        clear_background(BLACK);
-
         app.update();
 
         next_frame().await
