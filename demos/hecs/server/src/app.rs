@@ -82,25 +82,25 @@ impl App {
             {
                 count += 1;
 
-                // Create an entity
-                let naia_key = server.register_entity();
-                server.room_add_entity(&main_room_key, &naia_key);
+                // Create an Entity
+                let entity_key = server.register_entity();
+                server.room_add_entity(&main_room_key, &entity_key);
 
-                // Add position component to Entity
-                let position = Position::new((count * 4) as u8, 0).wrap();
-                let _pos_key =
-                    server.add_component_to_entity(&naia_key, Protocol::Position(position.clone()));
+                // Add Position component to Entity
+                let position_ref = Position::new((count * 4) as u8, 0).to_ref();
+                let _position_component_key =
+                    server.add_component_to_entity(&entity_key, Protocol::Position(position_ref.clone()));
 
-                // Add name component to Entity
-                let name = Name::new(first, last).wrap();
-                let _name_key =
-                    server.add_component_to_entity(&naia_key, Protocol::Name(name.clone()));
+                // Add Name component to Entity
+                let name_ref = Name::new(first, last).to_ref();
+                let _name_component_key =
+                    server.add_component_to_entity(&entity_key, Protocol::Name(name_ref.clone()));
 
                 // Add to World
-                let hecs_key = world.spawn((Ref::clone(&name), Ref::clone(&position)));
+                let hecs_key = world.spawn((Ref::clone(&name_ref), Ref::clone(&position_ref)));
 
-                naia_to_hecs_key_map.insert(naia_key, hecs_key);
-                hecs_to_naia_key_map.insert(hecs_key, naia_key);
+                naia_to_hecs_key_map.insert(entity_key, hecs_key);
+                hecs_to_naia_key_map.insert(hecs_key, entity_key);
             }
         }
 
@@ -128,16 +128,11 @@ impl App {
                     Event::Disconnection(_, user) => {
                         info!("Naia Server disconnected from: {:?}", user.address);
                     }
-                    Event::Message(user_key, message_type) => {
+                    Event::Message(user_key, Protocol::StringMessage(message_ref)) => {
                         if let Some(user) = self.server.get_user(&user_key) {
-                            match message_type {
-                                Protocol::StringMessage(message_ref) => {
-                                    let message = message_ref.borrow();
-                                    let message = message.message.get();
-                                    info!("Naia Server recv <- {}: {}", user.address, message);
-                                }
-                                _ => {}
-                            }
+                            let message = message_ref.borrow();
+                            let message = message.message.get();
+                            info!("Naia Server recv <- {}: {}", user.address, message);
                         }
                     }
                     Event::Tick => {
@@ -175,7 +170,7 @@ impl App {
 
                             if !self.has_marker.contains_key(naia_key) {
                                 // Add Marker component to Entity in Naia Server
-                                let marker = Marker::new("new").wrap();
+                                let marker = Marker::new("new").to_ref();
                                 let component_key = self.server.add_component_to_entity(
                                     &naia_key,
                                     Protocol::Marker(marker.clone()),
@@ -198,9 +193,9 @@ impl App {
                                 .expect("hecs <-> naia map not working ..");
 
                             if let Some(component_key) = self.has_marker.remove(naia_key) {
-                                let component_ref = self.server.remove_component(&component_key);
+                                let protocol_component = self.server.remove_component(&component_key);
 
-                                match component_ref {
+                                match protocol_component {
                                     Protocol::Position(position_ref) => {
                                         self.remove_component(&hecs_key, &position_ref);
                                     }
@@ -238,10 +233,10 @@ impl App {
                         }
                         for user_key in iter_vec {
                             let user = self.server.get_user(&user_key).unwrap();
-                            let new_message = format!("Server Packet (tick {})", self.tick_count);
-                            info!("Naia Server send -> {}: {}", user.address, new_message);
+                            let message_contents = format!("Server Packet (tick {})", self.tick_count);
+                            info!("Naia Server send -> {}: {}", user.address, message_contents);
 
-                            let message = StringMessage::new(new_message);
+                            let message = StringMessage::new(message_contents);
                             self.server.queue_message(&user_key, &message, true);
                         }
 

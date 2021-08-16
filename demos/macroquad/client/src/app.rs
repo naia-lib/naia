@@ -85,38 +85,37 @@ impl App {
                         Event::Tick => {
                             if let Some((pawn_key, _)) = self.pawn {
                                 if let Some(command) = self.queued_command.take() {
-                                    self.client.send_command(&pawn_key, &command);
+                                    self.client.send_object_command(&pawn_key, &command);
                                 }
                             }
                         }
-                        Event::AssignPawn(local_key) => {
+                        Event::AssignPawn(object_key) => {
                             info!("assign pawn");
                             if let Some(Protocol::Square(square_ref)) =
-                                self.client.get_pawn_mut(&local_key)
+                                self.client.get_pawn_mut(&object_key)
                             {
-                                self.pawn = Some((local_key, square_ref.clone()));
+                                self.pawn = Some((object_key, square_ref.clone()));
                             }
                         }
                         Event::UnassignPawn(_) => {
                             self.pawn = None;
                             info!("unassign pawn");
                         }
-                        Event::NewCommand(_, protocol) | Event::ReplayCommand(_, protocol) => {
-                            if let Protocol::KeyCommand(key_command) = protocol {
-                                if let Some((_, pawn_ref)) = &self.pawn {
-                                    shared_behavior::process_command(&key_command, &pawn_ref);
-                                }
+                        Event::NewCommand(_, Protocol::KeyCommand(key_command_ref)) |
+                        Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref)) => {
+                            if let Some((_, pawn_ref)) = &self.pawn {
+                                shared_behavior::process_command(&key_command_ref, &pawn_ref);
                             }
                         }
-                        Event::CreateObject(local_key) => {
+                        Event::CreateObject(object_key) => {
                             if let Some(Protocol::Square(square_ref)) =
-                                self.client.get_object(&local_key)
+                                self.client.get_object(&object_key)
                             {
-                                self.square_map.insert(local_key, square_ref.clone());
+                                self.square_map.insert(object_key, square_ref.clone());
                             }
                         }
-                        Event::DeleteObject(local_key, _) => {
-                            self.square_map.remove(&local_key);
+                        Event::DeleteObject(object_key, _) => {
+                            self.square_map.remove(&object_key);
                         }
                         _ => {}
                     },

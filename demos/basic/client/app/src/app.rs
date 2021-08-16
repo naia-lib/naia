@@ -56,21 +56,18 @@ impl App {
                             Event::Disconnection => {
                                 info!("Client disconnected from: {}", self.client.server_address());
                             }
-                            Event::Message(protocol) => match protocol {
-                                Protocol::StringMessage(message_ref) => {
-                                    let message = message_ref.borrow();
-                                    let message_contents = message.contents.get();
-                                    info!("Client recv <- {}", message_contents);
+                            Event::Message(Protocol::StringMessage(message_ref)) => {
+                                let message = message_ref.borrow();
+                                let message_contents = message.contents.get();
+                                info!("Client recv <- {}", message_contents);
 
-                                    let new_message_contents =
-                                        format!("Client Message ({})", self.message_count);
-                                    info!("Client send -> {}", new_message_contents);
+                                let new_message_contents =
+                                    format!("Client Message ({})", self.message_count);
+                                info!("Client send -> {}", new_message_contents);
 
-                                    let string_message = StringMessage::new(new_message_contents);
-                                    self.client.send_message(&string_message, true);
-                                    self.message_count += 1;
-                                }
-                                _ => {}
+                                let string_message = StringMessage::new(new_message_contents);
+                                self.client.send_message(&string_message, true);
+                                self.message_count += 1;
                             },
                             Event::CreateObject(object_key) => {
                                 if let Some(Protocol::Character(character_ref)) =
@@ -100,17 +97,15 @@ impl App {
                                     );
                                 }
                             }
-                            Event::DeleteObject(object_key, protocol) => {
-                                if let Protocol::Character(character_ref) = protocol {
-                                    let character = character_ref.borrow();
-                                    info!("deletion of Character with key: {}, x: {}, y: {}, name: {} {}",
+                            Event::DeleteObject(object_key, Protocol::Character(character_ref)) => {
+                                let character = character_ref.borrow();
+                                info!("deletion of Character with key: {}, x: {}, y: {}, name: {} {}",
                                       object_key,
                                       character.x.get(),
                                       character.y.get(),
                                       character.fullname.get().first,
                                       character.fullname.get().last,
                                 );
-                                }
                             }
                             Event::Tick => {
                                 //info!("tick event");
