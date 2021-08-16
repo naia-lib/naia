@@ -1,5 +1,5 @@
 [package]
-name = "naia-demo-macroquad-client"
+name = "naia-macroquad-client-demo"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 version = "0.1.0"
 edition = "2018"
@@ -10,13 +10,12 @@ name = "naia-demo-macroquad-client"
 path = "src/main.rs"
 
 [features]
-multithread = [ "naia-client/multithread", "naia-demo-macroquad-shared/multithread" ]
 
 [dependencies]
 cfg-if = "0.1.10"
 macroquad = { version = "=0.3.0-alpha.12", features = [ "log-impl" ] }
 naia-client = { path = "../../../client", features = [ "mquad" ] } #version = "0.5.0", features = [ "mquad" ] }
-naia-demo-macroquad-shared = { path = "../shared" }
+naia-macroquad-demo-shared = { path = "../shared" }
 
 [profile.release]
 lto = "thin"

@@ -1,4 +1,4 @@
-# naia-basic-server-demo
+# naia-hecs-server-demo
 
 To run a UDP-sending-and-receiving Server, run:
     `cargo run --features "use-udp"`

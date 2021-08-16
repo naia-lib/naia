@@ -1,5 +1,5 @@
 [package]
-name = "naia-demo-basic-client-mq"
+name = "naia-basic-client-demo-mq"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 version = "0.1.0"
 edition = "2018"
@@ -10,9 +10,9 @@ name = "naia-demo-basic-client-mq"
 path = "src/main.rs"
 
 [features]
-multithread = [ "naia-demo-basic-client-app/multithread", ]
+multithread = [ "naia-basic-client-demo-app/multithread", ]
 
 [dependencies]
 cfg-if = "0.1.10"
-naia-demo-basic-client-app = { path = "../app", features = [ "mquad" ] }
+naia-basic-client-demo-app = { path = "../app", features = [ "mquad" ] }
 miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"] }

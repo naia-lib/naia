@@ -1,8 +1,8 @@
 [package]
-name = "naia-basic-client-demo-wb"
+name = "naia-hecs-client-demo"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-workspace = "../../../../"
+workspace = "../../../"
 publish = false
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -15,12 +15,13 @@ name = "index" # This is because cargo-web also picks up the static assets folde
 path = "src/main.rs"
 
 [features]
-multithread = [ "naia-basic-client-demo-app/multithread" ]
 
 [dependencies]
-naia-basic-client-demo-app = { path = "../app", features = [ "wbindgen" ] }
 log = "0.4"
 cfg-if = "0.1.10"
+naia-client = { path = "../../../client", features = [ "wbindgen" ] }
+naia-hecs-demo-shared = { path = "../shared" }
+hecs = { path = "../../../../Forks/hecs" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 simple_logger = { version = "1.4" }

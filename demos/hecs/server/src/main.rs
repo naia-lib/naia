@@ -9,7 +9,7 @@ use smol::io;
 
 use naia_server::{ServerAddresses, ServerConfig};
 
-use naia_demo_macroquad_shared::get_server_address;
+use naia_hecs_demo_shared::get_server_address;
 
 mod app;
 use app::App;
@@ -20,7 +20,7 @@ fn main() -> io::Result<()> {
         .init()
         .expect("A logger was already initialized");
 
-    info!("Naia Macroquad Server Demo Started");
+    info!("Naia Hecs Server Demo Started");
 
     let mut server_config = ServerConfig::default();
 

@@ -8,7 +8,7 @@ use naia_client::{
     Client, ClientConfig, Event, LocalEntityKey as NaiaEntityKey, NaiaKey, Ref, Replicate,
 };
 
-use naia_demo_basic_shared::{
+use naia_hecs_demo_shared::{
     get_shared_config,
     get_server_address,
     protocol::{Auth, Protocol, StringMessage},
@@ -24,7 +24,7 @@ pub struct App {
 
 impl App {
     pub fn new() -> App {
-        info!("Basic Naia Client Demo Started");
+        info!("Naia Hecs Client Demo Started");
 
         let mut client_config = ClientConfig::default();
 
