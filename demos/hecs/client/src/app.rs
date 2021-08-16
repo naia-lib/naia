@@ -9,8 +9,7 @@ use naia_client::{
 };
 
 use naia_hecs_demo_shared::{
-    get_shared_config,
-    get_server_address,
+    get_server_address, get_shared_config,
     protocol::{Auth, Protocol, StringMessage},
 };
 
