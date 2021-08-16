@@ -116,9 +116,8 @@ impl<T: ProtocolType> ReplicaManager<T> {
                     // Assign Pawn
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
-                    if let Some(protocol) = self.local_replica_store.get(&object_key).cloned() {
-                        self.pawn_store
-                            .insert(object_key, protocol);
+                    if let Some(protocol) = self.local_replica_store.get(&object_key) {
+                        self.pawn_store.insert(object_key, protocol.copy());
 
                         let pawn_key = PawnKey::Object(object_key);
                         command_receiver.pawn_init(&pawn_key);

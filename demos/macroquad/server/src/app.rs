@@ -80,7 +80,7 @@ impl App {
                             };
 
                             let square =
-                                Square::new(x as u16, y as u16, square_color).to_protocol();
+                                Square::new(x as u16, y as u16, square_color).copy_to_protocol();
                             let square_key = self.server.register_object(square);
                             self.server
                                 .room_add_object(&self.main_room_key, &square_key);

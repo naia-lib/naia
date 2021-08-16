@@ -24,6 +24,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let write_method = get_write_method(&type_name, &input.data);
     let get_type_id_method = get_type_id_method(&type_name, &input.data);
     let load_method = get_load_method(&type_name, &input.data);
+    let copy_method = get_copy_method(&type_name, &input.data);
 
     let ref_imports = {
         if MULTITHREAD {
@@ -52,6 +53,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
             #mirror_method
             #write_method
             #get_type_id_method
+            #copy_method
         }
         #conversion_methods
     };
@@ -381,6 +383,38 @@ fn get_load_method(type_name: &Ident, data: &Data) -> TokenStream {
             #variants
 
             manifest
+        }
+    };
+}
+
+fn get_copy_method(type_name: &Ident, data: &Data) -> TokenStream {
+    let variants = match *data {
+        Data::Enum(ref data) => {
+            let mut output = quote! {};
+            for variant in data.variants.iter() {
+                let variant_name = &variant.ident;
+
+                let new_output_right = quote! {
+                    #type_name::#variant_name(replica_ref) => {
+                        return #type_name::#variant_name(replica_ref.borrow().copy().to_ref());
+                    }
+                };
+                let new_output_result = quote! {
+                    #output
+                    #new_output_right
+                };
+                output = new_output_result;
+            }
+            output
+        }
+        _ => unimplemented!(),
+    };
+
+    return quote! {
+        fn copy(&self) -> #type_name {
+            match self {
+                #variants
+            }
         }
     };
 }

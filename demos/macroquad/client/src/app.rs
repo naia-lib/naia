@@ -32,7 +32,7 @@ impl App {
         client_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         // This will be evaluated in the Server's 'on_auth()' method
-        let auth = Auth::new("charlie", "12345").to_protocol();
+        let auth = Auth::new("charlie", "12345").copy_to_protocol();
 
         App {
             client: Client::new(
@@ -101,8 +101,8 @@ impl App {
                             self.pawn = None;
                             info!("unassign pawn");
                         }
-                        Event::NewCommand(_, Protocol::KeyCommand(key_command_ref)) |
-                        Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref)) => {
+                        Event::NewCommand(_, Protocol::KeyCommand(key_command_ref))
+                        | Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref)) => {
                             if let Some((_, pawn_ref)) = &self.pawn {
                                 shared_behavior::process_command(&key_command_ref, &pawn_ref);
                             }

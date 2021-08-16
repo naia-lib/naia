@@ -14,7 +14,7 @@ pub trait Replicate<T: ProtocolType>: BoxClone<T> {
     fn get_diff_mask_size(&self) -> u8;
     /// Gets a copy of the Message/Object/Component, wrapped in an ProtocolType
     /// enum (which is the common protocol between the server/host)
-    fn to_protocol(&self) -> T;
+    fn copy_to_protocol(&self) -> T;
     /// Gets the TypeId of the Message/Object/Component, used to map to a
     /// registered ProtocolType
     fn get_type_id(&self) -> TypeId;
@@ -45,6 +45,8 @@ pub trait ReplicaEq<T: ProtocolType, Impl = Self>: Replicate<T> {
     /// Sets the current Replica to the state of another Replica of the
     /// same type
     fn mirror(&mut self, other: &Impl);
+    /// Gets a copy of the Message/Object/Component
+    fn copy(&self) -> Impl;
 }
 
 impl<T: ProtocolType> Debug for dyn Replicate<T> {

@@ -35,7 +35,7 @@ impl App {
         client_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         // This will be evaluated in the Server's 'on_auth()' method
-        let auth = Auth::new("charlie", "12345").to_protocol();
+        let auth = Auth::new("charlie", "12345").copy_to_protocol();
 
         App {
             client: Client::new(
@@ -70,13 +70,14 @@ impl App {
                             //let recv_message_contents = recv_message.contents.get();
                             //info!("Client received message: {}", recv_message_contents);
 
-                            let send_message_contents = format!("Client Packet ({})", self.message_count);
+                            let send_message_contents =
+                                format!("Client Packet ({})", self.message_count);
                             //info!("Client send: {}", send_message_contents);
 
                             let send_message = StringMessage::new(send_message_contents);
                             self.client.send_message(&send_message, true);
                             self.message_count += 1;
-                        },
+                        }
                         Event::CreateEntity(naia_entity_key, component_keys) => {
                             info!("creation of entity: {}", naia_entity_key.to_u16());
 
@@ -154,7 +155,9 @@ impl App {
                                 component_key.to_u16(),
                                 naia_entity_key.to_u16()
                             );
-                            if let Some(hecs_entity_key) = self.entity_key_map.get(&naia_entity_key).copied() {
+                            if let Some(hecs_entity_key) =
+                                self.entity_key_map.get(&naia_entity_key).copied()
+                            {
                                 match protocol {
                                     Protocol::Position(position_ref) => {
                                         self.remove_component(&hecs_entity_key, &position_ref);

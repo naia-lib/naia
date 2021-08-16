@@ -26,4 +26,7 @@ pub trait ProtocolType<Impl = Self>: Clone {
     /// Sets the current Object/Component/Message to the state of another of the
     /// same type
     fn mirror(&mut self, other: &Impl);
+    /// Creates a copy of self, different than clone (which works as a smart
+    /// reference)
+    fn copy(&self) -> Impl;
 }

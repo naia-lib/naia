@@ -88,8 +88,8 @@ impl App {
 
                 // Add Position component to Entity
                 let position_ref = Position::new((count * 4) as u8, 0).to_ref();
-                let _position_component_key =
-                    server.add_component_to_entity(&entity_key, Protocol::Position(position_ref.clone()));
+                let _position_component_key = server
+                    .add_component_to_entity(&entity_key, Protocol::Position(position_ref.clone()));
 
                 // Add Name component to Entity
                 let name_ref = Name::new(first, last).to_ref();
@@ -193,7 +193,8 @@ impl App {
                                 .expect("hecs <-> naia map not working ..");
 
                             if let Some(component_key) = self.has_marker.remove(naia_key) {
-                                let protocol_component = self.server.remove_component(&component_key);
+                                let protocol_component =
+                                    self.server.remove_component(&component_key);
 
                                 match protocol_component {
                                     Protocol::Position(position_ref) => {
@@ -233,7 +234,8 @@ impl App {
                         }
                         for user_key in iter_vec {
                             let user = self.server.get_user(&user_key).unwrap();
-                            let message_contents = format!("Server Packet (tick {})", self.tick_count);
+                            let message_contents =
+                                format!("Server Packet (tick {})", self.tick_count);
                             info!("Naia Server send -> {}: {}", user.address, message_contents);
 
                             let message = StringMessage::new(message_contents);
