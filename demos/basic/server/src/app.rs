@@ -71,8 +71,8 @@ impl App {
                 count += 1;
 
                 // Create a Character
-                let character = Character::new((count * 4) as u8, 0, first, last);
-                let character_key = server.register_object(character.to_protocol());
+                let character = Character::new((count * 4) as u8, 0, first, last).to_protocol();
+                let character_key = server.register_object(character);
 
                 // Add the Character to the main Room
                 server.room_add_object(&main_room_key, &character_key);
@@ -99,16 +99,14 @@ impl App {
                     Event::Disconnection(_, user) => {
                         info!("Naia Server disconnected from: {:?}", user.address);
                     }
-                    Event::Message(user_key, protocol) => {
+                    Event::Message(user_key, Protocol::StringMessage(message_ref)) => {
                         if let Some(user) = self.server.get_user(&user_key) {
-                            if let Protocol::StringMessage(message_ref) = protocol {
-                                let message = message_ref.borrow();
-                                let message_contents = message.contents.get();
-                                info!(
-                                    "Server recv from ({}) <- {}",
-                                    user.address, message_contents
-                                );
-                            }
+                            let message = message_ref.borrow();
+                            let message_contents = message.contents.get();
+                            info!(
+                                "Server recv from ({}) <- {}",
+                                user.address, message_contents
+                            );
                         }
                     }
                     Event::Tick => {

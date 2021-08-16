@@ -98,13 +98,11 @@ impl App {
                             self.server.deregister_object(&object_key);
                         }
                     }
-                    Event::Command(_, object_key, protocol) => {
-                        if let Protocol::KeyCommand(key_command) = protocol {
-                            if let Some(Protocol::Square(square_ref)) =
-                                self.server.get_object(&object_key)
-                            {
-                                shared_behavior::process_command(&key_command, square_ref);
-                            }
+                    Event::Command(_, square_key, Protocol::KeyCommand(key_command_ref)) => {
+                        if let Some(Protocol::Square(square_ref)) =
+                            self.server.get_object(&square_key)
+                        {
+                            shared_behavior::process_command(&key_command_ref, square_ref);
                         }
                     }
                     Event::Tick => {

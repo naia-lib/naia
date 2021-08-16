@@ -65,20 +65,17 @@ impl App {
                         Event::Disconnection => {
                             info!("Client disconnected from: {}", self.client.server_address());
                         }
-                        Event::Message(message_type) => match message_type {
-                            Protocol::StringMessage(_message_ref) => {
-                                //let message = message_ref.borrow();
-                                //let message_inner = message.message.get();
-                                //info!("Client received message: {}", message_inner);
+                        Event::Message(Protocol::StringMessage(_recv_message_ref)) => {
+                            //let recv_message = _recv_message_ref.borrow();
+                            //let recv_message_contents = recv_message.contents.get();
+                            //info!("Client received message: {}", recv_message_contents);
 
-                                let new_message = format!("Client Packet ({})", self.message_count);
-                                //info!("Client send: {}", new_message);
+                            let send_message_contents = format!("Client Packet ({})", self.message_count);
+                            //info!("Client send: {}", send_message_contents);
 
-                                let string_message = StringMessage::new(new_message);
-                                self.client.send_message(&string_message, true);
-                                self.message_count += 1;
-                            }
-                            _ => {}
+                            let send_message = StringMessage::new(send_message_contents);
+                            self.client.send_message(&send_message, true);
+                            self.message_count += 1;
                         },
                         Event::CreateEntity(naia_entity_key, component_keys) => {
                             info!("creation of entity: {}", naia_entity_key.to_u16());
@@ -90,19 +87,15 @@ impl App {
                                     component_key.to_u16(),
                                     naia_entity_key.to_u16()
                                 );
-                                let component = self
-                                    .client
-                                    .get_component(&component_key)
-                                    .expect("attempting to add non-existent component to entity")
-                                    .clone();
-                                match component {
-                                    Protocol::Position(position_ref) => {
+
+                                match self.client.get_component(&component_key).cloned() {
+                                    Some(Protocol::Position(position_ref)) => {
                                         self.entity_builder.add(position_ref);
                                     }
-                                    Protocol::Name(name_ref) => {
+                                    Some(Protocol::Name(name_ref)) => {
                                         self.entity_builder.add(name_ref);
                                     }
-                                    Protocol::Marker(marker_ref) => {
+                                    Some(Protocol::Marker(marker_ref)) => {
                                         self.entity_builder.add(marker_ref);
                                     }
                                     _ => {}
@@ -136,23 +129,18 @@ impl App {
                                 .get(&naia_entity_key)
                                 .expect("attempting to add new component to non-existent entity");
 
-                            let component = self
-                                .client
-                                .get_component(&component_key)
-                                .expect("attempting to add non-existent component to entity")
-                                .clone();
-                            match component {
-                                Protocol::Position(position_ref) => {
+                            match self.client.get_component(&component_key).cloned() {
+                                Some(Protocol::Position(position_ref)) => {
                                     self.world
                                         .insert_one(hecs_entity_key, position_ref)
                                         .expect("error inserting component");
                                 }
-                                Protocol::Name(name_ref) => {
+                                Some(Protocol::Name(name_ref)) => {
                                     self.world
                                         .insert_one(hecs_entity_key, name_ref)
                                         .expect("error inserting component");
                                 }
-                                Protocol::Marker(marker_ref) => {
+                                Some(Protocol::Marker(marker_ref)) => {
                                     self.world
                                         .insert_one(hecs_entity_key, marker_ref)
                                         .expect("error inserting component");
@@ -160,17 +148,14 @@ impl App {
                                 _ => {}
                             }
                         }
-                        Event::RemoveComponent(naia_entity_key, component_key, component_ref) => {
+                        Event::RemoveComponent(naia_entity_key, component_key, protocol) => {
                             info!(
                                 "remove component: {}, from entity: {}",
                                 component_key.to_u16(),
                                 naia_entity_key.to_u16()
                             );
-                            if self.entity_key_map.contains_key(&naia_entity_key) {
-                                let hecs_entity_key =
-                                    *self.entity_key_map.get(&naia_entity_key).unwrap();
-
-                                match component_ref {
+                            if let Some(hecs_entity_key) = self.entity_key_map.get(&naia_entity_key).copied() {
+                                match protocol {
                                     Protocol::Position(position_ref) => {
                                         self.remove_component(&hecs_entity_key, &position_ref);
                                     }
@@ -182,8 +167,6 @@ impl App {
                                     }
                                     _ => {}
                                 }
-                            } else {
-                                warn!("attempting to remove component from non-existent entity");
                             }
                         }
                         Event::Tick => {

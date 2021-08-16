@@ -52,7 +52,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                     type_id: TypeId::of::<#replica_name>(),
                 });
             }
-            pub fn wrap(self) -> Ref<#replica_name> {
+            pub fn to_ref(self) -> Ref<#replica_name> {
                 return Ref::new(self);
             }
             #new_complete_method
@@ -238,7 +238,7 @@ fn get_to_protocol_method(
 
     return quote! {
         fn to_protocol(&self) -> #type_name {
-            let copied_replica = #replica_name::new_complete(#args).wrap();
+            let copied_replica = #replica_name::new_complete(#args).to_ref();
             return #type_name::#replica_name(copied_replica);
         }
     };
