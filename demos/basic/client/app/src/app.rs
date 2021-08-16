@@ -28,7 +28,7 @@ impl App {
         client_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         // This will be evaluated in the Server's 'on_auth()' method
-        let auth = Auth::new("charlie", "12345").to_protocol();
+        let auth = Auth::new("charlie", "12345").copy_to_protocol();
 
         App {
             client: Client::new(
@@ -68,7 +68,7 @@ impl App {
                                 let string_message = StringMessage::new(new_message_contents);
                                 self.client.send_message(&string_message, true);
                                 self.message_count += 1;
-                            },
+                            }
                             Event::CreateObject(object_key) => {
                                 if let Some(Protocol::Character(character_ref)) =
                                     self.client.get_object(&object_key)
@@ -99,12 +99,13 @@ impl App {
                             }
                             Event::DeleteObject(object_key, Protocol::Character(character_ref)) => {
                                 let character = character_ref.borrow();
-                                info!("deletion of Character with key: {}, x: {}, y: {}, name: {} {}",
-                                      object_key,
-                                      character.x.get(),
-                                      character.y.get(),
-                                      character.fullname.get().first,
-                                      character.fullname.get().last,
+                                info!(
+                                    "deletion of Character with key: {}, x: {}, y: {}, name: {} {}",
+                                    object_key,
+                                    character.x.get(),
+                                    character.y.get(),
+                                    character.fullname.get().first,
+                                    character.fullname.get().last,
                                 );
                             }
                             Event::Tick => {

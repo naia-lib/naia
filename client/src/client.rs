@@ -169,13 +169,13 @@ impl<T: ProtocolType> Client<T> {
                         PawnKey::Object(object_key) => {
                             return Some(Ok(Event::ReplayCommand(
                                 object_key,
-                                command.as_ref().to_protocol(),
+                                command.as_ref().copy_to_protocol(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(Event::ReplayCommandEntity(
                                 entity_key,
-                                command.as_ref().to_protocol(),
+                                command.as_ref().copy_to_protocol(),
                             )));
                         }
                     }
@@ -186,13 +186,13 @@ impl<T: ProtocolType> Client<T> {
                         PawnKey::Object(object_key) => {
                             return Some(Ok(Event::NewCommand(
                                 object_key,
-                                command.as_ref().to_protocol(),
+                                command.as_ref().copy_to_protocol(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(Event::NewCommandEntity(
                                 entity_key,
-                                command.as_ref().to_protocol(),
+                                command.as_ref().copy_to_protocol(),
                             )));
                         }
                     }
@@ -392,7 +392,11 @@ impl<T: ProtocolType> Client<T> {
     }
 
     /// Queues up a Pawn Object Command to be sent to the Server
-    pub fn send_object_command(&mut self, pawn_object_key: &LocalObjectKey, command: &impl Replicate<T>) {
+    pub fn send_object_command(
+        &mut self,
+        pawn_object_key: &LocalObjectKey,
+        command: &impl Replicate<T>,
+    ) {
         if let Some(connection) = &mut self.server_connection {
             connection.object_queue_command(pawn_object_key, command);
         }
