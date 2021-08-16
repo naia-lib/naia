@@ -11,13 +11,13 @@ use crate::Packet;
 use super::{
     dual_command_receiver::DualCommandReceiver, dual_command_sender::DualCommandSender,
     packet_writer::PacketWriter, ping_manager::PingManager, replica_action::ReplicaAction,
-    replica_manager::Replicamanager, tick_manager::TickManager, tick_queue::TickQueue,
+    replica_manager::ReplicaManager, tick_manager::TickManager, tick_queue::TickQueue,
 };
 
 #[derive(Debug)]
 pub struct ServerConnection<T: ProtocolType> {
     connection: Connection<T>,
-    replica_manager: Replicamanager<T>,
+    replica_manager: ReplicaManager<T>,
     ping_manager: PingManager,
     command_sender: DualCommandSender<T>,
     command_receiver: DualCommandReceiver<T>,
@@ -28,7 +28,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
-            replica_manager: Replicamanager::new(),
+            replica_manager: ReplicaManager::new(),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
