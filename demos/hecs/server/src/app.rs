@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use hecs::{Entity as HecsEntityKey, World};
 
@@ -49,19 +49,6 @@ impl App {
         let mut server =
             Server::new(Protocol::load(), Some(server_config), get_shared_config()).await;
 
-        // This method is called during the connection handshake process, and can be
-        // used to reject a new connection if the correct credentials have not been
-        // provided
-        server.on_auth(Rc::new(Box::new(|_, auth_type| {
-            if let Protocol::Auth(auth_ref) = auth_type {
-                let auth = auth_ref.borrow();
-                let username = auth.username.get();
-                let password = auth.password.get();
-                return username == "charlie" && password == "12345";
-            }
-            return false;
-        })));
-
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
         let main_room_key = server.create_room();
@@ -86,21 +73,25 @@ impl App {
                 let entity_key = server.register_entity();
                 server.room_add_entity(&main_room_key, &entity_key);
 
-                // Add Position component to Entity
-                let position_ref = Position::new((count * 4) as u8, 0).to_ref();
-                let _position_component_key = server
-                    .add_component_to_entity(&entity_key, Protocol::Position(position_ref.clone()));
+                // Create Position component
+                let position_ref = Position::new((count * 4) as u8, 0);
 
-                // Add Name component to Entity
-                let name_ref = Name::new(first, last).to_ref();
-                let _name_component_key =
-                    server.add_component_to_entity(&entity_key, Protocol::Name(name_ref.clone()));
+                // Create Name component
+                let name_ref = Name::new(first, last);
 
                 // Add to World
                 let hecs_key = world.spawn((Ref::clone(&name_ref), Ref::clone(&position_ref)));
 
                 naia_to_hecs_key_map.insert(entity_key, hecs_key);
                 hecs_to_naia_key_map.insert(hecs_key, entity_key);
+
+                // Add Position component to Entity
+                let _position_component_key = server
+                    .add_component_to_entity(&entity_key, &Protocol::PositionConvert(position_ref));
+
+                // Add Name component to Entity
+                let _name_component_key =
+                    server.add_component_to_entity(&entity_key, &Protocol::NameConvert(name_ref));
             }
         }
 
@@ -119,6 +110,18 @@ impl App {
         match self.server.receive().await {
             Ok(event) => {
                 match event {
+                    Event::Authorization(user_key, Protocol::Auth(auth_ref)) => {
+                        let auth_message = auth_ref.borrow();
+                        let username = auth_message.username.get();
+                        let password = auth_message.password.get();
+                        if username == "charlie" && password == "12345" {
+                            // Accept incoming connection
+                            self.server.accept_connection(&user_key);
+                        } else {
+                            // Reject incoming connection
+                            self.server.reject_connection(&user_key);
+                        }
+                    }
                     Event::Connection(user_key) => {
                         self.server.room_add_user(&self.main_room_key, &user_key);
                         if let Some(user) = self.server.get_user(&user_key) {
@@ -169,18 +172,21 @@ impl App {
                                 .expect("hecs <-> naia map not working ..");
 
                             if !self.has_marker.contains_key(naia_key) {
-                                // Add Marker component to Entity in Naia Server
-                                let marker = Marker::new("new").to_ref();
-                                let component_key = self.server.add_component_to_entity(
-                                    &naia_key,
-                                    Protocol::Marker(marker.clone()),
-                                );
+                                // Create Marker component
+                                let marker = Marker::new("new");
 
                                 // Add to Hecs World
                                 self.world
-                                    .insert_one(hecs_key, marker)
+                                    .insert_one(hecs_key, Ref::clone(&marker))
                                     .expect("error inserting!");
 
+                                // Add Marker component to Entity in Naia Server
+                                let component_key = self.server.add_component_to_entity(
+                                    &naia_key,
+                                    &Protocol::MarkerConvert(marker),
+                                );
+
+                                // Track that this entity has a Marker
                                 self.has_marker.insert(*naia_key, component_key);
                             }
                         }
@@ -239,7 +245,7 @@ impl App {
                             info!("Naia Server send -> {}: {}", user.address, message_contents);
 
                             let message = StringMessage::new(message_contents);
-                            self.server.queue_message(&user_key, &message, true);
+                            self.server.queue_message(&user_key, &Protocol::StringMessageConvert(message), true);
                         }
 
                         // VERY IMPORTANT! Calling this actually sends all update data

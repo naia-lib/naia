@@ -1,5 +1,5 @@
 use naia_derive::Replicate;
-use naia_shared::{Property, Replicate};
+use naia_shared::Property;
 
 use super::Protocol;
 
@@ -9,7 +9,7 @@ pub struct StringMessage {
 }
 
 impl StringMessage {
-    pub fn new(contents: String) -> StringMessage {
+    pub fn new(contents: String) -> Ref<Self> {
         return StringMessage::new_complete(contents);
     }
 }

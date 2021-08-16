@@ -35,14 +35,14 @@ impl App {
         client_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         // This will be evaluated in the Server's 'on_auth()' method
-        let auth = Auth::new("charlie", "12345").copy_to_protocol();
+        let auth = Auth::new("charlie", "12345");
 
         App {
             client: Client::new(
                 Protocol::load(),
                 Some(client_config),
                 get_shared_config(),
-                Some(auth),
+                Some(Protocol::AuthConvert(auth)),
             ),
             world: World::new(),
             entity_builder: HecsEntityBuilder::new(),
@@ -75,7 +75,7 @@ impl App {
                             //info!("Client send: {}", send_message_contents);
 
                             let send_message = StringMessage::new(send_message_contents);
-                            self.client.send_message(&send_message, true);
+                            self.client.send_message(&Protocol::StringMessageConvert(send_message), true);
                             self.message_count += 1;
                         }
                         Event::CreateEntity(naia_entity_key, component_keys) => {

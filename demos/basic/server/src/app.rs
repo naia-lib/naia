@@ -1,6 +1,6 @@
-use std::{rc::Rc, time::Duration};
+use std::time::Duration;
 
-use naia_server::{Event, Replicate, RoomKey, Server, ServerAddresses, ServerConfig, UserKey};
+use naia_server::{Event, RoomKey, Server, ServerAddresses, ServerConfig, UserKey};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
@@ -40,19 +40,6 @@ impl App {
         let mut server =
             Server::new(Protocol::load(), Some(server_config), get_shared_config()).await;
 
-        // This method is called during the connection handshake process, and can be
-        // used to reject a new connection if the correct credentials have not been
-        // provided
-        server.on_auth(Rc::new(Box::new(|_, protocol| {
-            if let Protocol::Auth(auth_ref) = protocol {
-                let auth = auth_ref.borrow();
-                let username = auth.username.get();
-                let password = auth.password.get();
-                return username == "charlie" && password == "12345";
-            }
-            return false;
-        })));
-
         // Create a new, singular room, which will contain Users and Objects that they
         // can receive updates from
         let main_room_key = server.create_room();
@@ -72,8 +59,8 @@ impl App {
 
                 // Create a Character
                 let character =
-                    Character::new((count * 4) as u8, 0, first, last).copy_to_protocol();
-                let character_key = server.register_object(character);
+                    Character::new((count * 4) as u8, 0, first, last);
+                let character_key = server.register_object(&Protocol::CharacterConvert(character));
 
                 // Add the Character to the main Room
                 server.room_add_object(&main_room_key, &character_key);
@@ -91,6 +78,18 @@ impl App {
         match self.server.receive().await {
             Ok(event) => {
                 match event {
+                    Event::Authorization(user_key, Protocol::Auth(auth_ref)) => {
+                        let auth_message = auth_ref.borrow();
+                        let username = auth_message.username.get();
+                        let password = auth_message.password.get();
+                        if username == "charlie" && password == "12345" {
+                            // Accept incoming connection
+                            self.server.accept_connection(&user_key);
+                        } else {
+                            // Reject incoming connection
+                            self.server.reject_connection(&user_key);
+                        }
+                    }
                     Event::Connection(user_key) => {
                         if let Some(user) = self.server.get_user(&user_key) {
                             info!("Naia Server connected to: {}", user.address);
@@ -128,7 +127,7 @@ impl App {
                             );
 
                             let new_message = StringMessage::new(new_message_contents);
-                            self.server.queue_message(&user_key, &new_message, true);
+                            self.server.queue_message(&user_key, &Protocol::StringMessageConvert(new_message), true);
                         }
 
                         // Iterate through Characters, marching them from (0,0) to (20, N)
