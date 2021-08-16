@@ -529,23 +529,23 @@ impl<U: ProtocolType> Server<U> {
 
     /// Deregisters an Object with the Server, deleting local replicas of the
     /// Object on each Client
-    pub fn deregister_object(&mut self, key: ObjectKey) -> U {
-        if !self.global_object_set.contains(&key) {
+    pub fn deregister_object(&mut self, key: &ObjectKey) -> U {
+        if !self.global_object_set.contains(key) {
             panic!("attempted to deregister an Object which was never registered");
         }
 
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                Self::user_remove_object(user_connection, &key);
+                Self::user_remove_object(user_connection, key);
             }
         }
 
-        self.mut_handler.borrow_mut().deregister_replica(&key);
-        self.global_object_set.remove(&key);
+        self.mut_handler.borrow_mut().deregister_replica(key);
+        self.global_object_set.remove(key);
         return self
             .global_replica_store
-            .remove(key)
-            .expect("replica not initialized correctly?");
+            .remove(*key)
+            .expect("object not initialized correctly?");
     }
 
     /// Assigns an Object to a specific User, making it a Pawn for that User
@@ -687,9 +687,9 @@ impl<U: ProtocolType> Server<U> {
 
     /// Given an ObjectKey, get a reference to a registered Object being tracked
     /// by the Server
-    pub fn get_object(&mut self, key: ObjectKey) -> Option<&U> {
-        if self.global_object_set.contains(&key) {
-            return self.global_replica_store.get(key);
+    pub fn get_object(&self, key: &ObjectKey) -> Option<&U> {
+        if self.global_object_set.contains(key) {
+            return self.global_replica_store.get(*key);
         } else {
             return None;
         }
@@ -713,18 +713,18 @@ impl<U: ProtocolType> Server<U> {
     }
 
     /// Deletes the Room associated with a given RoomKey on the Server
-    pub fn delete_room(&mut self, key: RoomKey) {
-        self.rooms.remove(key);
+    pub fn delete_room(&mut self, key: &RoomKey) {
+        self.rooms.remove(*key);
     }
 
     /// Gets a Room given an associated RoomKey
-    pub fn get_room(&self, key: RoomKey) -> Option<&Room> {
-        return self.rooms.get(key);
+    pub fn get_room(&self, key: &RoomKey) -> Option<&Room> {
+        return self.rooms.get(*key);
     }
 
     /// Gets a mutable Room given an associated RoomKey
-    pub fn get_room_mut(&mut self, key: RoomKey) -> Option<&mut Room> {
-        return self.rooms.get_mut(key);
+    pub fn get_room_mut(&mut self, key: &RoomKey) -> Option<&mut Room> {
+        return self.rooms.get_mut(*key);
     }
 
     /// Iterate through all the Server's current Rooms
