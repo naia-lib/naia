@@ -10,7 +10,7 @@ cfg_if! {
 
         use wasm_bindgen::prelude::*;
 
-        use naia_demo_basic_client_app::App;
+        use naia_basic_client_demo_app::App;
 
         #[wasm_bindgen(start)]
         pub fn main_js() {

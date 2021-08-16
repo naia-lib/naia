@@ -3,7 +3,7 @@ extern crate cfg_if;
 extern crate log;
 
 use log::LevelFilter;
-use naia_demo_basic_client_app::App;
+use naia_basic_client_demo_app::App;
 use simple_logger::SimpleLogger;
 
 mod loop_native;

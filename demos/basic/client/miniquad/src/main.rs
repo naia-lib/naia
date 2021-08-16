@@ -1,5 +1,5 @@
 use miniquad::*;
-use naia_demo_basic_client_app::{App, Config};
+use naia_basic_client_demo_app::{App, Config};
 
 struct Stage {
     ctx: Context,

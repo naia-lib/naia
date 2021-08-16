@@ -9,7 +9,7 @@ use smol::io;
 
 use naia_server::{ServerAddresses, ServerConfig};
 
-use naia_demo_macroquad_shared::get_server_address;
+use naia_macroquad_demo_shared::get_server_address;
 
 mod app;
 use app::App;
