@@ -1,7 +1,7 @@
 use nanoserde::{DeBin, SerBin};
 
 use naia_derive::Replicate;
-use naia_shared::{Property, Replicate};
+use naia_shared::Property;
 
 use super::Protocol;
 
@@ -18,7 +18,7 @@ pub struct Name {
 }
 
 impl Name {
-    pub fn new(first: &str, last: &str) -> Self {
+    pub fn new(first: &str, last: &str) -> Ref<Self> {
         return Name::new_complete(Fullname {
             first: first.to_string(),
             last: last.to_string(),

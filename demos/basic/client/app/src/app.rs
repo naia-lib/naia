@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use log::info;
 
-use naia_client::{Client, ClientConfig, Event, Replicate};
+use naia_client::{Client, ClientConfig, Event};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
@@ -28,14 +28,14 @@ impl App {
         client_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         // This will be evaluated in the Server's 'on_auth()' method
-        let auth = Auth::new("charlie", "12345").copy_to_protocol();
+        let auth = Auth::new("charlie", "12345");
 
         App {
             client: Client::new(
                 Protocol::load(),
                 Some(client_config),
                 get_shared_config(),
-                Some(auth),
+                Some(Protocol::AuthConvert(auth)),
             ),
             message_count: 0,
         }
@@ -66,7 +66,7 @@ impl App {
                                 info!("Client send -> {}", new_message_contents);
 
                                 let string_message = StringMessage::new(new_message_contents);
-                                self.client.send_message(&string_message, true);
+                                self.client.send_message(&Protocol::StringMessageConvert(string_message), true);
                                 self.message_count += 1;
                             }
                             Event::CreateObject(object_key) => {

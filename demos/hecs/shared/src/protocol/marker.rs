@@ -1,5 +1,5 @@
 use naia_derive::Replicate;
-use naia_shared::{Property, Replicate};
+use naia_shared::Property;
 
 use super::Protocol;
 
@@ -9,7 +9,7 @@ pub struct Marker {
 }
 
 impl Marker {
-    pub fn new(name: &str) -> Self {
+    pub fn new(name: &str) -> Ref<Self> {
         return Marker::new_complete(name.to_string());
     }
 }
