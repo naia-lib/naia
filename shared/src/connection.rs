@@ -1,6 +1,6 @@
-use std::{net::SocketAddr, rc::Rc};
+use std::net::SocketAddr;
 
-use crate::{wrapping_diff, MessageManager, Timer};
+use crate::{wrapping_diff, MessageManager, Ref, Timer};
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
@@ -116,7 +116,7 @@ impl<T: ProtocolType> Connection<T> {
     }
 
     /// Queue up a message to be sent to the remote host
-    pub fn queue_message(&mut self, message: &impl Replicate<T>, guaranteed_delivery: bool) {
+    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<T>>, guaranteed_delivery: bool) {
         return self
             .message_manager
             .queue_outgoing_message(message, guaranteed_delivery);
@@ -131,7 +131,7 @@ impl<T: ProtocolType> Connection<T> {
     pub fn pop_outgoing_message(
         &mut self,
         next_packet_index: u16,
-    ) -> Option<Rc<Box<dyn Replicate<T>>>> {
+    ) -> Option<Ref<dyn Replicate<T>>> {
         return self.message_manager.pop_outgoing_message(next_packet_index);
     }
 
@@ -140,7 +140,7 @@ impl<T: ProtocolType> Connection<T> {
     pub fn unpop_outgoing_message(
         &mut self,
         next_packet_index: u16,
-        message: &Rc<Box<dyn Replicate<T>>>,
+        message: &Ref<dyn Replicate<T>>,
     ) {
         return self
             .message_manager

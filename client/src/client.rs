@@ -6,7 +6,7 @@ use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 
 pub use naia_shared::{
     ConnectionConfig, HostTickManager, Instant, LocalComponentKey, LocalEntityKey, LocalObjectKey,
-    LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PawnKey, ProtocolType,
+    LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PawnKey, ProtocolType, Ref,
     Replicate, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
 };
 
@@ -35,7 +35,7 @@ pub struct Client<T: ProtocolType> {
     pre_connection_digest: Option<Box<[u8]>>,
     handshake_timer: Timer,
     connection_state: ConnectionState,
-    auth_message: Option<T>,
+    auth_message: Option<Ref<dyn Replicate<T>>>,
     tick_manager: TickManager,
 }
 
@@ -46,7 +46,7 @@ impl<T: ProtocolType> Client<T> {
         manifest: Manifest<T>,
         client_config: Option<ClientConfig>,
         shared_config: SharedConfig,
-        auth: Option<T>,
+        auth: Option<Ref<dyn Replicate<T>>>,
     ) -> Self {
         let client_config = match client_config {
             Some(config) => config,
@@ -169,13 +169,13 @@ impl<T: ProtocolType> Client<T> {
                         PawnKey::Object(object_key) => {
                             return Some(Ok(Event::ReplayCommand(
                                 object_key,
-                                command.as_ref().copy_to_protocol(),
+                                command.borrow().copy_to_protocol(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(Event::ReplayCommandEntity(
                                 entity_key,
-                                command.as_ref().copy_to_protocol(),
+                                command.borrow().copy_to_protocol(),
                             )));
                         }
                     }
@@ -186,13 +186,13 @@ impl<T: ProtocolType> Client<T> {
                         PawnKey::Object(object_key) => {
                             return Some(Ok(Event::NewCommand(
                                 object_key,
-                                command.as_ref().copy_to_protocol(),
+                                command.borrow().copy_to_protocol(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(Event::NewCommandEntity(
                                 entity_key,
-                                command.as_ref().copy_to_protocol(),
+                                command.borrow().copy_to_protocol(),
                             )));
                         }
                     }
@@ -274,10 +274,10 @@ impl<T: ProtocolType> Client<T> {
                             }
                             // write auth message if there is one
                             if let Some(auth_message) = &mut self.auth_message {
-                                let type_id = auth_message.get_type_id();
+                                let type_id = auth_message.borrow().get_type_id();
                                 let naia_id = self.manifest.get_naia_id(&type_id); // get naia id
                                 payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                                auth_message.write(&mut payload_bytes);
+                                auth_message.borrow().write(&mut payload_bytes);
                             }
                             Client::<T>::internal_send_connectionless(
                                 &mut self.sender,
@@ -385,7 +385,7 @@ impl<T: ProtocolType> Client<T> {
     }
 
     /// Queues up an Message to be sent to the Server
-    pub fn send_message(&mut self, message: &impl Replicate<T>, guaranteed_delivery: bool) {
+    pub fn send_message(&mut self, message: &Ref<dyn Replicate<T>>, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
             connection.queue_message(message, guaranteed_delivery);
         }
@@ -395,7 +395,7 @@ impl<T: ProtocolType> Client<T> {
     pub fn send_object_command(
         &mut self,
         pawn_object_key: &LocalObjectKey,
-        command: &impl Replicate<T>,
+        command: &Ref<dyn Replicate<T>>,
     ) {
         if let Some(connection) = &mut self.server_connection {
             connection.object_queue_command(pawn_object_key, command);
@@ -406,7 +406,7 @@ impl<T: ProtocolType> Client<T> {
     pub fn send_entity_command(
         &mut self,
         pawn_entity_key: &LocalEntityKey,
-        command: &impl Replicate<T>,
+        command: &Ref<dyn Replicate<T>>,
     ) {
         if let Some(connection) = &mut self.server_connection {
             connection.entity_queue_command(pawn_entity_key, command);

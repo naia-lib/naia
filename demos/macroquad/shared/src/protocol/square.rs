@@ -1,7 +1,7 @@
 use nanoserde::{DeBin, SerBin};
 
 use naia_derive::Replicate;
-use naia_shared::{Property, Replicate};
+use naia_shared::Property;
 
 use super::Protocol;
 
@@ -26,7 +26,7 @@ pub struct Square {
 }
 
 impl Square {
-    pub fn new(x: u16, y: u16, color: Color) -> Square {
+    pub fn new(x: u16, y: u16, color: Color) -> Ref<Square> {
         return Square::new_complete(x, y, color);
     }
 }

@@ -2,7 +2,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use crate::{
     manager_type::ManagerType, manifest::Manifest, protocol_type::ProtocolType,
-    replicate::Replicate, standard_header::StandardHeader,
+    replicate::Replicate, standard_header::StandardHeader, Ref,
 };
 
 /// The maximum of bytes that can be used for the payload of a given packet. (See #38 of http://ithare.com/64-network-dos-and-donts-for-game-engines-part-v-udp/)
@@ -51,16 +51,16 @@ impl MessagePacketWriter {
     pub fn write_message<T: ProtocolType>(
         &mut self,
         manifest: &Manifest<T>,
-        message: &Box<dyn Replicate<T>>,
+        message: &Ref<dyn Replicate<T>>,
     ) -> bool {
         //Write message payload
         let mut message_payload_bytes = Vec::<u8>::new();
-        message.as_ref().write(&mut message_payload_bytes);
+        message.borrow().write(&mut message_payload_bytes);
 
         //Write message "header"
         let mut message_total_bytes = Vec::<u8>::new();
 
-        let type_id = message.as_ref().get_type_id();
+        let type_id = message.borrow().get_type_id();
         let naia_id = manifest.get_naia_id(&type_id); // get naia id
         message_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
         message_total_bytes.append(&mut message_payload_bytes); // write payload

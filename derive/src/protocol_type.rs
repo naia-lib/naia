@@ -44,6 +44,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
         #ref_imports
         impl #type_name {
             #load_method
+            #conversion_methods
         }
         impl ProtocolType for #type_name {
             #read_full_method
@@ -55,7 +56,6 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
             #get_type_id_method
             #copy_method
         }
-        #conversion_methods
     };
 
     proc_macro::TokenStream::from(gen)
@@ -130,14 +130,14 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
 
-                let method_name = Ident::new(
+                let convert_method_name = Ident::new(
                     (variant_name.to_string() + "Convert").as_str(),
                     Span::call_site(),
                 );
 
                 let new_output_right = quote! {
                     #type_name::#variant_name(replica_ref) => {
-                        return #method_name(replica_ref.clone());
+                        return #type_name::#convert_method_name(replica_ref.clone());
                     }
                 };
                 let new_output_result = quote! {
@@ -167,12 +167,12 @@ fn get_conversion_methods(type_name: &Ident, data: &Data) -> TokenStream {
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
 
-                let method_name = Ident::new(
+                let convert_method_name = Ident::new(
                     (variant_name.to_string() + "Convert").as_str(),
                     Span::call_site(),
                 );
 
-                let method_name_raw = Ident::new(
+                let convert_raw_method_name = Ident::new(
                     (variant_name.to_string() + "ConvertRaw").as_str(),
                     Span::call_site(),
                 );
@@ -181,13 +181,13 @@ fn get_conversion_methods(type_name: &Ident, data: &Data) -> TokenStream {
                     let new_output_right = {
                         if MULTITHREAD {
                             quote! {
-                                fn #method_name_raw(eref: Arc<Mutex<#variant_name>>) -> Arc<Mutex<dyn Replicate<#type_name>>> {
+                                fn #convert_raw_method_name(eref: Arc<Mutex<#variant_name>>) -> Arc<Mutex<dyn Replicate<#type_name>>> {
                                     eref.clone()
                                 }
                             }
                         } else {
                             quote! {
-                                fn #method_name_raw(eref: Rc<RefCell<#variant_name>>) -> Rc<RefCell<dyn Replicate<#type_name>>> {
+                                fn #convert_raw_method_name(eref: Rc<RefCell<#variant_name>>) -> Rc<RefCell<dyn Replicate<#type_name>>> {
                                     eref.clone()
                                 }
                             }
@@ -204,8 +204,8 @@ fn get_conversion_methods(type_name: &Ident, data: &Data) -> TokenStream {
 
                 {
                     let new_output_right = quote! {
-                        fn #method_name(eref: Ref<#variant_name>) -> Ref<dyn Replicate<#type_name>> {
-                            let upcast_ref = #method_name_raw(eref.inner());
+                        pub fn #convert_method_name(eref: Ref<#variant_name>) -> Ref<dyn Replicate<#type_name>> {
+                            let upcast_ref = #type_name::#convert_raw_method_name(eref.inner());
                             Ref::new_raw(upcast_ref)
                         }
                     };

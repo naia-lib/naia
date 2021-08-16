@@ -1,10 +1,9 @@
 use std::{
     collections::{HashMap, VecDeque},
-    rc::Rc,
 };
 
 use naia_shared::{
-    wrapping_diff, PawnKey, ProtocolType, Replicate, SequenceBuffer, SequenceIterator,
+    wrapping_diff, PawnKey, ProtocolType, Ref, Replicate, SequenceBuffer, SequenceIterator,
 };
 
 use super::replica_manager::ReplicaManager;
@@ -14,9 +13,9 @@ const COMMAND_HISTORY_SIZE: u16 = 64;
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
 pub struct CommandReceiver<T: ProtocolType> {
-    queued_incoming_commands: VecDeque<(u16, PawnKey, Rc<Box<dyn Replicate<T>>>)>,
-    command_history: HashMap<PawnKey, SequenceBuffer<Rc<Box<dyn Replicate<T>>>>>,
-    queued_command_replays: VecDeque<(u16, PawnKey, Rc<Box<dyn Replicate<T>>>)>,
+    queued_incoming_commands: VecDeque<(u16, PawnKey, Ref<dyn Replicate<T>>)>,
+    command_history: HashMap<PawnKey, SequenceBuffer<Ref<dyn Replicate<T>>>>,
+    queued_command_replays: VecDeque<(u16, PawnKey, Ref<dyn Replicate<T>>)>,
     replay_trigger: HashMap<PawnKey, u16>,
 }
 
@@ -32,14 +31,14 @@ impl<T: ProtocolType> CommandReceiver<T> {
     }
 
     /// Gets the next queued Command
-    pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Rc<Box<dyn Replicate<T>>>)> {
+    pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Ref<dyn Replicate<T>>)> {
         self.queued_incoming_commands.pop_front()
     }
 
     /// Gets the next queued Replayed Command
     pub fn pop_command_replay<U: ProtocolType>(
         &mut self,
-    ) -> Option<(u16, PawnKey, Rc<Box<dyn Replicate<T>>>)> {
+    ) -> Option<(u16, PawnKey, Ref<dyn Replicate<T>>)> {
         self.queued_command_replays.pop_front()
     }
 
@@ -78,7 +77,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
         &mut self,
         host_tick: u16,
         pawn_key: &PawnKey,
-        command: &Rc<Box<dyn Replicate<T>>>,
+        command: &Ref<dyn Replicate<T>>,
     ) {
         self.queued_incoming_commands
             .push_back((host_tick, *pawn_key, command.clone()));
@@ -101,7 +100,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
         &self,
         pawn_key: &PawnKey,
         reverse: bool,
-    ) -> Option<SequenceIterator<Rc<Box<dyn Replicate<T>>>>> {
+    ) -> Option<SequenceIterator<Ref<dyn Replicate<T>>>> {
         if let Some(command_buffer) = self.command_history.get(&pawn_key) {
             return Some(command_buffer.iter(reverse));
         }

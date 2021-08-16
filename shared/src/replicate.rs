@@ -9,11 +9,11 @@ use crate::{PacketReader, Ref};
 
 /// A Replica is a Message/Object/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
-pub trait Replicate<T: ProtocolType>: BoxClone<T> {
+pub trait Replicate<T: ProtocolType> {
     /// Gets the number of bytes of the Message/Object/Component's DiffMask
     fn get_diff_mask_size(&self) -> u8;
     /// Gets a copy of the Message/Object/Component, wrapped in an ProtocolType
-    /// enum (which is the common protocol between the server/host)
+    /// enum
     fn copy_to_protocol(&self) -> T;
     /// Gets the TypeId of the Message/Object/Component, used to map to a
     /// registered ProtocolType
@@ -55,20 +55,8 @@ impl<T: ProtocolType> Debug for dyn Replicate<T> {
     }
 }
 
-/// A Boxed Replicate must be able to clone itself
-pub trait BoxClone<T: ProtocolType> {
-    /// Clone the Boxed Event
-    fn box_clone(&self) -> Box<dyn Replicate<T>>;
-}
-
-impl<Z: ProtocolType, T: 'static + Replicate<Z> + Clone> BoxClone<Z> for T {
-    fn box_clone(&self) -> Box<dyn Replicate<Z>> {
-        Box::new(self.clone())
-    }
-}
-
-impl<T: ProtocolType> Clone for Box<dyn Replicate<T>> {
-    fn clone(&self) -> Box<dyn Replicate<T>> {
-        BoxClone::box_clone(self.as_ref())
-    }
+/// Ref<Replicate<>> must be able to turn into a ProtocolType
+pub trait AsProtocol<X: ProtocolType> {
+    /// Turns Ref<Replicate<>> into a ProtocolType
+    fn wrap_in_protocol(self) -> X;
 }

@@ -34,7 +34,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicaEq, PacketReader, Ref};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicaEq, PacketReader, Ref, Replicate, AsProtocol};
         #property_enum
         pub struct #replica_builder_name {
             type_id: TypeId,
@@ -58,6 +58,11 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             }
             #new_complete_method
             #read_to_type_method
+        }
+        impl AsProtocol<#type_name> for Ref<#replica_name> {
+            fn wrap_in_protocol(self) -> #type_name {
+                #type_name::#replica_name(self.clone())
+            }
         }
         impl Replicate<#type_name> for #replica_name {
             fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
@@ -167,10 +172,10 @@ fn get_new_complete_method(
     }
 
     return quote! {
-        pub fn new_complete(#args) -> #replica_name {
-            #replica_name {
+        pub fn new_complete(#args) -> Ref<#replica_name> {
+            Ref::new(#replica_name {
                 #fields
-            }
+            })
         }
     };
 }
