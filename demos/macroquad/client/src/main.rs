@@ -1,27 +1,14 @@
 extern crate cfg_if;
 
-use std::time::Duration;
-
 use macroquad::prelude::*;
-
-use naia_client::ClientConfig;
-use naia_macroquad_demo_shared::get_server_address;
 
 mod app;
 use app::App;
 
 #[macroquad::main("NaiaMacroquadDemo")]
 async fn main() {
-    info!("Naia Macroquad Client Demo started");
 
-    let mut client_config = ClientConfig::default();
-
-    client_config.server_address = get_server_address();
-
-    client_config.heartbeat_interval = Duration::from_secs(2);
-    client_config.disconnection_timeout_duration = Duration::from_secs(5);
-
-    let mut app = App::new(client_config);
+    let mut app = App::new();
 
     loop {
         clear_background(BLACK);

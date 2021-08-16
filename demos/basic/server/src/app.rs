@@ -18,6 +18,9 @@ pub struct App {
 
 impl App {
     pub async fn new() -> Self {
+
+        info!("Basic Naia Server Demo started");
+
         let mut server_config = ServerConfig::default();
 
         server_config.socket_addresses = ServerAddresses::new(
@@ -117,7 +120,7 @@ impl App {
                     Event::Tick => {
                         // All game logic should happen here, on a tick event
 
-                        // Message Sending
+                        // Message sending
                         let mut iter_vec: Vec<UserKey> = Vec::new();
                         for (user_key, _) in self.server.users_iter() {
                             iter_vec.push(user_key);
