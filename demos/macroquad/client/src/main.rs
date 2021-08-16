@@ -10,9 +10,9 @@ use naia_macroquad_demo_shared::get_server_address;
 mod app;
 use app::App;
 
-#[macroquad::main("NaiaMacroquadExample")]
+#[macroquad::main("NaiaMacroquadDemo")]
 async fn main() {
-    info!("Naia Macroquad Client Example Started");
+    info!("Naia Macroquad Client Demo started");
 
     let mut client_config = ClientConfig::default();
 

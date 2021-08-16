@@ -20,7 +20,7 @@ fn main() -> io::Result<()> {
         .init()
         .expect("A logger was already initialized");
 
-    info!("Naia Hecs Server Demo Started");
+    info!("Naia Hecs Server Demo started");
 
     let mut server_config = ServerConfig::default();
 
