@@ -1,6 +1,6 @@
 
 ## [0.4.0]
-- Moved completely off of tokio & in the examples too (prefer smol & runtime-agnostic where necessary)
+- Moved completely off of tokio & in the demos too (prefer smol & runtime-agnostic where necessary)
 - Update to use naia-socket version 0.4.0
 
 --- sorry for skipped changelog here ---
