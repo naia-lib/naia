@@ -10,7 +10,7 @@ use naia_shared::{
 use super::{dual_command_receiver::DualCommandReceiver, replica_action::ReplicaAction};
 
 #[derive(Debug)]
-pub struct Replicamanager<T: ProtocolType> {
+pub struct ReplicaManager<T: ProtocolType> {
     local_replica_store: HashMap<LocalReplicaKey, T>,
     queued_incoming_messages: VecDeque<ReplicaAction<T>>,
     pawn_store: HashMap<LocalObjectKey, T>,
@@ -19,9 +19,9 @@ pub struct Replicamanager<T: ProtocolType> {
     component_entity_map: HashMap<LocalComponentKey, LocalEntityKey>,
 }
 
-impl<T: ProtocolType> Replicamanager<T> {
+impl<T: ProtocolType> ReplicaManager<T> {
     pub fn new() -> Self {
-        Replicamanager {
+        ReplicaManager {
             queued_incoming_messages: VecDeque::new(),
             local_replica_store: HashMap::new(),
             pawn_store: HashMap::new(),
@@ -65,9 +65,8 @@ impl<T: ProtocolType> Replicamanager<T> {
                     // Replica Deletion
                     let replica_key = LocalReplicaKey::from_u16(reader.read_u16());
 
-                    if self.component_entity_map.contains_key(&replica_key) {
+                    if let Some(entity_key) = self.component_entity_map.remove(&replica_key) {
                         // Replica is a Component
-                        let entity_key = self.component_entity_map.remove(&replica_key).unwrap();
                         let component_set = self
                             .local_entity_store
                             .get_mut(&entity_key)
@@ -117,9 +116,9 @@ impl<T: ProtocolType> Replicamanager<T> {
                     // Assign Pawn
                     let object_key = LocalObjectKey::from_u16(reader.read_u16());
 
-                    if let Some(object_ref) = self.local_replica_store.get_mut(&object_key) {
+                    if let Some(protocol) = self.local_replica_store.get(&object_key).cloned() {
                         self.pawn_store
-                            .insert(object_key, object_ref.inner_ref().borrow().to_protocol());
+                            .insert(object_key, protocol);
 
                         let pawn_key = PawnKey::Object(object_key);
                         command_receiver.pawn_init(&pawn_key);
