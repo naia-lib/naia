@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use naia_server::{Event, ObjectKey, Random, RoomKey, Server, ServerConfig, UserKey};
 
-use naia_demo_macroquad_shared::{
+use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_shared_config,
     protocol::{Color, Protocol, Square},
 };

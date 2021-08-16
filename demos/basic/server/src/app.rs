@@ -7,7 +7,7 @@ use naia_server::{
     UserKey,
 };
 
-use naia_demo_basic_shared::{
+use naia_basic_demo_shared::{
     get_shared_config,
     protocol::{Marker, Name, Position, Protocol, StringMessage},
 };

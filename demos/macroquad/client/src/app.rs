@@ -4,7 +4,7 @@ use macroquad::prelude::*;
 
 use naia_client::{Client, ClientConfig, Event, LocalReplicaKey, Ref, Replicate};
 
-use naia_demo_macroquad_shared::{
+use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_shared_config,
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
 };

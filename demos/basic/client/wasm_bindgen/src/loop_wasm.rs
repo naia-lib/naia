@@ -12,7 +12,7 @@ cfg_if! {
         use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsCast;
 
-        use naia_demo_basic_client_app::App;
+        use naia_basic_client_demo_app::App;
 
         pub fn start_loop(app: App) {
             fn set_timeout(f: &Closure<dyn FnMut()>) {

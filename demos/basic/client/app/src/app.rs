@@ -8,7 +8,7 @@ use naia_client::{
     Client, ClientConfig, Event, LocalEntityKey as NaiaEntityKey, NaiaKey, Ref, Replicate,
 };
 
-use naia_demo_basic_shared::{
+use naia_basic_demo_shared::{
     get_shared_config,
     get_server_address,
     protocol::{Auth, Protocol, StringMessage},
