@@ -23,7 +23,7 @@ pub struct App {
 
 impl App {
     pub fn new() -> App {
-        info!("Naia Hecs Client Demo Started");
+        info!("Naia Hecs Client Demo started");
 
         let mut client_config = ClientConfig::default();
 

@@ -14,7 +14,7 @@ fn main() -> io::Result<()> {
         .init()
         .expect("A logger was already initialized");
 
-    info!("Basic Naia Server Demo Started");
+    info!("Basic Naia Server Demo started");
 
     smol::block_on(async {
         let mut app = App::new().await;
