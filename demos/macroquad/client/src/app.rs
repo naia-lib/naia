@@ -9,6 +9,8 @@ use naia_macroquad_demo_shared::{
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
 };
 
+const SQUARE_SIZE: f32 = 32.0;
+
 pub struct App {
     client: Client<Protocol>,
     pawn: Option<(LocalReplicaKey, Ref<Square>)>,
@@ -22,22 +24,23 @@ impl App {
         info!("Naia Macroquad Client Demo started");
 
         let mut client_config = ClientConfig::default();
-
         client_config.server_address = get_server_address();
         client_config.heartbeat_interval = Duration::from_secs(2);
+        // Keep in mind that the disconnect timeout duration should always be at least
+        // 2x greater than the server's heartbeat interval, to make it so that at the worst case, the
+        // client would need to miss 2 server heartbeats before disconnecting from them
         client_config.disconnection_timeout_duration = Duration::from_secs(5);
 
+        // This will be evaluated in the Server's 'on_auth()' method
         let auth = Auth::new("charlie", "12345").to_protocol();
 
-        let client = Client::new(
-            Protocol::load(),
-            Some(client_config),
-            get_shared_config(),
-            Some(auth),
-        );
-
         App {
-            client,
+            client: Client::new(
+                Protocol::load(),
+                Some(client_config),
+                get_shared_config(),
+                Some(auth),
+            ),
             pawn: None,
             queued_command: None,
             square_map: HashMap::new(),
@@ -88,43 +91,25 @@ impl App {
                         }
                         Event::AssignPawn(local_key) => {
                             info!("assign pawn");
-                            if let Some(typed_object) = self.client.get_pawn_mut(&local_key) {
-                                match typed_object {
-                                    Protocol::Square(square_ref) => {
-                                        self.pawn = Some((local_key, square_ref.clone()));
-                                    }
-                                    _ => {}
-                                }
+                            if let Some(Protocol::Square(square_ref)) = self.client.get_pawn_mut(&local_key) {
+                                self.pawn = Some((local_key, square_ref.clone()));
                             }
                         }
                         Event::UnassignPawn(_) => {
                             self.pawn = None;
                             info!("unassign pawn");
                         }
-                        Event::NewCommand(_, command_type) => match command_type {
-                            Protocol::KeyCommand(key_command) => {
+                        Event::NewCommand(_, protocol) |
+                        Event::ReplayCommand(_, protocol) => {
+                            if let Protocol::KeyCommand(key_command) = protocol {
                                 if let Some((_, pawn_ref)) = &self.pawn {
                                     shared_behavior::process_command(&key_command, &pawn_ref);
                                 }
                             }
-                            _ => {}
-                        },
-                        Event::ReplayCommand(_, command_type) => match command_type {
-                            Protocol::KeyCommand(key_command) => {
-                                if let Some((_, pawn_ref)) = &self.pawn {
-                                    shared_behavior::process_command(&key_command, &pawn_ref);
-                                }
-                            }
-                            _ => {}
                         },
                         Event::CreateObject(local_key) => {
-                            if let Some(typed_object) = self.client.get_object(&local_key) {
-                                match typed_object {
-                                    Protocol::Square(square_ref) => {
-                                        self.square_map.insert(local_key, square_ref.clone());
-                                    }
-                                    _ => {}
-                                }
+                            if let Some(Protocol::Square(square_ref)) = self.client.get_object(&local_key) {
+                                self.square_map.insert(local_key, square_ref.clone());
                             }
                         }
                         Event::DeleteObject(local_key, _) => {
@@ -144,8 +129,6 @@ impl App {
         // drawing
         clear_background(BLACK);
 
-        let square_size = 32.0;
-
         if self.client.has_connection() {
             // draw squares
             for (_, square_ref) in &self.square_map {
@@ -158,8 +141,8 @@ impl App {
                 draw_rectangle(
                     f32::from(*(square.x.get())),
                     f32::from(*(square.y.get())),
-                    square_size,
-                    square_size,
+                    SQUARE_SIZE,
+                    SQUARE_SIZE,
                     color,
                 );
             }
@@ -170,8 +153,8 @@ impl App {
                 draw_rectangle(
                     f32::from(*(square.x.get())),
                     f32::from(*(square.y.get())),
-                    square_size,
-                    square_size,
+                    SQUARE_SIZE,
+                    SQUARE_SIZE,
                     WHITE,
                 );
             }
