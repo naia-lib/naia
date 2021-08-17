@@ -59,7 +59,7 @@ impl App {
 
                 // Create a Character
                 let character = Character::new((count * 4) as u8, 0, first, last);
-                let character_key = server.register_object(character);
+                let character_key = server.register_object(&character);
 
                 // Add the Character to the main Room
                 server.room_add_object(&main_room_key, &character_key);
@@ -126,7 +126,7 @@ impl App {
                             );
 
                             let new_message = StringMessage::new(new_message_contents);
-                            self.server.queue_message(&user_key, new_message, true);
+                            self.server.queue_message(&user_key, &new_message, true);
                         }
 
                         // Iterate through Characters, marching them from (0,0) to (20, N)

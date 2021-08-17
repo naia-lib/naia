@@ -87,10 +87,10 @@ impl App {
 
                 // Add Position component to Entity
                 let _position_component_key =
-                    server.add_component_to_entity(&entity_key, position_ref);
+                    server.add_component_to_entity(&entity_key, &position_ref);
 
                 // Add Name component to Entity
-                let _name_component_key = server.add_component_to_entity(&entity_key, name_ref);
+                let _name_component_key = server.add_component_to_entity(&entity_key, &name_ref);
             }
         }
 
@@ -181,7 +181,7 @@ impl App {
 
                                 // Add Marker component to Entity in Naia Server
                                 let component_key =
-                                    self.server.add_component_to_entity(&naia_key, marker);
+                                    self.server.add_component_to_entity(&naia_key, &marker);
 
                                 // Track that this entity has a Marker
                                 self.has_marker.insert(*naia_key, component_key);
@@ -242,7 +242,7 @@ impl App {
                             info!("Naia Server send -> {}: {}", user.address, message_contents);
 
                             let message = StringMessage::new(message_contents);
-                            self.server.queue_message(&user_key, message, true);
+                            self.server.queue_message(&user_key, &message, true);
                         }
 
                         // VERY IMPORTANT! Calling this actually sends all update data

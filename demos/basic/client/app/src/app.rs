@@ -66,7 +66,7 @@ impl App {
                                 info!("Client send -> {}", new_message_contents);
 
                                 let string_message = StringMessage::new(new_message_contents);
-                                self.client.send_message(string_message, true);
+                                self.client.send_message(&string_message, true);
                                 self.message_count += 1;
                             }
                             Event::CreateObject(object_key) => {
