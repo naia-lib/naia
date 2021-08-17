@@ -25,7 +25,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let read_full_method = get_read_full_method(&properties);
     let read_partial_method = get_read_partial_method(&enum_name, &properties);
     let set_mutator_method = get_set_mutator_method(&properties);
-    let copy_to_protocol_method = get_copy_to_protocol_method(&type_name, replica_name);
+//    let copy_to_protocol_method = get_copy_to_protocol_method(&type_name, replica_name);
     let copy_method = get_copy_method(replica_name);
     let equals_method = get_equals_method(replica_name, &properties);
     let mirror_method = get_mirror_method(replica_name, &properties);
@@ -34,7 +34,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicaEq, PacketReader, Ref, Replicate, AsProtocol};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicaEq, PacketReader, Ref, Replicate};
         #property_enum
         pub struct #replica_builder_name {
             type_id: TypeId,
@@ -59,11 +59,11 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #new_complete_method
             #read_to_type_method
         }
-        impl AsProtocol<#type_name> for Ref<#replica_name> {
-            fn wrap_in_protocol(self) -> #type_name {
-                #type_name::#replica_name(self.clone())
-            }
-        }
+//        impl AsProtocol<#type_name> for Ref<#replica_name> {
+//            fn wrap_in_protocol(self) -> #type_name {
+//                #type_name::#replica_name(self.clone())
+//            }
+//        }
         impl Replicate<#type_name> for #replica_name {
             fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
             fn get_type_id(&self) -> TypeId {
@@ -74,7 +74,6 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #write_partial_method
             #read_full_method
             #read_partial_method
-            #copy_to_protocol_method
         }
         impl ReplicaEq<#type_name> for #replica_name {
             #equals_method
@@ -235,14 +234,14 @@ fn get_copy_method(replica_name: &Ident) -> TokenStream {
     };
 }
 
-fn get_copy_to_protocol_method(type_name: &Ident, replica_name: &Ident) -> TokenStream {
-    return quote! {
-        fn copy_to_protocol(&self) -> #type_name {
-            let copied_replica = self.clone().to_ref();
-            return #type_name::#replica_name(copied_replica);
-        }
-    };
-}
+//fn get_copy_to_protocol_method(type_name: &Ident, replica_name: &Ident) -> TokenStream {
+//    return quote! {
+//        fn copy_to_protocol(&self) -> #type_name {
+//            let copied_replica = self.clone().to_ref();
+//            return #type_name::#replica_name(copied_replica);
+//        }
+//    };
+//}
 
 fn get_write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};

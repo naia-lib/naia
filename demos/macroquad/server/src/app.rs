@@ -83,7 +83,7 @@ impl App {
 
                             let square =
                                 Square::new(x as u16, y as u16, square_color);
-                            let square_key = self.server.register_object(&Protocol::SquareConvert(square));
+                            let square_key = self.server.register_object(square);
                             self.server
                                 .room_add_object(&self.main_room_key, &square_key);
                             self.server.assign_pawn(&user_key, &square_key);

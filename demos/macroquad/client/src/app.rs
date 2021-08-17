@@ -39,7 +39,7 @@ impl App {
                 Protocol::load(),
                 Some(client_config),
                 get_shared_config(),
-                Some(Protocol::AuthConvert(auth)),
+                Some(auth),
             ),
             pawn: None,
             queued_command: None,
@@ -86,7 +86,7 @@ impl App {
                         Event::Tick => {
                             if let Some((pawn_key, _)) = self.pawn {
                                 if let Some(command) = self.queued_command.take() {
-                                    self.client.send_object_command(&pawn_key, &Protocol::KeyCommandConvert(command));
+                                    self.client.send_object_command(&pawn_key, command);
                                 }
                             }
                         }
