@@ -42,7 +42,7 @@ impl App {
                 Protocol::load(),
                 Some(client_config),
                 get_shared_config(),
-                Some(Protocol::AuthConvert(auth)),
+                Some(auth),
             ),
             world: World::new(),
             entity_builder: HecsEntityBuilder::new(),
@@ -76,7 +76,7 @@ impl App {
 
                             let send_message = StringMessage::new(send_message_contents);
                             self.client
-                                .send_message(send_message, true);
+                                .send_message(&send_message, true);
                             self.message_count += 1;
                         }
                         Event::CreateEntity(naia_entity_key, component_keys) => {
