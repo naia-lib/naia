@@ -1,6 +1,4 @@
-use std::{
-    collections::{HashMap, VecDeque},
-};
+use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
     wrapping_diff, PawnKey, ProtocolType, Ref, Replicate, SequenceBuffer, SequenceIterator,

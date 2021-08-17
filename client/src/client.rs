@@ -5,9 +5,9 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
 
 pub use naia_shared::{
-    ConnectionConfig, HostTickManager, Instant, LocalComponentKey, LocalEntityKey, LocalObjectKey,
-    LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PawnKey, ProtocolType, Ref,
-    Replicate, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
+    ConnectionConfig, HostTickManager, ImplRef, Instant, LocalComponentKey, LocalEntityKey,
+    LocalObjectKey, LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PawnKey,
+    ProtocolType, Ref, Replicate, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
 };
 
 use super::{
@@ -42,11 +42,11 @@ pub struct Client<T: ProtocolType> {
 impl<T: ProtocolType> Client<T> {
     /// Create a new client, given the server's address, a shared manifest, an
     /// optional Config, and an optional Authentication message
-    pub fn new(
+    pub fn new<U: ImplRef<T>>(
         manifest: Manifest<T>,
         client_config: Option<ClientConfig>,
         shared_config: SharedConfig,
-        auth: Option<Ref<dyn Replicate<T>>>,
+        auth: Option<U>,
     ) -> Self {
         let client_config = match client_config {
             Some(config) => config,
@@ -71,6 +71,14 @@ impl<T: ProtocolType> Client<T> {
         handshake_timer.ring_manual();
         let message_sender = client_socket.get_sender();
 
+        let auth_message: Option<Ref<dyn Replicate<T>>> = {
+            if auth.is_none() {
+                None
+            } else {
+                Some(auth.unwrap().dyn_ref())
+            }
+        };
+
         Client {
             server_address,
             manifest,
@@ -82,7 +90,7 @@ impl<T: ProtocolType> Client<T> {
             pre_connection_timestamp: None,
             pre_connection_digest: None,
             connection_state: AwaitingChallengeResponse,
-            auth_message: auth,
+            auth_message,
             tick_manager: TickManager::new(shared_config.tick_interval),
         }
     }
@@ -169,13 +177,13 @@ impl<T: ProtocolType> Client<T> {
                         PawnKey::Object(object_key) => {
                             return Some(Ok(Event::ReplayCommand(
                                 object_key,
-                                command.impl_wrap_in_protocol(),
+                                command.borrow().copy_to_protocol(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(Event::ReplayCommandEntity(
                                 entity_key,
-                                command.impl_wrap_in_protocol(),
+                                command.borrow().copy_to_protocol(),
                             )));
                         }
                     }
@@ -186,13 +194,13 @@ impl<T: ProtocolType> Client<T> {
                         PawnKey::Object(object_key) => {
                             return Some(Ok(Event::NewCommand(
                                 object_key,
-                                command.impl_wrap_in_protocol(),
+                                command.borrow().copy_to_protocol(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(Event::NewCommandEntity(
                                 entity_key,
-                                command.impl_wrap_in_protocol(),
+                                command.borrow().copy_to_protocol(),
                             )));
                         }
                     }
@@ -385,31 +393,35 @@ impl<T: ProtocolType> Client<T> {
     }
 
     /// Queues up an Message to be sent to the Server
-    pub fn send_message(&mut self, message: &Ref<dyn Replicate<T>>, guaranteed_delivery: bool) {
+    /// pub fn queue_message<T: ImplRef<U>>(
+    pub fn send_message<U: ImplRef<T>>(&mut self, message_ref: &U, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
-            connection.queue_message(message, guaranteed_delivery);
+            let dyn_ref = message_ref.dyn_ref();
+            connection.queue_message(&dyn_ref, guaranteed_delivery);
         }
     }
 
     /// Queues up a Pawn Object Command to be sent to the Server
-    pub fn send_object_command(
+    pub fn send_object_command<U: ImplRef<T>>(
         &mut self,
         pawn_object_key: &LocalObjectKey,
-        command: &Ref<dyn Replicate<T>>,
+        command_ref: &U,
     ) {
         if let Some(connection) = &mut self.server_connection {
-            connection.object_queue_command(pawn_object_key, command);
+            let dyn_ref = command_ref.dyn_ref();
+            connection.object_queue_command(pawn_object_key, &dyn_ref);
         }
     }
 
     /// Queues up a Pawn Entity Command to be sent to the Server
-    pub fn send_entity_command(
+    pub fn send_entity_command<U: ImplRef<T>>(
         &mut self,
         pawn_entity_key: &LocalEntityKey,
-        command: &Ref<dyn Replicate<T>>,
+        command_ref: &U,
     ) {
         if let Some(connection) = &mut self.server_connection {
-            connection.entity_queue_command(pawn_entity_key, command);
+            let dyn_ref = command_ref.dyn_ref();
+            connection.entity_queue_command(pawn_entity_key, &dyn_ref);
         }
     }
 

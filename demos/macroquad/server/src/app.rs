@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use naia_server::{
-    Event, ObjectKey, Random, RoomKey, Server, ServerAddresses, ServerConfig, UserKey
+    Event, ObjectKey, Random, RoomKey, Server, ServerAddresses, ServerConfig, UserKey,
 };
 
 use naia_macroquad_demo_shared::{
@@ -81,9 +81,8 @@ impl App {
                                 _ => Color::Blue,
                             };
 
-                            let square =
-                                Square::new(x as u16, y as u16, square_color);
-                            let square_key = self.server.register_object(square);
+                            let square = Square::new(x as u16, y as u16, square_color);
+                            let square_key = self.server.register_object(&square);
                             self.server
                                 .room_add_object(&self.main_room_key, &square_key);
                             self.server.assign_pawn(&user_key, &square_key);
