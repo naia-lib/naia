@@ -12,9 +12,6 @@ use crate::{PacketReader, Ref};
 pub trait Replicate<T: ProtocolType> {
     /// Gets the number of bytes of the Message/Object/Component's DiffMask
     fn get_diff_mask_size(&self) -> u8;
-    /// Gets a copy of the Message/Object/Component, wrapped in an ProtocolType
-    /// enum
-    fn copy_to_protocol(&self) -> T;
     /// Gets the TypeId of the Message/Object/Component, used to map to a
     /// registered ProtocolType
     fn get_type_id(&self) -> TypeId;
@@ -53,10 +50,4 @@ impl<T: ProtocolType> Debug for dyn Replicate<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str("Replicate")
     }
-}
-
-/// Ref<Replicate<>> must be able to turn into a ProtocolType
-pub trait AsProtocol<X: ProtocolType> {
-    /// Turns Ref<Replicate<>> into a ProtocolType
-    fn wrap_in_protocol(self) -> X;
 }

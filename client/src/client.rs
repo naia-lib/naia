@@ -169,13 +169,13 @@ impl<T: ProtocolType> Client<T> {
                         PawnKey::Object(object_key) => {
                             return Some(Ok(Event::ReplayCommand(
                                 object_key,
-                                command.borrow().copy_to_protocol(),
+                                command.impl_wrap_in_protocol(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(Event::ReplayCommandEntity(
                                 entity_key,
-                                command.borrow().copy_to_protocol(),
+                                command.impl_wrap_in_protocol(),
                             )));
                         }
                     }
@@ -186,13 +186,13 @@ impl<T: ProtocolType> Client<T> {
                         PawnKey::Object(object_key) => {
                             return Some(Ok(Event::NewCommand(
                                 object_key,
-                                command.borrow().copy_to_protocol(),
+                                command.impl_wrap_in_protocol(),
                             )));
                         }
                         PawnKey::Entity(entity_key) => {
                             return Some(Ok(Event::NewCommandEntity(
                                 entity_key,
-                                command.borrow().copy_to_protocol(),
+                                command.impl_wrap_in_protocol(),
                             )));
                         }
                     }

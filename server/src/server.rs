@@ -17,7 +17,7 @@ use naia_server_socket::{
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, EntityKey, HostTickManager, Instant, KeyGenerator,
     LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, ProtocolType,
-    Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
+    Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp
 };
 
 use super::{
@@ -528,14 +528,12 @@ impl<U: ProtocolType> Server<U> {
     /// is in scope. Gives back an ObjectKey which can be used to get the
     /// reference to the Object from the Server once again
     pub fn register_object(&mut self, object: &Ref<dyn Replicate<U>>) -> ObjectKey {
-        let protocolized_object = object.borrow().copy_to_protocol();
         let new_mutator_ref: Ref<PropertyMutator> =
             Ref::new(PropertyMutator::new(&self.mut_handler));
-        protocolized_object
-            .inner_ref()
+        object
             .borrow_mut()
             .set_mutator(&to_property_mutator(&new_mutator_ref));
-        let object_key = self.global_replica_store.insert(protocolized_object);
+        let object_key = self.global_replica_store.insert(object);
         self.global_object_set.insert(object_key);
         new_mutator_ref.borrow_mut().set_object_key(object_key);
         self.mut_handler.borrow_mut().register_replica(&object_key);
@@ -645,8 +643,6 @@ impl<U: ProtocolType> Server<U> {
             panic!("attempted to add component to non-existent entity");
         }
 
-        let protocolized_component = component.borrow().copy_to_protocol();
-        let component_ref = protocolized_component.inner_ref().clone();
         let component_key: ComponentKey = self.register_object(component);
 
         // add component to connections already tracking entity
@@ -657,7 +653,7 @@ impl<U: ProtocolType> Server<U> {
                         user_connection,
                         entity_key,
                         &component_key,
-                        &component_ref,
+                        &component,
                     );
                 }
             }
