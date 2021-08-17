@@ -1,6 +1,6 @@
 use byteorder::WriteBytesExt;
 
-use naia_shared::{ManagerType, Manifest, MessagePacketWriter, ProtocolType, Replicate, Ref};
+use naia_shared::{ManagerType, Manifest, MessagePacketWriter, ProtocolType, Ref, Replicate};
 
 /// Handles writing of Message/Object/Component data into an outgoing packet
 pub struct PacketWriter {

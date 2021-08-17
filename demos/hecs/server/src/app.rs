@@ -86,12 +86,11 @@ impl App {
                 hecs_to_naia_key_map.insert(hecs_key, entity_key);
 
                 // Add Position component to Entity
-                let _position_component_key = server
-                    .add_component_to_entity(&entity_key, position_ref);
+                let _position_component_key =
+                    server.add_component_to_entity(&entity_key, position_ref);
 
                 // Add Name component to Entity
-                let _name_component_key =
-                    server.add_component_to_entity(&entity_key, name_ref);
+                let _name_component_key = server.add_component_to_entity(&entity_key, name_ref);
             }
         }
 
@@ -181,10 +180,8 @@ impl App {
                                     .expect("error inserting!");
 
                                 // Add Marker component to Entity in Naia Server
-                                let component_key = self.server.add_component_to_entity(
-                                    &naia_key,
-                                    marker,
-                                );
+                                let component_key =
+                                    self.server.add_component_to_entity(&naia_key, marker);
 
                                 // Track that this entity has a Marker
                                 self.has_marker.insert(*naia_key, component_key);

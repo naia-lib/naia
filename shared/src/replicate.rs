@@ -31,6 +31,8 @@ pub trait Replicate<T: ProtocolType> {
     /// of which Properties have been mutated, necessary to sync only the
     /// Properties that have changed with the client
     fn set_mutator(&mut self, mutator: &Ref<dyn PropertyMutate>);
+    /// Copies underlying Replica to a Protocol
+    fn copy_to_protocol(&self) -> T;
 }
 
 //TODO: do we really need another trait here?
@@ -50,4 +52,12 @@ impl<T: ProtocolType> Debug for dyn Replicate<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str("Replicate")
     }
+}
+
+/// Represents a Ref of a concrete type that implements Replicate
+pub trait ImplRef<T: ProtocolType> {
+    /// Converts the Ref to a ProtocolType
+    fn protocol(&self) -> T;
+    /// Converts the Ref to a Trait Object Ref
+    fn dyn_ref(&self) -> Ref<dyn Replicate<T>>;
 }

@@ -58,8 +58,7 @@ impl App {
                 count += 1;
 
                 // Create a Character
-                let character =
-                    Character::new((count * 4) as u8, 0, first, last);
+                let character = Character::new((count * 4) as u8, 0, first, last);
                 let character_key = server.register_object(character);
 
                 // Add the Character to the main Room

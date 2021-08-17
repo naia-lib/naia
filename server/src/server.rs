@@ -15,9 +15,9 @@ use naia_server_socket::{
     MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
 };
 pub use naia_shared::{
-    wrapping_diff, Connection, ConnectionConfig, EntityKey, HostTickManager, Instant, KeyGenerator,
-    LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, ProtocolType,
-    Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp
+    wrapping_diff, Connection, ConnectionConfig, EntityKey, HostTickManager, ImplRef, Instant,
+    KeyGenerator, LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
+    ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
 };
 
 use super::{
@@ -170,10 +170,7 @@ impl<U: ProtocolType> Server<U> {
                         &self.connection_config,
                     );
                     //new_connection.process_incoming_header(&header);
-                    Server::<U>::send_connect_accept_message(
-                        &mut new_connection,
-                        &mut self.sender,
-                    )
+                    Server::<U>::send_connect_accept_message(&mut new_connection, &mut self.sender)
                         .await;
                     self.client_connections.insert(user_key, new_connection);
 
@@ -461,32 +458,29 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    /// Accepts an incoming Client User, allowing them to establish a connection with the Server
-    pub fn accept_connection(
-        &mut self,
-        user_key: &UserKey,
-    ) {
+    /// Accepts an incoming Client User, allowing them to establish a connection
+    /// with the Server
+    pub fn accept_connection(&mut self, user_key: &UserKey) {
         self.outstanding_connects.push_back(*user_key);
     }
 
-    /// Rejects an incoming Client User, terminating their attempt to establish a connection with the Server
-    pub fn reject_connection(
-        &mut self,
-        user_key: &UserKey,
-    ) {
+    /// Rejects an incoming Client User, terminating their attempt to establish
+    /// a connection with the Server
+    pub fn reject_connection(&mut self, user_key: &UserKey) {
         self.users.remove(*user_key);
     }
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn queue_message(
+    pub fn queue_message<T: ImplRef<U>>(
         &mut self,
         user_key: &UserKey,
-        message: &Ref<dyn Replicate<U>>,
+        message_ref: &T,
         guaranteed_delivery: bool,
     ) {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
-            connection.queue_message(message, guaranteed_delivery);
+            let dyn_ref = message_ref.dyn_ref();
+            connection.queue_message(&dyn_ref, guaranteed_delivery);
         }
     }
 
@@ -527,13 +521,17 @@ impl<U: ProtocolType> Server<U> {
     /// replicas of the Object to all connected Clients for which the Object
     /// is in scope. Gives back an ObjectKey which can be used to get the
     /// reference to the Object from the Server once again
-    pub fn register_object(&mut self, object: &Ref<dyn Replicate<U>>) -> ObjectKey {
+    pub fn register_object<T: ImplRef<U>>(&mut self, object_ref: &T) -> ObjectKey {
+        let dyn_ref = object_ref.dyn_ref();
         let new_mutator_ref: Ref<PropertyMutator> =
             Ref::new(PropertyMutator::new(&self.mut_handler));
-        object
+
+        dyn_ref
             .borrow_mut()
             .set_mutator(&to_property_mutator(&new_mutator_ref));
-        let object_key = self.global_replica_store.insert(object);
+
+        let object_protocol = object_ref.protocol();
+        let object_key = self.global_replica_store.insert(object_protocol);
         self.global_object_set.insert(object_key);
         new_mutator_ref.borrow_mut().set_object_key(object_key);
         self.mut_handler.borrow_mut().register_replica(&object_key);
@@ -634,27 +632,24 @@ impl<U: ProtocolType> Server<U> {
     /// Component's Entity is in Scope.
     /// Gives back a ComponentKey which can be used to get the reference to the
     /// Component from the Server once again
-    pub fn add_component_to_entity(
+    pub fn add_component_to_entity<T: ImplRef<U>>(
         &mut self,
         entity_key: &EntityKey,
-        component: &Ref<dyn Replicate<U>>,
+        component_ref: &T,
     ) -> ComponentKey {
         if !self.entity_component_map.contains_key(&entity_key) {
             panic!("attempted to add component to non-existent entity");
         }
 
-        let component_key: ComponentKey = self.register_object(component);
+        let component_key: ComponentKey = self.register_object(component_ref);
+
+        let dyn_ref: Ref<dyn Replicate<U>> = component_ref.dyn_ref();
 
         // add component to connections already tracking entity
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
                 if user_connection.has_entity(entity_key) {
-                    Self::user_add_component(
-                        user_connection,
-                        entity_key,
-                        &component_key,
-                        &component,
-                    );
+                    Self::user_add_component(user_connection, entity_key, &component_key, &dyn_ref);
                 }
             }
         }
