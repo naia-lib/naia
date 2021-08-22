@@ -75,8 +75,7 @@ impl App {
                             //info!("Client send: {}", send_message_contents);
 
                             let send_message = StringMessage::new(send_message_contents);
-                            self.client
-                                .send_message(&send_message, true);
+                            self.client.send_message(&send_message, true);
                             self.message_count += 1;
                         }
                         Event::CreateEntity(naia_entity_key, component_keys) => {

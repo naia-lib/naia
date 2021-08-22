@@ -39,8 +39,7 @@ impl App {
         // disconnecting them
         server_config.disconnection_timeout_duration = Duration::from_secs(5);
 
-        let mut server =
-            Server::new(Protocol::load(), Some(server_config), get_shared_config());
+        let mut server = Server::new(Protocol::load(), Some(server_config), get_shared_config());
 
         let main_room_key = server.create_room();
 
@@ -111,9 +110,14 @@ impl App {
                             // All game logic should happen here, on a tick event
 
                             // Update scopes of objects
-                            for (room_key, user_key, object_key) in self.server.object_scope_sets() {
-                                self.server
-                                    .object_set_scope(&room_key, &user_key, &object_key, true);
+                            for (room_key, user_key, object_key) in self.server.object_scope_sets()
+                            {
+                                self.server.object_set_scope(
+                                    &room_key,
+                                    &user_key,
+                                    &object_key,
+                                    true,
+                                );
                             }
 
                             // VERY IMPORTANT! Calling this actually sends all update data
