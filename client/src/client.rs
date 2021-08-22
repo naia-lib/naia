@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use naia_client_socket::{ClientSocket, ClientSocketTrait, PacketSender, PacketReceiver};
+use naia_client_socket::{ClientSocket, PacketSender, PacketReceiver};
 
 pub use naia_shared::{
     ConnectionConfig, HostTickManager, ImplRef, Instant, LocalComponentKey, LocalEntityKey,
@@ -62,9 +62,7 @@ impl<T: ProtocolType> Client<T> {
             client_config.rtt_sample_size,
         );
 
-        let client_socket = ClientSocket::connect(client_config.socket_config);
-        let sender = client_socket.get_sender();
-        let receiver = client_socket.get_receiver();
+        let (sender, receiver) = ClientSocket::connect(client_config.socket_config);
 
         let mut handshake_timer = Timer::new(client_config.send_handshake_interval);
         handshake_timer.ring_manual();

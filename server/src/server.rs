@@ -10,7 +10,7 @@ use ring::{hmac, rand};
 use slotmap::DenseSlotMap;
 
 use naia_server_socket::{
-    Packet, PacketReceiverTrait, PacketSender, ServerSocket, ServerSocketTrait,
+    Packet, PacketReceiver, PacketSender, ServerSocket,
 };
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, EntityKey, HostTickManager, ImplRef, Instant,
@@ -39,7 +39,7 @@ pub struct Server<T: ProtocolType> {
     connection_config: ConnectionConfig,
     manifest: Manifest<T>,
     socket_sender: PacketSender,
-    socket_receiver: Box<dyn PacketReceiverTrait>,
+    socket_receiver: Box<dyn PacketReceiver>,
     global_replica_store: DenseSlotMap<ReplicaKey, T>,
     global_object_set: HashSet<ObjectKey>,
     mut_handler: Ref<MutHandler>,
@@ -81,12 +81,10 @@ impl<U: ProtocolType> Server<U> {
             server_config.rtt_sample_size,
         );
 
-        let server_socket = ServerSocket::listen(
+        let (socket_sender, socket_receiver) = ServerSocket::listen(
             server_config.socket_config
         );
 
-        let socket_sender = server_socket.get_sender();
-        let socket_receiver = server_socket.get_receiver();
         let clients_map = HashMap::new();
         let heartbeat_timer = Timer::new(connection_config.heartbeat_interval);
 
