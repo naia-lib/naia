@@ -32,6 +32,8 @@ pub use naia_shared::{
     Ref, Replicate, SharedConfig,
 };
 
+pub use naia_server_socket::{ServerSocketConfig, SocketSharedConfig};
+
 mod client_connection;
 mod command_receiver;
 mod entity_record;
@@ -56,5 +58,5 @@ pub use event::Event;
 pub use keys::{replica_key::ReplicaKey, ComponentKey, GlobalPawnKey, ObjectKey};
 pub use room::room_key::RoomKey;
 pub use server::Server;
-pub use server_config::{ServerAddresses, ServerConfig};
+pub use server_config::ServerConfig;
 pub use user::user_key::UserKey;

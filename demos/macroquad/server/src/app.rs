@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use naia_server::{
-    Event, ObjectKey, Random, RoomKey, Server, ServerAddresses, ServerConfig, UserKey,
+    Event, ObjectKey, Random, RoomKey, Server, ServerConfig, UserKey, ServerSocketConfig, SocketSharedConfig
 };
 
 use naia_macroquad_demo_shared::{
@@ -19,8 +19,10 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Macroquad Server Demo started");
 
+        let shared_config = get_shared_config();
+
         let mut server_config = ServerConfig::default();
-        server_config.socket_addresses = ServerAddresses::new(
+        server_config.socket_config = ServerSocketConfig::new(
             // IP Address to listen on for the signaling portion of WebRTC
             get_server_address(),
             // IP Address to listen on for UDP WebRTC data channels
@@ -31,6 +33,7 @@ impl App {
             "127.0.0.1:14192"
                 .parse()
                 .expect("could not parse advertised public WebRTC data address/port"),
+            SocketSharedConfig::new(shared_config.link_condition_config.clone(), None)
         );
         server_config.heartbeat_interval = Duration::from_secs(2);
         // Keep in mind that the disconnect timeout duration should always be at least
@@ -39,7 +42,7 @@ impl App {
         // disconnecting them
         server_config.disconnection_timeout_duration = Duration::from_secs(5);
 
-        let mut server = Server::new(Protocol::load(), Some(server_config), get_shared_config());
+        let mut server = Server::new(Protocol::load(), Some(server_config), shared_config);
 
         let main_room_key = server.create_room();
 
