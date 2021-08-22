@@ -52,8 +52,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        let events = self.server.receive();
-        for event_result in events {
+        for event_result in self.server.receive() {
             match event_result {
                 Ok(event) => {
                     match event {
