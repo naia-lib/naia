@@ -14,10 +14,8 @@ fn main() -> io::Result<()> {
         .init()
         .expect("A logger was already initialized");
 
-    smol::block_on(async {
-        let mut app = App::new().await;
-        loop {
-            app.update().await;
-        }
-    })
+    let mut app = App::new();
+    loop {
+        app.update();
+    }
 }

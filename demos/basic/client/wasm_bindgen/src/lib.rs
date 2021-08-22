@@ -17,9 +17,7 @@ cfg_if! {
             // Uncomment the line below to enable logging. You don't need it if something else (e.g. quicksilver) is logging for you
             wasm_logger::init(wasm_logger::Config::default());
 
-            let app = App::new();
-
-            loop_wasm::start_loop(app);
+            loop_wasm::start_loop(App::new());
         }
     } else {}
 }

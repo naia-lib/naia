@@ -10,13 +10,13 @@ get_reload_actions(){
   local c=$1
   local d=$2
   FMT='
-  cargo build --target wasm32-unknown-unknown --target-dir target &&
-  cd ../../dev_http_server
-  rm -rf dist &&
-  mkdir dist &&
-  cp ../%s/target/wasm32-unknown-unknown/debug/%s.wasm dist/%s.wasm &&
-  cp -a ../%s/static/. dist/ &&
-  cp -a ../%s/js/. dist/ &&
+  cargo build --target wasm32-unknown-unknown --target-dir target;
+  cd ../../dev_http_server;
+  rm -rf dist;
+  mkdir dist;
+  cp ../%s/target/wasm32-unknown-unknown/debug/%s.wasm dist/%s.wasm;
+  cp -a ../%s/static/. dist/;
+  cp -a ../%s/js/. dist/;
   cargo run'
   printf -v OUTPUT "$FMT" $d $c $c $d $d
   echo $OUTPUT

@@ -6,7 +6,7 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [[bin]]
-name = "naia-demo-basic-client-mq"
+name = "naia-basic-client-demo-mq"
 path = "src/main.rs"
 
 [features]

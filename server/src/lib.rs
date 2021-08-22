@@ -37,7 +37,6 @@ mod command_receiver;
 mod entity_record;
 mod error;
 mod event;
-mod interval;
 mod keys;
 mod locality_status;
 mod mut_handler;

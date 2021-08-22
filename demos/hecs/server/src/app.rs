@@ -23,7 +23,7 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new() -> Self {
+    pub fn new() -> Self {
         info!("Naia Hecs Server Demo started");
 
         let mut server_config = ServerConfig::default();
@@ -47,7 +47,7 @@ impl App {
         server_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         let mut server =
-            Server::new(Protocol::load(), Some(server_config), get_shared_config()).await;
+            Server::new(Protocol::load(), Some(server_config), get_shared_config());
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
@@ -105,8 +105,8 @@ impl App {
         }
     }
 
-    pub async fn update(&mut self) {
-        match self.server.receive().await {
+    pub fn update(&mut self) {
+        match self.server.receive() {
             Ok(event) => {
                 match event {
                     Event::Authorization(user_key, Protocol::Auth(auth_ref)) => {
@@ -248,7 +248,7 @@ impl App {
                         // VERY IMPORTANT! Calling this actually sends all update data
                         // packets to all Clients that require it. If you don't call this
                         // method, the Server will never communicate with it's connected Clients
-                        self.server.send_all_updates().await;
+                        self.server.send_all_updates();
 
                         self.tick_count = self.tick_count.wrapping_add(1);
                     }
