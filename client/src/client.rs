@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use naia_client_socket::{ClientSocket, ClientSocketTrait, MessageSender};
+use naia_client_socket::{ClientSocket, ClientSocketTrait, PacketSender, PacketReceiver};
 
 pub use naia_shared::{
     ConnectionConfig, HostTickManager, ImplRef, Instant, LocalComponentKey, LocalEntityKey,
@@ -28,8 +28,8 @@ pub struct Client<T: ProtocolType> {
     manifest: Manifest<T>,
     server_address: SocketAddr,
     connection_config: ConnectionConfig,
-    socket: Box<dyn ClientSocketTrait>,
-    sender: MessageSender,
+    sender: PacketSender,
+    receiver: Box<dyn PacketReceiver>,
     server_connection: Option<ServerConnection<T>>,
     pre_connection_timestamp: Option<Timestamp>,
     pre_connection_digest: Option<Box<[u8]>>,
@@ -53,7 +53,7 @@ impl<T: ProtocolType> Client<T> {
             None => ClientConfig::default(),
         };
 
-        let server_address = client_config.server_address;
+        let server_address = client_config.socket_config.server_address;
 
         let connection_config = ConnectionConfig::new(
             client_config.disconnection_timeout_duration,
@@ -62,14 +62,12 @@ impl<T: ProtocolType> Client<T> {
             client_config.rtt_sample_size,
         );
 
-        let mut client_socket = ClientSocket::connect(server_address);
-        if let Some(config) = shared_config.link_condition_config {
-            client_socket = client_socket.with_link_conditioner(&config);
-        }
+        let client_socket = ClientSocket::connect(client_config.socket_config);
+        let sender = client_socket.get_sender();
+        let receiver = client_socket.get_receiver();
 
         let mut handshake_timer = Timer::new(client_config.send_handshake_interval);
         handshake_timer.ring_manual();
-        let message_sender = client_socket.get_sender();
 
         let auth_message: Option<Ref<dyn Replicate<T>>> = {
             if auth.is_none() {
@@ -82,8 +80,8 @@ impl<T: ProtocolType> Client<T> {
         Client {
             server_address,
             manifest,
-            socket: client_socket,
-            sender: message_sender,
+            sender,
+            receiver,
             connection_config,
             handshake_timer,
             server_connection: None,
@@ -303,7 +301,7 @@ impl<T: ProtocolType> Client<T> {
 
         // receive from socket
         loop {
-            match self.socket.receive() {
+            match self.receiver.receive() {
                 Ok(event) => {
                     if let Some(packet) = event {
                         let server_connection_wrapper = self.server_connection.as_mut();
@@ -569,7 +567,7 @@ impl<T: ProtocolType> Client<T> {
 
     fn internal_send_with_connection(
         host_tick: u16,
-        sender: &mut MessageSender,
+        sender: &mut PacketSender,
         connection: &mut ServerConnection<T>,
         packet_type: PacketType,
         packet: Packet,
@@ -587,7 +585,7 @@ impl<T: ProtocolType> Client<T> {
     }
 
     fn internal_send_connectionless(
-        sender: &mut MessageSender,
+        sender: &mut PacketSender,
         packet_type: PacketType,
         packet: Packet,
     ) {

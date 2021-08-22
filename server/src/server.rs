@@ -81,14 +81,9 @@ impl<U: ProtocolType> Server<U> {
             server_config.rtt_sample_size,
         );
 
-        let mut server_socket = ServerSocket::listen(
-            server_config.socket_addresses.session_listen_addr,
-            server_config.socket_addresses.webrtc_listen_addr,
-            server_config.socket_addresses.public_webrtc_addr,
+        let server_socket = ServerSocket::listen(
+            server_config.socket_config
         );
-        if let Some(config) = &shared_config.link_condition_config {
-            server_socket = server_socket.with_link_conditioner(config);
-        }
 
         let socket_sender = server_socket.get_sender();
         let socket_receiver = server_socket.get_receiver();
