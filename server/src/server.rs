@@ -6,13 +6,11 @@ use std::{
 };
 
 use byteorder::{BigEndian, WriteBytesExt};
-use futures_util::{pin_mut, select, FutureExt, StreamExt};
-use log::info;
 use ring::{hmac, rand};
 use slotmap::DenseSlotMap;
 
 use naia_server_socket::{
-    MessageSender, NaiaServerSocketError, Packet, ServerSocket, ServerSocketTrait,
+    Packet, ServerSocket, ServerSocketTrait, PacketSender, PacketReceiverTrait
 };
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, EntityKey, HostTickManager, ImplRef, Instant,
@@ -24,7 +22,6 @@ use super::{
     client_connection::ClientConnection,
     error::NaiaServerError,
     event::Event,
-    interval::Interval,
     keys::{replica_key::ReplicaKey, ObjectKey},
     mut_handler::MutHandler,
     property_mutator::PropertyMutator,
@@ -41,8 +38,9 @@ use crate::{ComponentKey, GlobalPawnKey};
 pub struct Server<T: ProtocolType> {
     connection_config: ConnectionConfig,
     manifest: Manifest<T>,
-    socket: Box<dyn ServerSocketTrait>,
-    sender: MessageSender,
+    _socket: ServerSocket,
+    socket_sender: PacketSender,
+    socket_receiver: Box<dyn PacketReceiverTrait>,
     global_replica_store: DenseSlotMap<ReplicaKey, T>,
     global_object_set: HashSet<ObjectKey>,
     mut_handler: Ref<MutHandler>,
@@ -55,7 +53,6 @@ pub struct Server<T: ProtocolType> {
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
     tick_manager: TickManager,
-    tick_timer: Interval,
     object_scope_map: HashMap<(RoomKey, UserKey, ObjectKey), bool>,
     entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
     entity_key_generator: KeyGenerator<EntityKey>,
@@ -66,7 +63,7 @@ pub struct Server<T: ProtocolType> {
 impl<U: ProtocolType> Server<U> {
     /// Create a new Server, given an address to listen at, a Replica
     /// manifest, and an optional Config
-    pub async fn new(
+    pub fn new(
         manifest: Manifest<U>,
         server_config: Option<ServerConfig>,
         shared_config: SharedConfig,
@@ -87,13 +84,13 @@ impl<U: ProtocolType> Server<U> {
             server_config.socket_addresses.session_listen_addr,
             server_config.socket_addresses.webrtc_listen_addr,
             server_config.socket_addresses.public_webrtc_addr,
-        )
-        .await;
+        );
         if let Some(config) = &shared_config.link_condition_config {
             server_socket = server_socket.with_link_conditioner(config);
         }
 
-        let sender = server_socket.get_sender();
+        let socket_sender = server_socket.get_sender();
+        let socket_receiver = server_socket.get_receiver();
         let clients_map = HashMap::new();
         let heartbeat_timer = Timer::new(connection_config.heartbeat_interval);
 
@@ -107,8 +104,9 @@ impl<U: ProtocolType> Server<U> {
             object_scope_map: HashMap::new(),
             entity_scope_map: HashMap::new(),
             mut_handler: MutHandler::new(),
-            socket: server_socket,
-            sender,
+            _socket: server_socket,
+            socket_sender,
+            socket_receiver,
             connection_config,
             users: DenseSlotMap::with_key(),
             rooms: DenseSlotMap::with_key(),
@@ -119,7 +117,6 @@ impl<U: ProtocolType> Server<U> {
             outstanding_disconnects: VecDeque::new(),
             heartbeat_timer,
             tick_manager: TickManager::new(shared_config.tick_interval),
-            tick_timer: Interval::new(shared_config.tick_interval),
             entity_key_generator: KeyGenerator::new(),
             entity_component_map: HashMap::new(),
             component_entity_map: HashMap::new(),
@@ -128,334 +125,301 @@ impl<U: ProtocolType> Server<U> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub async fn receive(&mut self) -> Result<Event<U>, NaiaServerError> {
-        loop {
-            // heartbeats
-            if self.heartbeat_timer.ringing() {
-                self.heartbeat_timer.reset();
+    pub fn receive(&mut self) -> VecDeque<Result<Event<U>, NaiaServerError>> {
+        let mut output = VecDeque::new();
 
-                for (user_key, connection) in self.client_connections.iter_mut() {
-                    if let Some(user) = self.users.get(*user_key) {
-                        if connection.should_drop() {
-                            self.outstanding_disconnects.push_back(*user_key);
-                        } else {
-                            if connection.should_send_heartbeat() {
-                                // Don't try to refactor this to self.internal_send, doesn't seem to
-                                // work cause of iter_mut()
-                                let payload = connection.process_outgoing_header(
-                                    self.tick_manager.get_tick(),
-                                    connection.get_last_received_tick(),
-                                    PacketType::Heartbeat,
-                                    &[],
-                                );
-                                self.sender
-                                    .send(Packet::new_raw(user.address, payload))
-                                    .await
-                                    .expect("send failed!");
-                                connection.mark_sent();
-                            }
-                        }
-                    }
-                }
-            }
+        // heartbeats
+        if self.heartbeat_timer.ringing() {
+            self.heartbeat_timer.reset();
 
-            // new connections
-            if let Some(user_key) = self.outstanding_connects.pop_front() {
-                if let Some(user) = self.users.get(user_key) {
-                    self.address_to_user_key_map.insert(user.address, user_key);
-
-                    let mut new_connection = ClientConnection::new(
-                        user.address,
-                        Some(&self.mut_handler),
-                        &self.connection_config,
-                    );
-                    //new_connection.process_incoming_header(&header);
-                    Server::<U>::send_connect_accept_message(&mut new_connection, &mut self.sender)
-                        .await;
-                    self.client_connections.insert(user_key, new_connection);
-
-                    return Ok(Event::Connection(user_key));
-                }
-            }
-
-            // new disconnections
-            if let Some(user_key) = self.outstanding_disconnects.pop_front() {
-                for (_, room) in self.rooms.iter_mut() {
-                    room.unsubscribe_user(&user_key);
-                }
-
-                let address = self.users.get(user_key).unwrap().address;
-                self.address_to_user_key_map.remove(&address);
-                let user_clone = self.users.get(user_key).unwrap().clone();
-                self.users.remove(user_key);
-                self.client_connections.remove(&user_key);
-
-                return Ok(Event::Disconnection(user_key, user_clone));
-            }
-
-            // TODO: have 1 single queue for commands/messages from all users, as it's
-            // possible this current technique unfairly favors the 1st users in
-            // self.client_connections
             for (user_key, connection) in self.client_connections.iter_mut() {
-                //receive commands from anyone
-                if let Some((pawn_key, command)) =
-                    connection.get_incoming_command(self.tick_manager.get_tick())
-                {
-                    match pawn_key {
-                        GlobalPawnKey::Object(object_key) => {
-                            return Ok(Event::Command(*user_key, object_key, command));
-                        }
-                        GlobalPawnKey::Entity(entity_key) => {
-                            return Ok(Event::CommandEntity(*user_key, entity_key, command));
-                        }
-                    }
-                }
-                //receive messages from anyone
-                if let Some(message) = connection.get_incoming_message() {
-                    return Ok(Event::Message(*user_key, message));
-                }
-            }
-
-            //receive socket events
-            enum Next {
-                SocketResult(Result<Packet, NaiaServerSocketError>),
-                Tick,
-            }
-
-            let next = {
-                let timer_next = self.tick_timer.next().fuse();
-                pin_mut!(timer_next);
-
-                let socket_next = self.socket.receive().fuse();
-                pin_mut!(socket_next);
-
-                select! {
-                    socket_result = socket_next => {
-                        Next::SocketResult(socket_result)
-                    }
-                    _ = timer_next => {
-                        Next::Tick
-                    }
-                }
-            };
-
-            match next {
-                Next::SocketResult(result) => {
-                    match result {
-                        Ok(packet) => {
-                            let address = packet.address();
-                            if let Some(user_key) = self.address_to_user_key_map.get(&address) {
-                                match self.client_connections.get_mut(&user_key) {
-                                    Some(connection) => {
-                                        connection.mark_heard();
-                                    }
-                                    None => {} //not yet established connection
-                                }
-                            }
-
-                            let (header, payload) = StandardHeader::read(packet.payload());
-
-                            match header.packet_type() {
-                                PacketType::ClientChallengeRequest => {
-                                    let mut reader = PacketReader::new(&payload);
-                                    let timestamp = Timestamp::read(&mut reader);
-
-                                    let mut timestamp_bytes = Vec::new();
-                                    timestamp.write(&mut timestamp_bytes);
-                                    let timestamp_hash: hmac::Tag =
-                                        hmac::sign(&self.connection_hash_key, &timestamp_bytes);
-
-                                    let mut payload_bytes = Vec::new();
-                                    // write current tick
-                                    payload_bytes
-                                        .write_u16::<BigEndian>(self.tick_manager.get_tick())
-                                        .unwrap();
-
-                                    //write timestamp
-                                    payload_bytes.append(&mut timestamp_bytes);
-
-                                    //write timestamp digest
-                                    let hash_bytes: &[u8] = timestamp_hash.as_ref();
-                                    for hash_byte in hash_bytes {
-                                        payload_bytes.push(*hash_byte);
-                                    }
-
-                                    Server::<U>::internal_send_connectionless(
-                                        &mut self.sender,
-                                        PacketType::ServerChallengeResponse,
-                                        Packet::new(address, payload_bytes),
-                                    )
-                                    .await;
-
-                                    continue;
-                                }
-                                PacketType::ClientConnectRequest => {
-                                    let mut reader = PacketReader::new(&payload);
-                                    let timestamp = Timestamp::read(&mut reader);
-
-                                    if let Some(user_key) =
-                                        self.address_to_user_key_map.get(&address)
-                                    {
-                                        if self.client_connections.contains_key(user_key) {
-                                            let user = self.users.get(*user_key).unwrap();
-                                            if user.timestamp == timestamp {
-                                                let mut connection = self
-                                                    .client_connections
-                                                    .get_mut(user_key)
-                                                    .unwrap();
-                                                connection.process_incoming_header(&header);
-                                                Server::<U>::send_connect_accept_message(
-                                                    &mut connection,
-                                                    &mut self.sender,
-                                                )
-                                                .await;
-                                                continue;
-                                            } else {
-                                                self.outstanding_disconnects.push_back(*user_key);
-                                                continue;
-                                            }
-                                        } else {
-                                            error!("if there's a user key associated with the address, should also have a client connection initiated");
-                                            continue;
-                                        }
-                                    } else {
-                                        //Verify that timestamp hash has been written by this
-                                        // server instance
-                                        let mut timestamp_bytes: Vec<u8> = Vec::new();
-                                        timestamp.write(&mut timestamp_bytes);
-                                        let mut digest_bytes: Vec<u8> = Vec::new();
-                                        for _ in 0..32 {
-                                            digest_bytes.push(reader.read_u8());
-                                        }
-                                        if !hmac::verify(
-                                            &self.connection_hash_key,
-                                            &timestamp_bytes,
-                                            &digest_bytes,
-                                        )
-                                        .is_ok()
-                                        {
-                                            continue;
-                                        }
-
-                                        let user = User::new(address, timestamp);
-                                        let user_key = self.users.insert(user);
-
-                                        // Return authorization event
-                                        let naia_id = reader.read_u16();
-
-                                        let auth_message =
-                                            self.manifest.create_replica(naia_id, &mut reader);
-
-                                        return Ok(Event::Authorization(user_key, auth_message));
-                                    }
-                                }
-                                PacketType::Data => {
-                                    if let Some(user_key) =
-                                        self.address_to_user_key_map.get(&address)
-                                    {
-                                        match self.client_connections.get_mut(user_key) {
-                                            Some(connection) => {
-                                                connection.process_incoming_header(&header);
-                                                connection.process_incoming_data(
-                                                    self.tick_manager.get_tick(),
-                                                    header.host_tick(),
-                                                    &self.manifest,
-                                                    &payload,
-                                                );
-                                                continue;
-                                            }
-                                            None => {
-                                                warn!(
-                                                    "received data from unauthenticated client: {}",
-                                                    address
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-                                PacketType::Heartbeat => {
-                                    if let Some(user_key) =
-                                        self.address_to_user_key_map.get(&address)
-                                    {
-                                        match self.client_connections.get_mut(user_key) {
-                                            Some(connection) => {
-                                                // Still need to do this so that proper notify
-                                                // events fire based on the heartbeat header
-                                                connection.process_incoming_header(&header);
-                                                continue;
-                                            }
-                                            None => {
-                                                warn!(
-                                                    "received heartbeat from unauthenticated client: {}",
-                                                    address
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-                                PacketType::Ping => {
-                                    if let Some(user_key) =
-                                        self.address_to_user_key_map.get(&address)
-                                    {
-                                        match self.client_connections.get_mut(user_key) {
-                                            Some(connection) => {
-                                                connection.process_incoming_header(&header);
-                                                let ping_payload =
-                                                    connection.process_ping(&payload);
-                                                let payload_with_header = connection
-                                                    .process_outgoing_header(
-                                                        self.tick_manager.get_tick(),
-                                                        connection.get_last_received_tick(),
-                                                        PacketType::Pong,
-                                                        &ping_payload,
-                                                    );
-                                                self.sender
-                                                    .send(Packet::new_raw(
-                                                        connection.get_address(),
-                                                        payload_with_header,
-                                                    ))
-                                                    .await
-                                                    .expect("send failed!");
-                                                connection.mark_sent();
-                                                continue;
-                                            }
-                                            None => {
-                                                warn!(
-                                                    "received ping from unauthenticated client: {}",
-                                                    address
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                        Err(error) => {
-                            //TODO: Determine if disconnecting a user based on a send error is the
-                            // right thing to do
-                            //
-                            // if let
-                            // NaiaServerSocketError::SendError(address) = error {
-                            //                        if let Some(user_key) =
-                            // self.address_to_user_key_map.get(&address).copied() {
-                            //                            self.client_connections.remove(&user_key);
-                            //                            output =
-                            // Some(Ok(Event::Disconnection(user_key)));
-                            //                            continue;
-                            //                        }
-                            //                    }
-
-                            return Err(NaiaServerError::Wrapped(Box::new(error)));
+                if let Some(user) = self.users.get(*user_key) {
+                    if connection.should_drop() {
+                        self.outstanding_disconnects.push_back(*user_key);
+                    } else {
+                        if connection.should_send_heartbeat() {
+                            // Don't try to refactor this to self.internal_send, doesn't seem to
+                            // work cause of iter_mut()
+                            let payload = connection.process_outgoing_header(
+                                self.tick_manager.get_tick(),
+                                connection.get_last_received_tick(),
+                                PacketType::Heartbeat,
+                                &[],
+                            );
+                            self.socket_sender
+                                .send(Packet::new_raw(user.address, payload));
+                            connection.mark_sent();
                         }
                     }
-                }
-                Next::Tick => {
-                    self.tick_manager.increment_tick();
-                    return Ok(Event::Tick);
                 }
             }
         }
+
+        // new connections
+        while let Some(user_key) = self.outstanding_connects.pop_front() {
+            if let Some(user) = self.users.get(user_key) {
+                self.address_to_user_key_map.insert(user.address, user_key);
+
+                let mut new_connection = ClientConnection::new(
+                    user.address,
+                    Some(&self.mut_handler),
+                    &self.connection_config,
+                );
+                //new_connection.process_incoming_header(&header);
+                Server::<U>::send_connect_accept_message(&mut new_connection, &mut self.socket_sender);
+                self.client_connections.insert(user_key, new_connection);
+
+                output.push_back(Ok(Event::Connection(user_key)));
+            }
+        }
+
+        // new disconnections
+        while let Some(user_key) = self.outstanding_disconnects.pop_front() {
+            for (_, room) in self.rooms.iter_mut() {
+                room.unsubscribe_user(&user_key);
+            }
+
+            let address = self.users.get(user_key).unwrap().address;
+            self.address_to_user_key_map.remove(&address);
+            let user_clone = self.users.get(user_key).unwrap().clone();
+            self.users.remove(user_key);
+            self.client_connections.remove(&user_key);
+
+            output.push_back(Ok(Event::Disconnection(user_key, user_clone)));
+        }
+
+        // TODO: have 1 single queue for commands/messages from all users, as it's
+        // possible this current technique unfairly favors the 1st users in
+        // self.client_connections
+        for (user_key, connection) in self.client_connections.iter_mut() {
+            //receive commands from anyone
+            while let Some((pawn_key, command)) =
+                connection.get_incoming_command(self.tick_manager.get_tick())
+            {
+                match pawn_key {
+                    GlobalPawnKey::Object(object_key) => {
+                        output.push_back(Ok(Event::Command(*user_key, object_key, command)));
+                    }
+                    GlobalPawnKey::Entity(entity_key) => {
+                        output.push_back(Ok(Event::CommandEntity(*user_key, entity_key, command)));
+                    }
+                }
+            }
+            //receive messages from anyone
+            while let Some(message) = connection.get_incoming_message() {
+                output.push_back(Ok(Event::Message(*user_key, message)));
+            }
+        }
+
+        //receive socket events
+        loop {
+            match self.socket_receiver.receive() {
+                Ok(Some(packet)) => {
+                    let address = packet.address();
+                    if let Some(user_key) = self.address_to_user_key_map.get(&address) {
+                        match self.client_connections.get_mut(&user_key) {
+                            Some(connection) => {
+                                connection.mark_heard();
+                            }
+                            None => {} //not yet established connection
+                        }
+                    }
+
+                    let (header, payload) = StandardHeader::read(packet.payload());
+
+                    match header.packet_type() {
+                        PacketType::ClientChallengeRequest => {
+                            let mut reader = PacketReader::new(&payload);
+                            let timestamp = Timestamp::read(&mut reader);
+
+                            let mut timestamp_bytes = Vec::new();
+                            timestamp.write(&mut timestamp_bytes);
+                            let timestamp_hash: hmac::Tag =
+                                hmac::sign(&self.connection_hash_key, &timestamp_bytes);
+
+                            let mut payload_bytes = Vec::new();
+                            // write current tick
+                            payload_bytes
+                                .write_u16::<BigEndian>(self.tick_manager.get_tick())
+                                .unwrap();
+
+                            //write timestamp
+                            payload_bytes.append(&mut timestamp_bytes);
+
+                            //write timestamp digest
+                            let hash_bytes: &[u8] = timestamp_hash.as_ref();
+                            for hash_byte in hash_bytes {
+                                payload_bytes.push(*hash_byte);
+                            }
+
+                            Server::<U>::internal_send_connectionless(
+                                &mut self.socket_sender,
+                                PacketType::ServerChallengeResponse,
+                                Packet::new(address, payload_bytes),
+                            );
+                        }
+                        PacketType::ClientConnectRequest => {
+                            let mut reader = PacketReader::new(&payload);
+                            let timestamp = Timestamp::read(&mut reader);
+
+                            if let Some(user_key) =
+                            self.address_to_user_key_map.get(&address)
+                            {
+                                if self.client_connections.contains_key(user_key) {
+                                    let user = self.users.get(*user_key).unwrap();
+                                    if user.timestamp == timestamp {
+                                        let mut connection = self
+                                            .client_connections
+                                            .get_mut(user_key)
+                                            .unwrap();
+                                        connection.process_incoming_header(&header);
+                                        Server::<U>::send_connect_accept_message(
+                                            &mut connection,
+                                            &mut self.socket_sender,
+                                        );
+                                    } else {
+                                        self.outstanding_disconnects.push_back(*user_key);
+                                    }
+                                } else {
+                                    error!("if there's a user key associated with the address, should also have a client connection initiated");
+                                }
+                            } else {
+                                //Verify that timestamp hash has been written by this
+                                // server instance
+                                let mut timestamp_bytes: Vec<u8> = Vec::new();
+                                timestamp.write(&mut timestamp_bytes);
+                                let mut digest_bytes: Vec<u8> = Vec::new();
+                                for _ in 0..32 {
+                                    digest_bytes.push(reader.read_u8());
+                                }
+                                if hmac::verify(
+                                    &self.connection_hash_key,
+                                    &timestamp_bytes,
+                                    &digest_bytes,
+                                )
+                                    .is_ok()
+                                {
+                                    let user = User::new(address, timestamp);
+                                    let user_key = self.users.insert(user);
+
+                                    // Return authorization event
+                                    let naia_id = reader.read_u16();
+
+                                    let auth_message =
+                                        self.manifest.create_replica(naia_id, &mut reader);
+
+                                    output.push_back(Ok(Event::Authorization(user_key, auth_message)));
+                                }
+                            }
+                        }
+                        PacketType::Data => {
+                            if let Some(user_key) =
+                            self.address_to_user_key_map.get(&address)
+                            {
+                                match self.client_connections.get_mut(user_key) {
+                                    Some(connection) => {
+                                        connection.process_incoming_header(&header);
+                                        connection.process_incoming_data(
+                                            self.tick_manager.get_tick(),
+                                            header.host_tick(),
+                                            &self.manifest,
+                                            &payload,
+                                        );
+                                    }
+                                    None => {
+                                        warn!(
+                                            "received data from unauthenticated client: {}",
+                                            address
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        PacketType::Heartbeat => {
+                            if let Some(user_key) =
+                            self.address_to_user_key_map.get(&address)
+                            {
+                                match self.client_connections.get_mut(user_key) {
+                                    Some(connection) => {
+                                        // Still need to do this so that proper notify
+                                        // events fire based on the heartbeat header
+                                        connection.process_incoming_header(&header);
+                                    }
+                                    None => {
+                                        warn!(
+                                            "received heartbeat from unauthenticated client: {}",
+                                            address
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        PacketType::Ping => {
+                            if let Some(user_key) =
+                            self.address_to_user_key_map.get(&address)
+                            {
+                                match self.client_connections.get_mut(user_key) {
+                                    Some(connection) => {
+                                        connection.process_incoming_header(&header);
+                                        let ping_payload =
+                                            connection.process_ping(&payload);
+                                        let payload_with_header = connection
+                                            .process_outgoing_header(
+                                                self.tick_manager.get_tick(),
+                                                connection.get_last_received_tick(),
+                                                PacketType::Pong,
+                                                &ping_payload,
+                                            );
+                                        self.socket_sender
+                                            .send(Packet::new_raw(
+                                                connection.get_address(),
+                                                payload_with_header,
+                                            ));
+                                        connection.mark_sent();
+                                    }
+                                    None => {
+                                        warn!(
+                                            "received ping from unauthenticated client: {}",
+                                            address
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        PacketType::ServerChallengeResponse | PacketType::ServerConnectResponse | PacketType::Pong | PacketType::Unknown => {
+                            // do nothing
+                        }
+                    }
+                }
+                Ok(None) => {
+                    // No more packets, break loop
+                    break;
+                }
+                Err(error) => {
+                    //TODO: Determine if disconnecting a user based on a send error is the
+                    // right thing to do
+                    //
+                    // if let
+                    // NaiaServerSocketError::SendError(address) = error {
+                    //                        if let Some(user_key) =
+                    // self.address_to_user_key_map.get(&address).copied() {
+                    //                            self.client_connections.remove(&user_key);
+                    //                            output =
+                    // Some(Ok(Event::Disconnection(user_key)));
+                    //                            continue;
+                    //                        }
+                    //                    }
+
+                    output.push_back(Err(NaiaServerError::Wrapped(Box::new(error))));
+                }
+            }
+        }
+
+        if self.tick_manager.should_tick() {
+            output.push_back(Ok(Event::Tick));
+        }
+
+        output
     }
 
     /// Accepts an incoming Client User, allowing them to establish a connection
@@ -487,7 +451,7 @@ impl<U: ProtocolType> Server<U> {
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
-    pub async fn send_all_updates(&mut self) {
+    pub fn send_all_updates(&mut self) {
         // update object scopes
         self.update_object_scopes();
 
@@ -501,16 +465,8 @@ impl<U: ProtocolType> Server<U> {
                 while let Some(payload) =
                     connection.get_outgoing_packet(self.tick_manager.get_tick(), &self.manifest)
                 {
-                    match self
-                        .sender
-                        .send(Packet::new_raw(user.address, payload))
-                        .await
-                    {
-                        Ok(_) => {}
-                        Err(err) => {
-                            info!("send error! {}", err);
-                        }
-                    }
+                    self.socket_sender
+                        .send(Packet::new_raw(user.address, payload));
                     connection.mark_sent();
                 }
             }
@@ -1047,35 +1003,25 @@ impl<U: ProtocolType> Server<U> {
         user_connection.add_component(entity_key, component_key, component_ref);
     }
 
-    async fn send_connect_accept_message(
+    fn send_connect_accept_message(
         connection: &mut ClientConnection<U>,
-        sender: &mut MessageSender,
+        sender: &mut PacketSender,
     ) {
         let payload =
             connection.process_outgoing_header(0, 0, PacketType::ServerConnectResponse, &[]);
-        match sender
-            .send(Packet::new_raw(connection.get_address(), payload))
-            .await
-        {
-            Ok(_) => {}
-            Err(err) => {
-                info!("send error! {}", err);
-            }
-        }
+        sender.send(Packet::new_raw(connection.get_address(), payload));
         connection.mark_sent();
     }
 
-    async fn internal_send_connectionless(
-        sender: &mut MessageSender,
+    fn internal_send_connectionless(
+        sender: &mut PacketSender,
         packet_type: PacketType,
         packet: Packet,
     ) {
         let new_payload =
             naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
         sender
-            .send(Packet::new_raw(packet.address(), new_payload))
-            .await
-            .expect("send failed!");
+            .send(Packet::new_raw(packet.address(), new_payload));
     }
 }
 
