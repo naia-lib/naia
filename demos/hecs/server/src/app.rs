@@ -46,8 +46,7 @@ impl App {
         // disconnecting them
         server_config.disconnection_timeout_duration = Duration::from_secs(5);
 
-        let mut server =
-            Server::new(Protocol::load(), Some(server_config), get_shared_config());
+        let mut server = Server::new(Protocol::load(), Some(server_config), get_shared_config());
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
@@ -145,24 +144,24 @@ impl App {
 
                             for (hecs_entity_key, position_ref) in
                                 self.world.query_mut::<&Ref<Position>>()
-                                {
-                                    let mut position = position_ref.borrow_mut();
-                                    let mut x = *position.x.get();
-                                    x += 1;
-                                    if x > 125 {
-                                        x = 0;
-                                        let mut y = *position.y.get();
-                                        y = y.wrapping_add(1);
-                                        position.y.set(y);
-                                    }
-                                    if x == 40 {
-                                        entities_to_add.push(hecs_entity_key);
-                                    }
-                                    if x == 75 {
-                                        entities_to_remove.push(hecs_entity_key);
-                                    }
-                                    position.x.set(x);
+                            {
+                                let mut position = position_ref.borrow_mut();
+                                let mut x = *position.x.get();
+                                x += 1;
+                                if x > 125 {
+                                    x = 0;
+                                    let mut y = *position.y.get();
+                                    y = y.wrapping_add(1);
+                                    position.y.set(y);
                                 }
+                                if x == 40 {
+                                    entities_to_add.push(hecs_entity_key);
+                                }
+                                if x == 75 {
+                                    entities_to_remove.push(hecs_entity_key);
+                                }
+                                position.x.set(x);
+                            }
 
                             // add marker
                             while let Some(hecs_key) = entities_to_add.pop() {
@@ -216,7 +215,8 @@ impl App {
                             }
 
                             // Update scopes of entities
-                            for (room_key, user_key, entity_key) in self.server.entity_scope_sets() {
+                            for (room_key, user_key, entity_key) in self.server.entity_scope_sets()
+                            {
                                 if let Some(entity) = self.naia_to_hecs_key_map.get(&entity_key) {
                                     if let Ok(pos_ref) = self.world.get::<Ref<Position>>(*entity) {
                                         let x = *pos_ref.borrow().x.get();

@@ -37,8 +37,7 @@ impl App {
         // disconnecting them
         server_config.disconnection_timeout_duration = Duration::from_secs(5);
 
-        let mut server =
-            Server::new(Protocol::load(), Some(server_config), get_shared_config());
+        let mut server = Server::new(Protocol::load(), Some(server_config), get_shared_config());
 
         // Create a new, singular room, which will contain Users and Objects that they
         // can receive updates from
@@ -133,16 +132,17 @@ impl App {
                             // Iterate through Characters, marching them from (0,0) to (20, N)
                             for object_key in self.server.objects_iter() {
                                 if let Some(Protocol::Character(character_ref)) =
-                                self.server.get_object(object_key)
+                                    self.server.get_object(object_key)
                                 {
                                     character_ref.borrow_mut().step();
                                 }
                             }
 
                             // Update scopes of objects
-                            for (room_key, user_key, object_key) in self.server.object_scope_sets() {
+                            for (room_key, user_key, object_key) in self.server.object_scope_sets()
+                            {
                                 if let Some(Protocol::Character(character_ref)) =
-                                self.server.get_object(&object_key)
+                                    self.server.get_object(&object_key)
                                 {
                                     let x = *character_ref.borrow().x.get();
                                     let in_scope = x >= 5 && x <= 15;
