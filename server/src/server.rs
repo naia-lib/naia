@@ -38,7 +38,6 @@ use crate::{ComponentKey, GlobalPawnKey};
 pub struct Server<T: ProtocolType> {
     connection_config: ConnectionConfig,
     manifest: Manifest<T>,
-    _socket: ServerSocket,
     socket_sender: PacketSender,
     socket_receiver: Box<dyn PacketReceiverTrait>,
     global_replica_store: DenseSlotMap<ReplicaKey, T>,
@@ -106,7 +105,6 @@ impl<U: ProtocolType> Server<U> {
             object_scope_map: HashMap::new(),
             entity_scope_map: HashMap::new(),
             mut_handler: MutHandler::new(),
-            _socket: server_socket,
             socket_sender,
             socket_receiver,
             connection_config,
@@ -130,13 +128,15 @@ impl<U: ProtocolType> Server<U> {
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
     pub fn receive(&mut self) -> VecDeque<Result<Event<U>, NaiaServerError>> {
-        self.maintain_socket();
 
-        let mut output = VecDeque::new();
+        let mut events = VecDeque::new();
+
+        // Need to run this to maintain connection with all clients, and receive packets until none left
+        self.maintain_socket();
 
         // new authorizations
         while let Some((user_key, auth_message)) = self.outstanding_auths.pop_front() {
-            output.push_back(Ok(Event::Authorization(user_key, auth_message)));
+            events.push_back(Ok(Event::Authorization(user_key, auth_message)));
         }
 
         // new connections
@@ -156,7 +156,7 @@ impl<U: ProtocolType> Server<U> {
                 );
                 self.client_connections.insert(user_key, new_connection);
 
-                output.push_back(Ok(Event::Connection(user_key)));
+                events.push_back(Ok(Event::Connection(user_key)));
             }
         }
 
@@ -172,7 +172,7 @@ impl<U: ProtocolType> Server<U> {
             self.users.remove(user_key);
             self.client_connections.remove(&user_key);
 
-            output.push_back(Ok(Event::Disconnection(user_key, user_clone)));
+            events.push_back(Ok(Event::Disconnection(user_key, user_clone)));
         }
 
         // TODO: have 1 single queue for commands/messages from all users, as it's
@@ -185,29 +185,29 @@ impl<U: ProtocolType> Server<U> {
             {
                 match pawn_key {
                     GlobalPawnKey::Object(object_key) => {
-                        output.push_back(Ok(Event::Command(*user_key, object_key, command)));
+                        events.push_back(Ok(Event::Command(*user_key, object_key, command)));
                     }
                     GlobalPawnKey::Entity(entity_key) => {
-                        output.push_back(Ok(Event::CommandEntity(*user_key, entity_key, command)));
+                        events.push_back(Ok(Event::CommandEntity(*user_key, entity_key, command)));
                     }
                 }
             }
             //receive messages from anyone
             while let Some(message) = connection.get_incoming_message() {
-                output.push_back(Ok(Event::Message(*user_key, message)));
+                events.push_back(Ok(Event::Message(*user_key, message)));
             }
         }
 
         // new errors
         while let Some(err) = self.outstanding_errors.pop_front() {
-            output.push_back(Err(err));
+            events.push_back(Err(err));
         }
 
         if self.tick_manager.should_tick() {
-            output.push_back(Ok(Event::Tick));
+            events.push_back(Ok(Event::Tick));
         }
 
-        output
+        events
     }
 
     /// Accepts an incoming Client User, allowing them to establish a connection
