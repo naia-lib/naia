@@ -98,9 +98,7 @@ impl App {
                 }
                 Ok(Event::AssignPawn(object_key)) => {
                     info!("assign pawn");
-                    if let Some(Protocol::Square(square_ref)) =
-                        self.client.get_pawn_mut(&object_key)
-                    {
+                    if let Some(Protocol::Square(square_ref)) = self.client.get_pawn(&object_key) {
                         self.pawn = Some((object_key, square_ref.clone()));
                     }
                 }
