@@ -18,7 +18,6 @@ impl App {
         info!("Naia Macroquad Server Demo started");
 
         let shared_config = get_shared_config();
-
         let mut server_config = ServerConfig::default();
         server_config.socket_config.session_listen_addr = get_server_address();
         server_config.heartbeat_interval = Duration::from_secs(2);

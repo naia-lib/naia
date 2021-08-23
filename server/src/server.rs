@@ -2,7 +2,6 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     net::SocketAddr,
     panic,
-    rc::Rc,
 };
 
 use byteorder::{BigEndian, WriteBytesExt};
