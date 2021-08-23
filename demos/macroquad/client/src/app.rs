@@ -48,7 +48,12 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        // input
+        self.input();
+        self.receive_events();
+        self.draw();
+    }
+
+    fn input(&mut self) {
         let w = is_key_down(KeyCode::W);
         let s = is_key_down(KeyCode::S);
         let a = is_key_down(KeyCode::A);
@@ -71,8 +76,9 @@ impl App {
         } else {
             self.queued_command = Some(KeyCommand::new(w, s, a, d));
         }
+    }
 
-        // update
+    fn receive_events(&mut self) {
         for event_result in self.client.receive() {
             match event_result {
                 Ok(event) => match event {
@@ -124,8 +130,9 @@ impl App {
                 }
             }
         }
+    }
 
-        // drawing
+    fn draw(&mut self) {
         clear_background(BLACK);
 
         if self.client.has_connection() {
