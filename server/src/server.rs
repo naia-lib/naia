@@ -68,10 +68,12 @@ impl<U: ProtocolType> Server<U> {
         server_config: Option<ServerConfig>,
         shared_config: SharedConfig,
     ) -> Self {
-        let server_config = match server_config {
+        let mut server_config = match server_config {
             Some(config) => config,
             None => ServerConfig::default(),
         };
+        server_config.socket_config.shared.link_condition_config =
+            shared_config.link_condition_config.clone();
 
         let connection_config = ConnectionConfig::new(
             server_config.disconnection_timeout_duration,
