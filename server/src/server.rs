@@ -16,6 +16,8 @@ pub use naia_shared::{
     ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
 };
 
+use crate::{ComponentKey, GlobalPawnKey};
+
 use super::{
     client_connection::ClientConnection,
     error::NaiaServerError,
@@ -28,7 +30,6 @@ use super::{
     tick_manager::TickManager,
     user::{user_key::UserKey, User},
 };
-use crate::{ComponentKey, GlobalPawnKey};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered objects/entities to
@@ -192,6 +193,7 @@ impl<U: ProtocolType> Server<U> {
             events.push_back(Err(err));
         }
 
+        // tick event
         if self.tick_manager.should_tick() {
             events.push_back(Ok(Event::Tick));
         }
