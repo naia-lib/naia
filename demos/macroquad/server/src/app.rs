@@ -55,86 +55,76 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        for event_result in self.server.receive() {
-            match event_result {
-                Ok(event) => {
-                    match event {
-                        Event::Authorization(user_key, Protocol::Auth(auth_ref)) => {
-                            let auth_message = auth_ref.borrow();
-                            let username = auth_message.username.get();
-                            let password = auth_message.password.get();
-                            if username == "charlie" && password == "12345" {
-                                // Accept incoming connection
-                                self.server.accept_connection(&user_key);
-                            } else {
-                                // Reject incoming connection
-                                self.server.reject_connection(&user_key);
-                            }
-                        }
-                        Event::Connection(user_key) => {
-                            self.server.room_add_user(&self.main_room_key, &user_key);
-                            if let Some(user) = self.server.get_user(&user_key) {
-                                info!("Naia Server connected to: {}", user.address);
-
-                                let x = Random::gen_range_u32(0, 50) * 16;
-                                let y = Random::gen_range_u32(0, 37) * 16;
-
-                                let square_color = match self.server.get_users_count() % 3 {
-                                    0 => Color::Yellow,
-                                    1 => Color::Red,
-                                    _ => Color::Blue,
-                                };
-
-                                let square = Square::new(x as u16, y as u16, square_color);
-                                let square_key = self.server.register_object(&square);
-                                self.server
-                                    .room_add_object(&self.main_room_key, &square_key);
-                                self.server.assign_pawn(&user_key, &square_key);
-                                self.user_to_pawn_map.insert(user_key, square_key);
-                            }
-                        }
-                        Event::Disconnection(user_key, user) => {
-                            info!("Naia Server disconnected from: {:?}", user.address);
-                            self.server.room_remove_user(&self.main_room_key, &user_key);
-                            if let Some(object_key) = self.user_to_pawn_map.remove(&user_key) {
-                                self.server
-                                    .room_remove_object(&self.main_room_key, &object_key);
-                                self.server.unassign_pawn(&user_key, &object_key);
-                                self.server.deregister_object(&object_key);
-                            }
-                        }
-                        Event::Command(_, square_key, Protocol::KeyCommand(key_command_ref)) => {
-                            if let Some(Protocol::Square(square_ref)) =
-                                self.server.get_object(&square_key)
-                            {
-                                shared_behavior::process_command(&key_command_ref, square_ref);
-                            }
-                        }
-                        Event::Tick => {
-                            // All game logic should happen here, on a tick event
-
-                            // Update scopes of objects
-                            for (room_key, user_key, object_key) in self.server.object_scope_sets()
-                            {
-                                self.server.object_set_scope(
-                                    &room_key,
-                                    &user_key,
-                                    &object_key,
-                                    true,
-                                );
-                            }
-
-                            // VERY IMPORTANT! Calling this actually sends all update data
-                            // packets to all Clients that require it. If you don't call this
-                            // method, the Server will never communicate with it's connected Clients
-                            self.server.send_all_updates();
-                        }
-                        _ => {}
+        for event in self.server.receive() {
+            match event {
+                Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
+                    let auth_message = auth_ref.borrow();
+                    let username = auth_message.username.get();
+                    let password = auth_message.password.get();
+                    if username == "charlie" && password == "12345" {
+                        // Accept incoming connection
+                        self.server.accept_connection(&user_key);
+                    } else {
+                        // Reject incoming connection
+                        self.server.reject_connection(&user_key);
                     }
+                }
+                Ok(Event::Connection(user_key)) => {
+                    self.server.room_add_user(&self.main_room_key, &user_key);
+                    if let Some(user) = self.server.get_user(&user_key) {
+                        info!("Naia Server connected to: {}", user.address);
+
+                        let x = Random::gen_range_u32(0, 50) * 16;
+                        let y = Random::gen_range_u32(0, 37) * 16;
+
+                        let square_color = match self.server.get_users_count() % 3 {
+                            0 => Color::Yellow,
+                            1 => Color::Red,
+                            _ => Color::Blue,
+                        };
+
+                        let square = Square::new(x as u16, y as u16, square_color);
+                        let square_key = self.server.register_object(&square);
+                        self.server
+                            .room_add_object(&self.main_room_key, &square_key);
+                        self.server.assign_pawn(&user_key, &square_key);
+                        self.user_to_pawn_map.insert(user_key, square_key);
+                    }
+                }
+                Ok(Event::Disconnection(user_key, user)) => {
+                    info!("Naia Server disconnected from: {:?}", user.address);
+                    self.server.room_remove_user(&self.main_room_key, &user_key);
+                    if let Some(object_key) = self.user_to_pawn_map.remove(&user_key) {
+                        self.server
+                            .room_remove_object(&self.main_room_key, &object_key);
+                        self.server.unassign_pawn(&user_key, &object_key);
+                        self.server.deregister_object(&object_key);
+                    }
+                }
+                Ok(Event::Command(_, square_key, Protocol::KeyCommand(key_command_ref))) => {
+                    if let Some(Protocol::Square(square_ref)) = self.server.get_object(&square_key)
+                    {
+                        shared_behavior::process_command(&key_command_ref, square_ref);
+                    }
+                }
+                Ok(Event::Tick) => {
+                    // All game logic should happen here, on a tick event
+
+                    // Update scopes of objects
+                    for (room_key, user_key, object_key) in self.server.object_scope_sets() {
+                        self.server
+                            .object_set_scope(&room_key, &user_key, &object_key, true);
+                    }
+
+                    // VERY IMPORTANT! Calling this actually sends all update data
+                    // packets to all Clients that require it. If you don't call this
+                    // method, the Server will never communicate with it's connected Clients
+                    self.server.send_all_updates();
                 }
                 Err(error) => {
                     info!("Naia Server error: {}", error);
                 }
+                _ => {}
             }
         }
     }

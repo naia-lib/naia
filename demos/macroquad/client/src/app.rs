@@ -79,55 +79,52 @@ impl App {
     }
 
     fn receive_events(&mut self) {
-        for event_result in self.client.receive() {
-            match event_result {
-                Ok(event) => match event {
-                    Event::Connection => {
-                        info!("Client connected to: {}", self.client.server_address());
-                    }
-                    Event::Disconnection => {
-                        info!("Client disconnected from: {}", self.client.server_address());
-                    }
-                    Event::Tick => {
-                        if let Some((pawn_key, _)) = self.pawn {
-                            if let Some(command) = self.queued_command.take() {
-                                self.client.send_object_command(&pawn_key, &command);
-                            }
+        for event in self.client.receive() {
+            match event {
+                Ok(Event::Connection) => {
+                    info!("Client connected to: {}", self.client.server_address());
+                }
+                Ok(Event::Disconnection) => {
+                    info!("Client disconnected from: {}", self.client.server_address());
+                }
+                Ok(Event::Tick) => {
+                    if let Some((pawn_key, _)) = self.pawn {
+                        if let Some(command) = self.queued_command.take() {
+                            self.client.send_object_command(&pawn_key, &command);
                         }
                     }
-                    Event::AssignPawn(object_key) => {
-                        info!("assign pawn");
-                        if let Some(Protocol::Square(square_ref)) =
-                            self.client.get_pawn_mut(&object_key)
-                        {
-                            self.pawn = Some((object_key, square_ref.clone()));
-                        }
+                }
+                Ok(Event::AssignPawn(object_key)) => {
+                    info!("assign pawn");
+                    if let Some(Protocol::Square(square_ref)) =
+                        self.client.get_pawn_mut(&object_key)
+                    {
+                        self.pawn = Some((object_key, square_ref.clone()));
                     }
-                    Event::UnassignPawn(_) => {
-                        self.pawn = None;
-                        info!("unassign pawn");
+                }
+                Ok(Event::UnassignPawn(_)) => {
+                    self.pawn = None;
+                    info!("unassign pawn");
+                }
+                Ok(Event::NewCommand(_, Protocol::KeyCommand(key_command_ref)))
+                | Ok(Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref))) => {
+                    if let Some((_, pawn_ref)) = &self.pawn {
+                        shared_behavior::process_command(&key_command_ref, &pawn_ref);
                     }
-                    Event::NewCommand(_, Protocol::KeyCommand(key_command_ref))
-                    | Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref)) => {
-                        if let Some((_, pawn_ref)) = &self.pawn {
-                            shared_behavior::process_command(&key_command_ref, &pawn_ref);
-                        }
+                }
+                Ok(Event::CreateObject(object_key)) => {
+                    if let Some(Protocol::Square(square_ref)) = self.client.get_object(&object_key)
+                    {
+                        self.square_map.insert(object_key, square_ref.clone());
                     }
-                    Event::CreateObject(object_key) => {
-                        if let Some(Protocol::Square(square_ref)) =
-                            self.client.get_object(&object_key)
-                        {
-                            self.square_map.insert(object_key, square_ref.clone());
-                        }
-                    }
-                    Event::DeleteObject(object_key, _) => {
-                        self.square_map.remove(&object_key);
-                    }
-                    _ => {}
-                },
+                }
+                Ok(Event::DeleteObject(object_key, _)) => {
+                    self.square_map.remove(&object_key);
+                }
                 Err(err) => {
                     info!("Client Error: {}", err);
                 }
+                _ => {}
             }
         }
     }
