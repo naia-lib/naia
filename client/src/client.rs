@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{collections::VecDeque, net::SocketAddr};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
@@ -37,6 +37,8 @@ pub struct Client<T: ProtocolType> {
     connection_state: ConnectionState,
     auth_message: Option<Ref<dyn Replicate<T>>>,
     tick_manager: TickManager,
+    outstanding_connect: bool,
+    outstanding_errors: VecDeque<NaiaClientError>,
 }
 
 impl<T: ProtocolType> Client<T> {
@@ -88,123 +90,32 @@ impl<T: ProtocolType> Client<T> {
             connection_state: AwaitingChallengeResponse,
             auth_message,
             tick_manager: TickManager::new(shared_config.tick_interval),
+            outstanding_connect: false,
+            outstanding_errors: VecDeque::new(),
         }
     }
 
     /// Must call this regularly (preferably at the beginning of every draw
     /// frame), in a loop until it returns None.
     /// Retrieves incoming update data, and maintains the connection.
-    pub fn receive(&mut self) -> Option<Result<Event<T>, NaiaClientError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<T>, NaiaClientError>> {
+        let mut events = VecDeque::new();
+
+        // Need to run this to maintain connection with server, and receive packets
+        // until none left
+        self.maintain_socket();
+
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
             Some(connection) => {
-                // process replays
-                connection.process_replays();
-                // receive message
-                if let Some(message) = connection.get_incoming_message() {
-                    return Some(Ok(Event::Message(message)));
+                // return connect event
+                if self.outstanding_connect {
+                    events.push_back(Ok(Event::Connection));
+                    self.outstanding_connect = false;
                 }
-                // receive replica action
-                while let Some(action) = connection.get_incoming_replica_action() {
-                    let event_opt: Option<Event<T>> = {
-                        match action {
-                            ReplicaAction::CreateObject(local_key) => {
-                                Some(Event::CreateObject(local_key))
-                            }
-                            ReplicaAction::DeleteObject(local_key, replica) => {
-                                Some(Event::DeleteObject(local_key, replica.clone()))
-                            }
-                            ReplicaAction::UpdateObject(local_key) => {
-                                Some(Event::UpdateObject(local_key))
-                            }
-                            ReplicaAction::AssignPawn(local_key) => {
-                                Some(Event::AssignPawn(local_key))
-                            }
-                            ReplicaAction::UnassignPawn(local_key) => {
-                                Some(Event::UnassignPawn(local_key))
-                            }
-                            ReplicaAction::ResetPawn(local_key) => {
-                                Some(Event::ResetPawn(local_key))
-                            }
-                            ReplicaAction::CreateEntity(local_key, component_list) => {
-                                Some(Event::CreateEntity(local_key, component_list))
-                            }
-                            ReplicaAction::DeleteEntity(local_key) => {
-                                Some(Event::DeleteEntity(local_key))
-                            }
-                            ReplicaAction::AssignPawnEntity(local_key) => {
-                                Some(Event::AssignPawnEntity(local_key))
-                            }
-                            ReplicaAction::UnassignPawnEntity(local_key) => {
-                                Some(Event::UnassignPawnEntity(local_key))
-                            }
-                            ReplicaAction::ResetPawnEntity(local_key) => {
-                                Some(Event::ResetPawnEntity(local_key))
-                            }
-                            ReplicaAction::AddComponent(entity_key, component_key) => {
-                                Some(Event::AddComponent(entity_key, component_key))
-                            }
-                            ReplicaAction::UpdateComponent(entity_key, component_key) => {
-                                Some(Event::UpdateComponent(entity_key, component_key))
-                            }
-                            ReplicaAction::RemoveComponent(
-                                entity_key,
-                                component_key,
-                                component,
-                            ) => Some(Event::RemoveComponent(
-                                entity_key,
-                                component_key,
-                                component.clone(),
-                            )),
-                        }
-                    };
-                    match event_opt {
-                        Some(event) => {
-                            return Some(Ok(event));
-                        }
-                        None => {
-                            continue;
-                        }
-                    }
-                }
-                // receive replay command
-                if let Some((pawn_key, command)) = connection.get_incoming_replay() {
-                    match pawn_key {
-                        PawnKey::Object(object_key) => {
-                            return Some(Ok(Event::ReplayCommand(
-                                object_key,
-                                command.borrow().copy_to_protocol(),
-                            )));
-                        }
-                        PawnKey::Entity(entity_key) => {
-                            return Some(Ok(Event::ReplayCommandEntity(
-                                entity_key,
-                                command.borrow().copy_to_protocol(),
-                            )));
-                        }
-                    }
-                }
-                // receive command
-                if let Some((pawn_key, command)) = connection.get_incoming_command() {
-                    match pawn_key {
-                        PawnKey::Object(object_key) => {
-                            return Some(Ok(Event::NewCommand(
-                                object_key,
-                                command.borrow().copy_to_protocol(),
-                            )));
-                        }
-                        PawnKey::Entity(entity_key) => {
-                            return Some(Ok(Event::NewCommandEntity(
-                                entity_key,
-                                command.borrow().copy_to_protocol(),
-                            )));
-                        }
-                    }
-                }
-                // update current tick
-                // apply updates on tick boundary
-                if connection.frame_begin(&self.manifest, &mut self.tick_manager) {
-                    return Some(Ok(Event::Tick));
+                // new errors
+                while let Some(err) = self.outstanding_errors.pop_front() {
+                    events.push_back(Err(err));
                 }
                 // drop connection if necessary
                 if connection.should_drop() {
@@ -212,180 +123,142 @@ impl<T: ProtocolType> Client<T> {
                     self.pre_connection_timestamp = None;
                     self.pre_connection_digest = None;
                     self.connection_state = AwaitingChallengeResponse;
-                    return Some(Ok(Event::Disconnection));
-                } else {
-                    // send heartbeats
-                    if connection.should_send_heartbeat() {
-                        Client::internal_send_with_connection(
-                            self.tick_manager.get_client_tick(),
-                            &mut self.sender,
-                            connection,
-                            PacketType::Heartbeat,
-                            Packet::empty(),
-                        );
+                    events.push_back(Ok(Event::Disconnection));
+                    return events; // exit early, we're disconnected, who cares?
+                }
+                // process replays
+                connection.process_replays();
+                // receive messages
+                while let Some(message) = connection.get_incoming_message() {
+                    events.push_back(Ok(Event::Message(message)));
+                }
+                // receive replica actions
+                while let Some(action) = connection.get_incoming_replica_action() {
+                    let event: Event<T> = {
+                        match action {
+                            ReplicaAction::CreateObject(local_key) => {
+                                Event::CreateObject(local_key)
+                            }
+                            ReplicaAction::DeleteObject(local_key, replica) => {
+                                Event::DeleteObject(local_key, replica.clone())
+                            }
+                            ReplicaAction::UpdateObject(local_key) => {
+                                Event::UpdateObject(local_key)
+                            }
+                            ReplicaAction::AssignPawn(local_key) => Event::AssignPawn(local_key),
+                            ReplicaAction::UnassignPawn(local_key) => {
+                                Event::UnassignPawn(local_key)
+                            }
+                            ReplicaAction::ResetPawn(local_key) => Event::ResetPawn(local_key),
+                            ReplicaAction::CreateEntity(local_key, component_list) => {
+                                Event::CreateEntity(local_key, component_list)
+                            }
+                            ReplicaAction::DeleteEntity(local_key) => {
+                                Event::DeleteEntity(local_key)
+                            }
+                            ReplicaAction::AssignPawnEntity(local_key) => {
+                                Event::AssignPawnEntity(local_key)
+                            }
+                            ReplicaAction::UnassignPawnEntity(local_key) => {
+                                Event::UnassignPawnEntity(local_key)
+                            }
+                            ReplicaAction::ResetPawnEntity(local_key) => {
+                                Event::ResetPawnEntity(local_key)
+                            }
+                            ReplicaAction::AddComponent(entity_key, component_key) => {
+                                Event::AddComponent(entity_key, component_key)
+                            }
+                            ReplicaAction::UpdateComponent(entity_key, component_key) => {
+                                Event::UpdateComponent(entity_key, component_key)
+                            }
+                            ReplicaAction::RemoveComponent(
+                                entity_key,
+                                component_key,
+                                component,
+                            ) => {
+                                Event::RemoveComponent(entity_key, component_key, component.clone())
+                            }
+                        }
+                    };
+                    events.push_back(Ok(event));
+                }
+                // receive replay command
+                while let Some((pawn_key, command)) = connection.get_incoming_replay() {
+                    match pawn_key {
+                        PawnKey::Object(object_key) => {
+                            events.push_back(Ok(Event::ReplayCommand(
+                                object_key,
+                                command.borrow().copy_to_protocol(),
+                            )));
+                        }
+                        PawnKey::Entity(entity_key) => {
+                            events.push_back(Ok(Event::ReplayCommandEntity(
+                                entity_key,
+                                command.borrow().copy_to_protocol(),
+                            )));
+                        }
                     }
-                    // send pings
-                    if connection.should_send_ping() {
-                        let ping_payload = connection.get_ping_payload();
-                        Client::internal_send_with_connection(
-                            self.tick_manager.get_client_tick(),
-                            &mut self.sender,
-                            connection,
-                            PacketType::Ping,
-                            ping_payload,
-                        );
+                }
+                // receive command
+                while let Some((pawn_key, command)) = connection.get_incoming_command() {
+                    match pawn_key {
+                        PawnKey::Object(object_key) => {
+                            events.push_back(Ok(Event::NewCommand(
+                                object_key,
+                                command.borrow().copy_to_protocol(),
+                            )));
+                        }
+                        PawnKey::Entity(entity_key) => {
+                            events.push_back(Ok(Event::NewCommandEntity(
+                                entity_key,
+                                command.borrow().copy_to_protocol(),
+                            )));
+                        }
                     }
-                    // send a packet
-                    while let Some(payload) = connection
-                        .get_outgoing_packet(self.tick_manager.get_client_tick(), &self.manifest)
-                    {
-                        self.sender
-                            .send(Packet::new_raw(payload))
-                            .expect("send failed!");
-                        connection.mark_sent();
-                    }
+                }
+                // send heartbeats
+                if connection.should_send_heartbeat() {
+                    Client::internal_send_with_connection(
+                        self.tick_manager.get_client_tick(),
+                        &mut self.sender,
+                        connection,
+                        PacketType::Heartbeat,
+                        Packet::empty(),
+                    );
+                }
+                // send pings
+                if connection.should_send_ping() {
+                    let ping_payload = connection.get_ping_payload();
+                    Client::internal_send_with_connection(
+                        self.tick_manager.get_client_tick(),
+                        &mut self.sender,
+                        connection,
+                        PacketType::Ping,
+                        ping_payload,
+                    );
+                }
+                // send a packet
+                while let Some(payload) = connection
+                    .get_outgoing_packet(self.tick_manager.get_client_tick(), &self.manifest)
+                {
+                    self.sender.send(Packet::new_raw(payload));
+                    connection.mark_sent();
+                }
+                // update current tick
+                // apply updates on tick boundary
+                if connection.frame_begin(&self.manifest, &mut self.tick_manager) {
+                    events.push_back(Ok(Event::Tick));
                 }
             }
             None => {
                 if self.handshake_timer.ringing() {
-                    match self.connection_state {
-                        ConnectionState::AwaitingChallengeResponse => {
-                            if self.pre_connection_timestamp.is_none() {
-                                self.pre_connection_timestamp = Some(Timestamp::now());
-                            }
-
-                            let mut timestamp_bytes = Vec::new();
-                            self.pre_connection_timestamp
-                                .as_mut()
-                                .unwrap()
-                                .write(&mut timestamp_bytes);
-                            Client::<T>::internal_send_connectionless(
-                                &mut self.sender,
-                                PacketType::ClientChallengeRequest,
-                                Packet::new(timestamp_bytes),
-                            );
-                        }
-                        ConnectionState::AwaitingConnectResponse => {
-                            // write timestamp & digest into payload
-                            let mut payload_bytes = Vec::new();
-                            self.pre_connection_timestamp
-                                .as_mut()
-                                .unwrap()
-                                .write(&mut payload_bytes);
-                            for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref()
-                            {
-                                payload_bytes.push(*digest_byte);
-                            }
-                            // write auth message if there is one
-                            if let Some(auth_message) = &mut self.auth_message {
-                                let type_id = auth_message.borrow().get_type_id();
-                                let naia_id = self.manifest.get_naia_id(&type_id); // get naia id
-                                payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                                auth_message.borrow().write(&mut payload_bytes);
-                            }
-                            Client::<T>::internal_send_connectionless(
-                                &mut self.sender,
-                                PacketType::ClientConnectRequest,
-                                Packet::new(payload_bytes),
-                            );
-                        }
-                        _ => {}
-                    }
-
                     self.handshake_timer.reset();
+                    self.send_handshake_packets();
                 }
             }
         }
 
-        // receive from socket
-        loop {
-            match self.receiver.receive() {
-                Ok(event) => {
-                    if let Some(packet) = event {
-                        let server_connection_wrapper = self.server_connection.as_mut();
-
-                        if let Some(server_connection) = server_connection_wrapper {
-                            server_connection.mark_heard();
-
-                            let (header, payload) = StandardHeader::read(packet.payload());
-                            server_connection
-                                .process_incoming_header(&header, &mut self.tick_manager);
-
-                            match header.packet_type() {
-                                PacketType::Data => {
-                                    server_connection.buffer_data_packet(
-                                        header.host_tick(),
-                                        header.local_packet_index(),
-                                        &payload,
-                                    );
-                                    continue;
-                                }
-                                PacketType::Heartbeat => {
-                                    continue;
-                                }
-                                PacketType::Pong => {
-                                    server_connection.process_pong(&payload);
-                                    continue;
-                                }
-                                _ => {}
-                            }
-                        } else {
-                            let (header, payload) = StandardHeader::read(packet.payload());
-                            match header.packet_type() {
-                                PacketType::ServerChallengeResponse => {
-                                    if self.connection_state
-                                        == ConnectionState::AwaitingChallengeResponse
-                                    {
-                                        if let Some(my_timestamp) = self.pre_connection_timestamp {
-                                            let mut reader = PacketReader::new(&payload);
-                                            let server_tick = reader
-                                                .get_cursor()
-                                                .read_u16::<BigEndian>()
-                                                .unwrap();
-                                            let payload_timestamp = Timestamp::read(&mut reader);
-
-                                            if my_timestamp == payload_timestamp {
-                                                let mut digest_bytes: Vec<u8> = Vec::new();
-                                                for _ in 0..32 {
-                                                    digest_bytes.push(reader.read_u8());
-                                                }
-                                                self.pre_connection_digest =
-                                                    Some(digest_bytes.into_boxed_slice());
-
-                                                self.tick_manager.set_initial_tick(server_tick);
-
-                                                self.connection_state =
-                                                    ConnectionState::AwaitingConnectResponse;
-                                            }
-                                        }
-                                    }
-
-                                    continue;
-                                }
-                                PacketType::ServerConnectResponse => {
-                                    let server_connection = ServerConnection::new(
-                                        self.server_address,
-                                        &self.connection_config,
-                                    );
-
-                                    self.server_connection = Some(server_connection);
-                                    self.connection_state = ConnectionState::Connected;
-                                    return Some(Ok(Event::Connection));
-                                }
-                                _ => {}
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                Err(error) => {
-                    return Some(Err(NaiaClientError::Wrapped(Box::new(error))));
-                }
-            }
-        }
-
-        return None;
+        events
     }
 
     /// Queues up an Message to be sent to the Server
@@ -563,6 +436,138 @@ impl<T: ProtocolType> Client<T> {
 
     // internal functions
 
+    fn send_handshake_packets(&mut self) {
+        match self.connection_state {
+            ConnectionState::Connected => {
+                // do nothing, not necessary
+            }
+            ConnectionState::AwaitingChallengeResponse => {
+                if self.pre_connection_timestamp.is_none() {
+                    self.pre_connection_timestamp = Some(Timestamp::now());
+                }
+
+                let mut timestamp_bytes = Vec::new();
+                self.pre_connection_timestamp
+                    .as_mut()
+                    .unwrap()
+                    .write(&mut timestamp_bytes);
+                Client::<T>::internal_send_connectionless(
+                    &mut self.sender,
+                    PacketType::ClientChallengeRequest,
+                    Packet::new(timestamp_bytes),
+                );
+            }
+            ConnectionState::AwaitingConnectResponse => {
+                // write timestamp & digest into payload
+                let mut payload_bytes = Vec::new();
+                self.pre_connection_timestamp
+                    .as_mut()
+                    .unwrap()
+                    .write(&mut payload_bytes);
+                for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref() {
+                    payload_bytes.push(*digest_byte);
+                }
+                // write auth message if there is one
+                if let Some(auth_message) = &mut self.auth_message {
+                    let type_id = auth_message.borrow().get_type_id();
+                    let naia_id = self.manifest.get_naia_id(&type_id); // get naia id
+                    payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
+                    auth_message.borrow().write(&mut payload_bytes);
+                }
+                Client::<T>::internal_send_connectionless(
+                    &mut self.sender,
+                    PacketType::ClientConnectRequest,
+                    Packet::new(payload_bytes),
+                );
+            }
+        }
+    }
+
+    fn maintain_socket(&mut self) {
+        // receive from socket
+        loop {
+            match self.receiver.receive() {
+                Ok(event) => {
+                    if let Some(packet) = event {
+                        let server_connection_wrapper = self.server_connection.as_mut();
+
+                        if let Some(server_connection) = server_connection_wrapper {
+                            server_connection.mark_heard();
+
+                            let (header, payload) = StandardHeader::read(packet.payload());
+                            server_connection
+                                .process_incoming_header(&header, &mut self.tick_manager);
+
+                            match header.packet_type() {
+                                PacketType::Data => {
+                                    server_connection.buffer_data_packet(
+                                        header.host_tick(),
+                                        header.local_packet_index(),
+                                        &payload,
+                                    );
+                                }
+                                PacketType::Heartbeat => {}
+                                PacketType::Pong => {
+                                    server_connection.process_pong(&payload);
+                                }
+                                _ => {} // TODO: explicitly cover these cases
+                            }
+                        } else {
+                            let (header, payload) = StandardHeader::read(packet.payload());
+                            match header.packet_type() {
+                                PacketType::ServerChallengeResponse => {
+                                    if self.connection_state
+                                        == ConnectionState::AwaitingChallengeResponse
+                                    {
+                                        if let Some(my_timestamp) = self.pre_connection_timestamp {
+                                            let mut reader = PacketReader::new(&payload);
+                                            let server_tick = reader
+                                                .get_cursor()
+                                                .read_u16::<BigEndian>()
+                                                .unwrap();
+                                            let payload_timestamp = Timestamp::read(&mut reader);
+
+                                            if my_timestamp == payload_timestamp {
+                                                let mut digest_bytes: Vec<u8> = Vec::new();
+                                                for _ in 0..32 {
+                                                    digest_bytes.push(reader.read_u8());
+                                                }
+                                                self.pre_connection_digest =
+                                                    Some(digest_bytes.into_boxed_slice());
+
+                                                self.tick_manager.set_initial_tick(server_tick);
+
+                                                self.connection_state =
+                                                    ConnectionState::AwaitingConnectResponse;
+                                            }
+                                        }
+                                    }
+                                }
+                                PacketType::ServerConnectResponse => {
+                                    let server_connection = ServerConnection::new(
+                                        self.server_address,
+                                        &self.connection_config,
+                                    );
+
+                                    self.server_connection = Some(server_connection);
+                                    self.connection_state = ConnectionState::Connected;
+                                    self.outstanding_connect = true;
+                                }
+                                _ => {}
+                            }
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                Err(error) => {
+                    self.outstanding_errors
+                        .push_back(NaiaClientError::Wrapped(Box::new(error)));
+                }
+            }
+        }
+    }
+
     fn internal_send_with_connection(
         host_tick: u16,
         sender: &mut PacketSender,
@@ -576,9 +581,7 @@ impl<T: ProtocolType> Client<T> {
             packet_type,
             packet.payload(),
         );
-        sender
-            .send(Packet::new_raw(new_payload))
-            .expect("send failed!");
+        sender.send(Packet::new_raw(new_payload));
         connection.mark_sent();
     }
 
@@ -589,8 +592,6 @@ impl<T: ProtocolType> Client<T> {
     ) {
         let new_payload =
             naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
-        sender
-            .send(Packet::new_raw(new_payload))
-            .expect("send failed!");
+        sender.send(Packet::new_raw(new_payload));
     }
 }
