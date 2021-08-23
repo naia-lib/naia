@@ -50,10 +50,12 @@ impl<T: ProtocolType> Client<T> {
         shared_config: SharedConfig,
         auth: Option<U>,
     ) -> Self {
-        let client_config = match client_config {
+        let mut client_config = match client_config {
             Some(config) => config,
             None => ClientConfig::default(),
         };
+        client_config.socket_config.shared.link_condition_config =
+            shared_config.link_condition_config.clone();
 
         let server_address = client_config.socket_config.server_address;
 
