@@ -9,9 +9,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 use ring::{hmac, rand};
 use slotmap::DenseSlotMap;
 
-use naia_server_socket::{
-    Packet, PacketReceiver, PacketSender, ServerSocket,
-};
+use naia_server_socket::{Packet, PacketReceiver, PacketSender, ServerSocket};
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, EntityKey, HostTickManager, ImplRef, Instant,
     KeyGenerator, LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
@@ -81,9 +79,7 @@ impl<U: ProtocolType> Server<U> {
             server_config.rtt_sample_size,
         );
 
-        let (socket_sender, socket_receiver) = ServerSocket::listen(
-            server_config.socket_config
-        );
+        let (socket_sender, socket_receiver) = ServerSocket::listen(server_config.socket_config);
 
         let clients_map = HashMap::new();
         let heartbeat_timer = Timer::new(connection_config.heartbeat_interval);
@@ -121,10 +117,10 @@ impl<U: ProtocolType> Server<U> {
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
     pub fn receive(&mut self) -> VecDeque<Result<Event<U>, NaiaServerError>> {
-
         let mut events = VecDeque::new();
 
-        // Need to run this to maintain connection with all clients, and receive packets until none left
+        // Need to run this to maintain connection with all clients, and receive packets
+        // until none left
         self.maintain_socket();
 
         // new authorizations
