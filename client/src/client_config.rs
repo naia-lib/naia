@@ -29,10 +29,7 @@ impl Default for ClientConfig {
             .parse()
             .expect("couldn't parse input IP address");
         Self {
-            socket_config: ClientSocketConfig::new(
-                server_address,
-                SocketSharedConfig::default(),
-            ),
+            socket_config: ClientSocketConfig::new(server_address, SocketSharedConfig::default()),
             disconnection_timeout_duration: Duration::from_secs(10),
             heartbeat_interval: Duration::from_secs(4),
             send_handshake_interval: Duration::from_secs(1),

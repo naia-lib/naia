@@ -1,7 +1,8 @@
 use std::{collections::HashMap, time::Duration};
 
 use naia_server::{
-    Event, ObjectKey, Random, RoomKey, Server, ServerConfig, UserKey, ServerSocketConfig, SocketSharedConfig
+    Event, ObjectKey, Random, RoomKey, Server, ServerConfig, ServerSocketConfig,
+    SocketSharedConfig, UserKey,
 };
 
 use naia_macroquad_demo_shared::{
@@ -33,7 +34,7 @@ impl App {
             "127.0.0.1:14192"
                 .parse()
                 .expect("could not parse advertised public WebRTC data address/port"),
-            SocketSharedConfig::new(shared_config.link_condition_config.clone(), None)
+            SocketSharedConfig::new(shared_config.link_condition_config.clone(), None),
         );
         server_config.heartbeat_interval = Duration::from_secs(2);
         // Keep in mind that the disconnect timeout duration should always be at least

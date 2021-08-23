@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use naia_client_socket::{ClientSocket, PacketSender, PacketReceiver};
+use naia_client_socket::{ClientSocket, PacketReceiver, PacketSender};
 
 pub use naia_shared::{
     ConnectionConfig, HostTickManager, ImplRef, Instant, LocalComponentKey, LocalEntityKey,
