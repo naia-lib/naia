@@ -13,7 +13,7 @@ use-webrtc = [ "naia-server/use-webrtc" ]
 
 [dependencies]
 naia-bevy-demo-shared = { path = "../shared" }
-naia-server = { path = "../../../server", features = [ "multithread" ] } #version = "0.5.0" }
+naia-server = { path = "../../../server" } #version = "0.5.0" }
 log = "0.4"
 simple_logger = { version = "1.4" }
 smol = { version = "1.2.4" }

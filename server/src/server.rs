@@ -263,7 +263,7 @@ impl<U: ProtocolType> Server<U> {
 
         dyn_ref
             .borrow_mut()
-            .set_mutator(&to_property_mutator(&new_mutator_ref));
+            .set_mutator(&to_property_mutator(new_mutator_ref.clone()));
 
         let object_protocol = object_ref.protocol();
         let object_key = self.global_replica_store.insert(object_protocol);
@@ -1021,18 +1021,18 @@ impl<U: ProtocolType> Server<U> {
 cfg_if! {
     if #[cfg(feature = "multithread")] {
         use std::sync::{Arc, Mutex};
-        fn to_property_mutator_raw(eref: &Arc<Mutex<PropertyMutator>>) -> Arc<Mutex<dyn PropertyMutate>> {
+        fn to_property_mutator_raw(eref: Arc<Mutex<PropertyMutator>>) -> Arc<Mutex<dyn PropertyMutate>> {
             eref.clone()
         }
     } else {
-        use std::cell::RefCell;
-        fn to_property_mutator_raw(eref: &Rc<RefCell<PropertyMutator>>) -> Rc<RefCell<dyn PropertyMutate>> {
+        use std::{cell::RefCell, rc::Rc};
+        fn to_property_mutator_raw(eref: Rc<RefCell<PropertyMutator>>) -> Rc<RefCell<dyn PropertyMutate>> {
             eref.clone()
         }
     }
 }
 
-fn to_property_mutator(eref: &Ref<PropertyMutator>) -> Ref<dyn PropertyMutate> {
-    let upcast_ref = to_property_mutator_raw(&eref.inner());
+fn to_property_mutator(eref: Ref<PropertyMutator>) -> Ref<dyn PropertyMutate> {
+    let upcast_ref = to_property_mutator_raw(eref.inner());
     Ref::new_raw(upcast_ref)
 }

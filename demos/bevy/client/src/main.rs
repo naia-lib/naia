@@ -29,7 +29,8 @@ fn main() {
     let mut app = App::build();
 
     // Plugins
-    app.add_plugins(DefaultPlugins).add_stage_before(
+    app.add_plugins(DefaultPlugins)
+       .add_stage_before(
         CoreStage::PreUpdate,
         ALL,
         SystemStage::single_threaded(),
