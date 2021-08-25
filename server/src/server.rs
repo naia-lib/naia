@@ -60,8 +60,7 @@ pub struct Server<T: ProtocolType> {
 }
 
 impl<U: ProtocolType> Server<U> {
-    /// Create a new Server, given an address to listen at, a Replica
-    /// manifest, and an optional Config
+    /// Create a new Server
     pub fn new(
         manifest: Manifest<U>,
         server_config: Option<ServerConfig>,

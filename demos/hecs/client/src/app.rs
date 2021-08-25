@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 use log::{info, warn};
 
@@ -27,12 +27,6 @@ impl App {
 
         let mut client_config = ClientConfig::default();
         client_config.socket_config.server_address = get_server_address();
-        client_config.heartbeat_interval = Duration::from_secs(2);
-        // Keep in mind that the disconnect timeout duration should always be at least
-        // 2x greater than the server's heartbeat interval, to make it so that at the
-        // worst case, the client would need to miss 2 server heartbeats before
-        // disconnecting from them
-        client_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         // This will be evaluated in the Server's 'on_auth()' method
         let auth = Auth::new("charlie", "12345");

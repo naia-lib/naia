@@ -13,6 +13,6 @@ path = "src/main.rs"
 multithread = [ "naia-basic-client-demo-app/multithread", ]
 
 [dependencies]
-cfg-if = "0.1.10"
 naia-basic-client-demo-app = { path = "../app", features = [ "mquad" ] }
+cfg-if = "0.1.10"
 miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"] }

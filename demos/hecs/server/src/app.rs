@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 use hecs::{Entity as HecsEntityKey, World};
 
@@ -30,12 +30,6 @@ impl App {
 
         let mut server_config = ServerConfig::default();
         server_config.socket_config.session_listen_addr = get_server_address();
-        server_config.heartbeat_interval = Duration::from_secs(2);
-        // Keep in mind that the disconnect timeout duration should always be at least
-        // 2x greater than the client's heartbeat interval, to make it so that at the
-        // worst case, the server would need to miss 2 client heartbeats before
-        // disconnecting them
-        server_config.disconnection_timeout_duration = Duration::from_secs(5);
 
         let mut server = Server::new(Protocol::load(), Some(server_config), shared_config);
 
