@@ -12,7 +12,7 @@ path = "src/main.rs"
 [features]
 
 [dependencies]
+naia-macroquad-demo-shared = { path = "../shared" }
+naia-client = { path = "../../../client", features = [ "mquad" ] } #version = "0.5.0", features = [ "mquad" ] }
 cfg-if = "0.1.10"
 macroquad = { version = "=0.3.0-alpha.12", features = [ "log-impl" ] }
-naia-client = { path = "../../../client", features = [ "mquad" ] } #version = "0.5.0", features = [ "mquad" ] }
-naia-macroquad-demo-shared = { path = "../shared" }

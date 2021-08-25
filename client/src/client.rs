@@ -42,8 +42,7 @@ pub struct Client<T: ProtocolType> {
 }
 
 impl<T: ProtocolType> Client<T> {
-    /// Create a new client, given the server's address, a shared manifest, an
-    /// optional Config, and an optional Authentication message
+    /// Create a new Client
     pub fn new<U: ImplRef<T>>(
         manifest: Manifest<T>,
         client_config: Option<ClientConfig>,

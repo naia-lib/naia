@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use naia_server::{Event, ObjectKey, Random, RoomKey, Server, ServerConfig, UserKey};
 
-use naia_macroquad_demo_shared::{
+use naia_bevy_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
     protocol::{Color, Protocol, Square},
 };
@@ -15,7 +15,7 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        info!("Naia Macroquad Server Demo started");
+        info!("Bevy Naia Server Demo started");
 
         let shared_config = get_shared_config();
         let mut server_config = ServerConfig::default();
@@ -54,8 +54,12 @@ impl App {
                     if let Some(user) = self.server.get_user(&user_key) {
                         info!("Naia Server connected to: {}", user.address);
 
-                        let x = Random::gen_range_u32(0, 50) * 16;
-                        let y = Random::gen_range_u32(0, 37) * 16;
+                        let mut x = Random::gen_range_u32(0, 40) as i16;
+                        let mut y = Random::gen_range_u32(0, 30) as i16;
+                        x -= 20;
+                        y -= 15;
+                        x *= 16;
+                        y *= 16;
 
                         let square_color = match self.server.get_users_count() % 3 {
                             0 => Color::Yellow,
@@ -63,7 +67,7 @@ impl App {
                             _ => Color::Blue,
                         };
 
-                        let square = Square::new(x as u16, y as u16, square_color);
+                        let square = Square::new(x, y, square_color);
                         let square_key = self.server.register_object(&square);
                         self.server
                             .room_add_object(&self.main_room_key, &square_key);
