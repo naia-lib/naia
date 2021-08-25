@@ -13,7 +13,7 @@ a *n*etworking *a*rchitecture for *i*nteractive *a*pplications
 
 A cross-platform (including Wasm!) networking engine that intends to make multiplayer game development in Rust dead simple and lightning fast.
 
-Check out the [quicksilver](https://github.com/naia-rs/naia-quicksilver-example) & [macroquad](https://github.com/naia-rs/naia-macroquad-example) demos.
+Check out the [macroquad](https://github.com/naia-rs/naia-macroquad-example) demo.
 
 At the highest level, you register Event and Actor implementations in a module shared by Client & Server. Then, naia will facilitate sending/receiving those Events between Client & Server, and also keep a pool of tracked Actors synced with each Client for whom they are "in-scope". Actors are "scoped" to Clients with whom they share the same Room, as well as being sufficiently customizable to, for example, only keep Actors persisted & synced while within a Client's viewport or according to some other criteria.
 
