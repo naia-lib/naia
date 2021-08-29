@@ -94,7 +94,6 @@ impl<T: ProtocolType> ReplicaManager<T> {
 
                             // if Entity is a Pawn, replay commands
                             if self.pawn_entity_store.contains(entity_key) {
-
                                 let pawn_key = PawnKey::Entity(*entity_key);
                                 command_receiver.replay_commands(packet_tick, &pawn_key);
 
@@ -360,8 +359,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
         if self.pawn_entity_store.contains(key) {
             if let Some(component_set) = self.local_entity_store.get(key) {
                 for component_key in component_set {
-                    if let Some(component_proto) = self.pawn_store.get(component_key)
-                    {
+                    if let Some(component_proto) = self.pawn_store.get(component_key) {
                         output.push(component_proto.clone());
                     }
                 }
@@ -392,8 +390,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
         if let Some(component_set) = self.local_entity_store.get(key) {
             for component_key in component_set {
                 if let Some(component_ref) = self.local_replica_store.get(component_key) {
-                    if let Some(pawn_component_ref) = self.pawn_store.get_mut(component_key)
-                    {
+                    if let Some(pawn_component_ref) = self.pawn_store.get_mut(component_key) {
                         pawn_component_ref.mirror(component_ref);
                     }
                 }

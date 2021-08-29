@@ -32,7 +32,7 @@ mod tick_queue;
 
 pub use naia_shared::{
     find_my_ip_address, wrapping_diff, Instant, LinkConditionerConfig, LocalComponentKey,
-    LocalEntityKey, LocalObjectKey, LocalReplicaKey, NaiaKey, Random, Ref, Replicate, ReplicaEq
+    LocalEntityKey, LocalObjectKey, LocalReplicaKey, NaiaKey, Random, Ref, ReplicaEq, Replicate,
 };
 
 pub use client::Client;
