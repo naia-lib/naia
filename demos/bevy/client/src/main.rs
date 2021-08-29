@@ -1,12 +1,16 @@
+use std::collections::HashMap;
+
 use bevy::prelude::*;
+use bevy::ecs::entity::Entity as BevyEntityKey;
 
 use naia_client::{
-    Client, ClientConfig, Event, LocalReplicaKey, Ref
+    Client, ClientConfig, Event, LocalEntityKey as NaiaEntityKey, LocalReplicaKey, Ref
 };
+use naia_client::NaiaKey;
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
-    protocol::{Auth, Color as SquareColor, KeyCommand, Protocol, Position},
+    protocol::{Auth, Color as NaiaColor, ColorValue, KeyCommand, Protocol, Position},
 };
 
 const SQUARE_SIZE: f32 = 32.0;
@@ -14,7 +18,7 @@ static ALL: &str = "all";
 
 struct Pawn;
 struct NonPawn;
-struct Key(LocalReplicaKey);
+struct Key(NaiaEntityKey);
 struct Materials {
     white: Handle<ColorMaterial>,
     red: Handle<ColorMaterial>,
@@ -23,6 +27,9 @@ struct Materials {
 }
 struct QueuedCommand {
     command: Option<Ref<KeyCommand>>,
+}
+struct ClientResource {
+    entity_key_map: HashMap<NaiaEntityKey, BevyEntityKey>,
 }
 
 fn main() {
@@ -55,7 +62,10 @@ fn main() {
 
     // Resources
     app.insert_non_send_resource(QueuedCommand { command: None })
-       .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)));
+       .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
+       .insert_resource(ClientResource {
+            entity_key_map: HashMap::new(),
+        });
 
     // Systems
     app.add_startup_system(setup.system())
@@ -109,9 +119,10 @@ fn pawn_input(keyboard_input: Res<Input<KeyCode>>, mut queued_command: NonSendMu
 fn naia_client_update(
     mut commands: Commands,
     mut client: NonSendMut<Client<Protocol>>,
+    mut client_resource: ResMut<ClientResource>,
     materials: Res<Materials>,
     pawn_query: Query<(Entity, &Key, &Ref<Position>), With<Pawn>>,
-    nonpawn_query: Query<(Entity, &Key), With<NonPawn>>,
+    nonpawn_query: Query<(Entity, &Key, &Ref<Position>, &Ref<NaiaColor>), With<NonPawn>>,
     mut queued_command: NonSendMut<QueuedCommand>,
 ) {
     for event in client.receive() {
@@ -125,64 +136,93 @@ fn naia_client_update(
             Ok(Event::Tick) => {
                 for (_, Key(pawn_key), _) in pawn_query.iter() {
                     if let Some(command) = queued_command.command.take() {
-                        client.send_object_command(pawn_key, &command);
+                        client.send_entity_command(pawn_key, &command);
                     }
                 }
             }
-            Ok(Event::CreateObject(object_key)) => {
-                if let Some(Protocol::Square(square_ref)) = client.get_object(&object_key) {
-                    let square = square_ref.borrow();
-                    let material = {
-                        match &square.color.get() {
-                            SquareColor::Red => materials.red.clone(),
-                            SquareColor::Blue => materials.blue.clone(),
-                            SquareColor::Yellow => materials.yellow.clone(),
-                        }
-                    };
+            Ok(Event::CreateEntity(naia_entity_key, component_keys)) => {
+                let mut entity = commands.spawn()
+                    .insert(NonPawn)
+                    .insert(Key(naia_entity_key));
 
-                    commands
-                        .spawn_bundle(SpriteBundle {
-                            material: material.clone(),
-                            sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                            transform: Transform::from_xyz(
-                                f32::from(*(square.x.get())),
-                                f32::from(*(square.y.get())) * -1.0,
-                                0.0,
-                            ),
-                            ..Default::default()
-                        })
-                        .insert(Ref::clone(&square_ref))
-                        .insert(NonPawn)
-                        .insert(Key(object_key));
+                for component_key in component_keys {
+                    info!(
+                        "init component: {}, to entity: {}",
+                        component_key.to_u16(),
+                        naia_entity_key.to_u16()
+                    );
+
+                    match client.get_component(&component_key).cloned() {
+                        Some(Protocol::Position(position_ref)) => {
+                            entity.insert(position_ref);
+                        }
+                        Some(Protocol::Color(color_ref)) => {
+                            entity.insert(color_ref);
+                            let color = color_ref.borrow();
+
+                            let material = {
+                                match &color.value.get() {
+                                    ColorValue::Red => materials.red.clone(),
+                                    ColorValue::Blue => materials.blue.clone(),
+                                    ColorValue::Yellow => materials.yellow.clone(),
+                                }
+                            };
+
+                            entity.insert(SpriteBundle {
+                                material: material.clone(),
+                                sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                                transform: Transform::from_xyz(
+                                    0.0,
+                                    0.0,
+                                    0.0,
+                                ),
+                                ..Default::default()
+                            });
+                        }
+                        _ => {}
+                    }
                 }
+
+                let bevy_entity_key = entity.id();
+                client_resource.entity_key_map.insert(naia_entity_key, bevy_entity_key);
             }
-            Ok(Event::DeleteObject(object_key, _)) => {
-                for (entity, Key(square_key)) in nonpawn_query.iter() {
-                    if object_key == *square_key {
+            Ok(Event::DeleteEntity(naia_entity_key)) => {
+                for (entity, Key(key), _, _) in nonpawn_query.iter() {
+                    if naia_entity_key == *key {
                         commands.entity(entity).despawn();
                     }
                 }
             }
-            Ok(Event::AssignPawn(object_key)) => {
+            Ok(Event::AssignPawnEntity(naia_entity_key)) => {
                 info!("assign pawn");
 
-                if let Some(Protocol::Square(square_ref)) = client.get_pawn(&object_key) {
-                    let square = square_ref.borrow();
+                let bevy_entity_key = client_resource.entity_key_map.get(&naia_entity_key);
 
-                    commands
-                        .spawn_bundle(SpriteBundle {
-                            material: materials.white.clone(),
-                            sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                            transform: Transform::from_xyz(
-                                f32::from(*(square.x.get())),
-                                f32::from(*(square.y.get())) * -1.0,
-                                0.0,
-                            ),
-                            ..Default::default()
-                        })
-                        .insert(Ref::clone(&square_ref))
+                for (entity, Key(key), position_ref, color_ref) in nonpawn_query.get(bevy_entity_key) {
+                    let mut entity = commands.spawn()
                         .insert(Pawn)
-                        .insert(Key(object_key));
+                        .insert(Key(key))
+                        .insert(position_ref.borrow().copy().to_ref())
+                        .insert(color_ref.borrow().copy().to_ref());
+
+                    let material = {
+                        match &color_ref.borrow().value.get() {
+                            ColorValue::Red => materials.red.clone(),
+                            ColorValue::Blue => materials.blue.clone(),
+                            ColorValue::Yellow => materials.yellow.clone(),
+                        }
+                    };
+
+                    entity.insert(SpriteBundle {
+                        material: material.clone(),
+                        sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                        transform: Transform::from_xyz(
+                            0.0,
+                            0.0,
+                            0.0,
+                        ),
+                        ..Default::default()
+                    });
                 }
             }
             Ok(Event::UnassignPawn(_)) => {
@@ -192,10 +232,11 @@ fn naia_client_update(
                     commands.entity(entity).despawn();
                 }
             }
-            Ok(Event::NewCommand(_, Protocol::KeyCommand(key_command_ref)))
-            | Ok(Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref))) => {
-                for (_, _, square) in pawn_query.iter() {
-                    shared_behavior::process_command(&key_command_ref, square);
+            Ok(Event::NewCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref)))
+            | Ok(Event::ReplayCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref))) => {
+                let bevy_entity = client_resource.entity_key_map.get(naia_entity);
+                for (_, _, position) in pawn_query.get_mut(bevy_entity) {
+                    shared_behavior::process_command(&key_command_ref, position);
                 }
             }
             _ => {}
@@ -203,18 +244,18 @@ fn naia_client_update(
     }
 }
 
-fn pawn_sync(mut query: Query<(&Pawn, &Ref<Square>, &mut Transform)>) {
-    for (_, pawn_ref, mut transform) in query.iter_mut() {
-        let square = pawn_ref.borrow();
-        transform.translation.x = f32::from(*(square.x.get()));
-        transform.translation.y = f32::from(*(square.y.get())) * -1.0;
+fn pawn_sync(mut query: Query<(&Pawn, &Ref<Position>, &mut Transform)>) {
+    for (_, pos_ref, mut transform) in query.iter_mut() {
+        let pos = pos_ref.borrow();
+        transform.translation.x = f32::from(*(pos.x.get()));
+        transform.translation.y = f32::from(*(pos.y.get())) * -1.0;
     }
 }
 
-fn nonpawn_sync(mut query: Query<(&NonPawn, &Ref<Square>, &mut Transform)>) {
-    for (_, square_ref, mut transform) in query.iter_mut() {
-        let square = square_ref.borrow();
-        transform.translation.x = f32::from(*(square.x.get()));
-        transform.translation.y = f32::from(*(square.y.get())) * -1.0;
+fn nonpawn_sync(mut query: Query<(&NonPawn, &Ref<Position>, &mut Transform)>) {
+    for (_, pos_ref, mut transform) in query.iter_mut() {
+        let pos = pos_ref.borrow();
+        transform.translation.x = f32::from(*(pos.x.get()));
+        transform.translation.y = f32::from(*(pos.y.get())) * -1.0;
     }
 }
