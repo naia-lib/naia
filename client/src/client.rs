@@ -400,7 +400,8 @@ impl<T: ProtocolType> Client<T> {
         return false;
     }
 
-    /// Get a set of Components for the Entity associated with the given EntityKey
+    /// Get a set of Components for the Entity associated with the given
+    /// EntityKey
     pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
         if let Some(connection) = &self.server_connection {
             return connection.get_components(key);
@@ -408,7 +409,8 @@ impl<T: ProtocolType> Client<T> {
         return Vec::<T>::new();
     }
 
-    /// Get a set of Components for the Pawn Entity associated with the given EntityKey
+    /// Get a set of Components for the Pawn Entity associated with the given
+    /// EntityKey
     pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
         if let Some(connection) = &self.server_connection {
             return connection.get_pawn_components(key);
