@@ -6,7 +6,7 @@ use naia_client::{
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
-    protocol::{Auth, Color as SquareColor, KeyCommand, Protocol, Square},
+    protocol::{Auth, Color as SquareColor, KeyCommand, Protocol, Position},
 };
 
 const SQUARE_SIZE: f32 = 32.0;
@@ -39,20 +39,19 @@ fn main() {
     #[cfg(target_arch = "wasm32")]
     app.add_plugin(bevy_webgl2::WebGL2Plugin);
 
-    // Add Naia Client
-    let mut client_config = ClientConfig::default();
-    client_config.socket_config.server_address = get_server_address();
-
     // This will be evaluated in the Server's 'on_auth()' method
     let auth = Auth::new("charlie", "12345");
 
-    // insert
-    app.insert_non_send_resource(Client::new(
+    // Add Naia Client
+    let mut client_config = ClientConfig::default();
+    client_config.socket_config.server_address = get_server_address();
+    let client = Client::new(
         Protocol::load(),
         Some(client_config),
         get_shared_config(),
         Some(auth),
-    ));
+    );
+    app.insert_non_send_resource(client);
 
     // Resources
     app.insert_non_send_resource(QueuedCommand { command: None })
@@ -111,7 +110,7 @@ fn naia_client_update(
     mut commands: Commands,
     mut client: NonSendMut<Client<Protocol>>,
     materials: Res<Materials>,
-    pawn_query: Query<(Entity, &Key, &Ref<Square>), With<Pawn>>,
+    pawn_query: Query<(Entity, &Key, &Ref<Position>), With<Pawn>>,
     nonpawn_query: Query<(Entity, &Key), With<NonPawn>>,
     mut queued_command: NonSendMut<QueuedCommand>,
 ) {
