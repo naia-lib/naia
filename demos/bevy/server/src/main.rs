@@ -192,10 +192,10 @@ fn on_tick(
     // All game logic should happen here, on a tick event
     //info!("tick");
 
-    // Update scopes of objects
-    for (room_key, user_key, object_key) in server.object_scope_sets() {
+    // Update scopes of entities
+    for (room_key, user_key, entity_key) in server.entity_scope_sets() {
         server
-            .object_set_scope(&room_key, &user_key, &object_key, true);
+            .entity_set_scope(&room_key, &user_key, &entity_key, true);
     }
 
     // VERY IMPORTANT! Calling this actually sends all update data

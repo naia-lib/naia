@@ -297,15 +297,16 @@ impl<U: ProtocolType> Server<U> {
     /// Assigns an Object to a specific User, making it a Pawn for that User
     /// (meaning that the User will be able to issue Commands to that Pawn)
     pub fn assign_pawn(&mut self, user_key: &UserKey, object_key: &ObjectKey) {
-        if let Some(object) = self.global_replica_store.get(*object_key) {
-            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-                Self::user_add_object(user_connection, object_key, &object);
-            }
-        }
-
+        // check that object_key references an object, not a component
         if self.global_object_set.contains(object_key) {
-            if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-                user_connection.add_pawn(object_key);
+            if let Some(object) = self.global_replica_store.get(*object_key) {
+                if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                    // add object to user's connection
+                    Self::user_add_object(user_connection, object_key, &object);
+
+                    // assign object to user as a Pawn
+                    user_connection.add_pawn(object_key);
+                }
             }
         }
     }
@@ -345,8 +346,18 @@ impl<U: ProtocolType> Server<U> {
     /// Assigns an Entity to a specific User, making it a Pawn for that User
     /// (meaning that the User will be able to issue Commands to that Pawn)
     pub fn assign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
-        if self.entity_component_map.contains_key(entity_key) {
+        // check that entity is initialized
+        if let Some(component_set_ref) = self.entity_component_map.get(entity_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+                // add entity to user's connection
+                Self::user_add_entity(
+                    &self.global_replica_store,
+                    user_connection,
+                    entity_key,
+                    &component_set_ref,
+                );
+
+                // assign entity to user as a Pawn
                 user_connection.add_pawn_entity(entity_key);
             }
         }

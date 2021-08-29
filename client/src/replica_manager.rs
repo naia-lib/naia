@@ -94,6 +94,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
 
                             // if Entity is a Pawn, replay commands
                             if self.pawn_entity_store.contains(entity_key) {
+
                                 let pawn_key = PawnKey::Entity(*entity_key);
                                 command_receiver.replay_commands(packet_tick, &pawn_key);
 
@@ -225,8 +226,16 @@ impl<T: ProtocolType> ReplicaManager<T> {
                 ReplicaActionType::AssignPawnEntity => {
                     // Assign Pawn Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
-                    if self.local_entity_store.contains_key(&entity_key) {
+                    if let Some(component_set) = self.local_entity_store.get(&entity_key) {
                         self.pawn_entity_store.insert(entity_key);
+
+                        // create copies of components
+                        for component_key in component_set {
+                            if let Some(protocol) = self.local_replica_store.get(&component_key) {
+                                self.pawn_store.insert(*component_key, protocol.copy());
+                            }
+                        }
+                        //
 
                         let pawn_key = PawnKey::Entity(entity_key);
                         command_receiver.pawn_init(&pawn_key);
@@ -240,6 +249,14 @@ impl<T: ProtocolType> ReplicaManager<T> {
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if self.pawn_entity_store.contains(&entity_key) {
                         self.pawn_entity_store.remove(&entity_key);
+
+                        // remove pawn components
+                        let component_set = self.local_entity_store.get(&entity_key).unwrap();
+                        for component_key in component_set {
+                            self.pawn_store.remove(&component_key);
+                        }
+                        //
+
                         let pawn_key = PawnKey::Entity(entity_key);
                         command_receiver.pawn_cleanup(&pawn_key);
                     }
@@ -247,6 +264,8 @@ impl<T: ProtocolType> ReplicaManager<T> {
                         .push_back(ReplicaAction::UnassignPawnEntity(entity_key));
                 }
                 ReplicaActionType::AddComponent => {
+                    //TODO: handle adding Component to a Pawn...
+
                     // Add Component to Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     let naia_id: u16 = reader.read_u16();
@@ -324,6 +343,33 @@ impl<T: ProtocolType> ReplicaManager<T> {
         return self.local_entity_store.contains_key(key);
     }
 
+    pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
+        let mut output = Vec::new();
+        if let Some(component_set) = self.local_entity_store.get(key) {
+            for component_key in component_set {
+                if let Some(component_proto) = self.local_replica_store.get(component_key) {
+                    output.push(component_proto.clone());
+                }
+            }
+        }
+        return output;
+    }
+
+    pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
+        let mut output = Vec::new();
+        if self.pawn_entity_store.contains(key) {
+            if let Some(component_set) = self.local_entity_store.get(key) {
+                for component_key in component_set {
+                    if let Some(component_proto) = self.pawn_store.get(component_key)
+                    {
+                        output.push(component_proto.clone());
+                    }
+                }
+            }
+        }
+        return output;
+    }
+
     pub fn pawn_keys(&self) -> Keys<LocalObjectKey, T> {
         return self.pawn_store.keys();
     }
@@ -343,6 +389,17 @@ impl<T: ProtocolType> ReplicaManager<T> {
     }
 
     pub fn pawn_reset_entity(&mut self, key: &LocalEntityKey) {
+        if let Some(component_set) = self.local_entity_store.get(key) {
+            for component_key in component_set {
+                if let Some(component_ref) = self.local_replica_store.get(component_key) {
+                    if let Some(pawn_component_ref) = self.pawn_store.get_mut(component_key)
+                    {
+                        pawn_component_ref.mirror(component_ref);
+                    }
+                }
+            }
+        }
+
         self.queued_incoming_messages
             .push_back(ReplicaAction::ResetPawnEntity(*key));
     }

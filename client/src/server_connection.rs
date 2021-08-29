@@ -182,6 +182,14 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.replica_manager.has_entity(key);
     }
 
+    pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
+        return self.replica_manager.get_components(key);
+    }
+
+    pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
+        return self.replica_manager.get_pawn_components(key);
+    }
+
     /// Reads buffered incoming data on the appropriate tick boundary
     pub fn frame_begin(&mut self, manifest: &Manifest<T>, tick_manager: &mut TickManager) -> bool {
         if tick_manager.mark_frame() {
