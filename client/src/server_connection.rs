@@ -134,12 +134,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         );
     }
 
-    pub fn get_buffered_data_packet(&mut self, current_tick: u16) -> Option<(u16, u16, Box<[u8]>)> {
-        if let Some((tick, (index, payload))) = self.jitter_buffer.pop_item(current_tick) {
-            return Some((tick, index, payload));
-        }
-        return None;
-    }
+
 
     // Pass-through methods to underlying replica manager
     pub fn get_incoming_replica_action(&mut self) -> Option<ReplicaAction<T>> {
@@ -326,5 +321,12 @@ impl<T: ProtocolType> ServerConnection<T> {
 
     pub fn get_jitter(&self) -> f32 {
         return self.ping_manager.get_jitter();
+    }
+
+    fn get_buffered_data_packet(&mut self, current_tick: u16) -> Option<(u16, u16, Box<[u8]>)> {
+        if let Some((tick, (index, payload))) = self.jitter_buffer.pop_item(current_tick) {
+            return Some((tick, index, payload));
+        }
+        return None;
     }
 }

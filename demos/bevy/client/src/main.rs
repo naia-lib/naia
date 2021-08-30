@@ -65,7 +65,7 @@ fn main() {
         });
 
     // Systems
-    app.add_startup_system(setup.system())
+    app.add_startup_system(init.system())
        .add_system(pawn_input.system())
        .add_system_to_stage(ALL, naia_client_update.system())
        .add_system_to_stage(ALL, pawn_sync.system())
@@ -75,7 +75,9 @@ fn main() {
        .run();
 }
 
-fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
+fn init(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
+    info!("Naia Bevy Client Demo started");
+
     // Setup Camera
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
 
@@ -223,8 +225,8 @@ fn naia_client_update(
                     commands.entity(bevy_entity_key).despawn();
                 }
             }
-            Ok(Event::NewCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref)))
-            | Ok(Event::ReplayCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref))) => {
+            Ok(Event::NewCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref))) |
+            Ok(Event::ReplayCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref))) => {
                 if let Some(bevy_entity) = client_resource.pawn_key_map.get(&naia_entity) {
                     if let Ok((_, position)) = pawn_query.get_mut(*bevy_entity) {
                         shared_behavior::process_command(&key_command_ref, position);
