@@ -6,7 +6,7 @@ use bevy::{
 
 use std::collections::HashMap;
 
-use naia_server::{EntityKey as NaiaEntityKey, Event, Random, Ref, RoomKey, Server, ServerConfig};
+use naia_server::{EntityKey as NaiaEntityKey, Event, Random, Ref, RoomKey, Server, ServerConfig, UserKey};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
@@ -20,6 +20,7 @@ struct ServerResource {
     main_room_key: RoomKey,
     naia_to_bevy_key_map: HashMap<NaiaEntityKey, BevyEntityKey>,
     bevy_to_naia_key_map: HashMap<BevyEntityKey, NaiaEntityKey>,
+    user_to_pawn_map: HashMap<UserKey, NaiaEntityKey>,
     ticked: bool,
 }
 
@@ -47,17 +48,23 @@ fn main() {
         main_room_key,
         naia_to_bevy_key_map: HashMap::new(),
         bevy_to_naia_key_map: HashMap::new(),
+        user_to_pawn_map: HashMap::new(),
         ticked: false,
     });
 
     // Systems
-    app.add_system_to_stage(ALL, naia_server_update.system())
+    app.add_startup_system(init.system())
+       .add_system_to_stage(ALL, naia_server_update.system())
        .add_system_to_stage(ALL, on_tick.system()
                                                          .with_run_criteria(
                                                              did_consume_tick.system()))
 
     // Run
        .run();
+}
+
+fn init() {
+    info!("Naia Bevy Server Demo started");
 }
 
 fn naia_server_update(
@@ -102,7 +109,7 @@ fn naia_server_update(
                     // Add Naia Entity to main Room
                     server.room_add_entity(&server_resource.main_room_key, &naia_entity);
 
-                    // Color component
+                    // Position component
                     {
                         // create
                         let mut x = Random::gen_range_u32(0, 40) as i16;
@@ -141,22 +148,22 @@ fn naia_server_update(
 
                     // Assign as Pawn to User
                     server.assign_pawn_entity(&user_key, &naia_entity);
+                    server_resource.user_to_pawn_map.insert(user_key, naia_entity);
                 }
             }
-            Ok(Event::Disconnection(_user_key, user)) => {
+            Ok(Event::Disconnection(user_key, user)) => {
                 info!("Naia Server disconnected from: {:?}", user.address);
-                //                
-                // server.room_remove_user(&server_resource.main_room_key,
-                // &user_key);                if let
-                // Some(object_key) =
-                // server_resource.user_to_pawn_map.remove(&user_key) {
-                //                    server
-                //                        
-                // .room_remove_object(&server_resource.main_room_key,
-                // &object_key);                    
-                // server.unassign_pawn(&user_key, &object_key);
-                //                    server.deregister_object(&object_key);
-                //                }
+
+                server.room_remove_user(&server_resource.main_room_key, &user_key);
+                if let Some(naia_entity_key) = server_resource.user_to_pawn_map.remove(&user_key) {
+                    server.room_remove_entity(&server_resource.main_room_key, &naia_entity_key);
+                    server.unassign_pawn_entity(&user_key, &naia_entity_key);
+                    server.deregister_entity(&naia_entity_key);
+                    if let Some(bevy_entity_key) = server_resource.naia_to_bevy_key_map.remove(&naia_entity_key) {
+                        commands.entity(bevy_entity_key).despawn();
+                        server_resource.bevy_to_naia_key_map.remove(&bevy_entity_key);
+                    }
+                }
             }
             Ok(Event::CommandEntity(_, naia_entity, Protocol::KeyCommand(key_command_ref))) => {
                 if let Some(bevy_entity) = server_resource.naia_to_bevy_key_map.get(&naia_entity) {

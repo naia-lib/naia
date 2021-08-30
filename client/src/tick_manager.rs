@@ -56,7 +56,6 @@ impl TickManager {
     pub fn set_initial_tick(&mut self, server_tick: u16) {
         self.server_tick = server_tick;
         self.server_tick_adjust = ((1000 / (self.tick_interval.as_millis())) + 1) as u16;
-
         self.client_tick_adjust = ((3000 / (self.tick_interval.as_millis())) + 1) as u16;
     }
 
