@@ -1,7 +1,7 @@
 //! # Naia Server
 //! A server that uses either UDP or WebRTC communication to send/receive
 //! messages to/from connected clients, and syncs registered
-//! Objects/Entities/Components to clients to whom they are in-scope.
+//! Entities/Components to clients to whom they are in-scope.
 
 #![deny(
     missing_docs,

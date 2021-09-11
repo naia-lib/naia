@@ -22,11 +22,11 @@ impl App {
 
         let mut server = Server::new(Protocol::load(), Some(server_config), shared_config);
 
-        // Create a new, singular room, which will contain Users and Objects that they
+        // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
         let main_room_key = server.create_room();
 
-        // Create 4 Character objects, with a range of X and name values
+        // Create 4 Character entities, with a range of X and name values
         {
             let mut count = 0;
             for (first, last) in [

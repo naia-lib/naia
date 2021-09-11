@@ -46,7 +46,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
         replica_manager: &mut ReplicaManager<U>,
     ) {
         for (pawn_key, history_tick) in self.replay_trigger.iter() {
-            // set pawn to server authoritative object/entity
+            // set pawn to server authoritative entity
             replica_manager.pawn_reset_entity(pawn_key);
 
             // trigger replay of historical commands

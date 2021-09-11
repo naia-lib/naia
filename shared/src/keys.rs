@@ -55,7 +55,7 @@ impl fmt::Display for LocalEntityKey {
 
 // Local Replica Key
 
-/// The key that represents a Object/Component in the Client's scope, that is
+/// The key that represents a Component in the Client's scope, that is
 /// being synced to the Client
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct LocalComponentKey(u16);

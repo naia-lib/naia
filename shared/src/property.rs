@@ -4,7 +4,7 @@ use crate::{wrapping_number::sequence_greater_than, PacketReader, Ref};
 
 use super::property_mutate::PropertyMutate;
 
-/// A Property of an Object/Component/Message, that contains data
+/// A Property of an Component/Message, that contains data
 /// which must be tracked for updates
 #[derive(Clone)]
 pub struct Property<T: Clone + DeBin + SerBin + PartialEq> {

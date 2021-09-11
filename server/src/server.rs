@@ -1,6 +1,6 @@
 use std::{
     any::TypeId,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     net::SocketAddr,
     panic,
 };
@@ -30,7 +30,7 @@ use super::{
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
-/// messages to/from connected clients, and syncs registered objects/entities to
+/// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
 pub struct Server<T: ProtocolType> {
     connection_config: ConnectionConfig,
@@ -38,7 +38,6 @@ pub struct Server<T: ProtocolType> {
     socket_sender: PacketSender,
     socket_receiver: Box<dyn PacketReceiver>,
     global_replica_store: DenseSlotMap<ComponentKey, T>,
-    global_object_set: HashSet<ComponentKey>,
     mut_handler: Ref<MutHandler>,
     users: DenseSlotMap<UserKey, User>,
     rooms: DenseSlotMap<RoomKey, Room>,
@@ -89,7 +88,6 @@ impl<U: ProtocolType> Server<U> {
         Server {
             manifest,
             global_replica_store: DenseSlotMap::with_key(),
-            global_object_set: HashSet::new(),
             entity_scope_map: HashMap::new(),
             mut_handler: MutHandler::new(),
             socket_sender,
@@ -221,9 +219,6 @@ impl<U: ProtocolType> Server<U> {
     /// method, the Server will never communicate with it's connected
     /// Clients
     pub fn send_all_updates(&mut self) {
-        // update object scopes
-//        self.update_object_scopes();
-
         // update entity scopes
         self.update_entity_scopes();
 
@@ -242,27 +237,6 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    /// Register an Object with the Server, whereby the Server will sync
-    /// replicas of the Object to all connected Clients for which the Object
-    /// is in scope. Gives back an ComponentKey which can be used to get the
-    /// reference to the Object from the Server once again
-    fn register_object<T: ImplRef<U>>(&mut self, object_ref: &T) -> ComponentKey {
-        let dyn_ref = object_ref.dyn_ref();
-        let new_mutator_ref: Ref<PropertyMutator> =
-            Ref::new(PropertyMutator::new(&self.mut_handler));
-
-        dyn_ref
-            .borrow_mut()
-            .set_mutator(&to_property_mutator(new_mutator_ref.clone()));
-
-        let object_protocol = object_ref.protocol();
-        let object_key = self.global_replica_store.insert(object_protocol);
-        self.global_object_set.insert(object_key);
-        new_mutator_ref.borrow_mut().set_object_key(object_key);
-        self.mut_handler.borrow_mut().register_replica(&object_key);
-        return object_key;
-    }
-
     /// Register an Entity with the Server initializing the Entity with a list Component Refs.
     /// The Server will sync replicas of the Entity to all connected Clients for which the Entity
     /// is in scope. Gives back an EntityKey which can be used to get the
@@ -274,52 +248,6 @@ impl<U: ProtocolType> Server<U> {
         }
         return entity_key;
     }
-
-    /// Deregisters an Object with the Server, deleting local replicas of the
-    /// Object on each Client
-//    pub fn deregister_object(&mut self, key: &ComponentKey) -> U {
-//        if !self.global_object_set.contains(key) {
-//            panic!("attempted to deregister an Object which was never registered");
-//        }
-//
-//        for (user_key, _) in self.users.iter() {
-//            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-//                Self::user_remove_object(user_connection, key);
-//            }
-//        }
-//
-//        self.mut_handler.borrow_mut().deregister_replica(key);
-//        self.global_object_set.remove(key);
-//        return self
-//            .global_replica_store
-//            .remove(*key)
-//            .expect("object not initialized correctly?");
-//    }
-
-    /// Assigns an Object to a specific User, making it a Pawn for that User
-    /// (meaning that the User will be able to issue Commands to that Pawn)
-//    pub fn assign_pawn(&mut self, user_key: &UserKey, object_key: &ComponentKey) {
-//        // check that object_key references an object, not a component
-//        if self.global_object_set.contains(object_key) {
-//            if let Some(object) = self.global_replica_store.get(*object_key) {
-//                if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-//                    // add object to user's connection
-//                    Self::user_add_object(user_connection, object_key, &object);
-//
-//                    // assign object to user as a Pawn
-//                    user_connection.add_pawn(object_key);
-//                }
-//            }
-//        }
-//    }
-
-    /// Unassigns a Pawn from a specific User (meaning that the User will be
-    /// unable to issue Commands to that Pawn)
-//    pub fn unassign_pawn(&mut self, user_key: &UserKey, object_key: &ComponentKey) {
-//        if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-//            user_connection.remove_pawn(object_key);
-//        }
-//    }
 
     /// Register an Entity with the Server, whereby the Server will sync the
     /// replica of all the given Entity's Components to all connected Clients
@@ -389,7 +317,7 @@ impl<U: ProtocolType> Server<U> {
             panic!("attempted to add component to non-existent entity");
         }
 
-        let component_key: ComponentKey = self.register_object(component_ref);
+        let component_key: ComponentKey = self.register_component(component_ref);
 
         let dyn_ref: Ref<dyn Replicate<U>> = component_ref.dyn_ref();
 
@@ -458,11 +386,6 @@ impl<U: ProtocolType> Server<U> {
         return None;
     }
 
-    /// Iterate through all the Server's Objects
-//    pub fn objects_iter(&self) -> std::collections::hash_set::Iter<ComponentKey> {
-//        return self.global_object_set.iter();
-//    }
-
     /// Iterate through all the Server's Entities
     pub fn entities_iter(&self) -> Vec<EntityKey> {
         let mut output = Vec::<EntityKey>::new();
@@ -486,11 +409,6 @@ impl<U: ProtocolType> Server<U> {
 
         return output;
     }
-
-    /// Get the number of Objects tracked by the Server
-//    pub fn get_objects_count(&self) -> usize {
-//        return self.global_object_set.len();
-//    }
 
     /// Creates a new Room on the Server, returns a Key which can be used to
     /// reference said Room
@@ -524,26 +442,8 @@ impl<U: ProtocolType> Server<U> {
         return self.rooms.len();
     }
 
-    /// Add an Object to a Room, given the appropriate RoomKey & ComponentKey
-    /// Objects will only ever be in-scope for Users which are in a Room with
-    /// them
-//    pub fn room_add_object(&mut self, room_key: &RoomKey, object_key: &ComponentKey) {
-//        if self.global_object_set.contains(object_key) {
-//            if let Some(room) = self.rooms.get_mut(*room_key) {
-//                room.add_object(object_key);
-//            }
-//        }
-//    }
-
-    /// Remove an Object from a Room, given the appropriate RoomKey & ComponentKey
-//    pub fn room_remove_object(&mut self, room_key: &RoomKey, object_key: &ComponentKey) {
-//        if let Some(room) = self.rooms.get_mut(*room_key) {
-//            room.remove_object(object_key);
-//        }
-//    }
-
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
-    /// Objects/Entities will only ever be in-scope for Users which are in a
+    /// Entities will only ever be in-scope for Users which are in a
     /// Room with them
     pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
@@ -574,26 +474,11 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    /// Used to evaluate whether, given a User & Object that are in the
-    /// same Room, said Object should be in scope for the given User.
+    /// Used to evaluate whether, given a User & Entity that are in the
+    /// same Room, said Entity should be in scope for the given User.
     ///
-    /// While Rooms allow for a very simple scope to which an Object can belong,
+    /// While Rooms allow for a very simple scope to which an Entity can belong,
     /// this provides complete customization for advanced scopes.
-//    pub fn object_set_scope(
-//        &mut self,
-//        room_key: &RoomKey,
-//        user_key: &UserKey,
-//        object_key: &ComponentKey,
-//        in_scope: bool,
-//    ) {
-//        if !self.global_object_set.contains(object_key) {
-//            return;
-//        }
-//        let key = (*room_key, *user_key, *object_key);
-//        self.object_scope_map.insert(key, in_scope);
-//    }
-
-    /// Similar to `object_set_scope()` but for entities only
     pub fn entity_set_scope(
         &mut self,
         room_key: &RoomKey,
@@ -604,25 +489,6 @@ impl<U: ProtocolType> Server<U> {
         let key = (*room_key, *user_key, *entity_key);
         self.entity_scope_map.insert(key, in_scope);
     }
-
-    /// Return a collection of Object Scope Sets, being a unique combination of
-    /// a related Room, User, and Object, used to determine which objects to
-    /// replicate to which users
-//    pub fn object_scope_sets(&self) -> Vec<(RoomKey, UserKey, ComponentKey)> {
-//        let mut list: Vec<(RoomKey, UserKey, ComponentKey)> = Vec::new();
-//
-//        // TODO: precache this, instead of generating a new list every call
-//        // likely this is called A LOT
-//        for (room_key, room) in self.rooms.iter() {
-//            for user_key in room.users_iter() {
-//                for object_key in room.objects_iter() {
-//                    list.push((room_key, *user_key, *object_key));
-//                }
-//            }
-//        }
-//
-//        return list;
-//    }
 
     /// Return a collection of Entity Scope Sets, being a unique combination of
     /// a related Room, User, and Entity, used to determine which entities to
@@ -671,14 +537,15 @@ impl<U: ProtocolType> Server<U> {
         self.tick_manager.get_tick()
     }
 
-    /// Returns true if a given User has an Object with a given ComponentKey
+    /// Returns true if a given User has an Entity with a given EntityKey
     /// in-scope currently
-//    pub fn user_scope_has_object(&self, user_key: &UserKey, object_key: &ComponentKey) -> bool {
-//        if let Some(user_connection) = self.client_connections.get(user_key) {
-//            return user_connection.has_object(object_key);
-//        }
-//        return false;
-//    }
+    pub fn user_scope_has_entity(&self, user_key: &UserKey, entity_key: &EntityKey) -> bool {
+       if let Some(user_connection) = self.client_connections.get(user_key) {
+           return user_connection.has_entity(entity_key);
+       }
+
+       return false;
+   }
 
     // Private methods
 
@@ -897,50 +764,6 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-//    fn update_object_scopes(&mut self) {
-//        for (room_key, room) in self.rooms.iter_mut() {
-//            while let Some((removed_user, removed_object)) = room.pop_object_removal_queue() {
-//                if let Some(user_connection) = self.client_connections.get_mut(&removed_user) {
-//                    Self::user_remove_object(user_connection, &removed_object);
-//                }
-//            }
-//
-//            for user_key in room.users_iter() {
-//                for object_key in room.objects_iter() {
-//                    if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-//                        let currently_in_scope = user_connection.has_object(object_key);
-//
-//                        let should_be_in_scope: bool;
-//                        if user_connection.has_pawn(object_key) {
-//                            should_be_in_scope = true;
-//                        } else {
-//                            let key = (room_key, *user_key, *object_key);
-//                            if let Some(in_scope) = self.object_scope_map.get(&key) {
-//                                should_be_in_scope = *in_scope;
-//                            } else {
-//                                should_be_in_scope = false;
-//                            }
-//                        }
-//
-//                        if should_be_in_scope {
-//                            if !currently_in_scope {
-//                                // add object to the connections local scope
-//                                if let Some(object) = self.global_replica_store.get(*object_key) {
-//                                    Self::user_add_object(user_connection, object_key, &object);
-//                                }
-//                            }
-//                        } else {
-//                            if currently_in_scope {
-//                                // remove object from the connections local scope
-//                                Self::user_remove_object(user_connection, object_key);
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//    }
-
     fn update_entity_scopes(&mut self) {
         for (room_key, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
@@ -994,22 +817,33 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-//    fn user_add_object(
-//        user_connection: &mut ClientConnection<U>,
-//        object_key: &ComponentKey,
-//        object_ref: &U,
-//    ) {
-//        //add object to user connection
-//        user_connection.add_object(object_key, &object_ref.inner_ref());
-//    }
+    // Register an Component with the Server, whereby the Server will sync
+    // replicas of the Component to all connected Clients for which the Component
+    // is in scope. Gives back an ComponentKey which can be used to get the
+    // reference to the Component from the Server once again
+    fn register_component<T: ImplRef<U>>(&mut self, component_ref: &T) -> ComponentKey {
+        let dyn_ref = component_ref.dyn_ref();
+        let new_mutator_ref: Ref<PropertyMutator> =
+            Ref::new(PropertyMutator::new(&self.mut_handler));
 
-    fn user_remove_component(user_connection: &mut ClientConnection<U>, object_key: &ComponentKey) {
+        dyn_ref
+            .borrow_mut()
+            .set_mutator(&to_property_mutator(new_mutator_ref.clone()));
+
+        let component_protocol = component_ref.protocol();
+        let component_key = self.global_replica_store.insert(component_protocol);
+        new_mutator_ref.borrow_mut().set_component_key(component_key);
+        self.mut_handler.borrow_mut().register_replica(&component_key);
+        return component_key;
+    }
+
+    fn user_remove_component(user_connection: &mut ClientConnection<U>, component_key: &ComponentKey) {
         //remove component from user connection
-        user_connection.remove_component(object_key);
+        user_connection.remove_component(component_key);
     }
 
     fn user_add_entity(
-        object_store: &DenseSlotMap<ComponentKey, U>,
+        component_store: &DenseSlotMap<ComponentKey, U>,
         user_connection: &mut ClientConnection<U>,
         entity_key: &EntityKey,
         entity_component_record: &Ref<ComponentRecord<ComponentKey>>,
@@ -1017,7 +851,7 @@ impl<U: ProtocolType> Server<U> {
         // Get list of components first
         let mut component_list: Vec<(ComponentKey, Ref<dyn Replicate<U>>)> = Vec::new();
         for component_key in entity_component_record.borrow().get_component_keys() {
-            if let Some(component_ref) = object_store.get(component_key) {
+            if let Some(component_ref) = component_store.get(component_key) {
                 component_list.push((component_key, component_ref.inner_ref().clone()));
             }
         }
