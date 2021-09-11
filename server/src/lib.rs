@@ -53,6 +53,7 @@ mod server;
 mod server_config;
 mod tick_manager;
 mod user;
+mod entity_component_record;
 
 pub use event::Event;
 pub use keys::{replica_key::ReplicaKey, ComponentKey, GlobalPawnKey, ObjectKey};

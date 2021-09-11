@@ -6,7 +6,7 @@ use crate::{PacketReader, Ref};
 
 /// An Enum with a variant for every Object/Component/Message that can be sent
 /// between Client/Host
-pub trait ProtocolType<Impl = Self>: Clone {
+pub trait ProtocolType<Impl = Self>: Clone where Impl: ProtocolType {
     // write & get_type_id are ONLY currently used for reading/writing auth
     // messages.. maybe should do something different here
     /// Writes the typed Object/Component/Message into an outgoing byte stream
@@ -21,6 +21,9 @@ pub trait ProtocolType<Impl = Self>: Clone {
     /// Convert ProtocolType to an inner reference of the
     /// Object/Component/Message
     fn inner_ref(&self) -> Ref<dyn Replicate<Impl>>;
+    /// Convert ProtocolType to a typed inner reference of the
+    /// Object/Component/Message
+    fn typed_inner_ref<T: Replicate<Impl>>(&self) -> Option<Ref<T>>;
     /// Compare properties in another ProtocolType
     fn equals(&self, other: &Impl) -> bool;
     /// Sets the current Object/Component/Message to the state of another of the

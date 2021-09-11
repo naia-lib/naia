@@ -142,9 +142,9 @@ impl<T: ProtocolType> ReplicaManager<T> {
 
         //clear diff mask of replica if need be
         match &message {
-            ReplicaAction::CreateObject(global_key, _, _) => {
-                self.pop_create_replica_diff_mask(global_key);
-            }
+//            ReplicaAction::CreateObject(global_key, _, _) => {
+//                self.pop_create_replica_diff_mask(global_key);
+//            }
             ReplicaAction::AddComponent(_, global_key, _, _) => {
                 self.pop_create_replica_diff_mask(global_key);
             }
@@ -175,16 +175,16 @@ impl<T: ProtocolType> ReplicaManager<T> {
                     replica,
                 ));
             }
-            ReplicaAction::UpdatePawn(global_key, local_key, diff_mask, replica) => {
-                return Some(self.pop_update_replica_diff_mask(
-                    true,
-                    packet_index,
-                    global_key,
-                    local_key,
-                    diff_mask,
-                    replica,
-                ));
-            }
+//            ReplicaAction::UpdatePawn(global_key, local_key, diff_mask, replica) => {
+//                return Some(self.pop_update_replica_diff_mask(
+//                    true,
+//                    packet_index,
+//                    global_key,
+//                    local_key,
+//                    diff_mask,
+//                    replica,
+//                ));
+//            }
             _ => {}
         }
 
@@ -201,9 +201,9 @@ impl<T: ProtocolType> ReplicaManager<T> {
         }
 
         match &message {
-            ReplicaAction::CreateObject(global_key, _, _) => {
-                self.unpop_create_replica_diff_mask(global_key);
-            }
+//            ReplicaAction::CreateObject(global_key, _, _) => {
+//                self.unpop_create_replica_diff_mask(global_key);
+//            }
             ReplicaAction::AddComponent(_, global_key, _, _) => {
                 self.unpop_create_replica_diff_mask(global_key);
             }
@@ -230,17 +230,17 @@ impl<T: ProtocolType> ReplicaManager<T> {
                 self.queued_messages.push_front(cloned_message);
                 return;
             }
-            ReplicaAction::UpdatePawn(global_key, local_key, _, replica) => {
-                let cloned_message = self.unpop_update_replica_diff_mask(
-                    true,
-                    packet_index,
-                    global_key,
-                    local_key,
-                    replica,
-                );
-                self.queued_messages.push_front(cloned_message);
-                return;
-            }
+//            ReplicaAction::UpdatePawn(global_key, local_key, _, replica) => {
+//                let cloned_message = self.unpop_update_replica_diff_mask(
+//                    true,
+//                    packet_index,
+//                    global_key,
+//                    local_key,
+//                    replica,
+//                );
+//                self.queued_messages.push_front(cloned_message);
+//                return;
+//            }
             _ => {}
         }
 
@@ -252,11 +252,11 @@ impl<T: ProtocolType> ReplicaManager<T> {
     pub fn add_object(&mut self, key: &ObjectKey, object: &Ref<dyn Replicate<T>>) {
         let local_key = self.replica_init(key, object, LocalityStatus::Creating);
 
-        self.queued_messages.push_back(ReplicaAction::CreateObject(
-            *key,
-            local_key,
-            object.clone(),
-        ));
+//        self.queued_messages.push_back(ReplicaAction::CreateObject(
+//            *key,
+//            local_key,
+//            object.clone(),
+//        ));
     }
 
     pub fn remove_object(&mut self, key: &ObjectKey) {
@@ -296,8 +296,8 @@ impl<T: ProtocolType> ReplicaManager<T> {
             if !self.pawn_object_store.contains(key) {
                 self.pawn_object_store.insert(*key);
                 if let Some(replica_record) = self.replica_records.get_mut(*key) {
-                    self.queued_messages
-                        .push_back(ReplicaAction::AssignPawn(*key, replica_record.local_key));
+//                    self.queued_messages
+//                        .push_back(ReplicaAction::AssignPawn(*key, replica_record.local_key));
                 }
             }
         } else {
@@ -308,8 +308,8 @@ impl<T: ProtocolType> ReplicaManager<T> {
     pub fn remove_pawn(&mut self, key: &ObjectKey) {
         if self.pawn_object_store.remove(key) {
             if let Some(replica_record) = self.replica_records.get_mut(*key) {
-                self.queued_messages
-                    .push_back(ReplicaAction::UnassignPawn(*key, replica_record.local_key));
+//                self.queued_messages
+//                    .push_back(ReplicaAction::UnassignPawn(*key, replica_record.local_key));
             }
         } else {
             panic!("attempt to unassign a pawn object from a connection to which it is not assigned as a pawn in the first place")
@@ -487,12 +487,12 @@ impl<T: ProtocolType> ReplicaManager<T> {
                 if let Some(replica_ref) = self.local_replica_store.get(key) {
                     if self.pawn_object_store.contains(&key) {
                         // handle as a pawn
-                        self.queued_messages.push_back(ReplicaAction::UpdatePawn(
-                            key,
-                            record.local_key,
-                            record.get_diff_mask().clone(),
-                            replica_ref.clone(),
-                        ));
+//                        self.queued_messages.push_back(ReplicaAction::UpdatePawn(
+//                            key,
+//                            record.local_key,
+//                            record.get_diff_mask().clone(),
+//                            replica_ref.clone(),
+//                        ));
                     } else {
                         // handle as a replica (object or component)
                         self.queued_messages.push_back(ReplicaAction::UpdateReplica(
@@ -521,21 +521,21 @@ impl<T: ProtocolType> ReplicaManager<T> {
             .unwrap(); // write replica message type
 
         match message {
-            ReplicaAction::CreateObject(_, local_key, replica) => {
-                //write replica payload
-                let mut replica_payload_bytes = Vec::<u8>::new();
-                replica.borrow().write(&mut replica_payload_bytes);
-
-                //Write replica "header"
-                let type_id = replica.borrow().get_type_id();
-                let naia_id = manifest.get_naia_id(&type_id); // get naia id
-                replica_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                replica_total_bytes
-                    .write_u16::<BigEndian>(local_key.to_u16())
-                    .unwrap(); //write local key
-                replica_total_bytes.append(&mut replica_payload_bytes); // write
-                                                                        // payload
-            }
+//            ReplicaAction::CreateObject(_, local_key, replica) => {
+//                //write replica payload
+//                let mut replica_payload_bytes = Vec::<u8>::new();
+//                replica.borrow().write(&mut replica_payload_bytes);
+//
+//                //Write replica "header"
+//                let type_id = replica.borrow().get_type_id();
+//                let naia_id = manifest.get_naia_id(&type_id); // get naia id
+//                replica_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
+//                replica_total_bytes
+//                    .write_u16::<BigEndian>(local_key.to_u16())
+//                    .unwrap(); //write local key
+//                replica_total_bytes.append(&mut replica_payload_bytes); // write
+//                                                                        // payload
+//            }
             ReplicaAction::DeleteReplica(_, local_key) => {
                 replica_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
@@ -556,28 +556,28 @@ impl<T: ProtocolType> ReplicaManager<T> {
                 replica_total_bytes.append(&mut replica_payload_bytes); // write
                                                                         // payload
             }
-            ReplicaAction::AssignPawn(_, local_key) => {
-                replica_total_bytes
-                    .write_u16::<BigEndian>(local_key.to_u16())
-                    .unwrap(); //write local key
-            }
-            ReplicaAction::UnassignPawn(_, local_key) => {
-                replica_total_bytes
-                    .write_u16::<BigEndian>(local_key.to_u16())
-                    .unwrap(); //write local key
-            }
-            ReplicaAction::UpdatePawn(_, local_key, _, replica) => {
-                //write replica payload
-                let mut replica_payload_bytes = Vec::<u8>::new();
-                replica.borrow().write(&mut replica_payload_bytes);
-
-                //Write replica "header"
-                replica_total_bytes
-                    .write_u16::<BigEndian>(local_key.to_u16())
-                    .unwrap(); //write local key
-                replica_total_bytes.append(&mut replica_payload_bytes); // write
-                                                                        // payload
-            }
+//            ReplicaAction::AssignPawn(_, local_key) => {
+//                replica_total_bytes
+//                    .write_u16::<BigEndian>(local_key.to_u16())
+//                    .unwrap(); //write local key
+//            }
+//            ReplicaAction::UnassignPawn(_, local_key) => {
+//                replica_total_bytes
+//                    .write_u16::<BigEndian>(local_key.to_u16())
+//                    .unwrap(); //write local key
+//            }
+//            ReplicaAction::UpdatePawn(_, local_key, _, replica) => {
+//                //write replica payload
+//                let mut replica_payload_bytes = Vec::<u8>::new();
+//                replica.borrow().write(&mut replica_payload_bytes);
+//
+//                //Write replica "header"
+//                replica_total_bytes
+//                    .write_u16::<BigEndian>(local_key.to_u16())
+//                    .unwrap(); //write local key
+//                replica_total_bytes.append(&mut replica_payload_bytes); // write
+//                                                                        // payload
+//            }
             ReplicaAction::CreateEntity(_, local_entity_key, component_list_opt) => {
                 replica_total_bytes
                     .write_u16::<BigEndian>(local_entity_key.to_u16())
@@ -738,14 +738,15 @@ impl<T: ProtocolType> ReplicaManager<T> {
     ) -> ReplicaAction<T> {
         let locked_diff_mask = self.process_replica_update(packet_index, global_key, diff_mask);
         // return new Update message to be written
-        if is_pawn {
-            return ReplicaAction::UpdatePawn(
-                *global_key,
-                *local_key,
-                locked_diff_mask,
-                replica.clone(),
-            );
-        } else {
+//        if is_pawn {
+//            return ReplicaAction::UpdatePawn(
+//                *global_key,
+//                *local_key,
+//                locked_diff_mask,
+//                replica.clone(),
+//            );
+//        } else
+        {
             return ReplicaAction::UpdateReplica(
                 *global_key,
                 *local_key,
@@ -764,14 +765,15 @@ impl<T: ProtocolType> ReplicaManager<T> {
         replica: &Ref<dyn Replicate<T>>,
     ) -> ReplicaAction<T> {
         let original_diff_mask = self.undo_replica_update(&packet_index, &global_key);
-        if is_pawn {
-            return ReplicaAction::UpdatePawn(
-                *global_key,
-                *local_key,
-                original_diff_mask,
-                replica.clone(),
-            );
-        } else {
+//        if is_pawn {
+//            return ReplicaAction::UpdatePawn(
+//                *global_key,
+//                *local_key,
+//                original_diff_mask,
+//                replica.clone(),
+//            );
+//        } else
+        {
             return ReplicaAction::UpdateReplica(
                 *global_key,
                 *local_key,
@@ -845,27 +847,28 @@ impl<T: ProtocolType> PacketNotifiable for ReplicaManager<T> {
         if let Some(delivered_messages_list) = self.sent_messages.remove(&packet_index) {
             for delivered_message in delivered_messages_list.into_iter() {
                 match delivered_message {
-                    ReplicaAction::CreateObject(global_key, _, _) => {
-                        let replica_record = self.replica_records.get_mut(global_key)
-                            .expect("created Object does not have an replica_record ... initialization error?");
-
-                        // do we need to delete this now?
-                        if self.delayed_replica_deletions.remove(&global_key) {
-                            replica_delete(&mut self.queued_messages, replica_record, &global_key);
-                        } else {
-                            // we do not need to delete just yet
-                            replica_record.status = LocalityStatus::Created;
-                        }
-                    }
+//                    ReplicaAction::CreateObject(global_key, _, _) => {
+//                        let replica_record = self.replica_records.get_mut(global_key)
+//                            .expect("created Object does not have an replica_record ... initialization error?");
+//
+//                        // do we need to delete this now?
+//                        if self.delayed_replica_deletions.remove(&global_key) {
+//                            replica_delete(&mut self.queued_messages, replica_record, &global_key);
+//                        } else {
+//                            // we do not need to delete just yet
+//                            replica_record.status = LocalityStatus::Created;
+//                        }
+//                    }
                     ReplicaAction::DeleteReplica(global_object_key, _) => {
                         deleted_replicas.push(global_object_key);
                     }
                     ReplicaAction::UpdateReplica(_, _, _, _)
-                    | ReplicaAction::UpdatePawn(_, _, _, _) => {
+//                    | ReplicaAction::UpdatePawn(_, _, _, _)
+                    => {
                         self.sent_updates.remove(&packet_index);
                     }
-                    ReplicaAction::AssignPawn(_, _) => {}
-                    ReplicaAction::UnassignPawn(_, _) => {}
+//                    ReplicaAction::AssignPawn(_, _) => {}
+//                    ReplicaAction::UnassignPawn(_, _) => {}
                     ReplicaAction::CreateEntity(global_entity_key, _, component_list_opt) => {
                         let entity_record = self.local_entity_store.get_mut(&global_entity_key)
                             .expect("created entity does not have a entity_record ... initialization error?");
@@ -970,10 +973,10 @@ impl<T: ProtocolType> PacketNotifiable for ReplicaManager<T> {
             for dropped_message in dropped_messages_list.into_iter() {
                 match dropped_message {
                     // gauranteed delivery messages
-                    ReplicaAction::CreateObject(_, _, _)
+//                    ReplicaAction::CreateObject(_, _, _)
                     | ReplicaAction::DeleteReplica(_, _)
-                    | ReplicaAction::AssignPawn(_, _)
-                    | ReplicaAction::UnassignPawn(_, _)
+//                    | ReplicaAction::AssignPawn(_, _)
+//                    | ReplicaAction::UnassignPawn(_, _)
                     | ReplicaAction::CreateEntity(_, _, _)
                     | ReplicaAction::DeleteEntity(_, _)
                     | ReplicaAction::AssignPawnEntity(_, _)
@@ -983,7 +986,8 @@ impl<T: ProtocolType> PacketNotifiable for ReplicaManager<T> {
                     }
                     // non-gauranteed delivery messages
                     ReplicaAction::UpdateReplica(global_key, _, _, _)
-                    | ReplicaAction::UpdatePawn(global_key, _, _, _) => {
+//                    | ReplicaAction::UpdatePawn(global_key, _, _, _)
+                    => {
                         if let Some(diff_mask_map) = self.sent_updates.get(&dropped_packet_index) {
                             if let Some(diff_mask) = diff_mask_map.get(global_key) {
                                 let mut new_diff_mask = diff_mask.borrow().clone();

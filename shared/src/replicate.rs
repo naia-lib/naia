@@ -1,5 +1,5 @@
 use std::{
-    any::TypeId,
+    any::{Any, TypeId},
     fmt::{Debug, Formatter, Result},
 };
 
@@ -9,7 +9,7 @@ use crate::{PacketReader, Ref};
 
 /// A Replica is a Message/Object/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
-pub trait Replicate<T: ProtocolType> {
+pub trait Replicate<T: ProtocolType>: Any {
     /// Gets the number of bytes of the Message/Object/Component's DiffMask
     fn get_diff_mask_size(&self) -> u8;
     /// Gets the TypeId of the Message/Object/Component, used to map to a
@@ -55,7 +55,7 @@ impl<T: ProtocolType> Debug for dyn Replicate<T> {
 }
 
 /// Represents a Ref of a concrete type that implements Replicate
-pub trait ImplRef<T: ProtocolType> {
+pub trait ImplRef<T: ProtocolType>: Any {
     /// Converts the Ref to a ProtocolType
     fn protocol(&self) -> T;
     /// Converts the Ref to a Trait Object Ref

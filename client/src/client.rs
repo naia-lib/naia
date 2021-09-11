@@ -137,20 +137,20 @@ impl<T: ProtocolType> Client<T> {
                 while let Some(action) = connection.get_incoming_replica_action() {
                     let event: Event<T> = {
                         match action {
-                            ReplicaAction::CreateObject(local_key) => {
-                                Event::CreateObject(local_key)
-                            }
-                            ReplicaAction::DeleteObject(local_key, replica) => {
-                                Event::DeleteObject(local_key, replica.clone())
-                            }
-                            ReplicaAction::UpdateObject(local_key) => {
-                                Event::UpdateObject(local_key)
-                            }
-                            ReplicaAction::AssignPawn(local_key) => Event::AssignPawn(local_key),
-                            ReplicaAction::UnassignPawn(local_key) => {
-                                Event::UnassignPawn(local_key)
-                            }
-                            ReplicaAction::ResetPawn(local_key) => Event::ResetPawn(local_key),
+//                            ReplicaAction::CreateObject(local_key) => {
+//                                Event::CreateObject(local_key)
+//                            }
+//                            ReplicaAction::DeleteObject(local_key, replica) => {
+//                                Event::DeleteObject(local_key, replica.clone())
+//                            }
+//                            ReplicaAction::UpdateObject(local_key) => {
+//                                Event::UpdateObject(local_key)
+//                            }
+//                            ReplicaAction::AssignPawn(local_key) => Event::AssignPawn(local_key),
+//                            ReplicaAction::UnassignPawn(local_key) => {
+//                                Event::UnassignPawn(local_key)
+//                            }
+//                            ReplicaAction::ResetPawn(local_key) => Event::ResetPawn(local_key),
                             ReplicaAction::CreateEntity(local_key, component_list) => {
                                 Event::CreateEntity(local_key, component_list)
                             }
@@ -187,10 +187,10 @@ impl<T: ProtocolType> Client<T> {
                 while let Some((pawn_key, command)) = connection.get_incoming_replay() {
                     match pawn_key {
                         PawnKey::Object(object_key) => {
-                            events.push_back(Ok(Event::ReplayCommand(
-                                object_key,
-                                command.borrow().copy_to_protocol(),
-                            )));
+//                            events.push_back(Ok(Event::ReplayCommand(
+//                                object_key,
+//                                command.borrow().copy_to_protocol(),
+//                            )));
                         }
                         PawnKey::Entity(entity_key) => {
                             events.push_back(Ok(Event::ReplayCommandEntity(
@@ -204,10 +204,10 @@ impl<T: ProtocolType> Client<T> {
                 while let Some((pawn_key, command)) = connection.get_incoming_command() {
                     match pawn_key {
                         PawnKey::Object(object_key) => {
-                            events.push_back(Ok(Event::NewCommand(
-                                object_key,
-                                command.borrow().copy_to_protocol(),
-                            )));
+//                            events.push_back(Ok(Event::NewCommand(
+//                                object_key,
+//                                command.borrow().copy_to_protocol(),
+//                            )));
                         }
                         PawnKey::Entity(entity_key) => {
                             events.push_back(Ok(Event::NewCommandEntity(
@@ -272,16 +272,16 @@ impl<T: ProtocolType> Client<T> {
     }
 
     /// Queues up a Pawn Object Command to be sent to the Server
-    pub fn send_object_command<U: ImplRef<T>>(
-        &mut self,
-        pawn_object_key: &LocalObjectKey,
-        command_ref: &U,
-    ) {
-        if let Some(connection) = &mut self.server_connection {
-            let dyn_ref = command_ref.dyn_ref();
-            connection.object_queue_command(pawn_object_key, &dyn_ref);
-        }
-    }
+//    pub fn send_object_command<U: ImplRef<T>>(
+//        &mut self,
+//        pawn_object_key: &LocalObjectKey,
+//        command_ref: &U,
+//    ) {
+//        if let Some(connection) = &mut self.server_connection {
+//            let dyn_ref = command_ref.dyn_ref();
+//            connection.object_queue_command(pawn_object_key, &dyn_ref);
+//        }
+//    }
 
     /// Queues up a Pawn Entity Command to be sent to the Server
     pub fn send_entity_command<U: ImplRef<T>>(
@@ -309,25 +309,28 @@ impl<T: ProtocolType> Client<T> {
 
     /// Get a reference to an Object currently in scope for the Client, given
     /// that Object's Key
-    pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
+//    pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
+//        if let Some(connection) = &self.server_connection {
+//            return connection.get_object(key);
+//        }
+//        return None;
+//    }
+
+    /// Get whether or not the Object currently in scope for the Client, given
+    /// that Object's Key
+//    pub fn has_object(&self, key: &LocalObjectKey) -> bool {
+//        if let Some(connection) = &self.server_connection {
+//            return connection.has_object(key);
+//        }
+//        return false;
+//    }
+
+    /// Component-themed alias for `get_object`
+    pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
         if let Some(connection) = &self.server_connection {
             return connection.get_object(key);
         }
         return None;
-    }
-
-    /// Get whether or not the Object currently in scope for the Client, given
-    /// that Object's Key
-    pub fn has_object(&self, key: &LocalObjectKey) -> bool {
-        if let Some(connection) = &self.server_connection {
-            return connection.has_object(key);
-        }
-        return false;
-    }
-
-    /// Component-themed alias for `get_object`
-    pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
-        return self.get_object(key);
     }
 
     /// Get whether or not the Component currently in scope for the Client,
@@ -341,12 +344,12 @@ impl<T: ProtocolType> Client<T> {
 
     /// Return an iterator to the collection of keys to all Objects tracked
     /// by the Client
-    pub fn object_keys(&self) -> Option<Vec<LocalObjectKey>> {
-        if let Some(connection) = &self.server_connection {
-            return Some(connection.object_keys());
-        }
-        return None;
-    }
+//    pub fn object_keys(&self) -> Option<Vec<LocalObjectKey>> {
+//        if let Some(connection) = &self.server_connection {
+//            return Some(connection.object_keys());
+//        }
+//        return None;
+//    }
 
     /// Return an iterator to the collection of keys to all Components tracked
     /// by the Client

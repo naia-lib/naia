@@ -45,22 +45,22 @@ impl<T: ProtocolType> ReplicaManager<T> {
             let message_type = ReplicaActionType::from_u8(reader.read_u8());
 
             match message_type {
-                ReplicaActionType::CreateObject => {
-                    // Object Creation
-                    let naia_id: u16 = reader.read_u16();
-                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
-
-                    let new_replica = manifest.create_replica(naia_id, reader);
-                    if !self.local_replica_store.contains_key(&object_key) {
-                        self.local_replica_store.insert(object_key, new_replica);
-
-                        self.queued_incoming_messages
-                            .push_back(ReplicaAction::CreateObject(object_key));
-                    } else {
-                        // may have received a duplicate message
-                        warn!("attempted to insert duplicate local object key");
-                    }
-                }
+//                ReplicaActionType::CreateObject => {
+//                    // Object Creation
+//                    let naia_id: u16 = reader.read_u16();
+//                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
+//
+//                    let new_replica = manifest.create_replica(naia_id, reader);
+//                    if !self.local_replica_store.contains_key(&object_key) {
+//                        self.local_replica_store.insert(object_key, new_replica);
+//
+//                        self.queued_incoming_messages
+//                            .push_back(ReplicaAction::CreateObject(object_key));
+//                    } else {
+//                        // may have received a duplicate message
+//                        warn!("attempted to insert duplicate local object key");
+//                    }
+//                }
                 ReplicaActionType::DeleteReplica => {
                     // Replica Deletion
                     let replica_key = LocalReplicaKey::from_u16(reader.read_u16());
@@ -77,7 +77,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
                         self.component_delete_cleanup(&entity_key, &replica_key);
                     } else {
                         // Replica is an Object
-                        self.object_delete_cleanup(command_receiver, &replica_key);
+//                        self.object_delete_cleanup(command_receiver, &replica_key);
                     }
                 }
                 ReplicaActionType::UpdateReplica => {
@@ -107,55 +107,55 @@ impl<T: ProtocolType> ReplicaManager<T> {
                             );
                         } else {
                             // Replica is an Object
-                            self.queued_incoming_messages
-                                .push_back(ReplicaAction::UpdateObject(replica_key));
+//                            self.queued_incoming_messages
+//                                .push_back(ReplicaAction::UpdateObject(replica_key));
                         }
                     }
                 }
-                ReplicaActionType::AssignPawn => {
-                    // Assign Pawn
-                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
-
-                    if let Some(protocol) = self.local_replica_store.get(&object_key) {
-                        self.pawn_store.insert(object_key, protocol.copy());
-
-                        let pawn_key = PawnKey::Object(object_key);
-                        command_receiver.pawn_init(&pawn_key);
-
-                        self.queued_incoming_messages
-                            .push_back(ReplicaAction::AssignPawn(object_key));
-                    }
-                }
-                ReplicaActionType::UnassignPawn => {
-                    // Unassign Pawn
-                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
-                    if self.pawn_store.contains_key(&object_key) {
-                        self.pawn_store.remove(&object_key);
-
-                        let pawn_key = PawnKey::Object(object_key);
-                        command_receiver.pawn_cleanup(&pawn_key);
-                    }
-                    self.queued_incoming_messages
-                        .push_back(ReplicaAction::UnassignPawn(object_key));
-                }
-                ReplicaActionType::UpdatePawn => {
-                    // Pawn Update
-                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
-
-                    if let Some(object_ref) = self.local_replica_store.get_mut(&object_key) {
-                        object_ref.read_full(reader, packet_index);
-
-                        let pawn_key = PawnKey::Object(object_key);
-
-                        command_receiver.replay_commands(packet_tick, &pawn_key);
-
-                        // remove command history until the tick that has already been checked
-                        command_receiver.remove_history_until(packet_tick, &pawn_key);
-
-                        self.queued_incoming_messages
-                            .push_back(ReplicaAction::UpdateObject(object_key));
-                    }
-                }
+//                ReplicaActionType::AssignPawn => {
+//                    // Assign Pawn
+//                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
+//
+//                    if let Some(protocol) = self.local_replica_store.get(&object_key) {
+//                        self.pawn_store.insert(object_key, protocol.copy());
+//
+//                        let pawn_key = PawnKey::Object(object_key);
+//                        command_receiver.pawn_init(&pawn_key);
+//
+//                        self.queued_incoming_messages
+//                            .push_back(ReplicaAction::AssignPawn(object_key));
+//                    }
+//                }
+//                ReplicaActionType::UnassignPawn => {
+//                    // Unassign Pawn
+//                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
+//                    if self.pawn_store.contains_key(&object_key) {
+//                        self.pawn_store.remove(&object_key);
+//
+//                        let pawn_key = PawnKey::Object(object_key);
+//                        command_receiver.pawn_cleanup(&pawn_key);
+//                    }
+//                    self.queued_incoming_messages
+//                        .push_back(ReplicaAction::UnassignPawn(object_key));
+//                }
+//                ReplicaActionType::UpdatePawn => {
+//                    // Pawn Update
+//                    let object_key = LocalObjectKey::from_u16(reader.read_u16());
+//
+//                    if let Some(object_ref) = self.local_replica_store.get_mut(&object_key) {
+//                        object_ref.read_full(reader, packet_index);
+//
+//                        let pawn_key = PawnKey::Object(object_key);
+//
+//                        command_receiver.replay_commands(packet_tick, &pawn_key);
+//
+//                        // remove command history until the tick that has already been checked
+//                        command_receiver.remove_history_until(packet_tick, &pawn_key);
+//
+//                        self.queued_incoming_messages
+//                            .push_back(ReplicaAction::UpdateObject(object_key));
+//                    }
+//                }
                 ReplicaActionType::CreateEntity => {
                     // Entity Creation
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
@@ -376,15 +376,15 @@ impl<T: ProtocolType> ReplicaManager<T> {
         return self.pawn_store.get(key);
     }
 
-    pub fn pawn_reset(&mut self, key: &LocalObjectKey) {
-        if let Some(object_ref) = self.local_replica_store.get(key) {
-            if let Some(pawn_ref) = self.pawn_store.get_mut(key) {
-                pawn_ref.mirror(object_ref);
-            }
-        }
-        self.queued_incoming_messages
-            .push_back(ReplicaAction::ResetPawn(*key));
-    }
+//    pub fn pawn_reset(&mut self, key: &LocalObjectKey) {
+//        if let Some(object_ref) = self.local_replica_store.get(key) {
+//            if let Some(pawn_ref) = self.pawn_store.get_mut(key) {
+//                pawn_ref.mirror(object_ref);
+//            }
+//        }
+//        self.queued_incoming_messages
+//            .push_back(ReplicaAction::ResetPawn(*key));
+//    }
 
     pub fn pawn_reset_entity(&mut self, key: &LocalEntityKey) {
         if let Some(component_set) = self.local_entity_store.get(key) {
@@ -403,22 +403,22 @@ impl<T: ProtocolType> ReplicaManager<T> {
 
     // internal
 
-    fn object_delete_cleanup(
-        &mut self,
-        command_receiver: &mut DualCommandReceiver<T>,
-        object_key: &LocalObjectKey,
-    ) {
-        if let Some(object) = self.local_replica_store.remove(&object_key) {
-            if self.pawn_store.contains_key(&object_key) {
-                self.pawn_store.remove(&object_key);
-                let pawn_key = PawnKey::Object(*object_key);
-                command_receiver.pawn_cleanup(&pawn_key);
-            }
-
-            self.queued_incoming_messages
-                .push_back(ReplicaAction::DeleteObject(*object_key, object));
-        }
-    }
+//    fn object_delete_cleanup(
+//        &mut self,
+//        command_receiver: &mut DualCommandReceiver<T>,
+//        object_key: &LocalObjectKey,
+//    ) {
+//        if let Some(object) = self.local_replica_store.remove(&object_key) {
+//            if self.pawn_store.contains_key(&object_key) {
+//                self.pawn_store.remove(&object_key);
+//                let pawn_key = PawnKey::Object(*object_key);
+//                command_receiver.pawn_cleanup(&pawn_key);
+//            }
+//
+//            self.queued_incoming_messages
+//                .push_back(ReplicaAction::DeleteObject(*object_key, object));
+//        }
+//    }
 
     fn component_delete_cleanup(
         &mut self,
