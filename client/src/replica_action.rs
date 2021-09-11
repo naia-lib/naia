@@ -2,12 +2,12 @@ use naia_shared::{LocalComponentKey, LocalEntityKey, LocalObjectKey, ProtocolTyp
 
 #[derive(Debug, Clone)]
 pub enum ReplicaAction<U: ProtocolType> {
-    CreateObject(LocalObjectKey),
-    UpdateObject(LocalObjectKey),
-    DeleteObject(LocalObjectKey, U),
-    AssignPawn(LocalObjectKey),
-    UnassignPawn(LocalObjectKey),
-    ResetPawn(LocalObjectKey),
+//    CreateObject(LocalObjectKey),
+//    UpdateObject(LocalObjectKey),
+//    DeleteObject(LocalObjectKey, U),
+//    AssignPawn(LocalObjectKey),
+//    UnassignPawn(LocalObjectKey),
+//    ResetPawn(LocalObjectKey),
     CreateEntity(LocalEntityKey, Vec<LocalComponentKey>),
     DeleteEntity(LocalEntityKey),
     AssignPawnEntity(LocalEntityKey),

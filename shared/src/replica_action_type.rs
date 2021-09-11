@@ -4,17 +4,17 @@
 #[repr(u8)]
 pub enum ReplicaActionType {
     /// Action indicating an Object to be created
-    CreateObject = 0,
+//    CreateObject = 0,
     /// Action indicating a Replica to be updated
-    UpdateReplica,
+    UpdateReplica = 0,
     /// Action indicating a Replica to be deleted
     DeleteReplica,
     /// Action indicating an Object to be assigned as a Pawn
-    AssignPawn,
+//    AssignPawn,
     /// Action indicating an Object to be unassigned as a Pawn
-    UnassignPawn,
+//    UnassignPawn,
     /// Action indicating a Pawn to be updated
-    UpdatePawn,
+//    UpdatePawn,
     /// Action indicating an Entity to be created
     CreateEntity,
     /// Action indicating an Entity to be deleted

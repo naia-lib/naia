@@ -23,7 +23,7 @@ pub enum Event<T> {
     /// passed to the Server on initialization
     Tick,
     /// A Command emitted to the Server from a Client
-    Command(UserKey, ObjectKey, T),
+    //Command(UserKey, ObjectKey, T),
     /// A Command emitted to the Server from a Client, related to an Entity
     CommandEntity(UserKey, EntityKey, T),
 }

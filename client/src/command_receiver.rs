@@ -48,7 +48,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
         for (pawn_key, history_tick) in self.replay_trigger.iter() {
             // set pawn to server authoritative object/entity
             match pawn_key {
-                PawnKey::Object(object_key) => replica_manager.pawn_reset(object_key),
+                PawnKey::Object(object_key) => {},//replica_manager.pawn_reset(object_key),
                 PawnKey::Entity(entity_key) => replica_manager.pawn_reset_entity(entity_key),
             }
 

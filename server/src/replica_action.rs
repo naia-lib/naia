@@ -7,7 +7,7 @@ use super::keys::{ComponentKey, ObjectKey};
 
 #[derive(Debug)]
 pub enum ReplicaAction<T: ProtocolType> {
-    CreateObject(ObjectKey, LocalObjectKey, Ref<dyn Replicate<T>>),
+//    CreateObject(ObjectKey, LocalObjectKey, Ref<dyn Replicate<T>>),
     UpdateReplica(
         ObjectKey,
         LocalReplicaKey,
@@ -15,14 +15,14 @@ pub enum ReplicaAction<T: ProtocolType> {
         Ref<dyn Replicate<T>>,
     ),
     DeleteReplica(ObjectKey, LocalReplicaKey),
-    AssignPawn(ObjectKey, LocalObjectKey),
-    UnassignPawn(ObjectKey, LocalObjectKey),
-    UpdatePawn(
-        ObjectKey,
-        LocalObjectKey,
-        Ref<DiffMask>,
-        Ref<dyn Replicate<T>>,
-    ),
+//    AssignPawn(ObjectKey, LocalObjectKey),
+//    UnassignPawn(ObjectKey, LocalObjectKey),
+//    UpdatePawn(
+//        ObjectKey,
+//        LocalObjectKey,
+//        Ref<DiffMask>,
+//        Ref<dyn Replicate<T>>,
+//    ),
     CreateEntity(
         EntityKey,
         LocalEntityKey,
@@ -42,12 +42,12 @@ pub enum ReplicaAction<T: ProtocolType> {
 impl<T: ProtocolType> ReplicaAction<T> {
     pub fn as_type(&self) -> ReplicaActionType {
         match self {
-            ReplicaAction::CreateObject(_, _, _) => ReplicaActionType::CreateObject,
+//            ReplicaAction::CreateObject(_, _, _) => ReplicaActionType::CreateObject,
             ReplicaAction::DeleteReplica(_, _) => ReplicaActionType::DeleteReplica,
             ReplicaAction::UpdateReplica(_, _, _, _) => ReplicaActionType::UpdateReplica,
-            ReplicaAction::AssignPawn(_, _) => ReplicaActionType::AssignPawn,
-            ReplicaAction::UnassignPawn(_, _) => ReplicaActionType::UnassignPawn,
-            ReplicaAction::UpdatePawn(_, _, _, _) => ReplicaActionType::UpdatePawn,
+//            ReplicaAction::AssignPawn(_, _) => ReplicaActionType::AssignPawn,
+//            ReplicaAction::UnassignPawn(_, _) => ReplicaActionType::UnassignPawn,
+//            ReplicaAction::UpdatePawn(_, _, _, _) => ReplicaActionType::UpdatePawn,
             ReplicaAction::CreateEntity(_, _, _) => ReplicaActionType::CreateEntity,
             ReplicaAction::DeleteEntity(_, _) => ReplicaActionType::DeleteEntity,
             ReplicaAction::AssignPawnEntity(_, _) => ReplicaActionType::AssignPawnEntity,
@@ -60,22 +60,22 @@ impl<T: ProtocolType> ReplicaAction<T> {
 impl<T: ProtocolType> Clone for ReplicaAction<T> {
     fn clone(&self) -> Self {
         match self {
-            ReplicaAction::CreateObject(gk, lk, e) => {
-                ReplicaAction::CreateObject(gk.clone(), lk.clone(), e.clone())
-            }
+//            ReplicaAction::CreateObject(gk, lk, e) => {
+//                ReplicaAction::CreateObject(gk.clone(), lk.clone(), e.clone())
+//            }
             ReplicaAction::DeleteReplica(gk, lk) => {
                 ReplicaAction::DeleteReplica(gk.clone(), lk.clone())
             }
             ReplicaAction::UpdateReplica(gk, lk, sm, e) => {
                 ReplicaAction::UpdateReplica(gk.clone(), lk.clone(), sm.clone(), e.clone())
             }
-            ReplicaAction::AssignPawn(gk, lk) => ReplicaAction::AssignPawn(gk.clone(), lk.clone()),
-            ReplicaAction::UnassignPawn(gk, lk) => {
-                ReplicaAction::UnassignPawn(gk.clone(), lk.clone())
-            }
-            ReplicaAction::UpdatePawn(gk, lk, sm, e) => {
-                ReplicaAction::UpdatePawn(gk.clone(), lk.clone(), sm.clone(), e.clone())
-            }
+//            ReplicaAction::AssignPawn(gk, lk) => ReplicaAction::AssignPawn(gk.clone(), lk.clone()),
+//            ReplicaAction::UnassignPawn(gk, lk) => {
+//                ReplicaAction::UnassignPawn(gk.clone(), lk.clone())
+//            }
+//            ReplicaAction::UpdatePawn(gk, lk, sm, e) => {
+//                ReplicaAction::UpdatePawn(gk.clone(), lk.clone(), sm.clone(), e.clone())
+//            }
             ReplicaAction::CreateEntity(gk, lk, cs) => {
                 ReplicaAction::CreateEntity(gk.clone(), lk.clone(), cs.clone())
             }

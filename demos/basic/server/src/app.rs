@@ -41,10 +41,10 @@ impl App {
 
                 // Create a Character
                 let character = Character::new((count * 4) as u8, 0, first, last);
-                let character_key = server.register_object(&character);
+                let character_key = server.register_entity_with_components(&[character]);
 
-                // Add the Character to the main Room
-                server.room_add_object(&main_room_key, &character_key);
+                // Add the Character Entity to the main Room
+                server.room_add_entity(&main_room_key, &character_key);
             }
         }
 
@@ -110,25 +110,23 @@ impl App {
                     }
 
                     // Iterate through Characters, marching them from (0,0) to (20, N)
-                    for object_key in self.server.objects_iter() {
-                        if let Some(Protocol::Character(character_ref)) =
-                            self.server.get_object(object_key)
-                        {
+                    for entity_key in self.server.entities_iter() {
+                        if let Some(character_ref) = self.server.get_component_by_type::<Character>(&entity_key) {
                             character_ref.borrow_mut().step();
                         }
                     }
 
-                    // Update scopes of objects
-                    for (room_key, user_key, object_key) in self.server.object_scope_sets() {
-                        if let Some(Protocol::Character(character_ref)) =
-                            self.server.get_object(&object_key)
+                    // Update scopes of entities
+                    for (room_key, user_key, entity_key) in self.server.entity_scope_sets() {
+                        if let Some(character_ref) =
+                            self.server.get_component_by_type::<Character>(&entity_key)
                         {
                             let x = *character_ref.borrow().x.get();
                             let in_scope = x >= 5 && x <= 15;
-                            self.server.object_set_scope(
+                            self.server.entity_set_scope(
                                 &room_key,
                                 &user_key,
-                                &object_key,
+                                &entity_key,
                                 in_scope,
                             );
                         }
