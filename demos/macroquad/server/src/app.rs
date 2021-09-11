@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_server::{Event, ObjectKey, Random, RoomKey, Server, ServerConfig, UserKey};
+use naia_server::{Event, EntityKey, Random, RoomKey, Server, ServerConfig, UserKey};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
@@ -10,7 +10,7 @@ use naia_macroquad_demo_shared::{
 pub struct App {
     server: Server<Protocol>,
     main_room_key: RoomKey,
-    user_to_pawn_map: HashMap<UserKey, ObjectKey>,
+    user_to_pawn_map: HashMap<UserKey, EntityKey>,
 }
 
 impl App {
@@ -30,7 +30,7 @@ impl App {
         App {
             server,
             main_room_key,
-            user_to_pawn_map: HashMap::<UserKey, ObjectKey>::new(),
+            user_to_pawn_map: HashMap::<UserKey, EntityKey>::new(),
         }
     }
 
@@ -64,11 +64,11 @@ impl App {
                         };
 
                         let square = Square::new(x as u16, y as u16, square_color);
-                        let square_key = self.server.register_object(&square);
+                        let entity_key = self.server.register_entity_with_components(&[square]);
                         self.server
-                            .room_add_object(&self.main_room_key, &square_key);
-                        self.server.assign_pawn(&user_key, &square_key);
-                        self.user_to_pawn_map.insert(user_key, square_key);
+                            .room_add_entity(&self.main_room_key, &entity_key);
+                        self.server.assign_pawn_entity(&user_key, &entity_key);
+                        self.user_to_pawn_map.insert(user_key, entity_key);
                     }
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
@@ -76,24 +76,24 @@ impl App {
                     self.server.room_remove_user(&self.main_room_key, &user_key);
                     if let Some(object_key) = self.user_to_pawn_map.remove(&user_key) {
                         self.server
-                            .room_remove_object(&self.main_room_key, &object_key);
-                        self.server.unassign_pawn(&user_key, &object_key);
-                        self.server.deregister_object(&object_key);
+                            .room_remove_entity(&self.main_room_key, &object_key);
+                        self.server.unassign_pawn_entity(&user_key, &object_key);
+                        self.server.deregister_entity(&object_key);
                     }
                 }
-                Ok(Event::Command(_, square_key, Protocol::KeyCommand(key_command_ref))) => {
-                    if let Some(Protocol::Square(square_ref)) = self.server.get_object(&square_key)
+                Ok(Event::CommandEntity(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
+                    if let Some(square_ref) = self.server.get_component_by_type::<Square>(&entity_key)
                     {
-                        shared_behavior::process_command(&key_command_ref, square_ref);
+                        shared_behavior::process_command(&key_command_ref, &square_ref);
                     }
                 }
                 Ok(Event::Tick) => {
                     // All game logic should happen here, on a tick event
 
-                    // Update scopes of objects
-                    for (room_key, user_key, object_key) in self.server.object_scope_sets() {
+                    // Update scopes of entities
+                    for (room_key, user_key, entity_key) in self.server.entity_scope_sets() {
                         self.server
-                            .object_set_scope(&room_key, &user_key, &object_key, true);
+                            .entity_set_scope(&room_key, &user_key, &entity_key, true);
                     }
 
                     // VERY IMPORTANT! Calling this actually sends all update data

@@ -141,9 +141,9 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.replica_manager.pop_incoming_message();
     }
 
-    pub fn object_keys(&self) -> Vec<LocalObjectKey> {
-        return self.replica_manager.object_keys();
-    }
+//    pub fn object_keys(&self) -> Vec<LocalObjectKey> {
+//        return self.replica_manager.object_keys();
+//    }
 
     pub fn component_keys(&self) -> Vec<LocalComponentKey> {
         return self.replica_manager.component_keys();
@@ -183,6 +183,14 @@ impl<T: ProtocolType> ServerConnection<T> {
 
     pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
         return self.replica_manager.get_pawn_components(key);
+    }
+
+    pub fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
+        return self.replica_manager.get_component_by_type::<R>(key);
+    }
+
+    pub fn get_pawn_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
+        return self.replica_manager.get_pawn_component_by_type::<R>(key);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
@@ -263,14 +271,14 @@ impl<T: ProtocolType> ServerConnection<T> {
     }
 
     // command related
-    pub fn object_queue_command(
-        &mut self,
-        object_key: &LocalObjectKey,
-        command: &Ref<dyn Replicate<T>>,
-    ) {
-        let pawn_key = PawnKey::Object(*object_key);
-        return self.command_sender.queue_command(&pawn_key, command);
-    }
+//    pub fn object_queue_command(
+//        &mut self,
+//        object_key: &LocalObjectKey,
+//        command: &Ref<dyn Replicate<T>>,
+//    ) {
+//        let pawn_key = PawnKey::Object(*object_key);
+//        return self.command_sender.queue_command(&pawn_key, command);
+//    }
 
     pub fn entity_queue_command(
         &mut self,

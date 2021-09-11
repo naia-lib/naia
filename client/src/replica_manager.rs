@@ -1,10 +1,10 @@
-use std::collections::{hash_map::Keys, HashMap, HashSet, VecDeque};
+use std::{any::TypeId, collections::{hash_map::Keys, HashMap, HashSet, VecDeque}};
 
 use log::warn;
 
 use naia_shared::{
     DiffMask, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicaKey, Manifest,
-    NaiaKey, PacketReader, PawnKey, ProtocolType, ReplicaActionType,
+    NaiaKey, PacketReader, PawnKey, ProtocolType, ReplicaActionType, Replicate, Ref, ComponentRecord
 };
 
 use super::{dual_command_receiver::DualCommandReceiver, replica_action::ReplicaAction};
@@ -14,7 +14,7 @@ pub struct ReplicaManager<T: ProtocolType> {
     local_replica_store: HashMap<LocalReplicaKey, T>,
     queued_incoming_messages: VecDeque<ReplicaAction<T>>,
     pawn_store: HashMap<LocalObjectKey, T>,
-    local_entity_store: HashMap<LocalEntityKey, HashSet<LocalComponentKey>>,
+    local_entity_store: HashMap<LocalEntityKey, ComponentRecord<LocalComponentKey>>,
     pawn_entity_store: HashSet<LocalEntityKey>,
     component_entity_map: HashMap<LocalComponentKey, LocalEntityKey>,
 }
@@ -67,13 +67,11 @@ impl<T: ProtocolType> ReplicaManager<T> {
 
                     if let Some(entity_key) = self.component_entity_map.remove(&replica_key) {
                         // Replica is a Component
-                        let component_set = self
+                        let entity_record = self
                             .local_entity_store
                             .get_mut(&entity_key)
                             .expect("entity not instantiated properly?");
-                        if !component_set.remove(&replica_key) {
-                            panic!("trying to delete non-existent component");
-                        }
+                        entity_record.remove_component(&replica_key);
                         self.component_delete_cleanup(&entity_key, &replica_key);
                     } else {
                         // Replica is an Object
@@ -103,7 +101,7 @@ impl<T: ProtocolType> ReplicaManager<T> {
                             }
 
                             self.queued_incoming_messages.push_back(
-                                ReplicaAction::UpdateComponent(*entity_key, replica_key),
+                                ReplicaAction::UpdateComponent(*entity_key, replica_ref.clone()),
                             );
                         } else {
                             // Replica is an Object
@@ -170,8 +168,8 @@ impl<T: ProtocolType> ReplicaManager<T> {
                             manifest.create_replica(naia_id, reader);
                         }
                     } else {
-                        let mut component_list: Vec<LocalComponentKey> = Vec::new();
-                        let mut component_set = HashSet::new();
+                        let mut component_list: Vec<T> = Vec::new();
+                        let mut entity_record = ComponentRecord::new();
 
                         for _ in 0..components_num {
                             // Component Creation
@@ -182,14 +180,15 @@ impl<T: ProtocolType> ReplicaManager<T> {
                             if self.local_replica_store.contains_key(&component_key) {
                                 panic!("attempted to insert duplicate component");
                             } else {
-                                self.local_replica_store.insert(component_key, new_replica);
+                                let new_replica_type_id = new_replica.get_type_id();
+                                self.local_replica_store.insert(component_key, new_replica.clone());
                                 self.component_entity_map.insert(component_key, entity_key);
-                                component_list.push(component_key);
-                                component_set.insert(component_key);
+                                component_list.push(new_replica);
+                                entity_record.insert_component(&component_key, new_replica_type_id);
                             }
                         }
 
-                        self.local_entity_store.insert(entity_key, component_set);
+                        self.local_entity_store.insert(entity_key, entity_record);
 
                         self.queued_incoming_messages
                             .push_back(ReplicaAction::CreateEntity(entity_key, component_list));
@@ -199,13 +198,13 @@ impl<T: ProtocolType> ReplicaManager<T> {
                     // Entity Deletion
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
 
-                    if let Some(component_set) = self.local_entity_store.remove(&entity_key) {
+                    if let Some(entity_record) = self.local_entity_store.remove(&entity_key) {
                         if self.pawn_entity_store.take(&entity_key).is_some() {
                             let pawn_key = PawnKey::Entity(entity_key);
                             command_receiver.pawn_cleanup(&pawn_key);
                         }
 
-                        for component_key in component_set {
+                        for component_key in entity_record.get_component_keys() {
                             // delete all components
                             self.component_delete_cleanup(&entity_key, &component_key);
 
@@ -225,13 +224,13 @@ impl<T: ProtocolType> ReplicaManager<T> {
                 ReplicaActionType::AssignPawnEntity => {
                     // Assign Pawn Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
-                    if let Some(component_set) = self.local_entity_store.get(&entity_key) {
+                    if let Some(entity_record) = self.local_entity_store.get(&entity_key) {
                         self.pawn_entity_store.insert(entity_key);
 
                         // create copies of components
-                        for component_key in component_set {
+                        for component_key in entity_record.get_component_keys() {
                             if let Some(protocol) = self.local_replica_store.get(&component_key) {
-                                self.pawn_store.insert(*component_key, protocol.copy());
+                                self.pawn_store.insert(component_key, protocol.copy());
                             }
                         }
                         //
@@ -250,8 +249,8 @@ impl<T: ProtocolType> ReplicaManager<T> {
                         self.pawn_entity_store.remove(&entity_key);
 
                         // remove pawn components
-                        let component_set = self.local_entity_store.get(&entity_key).unwrap();
-                        for component_key in component_set {
+                        let entity_record = self.local_entity_store.get(&entity_key).unwrap();
+                        for component_key in entity_record.get_component_keys() {
                             self.pawn_store.remove(&component_key);
                         }
                         //
@@ -288,16 +287,16 @@ impl<T: ProtocolType> ReplicaManager<T> {
                             );
                         } else {
                             self.local_replica_store
-                                .insert(component_key, new_component);
+                                .insert(component_key, new_component.clone());
 
                             self.component_entity_map.insert(component_key, entity_key);
-                            let component_set =
+                            let entity_record =
                                 self.local_entity_store.get_mut(&entity_key).unwrap();
 
-                            component_set.insert(component_key);
+                            entity_record.insert_component(&component_key, new_component.get_type_id());
 
                             self.queued_incoming_messages
-                                .push_back(ReplicaAction::AddComponent(entity_key, component_key));
+                                .push_back(ReplicaAction::AddComponent(entity_key, new_component));
                         }
                     }
                 }
@@ -312,15 +311,15 @@ impl<T: ProtocolType> ReplicaManager<T> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn object_keys(&self) -> Vec<LocalObjectKey> {
-        let mut output: Vec<LocalObjectKey> = Vec::new();
-        for key in self.local_replica_store.keys() {
-            if !self.component_entity_map.contains_key(key) {
-                output.push(*key);
-            }
-        }
-        output
-    }
+//    pub fn object_keys(&self) -> Vec<LocalObjectKey> {
+//        let mut output: Vec<LocalObjectKey> = Vec::new();
+//        for key in self.local_replica_store.keys() {
+//            if !self.component_entity_map.contains_key(key) {
+//                output.push(*key);
+//            }
+//        }
+//        output
+//    }
 
     pub fn component_keys(&self) -> Vec<LocalComponentKey> {
         let mut output: Vec<LocalComponentKey> = Vec::new();
@@ -328,6 +327,28 @@ impl<T: ProtocolType> ReplicaManager<T> {
             output.push(*key);
         }
         output
+    }
+
+    pub fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
+        if let Some(entity_component_record) = self.local_entity_store.get(key) {
+            if let Some(component_key) = entity_component_record.get_key_from_type(&TypeId::of::<R>()) {
+                if let Some(replica_protocol) = self.local_replica_store.get(component_key) {
+                    return replica_protocol.to_typed_ref::<R>();
+                }
+            }
+        }
+        return None;
+    }
+
+    pub fn get_pawn_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
+        if let Some(entity_component_record) = self.local_entity_store.get(key) {
+            if let Some(component_key) = entity_component_record.get_key_from_type(&TypeId::of::<R>()) {
+                if let Some(replica_protocol) = self.pawn_store.get(component_key) {
+                    return replica_protocol.to_typed_ref::<R>();
+                }
+            }
+        }
+        return None;
     }
 
     pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
@@ -344,9 +365,9 @@ impl<T: ProtocolType> ReplicaManager<T> {
 
     pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
         let mut output = Vec::new();
-        if let Some(component_set) = self.local_entity_store.get(key) {
-            for component_key in component_set {
-                if let Some(component_proto) = self.local_replica_store.get(component_key) {
+        if let Some(entity_record) = self.local_entity_store.get(key) {
+            for component_key in entity_record.get_component_keys() {
+                if let Some(component_proto) = self.local_replica_store.get(&component_key) {
                     output.push(component_proto.clone());
                 }
             }
@@ -357,9 +378,9 @@ impl<T: ProtocolType> ReplicaManager<T> {
     pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
         let mut output = Vec::new();
         if self.pawn_entity_store.contains(key) {
-            if let Some(component_set) = self.local_entity_store.get(key) {
-                for component_key in component_set {
-                    if let Some(component_proto) = self.pawn_store.get(component_key) {
+            if let Some(entity_record) = self.local_entity_store.get(key) {
+                for component_key in entity_record.get_component_keys() {
+                    if let Some(component_proto) = self.pawn_store.get(&component_key) {
                         output.push(component_proto.clone());
                     }
                 }
@@ -387,10 +408,10 @@ impl<T: ProtocolType> ReplicaManager<T> {
 //    }
 
     pub fn pawn_reset_entity(&mut self, key: &LocalEntityKey) {
-        if let Some(component_set) = self.local_entity_store.get(key) {
-            for component_key in component_set {
-                if let Some(component_ref) = self.local_replica_store.get(component_key) {
-                    if let Some(pawn_component_ref) = self.pawn_store.get_mut(component_key) {
+        if let Some(entity_record) = self.local_entity_store.get(key) {
+            for component_key in entity_record.get_component_keys() {
+                if let Some(component_ref) = self.local_replica_store.get(&component_key) {
+                    if let Some(pawn_component_ref) = self.pawn_store.get_mut(&component_key) {
                         pawn_component_ref.mirror(component_ref);
                     }
                 }
@@ -429,7 +450,6 @@ impl<T: ProtocolType> ReplicaManager<T> {
             self.queued_incoming_messages
                 .push_back(ReplicaAction::RemoveComponent(
                     *entity_key,
-                    *component_key,
                     component,
                 ));
         }

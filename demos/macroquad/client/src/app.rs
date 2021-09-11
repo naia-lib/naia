@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use macroquad::prelude::*;
 
-use naia_client::{Client, ClientConfig, Event, LocalReplicaKey, Ref};
+use naia_client::{Client, ClientConfig, Event, LocalEntityKey, Ref};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
@@ -13,9 +13,9 @@ const SQUARE_SIZE: f32 = 32.0;
 
 pub struct App {
     client: Client<Protocol>,
-    pawn: Option<(LocalReplicaKey, Ref<Square>)>,
+    pawn: Option<(LocalEntityKey, Ref<Square>)>,
     queued_command: Option<Ref<KeyCommand>>,
-    square_map: HashMap<LocalReplicaKey, Ref<Square>>,
+    square_map: HashMap<LocalEntityKey, Ref<Square>>,
 }
 
 impl App {
@@ -86,34 +86,34 @@ impl App {
                 Ok(Event::Tick) => {
                     if let Some((pawn_key, _)) = self.pawn {
                         if let Some(command) = self.queued_command.take() {
-                            self.client.send_object_command(&pawn_key, &command);
+                            self.client.send_entity_command(&pawn_key, &command);
                         }
                     }
                 }
-                Ok(Event::AssignPawn(object_key)) => {
+                Ok(Event::AssignPawnEntity(entity_key)) => {
                     info!("assign pawn");
-                    if let Some(Protocol::Square(square_ref)) = self.client.get_pawn(&object_key) {
-                        self.pawn = Some((object_key, square_ref.clone()));
+                    if let Some(square_ref) = self.client.get_pawn_component_by_type::<Square>(&entity_key) {
+                        self.pawn = Some((entity_key, square_ref.clone()));
                     }
                 }
-                Ok(Event::UnassignPawn(_)) => {
+                Ok(Event::UnassignPawnEntity(_)) => {
                     self.pawn = None;
                     info!("unassign pawn");
                 }
-                Ok(Event::NewCommand(_, Protocol::KeyCommand(key_command_ref)))
-                | Ok(Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref))) => {
+                Ok(Event::NewCommandEntity(_, Protocol::KeyCommand(key_command_ref)))
+                | Ok(Event::ReplayCommandEntity(_, Protocol::KeyCommand(key_command_ref))) => {
                     if let Some((_, pawn_ref)) = &self.pawn {
                         shared_behavior::process_command(&key_command_ref, &pawn_ref);
                     }
                 }
-                Ok(Event::CreateObject(object_key)) => {
-                    if let Some(Protocol::Square(square_ref)) = self.client.get_object(&object_key)
+                Ok(Event::CreateEntity(entity_key, _)) => {
+                    if let Some(square_ref) = self.client.get_component_by_type::<Square>(&entity_key)
                     {
-                        self.square_map.insert(object_key, square_ref.clone());
+                        self.square_map.insert(entity_key, square_ref.clone());
                     }
                 }
-                Ok(Event::DeleteObject(object_key, _)) => {
-                    self.square_map.remove(&object_key);
+                Ok(Event::DeleteEntity(entity_key)) => {
+                    self.square_map.remove(&entity_key);
                 }
                 Err(err) => {
                     info!("Client Error: {}", err);
