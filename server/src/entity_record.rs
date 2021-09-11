@@ -1,6 +1,6 @@
 use naia_shared::{LocalEntityKey, Ref, ComponentRecord};
 
-use super::{keys::ComponentKey, locality_status::LocalityStatus};
+use super::{keys::component_key::ComponentKey, locality_status::LocalityStatus};
 
 #[derive(Debug)]
 pub struct EntityRecord {

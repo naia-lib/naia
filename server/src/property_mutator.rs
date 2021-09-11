@@ -1,9 +1,9 @@
 use naia_shared::{PropertyMutate, Ref};
 
-use super::{keys::replica_key::ReplicaKey, mut_handler::MutHandler};
+use super::{keys::component_key::ComponentKey, mut_handler::MutHandler};
 
 pub struct PropertyMutator {
-    key: Option<ReplicaKey>,
+    key: Option<ComponentKey>,
     mut_handler: Ref<MutHandler>,
 }
 
@@ -15,7 +15,7 @@ impl PropertyMutator {
         }
     }
 
-    pub fn set_object_key(&mut self, key: ReplicaKey) {
+    pub fn set_object_key(&mut self, key: ComponentKey) {
         self.key = Some(key);
     }
 }

@@ -1,11 +1,11 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, ManagerType, Manifest, MessagePacketWriter, PawnKey, ProtocolType, Ref,
-    Replicate, MTU_SIZE,
+    wrapping_diff, ManagerType, Manifest, MessagePacketWriter, ProtocolType, Ref,
+    Replicate, MTU_SIZE, LocalEntityKey, NaiaKey,
 };
 
-use crate::dual_command_receiver::DualCommandReceiver;
+use super::command_receiver::CommandReceiver;
 
 const MAX_PAST_COMMANDS: u8 = 3;
 
@@ -61,8 +61,8 @@ impl PacketWriter {
         &mut self,
         host_tick: u16,
         manifest: &Manifest<T>,
-        command_receiver: &DualCommandReceiver<T>,
-        pawn_key: &PawnKey,
+        command_receiver: &CommandReceiver<T>,
+        pawn_key: &LocalEntityKey,
         command: &Ref<dyn Replicate<T>>,
     ) -> bool {
         //Write command payload
@@ -98,14 +98,6 @@ impl PacketWriter {
         //Write command "header"
         let mut command_total_bytes = Vec::<u8>::new();
 
-        match pawn_key {
-            PawnKey::Object(_) => {
-                command_total_bytes.write_u8(0).unwrap(); // write pawn type
-            }
-            PawnKey::Entity(_) => {
-                command_total_bytes.write_u8(255).unwrap(); // write pawn type
-            }
-        }
         command_total_bytes
             .write_u16::<BigEndian>(pawn_key.to_u16())
             .unwrap(); // write pawn key

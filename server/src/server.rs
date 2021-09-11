@@ -12,17 +12,15 @@ use slotmap::DenseSlotMap;
 use naia_server_socket::{Packet, PacketReceiver, PacketSender, ServerSocket};
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, EntityKey, HostTickManager, ImplRef, Instant,
-    KeyGenerator, LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
+    KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
     ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp, ComponentRecord
 };
-
-use crate::{ComponentKey, GlobalPawnKey};
 
 use super::{
     client_connection::ClientConnection,
     error::NaiaServerError,
     event::Event,
-    keys::{replica_key::ReplicaKey, ObjectKey},
+    keys::component_key::ComponentKey,
     mut_handler::MutHandler,
     property_mutator::PropertyMutator,
     room::{room_key::RoomKey, Room},
@@ -39,8 +37,8 @@ pub struct Server<T: ProtocolType> {
     manifest: Manifest<T>,
     socket_sender: PacketSender,
     socket_receiver: Box<dyn PacketReceiver>,
-    global_replica_store: DenseSlotMap<ReplicaKey, T>,
-    global_object_set: HashSet<ObjectKey>,
+    global_replica_store: DenseSlotMap<ComponentKey, T>,
+    global_object_set: HashSet<ComponentKey>,
     mut_handler: Ref<MutHandler>,
     users: DenseSlotMap<UserKey, User>,
     rooms: DenseSlotMap<RoomKey, Room>,
@@ -172,14 +170,7 @@ impl<U: ProtocolType> Server<U> {
             while let Some((pawn_key, command)) =
                 connection.get_incoming_command(self.tick_manager.get_tick())
             {
-                match pawn_key {
-                    GlobalPawnKey::Object(_) => {
-                        //events.push_back(Ok(Event::Command(*user_key, object_key, command)));
-                    }
-                    GlobalPawnKey::Entity(entity_key) => {
-                        events.push_back(Ok(Event::CommandEntity(*user_key, entity_key, command)));
-                    }
-                }
+                    events.push_back(Ok(Event::CommandEntity(*user_key, pawn_key, command)));
             }
             //receive messages from anyone
             while let Some(message) = connection.get_incoming_message() {
@@ -253,9 +244,9 @@ impl<U: ProtocolType> Server<U> {
 
     /// Register an Object with the Server, whereby the Server will sync
     /// replicas of the Object to all connected Clients for which the Object
-    /// is in scope. Gives back an ObjectKey which can be used to get the
+    /// is in scope. Gives back an ComponentKey which can be used to get the
     /// reference to the Object from the Server once again
-    fn register_object<T: ImplRef<U>>(&mut self, object_ref: &T) -> ObjectKey {
+    fn register_object<T: ImplRef<U>>(&mut self, object_ref: &T) -> ComponentKey {
         let dyn_ref = object_ref.dyn_ref();
         let new_mutator_ref: Ref<PropertyMutator> =
             Ref::new(PropertyMutator::new(&self.mut_handler));
@@ -286,7 +277,7 @@ impl<U: ProtocolType> Server<U> {
 
     /// Deregisters an Object with the Server, deleting local replicas of the
     /// Object on each Client
-//    pub fn deregister_object(&mut self, key: &ObjectKey) -> U {
+//    pub fn deregister_object(&mut self, key: &ComponentKey) -> U {
 //        if !self.global_object_set.contains(key) {
 //            panic!("attempted to deregister an Object which was never registered");
 //        }
@@ -307,7 +298,7 @@ impl<U: ProtocolType> Server<U> {
 
     /// Assigns an Object to a specific User, making it a Pawn for that User
     /// (meaning that the User will be able to issue Commands to that Pawn)
-//    pub fn assign_pawn(&mut self, user_key: &UserKey, object_key: &ObjectKey) {
+//    pub fn assign_pawn(&mut self, user_key: &UserKey, object_key: &ComponentKey) {
 //        // check that object_key references an object, not a component
 //        if self.global_object_set.contains(object_key) {
 //            if let Some(object) = self.global_replica_store.get(*object_key) {
@@ -324,7 +315,7 @@ impl<U: ProtocolType> Server<U> {
 
     /// Unassigns a Pawn from a specific User (meaning that the User will be
     /// unable to issue Commands to that Pawn)
-//    pub fn unassign_pawn(&mut self, user_key: &UserKey, object_key: &ObjectKey) {
+//    pub fn unassign_pawn(&mut self, user_key: &UserKey, object_key: &ComponentKey) {
 //        if let Some(user_connection) = self.client_connections.get_mut(user_key) {
 //            user_connection.remove_pawn(object_key);
 //        }
@@ -425,7 +416,7 @@ impl<U: ProtocolType> Server<U> {
     pub fn remove_component(&mut self, component_key: &ComponentKey) -> U {
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                Self::user_remove_object(user_connection, component_key);
+                Self::user_remove_component(user_connection, component_key);
             }
         }
 
@@ -468,7 +459,7 @@ impl<U: ProtocolType> Server<U> {
     }
 
     /// Iterate through all the Server's Objects
-//    pub fn objects_iter(&self) -> std::collections::hash_set::Iter<ObjectKey> {
+//    pub fn objects_iter(&self) -> std::collections::hash_set::Iter<ComponentKey> {
 //        return self.global_object_set.iter();
 //    }
 
@@ -533,10 +524,10 @@ impl<U: ProtocolType> Server<U> {
         return self.rooms.len();
     }
 
-    /// Add an Object to a Room, given the appropriate RoomKey & ObjectKey
+    /// Add an Object to a Room, given the appropriate RoomKey & ComponentKey
     /// Objects will only ever be in-scope for Users which are in a Room with
     /// them
-//    pub fn room_add_object(&mut self, room_key: &RoomKey, object_key: &ObjectKey) {
+//    pub fn room_add_object(&mut self, room_key: &RoomKey, object_key: &ComponentKey) {
 //        if self.global_object_set.contains(object_key) {
 //            if let Some(room) = self.rooms.get_mut(*room_key) {
 //                room.add_object(object_key);
@@ -544,8 +535,8 @@ impl<U: ProtocolType> Server<U> {
 //        }
 //    }
 
-    /// Remove an Object from a Room, given the appropriate RoomKey & ObjectKey
-//    pub fn room_remove_object(&mut self, room_key: &RoomKey, object_key: &ObjectKey) {
+    /// Remove an Object from a Room, given the appropriate RoomKey & ComponentKey
+//    pub fn room_remove_object(&mut self, room_key: &RoomKey, object_key: &ComponentKey) {
 //        if let Some(room) = self.rooms.get_mut(*room_key) {
 //            room.remove_object(object_key);
 //        }
@@ -592,7 +583,7 @@ impl<U: ProtocolType> Server<U> {
 //        &mut self,
 //        room_key: &RoomKey,
 //        user_key: &UserKey,
-//        object_key: &ObjectKey,
+//        object_key: &ComponentKey,
 //        in_scope: bool,
 //    ) {
 //        if !self.global_object_set.contains(object_key) {
@@ -617,8 +608,8 @@ impl<U: ProtocolType> Server<U> {
     /// Return a collection of Object Scope Sets, being a unique combination of
     /// a related Room, User, and Object, used to determine which objects to
     /// replicate to which users
-//    pub fn object_scope_sets(&self) -> Vec<(RoomKey, UserKey, ObjectKey)> {
-//        let mut list: Vec<(RoomKey, UserKey, ObjectKey)> = Vec::new();
+//    pub fn object_scope_sets(&self) -> Vec<(RoomKey, UserKey, ComponentKey)> {
+//        let mut list: Vec<(RoomKey, UserKey, ComponentKey)> = Vec::new();
 //
 //        // TODO: precache this, instead of generating a new list every call
 //        // likely this is called A LOT
@@ -680,9 +671,9 @@ impl<U: ProtocolType> Server<U> {
         self.tick_manager.get_tick()
     }
 
-    /// Returns true if a given User has an Object with a given ObjectKey
+    /// Returns true if a given User has an Object with a given ComponentKey
     /// in-scope currently
-//    pub fn user_scope_has_object(&self, user_key: &UserKey, object_key: &ObjectKey) -> bool {
+//    pub fn user_scope_has_object(&self, user_key: &UserKey, object_key: &ComponentKey) -> bool {
 //        if let Some(user_connection) = self.client_connections.get(user_key) {
 //            return user_connection.has_object(object_key);
 //        }
@@ -1005,20 +996,20 @@ impl<U: ProtocolType> Server<U> {
 
 //    fn user_add_object(
 //        user_connection: &mut ClientConnection<U>,
-//        object_key: &ObjectKey,
+//        object_key: &ComponentKey,
 //        object_ref: &U,
 //    ) {
 //        //add object to user connection
 //        user_connection.add_object(object_key, &object_ref.inner_ref());
 //    }
 
-    fn user_remove_object(user_connection: &mut ClientConnection<U>, object_key: &ObjectKey) {
-        //remove object from user connection
-        user_connection.remove_object(object_key);
+    fn user_remove_component(user_connection: &mut ClientConnection<U>, object_key: &ComponentKey) {
+        //remove component from user connection
+        user_connection.remove_component(object_key);
     }
 
     fn user_add_entity(
-        object_store: &DenseSlotMap<ObjectKey, U>,
+        object_store: &DenseSlotMap<ComponentKey, U>,
         user_connection: &mut ClientConnection<U>,
         entity_key: &EntityKey,
         entity_component_record: &Ref<ComponentRecord<ComponentKey>>,

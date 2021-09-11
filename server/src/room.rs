@@ -1,6 +1,6 @@
 use std::collections::{hash_set::Iter, HashSet, VecDeque};
 
-use super::{keys::ObjectKey, user::user_key::UserKey};
+use super::{keys::component_key::ComponentKey, user::user_key::UserKey};
 use naia_shared::EntityKey;
 
 #[allow(missing_docs)]
@@ -12,8 +12,8 @@ pub mod room_key {
 
 pub struct Room {
     users: HashSet<UserKey>,
-    objects: HashSet<ObjectKey>,
-    object_removal_queue: VecDeque<(UserKey, ObjectKey)>,
+    objects: HashSet<ComponentKey>,
+    object_removal_queue: VecDeque<(UserKey, ComponentKey)>,
     entities: HashSet<EntityKey>,
     entity_removal_queue: VecDeque<(UserKey, EntityKey)>,
 }
@@ -29,11 +29,11 @@ impl Room {
         }
     }
 
-    pub fn add_object(&mut self, object_key: &ObjectKey) {
+    pub fn add_object(&mut self, object_key: &ComponentKey) {
         self.objects.insert(*object_key);
     }
 
-    pub fn remove_object(&mut self, object_key: &ObjectKey) {
+    pub fn remove_object(&mut self, object_key: &ComponentKey) {
         self.objects.remove(object_key);
         for user_key in self.users.iter() {
             self.object_removal_queue
@@ -41,7 +41,7 @@ impl Room {
         }
     }
 
-    pub fn objects_iter(&self) -> Iter<ObjectKey> {
+    pub fn objects_iter(&self) -> Iter<ComponentKey> {
         return self.objects.iter();
     }
 
@@ -61,7 +61,7 @@ impl Room {
         return self.users.iter();
     }
 
-    pub fn pop_object_removal_queue(&mut self) -> Option<(UserKey, ObjectKey)> {
+    pub fn pop_object_removal_queue(&mut self) -> Option<(UserKey, ComponentKey)> {
         return self.object_removal_queue.pop_front();
     }
 

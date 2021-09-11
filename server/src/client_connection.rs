@@ -2,14 +2,13 @@ use std::net::SocketAddr;
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityKey, ManagerType, Manifest, PacketReader, PacketType,
-    PawnKey, ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader, ComponentRecord
+    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader, ComponentRecord
 };
 
 use super::{
-    command_receiver::CommandReceiver, keys::ObjectKey, mut_handler::MutHandler,
+    command_receiver::CommandReceiver, keys::component_key::ComponentKey, mut_handler::MutHandler,
     packet_writer::PacketWriter, ping_manager::PingManager, replica_manager::ReplicaManager,
 };
-use crate::{ComponentKey, GlobalPawnKey};
 
 pub struct ClientConnection<U: ProtocolType> {
     connection: Connection<U>,
@@ -108,55 +107,43 @@ impl<U: ProtocolType> ClientConnection<U> {
         }
     }
 
-//    pub fn has_object(&self, key: &ObjectKey) -> bool {
+//    pub fn has_object(&self, key: &ComponentKey) -> bool {
 //        return self.replica_manager.has_object(key);
 //    }
 
-//    pub fn add_object(&mut self, key: &ObjectKey, object: &Ref<dyn Replicate<U>>) {
+//    pub fn add_object(&mut self, key: &ComponentKey, object: &Ref<dyn Replicate<U>>) {
 //        self.replica_manager.add_object(key, object);
 //    }
 
-    pub fn remove_object(&mut self, key: &ObjectKey) {
-        self.replica_manager.remove_object(key);
+    pub fn remove_component(&mut self, key: &ComponentKey) {
+        self.replica_manager.remove_component(key);
     }
 
     pub fn collect_replica_updates(&mut self) {
         self.replica_manager.collect_replica_updates();
     }
 
-//    pub fn has_pawn(&self, key: &ObjectKey) -> bool {
+//    pub fn has_pawn(&self, key: &ComponentKey) -> bool {
 //        return self.replica_manager.has_pawn(key);
 //    }
 
-//    pub fn add_pawn(&mut self, key: &ObjectKey) {
+//    pub fn add_pawn(&mut self, key: &ComponentKey) {
 //        self.replica_manager.add_pawn(key);
 //    }
 
-//    pub fn remove_pawn(&mut self, key: &ObjectKey) {
+//    pub fn remove_pawn(&mut self, key: &ComponentKey) {
 //        self.replica_manager.remove_pawn(key);
 //    }
 
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(GlobalPawnKey, U)> {
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(EntityKey, U)> {
         if let Some((local_pawn_key, command)) =
             self.command_receiver.pop_incoming_command(server_tick)
         {
-            match local_pawn_key {
-                PawnKey::Object(local_object_key) => {
-                    if let Some(global_pawn_key) = self
+            if let Some(global_pawn_key) = self
                         .replica_manager
-                        .get_global_key_from_local(local_object_key)
-                    {
-                        return Some((GlobalPawnKey::Object(*global_pawn_key), command));
-                    }
-                }
-                PawnKey::Entity(local_entity_key) => {
-                    if let Some(global_pawn_key) = self
-                        .replica_manager
-                        .get_global_entity_key_from_local(local_entity_key)
-                    {
-                        return Some((GlobalPawnKey::Entity(*global_pawn_key), command));
-                    }
-                }
+                        .get_global_entity_key_from_local(local_pawn_key)
+            {
+                return Some((*global_pawn_key, command));
             }
         }
         return None;

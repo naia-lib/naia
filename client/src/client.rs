@@ -6,7 +6,7 @@ use naia_client_socket::{ClientSocket, PacketReceiver, PacketSender};
 
 pub use naia_shared::{
     ConnectionConfig, HostTickManager, ImplRef, Instant, LocalComponentKey, LocalEntityKey,
-    LocalObjectKey, LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PawnKey,
+    ManagerType, Manifest, PacketReader, PacketType,
     ProtocolType, Ref, Replicate, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
 };
 
@@ -137,20 +137,6 @@ impl<T: ProtocolType> Client<T> {
                 while let Some(action) = connection.get_incoming_replica_action() {
                     let event: Event<T> = {
                         match action {
-//                            ReplicaAction::CreateObject(local_key) => {
-//                                Event::CreateObject(local_key)
-//                            }
-//                            ReplicaAction::DeleteObject(local_key, replica) => {
-//                                Event::DeleteObject(local_key, replica.clone())
-//                            }
-//                            ReplicaAction::UpdateObject(local_key) => {
-//                                Event::UpdateObject(local_key)
-//                            }
-//                            ReplicaAction::AssignPawn(local_key) => Event::AssignPawn(local_key),
-//                            ReplicaAction::UnassignPawn(local_key) => {
-//                                Event::UnassignPawn(local_key)
-//                            }
-//                            ReplicaAction::ResetPawn(local_key) => Event::ResetPawn(local_key),
                             ReplicaAction::CreateEntity(local_key, component_list) => {
                                 Event::CreateEntity(local_key, component_list)
                             }
@@ -172,10 +158,7 @@ impl<T: ProtocolType> Client<T> {
                             ReplicaAction::UpdateComponent(entity_key, component_key) => {
                                 Event::UpdateComponent(entity_key, component_key)
                             }
-                            ReplicaAction::RemoveComponent(
-                                entity_key,
-                                component,
-                            ) => {
+                            ReplicaAction::RemoveComponent(entity_key, component) => {
                                 Event::RemoveComponent(entity_key, component.clone())
                             }
                         }
@@ -184,37 +167,17 @@ impl<T: ProtocolType> Client<T> {
                 }
                 // receive replay command
                 while let Some((pawn_key, command)) = connection.get_incoming_replay() {
-                    match pawn_key {
-                        PawnKey::Object(_) => {
-//                            events.push_back(Ok(Event::ReplayCommand(
-//                                object_key,
-//                                command.borrow().copy_to_protocol(),
-//                            )));
-                        }
-                        PawnKey::Entity(entity_key) => {
-                            events.push_back(Ok(Event::ReplayCommandEntity(
-                                entity_key,
-                                command.borrow().copy_to_protocol(),
-                            )));
-                        }
-                    }
+                    events.push_back(Ok(Event::ReplayCommandEntity(
+                        pawn_key,
+                        command.borrow().copy_to_protocol(),
+                    )));
                 }
                 // receive command
                 while let Some((pawn_key, command)) = connection.get_incoming_command() {
-                    match pawn_key {
-                        PawnKey::Object(_) => {
-//                            events.push_back(Ok(Event::NewCommand(
-//                                object_key,
-//                                command.borrow().copy_to_protocol(),
-//                            )));
-                        }
-                        PawnKey::Entity(entity_key) => {
-                            events.push_back(Ok(Event::NewCommandEntity(
-                                entity_key,
-                                command.borrow().copy_to_protocol(),
-                            )));
-                        }
-                    }
+                    events.push_back(Ok(Event::NewCommandEntity(
+                        pawn_key,
+                        command.borrow().copy_to_protocol(),
+                    )));
                 }
                 // send heartbeats
                 if connection.should_send_heartbeat() {
@@ -270,18 +233,6 @@ impl<T: ProtocolType> Client<T> {
         }
     }
 
-    /// Queues up a Pawn Object Command to be sent to the Server
-//    pub fn send_object_command<U: ImplRef<T>>(
-//        &mut self,
-//        pawn_object_key: &LocalObjectKey,
-//        command_ref: &U,
-//    ) {
-//        if let Some(connection) = &mut self.server_connection {
-//            let dyn_ref = command_ref.dyn_ref();
-//            connection.object_queue_command(pawn_object_key, &dyn_ref);
-//        }
-//    }
-
     /// Queues up a Pawn Entity Command to be sent to the Server
     pub fn send_entity_command<U: ImplRef<T>>(
         &mut self,
@@ -306,28 +257,10 @@ impl<T: ProtocolType> Client<T> {
 
     // objects
 
-    /// Get a reference to an Object currently in scope for the Client, given
-    /// that Object's Key
-//    pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
-//        if let Some(connection) = &self.server_connection {
-//            return connection.get_object(key);
-//        }
-//        return None;
-//    }
-
-    /// Get whether or not the Object currently in scope for the Client, given
-    /// that Object's Key
-//    pub fn has_object(&self, key: &LocalObjectKey) -> bool {
-//        if let Some(connection) = &self.server_connection {
-//            return connection.has_object(key);
-//        }
-//        return false;
-//    }
-
     /// Component-themed alias for `get_object`
     pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
         if let Some(connection) = &self.server_connection {
-            return connection.get_object(key);
+            return connection.get_component(key);
         }
         return None;
     }
@@ -355,56 +288,6 @@ impl<T: ProtocolType> Client<T> {
     pub fn get_pawn_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
         if let Some(connection) = &self.server_connection {
             return connection.get_pawn_component_by_type::<R>(key);
-        }
-        return None;
-    }
-
-    /// Return an iterator to the collection of keys to all Objects tracked
-    /// by the Client
-//    pub fn object_keys(&self) -> Option<Vec<LocalObjectKey>> {
-//        if let Some(connection) = &self.server_connection {
-//            return Some(connection.object_keys());
-//        }
-//        return None;
-//    }
-
-    /// Return an iterator to the collection of keys to all Components tracked
-    /// by the Client
-    pub fn component_keys(&self) -> Option<Vec<LocalComponentKey>> {
-        if let Some(connection) = &self.server_connection {
-            return Some(connection.component_keys());
-        }
-        return None;
-    }
-
-    // pawns
-
-    /// Get a reference to a Pawn
-    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&T> {
-        if let Some(connection) = &self.server_connection {
-            return connection.get_pawn(key);
-        }
-        return None;
-    }
-
-    /// Get a reference to a Pawn, used for setting it's state
-    pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&T> {
-        if let Some(connection) = self.server_connection.as_mut() {
-            return connection.get_pawn_mut(key);
-        }
-        return None;
-    }
-
-    /// Return an iterator to the collection of keys to all Pawns tracked by
-    /// the Client
-    pub fn pawn_keys(&self) -> Option<Vec<LocalObjectKey>> {
-        if let Some(connection) = &self.server_connection {
-            return Some(
-                connection
-                    .pawn_keys()
-                    .cloned()
-                    .collect::<Vec<LocalObjectKey>>(),
-            );
         }
         return None;
     }
