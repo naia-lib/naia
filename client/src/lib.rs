@@ -18,8 +18,6 @@ mod client_config;
 mod command_receiver;
 mod command_sender;
 mod connection_state;
-mod dual_command_receiver;
-mod dual_command_sender;
 mod error;
 mod event;
 mod packet_writer;
@@ -32,7 +30,7 @@ mod tick_queue;
 
 pub use naia_shared::{
     find_my_ip_address, wrapping_diff, Instant, LinkConditionerConfig, LocalComponentKey,
-    LocalEntityKey, LocalObjectKey, LocalReplicaKey, NaiaKey, Random, Ref, ReplicaEq, Replicate, ProtocolType
+    LocalEntityKey, NaiaKey, Random, Ref, ReplicaEq, Replicate, ProtocolType
 };
 
 pub use client::Client;

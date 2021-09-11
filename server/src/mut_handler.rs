@@ -2,13 +2,13 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use naia_shared::{DiffMask, Ref};
 
-use super::keys::replica_key::ReplicaKey;
+use super::keys::component_key::ComponentKey;
 
 use indexmap::IndexMap;
 
 #[derive(Debug)]
 pub struct MutHandler {
-    replica_diff_mask_list_map: HashMap<ReplicaKey, IndexMap<SocketAddr, Ref<DiffMask>>>,
+    replica_diff_mask_list_map: HashMap<ComponentKey, IndexMap<SocketAddr, Ref<DiffMask>>>,
 }
 
 impl MutHandler {
@@ -18,7 +18,7 @@ impl MutHandler {
         })
     }
 
-    pub fn mutate(&mut self, replica_key: &ReplicaKey, property_index: u8) {
+    pub fn mutate(&mut self, replica_key: &ComponentKey, property_index: u8) {
         if let Some(diff_mask_list) = self.replica_diff_mask_list_map.get_mut(replica_key) {
             for (_, mask_ref) in diff_mask_list.iter_mut() {
                 mask_ref.borrow_mut().set_bit(property_index, true);
@@ -26,7 +26,7 @@ impl MutHandler {
         }
     }
 
-    pub fn clear_replica(&mut self, address: &SocketAddr, replica_key: &ReplicaKey) {
+    pub fn clear_replica(&mut self, address: &SocketAddr, replica_key: &ComponentKey) {
         if let Some(diff_mask_list) = self.replica_diff_mask_list_map.get_mut(replica_key) {
             if let Some(mask_ref) = diff_mask_list.get(address) {
                 mask_ref.borrow_mut().clear();
@@ -37,7 +37,7 @@ impl MutHandler {
     pub fn set_replica(
         &mut self,
         address: &SocketAddr,
-        replica_key: &ReplicaKey,
+        replica_key: &ComponentKey,
         other_replica: &DiffMask,
     ) {
         if let Some(diff_mask_list) = self.replica_diff_mask_list_map.get_mut(replica_key) {
@@ -47,7 +47,7 @@ impl MutHandler {
         }
     }
 
-    pub fn register_replica(&mut self, replica_key: &ReplicaKey) {
+    pub fn register_replica(&mut self, replica_key: &ComponentKey) {
         if self.replica_diff_mask_list_map.contains_key(replica_key) {
             panic!("Replica cannot register with server more than once!");
         }
@@ -55,14 +55,14 @@ impl MutHandler {
             .insert(*replica_key, IndexMap::new());
     }
 
-    pub fn deregister_replica(&mut self, replica_key: &ReplicaKey) {
+    pub fn deregister_replica(&mut self, replica_key: &ComponentKey) {
         self.replica_diff_mask_list_map.remove(replica_key);
     }
 
     pub fn register_mask(
         &mut self,
         address: &SocketAddr,
-        replica_key: &ReplicaKey,
+        replica_key: &ComponentKey,
         mask: &Ref<DiffMask>,
     ) {
         if let Some(diff_mask_list) = self.replica_diff_mask_list_map.get_mut(replica_key) {
@@ -70,7 +70,7 @@ impl MutHandler {
         }
     }
 
-    pub fn deregister_mask(&mut self, address: &SocketAddr, replica_key: &ReplicaKey) {
+    pub fn deregister_mask(&mut self, address: &SocketAddr, replica_key: &ComponentKey) {
         if let Some(diff_mask_list) = self.replica_diff_mask_list_map.get_mut(replica_key) {
             diff_mask_list.remove(address);
         }
