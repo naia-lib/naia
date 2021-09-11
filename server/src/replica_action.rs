@@ -1,5 +1,5 @@
 use naia_shared::{
-    DiffMask, EntityKey, LocalComponentKey, LocalEntityKey, LocalObjectKey, LocalReplicaKey,
+    DiffMask, EntityKey, LocalComponentKey, LocalEntityKey, LocalReplicaKey,
     ProtocolType, Ref, ReplicaActionType, Replicate,
 };
 

@@ -1,8 +1,8 @@
-use std::{collections::HashSet, net::SocketAddr};
+use std::net::SocketAddr;
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityKey, ManagerType, Manifest, PacketReader, PacketType,
-    PawnKey, ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
+    PawnKey, ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader, ComponentRecord
 };
 
 use super::{
@@ -108,13 +108,13 @@ impl<U: ProtocolType> ClientConnection<U> {
         }
     }
 
-    pub fn has_object(&self, key: &ObjectKey) -> bool {
-        return self.replica_manager.has_object(key);
-    }
+//    pub fn has_object(&self, key: &ObjectKey) -> bool {
+//        return self.replica_manager.has_object(key);
+//    }
 
-    pub fn add_object(&mut self, key: &ObjectKey, object: &Ref<dyn Replicate<U>>) {
-        self.replica_manager.add_object(key, object);
-    }
+//    pub fn add_object(&mut self, key: &ObjectKey, object: &Ref<dyn Replicate<U>>) {
+//        self.replica_manager.add_object(key, object);
+//    }
 
     pub fn remove_object(&mut self, key: &ObjectKey) {
         self.replica_manager.remove_object(key);
@@ -124,17 +124,17 @@ impl<U: ProtocolType> ClientConnection<U> {
         self.replica_manager.collect_replica_updates();
     }
 
-    pub fn has_pawn(&self, key: &ObjectKey) -> bool {
-        return self.replica_manager.has_pawn(key);
-    }
+//    pub fn has_pawn(&self, key: &ObjectKey) -> bool {
+//        return self.replica_manager.has_pawn(key);
+//    }
 
-    pub fn add_pawn(&mut self, key: &ObjectKey) {
-        self.replica_manager.add_pawn(key);
-    }
+//    pub fn add_pawn(&mut self, key: &ObjectKey) {
+//        self.replica_manager.add_pawn(key);
+//    }
 
-    pub fn remove_pawn(&mut self, key: &ObjectKey) {
-        self.replica_manager.remove_pawn(key);
-    }
+//    pub fn remove_pawn(&mut self, key: &ObjectKey) {
+//        self.replica_manager.remove_pawn(key);
+//    }
 
     pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(GlobalPawnKey, U)> {
         if let Some((local_pawn_key, command)) =
@@ -175,11 +175,11 @@ impl<U: ProtocolType> ClientConnection<U> {
     pub fn add_entity(
         &mut self,
         key: &EntityKey,
-        components_ref: &Ref<HashSet<ComponentKey>>,
+        entity_component_record: &Ref<ComponentRecord<ComponentKey>>,
         component_list: &Vec<(ComponentKey, Ref<dyn Replicate<U>>)>,
     ) {
         self.replica_manager
-            .add_entity(key, components_ref, component_list);
+            .add_entity(key, entity_component_record, component_list);
     }
 
     pub fn remove_entity(&mut self, key: &EntityKey) {

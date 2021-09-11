@@ -138,19 +138,19 @@ fn naia_client_update(
                     }
                 }
             }
-            Ok(Event::CreateEntity(naia_entity_key, component_keys)) => {
+            Ok(Event::CreateEntity(naia_entity_key, component_list)) => {
                 let mut entity = commands.spawn();
                 entity.insert(NonPawn).insert(Key(naia_entity_key));
 
                 info!("create entity");
 
-                for component_key in component_keys {
-                    match client.get_component(&component_key).cloned() {
-                        Some(Protocol::Position(position_ref)) => {
+                for component_protocol in component_list {
+                    match component_protocol {
+                        Protocol::Position(position_ref) => {
                             info!("add position to entity");
                             entity.insert(position_ref);
                         }
-                        Some(Protocol::Color(color_ref)) => {
+                        Protocol::Color(color_ref) => {
                             info!("add color to entity");
                             entity.insert(Ref::clone(&color_ref));
                             let color = color_ref.borrow();

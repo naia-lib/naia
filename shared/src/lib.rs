@@ -36,6 +36,7 @@ mod sequence_buffer;
 mod shared_config;
 mod standard_header;
 mod wrapping_number;
+mod component_record;
 
 /// Commonly used utility methods to be used by naia-server & naia-client
 pub mod utils;
@@ -45,6 +46,7 @@ pub use naia_socket_shared::{
 };
 
 pub use ack_manager::AckManager;
+pub use component_record::ComponentRecord;
 pub use connection::Connection;
 pub use connection_config::ConnectionConfig;
 pub use diff_mask::DiffMask;

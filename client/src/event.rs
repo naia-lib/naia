@@ -1,4 +1,4 @@
-use naia_shared::{LocalComponentKey, LocalEntityKey, LocalObjectKey, ProtocolType};
+use naia_shared::{LocalEntityKey, ProtocolType};
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
@@ -38,17 +38,17 @@ pub enum Event<T: ProtocolType> {
     //DeleteObject(LocalObjectKey, T),
     /// Occurs when an Entity on the Server has come into scope for the Client,
     /// and should be added to the local client's ECS "world"
-    CreateEntity(LocalEntityKey, Vec<LocalComponentKey>),
+    CreateEntity(LocalEntityKey, Vec<T>),
     /// Occurs when an Entity on the Server has left the Client's scope, and
     /// should be removed from the local client's ECS "world"
     DeleteEntity(LocalEntityKey),
     /// Occurs when a Component should be added to a given Entity
-    AddComponent(LocalEntityKey, LocalComponentKey),
+    AddComponent(LocalEntityKey, T),
     /// Occurs when a Component has had a state change on the Server while
     /// the Entity it is attached to has come into scope for the Client
-    UpdateComponent(LocalEntityKey, LocalComponentKey),
+    UpdateComponent(LocalEntityKey, T),
     /// Occurs when a Component should be removed from the given Entity
-    RemoveComponent(LocalEntityKey, LocalComponentKey, T),
+    RemoveComponent(LocalEntityKey, T),
     /// Occurs when an Entity has been assigned to the local host as a Pawn,
     /// meaning it can receive Commands from the Client
     AssignPawnEntity(LocalEntityKey),

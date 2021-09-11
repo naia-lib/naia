@@ -18,7 +18,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let read_full_method = get_read_full_method(&type_name, &input.data);
     let read_partial_method = get_read_partial_method(&type_name, &input.data);
     let inner_ref_method = get_inner_ref_method(&type_name, &input.data);
-    let typed_inner_ref_method = get_typed_inner_ref_method(&type_name, &input.data);
+    let to_typed_ref_method = get_to_typed_ref_method(&type_name, &input.data);
     let conversion_methods = get_conversion_methods(&type_name, &input.data);
     let equals_method = get_equals_method(&type_name, &input.data);
     let mirror_method = get_mirror_method(&type_name, &input.data);
@@ -51,7 +51,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
             #read_full_method
             #read_partial_method
             #inner_ref_method
-            #typed_inner_ref_method
+            #to_typed_ref_method
             #equals_method
             #mirror_method
             #write_method
@@ -162,7 +162,7 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 }
 
-fn get_typed_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
+fn get_to_typed_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     let variants = match *data {
         Data::Enum(ref data) => {
             let mut output = quote! {};
@@ -189,7 +189,7 @@ fn get_typed_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn typed_inner_ref<V: Replicate<#type_name>>(&self) -> Option<Ref<V>> {
+        fn to_typed_ref<V: Replicate<#type_name>>(&self) -> Option<Ref<V>> {
             match self {
                 #variants
             }

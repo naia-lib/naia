@@ -13,14 +13,13 @@ use naia_server_socket::{Packet, PacketReceiver, PacketSender, ServerSocket};
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, EntityKey, HostTickManager, ImplRef, Instant,
     KeyGenerator, LocalReplicaKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
-    ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
+    ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp, ComponentRecord
 };
 
 use crate::{ComponentKey, GlobalPawnKey};
 
 use super::{
     client_connection::ClientConnection,
-    entity_component_record::EntityComponentRecord,
     error::NaiaServerError,
     event::Event,
     keys::{replica_key::ReplicaKey, ObjectKey},
@@ -54,10 +53,9 @@ pub struct Server<T: ProtocolType> {
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
     tick_manager: TickManager,
-    object_scope_map: HashMap<(RoomKey, UserKey, ObjectKey), bool>,
     entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
     entity_key_generator: KeyGenerator<EntityKey>,
-    entity_component_map: HashMap<EntityKey, EntityComponentRecord>,
+    entity_component_map: HashMap<EntityKey, Ref<ComponentRecord<ComponentKey>>>,
     component_entity_map: HashMap<ComponentKey, EntityKey>,
 }
 
@@ -94,7 +92,6 @@ impl<U: ProtocolType> Server<U> {
             manifest,
             global_replica_store: DenseSlotMap::with_key(),
             global_object_set: HashSet::new(),
-            object_scope_map: HashMap::new(),
             entity_scope_map: HashMap::new(),
             mut_handler: MutHandler::new(),
             socket_sender,
@@ -176,7 +173,7 @@ impl<U: ProtocolType> Server<U> {
                 connection.get_incoming_command(self.tick_manager.get_tick())
             {
                 match pawn_key {
-                    GlobalPawnKey::Object(object_key) => {
+                    GlobalPawnKey::Object(_) => {
                         //events.push_back(Ok(Event::Command(*user_key, object_key, command)));
                     }
                     GlobalPawnKey::Entity(entity_key) => {
@@ -234,7 +231,7 @@ impl<U: ProtocolType> Server<U> {
     /// Clients
     pub fn send_all_updates(&mut self) {
         // update object scopes
-        self.update_object_scopes();
+//        self.update_object_scopes();
 
         // update entity scopes
         self.update_entity_scopes();
@@ -341,7 +338,7 @@ impl<U: ProtocolType> Server<U> {
     pub fn register_entity(&mut self) -> EntityKey {
         let entity_key: EntityKey = self.entity_key_generator.generate();
         self.entity_component_map
-            .insert(entity_key, EntityComponentRecord::new());
+            .insert(entity_key, Ref::new(ComponentRecord::new()));
         return entity_key;
     }
 
@@ -368,7 +365,7 @@ impl<U: ProtocolType> Server<U> {
                     &self.global_replica_store,
                     user_connection,
                     entity_key,
-                    &entity_component_record.get_component_set(),
+                    &entity_component_record,
                 );
 
                 // assign entity to user as a Pawn
@@ -417,7 +414,7 @@ impl<U: ProtocolType> Server<U> {
         self.component_entity_map.insert(component_key, *entity_key);
 
         if let Some(entity_component_record) = self.entity_component_map.get_mut(&entity_key) {
-            entity_component_record.get_component_set().borrow_mut().insert(component_key);
+            entity_component_record.borrow_mut().insert_component(&component_key, dyn_ref.borrow().get_type_id());
         }
 
         return component_key;
@@ -426,23 +423,21 @@ impl<U: ProtocolType> Server<U> {
     /// Deregisters a Component with the Server, deleting local copies of the
     /// Component on each Client
     pub fn remove_component(&mut self, component_key: &ComponentKey) -> U {
-        let entity_key = self
-            .component_entity_map
-            .remove(component_key)
-            .expect("attempting to remove a component which does not exist");
-        let mut component_set = self
-            .entity_component_map
-            .get(&entity_key)
-            .expect("component error during initialization causing issue with removal of component")
-            .get_component_set()
-            .borrow_mut();
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
                 Self::user_remove_object(user_connection, component_key);
             }
         }
 
-        component_set.remove(component_key);
+        let entity_key = self
+            .component_entity_map
+            .remove(component_key)
+            .expect("attempting to remove a component which does not exist");
+        self.entity_component_map
+            .get(&entity_key)
+            .expect("component error during initialization causing issue with removal of component")
+            .borrow_mut()
+            .remove_component(component_key);
 
         self.mut_handler
             .borrow_mut()
@@ -462,10 +457,10 @@ impl<U: ProtocolType> Server<U> {
     /// Given an EntityKey & a Component type, get a reference to a registered Component being tracked
     /// by the Server
     pub fn get_component_by_type<T: Replicate<U>>(&self, key: &EntityKey) -> Option<Ref<T>> {
-        if let Some(entity_component_record) = self.entity_component_map.get(key) {
-            if let Some(component_key) = entity_component_record.get_key_from_type(&TypeId::of::<T>()) {
+        if let Some(component_record) = self.entity_component_map.get(key) {
+            if let Some(component_key) = component_record.borrow().get_key_from_type(&TypeId::of::<T>()) {
                 if let Some(replica_protocol) = self.global_replica_store.get(*component_key) {
-                    return replica_protocol.typed_inner_ref::<T>();
+                    return replica_protocol.to_typed_ref::<T>();
                 }
             }
         }
@@ -492,10 +487,9 @@ impl<U: ProtocolType> Server<U> {
         let mut output = Vec::<ComponentKey>::new();
 
         // TODO: make this more efficient by some fancy 'collect' chaining type method?
-        if let Some(entity_component_record) = self.entity_component_map.get(entity_key) {
-            let component_set: &HashSet<ComponentKey> = &entity_component_record.get_component_set().borrow();
-            for component_key in component_set {
-                output.push(*component_key);
+        if let Some(component_record) = self.entity_component_map.get(entity_key) {
+            for component_key in component_record.borrow().get_component_keys() {
+                output.push(component_key);
             }
         }
 
@@ -912,49 +906,49 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    fn update_object_scopes(&mut self) {
-        for (room_key, room) in self.rooms.iter_mut() {
-            while let Some((removed_user, removed_object)) = room.pop_object_removal_queue() {
-                if let Some(user_connection) = self.client_connections.get_mut(&removed_user) {
-                    Self::user_remove_object(user_connection, &removed_object);
-                }
-            }
-
-            for user_key in room.users_iter() {
-                for object_key in room.objects_iter() {
-                    if let Some(user_connection) = self.client_connections.get_mut(user_key) {
-                        let currently_in_scope = user_connection.has_object(object_key);
-
-                        let should_be_in_scope: bool;
-                        if user_connection.has_pawn(object_key) {
-                            should_be_in_scope = true;
-                        } else {
-                            let key = (room_key, *user_key, *object_key);
-                            if let Some(in_scope) = self.object_scope_map.get(&key) {
-                                should_be_in_scope = *in_scope;
-                            } else {
-                                should_be_in_scope = false;
-                            }
-                        }
-
-                        if should_be_in_scope {
-                            if !currently_in_scope {
-                                // add object to the connections local scope
-                                if let Some(object) = self.global_replica_store.get(*object_key) {
-                                    Self::user_add_object(user_connection, object_key, &object);
-                                }
-                            }
-                        } else {
-                            if currently_in_scope {
-                                // remove object from the connections local scope
-                                Self::user_remove_object(user_connection, object_key);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+//    fn update_object_scopes(&mut self) {
+//        for (room_key, room) in self.rooms.iter_mut() {
+//            while let Some((removed_user, removed_object)) = room.pop_object_removal_queue() {
+//                if let Some(user_connection) = self.client_connections.get_mut(&removed_user) {
+//                    Self::user_remove_object(user_connection, &removed_object);
+//                }
+//            }
+//
+//            for user_key in room.users_iter() {
+//                for object_key in room.objects_iter() {
+//                    if let Some(user_connection) = self.client_connections.get_mut(user_key) {
+//                        let currently_in_scope = user_connection.has_object(object_key);
+//
+//                        let should_be_in_scope: bool;
+//                        if user_connection.has_pawn(object_key) {
+//                            should_be_in_scope = true;
+//                        } else {
+//                            let key = (room_key, *user_key, *object_key);
+//                            if let Some(in_scope) = self.object_scope_map.get(&key) {
+//                                should_be_in_scope = *in_scope;
+//                            } else {
+//                                should_be_in_scope = false;
+//                            }
+//                        }
+//
+//                        if should_be_in_scope {
+//                            if !currently_in_scope {
+//                                // add object to the connections local scope
+//                                if let Some(object) = self.global_replica_store.get(*object_key) {
+//                                    Self::user_add_object(user_connection, object_key, &object);
+//                                }
+//                            }
+//                        } else {
+//                            if currently_in_scope {
+//                                // remove object from the connections local scope
+//                                Self::user_remove_object(user_connection, object_key);
+//                            }
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//    }
 
     fn update_entity_scopes(&mut self) {
         for (room_key, room) in self.rooms.iter_mut() {
@@ -993,7 +987,7 @@ impl<U: ProtocolType> Server<U> {
                                         &self.global_replica_store,
                                         user_connection,
                                         entity_key,
-                                        &entity_component_record.get_component_set(),
+                                        &entity_component_record,
                                     );
                                 }
                             } else {
@@ -1009,14 +1003,14 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    fn user_add_object(
-        user_connection: &mut ClientConnection<U>,
-        object_key: &ObjectKey,
-        object_ref: &U,
-    ) {
-        //add object to user connection
-        user_connection.add_object(object_key, &object_ref.inner_ref());
-    }
+//    fn user_add_object(
+//        user_connection: &mut ClientConnection<U>,
+//        object_key: &ObjectKey,
+//        object_ref: &U,
+//    ) {
+//        //add object to user connection
+//        user_connection.add_object(object_key, &object_ref.inner_ref());
+//    }
 
     fn user_remove_object(user_connection: &mut ClientConnection<U>, object_key: &ObjectKey) {
         //remove object from user connection
@@ -1027,19 +1021,18 @@ impl<U: ProtocolType> Server<U> {
         object_store: &DenseSlotMap<ObjectKey, U>,
         user_connection: &mut ClientConnection<U>,
         entity_key: &EntityKey,
-        component_set_ref: &Ref<HashSet<ComponentKey>>,
+        entity_component_record: &Ref<ComponentRecord<ComponentKey>>,
     ) {
         // Get list of components first
         let mut component_list: Vec<(ComponentKey, Ref<dyn Replicate<U>>)> = Vec::new();
-        let component_set: &HashSet<ComponentKey> = &component_set_ref.borrow();
-        for component_key in component_set {
-            if let Some(component_ref) = object_store.get(*component_key) {
-                component_list.push((*component_key, component_ref.inner_ref().clone()));
+        for component_key in entity_component_record.borrow().get_component_keys() {
+            if let Some(component_ref) = object_store.get(component_key) {
+                component_list.push((component_key, component_ref.inner_ref().clone()));
             }
         }
 
         //add entity to user connection
-        user_connection.add_entity(entity_key, component_set_ref, &component_list);
+        user_connection.add_entity(entity_key, entity_component_record, &component_list);
     }
 
     fn user_remove_entity(user_connection: &mut ClientConnection<U>, entity_key: &EntityKey) {

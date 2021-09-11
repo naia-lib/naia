@@ -23,7 +23,7 @@ pub trait ProtocolType<Impl = Self>: Clone where Impl: ProtocolType {
     fn inner_ref(&self) -> Ref<dyn Replicate<Impl>>;
     /// Convert ProtocolType to a typed inner reference of the
     /// Object/Component/Message
-    fn typed_inner_ref<T: Replicate<Impl>>(&self) -> Option<Ref<T>>;
+    fn to_typed_ref<T: Replicate<Impl>>(&self) -> Option<Ref<T>>;
     /// Compare properties in another ProtocolType
     fn equals(&self, other: &Impl) -> bool;
     /// Sets the current Object/Component/Message to the state of another of the

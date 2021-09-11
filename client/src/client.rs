@@ -174,10 +174,9 @@ impl<T: ProtocolType> Client<T> {
                             }
                             ReplicaAction::RemoveComponent(
                                 entity_key,
-                                component_key,
                                 component,
                             ) => {
-                                Event::RemoveComponent(entity_key, component_key, component.clone())
+                                Event::RemoveComponent(entity_key, component.clone())
                             }
                         }
                     };
@@ -186,7 +185,7 @@ impl<T: ProtocolType> Client<T> {
                 // receive replay command
                 while let Some((pawn_key, command)) = connection.get_incoming_replay() {
                     match pawn_key {
-                        PawnKey::Object(object_key) => {
+                        PawnKey::Object(_) => {
 //                            events.push_back(Ok(Event::ReplayCommand(
 //                                object_key,
 //                                command.borrow().copy_to_protocol(),
@@ -203,7 +202,7 @@ impl<T: ProtocolType> Client<T> {
                 // receive command
                 while let Some((pawn_key, command)) = connection.get_incoming_command() {
                     match pawn_key {
-                        PawnKey::Object(object_key) => {
+                        PawnKey::Object(_) => {
 //                            events.push_back(Ok(Event::NewCommand(
 //                                object_key,
 //                                command.borrow().copy_to_protocol(),
@@ -340,6 +339,24 @@ impl<T: ProtocolType> Client<T> {
             return connection.has_component(key);
         }
         return false;
+    }
+
+    /// Given an EntityKey & a Component type, get a reference to a registered Component being tracked
+    /// by the Server
+    pub fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
+        if let Some(connection) = &self.server_connection {
+            return connection.get_component_by_type::<R>(key);
+        }
+        return None;
+    }
+
+    /// Given an EntityKey & a Component type, get a reference to a registered Pawn Component being tracked
+    /// by the Server
+    pub fn get_pawn_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
+        if let Some(connection) = &self.server_connection {
+            return connection.get_pawn_component_by_type::<R>(key);
+        }
+        return None;
     }
 
     /// Return an iterator to the collection of keys to all Objects tracked
