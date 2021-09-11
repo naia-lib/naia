@@ -22,7 +22,7 @@ use super::{
 };
 
 /// Client can send/receive messages to/from a server, and has a pool of
-/// in-scope objects/entities/components that are synced with the server
+/// in-scope entities/components that are synced with the server
 #[derive(Debug)]
 pub struct Client<T: ProtocolType> {
     manifest: Manifest<T>,
@@ -255,9 +255,9 @@ impl<T: ProtocolType> Client<T> {
         return self.server_connection.is_some();
     }
 
-    // objects
+    // components
 
-    /// Component-themed alias for `get_object`
+    /// Gets a reference to a specific Component which matches a given ComponentKey
     pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
         if let Some(connection) = &self.server_connection {
             return connection.get_component(key);

@@ -107,14 +107,6 @@ impl<U: ProtocolType> ClientConnection<U> {
         }
     }
 
-//    pub fn has_object(&self, key: &ComponentKey) -> bool {
-//        return self.replica_manager.has_object(key);
-//    }
-
-//    pub fn add_object(&mut self, key: &ComponentKey, object: &Ref<dyn Replicate<U>>) {
-//        self.replica_manager.add_object(key, object);
-//    }
-
     pub fn remove_component(&mut self, key: &ComponentKey) {
         self.replica_manager.remove_component(key);
     }
@@ -122,18 +114,6 @@ impl<U: ProtocolType> ClientConnection<U> {
     pub fn collect_replica_updates(&mut self) {
         self.replica_manager.collect_replica_updates();
     }
-
-//    pub fn has_pawn(&self, key: &ComponentKey) -> bool {
-//        return self.replica_manager.has_pawn(key);
-//    }
-
-//    pub fn add_pawn(&mut self, key: &ComponentKey) {
-//        self.replica_manager.add_pawn(key);
-//    }
-
-//    pub fn remove_pawn(&mut self, key: &ComponentKey) {
-//        self.replica_manager.remove_pawn(key);
-//    }
 
     pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(EntityKey, U)> {
         if let Some((local_pawn_key, command)) =

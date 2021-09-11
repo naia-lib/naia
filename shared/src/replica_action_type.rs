@@ -1,20 +1,12 @@
 /// Enum used as a shared network protocol, representing various message types
-/// related to Objects/Entities/Pawns/Components
+/// related to Entities/Pawns/Components
 #[derive(Copy, Clone)]
 #[repr(u8)]
 pub enum ReplicaActionType {
-    /// Action indicating an Object to be created
-//    CreateObject = 0,
     /// Action indicating a Replica to be updated
     UpdateReplica = 0,
     /// Action indicating a Replica to be deleted
     DeleteReplica,
-    /// Action indicating an Object to be assigned as a Pawn
-//    AssignPawn,
-    /// Action indicating an Object to be unassigned as a Pawn
-//    UnassignPawn,
-    /// Action indicating a Pawn to be updated
-//    UpdatePawn,
     /// Action indicating an Entity to be created
     CreateEntity,
     /// Action indicating an Entity to be deleted

@@ -15,7 +15,7 @@ impl PropertyMutator {
         }
     }
 
-    pub fn set_object_key(&mut self, key: ComponentKey) {
+    pub fn set_component_key(&mut self, key: ComponentKey) {
         self.key = Some(key);
     }
 }

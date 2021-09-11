@@ -23,7 +23,7 @@ impl App {
 
         let mut server = Server::new(Protocol::load(), Some(server_config), shared_config);
 
-        // Create a new, singular room, which will contain Users and Objects that they
+        // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
         let main_room_key = server.create_room();
 
@@ -74,11 +74,11 @@ impl App {
                 Ok(Event::Disconnection(user_key, user)) => {
                     info!("Naia Server disconnected from: {:?}", user.address);
                     self.server.room_remove_user(&self.main_room_key, &user_key);
-                    if let Some(object_key) = self.user_to_pawn_map.remove(&user_key) {
+                    if let Some(entity_key) = self.user_to_pawn_map.remove(&user_key) {
                         self.server
-                            .room_remove_entity(&self.main_room_key, &object_key);
-                        self.server.unassign_pawn_entity(&user_key, &object_key);
-                        self.server.deregister_entity(&object_key);
+                            .room_remove_entity(&self.main_room_key, &entity_key);
+                        self.server.unassign_pawn_entity(&user_key, &entity_key);
+                        self.server.deregister_entity(&entity_key);
                     }
                 }
                 Ok(Event::CommandEntity(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {

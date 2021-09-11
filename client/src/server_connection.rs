@@ -134,44 +134,14 @@ impl<T: ProtocolType> ServerConnection<T> {
         );
     }
 
-
-
     // Pass-through methods to underlying replica manager
     pub fn get_incoming_replica_action(&mut self) -> Option<ReplicaAction<T>> {
         return self.replica_manager.pop_incoming_message();
     }
 
-//    pub fn object_keys(&self) -> Vec<LocalComponentKey> {
-//        return self.replica_manager.object_keys();
-//    }
-
-//    pub fn component_keys(&self) -> Vec<LocalComponentKey> {
-//        return self.replica_manager.component_keys();
-//    }
-
-    /*pub fn get_object(&self, key: &LocalComponentKey) -> Option<&T> {
-        return self.replica_manager.get_object(key);
-    }
-
-    pub fn has_object(&self, key: &LocalComponentKey) -> bool {
-        return self.replica_manager.has_object(key);
-    }*/
-
     pub fn has_component(&self, key: &LocalComponentKey) -> bool {
         return self.replica_manager.has_component(key);
     }
-
-//    pub fn pawn_keys(&self) -> Keys<LocalComponentKey, T> {
-//        return self.replica_manager.pawn_keys();
-//    }
-
-//    pub fn get_pawn(&self, key: &LocalComponentKey) -> Option<&T> {
-//        return self.replica_manager.get_pawn(key);
-//    }
-
-//    pub fn get_pawn_mut(&mut self, key: &LocalComponentKey) -> Option<&T> {
-//        return self.replica_manager.get_pawn(key);
-//    }
 
     pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
         return self.replica_manager.has_entity(key);

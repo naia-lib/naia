@@ -2,12 +2,12 @@ use byteorder::WriteBytesExt;
 
 use naia_shared::{ManagerType, Manifest, MessagePacketWriter, ProtocolType, Ref, Replicate};
 
-/// Handles writing of Message/Object/Component data into an outgoing packet
+/// Handles writing of Message/Component data into an outgoing packet
 pub struct PacketWriter {
     message_writer: MessagePacketWriter,
-    /// bytes representing outgoing Message/Object/Component messages / updates
+    /// bytes representing outgoing Message/Component messages / updates
     pub replica_working_bytes: Vec<u8>,
-    /// number of Message/Object/Component messages to be written
+    /// number of Message/Component messages to be written
     pub replica_action_count: u8,
 }
 

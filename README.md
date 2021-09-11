@@ -13,7 +13,7 @@ a *n*etworking *a*rchitecture for *i*nteractive *a*pplications
 
 A cross-platform (including Wasm!) networking engine that intends to make multiplayer game development in Rust dead simple and lightning fast.
 
-naia helps you to easily define a common, shared Protocol that allows Server & Client to exchange information. Then, naia facilitates sending/receiving parts of that Protocol as reliable/unreliable Messages between Server & Client, and also keeps a pool of tracked Entities or Objects synced with each Client for whom they are "in-scope". Entities and Objects are "scoped" to Clients with whom they share the same Room, as well as being sufficiently customizable to, for example, only keep Entities or Objects persisted & synced while within a Client's viewport or according to some other criteria.
+naia helps you to easily define a common, shared Protocol that allows Server & Client to exchange information. Then, naia facilitates sending/receiving parts of that Protocol as reliable/unreliable Messages between Server & Client, and also keeps a pool of tracked Entities synced with each Client for whom they are "in-scope". Entities are "scoped" to Clients with whom they share the same Room, as well as being sufficiently customizable to, for example, only keep Entities persisted & synced while within a Client's viewport or according to some other criteria.
 
 It is built on top of [naia-socket](https://github.com/naia-rs/naia-socket), which provides a cross-platform unreliable & unordered transport layer.
 
