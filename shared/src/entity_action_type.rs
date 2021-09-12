@@ -1,5 +1,5 @@
 /// Enum used as a shared network protocol, representing various message types
-/// related to Entities/Pawns/Components
+/// related to Entities/Components
 #[derive(Copy, Clone)]
 #[repr(u8)]
 pub enum EntityActionType {
@@ -11,10 +11,10 @@ pub enum EntityActionType {
     SpawnEntity,
     /// Action indicating an Entity to be deleted
     DespawnEntity,
-    /// Action indicating an Entity to be assigned as a Pawn
-    AssignPawn,
-    /// Action indicating an Entity to be unassigned as a Pawn
-    UnassignPawn,
+    /// Action indicating an Entity to be assigned
+    AssignEntity,
+    /// Action indicating an Entity to be unassigned
+    UnassignEntity,
     /// Action indicating a Component to be added to an Entity
     InsertComponent,
     /// Unknown / Undefined message, should always be last variant in this list

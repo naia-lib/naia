@@ -149,11 +149,11 @@ impl<P: ProtocolType> Client<P> {
                             EntityAction::DespawnEntity(local_key) => {
                                 Event::DespawnEntity(local_key)
                             }
-                            EntityAction::AssignPawn(local_key) => Event::AssignEntity(local_key),
-                            EntityAction::UnassignPawn(local_key) => {
+                            EntityAction::AssignEntity(local_key) => Event::AssignEntity(local_key),
+                            EntityAction::UnassignEntity(local_key) => {
                                 Event::UnassignEntity(local_key)
                             }
-                            EntityAction::ResetPawn(local_key) => Event::RewindEntity(local_key),
+                            EntityAction::RewindEntity(local_key) => Event::RewindEntity(local_key),
                             EntityAction::InsertComponent(entity_key, component_key) => {
                                 Event::InsertComponent(entity_key, component_key)
                             }
@@ -236,7 +236,7 @@ impl<P: ProtocolType> Client<P> {
         }
     }
 
-    /// Queues up a Pawn Command to be sent to the Server
+    /// Queues up a Command for an assigned Entity to be sent to the Server
     pub fn queue_command<R: ImplRef<P>>(&mut self, entity_key: &LocalEntityKey, command_ref: &R) {
         if let Some(connection) = &mut self.server_connection {
             let dyn_ref = command_ref.dyn_ref();
@@ -256,8 +256,8 @@ impl<P: ProtocolType> Client<P> {
     }
 
     /// Get whether or not the Entity associated with a given EntityKey has
-    /// been assigned as a Pawn
-    pub fn entity_is_pawn(&self, key: &LocalEntityKey) -> bool {
+    /// been assigned to the current User
+    pub fn entity_is_assigned(&self, key: &LocalEntityKey) -> bool {
         if let Some(connection) = &self.server_connection {
             return connection.entity_is_pawn(key);
         }
