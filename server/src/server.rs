@@ -375,20 +375,6 @@ impl<U: ProtocolType> Server<U> {
         return None;
     }
 
-//    /// Iterate through all ComponentKeys associated a given Entity
-//    pub fn components_iter(&self, entity_key: &EntityKey) -> Vec<ComponentKey> {
-//        let mut output = Vec::<ComponentKey>::new();
-//
-//        // TODO: make this more efficient by some fancy 'collect' chaining type method?
-//        if let Some(component_record) = self.entity_component_map.get(entity_key) {
-//            for component_key in component_record.borrow().get_component_keys() {
-//                output.push(component_key);
-//            }
-//        }
-//
-//        return output;
-//    }
-
     // Rooms
 
     /// Creates a new Room on the Server and returns a corresponding RoomMut,

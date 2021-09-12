@@ -92,10 +92,7 @@ impl App {
                 }
                 Ok(Event::AssignPawnEntity(entity_key)) => {
                     info!("assign pawn");
-                    if let Some(square_ref) = self
-                        .client
-                        .component_present::<Square>(&entity_key)
-                    {
+                    if let Some(square_ref) = self.client.component_present::<Square>(&entity_key) {
                         self.pawn = Some((entity_key, square_ref.clone()));
                     }
                 }
@@ -110,9 +107,7 @@ impl App {
                     }
                 }
                 Ok(Event::CreateEntity(entity_key, _)) => {
-                    if let Some(square_ref) =
-                        self.client.component_past::<Square>(&entity_key)
-                    {
+                    if let Some(square_ref) = self.client.component_past::<Square>(&entity_key) {
                         self.square_map.insert(entity_key, square_ref.clone());
                     }
                 }
