@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use naia_shared::Timestamp;
+use naia_shared::{Timestamp, EntityKey};
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
@@ -67,14 +67,26 @@ impl<'s, T: ProtocolType> UserMut<'s, T> {
         return self.server.get_user_address(&self.key).unwrap();
     }
 
-    pub fn room_enter(&mut self, room_key: &RoomKey) -> &mut Self {
+    pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
         self.server.room_add_user(room_key, &self.key);
 
         self
     }
 
-    pub fn room_leave(&mut self, room_key: &RoomKey) -> &mut Self {
+    pub fn leave_room(&mut self, room_key: &RoomKey) -> &mut Self {
         self.server.room_remove_user(room_key, &self.key);
+
+        self
+    }
+
+    pub fn possess_entity(&mut self, entity_key: &EntityKey) -> &mut Self {
+        self.server.assign_pawn_entity(&self.key, entity_key);
+
+        self
+    }
+
+    pub fn release_entity(&mut self, entity_key: &EntityKey) -> &mut Self {
+        self.server.unassign_pawn_entity(&self.key, entity_key);
 
         self
     }

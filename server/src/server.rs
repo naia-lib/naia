@@ -604,9 +604,7 @@ impl<U: ProtocolType> Server<U> {
                 .borrow()
                 .get_key_from_type(&TypeId::of::<T>())
             {
-                if let Some(component_protocol) = self.global_component_store.get(*component_key) {
-                    return Some(component_protocol);
-                }
+                return self.global_component_store.get(*component_key);
             }
         }
         return None;

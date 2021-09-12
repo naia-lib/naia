@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use naia_shared::{
-    Connection, ConnectionConfig, LocalComponentKey, LocalEntityKey, ManagerType, Manifest,
+    Connection, ConnectionConfig, LocalEntityKey, ManagerType, Manifest,
     PacketReader, PacketType, ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
 };
 
@@ -138,9 +138,9 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.entity_manager.pop_incoming_message();
     }
 
-    pub fn has_component(&self, key: &LocalComponentKey) -> bool {
-        return self.entity_manager.has_component(key);
-    }
+//    pub fn has_component(&self, key: &LocalComponentKey) -> bool {
+//        return self.entity_manager.has_component(key);
+//    }
 
     pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
         return self.entity_manager.has_entity(key);
@@ -150,28 +150,27 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.entity_manager.entity_is_pawn(key);
     }
 
-    pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
-        return self.entity_manager.get_component(key);
-    }
+//    pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
+//        return self.entity_manager.get_component(key);
+//    }
 
-    pub fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
+    pub fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<&T> {
         return self.entity_manager.get_component_by_type::<R>(key);
     }
 
     pub fn get_pawn_component_by_type<R: Replicate<T>>(
         &self,
         key: &LocalEntityKey,
-    ) -> Option<Ref<R>> {
-        return self.entity_manager.get_pawn_component_by_type::<R>(key);
+    ) -> Option<&T> { return self.entity_manager.get_pawn_component_by_type::<R>(key);
     }
 
-    pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
-        return self.entity_manager.get_components(key);
-    }
-
-    pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
-        return self.entity_manager.get_pawn_components(key);
-    }
+//    pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
+//        return self.entity_manager.get_components(key);
+//    }
+//
+//    pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
+//        return self.entity_manager.get_pawn_components(key);
+//    }
 
     /// Reads buffered incoming data on the appropriate tick boundary
     pub fn frame_begin(&mut self, manifest: &Manifest<T>, tick_manager: &mut TickManager) -> bool {
