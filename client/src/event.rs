@@ -15,31 +15,34 @@ pub enum Event<P: ProtocolType> {
     /// A Tick Event, the duration between Tick events is defined in the Config
     /// passed to the Client on initialization
     Tick,
-    /// Occurs when an Entity on the Server has come into scope for the Client,
-    /// and should be added to the local client's ECS "world"
+    /// Occurs when an Entity on the Server has come into scope for the Client
     SpawnEntity(LocalEntityKey, Vec<P>),
-    /// Occurs when an Entity on the Server has left the Client's scope, and
-    /// should be removed from the local client's ECS "world"
+    /// Occurs when an Entity on the Server has been destroyed, or left the
+    /// Client's scope
     DespawnEntity(LocalEntityKey),
+    /// Occurs when an Entity has been assigned to the current User,
+    /// meaning it can receive Commands from the Client, and be extrapolated
+    /// into the "present"
+    AssignEntity(LocalEntityKey),
+    /// Occurs when an Entity has been unassigned from the current User,
+    /// meaning it can no longer receive Commands from this Client
+    UnassignEntity(LocalEntityKey),
+    /// Occurs when an assigned Entity needs to be reset from the "present"
+    /// state, back to it's authoritative "past", due to some misprediction
+    /// error
+    RewindEntity(LocalEntityKey),
     /// Occurs when a Component should be added to a given Entity
-    AddComponent(LocalEntityKey, P),
+    InsertComponent(LocalEntityKey, P),
     /// Occurs when a Component has had a state change on the Server while
     /// the Entity it is attached to has come into scope for the Client
     UpdateComponent(LocalEntityKey, P),
     /// Occurs when a Component should be removed from the given Entity
     RemoveComponent(LocalEntityKey, P),
-    /// Occurs when an Entity has been assigned to the local host as a Pawn,
-    /// meaning it can receive Commands from the Client
-    AssignPawnEntity(LocalEntityKey),
-    /// Occurs when a Pawn Entity has been unassigned from the local host,
-    /// meaning it cannot receive Commands from this Client
-    UnassignPawn(LocalEntityKey),
-    /// Occurs when a Pawn Entity needs to be reset to local state
-    ResetPawn(LocalEntityKey),
-    /// An Pawn Entity Command received which is to be simulated on the Client
-    /// as well as on the Server
-    NewCommandEntity(LocalEntityKey, P),
-    /// An Pawn Entity Command which is replayed to extrapolate from recently
-    /// received authoritative state
-    ReplayCommandEntity(LocalEntityKey, P),
+    /// A new Command received immediately to an assigned Entity, used to
+    /// extrapolate Entity from the "past" to the "present"
+    NewCommand(LocalEntityKey, P),
+    /// An old Command which has already been received by the assigned Entity,
+    /// but which must be replayed after a "ResetEntityPresent" event in order
+    /// to extrapolate back to the "present"
+    ReplayCommand(LocalEntityKey, P),
 }

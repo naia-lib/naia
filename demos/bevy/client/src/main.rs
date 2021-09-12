@@ -186,7 +186,7 @@ fn naia_client_update(
                     commands.entity(bevy_entity_key).despawn();
                 }
             }
-            Ok(Event::AssignPawnEntity(naia_entity_key)) => {
+            Ok(Event::AssignEntity(naia_entity_key)) => {
                 info!("assign pawn");
 
                 let pawn_components = client.get_pawn_components(&naia_entity_key);
@@ -217,7 +217,7 @@ fn naia_client_update(
                         .insert(naia_entity_key, bevy_entity_key);
                 }
             }
-            Ok(Event::UnassignPawn(naia_entity_key)) => {
+            Ok(Event::UnassignEntity(naia_entity_key)) => {
                 info!("unassign pawn");
 
                 if let Some(bevy_entity_key) = client_resource.pawn_key_map.remove(&naia_entity_key)
@@ -225,8 +225,8 @@ fn naia_client_update(
                     commands.entity(bevy_entity_key).despawn();
                 }
             }
-            Ok(Event::NewCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref)))
-            | Ok(Event::ReplayCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref))) => {
+            Ok(Event::NewCommand(naia_entity, Protocol::KeyCommand(key_command_ref)))
+            | Ok(Event::ReplayCommand(naia_entity, Protocol::KeyCommand(key_command_ref))) => {
                 if let Some(bevy_entity) = client_resource.pawn_key_map.get(&naia_entity) {
                     if let Ok((_, position)) = pawn_query.get_mut(*bevy_entity) {
                         shared_behavior::process_command(&key_command_ref, position);

@@ -186,7 +186,7 @@ impl<P: ProtocolType> Server<P> {
             while let Some((pawn_key, command)) =
                 connection.get_incoming_command(self.tick_manager.get_tick())
             {
-                events.push_back(Ok(Event::CommandEntity(*user_key, pawn_key, command)));
+                events.push_back(Ok(Event::Command(*user_key, pawn_key, command)));
             }
             //receive messages from anyone
             while let Some(message) = connection.get_incoming_message() {
@@ -565,7 +565,7 @@ impl<P: ProtocolType> Server<P> {
     /// Component to all connected Clients for which the Component's Entity
     /// is in Scope. Gives back a ComponentKey which can be used to get the
     /// reference to the Component from the Server once again
-    pub(crate) fn add_component_to_entity<R: ImplRef<P>>(
+    pub(crate) fn insert_component_to_entity<R: ImplRef<P>>(
         &mut self,
         entity_key: &EntityKey,
         component_ref: &R,
@@ -582,7 +582,12 @@ impl<P: ProtocolType> Server<P> {
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
                 if user_connection.has_entity(entity_key) {
-                    Self::user_add_component(user_connection, entity_key, &component_key, &dyn_ref);
+                    Self::user_insert_component(
+                        user_connection,
+                        entity_key,
+                        &component_key,
+                        &dyn_ref,
+                    );
                 }
             }
         }
@@ -992,14 +997,14 @@ impl<P: ProtocolType> Server<P> {
         user_connection.remove_entity(entity_key);
     }
 
-    fn user_add_component(
+    fn user_insert_component(
         user_connection: &mut ClientConnection<P>,
         entity_key: &EntityKey,
         component_key: &ComponentKey,
         component_ref: &Ref<dyn Replicate<P>>,
     ) {
         //add component to user connection
-        user_connection.add_component(entity_key, component_key, component_ref);
+        user_connection.insert_component(entity_key, component_key, component_ref);
     }
 
     fn send_connect_accept_message(

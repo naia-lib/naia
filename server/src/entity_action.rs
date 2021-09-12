@@ -15,7 +15,7 @@ pub enum EntityAction<P: ProtocolType> {
     DespawnEntity(EntityKey, LocalEntityKey),
     AssignPawn(EntityKey, LocalEntityKey),
     UnassignPawn(EntityKey, LocalEntityKey),
-    AddComponent(
+    InsertComponent(
         LocalEntityKey,
         ComponentKey,
         LocalComponentKey,
@@ -37,7 +37,7 @@ impl<P: ProtocolType> EntityAction<P> {
             EntityAction::DespawnEntity(_, _) => EntityActionType::DespawnEntity,
             EntityAction::AssignPawn(_, _) => EntityActionType::AssignPawn,
             EntityAction::UnassignPawn(_, _) => EntityActionType::UnassignPawn,
-            EntityAction::AddComponent(_, _, _, _) => EntityActionType::AddComponent,
+            EntityAction::InsertComponent(_, _, _, _) => EntityActionType::InsertComponent,
             EntityAction::RemoveComponent(_, _) => EntityActionType::RemoveComponent,
             EntityAction::UpdateComponent(_, _, _, _) => EntityActionType::UpdateComponent,
         }
@@ -57,8 +57,8 @@ impl<P: ProtocolType> Clone for EntityAction<P> {
             EntityAction::UnassignPawn(gk, lk) => {
                 EntityAction::UnassignPawn(gk.clone(), lk.clone())
             }
-            EntityAction::AddComponent(lek, gck, lck, r) => {
-                EntityAction::AddComponent(lek.clone(), gck.clone(), lck.clone(), r.clone())
+            EntityAction::InsertComponent(lek, gck, lck, r) => {
+                EntityAction::InsertComponent(lek.clone(), gck.clone(), lck.clone(), r.clone())
             }
             EntityAction::RemoveComponent(gk, lk) => {
                 EntityAction::RemoveComponent(gk.clone(), lk.clone())

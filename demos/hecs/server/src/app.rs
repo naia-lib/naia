@@ -69,10 +69,10 @@ impl App {
 
                 // Add Position component to Entity
                 let _position_component_key =
-                    server.add_component_to_entity(&entity_key, &position_ref);
+                    server.insert_component_to_entity(&entity_key, &position_ref);
 
                 // Add Name component to Entity
-                let _name_component_key = server.add_component_to_entity(&entity_key, &name_ref);
+                let _name_component_key = server.insert_component_to_entity(&entity_key, &name_ref);
             }
         }
 
@@ -161,7 +161,7 @@ impl App {
 
                             // Add Marker component to Entity in Naia Server
                             let component_key =
-                                self.server.add_component_to_entity(&naia_key, &marker);
+                                self.server.insert_component_to_entity(&naia_key, &marker);
 
                             // Track that this entity has a Marker
                             self.has_marker.insert(*naia_key, component_key);

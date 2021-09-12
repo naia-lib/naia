@@ -16,7 +16,7 @@ pub enum EntityActionType {
     /// Action indicating an Entity to be unassigned as a Pawn
     UnassignPawn,
     /// Action indicating a Component to be added to an Entity
-    AddComponent,
+    InsertComponent,
     /// Unknown / Undefined message, should always be last variant in this list
     Unknown,
 }

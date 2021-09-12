@@ -90,18 +90,18 @@ impl App {
                         }
                     }
                 }
-                Ok(Event::AssignPawnEntity(entity_key)) => {
+                Ok(Event::AssignEntity(entity_key)) => {
                     info!("assign pawn");
                     if let Some(square_ref) = self.client.component_present::<Square>(&entity_key) {
                         self.pawn = Some((entity_key, square_ref.clone()));
                     }
                 }
-                Ok(Event::UnassignPawn(_)) => {
+                Ok(Event::UnassignEntity(_)) => {
                     self.pawn = None;
                     info!("unassign pawn");
                 }
-                Ok(Event::NewCommandEntity(_, Protocol::KeyCommand(key_command_ref)))
-                | Ok(Event::ReplayCommandEntity(_, Protocol::KeyCommand(key_command_ref))) => {
+                Ok(Event::NewCommand(_, Protocol::KeyCommand(key_command_ref)))
+                | Ok(Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref))) => {
                     if let Some((_, pawn_ref)) = &self.pawn {
                         shared_behavior::process_command(&key_command_ref, &pawn_ref);
                     }

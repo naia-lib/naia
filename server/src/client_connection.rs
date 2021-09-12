@@ -166,14 +166,14 @@ impl<P: ProtocolType> ClientConnection<P> {
         self.entity_manager.remove_pawn_entity(key);
     }
 
-    pub fn add_component(
+    pub fn insert_component(
         &mut self,
         entity_key: &EntityKey,
         component_key: &ComponentKey,
         component_ref: &Ref<dyn Replicate<P>>,
     ) {
         self.entity_manager
-            .add_component(entity_key, component_key, component_ref);
+            .insert_component(entity_key, component_key, component_ref);
     }
 
     // Pass-through methods to underlying common connection
