@@ -273,54 +273,6 @@ impl<P: ProtocolType> Server<P> {
         return EntityMut::new(self, &entity_key);
     }
 
-    /// Spawns a new Entity with a single Component and returns a corresponding
-    /// EntityMut, which can be used for various operations
-    pub fn spawn_entity_with_component<R: ImplRef<P>>(
-        &mut self,
-        component_ref: &R,
-    ) -> EntityMut<P> {
-        let entity_key: EntityKey = self.entity_key_generator.generate();
-        self.entities.insert(entity_key, EntityRecord::new());
-
-        self.insert_component(&entity_key, component_ref);
-
-        return EntityMut::new(self, &entity_key);
-    }
-
-    /// Spawns a new Entity with a list of Components and returns a
-    /// corresponding EntityMut, which can be used for various operations
-    pub fn spawn_entity_with_components<R: ImplRef<P>>(
-        &mut self,
-        component_list: &[R],
-    ) -> EntityMut<P> {
-        let entity_key: EntityKey = self.entity_key_generator.generate();
-        self.entities.insert(entity_key, EntityRecord::new());
-
-        self.insert_components(&entity_key, component_list);
-
-        return EntityMut::new(self, &entity_key);
-    }
-
-    /// Retrieves an EntityRef that exposes read-only operations for the
-    /// Entity associated with the given EntityKey.
-    /// Returns None if the Entity does not exist.
-    pub fn entity(&self, entity_key: &EntityKey) -> Option<EntityRef<P>> {
-        if self.entities.contains_key(entity_key) {
-            return Some(EntityRef::new(self, &entity_key));
-        }
-        return None;
-    }
-
-    /// Retrieves an EntityMut that exposes read and write operations for the
-    /// Entity associated with the given EntityKey.
-    /// Returns None if the entity does not exist.
-    pub fn entity_mut(&mut self, entity_key: &EntityKey) -> Option<EntityMut<P>> {
-        if self.entities.contains_key(entity_key) {
-            return Some(EntityMut::new(self, &entity_key));
-        }
-        return None;
-    }
-
     /// Despawns the Entity associated with the given EntityKey, if it exists.
     /// This will also remove all of the entity’s Components.
     /// Returns true if the entity is successfully despawned and false if the
@@ -349,6 +301,26 @@ impl<P: ProtocolType> Server<P> {
         }
     }
 
+    /// Retrieves an EntityRef that exposes read-only operations for the
+    /// Entity associated with the given EntityKey.
+    /// Returns None if the Entity does not exist.
+    pub fn entity(&self, entity_key: &EntityKey) -> Option<EntityRef<P>> {
+        if self.entities.contains_key(entity_key) {
+            return Some(EntityRef::new(self, &entity_key));
+        }
+        return None;
+    }
+
+    /// Retrieves an EntityMut that exposes read and write operations for the
+    /// Entity associated with the given EntityKey.
+    /// Returns None if the entity does not exist.
+    pub fn entity_mut(&mut self, entity_key: &EntityKey) -> Option<EntityMut<P>> {
+        if self.entities.contains_key(entity_key) {
+            return Some(EntityMut::new(self, &entity_key));
+        }
+        return None;
+    }
+
     /// Returns whether an Entity exists for the given EntityKey
     pub fn entity_exists(&self, entity_key: &EntityKey) -> bool {
         return self.entities.contains_key(entity_key);
@@ -367,69 +339,6 @@ impl<P: ProtocolType> Server<P> {
             output.push(*entity_key);
         }
         return output;
-    }
-
-    // Entity Ownership
-
-    /// Returns whether or not an Entity associated with the given EntityKey has
-    /// an owner
-    pub fn entity_has_owner(&self, entity_key: &EntityKey) -> bool {
-        if let Some(record) = self.entities.get(entity_key) {
-            return record.get_owner().is_some();
-        }
-        return false;
-    }
-
-    /// Gets the UserKey of the User that currently owns an Entity associated
-    /// with the given EntityKey, if it exists
-    pub fn entity_get_owner(&self, entity_key: &EntityKey) -> Option<&UserKey> {
-        if let Some(record) = self.entities.get(entity_key) {
-            return record.get_owner();
-        }
-        return None;
-    }
-
-    /// Set the 'owner' of an Entity associated with a given EntityKey to a User
-    /// associated with a given UserKey. Users are only able to issue
-    /// Commands to Entities of which they are the owner
-    pub fn entity_set_owner(&mut self, entity_key: &EntityKey, user_key: &UserKey) {
-        // check that entity is initialized and un-owned
-        let entity_record = self
-            .entities
-            .get_mut(entity_key)
-            .expect("Entity associated with given EntityKey does not exist!");
-        if entity_record.has_owner() {
-            panic!("attempting to take ownership of an Entity that is already owned");
-        }
-
-        // get at the User's connection
-        let client_connection = self
-            .client_connections
-            .get_mut(user_key)
-            .expect("User associated with given UserKey does not exist!");
-
-        // add Entity to User's connection if it's not already in-scope
-        if !client_connection.has_entity(entity_key) {
-            Self::connection_add_entity(
-                &self.global_component_store,
-                client_connection,
-                entity_key,
-                &entity_record,
-            );
-        }
-
-        // assign Entity to User as a Pawn
-        client_connection.add_pawn_entity(entity_key);
-
-        // put in ownership map
-        entity_record.set_owner(user_key);
-    }
-
-    /// Removes ownership of an Entity from their current owner User.
-    /// No User is able to issue Commands to an un-owned Entity.
-    pub fn entity_disown(&mut self, entity_key: &EntityKey) {
-        let (client_connection, _, entity_record) = self.entity_disown_start(entity_key);
-        Self::entity_disown_finish(client_connection, entity_key, entity_record);
     }
 
     // Entity Scopes
@@ -474,75 +383,14 @@ impl<P: ProtocolType> Server<P> {
     /// Given an EntityKey & a Component type, get a reference to a registered
     /// Component being tracked by the Server
     pub fn component<R: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<&Ref<R>> {
-        if let Some(protocol) = self.get_component_by_type::<R>(entity_key) {
-            return protocol.as_typed_ref::<R>();
+        if let Some(entity_record) = self.entities.get(entity_key) {
+            if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
+                if let Some(protocol) = self.global_component_store.get(component_key) {
+                    return protocol.as_typed_ref::<R>();
+                }
+            }
         }
         return None;
-    }
-
-    /// Adds a Component to an Entity associated with the given EntityKey.
-    pub fn insert_component<R: ImplRef<P>>(&mut self, entity_key: &EntityKey, component_ref: &R) {
-        if !self.entities.contains_key(&entity_key) {
-            panic!("attempted to add component to non-existent entity");
-        }
-
-        let component_key: ComponentKey = self.component_init(component_ref);
-
-        let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
-
-        // add component to connections already tracking entity
-        for (user_key, _) in self.users.iter() {
-            if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                if client_connection.has_entity(entity_key) {
-                    Self::connection_insert_component(
-                        client_connection,
-                        entity_key,
-                        &component_key,
-                        &dyn_ref,
-                    );
-                }
-            }
-        }
-
-        self.component_entity_map.insert(component_key, *entity_key);
-
-        if let Some(entity_record) = self.entities.get_mut(&entity_key) {
-            entity_record.insert_component(&component_key, &dyn_ref.borrow().get_type_id());
-        }
-    }
-
-    /// Adds an array of Components to an Entity associated with the given
-    /// EntityKey.
-    pub fn insert_components<R: ImplRef<P>>(
-        &mut self,
-        entity_key: &EntityKey,
-        component_refs: &[R],
-    ) {
-        for component_ref in component_refs {
-            self.insert_component(entity_key, component_ref);
-        }
-    }
-
-    /// Removes a Component from an Entity associated with the given EntityKey
-    pub fn remove_component<R: Replicate<P>>(&mut self, entity_key: &EntityKey) -> bool {
-        if let Some(entity_record) = self.entities.get(entity_key) {
-            let component_key: ComponentKey = entity_record
-                .get_key_from_type(&TypeId::of::<R>())
-                .expect("component not initialized correctly?");
-
-            for (user_key, _) in self.users.iter() {
-                if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                    Self::connection_remove_component(client_connection, &component_key);
-                }
-            }
-
-            entity_record.remove_component(&component_key);
-
-            self.component_cleanup(&component_key);
-
-            return true;
-        }
-        return false;
     }
 
     // Rooms
@@ -592,54 +440,6 @@ impl<P: ProtocolType> Server<P> {
         self.rooms.len()
     }
 
-    /// Add an User to a Room, given the appropriate RoomKey & UserKey
-    /// Entities will only ever be in-scope for Users which are in a
-    /// Room with them
-    pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
-        if let Some(room) = self.rooms.get_mut(*room_key) {
-            room.subscribe_user(user_key);
-        }
-    }
-
-    /// Removes a User from a Room
-    pub fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
-        if let Some(room) = self.rooms.get_mut(*room_key) {
-            room.unsubscribe_user(user_key);
-        }
-    }
-
-    /// Get a count of Users in a given Room
-    pub fn room_users_count(&self, room_key: &RoomKey) -> usize {
-        if let Some(room) = self.rooms.get(*room_key) {
-            return room.users_count();
-        }
-        return 0;
-    }
-
-    /// Add an Entity to a Room, given the appropriate RoomKey & EntityKey
-    /// Entities will only ever be in-scope for Users which are in a Room with
-    /// them
-    pub fn room_add_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
-        if let Some(room) = self.rooms.get_mut(*room_key) {
-            room.add_entity(entity_key);
-        }
-    }
-
-    /// Remove an Entity from a Room, given the appropriate RoomKey & EntityKey
-    pub fn room_remove_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
-        if let Some(room) = self.rooms.get_mut(*room_key) {
-            room.remove_entity(entity_key);
-        }
-    }
-
-    /// Get a count of Entities in a given Room
-    pub fn room_entities_count(&self, room_key: &RoomKey) -> usize {
-        if let Some(room) = self.rooms.get(*room_key) {
-            return room.entities_count();
-        }
-        return 0;
-    }
-
     // Users
 
     /// Retrieves an UserRef that exposes read-only operations for the User
@@ -670,25 +470,6 @@ impl<P: ProtocolType> Server<P> {
     /// Get the number of Users currently connected
     pub fn users_count(&self) -> usize {
         return self.users.len();
-    }
-
-    // Users & Ownership
-
-    /// Set a User associated with a given UserKey as the 'owner' of an Entity
-    /// associated with the given EntityKey. Users are only able to issue
-    /// Commands to Entities of which they are the owner.
-    pub fn user_own_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
-        return self.entity_set_owner(entity_key, user_key);
-    }
-
-    /// Removes ownership of an Entity from a specific owner User
-    /// This means that the User will be unable to issue Commands to that Entity
-    pub fn user_disown_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
-        let (client_connection, owner_key, entity_record) = self.entity_disown_start(entity_key);
-        if owner_key != *user_key {
-            panic!("user is attempting to disown an entity which is owned by another user");
-        }
-        Self::entity_disown_finish(client_connection, entity_key, entity_record);
     }
 
     // User Scopes
@@ -722,18 +503,65 @@ impl<P: ProtocolType> Server<P> {
 
     //// Entities
 
-    /// Given an EntityKey & a Component type, get a reference to a registered
-    /// Component being tracked by the Server
-    pub(crate) fn get_component_by_type<R: Replicate<P>>(
-        &self,
-        entity_key: &EntityKey,
-    ) -> Option<&P> {
-        if let Some(entity_record) = self.entities.get(entity_key) {
-            if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
-                return self.global_component_store.get(component_key);
-            }
+    /// Returns whether or not an Entity associated with the given EntityKey has
+    /// an owner
+    pub(crate) fn entity_has_owner(&self, entity_key: &EntityKey) -> bool {
+        if let Some(record) = self.entities.get(entity_key) {
+            return record.get_owner().is_some();
+        }
+        return false;
+    }
+
+    /// Gets the UserKey of the User that currently owns an Entity associated
+    /// with the given EntityKey, if it exists
+    pub(crate) fn entity_get_owner(&self, entity_key: &EntityKey) -> Option<&UserKey> {
+        if let Some(record) = self.entities.get(entity_key) {
+            return record.get_owner();
         }
         return None;
+    }
+
+    /// Set the 'owner' of an Entity associated with a given EntityKey to a User
+    /// associated with a given UserKey. Users are only able to issue
+    /// Commands to Entities of which they are the owner
+    pub(crate) fn entity_set_owner(&mut self, entity_key: &EntityKey, user_key: &UserKey) {
+        // check that entity is initialized and un-owned
+        let entity_record = self
+            .entities
+            .get_mut(entity_key)
+            .expect("Entity associated with given EntityKey does not exist!");
+        if entity_record.has_owner() {
+            panic!("attempting to take ownership of an Entity that is already owned");
+        }
+
+        // get at the User's connection
+        let client_connection = self
+            .client_connections
+            .get_mut(user_key)
+            .expect("User associated with given UserKey does not exist!");
+
+        // add Entity to User's connection if it's not already in-scope
+        if !client_connection.has_entity(entity_key) {
+            Self::connection_add_entity(
+                &self.global_component_store,
+                client_connection,
+                entity_key,
+                &entity_record,
+            );
+        }
+
+        // assign Entity to User as a Pawn
+        client_connection.add_pawn_entity(entity_key);
+
+        // put in ownership map
+        entity_record.set_owner(user_key);
+    }
+
+    /// Removes ownership of an Entity from their current owner User.
+    /// No User is able to issue Commands to an un-owned Entity.
+    pub(crate) fn entity_disown(&mut self, entity_key: &EntityKey) {
+        let (client_connection, _, entity_record) = self.entity_disown_start(entity_key);
+        Self::entity_disown_finish(client_connection, entity_key, entity_record);
     }
 
     /// Returns whether or not an Entity has a Component of a given TypeId
@@ -744,13 +572,145 @@ impl<P: ProtocolType> Server<P> {
         return false;
     }
 
+    //// Components
+
+    /// Adds a Component to an Entity associated with the given EntityKey.
+    pub(crate) fn insert_component<R: ImplRef<P>>(
+        &mut self,
+        entity_key: &EntityKey,
+        component_ref: &R,
+    ) {
+        if !self.entities.contains_key(&entity_key) {
+            panic!("attempted to add component to non-existent entity");
+        }
+
+        let component_key: ComponentKey = self.component_init(component_ref);
+
+        let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
+
+        // add component to connections already tracking entity
+        for (user_key, _) in self.users.iter() {
+            if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
+                if client_connection.has_entity(entity_key) {
+                    Self::connection_insert_component(
+                        client_connection,
+                        entity_key,
+                        &component_key,
+                        &dyn_ref,
+                    );
+                }
+            }
+        }
+
+        self.component_entity_map.insert(component_key, *entity_key);
+
+        if let Some(entity_record) = self.entities.get_mut(&entity_key) {
+            entity_record.insert_component(&component_key, &dyn_ref.borrow().get_type_id());
+        }
+    }
+
+    /// Adds an array of Components to an Entity associated with the given
+    /// EntityKey.
+    pub(crate) fn insert_components<R: ImplRef<P>>(
+        &mut self,
+        entity_key: &EntityKey,
+        component_refs: &[R],
+    ) {
+        for component_ref in component_refs {
+            self.insert_component(entity_key, component_ref);
+        }
+    }
+
+    /// Removes a Component from an Entity associated with the given EntityKey
+    pub(crate) fn remove_component<R: Replicate<P>>(&mut self, entity_key: &EntityKey) -> bool {
+        if let Some(entity_record) = self.entities.get(entity_key) {
+            let component_key: ComponentKey = entity_record
+                .get_key_from_type(&TypeId::of::<R>())
+                .expect("component not initialized correctly?");
+
+            for (user_key, _) in self.users.iter() {
+                if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
+                    Self::connection_remove_component(client_connection, &component_key);
+                }
+            }
+
+            entity_record.remove_component(&component_key);
+
+            self.component_cleanup(&component_key);
+
+            return true;
+        }
+        return false;
+    }
+
     //// Users
+
     /// Get a User's Socket Address, given the associated UserKey
     pub(crate) fn get_user_address(&self, user_key: &UserKey) -> Option<SocketAddr> {
         if let Some(user) = self.users.get(*user_key) {
             return Some(user.address);
         }
         return None;
+    }
+
+    /// Removes ownership of an Entity from a specific owner User
+    /// This means that the User will be unable to issue Commands to that Entity
+    pub(crate) fn user_disown_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
+        let (client_connection, owner_key, entity_record) = self.entity_disown_start(entity_key);
+        if owner_key != *user_key {
+            panic!("user is attempting to disown an entity which is owned by another user");
+        }
+        Self::entity_disown_finish(client_connection, entity_key, entity_record);
+    }
+
+    //// Rooms
+
+    /// Add an User to a Room, given the appropriate RoomKey & UserKey
+    /// Entities will only ever be in-scope for Users which are in a
+    /// Room with them
+    pub(crate) fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+        if let Some(room) = self.rooms.get_mut(*room_key) {
+            room.subscribe_user(user_key);
+        }
+    }
+
+    /// Removes a User from a Room
+    pub(crate) fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+        if let Some(room) = self.rooms.get_mut(*room_key) {
+            room.unsubscribe_user(user_key);
+        }
+    }
+
+    /// Get a count of Users in a given Room
+    pub(crate) fn room_users_count(&self, room_key: &RoomKey) -> usize {
+        if let Some(room) = self.rooms.get(*room_key) {
+            return room.users_count();
+        }
+        return 0;
+    }
+
+    /// Add an Entity to a Room, given the appropriate RoomKey & EntityKey
+    /// Entities will only ever be in-scope for Users which are in a Room with
+    /// them
+    pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
+        if let Some(room) = self.rooms.get_mut(*room_key) {
+            room.add_entity(entity_key);
+        }
+    }
+
+    /// Remove an Entity from a Room, given the appropriate RoomKey & EntityKey
+    pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
+        if let Some(room) = self.rooms.get_mut(*room_key) {
+            room.remove_entity(entity_key);
+        }
+    }
+
+    /// Get a count of Entities in a given Room
+    pub(crate) fn room_entities_count(&self, room_key: &RoomKey) -> usize {
+        if let Some(room) = self.rooms.get(*room_key) {
+            return room.entities_count();
+        }
+        return 0;
     }
 
     // Private methods
