@@ -86,7 +86,7 @@ impl App {
                 Ok(Event::Tick) => {
                     if let Some((pawn_key, _)) = self.pawn {
                         if let Some(command) = self.queued_command.take() {
-                            self.client.send_command(&pawn_key, &command);
+                            self.client.queue_command(&pawn_key, &command);
                         }
                     }
                 }
@@ -94,7 +94,7 @@ impl App {
                     info!("assign pawn");
                     if let Some(square_ref) = self
                         .client
-                        .get_pawn_component_by_type::<Square>(&entity_key)
+                        .component_present::<Square>(&entity_key)
                     {
                         self.pawn = Some((entity_key, square_ref.clone()));
                     }
@@ -111,7 +111,7 @@ impl App {
                 }
                 Ok(Event::CreateEntity(entity_key, _)) => {
                     if let Some(square_ref) =
-                        self.client.get_component_by_type::<Square>(&entity_key)
+                        self.client.component_past::<Square>(&entity_key)
                     {
                         self.square_map.insert(entity_key, square_ref.clone());
                     }
@@ -130,7 +130,7 @@ impl App {
     fn draw(&mut self) {
         clear_background(BLACK);
 
-        if self.client.has_connection() {
+        if self.client.connected() {
             // draw squares
             for (_, square_ref) in &self.square_map {
                 let square = square_ref.borrow();

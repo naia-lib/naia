@@ -26,6 +26,7 @@ use super::{
 #[derive(Debug)]
 pub struct Client<T: ProtocolType> {
     manifest: Manifest<T>,
+    // Connection
     server_address: SocketAddr,
     connection_config: ConnectionConfig,
     sender: PacketSender,
@@ -36,9 +37,11 @@ pub struct Client<T: ProtocolType> {
     handshake_timer: Timer,
     connection_state: ConnectionState,
     auth_message: Option<Ref<dyn Replicate<T>>>,
-    tick_manager: TickManager,
+    // Events
     outstanding_connect: bool,
     outstanding_errors: VecDeque<NaiaClientError>,
+    // Ticks
+    tick_manager: TickManager,
 }
 
 impl<T: ProtocolType> Client<T> {
@@ -79,8 +82,9 @@ impl<T: ProtocolType> Client<T> {
         };
 
         Client {
-            server_address,
             manifest,
+            // Connection
+            server_address,
             sender,
             receiver,
             connection_config,
@@ -90,9 +94,11 @@ impl<T: ProtocolType> Client<T> {
             pre_connection_digest: None,
             connection_state: AwaitingChallengeResponse,
             auth_message,
-            tick_manager: TickManager::new(shared_config.tick_interval),
+            // Events
             outstanding_connect: false,
             outstanding_errors: VecDeque::new(),
+            // Ticks
+            tick_manager: TickManager::new(shared_config.tick_interval),
         }
     }
 
@@ -222,7 +228,7 @@ impl<T: ProtocolType> Client<T> {
 
     /// Queues up an Message to be sent to the Server
     /// pub fn queue_message<T: ImplRef<U>>(
-    pub fn send_message<U: ImplRef<T>>(&mut self, message_ref: &U, guaranteed_delivery: bool) {
+    pub fn queue_message<U: ImplRef<T>>(&mut self, message_ref: &U, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
             let dyn_ref = message_ref.dyn_ref();
             connection.queue_message(&dyn_ref, guaranteed_delivery);
@@ -230,7 +236,7 @@ impl<T: ProtocolType> Client<T> {
     }
 
     /// Queues up a Pawn Command to be sent to the Server
-    pub fn send_command<U: ImplRef<T>>(&mut self, entity_key: &LocalEntityKey, command_ref: &U) {
+    pub fn queue_command<U: ImplRef<T>>(&mut self, entity_key: &LocalEntityKey, command_ref: &U) {
         if let Some(connection) = &mut self.server_connection {
             let dyn_ref = command_ref.dyn_ref();
             connection.queue_command(entity_key, &dyn_ref);
@@ -241,7 +247,7 @@ impl<T: ProtocolType> Client<T> {
 
     /// Get whether or not the Entity currently in scope for the Client, given
     /// that Entity's Key
-    pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
+    pub fn entity_exists(&self, key: &LocalEntityKey) -> bool {
         if let Some(connection) = &self.server_connection {
             return connection.has_entity(key);
         }
@@ -259,62 +265,39 @@ impl<T: ProtocolType> Client<T> {
 
     // Components
 
-    /// Gets a reference to a specific Component which matches a given
-    /// ComponentKey
-    pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
-        if let Some(connection) = &self.server_connection {
-            return connection.get_component(key);
+    /// Given an EntityKey & a Component type, get a reference to the appropriate ComponentRef
+    pub fn component_past<R: Replicate<T>>(&self, entity_key: &LocalEntityKey) -> Option<&Ref<R>> {
+        if let Some(protocol) = self.get_component_by_type::<R>(entity_key) {
+            return protocol.as_typed_ref::<R>();
         }
         return None;
     }
 
-    /// Get whether or not the Component currently in scope for the Client,
-    /// given that Component's Key
-    pub fn has_component(&self, key: &LocalComponentKey) -> bool {
-        if let Some(connection) = &self.server_connection {
-            return connection.has_component(key);
-        }
-        return false;
-    }
-
-    /// Given an EntityKey & a Component type, get a reference to a registered
-    /// Component being tracked by the Server
-    pub fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
-        if let Some(connection) = &self.server_connection {
-            return connection.get_component_by_type::<R>(key);
+    /// Given an EntityKey & a Component type, get a reference to the appropriate ComponentRef
+    pub fn component_present<R: Replicate<T>>(&self, entity_key: &LocalEntityKey) -> Option<&Ref<R>> {
+        if let Some(protocol) = self.get_pawn_component_by_type::<R>(entity_key) {
+            return protocol.as_typed_ref::<R>();
         }
         return None;
     }
 
-    /// Given an EntityKey & a Component type, get a reference to a registered
-    /// Pawn Component being tracked by the Server
-    pub fn get_pawn_component_by_type<R: Replicate<T>>(
-        &self,
-        key: &LocalEntityKey,
-    ) -> Option<Ref<R>> {
-        if let Some(connection) = &self.server_connection {
-            return connection.get_pawn_component_by_type::<R>(key);
-        }
-        return None;
-    }
-
-    /// Get a set of Components for the Entity associated with the given
-    /// EntityKey
-    pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
-        if let Some(connection) = &self.server_connection {
-            return connection.get_components(key);
-        }
-        return Vec::<T>::new();
-    }
-
-    /// Get a set of Components for the Pawn Entity associated with the given
-    /// EntityKey
-    pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
-        if let Some(connection) = &self.server_connection {
-            return connection.get_pawn_components(key);
-        }
-        return Vec::<T>::new();
-    }
+//    /// Get a set of Components for the Entity associated with the given
+//    /// EntityKey
+//    pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
+//        if let Some(connection) = &self.server_connection {
+//            return connection.get_components(key);
+//        }
+//        return Vec::<T>::new();
+//    }
+//
+//    /// Get a set of Components for the Pawn Entity associated with the given
+//    /// EntityKey
+//    pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
+//        if let Some(connection) = &self.server_connection {
+//            return connection.get_pawn_components(key);
+//        }
+//        return Vec::<T>::new();
+//    }
 
     // Connection
 
@@ -324,29 +307,29 @@ impl<T: ProtocolType> Client<T> {
     }
 
     /// Return whether or not a connection has been established with the Server
-    pub fn has_connection(&self) -> bool {
+    pub fn connected(&self) -> bool {
         return self.server_connection.is_some();
     }
 
     /// Gets the average Round Trip Time measured to the Server
-    pub fn get_rtt(&self) -> f32 {
+    pub fn rtt(&self) -> f32 {
         return self.server_connection.as_ref().unwrap().get_rtt();
     }
 
     /// Gets the average Jitter measured in connection to the Server
-    pub fn get_jitter(&self) -> f32 {
+    pub fn jitter(&self) -> f32 {
         return self.server_connection.as_ref().unwrap().get_jitter();
     }
 
     // Ticks
 
     /// Gets the current tick of the Client
-    pub fn get_client_tick(&self) -> u16 {
+    pub fn client_tick(&self) -> u16 {
         return self.tick_manager.get_client_tick();
     }
 
     /// Gets the last received tick from the Server
-    pub fn get_server_tick(&self) -> u16 {
+    pub fn server_tick(&self) -> u16 {
         return self
             .server_connection
             .as_ref()
@@ -357,8 +340,31 @@ impl<T: ProtocolType> Client<T> {
     // Interpolation
 
     /// Gets the interpolation tween amount for the current frame
-    pub fn get_interpolation(&self) -> f32 {
+    pub fn interpolation(&self) -> f32 {
         self.tick_manager.fraction
+    }
+
+    // Crate-Public functions
+
+    /// Given an EntityKey & a Component type, get a reference to a registered
+    /// Component being tracked by the Server
+    pub(crate) fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<&T> {
+        if let Some(connection) = &self.server_connection {
+            return connection.get_component_by_type::<R>(key);
+        }
+        return None;
+    }
+
+    /// Given an EntityKey & a Component type, get a reference to a registered
+    /// Pawn Component being tracked by the Server
+    pub(crate) fn get_pawn_component_by_type<R: Replicate<T>>(
+        &self,
+        key: &LocalEntityKey,
+    ) -> Option<&T> {
+        if let Some(connection) = &self.server_connection {
+            return connection.get_pawn_component_by_type::<R>(key);
+        }
+        return None;
     }
 
     // internal functions
