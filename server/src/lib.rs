@@ -44,6 +44,7 @@ mod error;
 mod event;
 mod keys;
 mod local_component_record;
+mod local_entity_record;
 mod locality_status;
 mod mut_handler;
 mod packet_writer;

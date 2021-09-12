@@ -27,10 +27,7 @@ impl<'s, P: ProtocolType> EntityRef<'s, P> {
     }
 
     pub fn component<R: Replicate<P>>(&self) -> Option<&Ref<R>> {
-        if let Some(protocol) = self.server.get_component_by_type::<R>(&self.key) {
-            return protocol.as_typed_ref::<R>();
-        }
-        return None;
+        return self.server.component::<R>(&self.key);
     }
 }
 
@@ -56,10 +53,7 @@ impl<'s, P: ProtocolType> EntityMut<'s, P> {
     }
 
     pub fn component<R: Replicate<P>>(&self) -> Option<&Ref<R>> {
-        if let Some(protocol) = self.server.get_component_by_type::<R>(&self.key) {
-            return protocol.as_typed_ref::<R>();
-        }
-        return None;
+        return self.server.component::<R>(&self.key);
     }
 
     // Add Component
@@ -89,14 +83,16 @@ impl<'s, P: ProtocolType> EntityMut<'s, P> {
 
     // Users & Assignment
 
-    pub fn assign_user(&mut self, user_key: &UserKey) -> &mut Self {
+    pub fn owned_by(&mut self, user_key: &UserKey) -> &mut Self {
+        // user_own?
         self.server.assign_pawn_entity(user_key, &self.key);
 
         self
     }
 
-    pub fn unassign_user(&mut self, user_key: &UserKey) -> &mut Self {
-        self.server.unassign_pawn_entity(user_key, &self.key);
+    pub fn disown(&mut self) -> &mut Self {
+        // user_disown?
+        self.server.disown_entity_user_unknown(&self.key);
 
         self
     }

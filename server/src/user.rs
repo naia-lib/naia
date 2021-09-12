@@ -79,14 +79,14 @@ impl<'s, P: ProtocolType> UserMut<'s, P> {
         self
     }
 
-    pub fn possess_entity(&mut self, entity_key: &EntityKey) -> &mut Self {
+    pub fn own_entity(&mut self, entity_key: &EntityKey) -> &mut Self {
         self.server.assign_pawn_entity(&self.key, entity_key);
 
         self
     }
 
-    pub fn release_entity(&mut self, entity_key: &EntityKey) -> &mut Self {
-        self.server.unassign_pawn_entity(&self.key, entity_key);
+    pub fn disown_entity(&mut self, entity_key: &EntityKey) -> &mut Self {
+        self.server.disown_entity(&self.key, entity_key);
 
         self
     }

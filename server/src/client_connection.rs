@@ -1,8 +1,8 @@
 use std::net::SocketAddr;
 
 use naia_shared::{
-    ComponentRecord, Connection, ConnectionConfig, EntityKey, ManagerType, Manifest, PacketReader,
-    PacketType, ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
+    Connection, ConnectionConfig, EntityKey, ManagerType, Manifest, PacketReader, PacketType,
+    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
 };
 
 use super::{
@@ -10,6 +10,7 @@ use super::{
     keys::component_key::ComponentKey, mut_handler::MutHandler, packet_writer::PacketWriter,
     ping_manager::PingManager,
 };
+use crate::entity_record::EntityRecord;
 
 pub struct ClientConnection<P: ProtocolType> {
     connection: Connection<P>,
@@ -120,11 +121,15 @@ impl<P: ProtocolType> ClientConnection<P> {
         if let Some((local_pawn_key, command)) =
             self.command_receiver.pop_incoming_command(server_tick)
         {
+            // get global key from the local one
             if let Some(global_pawn_key) = self
                 .entity_manager
                 .get_global_entity_key_from_local(local_pawn_key)
             {
-                return Some((*global_pawn_key, command));
+                // make sure Command is valid (the entity really is owned by this connection)
+                if self.entity_manager.has_pawn_entity(global_pawn_key) {
+                    return Some((*global_pawn_key, command));
+                }
             }
         }
         return None;
@@ -143,11 +148,11 @@ impl<P: ProtocolType> ClientConnection<P> {
     pub fn add_entity(
         &mut self,
         key: &EntityKey,
-        entity_component_record: &Ref<ComponentRecord<ComponentKey>>,
+        entity_record: &EntityRecord,
         component_list: &Vec<(ComponentKey, Ref<dyn Replicate<P>>)>,
     ) {
         self.entity_manager
-            .add_entity(key, entity_component_record, component_list);
+            .add_entity(key, entity_record, component_list);
     }
 
     pub fn remove_entity(&mut self, key: &EntityKey) {

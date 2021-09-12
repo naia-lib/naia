@@ -14,13 +14,13 @@ pub enum Event<P> {
     /// Occurs when the Server has lost connection to a Client, usually as the
     /// result of a timeout
     Disconnection(UserKey, User),
+    /// A Tick Event.
+    /// The duration between Tick events is defined in the Config passed to the
+    /// Server on initialization
+    Tick,
     /// A Message emitted to the Server from a Client
     Message(UserKey, P),
     /// A Command emitted to the Server from a Client, related to some
     /// user-assigned Entity
     Command(UserKey, EntityKey, P),
-    /// A Tick Event.
-    /// The duration between Tick events is defined in the Config passed to the
-    /// Server on initialization
-    Tick,
 }

@@ -10,17 +10,18 @@ use slotmap::SparseSecondaryMap;
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    ComponentRecord, DiffMask, EntityKey, KeyGenerator, LocalComponentKey, LocalEntityKey,
-    Manifest, NaiaKey, PacketNotifiable, ProtocolType, Ref, Replicate, MTU_SIZE,
+    DiffMask, EntityKey, KeyGenerator, LocalComponentKey, LocalEntityKey, Manifest, NaiaKey,
+    PacketNotifiable, ProtocolType, Ref, Replicate, MTU_SIZE,
 };
 
 use crate::packet_writer::PacketWriter;
 
 use super::{
-    entity_action::EntityAction, entity_record::EntityRecord, keys::component_key::ComponentKey,
-    local_component_record::LocalComponentRecord, locality_status::LocalityStatus,
-    mut_handler::MutHandler,
+    entity_action::EntityAction, keys::component_key::ComponentKey,
+    local_component_record::LocalComponentRecord, local_entity_record::LocalEntityRecord,
+    locality_status::LocalityStatus, mut_handler::MutHandler,
 };
+use crate::entity_record::EntityRecord;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
@@ -29,7 +30,7 @@ pub struct EntityManager<P: ProtocolType> {
     address: SocketAddr,
     // Entities
     entity_key_generator: KeyGenerator<LocalEntityKey>,
-    local_entity_records: HashMap<EntityKey, EntityRecord>,
+    local_entity_records: HashMap<EntityKey, LocalEntityRecord>,
     local_to_global_entity_key_map: HashMap<LocalEntityKey, EntityKey>,
     delayed_entity_deletions: HashSet<EntityKey>,
     // Components
@@ -216,7 +217,7 @@ impl<P: ProtocolType> EntityManager<P> {
     pub fn add_entity(
         &mut self,
         global_key: &EntityKey,
-        component_record_ref: &Ref<ComponentRecord<ComponentKey>>,
+        entity_record: &EntityRecord,
         component_list: &Vec<(ComponentKey, Ref<dyn Replicate<P>>)>,
     ) {
         if !self.local_entity_records.contains_key(global_key) {
@@ -229,7 +230,8 @@ impl<P: ProtocolType> EntityManager<P> {
             let local_key: LocalEntityKey = self.entity_key_generator.generate();
             self.local_to_global_entity_key_map
                 .insert(local_key, *global_key);
-            let entity_record = EntityRecord::new(local_key, component_record_ref);
+            let entity_record =
+                LocalEntityRecord::new(local_key, &entity_record.get_component_record());
             self.local_entity_records.insert(*global_key, entity_record);
             self.queued_actions
                 .push_back(EntityAction::SpawnEntity(*global_key, local_key, None));
@@ -288,7 +290,7 @@ impl<P: ProtocolType> EntityManager<P> {
         // success
         entity_record.is_pawn = true;
         self.queued_actions
-            .push_back(EntityAction::AssignEntity(*key, entity_record.local_key));
+            .push_back(EntityAction::OwnEntity(*key, entity_record.local_key));
     }
 
     pub fn remove_pawn_entity(&mut self, key: &EntityKey) {
@@ -303,7 +305,7 @@ impl<P: ProtocolType> EntityManager<P> {
         // success
         entity_record.is_pawn = false;
         self.queued_actions
-            .push_back(EntityAction::UnassignEntity(*key, entity_record.local_key));
+            .push_back(EntityAction::DisownEntity(*key, entity_record.local_key));
     }
 
     pub fn has_pawn_entity(&self, key: &EntityKey) -> bool {
@@ -468,12 +470,12 @@ impl<P: ProtocolType> EntityManager<P> {
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            EntityAction::AssignEntity(_, local_key) => {
+            EntityAction::OwnEntity(_, local_key) => {
                 action_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            EntityAction::UnassignEntity(_, local_key) => {
+            EntityAction::DisownEntity(_, local_key) => {
                 action_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
@@ -758,8 +760,8 @@ impl<P: ProtocolType> PacketNotifiable for EntityManager<P> {
                             deleted_components.push(component_key);
                         }
                     }
-                    EntityAction::AssignEntity(_, _) => {}
-                    EntityAction::UnassignEntity(_, _) => {}
+                    EntityAction::OwnEntity(_, _) => {}
+                    EntityAction::DisownEntity(_, _) => {}
                     EntityAction::InsertComponent(_, global_component_key, _, _) => {
                         let component_record = self
                             .local_component_records
@@ -799,8 +801,8 @@ impl<P: ProtocolType> PacketNotifiable for EntityManager<P> {
                     EntityAction::RemoveComponent(_, _)
                     | EntityAction::SpawnEntity(_, _, _)
                     | EntityAction::DespawnEntity(_, _)
-                    | EntityAction::AssignEntity(_, _)
-                    | EntityAction::UnassignEntity(_, _)
+                    | EntityAction::OwnEntity(_, _)
+                    | EntityAction::DisownEntity(_, _)
                     | EntityAction::InsertComponent(_, _, _, _) => {
                         self.queued_actions.push_back(dropped_action.clone());
                     }
@@ -859,7 +861,7 @@ fn component_delete<P: ProtocolType>(
 
 fn entity_delete<P: ProtocolType>(
     queued_actions: &mut VecDeque<EntityAction<P>>,
-    entity_record: &mut EntityRecord,
+    entity_record: &mut LocalEntityRecord,
     entity_key: &EntityKey,
 ) {
     entity_record.status = LocalityStatus::Deleting;

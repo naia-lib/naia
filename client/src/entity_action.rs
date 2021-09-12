@@ -4,8 +4,8 @@ use naia_shared::{LocalEntityKey, ProtocolType};
 pub enum EntityAction<P: ProtocolType> {
     SpawnEntity(LocalEntityKey, Vec<P>),
     DespawnEntity(LocalEntityKey),
-    AssignEntity(LocalEntityKey),
-    UnassignEntity(LocalEntityKey),
+    OwnEntity(LocalEntityKey),
+    DisownEntity(LocalEntityKey),
     RewindEntity(LocalEntityKey),
     InsertComponent(LocalEntityKey, P),
     RemoveComponent(LocalEntityKey, P),

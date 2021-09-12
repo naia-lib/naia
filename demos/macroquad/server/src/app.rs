@@ -73,7 +73,7 @@ impl App {
                         .server
                         .spawn_entity()
                         .insert_component(&square)
-                        .assign_user(&user_key)
+                        .owned_by(&user_key)
                         .enter_room(&self.main_room_key)
                         .key();
                     self.user_to_pawn_map.insert(user_key, entity_key);
@@ -88,7 +88,7 @@ impl App {
                         self.server
                             .entity_mut(&entity_key)
                             .unwrap()
-                            .unassign_user(&user_key)
+                            .disown()
                             .leave_room(&self.main_room_key)
                             .despawn();
                     }
