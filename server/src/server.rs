@@ -25,7 +25,7 @@ use super::{
     keys::component_key::ComponentKey,
     mut_handler::MutHandler,
     property_mutator::PropertyMutator,
-    room::{room_key::RoomKey, Room},
+    room::{room_key::RoomKey, Room, RoomMut, RoomRef},
     server_config::ServerConfig,
     tick_manager::TickManager,
     user::{user_key::UserKey, User, UserMut, UserRef},
@@ -264,7 +264,7 @@ impl<U: ProtocolType> Server<U> {
     // Entities
 
     /// Spawns a new Entity and returns a corresponding EntityMut, which can be
-    /// used to add components to the entity or retrieve its id
+    /// used to add components to the entity or retrieve its unique key
     pub fn spawn_entity(&mut self) -> EntityMut<U> {
         let entity_key: EntityKey = self.entity_key_generator.generate();
         self.entity_component_map
@@ -391,26 +391,39 @@ impl<U: ProtocolType> Server<U> {
 
     // Rooms
 
-    /// Creates a new Room on the Server, returns a Key which can be used to
-    /// reference said Room
-    pub fn create_room(&mut self) -> RoomKey {
+    /// Creates a new Room on the Server and returns a corresponding RoomMut,
+    /// which can be used to add users/entities to the room or retrieve its
+    /// key
+    pub fn make_room(&mut self) -> RoomMut<U> {
         let new_room = Room::new();
-        return self.rooms.insert(new_room);
+        let room_key = self.rooms.insert(new_room);
+        return RoomMut::new(self, &room_key);
     }
 
-    /// Deletes the Room associated with a given RoomKey on the Server
-    pub fn delete_room(&mut self, key: &RoomKey) {
-        self.rooms.remove(*key);
+    /// Deletes the Room associated with a given RoomKey on the Server. Returns
+    /// true if the Room existed
+    pub fn destroy_room(&mut self, key: &RoomKey) -> bool {
+        return self.rooms.remove(*key).is_some();
     }
 
-    /// Gets a Room given an associated RoomKey
-    pub fn get_room(&self, key: &RoomKey) -> Option<&Room> {
-        return self.rooms.get(*key);
+    /// Retrieves an RoomMut that exposes read and write operations for the
+    /// Room associated with the given RoomKey.
+    /// Returns None if the room does not exist.
+    pub fn room(&self, room_key: &RoomKey) -> Option<RoomRef<U>> {
+        if self.rooms.contains_key(*room_key) {
+            return Some(RoomRef::new(self, room_key));
+        }
+        return None;
     }
 
-    /// Gets a mutable Room given an associated RoomKey
-    pub fn get_room_mut(&mut self, key: &RoomKey) -> Option<&mut Room> {
-        return self.rooms.get_mut(*key);
+    /// Retrieves an RoomMut that exposes read and write operations for the
+    /// Room associated with the given RoomKey.
+    /// Returns None if the room does not exist.
+    pub fn room_mut(&mut self, room_key: &RoomKey) -> Option<RoomMut<U>> {
+        if self.rooms.contains_key(*room_key) {
+            return Some(RoomMut::new(self, room_key));
+        }
+        return None;
     }
 
     /// Iterate through all the Server's current Rooms
@@ -418,9 +431,9 @@ impl<U: ProtocolType> Server<U> {
         return self.rooms.iter();
     }
 
-    /// Get the number of Rooms in the Server
-    pub fn get_rooms_count(&self) -> usize {
-        return self.rooms.len();
+    /// Get a count of how many Rooms currently exist
+    pub fn rooms_count(&self) -> usize {
+        self.rooms.len()
     }
 
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
@@ -457,16 +470,6 @@ impl<U: ProtocolType> Server<U> {
 
     // Users
 
-    /// Iterate through all currently connected Users
-    pub fn users_iter(&self) -> slotmap::dense::Iter<UserKey, User> {
-        return self.users.iter();
-    }
-
-    /// Get the number of Users currently connected
-    pub fn get_users_count(&self) -> usize {
-        return self.users.len();
-    }
-
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
@@ -487,6 +490,16 @@ impl<U: ProtocolType> Server<U> {
         return None;
     }
 
+    /// Iterate through all currently connected Users
+    pub fn users_iter(&self) -> slotmap::dense::Iter<UserKey, User> {
+        return self.users.iter();
+    }
+
+    /// Get the number of Users currently connected
+    pub fn users_count(&self) -> usize {
+        return self.users.len();
+    }
+
     /// Returns true if a given User has an Entity with a given EntityKey
     /// in-scope currently
     pub fn user_scope_has_entity(&self, user_key: &UserKey, entity_key: &EntityKey) -> bool {
@@ -500,7 +513,7 @@ impl<U: ProtocolType> Server<U> {
     // Ticks
 
     /// Gets the last received tick from the Client
-    pub fn get_client_tick(&self, user_key: &UserKey) -> Option<u16> {
+    pub fn client_tick(&self, user_key: &UserKey) -> Option<u16> {
         if let Some(user_connection) = self.client_connections.get(user_key) {
             return Some(user_connection.get_last_received_tick());
         }
@@ -508,7 +521,7 @@ impl<U: ProtocolType> Server<U> {
     }
 
     /// Gets the current tick of the Server
-    pub fn get_server_tick(&self) -> u16 {
+    pub fn server_tick(&self) -> u16 {
         self.tick_manager.get_tick()
     }
 

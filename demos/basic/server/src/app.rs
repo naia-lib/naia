@@ -24,7 +24,7 @@ impl App {
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
-        let main_room_key = server.create_room();
+        let main_room_key = server.make_room();
 
         // Create 4 Character entities, with a range of X and name values
         {
@@ -41,7 +41,7 @@ impl App {
 
                 // Create a Character
                 let character = Character::new((count * 4) as u8, 0, first, last);
-                let character_key = server.spawn_entity().insert(&character).key();
+                let character_key = server.spawn_entity().add_component(&character).key();
 
                 // Add the Character Entity to the main Room
                 server.room_add_entity(&main_room_key, &character_key);
