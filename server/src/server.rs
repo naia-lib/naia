@@ -225,10 +225,10 @@ impl<P: ProtocolType> Server<P> {
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn queue_message<T: ImplRef<P>>(
+    pub fn queue_message<R: ImplRef<P>>(
         &mut self,
         user_key: &UserKey,
-        message_ref: &T,
+        message_ref: &R,
         guaranteed_delivery: bool,
     ) {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
@@ -368,9 +368,9 @@ impl<P: ProtocolType> Server<P> {
 
     /// Given an EntityKey & a Component type, get a reference to a registered
     /// Component being tracked by the Server
-    pub fn component<T: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<&Ref<T>> {
-        if let Some(protocol) = self.get_component_by_type::<T>(entity_key) {
-            return protocol.as_typed_ref::<T>();
+    pub fn component<R: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<&Ref<R>> {
+        if let Some(protocol) = self.get_component_by_type::<R>(entity_key) {
+            return protocol.as_typed_ref::<R>();
         }
         return None;
     }
@@ -565,10 +565,10 @@ impl<P: ProtocolType> Server<P> {
     /// Component to all connected Clients for which the Component's Entity
     /// is in Scope. Gives back a ComponentKey which can be used to get the
     /// reference to the Component from the Server once again
-    pub(crate) fn add_component_to_entity<T: ImplRef<P>>(
+    pub(crate) fn add_component_to_entity<R: ImplRef<P>>(
         &mut self,
         entity_key: &EntityKey,
-        component_ref: &T,
+        component_ref: &R,
     ) -> ComponentKey {
         if !self.entity_component_map.contains_key(&entity_key) {
             panic!("attempted to add component to non-existent entity");
@@ -600,11 +600,11 @@ impl<P: ProtocolType> Server<P> {
 
     /// Given an EntityKey & a Component type, get a reference to a registered
     /// Component being tracked by the Server
-    pub(crate) fn get_component_by_type<T: Replicate<P>>(&self, key: &EntityKey) -> Option<&P> {
+    pub(crate) fn get_component_by_type<R: Replicate<P>>(&self, key: &EntityKey) -> Option<&P> {
         if let Some(component_record) = self.entity_component_map.get(key) {
             if let Some(component_key) = component_record
                 .borrow()
-                .get_key_from_type(&TypeId::of::<T>())
+                .get_key_from_type(&TypeId::of::<R>())
             {
                 return self.global_component_store.get(*component_key);
             }
@@ -614,14 +614,14 @@ impl<P: ProtocolType> Server<P> {
 
     /// Given an EntityKey & a Component type, get a ComponentKey to a
     /// registered Component being tracked by the Server
-    pub(crate) fn remove_component_by_type<T: Replicate<P>>(
+    pub(crate) fn remove_component_by_type<R: Replicate<P>>(
         &mut self,
         entity_key: &EntityKey,
     ) -> bool {
         if let Some(component_record_ref) = self.entity_component_map.get(entity_key) {
             let mut component_record = component_record_ref.borrow_mut();
             let component_key: ComponentKey = *component_record
-                .get_key_from_type(&TypeId::of::<T>())
+                .get_key_from_type(&TypeId::of::<R>())
                 .expect("component not initialized correctly?");
 
             for (user_key, _) in self.users.iter() {
@@ -941,7 +941,7 @@ impl<P: ProtocolType> Server<P> {
     // to all connected Clients for which the Component is in scope. Gives back
     // an ComponentKey which can be used to get the reference to the Component
     // from the Server once again
-    fn register_component<T: ImplRef<P>>(&mut self, component_ref: &T) -> ComponentKey {
+    fn register_component<R: ImplRef<P>>(&mut self, component_ref: &R) -> ComponentKey {
         let dyn_ref = component_ref.dyn_ref();
         let new_mutator_ref: Ref<PropertyMutator> =
             Ref::new(PropertyMutator::new(&self.mut_handler));

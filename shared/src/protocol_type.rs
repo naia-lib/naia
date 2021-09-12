@@ -26,10 +26,10 @@ where
     fn inner_ref(&self) -> Ref<dyn Replicate<Impl>>;
     /// Convert ProtocolType to a typed inner reference of the
     /// Component/Message
-    fn to_typed_ref<T: Replicate<Impl>>(&self) -> Option<Ref<T>>;
+    fn to_typed_ref<R: Replicate<Impl>>(&self) -> Option<Ref<R>>;
     /// Convert ProtocolType to a typed inner reference of the
     /// Component/Message
-    fn as_typed_ref<T: Replicate<Impl>>(&self) -> Option<&Ref<T>>;
+    fn as_typed_ref<R: Replicate<Impl>>(&self) -> Option<&Ref<R>>;
     /// Compare properties in another ProtocolType
     fn equals(&self, other: &Impl) -> bool;
     /// Sets the current Component/Message to the state of another of the
