@@ -22,9 +22,9 @@ impl<K: Eq + Hash + Copy> ComponentRecord<K> {
     }
 
     /// Inserts a new Component into the ComponentRecord
-    pub fn insert_component(&mut self, key: &K, type_id: TypeId) {
-        self.key_set_ref.insert(*key, type_id);
-        self.type_map.insert(type_id, *key);
+    pub fn insert_component(&mut self, key: &K, type_id: &TypeId) {
+        self.key_set_ref.insert(*key, *type_id);
+        self.type_map.insert(*type_id, *key);
     }
 
     /// Removes a Component from the ComponentRecord

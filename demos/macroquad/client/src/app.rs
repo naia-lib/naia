@@ -86,7 +86,7 @@ impl App {
                 Ok(Event::Tick) => {
                     if let Some((pawn_key, _)) = self.pawn {
                         if let Some(command) = self.queued_command.take() {
-                            self.client.send_entity_command(&pawn_key, &command);
+                            self.client.send_command(&pawn_key, &command);
                         }
                     }
                 }

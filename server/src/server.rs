@@ -338,7 +338,7 @@ impl<U: ProtocolType> Server<U> {
         if let Some(entity_component_record) = self.entity_component_map.get_mut(&entity_key) {
             entity_component_record
                 .borrow_mut()
-                .insert_component(&component_key, dyn_ref.borrow().get_type_id());
+                .insert_component(&component_key, &dyn_ref.borrow().get_type_id());
         }
 
         return component_key;

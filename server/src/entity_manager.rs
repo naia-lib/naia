@@ -27,19 +27,18 @@ use super::{
 #[derive(Debug)]
 pub struct EntityManager<T: ProtocolType> {
     address: SocketAddr,
-    // entities
+    // Entities
     entity_key_generator: KeyGenerator<LocalEntityKey>,
-    local_entity_store: HashMap<EntityKey, EntityRecord>,
+    local_entity_records: HashMap<EntityKey, EntityRecord>,
     local_to_global_entity_key_map: HashMap<LocalEntityKey, EntityKey>,
-    pawn_entity_store: HashSet<EntityKey>,
     delayed_entity_deletions: HashSet<EntityKey>,
-    // components
+    // Components
     component_key_generator: KeyGenerator<LocalComponentKey>,
     local_component_store: SparseSecondaryMap<ComponentKey, Ref<dyn Replicate<T>>>,
     local_to_global_component_key_map: HashMap<LocalComponentKey, ComponentKey>,
-    component_records: SparseSecondaryMap<ComponentKey, LocalComponentRecord>,
+    local_component_records: SparseSecondaryMap<ComponentKey, LocalComponentRecord>,
     delayed_component_deletions: HashSet<ComponentKey>,
-    // actions / updates / ect
+    // Actions / updates / ect
     queued_actions: VecDeque<EntityAction<T>>,
     sent_actions: HashMap<u16, Vec<EntityAction<T>>>,
     sent_updates: HashMap<u16, HashMap<ComponentKey, Ref<DiffMask>>>,
@@ -56,19 +55,18 @@ impl<T: ProtocolType> EntityManager<T> {
     pub fn new(address: SocketAddr, mut_handler: &Ref<MutHandler>) -> Self {
         EntityManager {
             address,
-            // entities
+            // Entities
             entity_key_generator: KeyGenerator::new(),
+            local_entity_records: HashMap::new(),
             local_to_global_entity_key_map: HashMap::new(),
-            local_entity_store: HashMap::new(),
-            pawn_entity_store: HashSet::new(),
             delayed_entity_deletions: HashSet::new(),
-            // components
+            // Components
             component_key_generator: KeyGenerator::new(),
             local_component_store: SparseSecondaryMap::new(),
             local_to_global_component_key_map: HashMap::new(),
-            component_records: SparseSecondaryMap::new(),
+            local_component_records: SparseSecondaryMap::new(),
             delayed_component_deletions: HashSet::new(),
-            // actions / updates / ect
+            // Actions / updates / ect
             queued_actions: VecDeque::new(),
             sent_actions: HashMap::new(),
             sent_updates: HashMap::<u16, HashMap<ComponentKey, Ref<DiffMask>>>::new(),
@@ -96,13 +94,13 @@ impl<T: ProtocolType> EntityManager<T> {
                 EntityAction::CreateEntity(global_entity_key, local_entity_key, _) => {
                     let mut component_list = Vec::new();
 
-                    let entity_record = self.local_entity_store.get(global_entity_key)
+                    let entity_record = self.local_entity_records.get(global_entity_key)
                         .expect("trying to pop an entity action for an entity which has not been initialized correctly");
 
                     for global_component_key in entity_record.get_component_keys() {
                         let component_ref = self.local_component_store.get(global_component_key)
                             .expect("trying to initiate a component which has not been initialized correctly");
-                        let component_record = self.component_records.get(global_component_key)
+                        let component_record = self.local_component_records.get(global_component_key)
                             .expect("trying to initiate a component which has not been initialized correctly");
                         component_list.push((
                             global_component_key,
@@ -142,7 +140,9 @@ impl<T: ProtocolType> EntityManager<T> {
                 if let Some(components_list) = components_list_opt {
                     let mut diff_mask_list: Vec<(ComponentKey, DiffMask)> = Vec::new();
                     for (global_component_key, _, _) in components_list {
-                        if let Some(record) = self.component_records.get(*global_component_key) {
+                        if let Some(record) =
+                            self.local_component_records.get(*global_component_key)
+                        {
                             diff_mask_list.push((
                                 *global_component_key,
                                 record.get_diff_mask().borrow().clone(),
@@ -219,7 +219,7 @@ impl<T: ProtocolType> EntityManager<T> {
         component_record_ref: &Ref<ComponentRecord<ComponentKey>>,
         component_list: &Vec<(ComponentKey, Ref<dyn Replicate<T>>)>,
     ) {
-        if !self.local_entity_store.contains_key(global_key) {
+        if !self.local_entity_records.contains_key(global_key) {
             // first, add components
             for (component_key, component_ref) in component_list {
                 self.component_init(component_key, component_ref, LocalityStatus::Creating);
@@ -230,7 +230,7 @@ impl<T: ProtocolType> EntityManager<T> {
             self.local_to_global_entity_key_map
                 .insert(local_key, *global_key);
             let entity_record = EntityRecord::new(local_key, component_record_ref);
-            self.local_entity_store.insert(*global_key, entity_record);
+            self.local_entity_records.insert(*global_key, entity_record);
             self.queued_actions
                 .push_back(EntityAction::CreateEntity(*global_key, local_key, None));
         } else {
@@ -243,7 +243,7 @@ impl<T: ProtocolType> EntityManager<T> {
             self.remove_pawn_entity(key);
         }
 
-        if let Some(entity_record) = self.local_entity_store.get_mut(key) {
+        if let Some(entity_record) = self.local_entity_records.get_mut(key) {
             match entity_record.status {
                 LocalityStatus::Creating => {
                     // queue deletion action to be sent after creation
@@ -257,7 +257,7 @@ impl<T: ProtocolType> EntityManager<T> {
                     // accordingly
                     for component_key in entity_record.get_component_keys() {
                         if let Some(component_record) =
-                            self.component_records.get_mut(component_key)
+                            self.local_component_records.get_mut(component_key)
                         {
                             component_record.status = LocalityStatus::Deleting;
                         }
@@ -271,74 +271,73 @@ impl<T: ProtocolType> EntityManager<T> {
     }
 
     pub fn has_entity(&self, key: &EntityKey) -> bool {
-        return self.local_entity_store.contains_key(key);
+        return self.local_entity_records.contains_key(key);
     }
 
     // Pawn Entities
 
     pub fn add_pawn_entity(&mut self, key: &EntityKey) {
-        if self.local_entity_store.contains_key(key) {
-            if !self.pawn_entity_store.contains(key) {
-                self.pawn_entity_store.insert(*key);
-                let local_key = self.local_entity_store.get(key).unwrap().local_key;
-                self.queued_actions
-                    .push_back(EntityAction::AssignPawn(*key, local_key));
-            } else {
-                warn!("attempting to assign a pawn entity twice");
-            }
-        } else {
-            warn!("attempting to assign a nonexistent entity to be a pawn");
+        let entity_record = self
+            .local_entity_records
+            .get_mut(key)
+            .expect("attempting to assign a nonexistent Entity to be a Pawn");
+        if entity_record.is_pawn {
+            panic!("attempting to assign an Entity as a Pawn twice!");
         }
+
+        // success
+        entity_record.is_pawn = true;
+        self.queued_actions
+            .push_back(EntityAction::AssignPawn(*key, entity_record.local_key));
     }
 
     pub fn remove_pawn_entity(&mut self, key: &EntityKey) {
-        if self.pawn_entity_store.contains(key) {
-            self.pawn_entity_store.remove(key);
-            let local_key = self
-                .local_entity_store
-                .get(key)
-                .expect(
-                    "expecting an entity record to exist if that entity is designated as a pawn",
-                )
-                .local_key;
-
-            self.queued_actions
-                .push_back(EntityAction::UnassignPawn(*key, local_key));
-        } else {
-            panic!("attempting to unassign an entity as a pawn which is not assigned as a pawn in the first place")
+        let entity_record = self
+            .local_entity_records
+            .get_mut(key)
+            .expect("attempting to unassign a non-existant Entity as a Pawn");
+        if !entity_record.is_pawn {
+            panic!("attempting to unassign a Entity as a Pawn, but it is already not a Pawn");
         }
+
+        // success
+        entity_record.is_pawn = false;
+        self.queued_actions
+            .push_back(EntityAction::UnassignPawn(*key, entity_record.local_key));
     }
 
     pub fn has_pawn_entity(&self, key: &EntityKey) -> bool {
-        return self.pawn_entity_store.contains(key);
+        if let Some(entity_record) = self.local_entity_records.get(key) {
+            return entity_record.is_pawn;
+        }
+        return false;
     }
 
     // Components
 
-    // Called when the entity already exists in this connection
     pub fn add_component(
         &mut self,
         entity_key: &EntityKey,
         component_key: &ComponentKey,
         component_ref: &Ref<dyn Replicate<T>>,
     ) {
-        if !self.local_entity_store.contains_key(entity_key) {
+        if !self.local_entity_records.contains_key(entity_key) {
             panic!(
-                "attempting to add component to entity that does not yet exist for this connection"
+                "attempting to add Component to Entity that does not yet exist for this connection"
             );
         }
 
         let local_component_key =
             self.component_init(component_key, component_ref, LocalityStatus::Creating);
 
-        let entity_record = self.local_entity_store.get(entity_key).unwrap();
+        let entity_record = self.local_entity_records.get(entity_key).unwrap(); // checked this above
 
         match entity_record.status {
             LocalityStatus::Creating => {
-                // uncreated components will be created after entity is created
+                // uncreated Components will be created after Entity is created
             }
             LocalityStatus::Created => {
-                // send add component action
+                // send AddComponent action
                 self.queued_actions.push_back(EntityAction::AddComponent(
                     entity_record.local_key,
                     *component_key,
@@ -353,24 +352,22 @@ impl<T: ProtocolType> EntityManager<T> {
     }
 
     pub fn remove_component(&mut self, key: &ComponentKey) {
-        if let Some(component_record) = self.component_records.get_mut(*key) {
-            match component_record.status {
-                LocalityStatus::Creating => {
-                    // queue deletion action to be sent after creation
-                    self.delayed_component_deletions.insert(*key);
-                }
-                LocalityStatus::Created => {
-                    // send deletion action
-                    component_delete(&mut self.queued_actions, component_record, key);
-                }
-                LocalityStatus::Deleting => {
-                    // deletion in progress, do nothing
-                }
+        let component_record = self.local_component_records.get_mut(*key).expect(
+            "attempting to remove a component from a connection within which it does not exist",
+        );
+
+        match component_record.status {
+            LocalityStatus::Creating => {
+                // queue deletion action to be sent after creation
+                self.delayed_component_deletions.insert(*key);
             }
-        } else {
-            panic!(
-                "attempting to remove a component from a connection within which it does not exist"
-            );
+            LocalityStatus::Created => {
+                // send deletion action
+                component_delete(&mut self.queued_actions, component_record, key);
+            }
+            LocalityStatus::Deleting => {
+                // deletion in progress, do nothing
+            }
         }
     }
 
@@ -384,7 +381,7 @@ impl<T: ProtocolType> EntityManager<T> {
     }
 
     pub fn collect_component_updates(&mut self) {
-        for (key, record) in self.component_records.iter() {
+        for (key, record) in self.local_component_records.iter() {
             if record.status == LocalityStatus::Created
                 && !record.get_diff_mask().borrow().is_clear()
             {
@@ -527,28 +524,28 @@ impl<T: ProtocolType> EntityManager<T> {
         component: &Ref<dyn Replicate<T>>,
         status: LocalityStatus,
     ) -> LocalComponentKey {
-        if !self.local_component_store.contains_key(*key) {
-            self.local_component_store.insert(*key, component.clone());
-            let local_key: LocalComponentKey = self.component_key_generator.generate();
-            self.local_to_global_component_key_map
-                .insert(local_key, *key);
-            let diff_mask_size = component.borrow().get_diff_mask_size();
-            let component_record = LocalComponentRecord::new(local_key, diff_mask_size, status);
-            self.mut_handler.borrow_mut().register_mask(
-                &self.address,
-                &key,
-                component_record.get_diff_mask(),
-            );
-            self.component_records.insert(*key, component_record);
-            return local_key;
-        } else {
+        if self.local_component_store.contains_key(*key) {
             // Should panic, as this is not dependent on any unreliable transport factor
             panic!("attempted to add component twice..");
         }
+
+        self.local_component_store.insert(*key, component.clone());
+        let local_key: LocalComponentKey = self.component_key_generator.generate();
+        self.local_to_global_component_key_map
+            .insert(local_key, *key);
+        let diff_mask_size = component.borrow().get_diff_mask_size();
+        let component_record = LocalComponentRecord::new(local_key, diff_mask_size, status);
+        self.mut_handler.borrow_mut().register_mask(
+            &self.address,
+            &key,
+            component_record.get_diff_mask(),
+        );
+        self.local_component_records.insert(*key, component_record);
+        return local_key;
     }
 
     fn component_cleanup(&mut self, global_component_key: &ComponentKey) {
-        if let Some(component_record) = self.component_records.remove(*global_component_key) {
+        if let Some(component_record) = self.local_component_records.remove(*global_component_key) {
             // actually delete the component from local records
             let local_component_key = component_record.local_key;
             self.mut_handler
@@ -568,7 +565,7 @@ impl<T: ProtocolType> EntityManager<T> {
     }
 
     fn pop_add_component_diff_mask(&mut self, global_key: &ComponentKey) {
-        if let Some(record) = self.component_records.get(*global_key) {
+        if let Some(record) = self.local_component_records.get(*global_key) {
             self.last_popped_diff_mask = Some(record.get_diff_mask().borrow().clone());
         }
         self.mut_handler
@@ -674,7 +671,7 @@ impl<T: ProtocolType> EntityManager<T> {
             );
         }
 
-        self.component_records
+        self.local_component_records
             .get(*global_key)
             .expect("uh oh, we don't have enough info to unpop the action")
             .get_diff_mask()
@@ -696,7 +693,7 @@ impl<T: ProtocolType> PacketNotifiable for EntityManager<T> {
                         self.sent_updates.remove(&packet_index);
                     }
                     EntityAction::CreateEntity(global_entity_key, _, component_list_opt) => {
-                        let entity_record = self.local_entity_store.get_mut(&global_entity_key)
+                        let entity_record = self.local_entity_records.get_mut(&global_entity_key)
                             .expect("created entity does not have a entity_record ... initialization error?");
 
                         // do we need to delete this now?
@@ -715,7 +712,7 @@ impl<T: ProtocolType> PacketNotifiable for EntityManager<T> {
                                 while let Some((global_component_key, _, _)) = component_list.pop()
                                 {
                                     let component_record = self
-                                        .component_records
+                                        .local_component_records
                                         .get_mut(global_component_key)
                                         .expect("component not created correctly?");
                                     component_record.status = LocalityStatus::Created;
@@ -726,7 +723,7 @@ impl<T: ProtocolType> PacketNotifiable for EntityManager<T> {
                             // initiate that now
                             for component_key in entity_record.get_component_keys() {
                                 let component_record = self
-                                    .component_records
+                                    .local_component_records
                                     .get(component_key)
                                     .expect("component not created correctly?");
                                 // check if component has been successfully created
@@ -748,14 +745,13 @@ impl<T: ProtocolType> PacketNotifiable for EntityManager<T> {
                     }
                     EntityAction::DeleteEntity(global_key, local_key) => {
                         let entity_record = self
-                            .local_entity_store
+                            .local_entity_records
                             .remove(&global_key)
                             .expect("deletion of nonexistent entity!");
 
                         // actually delete the entity from local records
                         self.local_to_global_entity_key_map.remove(&local_key);
                         self.entity_key_generator.recycle_key(&local_key);
-                        self.pawn_entity_store.remove(&global_key);
 
                         // delete all components associated with entity
                         for component_key in entity_record.get_component_keys() {
@@ -765,8 +761,10 @@ impl<T: ProtocolType> PacketNotifiable for EntityManager<T> {
                     EntityAction::AssignPawn(_, _) => {}
                     EntityAction::UnassignPawn(_, _) => {}
                     EntityAction::AddComponent(_, global_component_key, _, _) => {
-                        let component_record =
-                            self.component_records.get_mut(global_component_key).expect(
+                        let component_record = self
+                            .local_component_records
+                            .get_mut(global_component_key)
+                            .expect(
                                 "added component does not have a record .. initiation problem?",
                             );
                         // do we need to delete this now?
@@ -828,7 +826,9 @@ impl<T: ProtocolType> PacketNotifiable for EntityManager<T> {
                                     }
                                 }
 
-                                if let Some(record) = self.component_records.get_mut(*global_key) {
+                                if let Some(record) =
+                                    self.local_component_records.get_mut(*global_key)
+                                {
                                     let mut current_diff_mask = record.get_diff_mask().borrow_mut();
                                     current_diff_mask.or(new_diff_mask.borrow());
                                 }

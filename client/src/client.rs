@@ -218,6 +218,8 @@ impl<T: ProtocolType> Client<T> {
         events
     }
 
+    // Messages
+
     /// Queues up an Message to be sent to the Server
     /// pub fn queue_message<T: ImplRef<U>>(
     pub fn send_message<U: ImplRef<T>>(&mut self, message_ref: &U, guaranteed_delivery: bool) {
@@ -227,29 +229,35 @@ impl<T: ProtocolType> Client<T> {
         }
     }
 
-    /// Queues up a Pawn Entity Command to be sent to the Server
-    pub fn send_entity_command<U: ImplRef<T>>(
-        &mut self,
-        pawn_entity_key: &LocalEntityKey,
-        command_ref: &U,
-    ) {
+    /// Queues up a Pawn Command to be sent to the Server
+    pub fn send_command<U: ImplRef<T>>(&mut self, entity_key: &LocalEntityKey, command_ref: &U) {
         if let Some(connection) = &mut self.server_connection {
             let dyn_ref = command_ref.dyn_ref();
-            connection.entity_queue_command(pawn_entity_key, &dyn_ref);
+            connection.queue_command(entity_key, &dyn_ref);
         }
     }
 
-    /// Get the address currently associated with the Server
-    pub fn server_address(&self) -> SocketAddr {
-        return self.server_address;
+    // Entities
+
+    /// Get whether or not the Entity currently in scope for the Client, given
+    /// that Entity's Key
+    pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
+        if let Some(connection) = &self.server_connection {
+            return connection.has_entity(key);
+        }
+        return false;
     }
 
-    /// Return whether or not a connection has been established with the Server
-    pub fn has_connection(&self) -> bool {
-        return self.server_connection.is_some();
+    /// Get whether or not the Entity associated with a given EntityKey has
+    /// been assigned as a Pawn
+    pub fn entity_is_pawn(&self, key: &LocalEntityKey) -> bool {
+        if let Some(connection) = &self.server_connection {
+            return connection.entity_is_pawn(key);
+        }
+        return false;
     }
 
-    // components
+    // Components
 
     /// Gets a reference to a specific Component which matches a given
     /// ComponentKey
@@ -290,17 +298,6 @@ impl<T: ProtocolType> Client<T> {
         return None;
     }
 
-    // entities
-
-    /// Get whether or not the Entity currently in scope for the Client, given
-    /// that Entity's Key
-    pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
-        if let Some(connection) = &self.server_connection {
-            return connection.has_entity(key);
-        }
-        return false;
-    }
-
     /// Get a set of Components for the Entity associated with the given
     /// EntityKey
     pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
@@ -319,7 +316,17 @@ impl<T: ProtocolType> Client<T> {
         return Vec::<T>::new();
     }
 
-    // connection metrics
+    // Connection
+
+    /// Get the address currently associated with the Server
+    pub fn server_address(&self) -> SocketAddr {
+        return self.server_address;
+    }
+
+    /// Return whether or not a connection has been established with the Server
+    pub fn has_connection(&self) -> bool {
+        return self.server_connection.is_some();
+    }
 
     /// Gets the average Round Trip Time measured to the Server
     pub fn get_rtt(&self) -> f32 {
@@ -331,7 +338,7 @@ impl<T: ProtocolType> Client<T> {
         return self.server_connection.as_ref().unwrap().get_jitter();
     }
 
-    // ticks
+    // Ticks
 
     /// Gets the current tick of the Client
     pub fn get_client_tick(&self) -> u16 {
@@ -347,7 +354,7 @@ impl<T: ProtocolType> Client<T> {
             .get_last_received_tick();
     }
 
-    // interpolation
+    // Interpolation
 
     /// Gets the interpolation tween amount for the current frame
     pub fn get_interpolation(&self) -> f32 {
