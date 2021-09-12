@@ -18,19 +18,19 @@ mod client_config;
 mod command_receiver;
 mod command_sender;
 mod connection_state;
+mod entity_action;
+mod entity_manager;
 mod error;
 mod event;
 mod packet_writer;
 mod ping_manager;
-mod entity_action;
-mod entity_manager;
 mod server_connection;
 mod tick_manager;
 mod tick_queue;
 
 pub use naia_shared::{
     find_my_ip_address, wrapping_diff, Instant, LinkConditionerConfig, LocalComponentKey,
-    LocalEntityKey, NaiaKey, Random, Ref, ReplicaEq, Replicate, ProtocolType
+    LocalEntityKey, NaiaKey, ProtocolType, Random, Ref, ReplicaEq, Replicate,
 };
 
 pub use client::Client;

@@ -36,8 +36,8 @@ impl PacketWriter {
         //Write manager "header" (manager type & entity action count)
         if self.entity_action_count != 0 {
             out_bytes.write_u8(ManagerType::Entity as u8).unwrap(); // write
-                                                                     // manager
-                                                                     // type
+                                                                    // manager
+                                                                    // type
             out_bytes.write_u8(self.entity_action_count).unwrap(); // write number of actions
             out_bytes.append(&mut self.entity_working_bytes); // write entity payload
 

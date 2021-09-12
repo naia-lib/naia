@@ -1,6 +1,6 @@
 use naia_shared::{
-    DiffMask, EntityKey, LocalComponentKey, LocalEntityKey,
-    ProtocolType, Ref, EntityActionType, Replicate,
+    DiffMask, EntityActionType, EntityKey, LocalComponentKey, LocalEntityKey, ProtocolType, Ref,
+    Replicate,
 };
 
 use super::keys::component_key::ComponentKey;
@@ -10,7 +10,7 @@ pub enum EntityAction<T: ProtocolType> {
     CreateEntity(
         EntityKey,
         LocalEntityKey,
-        Option<Vec<(ComponentKey, LocalComponentKey, Ref<dyn Replicate<T>>)>>
+        Option<Vec<(ComponentKey, LocalComponentKey, Ref<dyn Replicate<T>>)>>,
     ),
     DeleteEntity(EntityKey, LocalEntityKey),
     AssignPawn(EntityKey, LocalEntityKey),
@@ -19,9 +19,14 @@ pub enum EntityAction<T: ProtocolType> {
         LocalEntityKey,
         ComponentKey,
         LocalComponentKey,
-        Ref<dyn Replicate<T>>
+        Ref<dyn Replicate<T>>,
     ),
-    UpdateComponent(ComponentKey, LocalComponentKey, Ref<DiffMask>, Ref<dyn Replicate<T>>),
+    UpdateComponent(
+        ComponentKey,
+        LocalComponentKey,
+        Ref<DiffMask>,
+        Ref<dyn Replicate<T>>,
+    ),
     RemoveComponent(ComponentKey, LocalComponentKey),
 }
 
@@ -48,9 +53,7 @@ impl<T: ProtocolType> Clone for EntityAction<T> {
             EntityAction::DeleteEntity(gk, lk) => {
                 EntityAction::DeleteEntity(gk.clone(), lk.clone())
             }
-            EntityAction::AssignPawn(gk, lk) => {
-                EntityAction::AssignPawn(gk.clone(), lk.clone())
-            }
+            EntityAction::AssignPawn(gk, lk) => EntityAction::AssignPawn(gk.clone(), lk.clone()),
             EntityAction::UnassignPawn(gk, lk) => {
                 EntityAction::UnassignPawn(gk.clone(), lk.clone())
             }

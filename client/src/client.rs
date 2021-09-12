@@ -6,16 +6,16 @@ use naia_client_socket::{ClientSocket, PacketReceiver, PacketSender};
 
 pub use naia_shared::{
     ConnectionConfig, HostTickManager, ImplRef, Instant, LocalComponentKey, LocalEntityKey,
-    ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, Ref, Replicate, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
+    ManagerType, Manifest, PacketReader, PacketType, ProtocolType, Ref, Replicate,
+    SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
 };
 
 use super::{
     client_config::ClientConfig,
     connection_state::{ConnectionState, ConnectionState::AwaitingChallengeResponse},
+    entity_action::EntityAction,
     error::NaiaClientError,
     event::Event,
-    entity_action::EntityAction,
     server_connection::ServerConnection,
     tick_manager::TickManager,
     Packet,
@@ -140,18 +140,12 @@ impl<T: ProtocolType> Client<T> {
                             EntityAction::CreateEntity(local_key, component_list) => {
                                 Event::CreateEntity(local_key, component_list)
                             }
-                            EntityAction::DeleteEntity(local_key) => {
-                                Event::DeleteEntity(local_key)
-                            }
+                            EntityAction::DeleteEntity(local_key) => Event::DeleteEntity(local_key),
                             EntityAction::AssignPawn(local_key) => {
                                 Event::AssignPawnEntity(local_key)
                             }
-                            EntityAction::UnassignPawn(local_key) => {
-                                Event::UnassignPawn(local_key)
-                            }
-                            EntityAction::ResetPawn(local_key) => {
-                                Event::ResetPawn(local_key)
-                            }
+                            EntityAction::UnassignPawn(local_key) => Event::UnassignPawn(local_key),
+                            EntityAction::ResetPawn(local_key) => Event::ResetPawn(local_key),
                             EntityAction::AddComponent(entity_key, component_key) => {
                                 Event::AddComponent(entity_key, component_key)
                             }
@@ -257,7 +251,8 @@ impl<T: ProtocolType> Client<T> {
 
     // components
 
-    /// Gets a reference to a specific Component which matches a given ComponentKey
+    /// Gets a reference to a specific Component which matches a given
+    /// ComponentKey
     pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
         if let Some(connection) = &self.server_connection {
             return connection.get_component(key);
@@ -274,8 +269,8 @@ impl<T: ProtocolType> Client<T> {
         return false;
     }
 
-    /// Given an EntityKey & a Component type, get a reference to a registered Component being tracked
-    /// by the Server
+    /// Given an EntityKey & a Component type, get a reference to a registered
+    /// Component being tracked by the Server
     pub fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
         if let Some(connection) = &self.server_connection {
             return connection.get_component_by_type::<R>(key);
@@ -283,9 +278,12 @@ impl<T: ProtocolType> Client<T> {
         return None;
     }
 
-    /// Given an EntityKey & a Component type, get a reference to a registered Pawn Component being tracked
-    /// by the Server
-    pub fn get_pawn_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
+    /// Given an EntityKey & a Component type, get a reference to a registered
+    /// Pawn Component being tracked by the Server
+    pub fn get_pawn_component_by_type<R: Replicate<T>>(
+        &self,
+        key: &LocalEntityKey,
+    ) -> Option<Ref<R>> {
         if let Some(connection) = &self.server_connection {
             return connection.get_pawn_component_by_type::<R>(key);
         }

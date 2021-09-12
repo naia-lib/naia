@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    sequence_greater_than, LocalEntityKey, Manifest, NaiaKey, PacketReader,
-    ProtocolType, SequenceBuffer,
+    sequence_greater_than, LocalEntityKey, Manifest, NaiaKey, PacketReader, ProtocolType,
+    SequenceBuffer,
 };
 
 const COMMAND_BUFFER_MAX_SIZE: u16 = 64;

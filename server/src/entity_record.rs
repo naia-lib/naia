@@ -1,4 +1,4 @@
-use naia_shared::{LocalEntityKey, Ref, ComponentRecord};
+use naia_shared::{ComponentRecord, LocalEntityKey, Ref};
 
 use super::{keys::component_key::ComponentKey, locality_status::LocalityStatus};
 
@@ -10,7 +10,10 @@ pub struct EntityRecord {
 }
 
 impl EntityRecord {
-    pub fn new(local_key: LocalEntityKey, components_ref: &Ref<ComponentRecord<ComponentKey>>) -> Self {
+    pub fn new(
+        local_key: LocalEntityKey,
+        components_ref: &Ref<ComponentRecord<ComponentKey>>,
+    ) -> Self {
         EntityRecord {
             local_key,
             status: LocalityStatus::Creating,

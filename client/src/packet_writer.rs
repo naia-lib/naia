@@ -1,8 +1,8 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, ManagerType, Manifest, MessagePacketWriter, ProtocolType, Ref,
-    Replicate, MTU_SIZE, LocalEntityKey, NaiaKey,
+    wrapping_diff, LocalEntityKey, ManagerType, Manifest, MessagePacketWriter, NaiaKey,
+    ProtocolType, Ref, Replicate, MTU_SIZE,
 };
 
 use super::command_receiver::CommandReceiver;

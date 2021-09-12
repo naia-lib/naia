@@ -1,8 +1,4 @@
-use std::{
-    any::TypeId,
-    collections::HashMap,
-    hash::Hash,
-};
+use std::{any::TypeId, collections::HashMap, hash::Hash};
 
 /// Keeps a record of Components, their Keys and TypeIds, for a given Entity
 #[derive(Debug)]

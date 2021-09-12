@@ -225,8 +225,8 @@ fn naia_client_update(
                     commands.entity(bevy_entity_key).despawn();
                 }
             }
-            Ok(Event::NewCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref))) |
-            Ok(Event::ReplayCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref))) => {
+            Ok(Event::NewCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref)))
+            | Ok(Event::ReplayCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref))) => {
                 if let Some(bevy_entity) = client_resource.pawn_key_map.get(&naia_entity) {
                     if let Ok((_, position)) = pawn_query.get_mut(*bevy_entity) {
                         shared_behavior::process_command(&key_command_ref, position);

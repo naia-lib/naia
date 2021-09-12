@@ -1,10 +1,13 @@
-use std::{any::TypeId, collections::{HashMap, HashSet, VecDeque}};
+use std::{
+    any::TypeId,
+    collections::{HashMap, HashSet, VecDeque},
+};
 
 use log::warn;
 
 use naia_shared::{
-    DiffMask, LocalComponentKey, LocalEntityKey, Manifest,
-    NaiaKey, PacketReader, ProtocolType, EntityActionType, Replicate, Ref, ComponentRecord
+    ComponentRecord, DiffMask, EntityActionType, LocalComponentKey, LocalEntityKey, Manifest,
+    NaiaKey, PacketReader, ProtocolType, Ref, Replicate,
 };
 
 use super::{command_receiver::CommandReceiver, entity_action::EntityAction};
@@ -49,7 +52,10 @@ impl<T: ProtocolType> EntityManager<T> {
                     // Component Deletion
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                    let entity_key = self.component_entity_map.remove(&component_key).expect("deleting nonexistant/non-initialized component");
+                    let entity_key = self
+                        .component_entity_map
+                        .remove(&component_key)
+                        .expect("deleting nonexistant/non-initialized component");
 
                     // Get entity record
                     let entity_record = self
@@ -63,12 +69,16 @@ impl<T: ProtocolType> EntityManager<T> {
                     // Component Update
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                    if let Some(component_ref) = self.local_component_store.get_mut(&component_key) {
+                    if let Some(component_ref) = self.local_component_store.get_mut(&component_key)
+                    {
                         let diff_mask: DiffMask = DiffMask::read(reader);
 
                         component_ref.read_partial(&diff_mask, reader, packet_index);
 
-                        let entity_key = self.component_entity_map.get(&component_key).expect("component not initialized correctly");
+                        let entity_key = self
+                            .component_entity_map
+                            .get(&component_key)
+                            .expect("component not initialized correctly");
 
                         // if Entity is a Pawn, replay commands
                         if self.pawn_entity_store.contains(entity_key) {
@@ -79,9 +89,11 @@ impl<T: ProtocolType> EntityManager<T> {
                             command_receiver.remove_history_until(packet_tick, &entity_key);
                         }
 
-                        self.queued_incoming_messages.push_back(
-                            EntityAction::UpdateComponent(*entity_key, component_ref.clone()),
-                        );
+                        self.queued_incoming_messages
+                            .push_back(EntityAction::UpdateComponent(
+                                *entity_key,
+                                component_ref.clone(),
+                            ));
                     }
                 }
                 EntityActionType::CreateEntity => {
@@ -111,10 +123,12 @@ impl<T: ProtocolType> EntityManager<T> {
                                 panic!("attempted to insert duplicate component");
                             } else {
                                 let new_component_type_id = new_component.get_type_id();
-                                self.local_component_store.insert(component_key, new_component.clone());
+                                self.local_component_store
+                                    .insert(component_key, new_component.clone());
                                 self.component_entity_map.insert(component_key, entity_key);
                                 component_list.push(new_component);
-                                entity_record.insert_component(&component_key, new_component_type_id);
+                                entity_record
+                                    .insert_component(&component_key, new_component_type_id);
                             }
                         }
 
@@ -220,7 +234,8 @@ impl<T: ProtocolType> EntityManager<T> {
                             let entity_record =
                                 self.local_entity_store.get_mut(&entity_key).unwrap();
 
-                            entity_record.insert_component(&component_key, new_component.get_type_id());
+                            entity_record
+                                .insert_component(&component_key, new_component.get_type_id());
 
                             self.queued_incoming_messages
                                 .push_back(EntityAction::AddComponent(entity_key, new_component));
@@ -240,7 +255,9 @@ impl<T: ProtocolType> EntityManager<T> {
 
     pub fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
         if let Some(entity_component_record) = self.local_entity_store.get(key) {
-            if let Some(component_key) = entity_component_record.get_key_from_type(&TypeId::of::<R>()) {
+            if let Some(component_key) =
+                entity_component_record.get_key_from_type(&TypeId::of::<R>())
+            {
                 if let Some(component_protocol) = self.local_component_store.get(component_key) {
                     return component_protocol.to_typed_ref::<R>();
                 }
@@ -249,9 +266,14 @@ impl<T: ProtocolType> EntityManager<T> {
         return None;
     }
 
-    pub fn get_pawn_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
+    pub fn get_pawn_component_by_type<R: Replicate<T>>(
+        &self,
+        key: &LocalEntityKey,
+    ) -> Option<Ref<R>> {
         if let Some(entity_component_record) = self.local_entity_store.get(key) {
-            if let Some(component_key) = entity_component_record.get_key_from_type(&TypeId::of::<R>()) {
+            if let Some(component_key) =
+                entity_component_record.get_key_from_type(&TypeId::of::<R>())
+            {
                 if let Some(component_protocol) = self.pawn_store.get(component_key) {
                     return component_protocol.to_typed_ref::<R>();
                 }
@@ -298,14 +320,6 @@ impl<T: ProtocolType> EntityManager<T> {
         return output;
     }
 
-//    pub fn pawn_keys(&self) -> Keys<LocalComponentKey, T> {
-//        return self.pawn_store.keys();
-//    }
-
-//    pub fn get_pawn(&self, key: &LocalComponentKey) -> Option<&T> {
-//        return self.pawn_store.get(key);
-//    }
-
     pub fn pawn_reset_entity(&mut self, key: &LocalEntityKey) {
         if let Some(entity_record) = self.local_entity_store.get(key) {
             for component_key in entity_record.get_component_keys() {
@@ -332,10 +346,7 @@ impl<T: ProtocolType> EntityManager<T> {
 
         if let Some(component) = self.local_component_store.remove(&component_key) {
             self.queued_incoming_messages
-                .push_back(EntityAction::RemoveComponent(
-                    *entity_key,
-                    component,
-                ));
+                .push_back(EntityAction::RemoveComponent(*entity_key, component));
         }
     }
 }

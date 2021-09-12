@@ -11,9 +11,10 @@ use slotmap::DenseSlotMap;
 
 use naia_server_socket::{Packet, PacketReceiver, PacketSender, ServerSocket};
 pub use naia_shared::{
-    wrapping_diff, Connection, ConnectionConfig, EntityKey, HostTickManager, ImplRef, Instant,
-    KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
-    ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp, ComponentRecord
+    wrapping_diff, ComponentRecord, Connection, ConnectionConfig, EntityKey, HostTickManager,
+    ImplRef, Instant, KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader,
+    PacketType, PropertyMutate, ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer,
+    Timestamp,
 };
 
 use super::{
@@ -168,7 +169,7 @@ impl<U: ProtocolType> Server<U> {
             while let Some((pawn_key, command)) =
                 connection.get_incoming_command(self.tick_manager.get_tick())
             {
-                    events.push_back(Ok(Event::CommandEntity(*user_key, pawn_key, command)));
+                events.push_back(Ok(Event::CommandEntity(*user_key, pawn_key, command)));
             }
             //receive messages from anyone
             while let Some(message) = connection.get_incoming_message() {
@@ -237,11 +238,15 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    /// Register an Entity with the Server initializing the Entity with a list Component Refs.
-    /// The Server will sync the Entity to all connected Clients for which the Entity
-    /// is in scope. Gives back an EntityKey which can be used to get the
-    /// reference to the Entity from the Server once again
-    pub fn register_entity_with_components<T: ImplRef<U>>(&mut self, component_refs: &[T]) -> EntityKey {
+    /// Register an Entity with the Server initializing the Entity with a list
+    /// Component Refs. The Server will sync the Entity to all connected
+    /// Clients for which the Entity is in scope. Gives back an EntityKey
+    /// which can be used to get the reference to the Entity from the Server
+    /// once again
+    pub fn register_entity_with_components<T: ImplRef<U>>(
+        &mut self,
+        component_refs: &[T],
+    ) -> EntityKey {
         let entity_key = self.register_entity();
         for component_ref in component_refs {
             self.add_component_to_entity(&entity_key, component_ref);
@@ -249,10 +254,10 @@ impl<U: ProtocolType> Server<U> {
         return entity_key;
     }
 
-    /// Register an Entity with the Server, whereby the Server will sync the given Entity's Components to all connected Clients
-    /// for which the Entity is in scope. Gives back an EntityKey which can
-    /// be used to get the reference to the Entity from the Server once
-    /// again
+    /// Register an Entity with the Server, whereby the Server will sync the
+    /// given Entity's Components to all connected Clients for which the
+    /// Entity is in scope. Gives back an EntityKey which can be used to get
+    /// the reference to the Entity from the Server once again
     pub fn register_entity(&mut self) -> EntityKey {
         let entity_key: EntityKey = self.entity_key_generator.generate();
         self.entity_component_map
@@ -302,10 +307,10 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    /// Register a Component with the Server, whereby the Server will sync the Component to all connected Clients for which the
-    /// Component's Entity is in Scope.
-    /// Gives back a ComponentKey which can be used to get the reference to the
-    /// Component from the Server once again
+    /// Register a Component with the Server, whereby the Server will sync the
+    /// Component to all connected Clients for which the Component's Entity
+    /// is in Scope. Gives back a ComponentKey which can be used to get the
+    /// reference to the Component from the Server once again
     pub fn add_component_to_entity<T: ImplRef<U>>(
         &mut self,
         entity_key: &EntityKey,
@@ -331,7 +336,9 @@ impl<U: ProtocolType> Server<U> {
         self.component_entity_map.insert(component_key, *entity_key);
 
         if let Some(entity_component_record) = self.entity_component_map.get_mut(&entity_key) {
-            entity_component_record.borrow_mut().insert_component(&component_key, dyn_ref.borrow().get_type_id());
+            entity_component_record
+                .borrow_mut()
+                .insert_component(&component_key, dyn_ref.borrow().get_type_id());
         }
 
         return component_key;
@@ -365,17 +372,20 @@ impl<U: ProtocolType> Server<U> {
             .expect("component not initialized correctly?");
     }
 
-    /// Given an ComponentKey, get a reference to a registered Component being tracked
-    /// by the Server
+    /// Given an ComponentKey, get a reference to a registered Component being
+    /// tracked by the Server
     pub fn get_component_by_key(&self, key: &ComponentKey) -> Option<&U> {
         return self.global_component_store.get(*key);
     }
 
-    /// Given an EntityKey & a Component type, get a reference to a registered Component being tracked
-    /// by the Server
+    /// Given an EntityKey & a Component type, get a reference to a registered
+    /// Component being tracked by the Server
     pub fn get_component_by_type<T: Replicate<U>>(&self, key: &EntityKey) -> Option<Ref<T>> {
         if let Some(component_record) = self.entity_component_map.get(key) {
-            if let Some(component_key) = component_record.borrow().get_key_from_type(&TypeId::of::<T>()) {
+            if let Some(component_key) = component_record
+                .borrow()
+                .get_key_from_type(&TypeId::of::<T>())
+            {
                 if let Some(component_protocol) = self.global_component_store.get(*component_key) {
                     return component_protocol.to_typed_ref::<T>();
                 }
@@ -538,12 +548,12 @@ impl<U: ProtocolType> Server<U> {
     /// Returns true if a given User has an Entity with a given EntityKey
     /// in-scope currently
     pub fn user_scope_has_entity(&self, user_key: &UserKey, entity_key: &EntityKey) -> bool {
-       if let Some(user_connection) = self.client_connections.get(user_key) {
-           return user_connection.has_entity(entity_key);
-       }
+        if let Some(user_connection) = self.client_connections.get(user_key) {
+            return user_connection.has_entity(entity_key);
+        }
 
-       return false;
-   }
+        return false;
+    }
 
     // Private methods
 
@@ -815,9 +825,10 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    // Register an Component with the Server, whereby the Server will the Component to all connected Clients for which the Component
-    // is in scope. Gives back an ComponentKey which can be used to get the
-    // reference to the Component from the Server once again
+    // Register an Component with the Server, whereby the Server will the Component
+    // to all connected Clients for which the Component is in scope. Gives back
+    // an ComponentKey which can be used to get the reference to the Component
+    // from the Server once again
     fn register_component<T: ImplRef<U>>(&mut self, component_ref: &T) -> ComponentKey {
         let dyn_ref = component_ref.dyn_ref();
         let new_mutator_ref: Ref<PropertyMutator> =
@@ -829,12 +840,19 @@ impl<U: ProtocolType> Server<U> {
 
         let component_protocol = component_ref.protocol();
         let component_key = self.global_component_store.insert(component_protocol);
-        new_mutator_ref.borrow_mut().set_component_key(component_key);
-        self.mut_handler.borrow_mut().register_component(&component_key);
+        new_mutator_ref
+            .borrow_mut()
+            .set_component_key(component_key);
+        self.mut_handler
+            .borrow_mut()
+            .register_component(&component_key);
         return component_key;
     }
 
-    fn user_remove_component(user_connection: &mut ClientConnection<U>, component_key: &ComponentKey) {
+    fn user_remove_component(
+        user_connection: &mut ClientConnection<U>,
+        component_key: &ComponentKey,
+    ) {
         //remove component from user connection
         user_connection.remove_component(component_key);
     }

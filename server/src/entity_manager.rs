@@ -10,19 +10,16 @@ use slotmap::SparseSecondaryMap;
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    DiffMask, EntityKey, KeyGenerator, LocalEntityKey, LocalComponentKey, Manifest, NaiaKey,
-    PacketNotifiable, ProtocolType, Ref, Replicate, MTU_SIZE, ComponentRecord
+    ComponentRecord, DiffMask, EntityKey, KeyGenerator, LocalComponentKey, LocalEntityKey,
+    Manifest, NaiaKey, PacketNotifiable, ProtocolType, Ref, Replicate, MTU_SIZE,
 };
 
 use crate::packet_writer::PacketWriter;
 
 use super::{
-    entity_record::EntityRecord,
-    keys::component_key::ComponentKey,
-    locality_status::LocalityStatus,
+    entity_action::EntityAction, entity_record::EntityRecord, keys::component_key::ComponentKey,
+    local_component_record::LocalComponentRecord, locality_status::LocalityStatus,
     mut_handler::MutHandler,
-    entity_action::EntityAction,
-    local_component_record::LocalComponentRecord,
 };
 
 /// Manages Entities for a given Client connection and keeps them in
@@ -234,11 +231,8 @@ impl<T: ProtocolType> EntityManager<T> {
                 .insert(local_key, *global_key);
             let entity_record = EntityRecord::new(local_key, component_record_ref);
             self.local_entity_store.insert(*global_key, entity_record);
-            self.queued_actions.push_back(EntityAction::CreateEntity(
-                *global_key,
-                local_key,
-                None,
-            ));
+            self.queued_actions
+                .push_back(EntityAction::CreateEntity(*global_key, local_key, None));
         } else {
             panic!("added entity twice");
         }
@@ -262,7 +256,9 @@ impl<T: ProtocolType> EntityManager<T> {
                     // Entity deletion IS Component deletion, so update those component records
                     // accordingly
                     for component_key in entity_record.get_component_keys() {
-                        if let Some(component_record) = self.component_records.get_mut(component_key) {
+                        if let Some(component_record) =
+                            self.component_records.get_mut(component_key)
+                        {
                             component_record.status = LocalityStatus::Deleting;
                         }
                     }
@@ -436,7 +432,7 @@ impl<T: ProtocolType> EntityManager<T> {
                     .unwrap(); //write local key
                 diff_mask.borrow_mut().write(&mut action_total_bytes); // write diff mask
                 action_total_bytes.append(&mut component_payload_bytes); // write
-                                                                        // payload
+                                                                         // payload
             }
             EntityAction::CreateEntity(_, local_entity_key, component_list_opt) => {
                 action_total_bytes
@@ -534,7 +530,8 @@ impl<T: ProtocolType> EntityManager<T> {
         if !self.local_component_store.contains_key(*key) {
             self.local_component_store.insert(*key, component.clone());
             let local_key: LocalComponentKey = self.component_key_generator.generate();
-            self.local_to_global_component_key_map.insert(local_key, *key);
+            self.local_to_global_component_key_map
+                .insert(local_key, *key);
             let diff_mask_size = component.borrow().get_diff_mask_size();
             let component_record = LocalComponentRecord::new(local_key, diff_mask_size, status);
             self.mut_handler.borrow_mut().register_mask(
@@ -560,10 +557,13 @@ impl<T: ProtocolType> EntityManager<T> {
             self.local_component_store.remove(*global_component_key);
             self.local_to_global_component_key_map
                 .remove(&local_component_key);
-            self.component_key_generator.recycle_key(&local_component_key);
+            self.component_key_generator
+                .recycle_key(&local_component_key);
         } else {
             // likely due to duplicate delivered deletion actions
-            warn!("attempting to clean up component from connection inside which it is not present");
+            warn!(
+                "attempting to clean up component from connection inside which it is not present"
+            );
         }
     }
 
@@ -653,7 +653,11 @@ impl<T: ProtocolType> EntityManager<T> {
         locked_diff_mask
     }
 
-    fn undo_component_update(&mut self, packet_index: &u16, global_key: &ComponentKey) -> Ref<DiffMask> {
+    fn undo_component_update(
+        &mut self,
+        packet_index: &u16,
+        global_key: &ComponentKey,
+    ) -> Ref<DiffMask> {
         if let Some(sent_updates_map) = self.sent_updates.get_mut(packet_index) {
             sent_updates_map.remove(global_key);
             if sent_updates_map.len() == 0 {
@@ -766,7 +770,10 @@ impl<T: ProtocolType> PacketNotifiable for EntityManager<T> {
                                 "added component does not have a record .. initiation problem?",
                             );
                         // do we need to delete this now?
-                        if self.delayed_component_deletions.remove(&global_component_key) {
+                        if self
+                            .delayed_component_deletions
+                            .remove(&global_component_key)
+                        {
                             component_delete(
                                 &mut self.queued_actions,
                                 component_record,
@@ -791,7 +798,7 @@ impl<T: ProtocolType> PacketNotifiable for EntityManager<T> {
             for dropped_action in dropped_actions_list.into_iter() {
                 match dropped_action {
                     // guaranteed delivery actions
-                    | EntityAction::RemoveComponent(_, _)
+                    EntityAction::RemoveComponent(_, _)
                     | EntityAction::CreateEntity(_, _, _)
                     | EntityAction::DeleteEntity(_, _)
                     | EntityAction::AssignPawn(_, _)
@@ -844,7 +851,10 @@ fn component_delete<T: ProtocolType>(
 ) {
     record.status = LocalityStatus::Deleting;
 
-    queued_actions.push_back(EntityAction::RemoveComponent(*component_key, record.local_key));
+    queued_actions.push_back(EntityAction::RemoveComponent(
+        *component_key,
+        record.local_key,
+    ));
 }
 
 fn entity_delete<T: ProtocolType>(

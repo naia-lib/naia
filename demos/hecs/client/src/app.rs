@@ -119,7 +119,6 @@ impl App {
                     }
                 }
                 Ok(Event::AddComponent(naia_entity_key, component)) => {
-
                     let hecs_entity_key = *self
                         .entity_key_map
                         .get(&naia_entity_key)

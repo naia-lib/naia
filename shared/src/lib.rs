@@ -14,9 +14,11 @@
 extern crate cfg_if;
 
 mod ack_manager;
+mod component_record;
 mod connection;
 mod connection_config;
 mod diff_mask;
+mod entity_action_type;
 mod host_tick_manager;
 mod key_store;
 mod keys;
@@ -29,14 +31,12 @@ mod packet_type;
 mod property;
 mod property_mutate;
 mod protocol_type;
-mod entity_action_type;
 mod replica_builder;
 mod replicate;
 mod sequence_buffer;
 mod shared_config;
 mod standard_header;
 mod wrapping_number;
-mod component_record;
 
 /// Commonly used utility methods to be used by naia-server & naia-client
 pub mod utils;
@@ -50,11 +50,10 @@ pub use component_record::ComponentRecord;
 pub use connection::Connection;
 pub use connection_config::ConnectionConfig;
 pub use diff_mask::DiffMask;
+pub use entity_action_type::EntityActionType;
 pub use host_tick_manager::HostTickManager;
 pub use key_store::KeyGenerator;
-pub use keys::{
-    EntityKey, LocalComponentKey, LocalEntityKey, NaiaKey,
-};
+pub use keys::{EntityKey, LocalComponentKey, LocalEntityKey, NaiaKey};
 pub use manager_type::ManagerType;
 pub use manifest::Manifest;
 pub use message_manager::MessageManager;
@@ -64,7 +63,6 @@ pub use packet_type::PacketType;
 pub use property::Property;
 pub use property_mutate::PropertyMutate;
 pub use protocol_type::ProtocolType;
-pub use entity_action_type::EntityActionType;
 pub use replica_builder::ReplicaBuilder;
 pub use replicate::{ImplRef, ReplicaEq, Replicate};
 pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};

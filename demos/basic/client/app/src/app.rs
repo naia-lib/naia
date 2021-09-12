@@ -4,7 +4,7 @@ use naia_client::{Client, ClientConfig, Event, ProtocolType};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
-    protocol::{Auth, Protocol, StringMessage, Character},
+    protocol::{Auth, Character, Protocol, StringMessage},
 };
 
 pub struct App {
@@ -61,7 +61,8 @@ impl App {
                 }
                 Ok(Event::CreateEntity(entity_key, component_list)) => {
                     for component_protocol in component_list {
-                        if let Some(character_ref) = component_protocol.to_typed_ref::<Character>() {
+                        if let Some(character_ref) = component_protocol.to_typed_ref::<Character>()
+                        {
                             let character = character_ref.borrow();
                             info!(
                                 "creation of Character with key: {}, x: {}, y: {}, name: {} {}",
@@ -101,10 +102,7 @@ impl App {
                     }
                 }
                 Ok(Event::DeleteEntity(entity_key)) => {
-                    info!(
-                        "deletion of Character Entity: {}",
-                        entity_key,
-                    );
+                    info!("deletion of Character Entity: {}", entity_key,);
                 }
                 Ok(Event::Tick) => {
                     //info!("tick event");
