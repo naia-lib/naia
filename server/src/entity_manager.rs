@@ -297,9 +297,9 @@ impl<P: ProtocolType> EntityManager<P> {
         let entity_record = self
             .local_entity_records
             .get_mut(key)
-            .expect("attempting to unassign a non-existant Entity");
+            .expect("attempting to disown on Entity which is not in-scope");
         if !entity_record.is_pawn {
-            panic!("attempting to unassign a Entity, but it is not currently assigned");
+            panic!("attempting to disown an Entity which is not currently assigned");
         }
 
         // success

@@ -67,6 +67,8 @@ impl<'s, P: ProtocolType> UserMut<'s, P> {
         return self.server.get_user_address(&self.key).unwrap();
     }
 
+    // Rooms
+
     pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
         self.server.room_add_user(room_key, &self.key);
 
@@ -79,14 +81,16 @@ impl<'s, P: ProtocolType> UserMut<'s, P> {
         self
     }
 
+    // Ownership
+
     pub fn own_entity(&mut self, entity_key: &EntityKey) -> &mut Self {
-        self.server.assign_pawn_entity(&self.key, entity_key);
+        self.server.entity_set_owner(entity_key, &self.key);
 
         self
     }
 
     pub fn disown_entity(&mut self, entity_key: &EntityKey) -> &mut Self {
-        self.server.disown_entity(&self.key, entity_key);
+        self.server.user_disown_entity(&self.key, entity_key);
 
         self
     }

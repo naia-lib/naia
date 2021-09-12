@@ -109,10 +109,6 @@ impl<P: ProtocolType> ClientConnection<P> {
         }
     }
 
-    pub fn remove_component(&mut self, key: &ComponentKey) {
-        self.entity_manager.remove_component(key);
-    }
-
     pub fn collect_component_updates(&mut self) {
         self.entity_manager.collect_component_updates();
     }
@@ -179,6 +175,10 @@ impl<P: ProtocolType> ClientConnection<P> {
     ) {
         self.entity_manager
             .insert_component(entity_key, component_key, component_ref);
+    }
+
+    pub fn remove_component(&mut self, key: &ComponentKey) {
+        self.entity_manager.remove_component(key);
     }
 
     // Pass-through methods to underlying common connection
