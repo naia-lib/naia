@@ -166,7 +166,7 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
 
 fn get_to_typed_ref_method(type_name: &Ident) -> TokenStream {
     return quote! {
-        fn to_typed_ref<V: Replicate<#type_name>>(&self) -> Option<Ref<V>> {
+        fn to_typed_ref<R: Replicate<#type_name>>(&self) -> Option<Ref<R>> {
             if let Some(rep_ref) = self.as_typed_ref() {
                 return Some(rep_ref.clone());
             }
@@ -185,7 +185,7 @@ fn get_as_typed_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
                 let new_output_right = quote! {
                     #type_name::#variant_name(replica_ref) => {
                         let typed_ref = replica_ref as &dyn Any;
-                        return typed_ref.downcast_ref::<Ref<V>>();
+                        return typed_ref.downcast_ref::<Ref<R>>();
                     }
                 };
                 let new_output_result = quote! {
@@ -200,7 +200,7 @@ fn get_as_typed_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn as_typed_ref<V: Replicate<#type_name>>(&self) -> Option<&Ref<V>> {
+        fn as_typed_ref<R: Replicate<#type_name>>(&self) -> Option<&Ref<R>> {
             match self {
                 #variants
             }
