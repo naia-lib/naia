@@ -375,6 +375,82 @@ impl<P: ProtocolType> Server<P> {
         return None;
     }
 
+    /// Adds a Component to an Entity associated with the given EntityKey.
+    pub fn insert_component<R: ImplRef<P>>(&mut self, entity_key: &EntityKey, component_ref: &R) {
+        if !self.entity_component_map.contains_key(&entity_key) {
+            panic!("attempted to add component to non-existent entity");
+        }
+
+        let component_key: ComponentKey = self.register_component(component_ref);
+
+        let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
+
+        // add component to connections already tracking entity
+        for (user_key, _) in self.users.iter() {
+            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+                if user_connection.has_entity(entity_key) {
+                    Self::user_insert_component(
+                        user_connection,
+                        entity_key,
+                        &component_key,
+                        &dyn_ref,
+                    );
+                }
+            }
+        }
+
+        self.component_entity_map.insert(component_key, *entity_key);
+
+        if let Some(entity_component_record) = self.entity_component_map.get_mut(&entity_key) {
+            entity_component_record
+                .borrow_mut()
+                .insert_component(&component_key, &dyn_ref.borrow().get_type_id());
+        }
+    }
+
+    /// Adds an array of Components to an Entity associated with the given
+    /// EntityKey.
+    pub fn insert_components<R: ImplRef<P>>(
+        &mut self,
+        entity_key: &EntityKey,
+        component_refs: &[R],
+    ) {
+        for component_ref in component_refs {
+            self.insert_component(entity_key, component_ref);
+        }
+    }
+
+    /// Removes a Component from an Entity associated with the given EntityKey
+    pub fn remove_component<R: Replicate<P>>(&mut self, entity_key: &EntityKey) -> bool {
+        if let Some(component_record_ref) = self.entity_component_map.get(entity_key) {
+            let mut component_record = component_record_ref.borrow_mut();
+            let component_key: ComponentKey = *component_record
+                .get_key_from_type(&TypeId::of::<R>())
+                .expect("component not initialized correctly?");
+
+            for (user_key, _) in self.users.iter() {
+                if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
+                    Self::user_remove_component(user_connection, &component_key);
+                }
+            }
+
+            self.component_entity_map
+                .remove(&component_key)
+                .expect("attempting to remove a component which does not exist");
+            component_record.remove_component(&component_key);
+
+            self.mut_handler
+                .borrow_mut()
+                .deregister_component(&component_key);
+            self.global_component_store
+                .remove(component_key)
+                .expect("component not initialized correctly?");
+
+            return true;
+        }
+        return false;
+    }
+
     // Rooms
 
     /// Creates a new Room on the Server and returns a corresponding RoomMut,
@@ -531,7 +607,8 @@ impl<P: ProtocolType> Server<P> {
 
     //// entities
 
-    /// Assigns an Entity to a specific User, (meaning that the User will be able to issue Commands for that Entity)
+    /// Assigns an Entity to a specific User, (meaning that the User will be
+    /// able to issue Commands for that Entity)
     pub(crate) fn assign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
         // check that entity is initialized
         if let Some(entity_component_record) = self.entity_component_map.get(entity_key) {
@@ -560,48 +637,6 @@ impl<P: ProtocolType> Server<P> {
         }
     }
 
-    /// Register a Component with the Server, whereby the Server will sync the
-    /// Component to all connected Clients for which the Component's Entity
-    /// is in Scope. Gives back a ComponentKey which can be used to get the
-    /// reference to the Component from the Server once again
-    pub(crate) fn insert_component_to_entity<R: ImplRef<P>>(
-        &mut self,
-        entity_key: &EntityKey,
-        component_ref: &R,
-    ) -> ComponentKey {
-        if !self.entity_component_map.contains_key(&entity_key) {
-            panic!("attempted to add component to non-existent entity");
-        }
-
-        let component_key: ComponentKey = self.register_component(component_ref);
-
-        let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
-
-        // add component to connections already tracking entity
-        for (user_key, _) in self.users.iter() {
-            if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                if user_connection.has_entity(entity_key) {
-                    Self::user_insert_component(
-                        user_connection,
-                        entity_key,
-                        &component_key,
-                        &dyn_ref,
-                    );
-                }
-            }
-        }
-
-        self.component_entity_map.insert(component_key, *entity_key);
-
-        if let Some(entity_component_record) = self.entity_component_map.get_mut(&entity_key) {
-            entity_component_record
-                .borrow_mut()
-                .insert_component(&component_key, &dyn_ref.borrow().get_type_id());
-        }
-
-        return component_key;
-    }
-
     /// Given an EntityKey & a Component type, get a reference to a registered
     /// Component being tracked by the Server
     pub(crate) fn get_component_by_type<R: Replicate<P>>(&self, key: &EntityKey) -> Option<&P> {
@@ -614,41 +649,6 @@ impl<P: ProtocolType> Server<P> {
             }
         }
         return None;
-    }
-
-    /// Given an EntityKey & a Component type, get a ComponentKey to a
-    /// registered Component being tracked by the Server
-    pub(crate) fn remove_component_by_type<R: Replicate<P>>(
-        &mut self,
-        entity_key: &EntityKey,
-    ) -> bool {
-        if let Some(component_record_ref) = self.entity_component_map.get(entity_key) {
-            let mut component_record = component_record_ref.borrow_mut();
-            let component_key: ComponentKey = *component_record
-                .get_key_from_type(&TypeId::of::<R>())
-                .expect("component not initialized correctly?");
-
-            for (user_key, _) in self.users.iter() {
-                if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
-                    Self::user_remove_component(user_connection, &component_key);
-                }
-            }
-
-            self.component_entity_map
-                .remove(&component_key)
-                .expect("attempting to remove a component which does not exist");
-            component_record.remove_component(&component_key);
-
-            self.mut_handler
-                .borrow_mut()
-                .deregister_component(&component_key);
-            self.global_component_store
-                .remove(component_key)
-                .expect("component not initialized correctly?");
-
-            return true;
-        }
-        return false;
     }
 
     /// Returns whether or not an Entity has a Component of a given TypeId
