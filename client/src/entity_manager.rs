@@ -15,15 +15,15 @@ use super::{
 };
 
 #[derive(Debug)]
-pub struct EntityManager<T: ProtocolType> {
+pub struct EntityManager<P: ProtocolType> {
     entities: HashMap<LocalEntityKey, EntityRecord>,
-    component_store: HashMap<LocalComponentKey, T>,
-    pawn_component_store: HashMap<LocalComponentKey, T>,
+    component_store: HashMap<LocalComponentKey, P>,
+    pawn_component_store: HashMap<LocalComponentKey, P>,
     component_entity_map: HashMap<LocalComponentKey, LocalEntityKey>,
-    queued_incoming_messages: VecDeque<EntityAction<T>>,
+    queued_incoming_messages: VecDeque<EntityAction<P>>,
 }
 
-impl<T: ProtocolType> EntityManager<T> {
+impl<P: ProtocolType> EntityManager<P> {
     pub fn new() -> Self {
         EntityManager {
             entities: HashMap::new(),
@@ -36,8 +36,8 @@ impl<T: ProtocolType> EntityManager<T> {
 
     pub fn process_data(
         &mut self,
-        manifest: &Manifest<T>,
-        command_receiver: &mut CommandReceiver<T>,
+        manifest: &Manifest<P>,
+        command_receiver: &mut CommandReceiver<P>,
         packet_tick: u16,
         packet_index: u16,
         reader: &mut PacketReader,
@@ -113,7 +113,7 @@ impl<T: ProtocolType> EntityManager<T> {
                             manifest.create_replica(naia_id, reader);
                         }
                     } else {
-                        let mut component_list: Vec<T> = Vec::new();
+                        let mut component_list: Vec<P> = Vec::new();
                         let mut entity_record = EntityRecord::new();
 
                         for _ in 0..components_num {
@@ -255,11 +255,11 @@ impl<T: ProtocolType> EntityManager<T> {
         }
     }
 
-    pub fn pop_incoming_message(&mut self) -> Option<EntityAction<T>> {
+    pub fn pop_incoming_message(&mut self) -> Option<EntityAction<P>> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<&T> {
+    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &LocalEntityKey) -> Option<&P> {
         if let Some(entity_record) = self.entities.get(key) {
             if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
                 return self.component_store.get(component_key);
@@ -268,7 +268,7 @@ impl<T: ProtocolType> EntityManager<T> {
         return None;
     }
 
-    pub fn get_pawn_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<&T> {
+    pub fn get_pawn_component_by_type<R: Replicate<P>>(&self, key: &LocalEntityKey) -> Option<&P> {
         if let Some(entity_component_record) = self.entities.get(key) {
             if let Some(component_key) =
                 entity_component_record.get_key_from_type(&TypeId::of::<R>())

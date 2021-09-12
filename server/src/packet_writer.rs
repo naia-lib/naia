@@ -55,10 +55,10 @@ impl PacketWriter {
 
     /// Writes an Message into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_message<T: ProtocolType>(
+    pub fn write_message<P: ProtocolType>(
         &mut self,
-        manifest: &Manifest<T>,
-        message: &Ref<dyn Replicate<T>>,
+        manifest: &Manifest<P>,
+        message: &Ref<dyn Replicate<P>>,
     ) -> bool {
         return self.message_writer.write_message(manifest, message);
     }

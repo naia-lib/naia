@@ -12,16 +12,16 @@ use super::{
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
 #[derive(Debug)]
-pub struct Connection<T: ProtocolType> {
+pub struct Connection<P: ProtocolType> {
     address: SocketAddr,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
     ack_manager: AckManager,
-    message_manager: MessageManager<T>,
+    message_manager: MessageManager<P>,
     last_received_tick: u16,
 }
 
-impl<T: ProtocolType> Connection<T> {
+impl<P: ProtocolType> Connection<P> {
     /// Create a new Connection, given the appropriate underlying managers
     pub fn new(address: SocketAddr, config: &ConnectionConfig) -> Self {
         return Connection {
@@ -116,7 +116,7 @@ impl<T: ProtocolType> Connection<T> {
     }
 
     /// Queue up a message to be sent to the remote host
-    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<T>>, guaranteed_delivery: bool) {
+    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<P>>, guaranteed_delivery: bool) {
         return self
             .message_manager
             .queue_outgoing_message(message, guaranteed_delivery);
@@ -131,7 +131,7 @@ impl<T: ProtocolType> Connection<T> {
     pub fn pop_outgoing_message(
         &mut self,
         next_packet_index: u16,
-    ) -> Option<Ref<dyn Replicate<T>>> {
+    ) -> Option<Ref<dyn Replicate<P>>> {
         return self.message_manager.pop_outgoing_message(next_packet_index);
     }
 
@@ -140,7 +140,7 @@ impl<T: ProtocolType> Connection<T> {
     pub fn unpop_outgoing_message(
         &mut self,
         next_packet_index: u16,
-        message: &Ref<dyn Replicate<T>>,
+        message: &Ref<dyn Replicate<P>>,
     ) {
         return self
             .message_manager
@@ -149,12 +149,12 @@ impl<T: ProtocolType> Connection<T> {
 
     /// Given an incoming packet which has been identified as an message, send
     /// the data to the MessageManager for processing
-    pub fn process_message_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<T>) {
+    pub fn process_message_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>) {
         return self.message_manager.process_data(reader, manifest);
     }
 
     /// Get the most recent message that has been received from a remote host
-    pub fn get_incoming_message(&mut self) -> Option<T> {
+    pub fn get_incoming_message(&mut self) -> Option<P> {
         return self.message_manager.pop_incoming_message();
     }
 

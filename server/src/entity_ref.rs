@@ -6,13 +6,13 @@ use crate::{EntityKey, RoomKey, Server, UserKey};
 
 // EntityRef
 
-pub struct EntityRef<'s, T: ProtocolType> {
-    server: &'s Server<T>,
+pub struct EntityRef<'s, P: ProtocolType> {
+    server: &'s Server<P>,
     key: EntityKey,
 }
 
-impl<'s, T: ProtocolType> EntityRef<'s, T> {
-    pub fn new(server: &'s Server<T>, key: &EntityKey) -> Self {
+impl<'s, P: ProtocolType> EntityRef<'s, P> {
+    pub fn new(server: &'s Server<P>, key: &EntityKey) -> Self {
         EntityRef { server, key: *key }
     }
 
@@ -20,13 +20,13 @@ impl<'s, T: ProtocolType> EntityRef<'s, T> {
         self.key
     }
 
-    pub fn has_component<R: Replicate<T>>(&self) -> bool {
+    pub fn has_component<R: Replicate<P>>(&self) -> bool {
         return self
             .server
             .entity_contains_type_id(&self.key, &TypeId::of::<R>());
     }
 
-    pub fn component<R: Replicate<T>>(&self) -> Option<&Ref<R>> {
+    pub fn component<R: Replicate<P>>(&self) -> Option<&Ref<R>> {
         if let Some(protocol) = self.server.get_component_by_type::<R>(&self.key) {
             return protocol.as_typed_ref::<R>();
         }
@@ -35,13 +35,13 @@ impl<'s, T: ProtocolType> EntityRef<'s, T> {
 }
 
 // EntityMut
-pub struct EntityMut<'s, T: ProtocolType> {
-    server: &'s mut Server<T>,
+pub struct EntityMut<'s, P: ProtocolType> {
+    server: &'s mut Server<P>,
     key: EntityKey,
 }
 
-impl<'s, T: ProtocolType> EntityMut<'s, T> {
-    pub fn new(server: &'s mut Server<T>, key: &EntityKey) -> Self {
+impl<'s, P: ProtocolType> EntityMut<'s, P> {
+    pub fn new(server: &'s mut Server<P>, key: &EntityKey) -> Self {
         EntityMut { server, key: *key }
     }
 
@@ -49,13 +49,13 @@ impl<'s, T: ProtocolType> EntityMut<'s, T> {
         self.key
     }
 
-    pub fn has_component<R: Replicate<T>>(&self) -> bool {
+    pub fn has_component<R: Replicate<P>>(&self) -> bool {
         return self
             .server
             .entity_contains_type_id(&self.key, &TypeId::of::<R>());
     }
 
-    pub fn component<R: Replicate<T>>(&self) -> Option<&Ref<R>> {
+    pub fn component<R: Replicate<P>>(&self) -> Option<&Ref<R>> {
         if let Some(protocol) = self.server.get_component_by_type::<R>(&self.key) {
             return protocol.as_typed_ref::<R>();
         }
@@ -63,14 +63,14 @@ impl<'s, T: ProtocolType> EntityMut<'s, T> {
     }
 
     // Add Component
-    pub fn add_component<R: ImplRef<T>>(&mut self, component_ref: &R) -> &mut Self {
+    pub fn add_component<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
         self.server
             .add_component_to_entity(&self.key, component_ref);
 
         self
     }
 
-    pub fn add_components<R: ImplRef<T>>(&mut self, component_refs: &[R]) -> &mut Self {
+    pub fn add_components<R: ImplRef<P>>(&mut self, component_refs: &[R]) -> &mut Self {
         for component_ref in component_refs {
             self.server
                 .add_component_to_entity(&self.key, component_ref);
@@ -80,7 +80,7 @@ impl<'s, T: ProtocolType> EntityMut<'s, T> {
     }
 
     // Remove Component
-    pub fn remove_component<R: Replicate<T>>(&mut self) -> &mut Self {
+    pub fn remove_component<R: Replicate<P>>(&mut self) -> &mut Self {
         self.server.remove_component_by_type::<R>(&self.key);
 
         self

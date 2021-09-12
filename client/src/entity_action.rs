@@ -1,13 +1,13 @@
 use naia_shared::{LocalEntityKey, ProtocolType};
 
 #[derive(Debug, Clone)]
-pub enum EntityAction<U: ProtocolType> {
-    CreateEntity(LocalEntityKey, Vec<U>),
+pub enum EntityAction<P: ProtocolType> {
+    CreateEntity(LocalEntityKey, Vec<P>),
     DeleteEntity(LocalEntityKey),
     AssignPawn(LocalEntityKey),
     UnassignPawn(LocalEntityKey),
     ResetPawn(LocalEntityKey),
-    AddComponent(LocalEntityKey, U),
-    RemoveComponent(LocalEntityKey, U),
-    UpdateComponent(LocalEntityKey, U),
+    AddComponent(LocalEntityKey, P),
+    RemoveComponent(LocalEntityKey, P),
+    UpdateComponent(LocalEntityKey, P),
 }

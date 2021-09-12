@@ -11,14 +11,14 @@ use crate::{
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 #[derive(Debug)]
-pub struct MessageManager<T: ProtocolType> {
-    queued_outgoing_messages: VecDeque<(bool, Ref<dyn Replicate<T>>)>,
-    queued_incoming_messages: VecDeque<T>,
-    sent_guaranteed_messages: HashMap<u16, Vec<Ref<dyn Replicate<T>>>>,
+pub struct MessageManager<P: ProtocolType> {
+    queued_outgoing_messages: VecDeque<(bool, Ref<dyn Replicate<P>>)>,
+    queued_incoming_messages: VecDeque<P>,
+    sent_guaranteed_messages: HashMap<u16, Vec<Ref<dyn Replicate<P>>>>,
     last_popped_message_guarantee: bool,
 }
 
-impl<T: ProtocolType> MessageManager<T> {
+impl<P: ProtocolType> MessageManager<P> {
     /// Creates a new MessageManager
     pub fn new() -> Self {
         MessageManager {
@@ -36,13 +36,13 @@ impl<T: ProtocolType> MessageManager<T> {
     }
 
     /// Gets the next queued Message to be transmitted
-    pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<Ref<dyn Replicate<T>>> {
+    pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<Ref<dyn Replicate<P>>> {
         match self.queued_outgoing_messages.pop_front() {
             Some((guaranteed, message)) => {
                 //place in transmission record if this is a gauranteed message
                 if guaranteed {
                     if !self.sent_guaranteed_messages.contains_key(&packet_index) {
-                        let sent_messages_list: Vec<Ref<dyn Replicate<T>>> = Vec::new();
+                        let sent_messages_list: Vec<Ref<dyn Replicate<P>>> = Vec::new();
                         self.sent_guaranteed_messages
                             .insert(packet_index, sent_messages_list);
                     }
@@ -64,7 +64,7 @@ impl<T: ProtocolType> MessageManager<T> {
 
     /// If  the last popped Message from the queue somehow wasn't able to be
     /// written into a packet, put the Message back into the front of the queue
-    pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: &Ref<dyn Replicate<T>>) {
+    pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: &Ref<dyn Replicate<P>>) {
         let cloned_message = message.clone();
 
         if self.last_popped_message_guarantee {
@@ -83,7 +83,7 @@ impl<T: ProtocolType> MessageManager<T> {
     /// Queues an Message to be transmitted to the remote host
     pub fn queue_outgoing_message(
         &mut self,
-        message: &Ref<dyn Replicate<T>>,
+        message: &Ref<dyn Replicate<P>>,
         guaranteed_delivery: bool,
     ) {
         self.queued_outgoing_messages
@@ -97,13 +97,13 @@ impl<T: ProtocolType> MessageManager<T> {
     }
 
     /// Get the most recently received Message
-    pub fn pop_incoming_message(&mut self) -> Option<T> {
+    pub fn pop_incoming_message(&mut self) -> Option<P> {
         return self.queued_incoming_messages.pop_front();
     }
 
     /// Given incoming packet data, read transmitted Messages and store them to
     /// be returned to the application
-    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<T>) {
+    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>) {
         let message_count = reader.read_u8();
         for _x in 0..message_count {
             let naia_id: u16 = reader.read_u16();
@@ -114,7 +114,7 @@ impl<T: ProtocolType> MessageManager<T> {
     }
 }
 
-impl<T: ProtocolType> PacketNotifiable for MessageManager<T> {
+impl<P: ProtocolType> PacketNotifiable for MessageManager<P> {
     /// Occurs when a packet has been notified as delivered. Stops tracking the
     /// status of Messages in that packet.
     fn notify_packet_delivered(&mut self, packet_index: u16) {

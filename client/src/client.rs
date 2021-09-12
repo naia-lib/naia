@@ -24,19 +24,19 @@ use super::{
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
 #[derive(Debug)]
-pub struct Client<T: ProtocolType> {
-    manifest: Manifest<T>,
+pub struct Client<P: ProtocolType> {
+    manifest: Manifest<P>,
     // Connection
     server_address: SocketAddr,
     connection_config: ConnectionConfig,
     sender: PacketSender,
     receiver: Box<dyn PacketReceiver>,
-    server_connection: Option<ServerConnection<T>>,
+    server_connection: Option<ServerConnection<P>>,
     pre_connection_timestamp: Option<Timestamp>,
     pre_connection_digest: Option<Box<[u8]>>,
     handshake_timer: Timer,
     connection_state: ConnectionState,
-    auth_message: Option<Ref<dyn Replicate<T>>>,
+    auth_message: Option<Ref<dyn Replicate<P>>>,
     // Events
     outstanding_connect: bool,
     outstanding_errors: VecDeque<NaiaClientError>,
@@ -44,13 +44,13 @@ pub struct Client<T: ProtocolType> {
     tick_manager: TickManager,
 }
 
-impl<T: ProtocolType> Client<T> {
+impl<P: ProtocolType> Client<P> {
     /// Create a new Client
-    pub fn new<U: ImplRef<T>>(
-        manifest: Manifest<T>,
+    pub fn new<R: ImplRef<P>>(
+        manifest: Manifest<P>,
         client_config: Option<ClientConfig>,
         shared_config: SharedConfig,
-        auth: Option<U>,
+        auth: Option<R>,
     ) -> Self {
         let mut client_config = match client_config {
             Some(config) => config,
@@ -73,7 +73,7 @@ impl<T: ProtocolType> Client<T> {
         let mut handshake_timer = Timer::new(client_config.send_handshake_interval);
         handshake_timer.ring_manual();
 
-        let auth_message: Option<Ref<dyn Replicate<T>>> = {
+        let auth_message: Option<Ref<dyn Replicate<P>>> = {
             if auth.is_none() {
                 None
             } else {
@@ -105,7 +105,7 @@ impl<T: ProtocolType> Client<T> {
     /// Must call this regularly (preferably at the beginning of every draw
     /// frame), in a loop until it returns None.
     /// Retrieves incoming update data, and maintains the connection.
-    pub fn receive(&mut self) -> VecDeque<Result<Event<T>, NaiaClientError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P>, NaiaClientError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with server, and receive packets
@@ -141,7 +141,7 @@ impl<T: ProtocolType> Client<T> {
                 }
                 // receive entity actions
                 while let Some(action) = connection.get_incoming_entity_action() {
-                    let event: Event<T> = {
+                    let event: Event<P> = {
                         match action {
                             EntityAction::CreateEntity(local_key, component_list) => {
                                 Event::CreateEntity(local_key, component_list)
@@ -227,8 +227,7 @@ impl<T: ProtocolType> Client<T> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    /// pub fn queue_message<T: ImplRef<U>>(
-    pub fn queue_message<U: ImplRef<T>>(&mut self, message_ref: &U, guaranteed_delivery: bool) {
+    pub fn queue_message<R: ImplRef<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
             let dyn_ref = message_ref.dyn_ref();
             connection.queue_message(&dyn_ref, guaranteed_delivery);
@@ -236,7 +235,7 @@ impl<T: ProtocolType> Client<T> {
     }
 
     /// Queues up a Pawn Command to be sent to the Server
-    pub fn queue_command<U: ImplRef<T>>(&mut self, entity_key: &LocalEntityKey, command_ref: &U) {
+    pub fn queue_command<R: ImplRef<P>>(&mut self, entity_key: &LocalEntityKey, command_ref: &R) {
         if let Some(connection) = &mut self.server_connection {
             let dyn_ref = command_ref.dyn_ref();
             connection.queue_command(entity_key, &dyn_ref);
@@ -267,7 +266,7 @@ impl<T: ProtocolType> Client<T> {
 
     /// Given an EntityKey & a Component type, get a reference to the
     /// appropriate ComponentRef
-    pub fn component_past<R: Replicate<T>>(&self, entity_key: &LocalEntityKey) -> Option<&Ref<R>> {
+    pub fn component_past<R: Replicate<P>>(&self, entity_key: &LocalEntityKey) -> Option<&Ref<R>> {
         if let Some(protocol) = self.get_component_by_type::<R>(entity_key) {
             return protocol.as_typed_ref::<R>();
         }
@@ -276,7 +275,7 @@ impl<T: ProtocolType> Client<T> {
 
     /// Given an EntityKey & a Component type, get a reference to the
     /// appropriate ComponentRef
-    pub fn component_present<R: Replicate<T>>(
+    pub fn component_present<R: Replicate<P>>(
         &self,
         entity_key: &LocalEntityKey,
     ) -> Option<&Ref<R>> {
@@ -335,10 +334,10 @@ impl<T: ProtocolType> Client<T> {
 
     /// Given an EntityKey & a Component type, get a reference to a registered
     /// Component being tracked by the Server
-    pub(crate) fn get_component_by_type<R: Replicate<T>>(
+    pub(crate) fn get_component_by_type<R: Replicate<P>>(
         &self,
         key: &LocalEntityKey,
-    ) -> Option<&T> {
+    ) -> Option<&P> {
         if let Some(connection) = &self.server_connection {
             return connection.get_component_by_type::<R>(key);
         }
@@ -347,10 +346,10 @@ impl<T: ProtocolType> Client<T> {
 
     /// Given an EntityKey & a Component type, get a reference to a registered
     /// Pawn Component being tracked by the Server
-    pub(crate) fn get_pawn_component_by_type<R: Replicate<T>>(
+    pub(crate) fn get_pawn_component_by_type<R: Replicate<P>>(
         &self,
         key: &LocalEntityKey,
-    ) -> Option<&T> {
+    ) -> Option<&P> {
         if let Some(connection) = &self.server_connection {
             return connection.get_pawn_component_by_type::<R>(key);
         }
@@ -374,7 +373,7 @@ impl<T: ProtocolType> Client<T> {
                     .as_mut()
                     .unwrap()
                     .write(&mut timestamp_bytes);
-                Client::<T>::internal_send_connectionless(
+                Client::<P>::internal_send_connectionless(
                     &mut self.sender,
                     PacketType::ClientChallengeRequest,
                     Packet::new(timestamp_bytes),
@@ -397,7 +396,7 @@ impl<T: ProtocolType> Client<T> {
                     payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                     auth_message.borrow().write(&mut payload_bytes);
                 }
-                Client::<T>::internal_send_connectionless(
+                Client::<P>::internal_send_connectionless(
                     &mut self.sender,
                     PacketType::ClientConnectRequest,
                     Packet::new(payload_bytes),
@@ -494,7 +493,7 @@ impl<T: ProtocolType> Client<T> {
     fn internal_send_with_connection(
         host_tick: u16,
         sender: &mut PacketSender,
-        connection: &mut ServerConnection<T>,
+        connection: &mut ServerConnection<P>,
         packet_type: PacketType,
         packet: Packet,
     ) {

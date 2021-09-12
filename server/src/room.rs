@@ -81,13 +81,13 @@ use room_key::RoomKey;
 
 // RoomRef
 
-pub struct RoomRef<'s, T: ProtocolType> {
-    server: &'s Server<T>,
+pub struct RoomRef<'s, P: ProtocolType> {
+    server: &'s Server<P>,
     key: RoomKey,
 }
 
-impl<'s, T: ProtocolType> RoomRef<'s, T> {
-    pub fn new(server: &'s Server<T>, key: &RoomKey) -> Self {
+impl<'s, P: ProtocolType> RoomRef<'s, P> {
+    pub fn new(server: &'s Server<P>, key: &RoomKey) -> Self {
         RoomRef { server, key: *key }
     }
 
@@ -105,13 +105,13 @@ impl<'s, T: ProtocolType> RoomRef<'s, T> {
 }
 
 // RoomMut
-pub struct RoomMut<'s, T: ProtocolType> {
-    server: &'s mut Server<T>,
+pub struct RoomMut<'s, P: ProtocolType> {
+    server: &'s mut Server<P>,
     key: RoomKey,
 }
 
-impl<'s, T: ProtocolType> RoomMut<'s, T> {
-    pub fn new(server: &'s mut Server<T>, key: &RoomKey) -> Self {
+impl<'s, P: ProtocolType> RoomMut<'s, P> {
+    pub fn new(server: &'s mut Server<P>, key: &RoomKey) -> Self {
         RoomMut { server, key: *key }
     }
 

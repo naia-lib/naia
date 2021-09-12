@@ -34,9 +34,9 @@ use super::{
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
-pub struct Server<T: ProtocolType> {
+pub struct Server<P: ProtocolType> {
     // Manifest
-    manifest: Manifest<T>,
+    manifest: Manifest<P>,
     // Connection
     connection_config: ConnectionConfig,
     socket_sender: PacketSender,
@@ -46,7 +46,7 @@ pub struct Server<T: ProtocolType> {
     // Users
     users: DenseSlotMap<UserKey, User>,
     address_to_user_key_map: HashMap<SocketAddr, UserKey>,
-    client_connections: HashMap<UserKey, ClientConnection<T>>,
+    client_connections: HashMap<UserKey, ClientConnection<P>>,
     // Rooms
     rooms: DenseSlotMap<RoomKey, Room>,
     // Entities
@@ -54,22 +54,22 @@ pub struct Server<T: ProtocolType> {
     entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
     entity_component_map: HashMap<EntityKey, Ref<ComponentRecord<ComponentKey>>>,
     // Components
-    global_component_store: DenseSlotMap<ComponentKey, T>,
+    global_component_store: DenseSlotMap<ComponentKey, P>,
     component_entity_map: HashMap<ComponentKey, EntityKey>,
     mut_handler: Ref<MutHandler>,
     // Events
     outstanding_connects: VecDeque<UserKey>,
     outstanding_disconnects: VecDeque<UserKey>,
-    outstanding_auths: VecDeque<(UserKey, T)>,
+    outstanding_auths: VecDeque<(UserKey, P)>,
     outstanding_errors: VecDeque<NaiaServerError>,
     // Ticks
     tick_manager: TickManager,
 }
 
-impl<U: ProtocolType> Server<U> {
+impl<P: ProtocolType> Server<P> {
     /// Create a new Server
     pub fn new(
-        manifest: Manifest<U>,
+        manifest: Manifest<P>,
         server_config: Option<ServerConfig>,
         shared_config: SharedConfig,
     ) -> Self {
@@ -130,7 +130,7 @@ impl<U: ProtocolType> Server<U> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive(&mut self) -> VecDeque<Result<Event<U>, NaiaServerError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P>, NaiaServerError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with all clients, and receive packets
@@ -153,7 +153,7 @@ impl<U: ProtocolType> Server<U> {
                     &self.connection_config,
                 );
                 //new_connection.process_incoming_header(&header);
-                Server::<U>::send_connect_accept_message(
+                Server::<P>::send_connect_accept_message(
                     &mut new_connection,
                     &mut self.socket_sender,
                 );
@@ -225,7 +225,7 @@ impl<U: ProtocolType> Server<U> {
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn queue_message<T: ImplRef<U>>(
+    pub fn queue_message<T: ImplRef<P>>(
         &mut self,
         user_key: &UserKey,
         message_ref: &T,
@@ -265,7 +265,7 @@ impl<U: ProtocolType> Server<U> {
 
     /// Spawns a new Entity and returns a corresponding EntityMut, which can be
     /// used to add components to the entity or retrieve its unique key
-    pub fn spawn_entity(&mut self) -> EntityMut<U> {
+    pub fn spawn_entity(&mut self) -> EntityMut<P> {
         let entity_key: EntityKey = self.entity_key_generator.generate();
         self.entity_component_map
             .insert(entity_key, Ref::new(ComponentRecord::new()));
@@ -276,7 +276,7 @@ impl<U: ProtocolType> Server<U> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity associated with the given EntityKey.
     /// Returns None if the entity does not exist.
-    pub fn entity(&self, entity_key: &EntityKey) -> Option<EntityRef<U>> {
+    pub fn entity(&self, entity_key: &EntityKey) -> Option<EntityRef<P>> {
         if self.entity_component_map.contains_key(entity_key) {
             return Some(EntityRef::new(self, &entity_key));
         }
@@ -286,7 +286,7 @@ impl<U: ProtocolType> Server<U> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity associated with the given EntityKey.
     /// Returns None if the entity does not exist.
-    pub fn entity_mut(&mut self, entity_key: &EntityKey) -> Option<EntityMut<U>> {
+    pub fn entity_mut(&mut self, entity_key: &EntityKey) -> Option<EntityMut<P>> {
         if self.entity_component_map.contains_key(entity_key) {
             return Some(EntityMut::new(self, &entity_key));
         }
@@ -368,7 +368,7 @@ impl<U: ProtocolType> Server<U> {
 
     /// Given an EntityKey & a Component type, get a reference to a registered
     /// Component being tracked by the Server
-    pub fn component<T: Replicate<U>>(&self, entity_key: &EntityKey) -> Option<&Ref<T>> {
+    pub fn component<T: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<&Ref<T>> {
         if let Some(protocol) = self.get_component_by_type::<T>(entity_key) {
             return protocol.as_typed_ref::<T>();
         }
@@ -380,7 +380,7 @@ impl<U: ProtocolType> Server<U> {
     /// Creates a new Room on the Server and returns a corresponding RoomMut,
     /// which can be used to add users/entities to the room or retrieve its
     /// key
-    pub fn make_room(&mut self) -> RoomMut<U> {
+    pub fn make_room(&mut self) -> RoomMut<P> {
         let new_room = Room::new();
         let room_key = self.rooms.insert(new_room);
         return RoomMut::new(self, &room_key);
@@ -395,7 +395,7 @@ impl<U: ProtocolType> Server<U> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Returns None if the room does not exist.
-    pub fn room(&self, room_key: &RoomKey) -> Option<RoomRef<U>> {
+    pub fn room(&self, room_key: &RoomKey) -> Option<RoomRef<P>> {
         if self.rooms.contains_key(*room_key) {
             return Some(RoomRef::new(self, room_key));
         }
@@ -405,7 +405,7 @@ impl<U: ProtocolType> Server<U> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Returns None if the room does not exist.
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> Option<RoomMut<U>> {
+    pub fn room_mut(&mut self, room_key: &RoomKey) -> Option<RoomMut<P>> {
         if self.rooms.contains_key(*room_key) {
             return Some(RoomMut::new(self, room_key));
         }
@@ -475,7 +475,7 @@ impl<U: ProtocolType> Server<U> {
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
-    pub fn user(&self, user_key: &UserKey) -> Option<UserRef<U>> {
+    pub fn user(&self, user_key: &UserKey) -> Option<UserRef<P>> {
         if self.users.contains_key(*user_key) {
             return Some(UserRef::new(self, &user_key));
         }
@@ -485,7 +485,7 @@ impl<U: ProtocolType> Server<U> {
     /// Retrieves an UserMut that exposes read and write operations for the User
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
-    pub fn user_mut(&mut self, user_key: &UserKey) -> Option<UserMut<U>> {
+    pub fn user_mut(&mut self, user_key: &UserKey) -> Option<UserMut<P>> {
         if self.users.contains_key(*user_key) {
             return Some(UserMut::new(self, &user_key));
         }
@@ -565,7 +565,7 @@ impl<U: ProtocolType> Server<U> {
     /// Component to all connected Clients for which the Component's Entity
     /// is in Scope. Gives back a ComponentKey which can be used to get the
     /// reference to the Component from the Server once again
-    pub(crate) fn add_component_to_entity<T: ImplRef<U>>(
+    pub(crate) fn add_component_to_entity<T: ImplRef<P>>(
         &mut self,
         entity_key: &EntityKey,
         component_ref: &T,
@@ -576,7 +576,7 @@ impl<U: ProtocolType> Server<U> {
 
         let component_key: ComponentKey = self.register_component(component_ref);
 
-        let dyn_ref: Ref<dyn Replicate<U>> = component_ref.dyn_ref();
+        let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
 
         // add component to connections already tracking entity
         for (user_key, _) in self.users.iter() {
@@ -600,7 +600,7 @@ impl<U: ProtocolType> Server<U> {
 
     /// Given an EntityKey & a Component type, get a reference to a registered
     /// Component being tracked by the Server
-    pub(crate) fn get_component_by_type<T: Replicate<U>>(&self, key: &EntityKey) -> Option<&U> {
+    pub(crate) fn get_component_by_type<T: Replicate<P>>(&self, key: &EntityKey) -> Option<&P> {
         if let Some(component_record) = self.entity_component_map.get(key) {
             if let Some(component_key) = component_record
                 .borrow()
@@ -614,7 +614,7 @@ impl<U: ProtocolType> Server<U> {
 
     /// Given an EntityKey & a Component type, get a ComponentKey to a
     /// registered Component being tracked by the Server
-    pub(crate) fn remove_component_by_type<T: Replicate<U>>(
+    pub(crate) fn remove_component_by_type<T: Replicate<P>>(
         &mut self,
         entity_key: &EntityKey,
     ) -> bool {
@@ -738,7 +738,7 @@ impl<U: ProtocolType> Server<U> {
                                 payload_bytes.push(*hash_byte);
                             }
 
-                            Server::<U>::internal_send_connectionless(
+                            Server::<P>::internal_send_connectionless(
                                 &mut self.socket_sender,
                                 PacketType::ServerChallengeResponse,
                                 Packet::new(address, payload_bytes),
@@ -759,7 +759,7 @@ impl<U: ProtocolType> Server<U> {
                                         let mut connection =
                                             self.client_connections.get_mut(user_key).unwrap();
                                         connection.process_incoming_header(&header);
-                                        Server::<U>::send_connect_accept_message(
+                                        Server::<P>::send_connect_accept_message(
                                             &mut connection,
                                             &mut self.socket_sender,
                                         );
@@ -941,7 +941,7 @@ impl<U: ProtocolType> Server<U> {
     // to all connected Clients for which the Component is in scope. Gives back
     // an ComponentKey which can be used to get the reference to the Component
     // from the Server once again
-    fn register_component<T: ImplRef<U>>(&mut self, component_ref: &T) -> ComponentKey {
+    fn register_component<T: ImplRef<P>>(&mut self, component_ref: &T) -> ComponentKey {
         let dyn_ref = component_ref.dyn_ref();
         let new_mutator_ref: Ref<PropertyMutator> =
             Ref::new(PropertyMutator::new(&self.mut_handler));
@@ -962,7 +962,7 @@ impl<U: ProtocolType> Server<U> {
     }
 
     fn user_remove_component(
-        user_connection: &mut ClientConnection<U>,
+        user_connection: &mut ClientConnection<P>,
         component_key: &ComponentKey,
     ) {
         //remove component from user connection
@@ -970,13 +970,13 @@ impl<U: ProtocolType> Server<U> {
     }
 
     fn user_add_entity(
-        component_store: &DenseSlotMap<ComponentKey, U>,
-        user_connection: &mut ClientConnection<U>,
+        component_store: &DenseSlotMap<ComponentKey, P>,
+        user_connection: &mut ClientConnection<P>,
         entity_key: &EntityKey,
         entity_component_record: &Ref<ComponentRecord<ComponentKey>>,
     ) {
         // Get list of components first
-        let mut component_list: Vec<(ComponentKey, Ref<dyn Replicate<U>>)> = Vec::new();
+        let mut component_list: Vec<(ComponentKey, Ref<dyn Replicate<P>>)> = Vec::new();
         for component_key in entity_component_record.borrow().get_component_keys() {
             if let Some(component_ref) = component_store.get(component_key) {
                 component_list.push((component_key, component_ref.inner_ref().clone()));
@@ -987,23 +987,23 @@ impl<U: ProtocolType> Server<U> {
         user_connection.add_entity(entity_key, entity_component_record, &component_list);
     }
 
-    fn user_remove_entity(user_connection: &mut ClientConnection<U>, entity_key: &EntityKey) {
+    fn user_remove_entity(user_connection: &mut ClientConnection<P>, entity_key: &EntityKey) {
         //remove entity from user connection
         user_connection.remove_entity(entity_key);
     }
 
     fn user_add_component(
-        user_connection: &mut ClientConnection<U>,
+        user_connection: &mut ClientConnection<P>,
         entity_key: &EntityKey,
         component_key: &ComponentKey,
-        component_ref: &Ref<dyn Replicate<U>>,
+        component_ref: &Ref<dyn Replicate<P>>,
     ) {
         //add component to user connection
         user_connection.add_component(entity_key, component_key, component_ref);
     }
 
     fn send_connect_accept_message(
-        connection: &mut ClientConnection<U>,
+        connection: &mut ClientConnection<P>,
         sender: &mut PacketSender,
     ) {
         let payload =
