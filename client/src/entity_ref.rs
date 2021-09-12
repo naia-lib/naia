@@ -2,16 +2,16 @@ use naia_shared::{ProtocolType, Ref, Replicate};
 
 use crate::{Client, LocalEntityKey};
 
-// PastEntityRef
+// EntityRef
 #[derive(Debug)]
-pub struct PastEntityRef<'s, P: ProtocolType> {
+pub struct EntityRef<'s, P: ProtocolType> {
     client: &'s Client<P>,
     key: LocalEntityKey,
 }
 
-impl<'s, P: ProtocolType> PastEntityRef<'s, P> {
+impl<'s, P: ProtocolType> EntityRef<'s, P> {
     pub fn new(client: &'s Client<P>, key: &LocalEntityKey) -> Self {
-        PastEntityRef { client, key: *key }
+        EntityRef { client, key: *key }
     }
 
     pub fn key(&self) -> LocalEntityKey {
@@ -23,20 +23,31 @@ impl<'s, P: ProtocolType> PastEntityRef<'s, P> {
     }
 
     pub fn component<R: Replicate<P>>(&self) -> Option<&Ref<R>> {
-        return self.client.component_past::<R>(&self.key);
+        return self.client.component::<R>(&self.key);
+    }
+
+    pub fn is_owned(&self) -> bool {
+        return self.client.entity_is_owned(&self.key);
+    }
+
+    pub fn prediction(&self) -> PredictedEntityRef<P> {
+        if !self.is_owned() {
+            panic!("Attempted to call .prediction() on an un-owned Entity!");
+        }
+        return PredictedEntityRef::new(self.client, &self.key);
     }
 }
 
-// PresentEntityRef
+// PredictedEntityRef
 #[derive(Debug)]
-pub struct PresentEntityRef<'s, P: ProtocolType> {
+pub struct PredictedEntityRef<'s, P: ProtocolType> {
     client: &'s Client<P>,
     key: LocalEntityKey,
 }
 
-impl<'s, P: ProtocolType> PresentEntityRef<'s, P> {
+impl<'s, P: ProtocolType> PredictedEntityRef<'s, P> {
     pub fn new(client: &'s Client<P>, key: &LocalEntityKey) -> Self {
-        PresentEntityRef { client, key: *key }
+        PredictedEntityRef { client, key: *key }
     }
 
     pub fn key(&self) -> LocalEntityKey {
@@ -48,6 +59,6 @@ impl<'s, P: ProtocolType> PresentEntityRef<'s, P> {
     }
 
     pub fn component<R: Replicate<P>>(&self) -> Option<&Ref<R>> {
-        return self.client.component_present::<R>(&self.key);
+        return self.client.component_prediction::<R>(&self.key);
     }
 }

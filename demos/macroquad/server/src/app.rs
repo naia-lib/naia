@@ -53,7 +53,6 @@ impl App {
                     let user_address = self
                         .server
                         .user_mut(&user_key)
-                        .unwrap()
                         .enter_room(&self.main_room_key)
                         .address();
 
@@ -82,19 +81,18 @@ impl App {
                     info!("Naia Server disconnected from: {:?}", user.address);
                     self.server
                         .user_mut(&user_key)
-                        .unwrap()
                         .leave_room(&self.main_room_key);
                     if let Some(entity_key) = self.user_to_pawn_map.remove(&user_key) {
                         self.server
                             .entity_mut(&entity_key)
-                            .unwrap()
                             .disown()
                             .leave_room(&self.main_room_key)
                             .despawn();
                     }
                 }
                 Ok(Event::Command(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
-                    if let Some(square_ref) = self.server.component::<Square>(&entity_key) {
+                    if let Some(square_ref) = self.server.entity(&entity_key).component::<Square>()
+                    {
                         shared_behavior::process_command(&key_command_ref, &square_ref);
                     }
                 }

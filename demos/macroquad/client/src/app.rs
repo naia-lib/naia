@@ -91,27 +91,22 @@ impl App {
                     }
                 }
                 Ok(Event::SpawnEntity(entity_key, _)) => {
-                    if let Some(square_ref) = self
-                        .client
-                        .entity_past(&entity_key)
-                        .unwrap()
-                        .component::<Square>()
+                    if let Some(square_ref) = self.client.entity(&entity_key).component::<Square>()
                     {
                         self.square_map.insert(entity_key, square_ref.clone());
                     }
-
-                    //                    if let Some(square_ref) =
-                    // self.client.component_past::<Square>(&entity_key) {
-                    //                        self.square_map.insert(entity_key,
-                    // square_ref.clone());
-                    // }
                 }
                 Ok(Event::DespawnEntity(entity_key)) => {
                     self.square_map.remove(&entity_key);
                 }
                 Ok(Event::OwnEntity(entity_key)) => {
                     info!("entity assigned");
-                    if let Some(square_ref) = self.client.component_present::<Square>(&entity_key) {
+                    if let Some(square_ref) = self
+                        .client
+                        .entity(&entity_key)
+                        .prediction()
+                        .component::<Square>()
+                    {
                         self.owned_square = Some((entity_key, square_ref.clone()));
                     }
                 }

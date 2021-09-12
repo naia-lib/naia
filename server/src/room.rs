@@ -150,4 +150,8 @@ impl<'s, P: ProtocolType> RoomMut<'s, P> {
 
         self
     }
+
+    pub fn destroy(&mut self) {
+        self.server.room_destroy(&self.key);
+    }
 }
