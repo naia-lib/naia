@@ -273,52 +273,24 @@ impl<P: ProtocolType> Server<P> {
         return EntityMut::new(self, &entity_key);
     }
 
-    /// Despawns the Entity associated with the given EntityKey, if it exists.
-    /// This will also remove all of the entity’s Components.
-    /// Returns true if the entity is successfully despawned and false if the
-    /// entity does not exist.
-    pub fn despawn_entity(&mut self, entity_key: &EntityKey) {
-        if !self.entity_exists(entity_key) {
-            panic!("attempted to de-spawn nonexistent entity");
-        }
-        // Clean up ownership if applicable
-        if self.entity_has_owner(entity_key) {
-            self.entity_disown(entity_key);
-        }
-
-        // TODO: we can make this more efficient in the future by caching which Entities
-        // are in each User's scope
-        for (user_key, _) in self.users.iter() {
-            if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                Self::connection_remove_entity(client_connection, entity_key);
-            }
-        }
-
-        // Clean up associated components
-        let entity_record = self.entities.remove(entity_key).unwrap();
-        for component_key in entity_record.get_component_keys() {
-            self.component_cleanup(&component_key);
-        }
-    }
-
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// Entity associated with the given EntityKey.
-    /// Returns None if the Entity does not exist.
-    pub fn entity(&self, entity_key: &EntityKey) -> Option<EntityRef<P>> {
+    /// Panics if the Entity does not exist.
+    pub fn entity(&self, entity_key: &EntityKey) -> EntityRef<P> {
         if self.entities.contains_key(entity_key) {
-            return Some(EntityRef::new(self, &entity_key));
+            return EntityRef::new(self, &entity_key);
         }
-        return None;
+        panic!("No Entity exists for given Key!");
     }
 
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity associated with the given EntityKey.
-    /// Returns None if the entity does not exist.
-    pub fn entity_mut(&mut self, entity_key: &EntityKey) -> Option<EntityMut<P>> {
+    /// Panics if the entity does not exist.
+    pub fn entity_mut(&mut self, entity_key: &EntityKey) -> EntityMut<P> {
         if self.entities.contains_key(entity_key) {
-            return Some(EntityMut::new(self, &entity_key));
+            return EntityMut::new(self, &entity_key);
         }
-        return None;
+        panic!("No Entity exists for given Key!");
     }
 
     /// Returns whether an Entity exists for the given EntityKey
@@ -378,21 +350,6 @@ impl<P: ProtocolType> Server<P> {
         return list;
     }
 
-    // Components
-
-    /// Given an EntityKey & a Component type, get a reference to a registered
-    /// Component being tracked by the Server
-    pub fn component<R: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<&Ref<R>> {
-        if let Some(entity_record) = self.entities.get(entity_key) {
-            if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
-                if let Some(protocol) = self.global_component_store.get(component_key) {
-                    return protocol.as_typed_ref::<R>();
-                }
-            }
-        }
-        return None;
-    }
-
     // Rooms
 
     /// Creates a new Room on the Server and returns a corresponding RoomMut,
@@ -404,30 +361,29 @@ impl<P: ProtocolType> Server<P> {
         return RoomMut::new(self, &room_key);
     }
 
-    /// Deletes the Room associated with a given RoomKey on the Server. Returns
-    /// true if the Room existed
-    pub fn destroy_room(&mut self, key: &RoomKey) -> bool {
-        return self.rooms.remove(*key).is_some();
+    /// Returns whether or not a Room exists for the given RoomKey
+    pub fn room_exists(&self, room_key: &RoomKey) -> bool {
+        return self.rooms.contains_key(*room_key);
     }
 
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
-    /// Returns None if the room does not exist.
-    pub fn room(&self, room_key: &RoomKey) -> Option<RoomRef<P>> {
+    /// Panics if the room does not exist.
+    pub fn room(&self, room_key: &RoomKey) -> RoomRef<P> {
         if self.rooms.contains_key(*room_key) {
-            return Some(RoomRef::new(self, room_key));
+            return RoomRef::new(self, room_key);
         }
-        return None;
+        panic!("No Room exists for given Key!");
     }
 
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
-    /// Returns None if the room does not exist.
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> Option<RoomMut<P>> {
+    /// Panics if the room does not exist.
+    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P> {
         if self.rooms.contains_key(*room_key) {
-            return Some(RoomMut::new(self, room_key));
+            return RoomMut::new(self, room_key);
         }
-        return None;
+        panic!("No Room exists for given Key!");
     }
 
     /// Iterate through all the Server's current Rooms
@@ -442,24 +398,29 @@ impl<P: ProtocolType> Server<P> {
 
     // Users
 
+    /// Returns whether or not a User exists for the given RoomKey
+    pub fn user_exists(&self, user_key: &UserKey) -> bool {
+        return self.users.contains_key(*user_key);
+    }
+
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
-    /// Returns None if the user does not exist.
-    pub fn user(&self, user_key: &UserKey) -> Option<UserRef<P>> {
+    /// Panics if the user does not exist.
+    pub fn user(&self, user_key: &UserKey) -> UserRef<P> {
         if self.users.contains_key(*user_key) {
-            return Some(UserRef::new(self, &user_key));
+            return UserRef::new(self, &user_key);
         }
-        return None;
+        panic!("No User exists for given Key!");
     }
 
     /// Retrieves an UserMut that exposes read and write operations for the User
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
-    pub fn user_mut(&mut self, user_key: &UserKey) -> Option<UserMut<P>> {
+    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P> {
         if self.users.contains_key(*user_key) {
-            return Some(UserMut::new(self, &user_key));
+            return UserMut::new(self, &user_key);
         }
-        return None;
+        panic!("No User exists for given Key!");
     }
 
     /// Iterate through all currently connected Users
@@ -502,6 +463,34 @@ impl<P: ProtocolType> Server<P> {
     // Crate-Public methods
 
     //// Entities
+
+    /// Despawns the Entity associated with the given EntityKey, if it exists.
+    /// This will also remove all of the entity’s Components.
+    /// Returns true if the entity is successfully despawned and false if the
+    /// entity does not exist.
+    pub(crate) fn despawn_entity(&mut self, entity_key: &EntityKey) {
+        if !self.entity_exists(entity_key) {
+            panic!("attempted to de-spawn nonexistent entity");
+        }
+        // Clean up ownership if applicable
+        if self.entity_has_owner(entity_key) {
+            self.entity_disown(entity_key);
+        }
+
+        // TODO: we can make this more efficient in the future by caching which Entities
+        // are in each User's scope
+        for (user_key, _) in self.users.iter() {
+            if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
+                Self::connection_remove_entity(client_connection, entity_key);
+            }
+        }
+
+        // Clean up associated components
+        let entity_record = self.entities.remove(entity_key).unwrap();
+        for component_key in entity_record.get_component_keys() {
+            self.component_cleanup(&component_key);
+        }
+    }
 
     /// Returns whether or not an Entity associated with the given EntityKey has
     /// an owner
@@ -573,6 +562,19 @@ impl<P: ProtocolType> Server<P> {
     }
 
     //// Components
+
+    /// Given an EntityKey & a Component type, get a reference to a registered
+    /// Component being tracked by the Server
+    pub(crate) fn component<R: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<&Ref<R>> {
+        if let Some(entity_record) = self.entities.get(entity_key) {
+            if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
+                if let Some(protocol) = self.global_component_store.get(component_key) {
+                    return protocol.as_typed_ref::<R>();
+                }
+            }
+        }
+        return None;
+    }
 
     /// Adds a Component to an Entity associated with the given EntityKey.
     pub(crate) fn insert_component<R: ImplRef<P>>(
@@ -711,6 +713,12 @@ impl<P: ProtocolType> Server<P> {
             return room.entities_count();
         }
         return 0;
+    }
+
+    /// Deletes the Room associated with a given RoomKey on the Server. Returns
+    /// true if the Room existed
+    pub(crate) fn room_destroy(&mut self, key: &RoomKey) -> bool {
+        return self.rooms.remove(*key).is_some();
     }
 
     // Private methods

@@ -14,7 +14,7 @@ use super::{
     client_config::ClientConfig,
     connection_state::{ConnectionState, ConnectionState::AwaitingChallengeResponse},
     entity_action::EntityAction,
-    entity_ref::{PastEntityRef, PresentEntityRef},
+    entity_ref::EntityRef,
     error::NaiaClientError,
     event::Event,
     server_connection::ServerConnection,
@@ -104,6 +104,92 @@ impl<P: ProtocolType> Client<P> {
             tick_manager: TickManager::new(shared_config.tick_interval),
         }
     }
+
+    // Messages
+
+    /// Queues up an Message to be sent to the Server
+    pub fn queue_message<R: ImplRef<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
+        if let Some(connection) = &mut self.server_connection {
+            let dyn_ref = message_ref.dyn_ref();
+            connection.queue_message(&dyn_ref, guaranteed_delivery);
+        }
+    }
+
+    /// Queues up a Command for an assigned Entity to be sent to the Server
+    pub fn queue_command<R: ImplRef<P>>(&mut self, entity_key: &LocalEntityKey, command_ref: &R) {
+        if let Some(connection) = &mut self.server_connection {
+            let dyn_ref = command_ref.dyn_ref();
+            connection.queue_command(entity_key, &dyn_ref);
+        }
+    }
+
+    // Entities
+
+    /// Retrieves an EntityRef that exposes read-only operations for the
+    /// Entity associated with the given LocalEntityKey.
+    /// Panics if the Entity does not exist for the given LocalEntityKey.
+    pub fn entity(&self, entity_key: &LocalEntityKey) -> EntityRef<P> {
+        if self.entity_exists(entity_key) {
+            return EntityRef::new(self, &entity_key);
+        }
+        panic!("No Entity exists for given Key!");
+    }
+
+    /// Get whether or not the Entity currently in scope for the Client, given
+    /// that Entity's Key
+    pub fn entity_exists(&self, entity_key: &LocalEntityKey) -> bool {
+        if let Some(connection) = &self.server_connection {
+            return connection.has_entity(entity_key);
+        }
+        return false;
+    }
+
+    // Connection
+
+    /// Get the address currently associated with the Server
+    pub fn server_address(&self) -> SocketAddr {
+        return self.server_address;
+    }
+
+    /// Return whether or not a connection has been established with the Server
+    pub fn connected(&self) -> bool {
+        return self.server_connection.is_some();
+    }
+
+    /// Gets the average Round Trip Time measured to the Server
+    pub fn rtt(&self) -> f32 {
+        return self.server_connection.as_ref().unwrap().get_rtt();
+    }
+
+    /// Gets the average Jitter measured in connection to the Server
+    pub fn jitter(&self) -> f32 {
+        return self.server_connection.as_ref().unwrap().get_jitter();
+    }
+
+    // Ticks
+
+    /// Gets the current tick of the Client
+    pub fn client_tick(&self) -> u16 {
+        return self.tick_manager.get_client_tick();
+    }
+
+    /// Gets the last received tick from the Server
+    pub fn server_tick(&self) -> u16 {
+        return self
+            .server_connection
+            .as_ref()
+            .unwrap()
+            .get_last_received_tick();
+    }
+
+    // Interpolation
+
+    /// Gets the interpolation tween amount for the current frame
+    pub fn interpolation(&self) -> f32 {
+        self.tick_manager.fraction
+    }
+
+    // Receive Data from Server! Very important!
 
     /// Must call this regularly (preferably at the beginning of every draw
     /// frame), in a loop until it returns None.
@@ -227,69 +313,35 @@ impl<P: ProtocolType> Client<P> {
         events
     }
 
-    // Messages
+    // Crate-Public functions
 
-    /// Queues up an Message to be sent to the Server
-    pub fn queue_message<R: ImplRef<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
-        if let Some(connection) = &mut self.server_connection {
-            let dyn_ref = message_ref.dyn_ref();
-            connection.queue_message(&dyn_ref, guaranteed_delivery);
-        }
-    }
-
-    /// Queues up a Command for an assigned Entity to be sent to the Server
-    pub fn queue_command<R: ImplRef<P>>(&mut self, entity_key: &LocalEntityKey, command_ref: &R) {
-        if let Some(connection) = &mut self.server_connection {
-            let dyn_ref = command_ref.dyn_ref();
-            connection.queue_command(entity_key, &dyn_ref);
-        }
-    }
-
-    // Entities
-
-    /// Retrieves an EntityRef that exposes read-only operations for the
-    /// Entity associated with the given LocalEntityKey.
-    /// Returns None if the Entity does not exist.
-    pub fn entity_past(&self, entity_key: &LocalEntityKey) -> Option<PastEntityRef<P>> {
-        if self.entity_exists(entity_key) {
-            return Some(PastEntityRef::new(self, &entity_key));
-        }
-        return None;
-    }
-
-    /// Retrieves an EntityRef that exposes read-only operations for the
-    /// Entity associated with the given LocalEntityKey.
-    /// Returns None if the Entity does not exist.
-    pub fn entity_present(&self, entity_key: &LocalEntityKey) -> Option<PresentEntityRef<P>> {
-        if self.entity_exists(entity_key) {
-            return Some(PresentEntityRef::new(self, &entity_key));
-        }
-        return None;
-    }
-
-    /// Get whether or not the Entity currently in scope for the Client, given
-    /// that Entity's Key
-    pub fn entity_exists(&self, entity_key: &LocalEntityKey) -> bool {
-        if let Some(connection) = &self.server_connection {
-            return connection.has_entity(entity_key);
-        }
-        return false;
-    }
+    //// Entities
 
     /// Get whether or not the Entity associated with a given EntityKey has
     /// been assigned to the current User
-    pub fn entity_is_owned(&self, entity_key: &LocalEntityKey) -> bool {
+    pub(crate) fn entity_is_owned(&self, entity_key: &LocalEntityKey) -> bool {
         if let Some(connection) = &self.server_connection {
             return connection.entity_is_pawn(entity_key);
         }
         return false;
     }
 
-    // Components
+    /// Returns whether or not an Entity has a Component of a given TypeId
+    pub(crate) fn entity_contains_type<R: Replicate<P>>(
+        &self,
+        entity_key: &LocalEntityKey,
+    ) -> bool {
+        return self.get_component_by_type::<R>(entity_key).is_some();
+    }
+
+    //// Components
 
     /// Given an EntityKey & a Component type, get a reference to the
     /// appropriate ComponentRef
-    pub fn component_past<R: Replicate<P>>(&self, entity_key: &LocalEntityKey) -> Option<&Ref<R>> {
+    pub(crate) fn component<R: Replicate<P>>(
+        &self,
+        entity_key: &LocalEntityKey,
+    ) -> Option<&Ref<R>> {
         if let Some(protocol) = self.get_component_by_type::<R>(entity_key) {
             return protocol.as_typed_ref::<R>();
         }
@@ -298,7 +350,7 @@ impl<P: ProtocolType> Client<P> {
 
     /// Given an EntityKey & a Component type, get a reference to the
     /// appropriate ComponentRef
-    pub fn component_present<R: Replicate<P>>(
+    pub(crate) fn component_prediction<R: Replicate<P>>(
         &self,
         entity_key: &LocalEntityKey,
     ) -> Option<&Ref<R>> {
@@ -306,63 +358,6 @@ impl<P: ProtocolType> Client<P> {
             return protocol.as_typed_ref::<R>();
         }
         return None;
-    }
-
-    // Connection
-
-    /// Get the address currently associated with the Server
-    pub fn server_address(&self) -> SocketAddr {
-        return self.server_address;
-    }
-
-    /// Return whether or not a connection has been established with the Server
-    pub fn connected(&self) -> bool {
-        return self.server_connection.is_some();
-    }
-
-    /// Gets the average Round Trip Time measured to the Server
-    pub fn rtt(&self) -> f32 {
-        return self.server_connection.as_ref().unwrap().get_rtt();
-    }
-
-    /// Gets the average Jitter measured in connection to the Server
-    pub fn jitter(&self) -> f32 {
-        return self.server_connection.as_ref().unwrap().get_jitter();
-    }
-
-    // Ticks
-
-    /// Gets the current tick of the Client
-    pub fn client_tick(&self) -> u16 {
-        return self.tick_manager.get_client_tick();
-    }
-
-    /// Gets the last received tick from the Server
-    pub fn server_tick(&self) -> u16 {
-        return self
-            .server_connection
-            .as_ref()
-            .unwrap()
-            .get_last_received_tick();
-    }
-
-    // Interpolation
-
-    /// Gets the interpolation tween amount for the current frame
-    pub fn interpolation(&self) -> f32 {
-        self.tick_manager.fraction
-    }
-
-    // Crate-Public functions
-
-    //// Entities & Components
-
-    /// Returns whether or not an Entity has a Component of a given TypeId
-    pub(crate) fn entity_contains_type<R: Replicate<P>>(
-        &self,
-        entity_key: &LocalEntityKey,
-    ) -> bool {
-        return self.get_component_by_type::<R>(entity_key).is_some();
     }
 
     /// Given an EntityKey & a Component type, get a reference to a registered
