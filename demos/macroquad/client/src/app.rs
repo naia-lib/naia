@@ -103,7 +103,7 @@ impl App {
                     //                    if let Some(square_ref) =
                     // self.client.component_past::<Square>(&entity_key) {
                     //                        self.square_map.insert(entity_key,
-                    // square_ref.clone());                 
+                    // square_ref.clone());
                     // }
                 }
                 Ok(Event::DespawnEntity(entity_key)) => {

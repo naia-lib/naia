@@ -34,11 +34,11 @@ impl EntityRecord {
         self.owner = None;
     }
 
+    // Pass-through methods to underlying ComponentRecord
     pub fn get_component_record(&self) -> Ref<ComponentRecord<ComponentKey>> {
         return self.component_record.clone();
     }
 
-    // Pass-through methods to underlying ComponentRecord
     pub fn get_key_from_type(&self, type_id: &TypeId) -> Option<ComponentKey> {
         if let Some(key) = self.component_record.borrow().get_key_from_type(type_id) {
             return Some(*key);
