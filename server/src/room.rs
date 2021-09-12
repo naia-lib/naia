@@ -18,7 +18,7 @@ pub struct Room {
 }
 
 impl Room {
-    pub fn new() -> Room {
+    pub(crate) fn new() -> Room {
         Room {
             users: HashSet::new(),
             entities: HashSet::new(),
@@ -26,11 +26,11 @@ impl Room {
         }
     }
 
-    pub fn subscribe_user(&mut self, user_key: &UserKey) {
+    pub(crate) fn subscribe_user(&mut self, user_key: &UserKey) {
         self.users.insert(*user_key);
     }
 
-    pub fn unsubscribe_user(&mut self, user_key: &UserKey) {
+    pub(crate) fn unsubscribe_user(&mut self, user_key: &UserKey) {
         self.users.remove(user_key);
         for entity_key in self.entities.iter() {
             self.entity_removal_queue
@@ -38,15 +38,15 @@ impl Room {
         }
     }
 
-    pub fn users_iter(&self) -> Iter<UserKey> {
+    pub(crate) fn users_iter(&self) -> Iter<UserKey> {
         return self.users.iter();
     }
 
-    pub fn add_entity(&mut self, entity_key: &EntityKey) {
+    pub(crate) fn add_entity(&mut self, entity_key: &EntityKey) {
         self.entities.insert(*entity_key);
     }
 
-    pub fn remove_entity(&mut self, entity_key: &EntityKey) {
+    pub(crate) fn remove_entity(&mut self, entity_key: &EntityKey) {
         self.entities.remove(entity_key);
         for user_key in self.users.iter() {
             self.entity_removal_queue
@@ -54,11 +54,76 @@ impl Room {
         }
     }
 
-    pub fn entities_iter(&self) -> Iter<EntityKey> {
+    pub(crate) fn entities_iter(&self) -> Iter<EntityKey> {
         return self.entities.iter();
     }
 
-    pub fn pop_entity_removal_queue(&mut self) -> Option<(UserKey, EntityKey)> {
+    pub(crate) fn pop_entity_removal_queue(&mut self) -> Option<(UserKey, EntityKey)> {
         return self.entity_removal_queue.pop_front();
+    }
+}
+
+// room references
+
+use naia_shared::ProtocolType;
+
+use crate::Server;
+
+use room_key::RoomKey;
+
+// RoomRef
+
+pub struct RoomRef<'s, T: ProtocolType> {
+    server: &'s Server<T>,
+    key: RoomKey,
+}
+
+impl<'s, T: ProtocolType> RoomRef<'s, T> {
+    pub fn new(server: &'s Server<T>, key: &RoomKey) -> Self {
+        RoomRef { server, key: *key }
+    }
+
+    pub fn key(&self) -> RoomKey {
+        self.key
+    }
+}
+
+// RoomMut
+pub struct RoomMut<'s, T: ProtocolType> {
+    server: &'s mut Server<T>,
+    key: RoomKey,
+}
+
+impl<'s, T: ProtocolType> RoomMut<'s, T> {
+    pub fn new(server: &'s mut Server<T>, key: &RoomKey) -> Self {
+        RoomMut { server, key: *key }
+    }
+
+    pub fn key(&self) -> RoomKey {
+        self.key
+    }
+
+    pub fn add_user(&mut self, user_key: &UserKey) -> &mut Self {
+        self.server.room_add_user(&self.key, user_key);
+
+        self
+    }
+
+    pub fn remove_user(&mut self, user_key: &UserKey) -> &mut Self {
+        self.server.room_remove_user(&self.key, user_key);
+
+        self
+    }
+
+    pub fn add_entity(&mut self, entity_key: &EntityKey) -> &mut Self {
+        self.server.room_add_entity(&self.key, entity_key);
+
+        self
+    }
+
+    pub fn remove_entity(&mut self, entity_key: &EntityKey) -> &mut Self {
+        self.server.room_remove_entity(&self.key, entity_key);
+
+        self
     }
 }

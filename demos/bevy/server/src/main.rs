@@ -42,7 +42,7 @@ fn main() {
 
     // Create a new, singular room, which will contain Users and Entities that they
     // can receive updates from
-    let main_room_key = server.create_room();
+    let main_room_key = server.make_room();
 
     // Resources
     app.insert_non_send_resource(server);

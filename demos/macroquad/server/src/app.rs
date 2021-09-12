@@ -25,7 +25,7 @@ impl App {
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
-        let main_room_key = server.create_room();
+        let main_room_key = server.make_room().key();
 
         App {
             server,
@@ -62,7 +62,7 @@ impl App {
                     let x = Random::gen_range_u32(0, 50) * 16;
                     let y = Random::gen_range_u32(0, 37) * 16;
 
-                    let square_color = match self.server.get_users_count() % 3 {
+                    let square_color = match self.server.users_count() % 3 {
                         0 => Color::Yellow,
                         1 => Color::Red,
                         _ => Color::Blue,
@@ -72,9 +72,9 @@ impl App {
                     let entity_key = self
                         .server
                         .spawn_entity()
-                        .insert(&square)
-                        .user_assign(&user_key)
-                        .room_enter(&self.main_room_key)
+                        .add_component(&square)
+                        .assign_user(&user_key)
+                        .enter_room(&self.main_room_key)
                         .key();
                     self.user_to_pawn_map.insert(user_key, entity_key);
                 }
@@ -88,15 +88,18 @@ impl App {
                         self.server
                             .entity_mut(&entity_key)
                             .unwrap()
-                            .user_unassign(&user_key)
-                            .room_leave(&self.main_room_key)
+                            .unassign_user(&user_key)
+                            .leave_room(&self.main_room_key)
                             .despawn();
                     }
                 }
                 Ok(Event::CommandEntity(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
                     // this should also work:
-                    if let Some(square_ref) =
-                        self.server.entity_mut(&entity_key).unwrap().get::<Square>()
+                    if let Some(square_ref) = self
+                        .server
+                        .entity_mut(&entity_key)
+                        .unwrap()
+                        .component::<Square>()
                     {
                         shared_behavior::process_command(&key_command_ref, &square_ref);
                     }

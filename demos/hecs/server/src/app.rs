@@ -33,7 +33,7 @@ impl App {
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
-        let main_room_key = server.create_room();
+        let main_room_key = server.make_room();
 
         let mut world = World::new();
         let mut naia_to_hecs_key_map = HashMap::new();
