@@ -375,19 +375,19 @@ impl<U: ProtocolType> Server<U> {
         return None;
     }
 
-    /// Iterate through all ComponentKeys associated a given Entity
-    pub fn components_iter(&self, entity_key: &EntityKey) -> Vec<ComponentKey> {
-        let mut output = Vec::<ComponentKey>::new();
-
-        // TODO: make this more efficient by some fancy 'collect' chaining type method?
-        if let Some(component_record) = self.entity_component_map.get(entity_key) {
-            for component_key in component_record.borrow().get_component_keys() {
-                output.push(component_key);
-            }
-        }
-
-        return output;
-    }
+//    /// Iterate through all ComponentKeys associated a given Entity
+//    pub fn components_iter(&self, entity_key: &EntityKey) -> Vec<ComponentKey> {
+//        let mut output = Vec::<ComponentKey>::new();
+//
+//        // TODO: make this more efficient by some fancy 'collect' chaining type method?
+//        if let Some(component_record) = self.entity_component_map.get(entity_key) {
+//            for component_key in component_record.borrow().get_component_keys() {
+//                output.push(component_key);
+//            }
+//        }
+//
+//        return output;
+//    }
 
     // Rooms
 
@@ -452,6 +452,14 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
+    /// Get a count of Users in a given Room
+    pub fn room_users_count(&self, room_key: &RoomKey) -> usize {
+        if let Some(room) = self.rooms.get(*room_key) {
+            return room.users_count();
+        }
+        return 0;
+    }
+
     /// Add an Entity to a Room, given the appropriate RoomKey & EntityKey
     /// Entities will only ever be in-scope for Users which are in a Room with
     /// them
@@ -466,6 +474,14 @@ impl<U: ProtocolType> Server<U> {
         if let Some(room) = self.rooms.get_mut(*room_key) {
             room.remove_entity(entity_key);
         }
+    }
+
+    /// Get a count of Entities in a given Room
+    pub fn room_entities_count(&self, room_key: &RoomKey) -> usize {
+        if let Some(room) = self.rooms.get(*room_key) {
+            return room.entities_count();
+        }
+        return 0;
     }
 
     // Users

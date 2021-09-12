@@ -42,6 +42,10 @@ impl Room {
         return self.users.iter();
     }
 
+    pub(crate) fn users_count(&self) -> usize {
+        return self.users.len();
+    }
+
     pub(crate) fn add_entity(&mut self, entity_key: &EntityKey) {
         self.entities.insert(*entity_key);
     }
@@ -60,6 +64,10 @@ impl Room {
 
     pub(crate) fn pop_entity_removal_queue(&mut self) -> Option<(UserKey, EntityKey)> {
         return self.entity_removal_queue.pop_front();
+    }
+
+    pub(crate) fn entities_count(&self) -> usize {
+        return self.entities.len();
     }
 }
 
@@ -86,6 +94,14 @@ impl<'s, T: ProtocolType> RoomRef<'s, T> {
     pub fn key(&self) -> RoomKey {
         self.key
     }
+
+    pub fn users_count(&self) -> usize {
+        return self.server.room_users_count(&self.key);
+    }
+
+    pub fn entities_count(&self) -> usize {
+        return self.server.room_entities_count(&self.key);
+    }
 }
 
 // RoomMut
@@ -101,6 +117,14 @@ impl<'s, T: ProtocolType> RoomMut<'s, T> {
 
     pub fn key(&self) -> RoomKey {
         self.key
+    }
+
+    pub fn users_count(&self) -> usize {
+        return self.server.room_users_count(&self.key);
+    }
+
+    pub fn entities_count(&self) -> usize {
+        return self.server.room_entities_count(&self.key);
     }
 
     pub fn add_user(&mut self, user_key: &UserKey) -> &mut Self {

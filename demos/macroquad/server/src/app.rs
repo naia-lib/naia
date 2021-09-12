@@ -54,7 +54,7 @@ impl App {
                         .server
                         .user_mut(&user_key)
                         .unwrap()
-                        .room_enter(&self.main_room_key)
+                        .enter_room(&self.main_room_key)
                         .address();
 
                     info!("Naia Server connected to: {}", user_address);
@@ -83,7 +83,7 @@ impl App {
                     self.server
                         .user_mut(&user_key)
                         .unwrap()
-                        .room_leave(&self.main_room_key);
+                        .leave_room(&self.main_room_key);
                     if let Some(entity_key) = self.user_to_pawn_map.remove(&user_key) {
                         self.server
                             .entity_mut(&entity_key)
