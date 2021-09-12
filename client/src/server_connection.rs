@@ -10,14 +10,14 @@ use crate::Packet;
 
 use super::{
     command_receiver::CommandReceiver, command_sender::CommandSender,
-    packet_writer::PacketWriter, ping_manager::PingManager, replica_action::ReplicaAction,
-    replica_manager::ReplicaManager, tick_manager::TickManager, tick_queue::TickQueue,
+    packet_writer::PacketWriter, ping_manager::PingManager, entity_action::EntityAction,
+    entity_manager::EntityManager, tick_manager::TickManager, tick_queue::TickQueue,
 };
 
 #[derive(Debug)]
 pub struct ServerConnection<T: ProtocolType> {
     connection: Connection<T>,
-    replica_manager: ReplicaManager<T>,
+    entity_manager: EntityManager<T>,
     ping_manager: PingManager,
     command_sender: CommandSender<T>,
     command_receiver: CommandReceiver<T>,
@@ -28,7 +28,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
-            replica_manager: ReplicaManager::new(),
+            entity_manager: EntityManager::new(),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
@@ -108,8 +108,8 @@ impl<T: ProtocolType> ServerConnection<T> {
                 ManagerType::Message => {
                     self.connection.process_message_data(&mut reader, manifest);
                 }
-                ManagerType::Replica => {
-                    self.replica_manager.process_data(
+                ManagerType::Entity => {
+                    self.entity_manager.process_data(
                         manifest,
                         &mut self.command_receiver,
                         packet_tick,
@@ -134,43 +134,43 @@ impl<T: ProtocolType> ServerConnection<T> {
         );
     }
 
-    // Pass-through methods to underlying replica manager
-    pub fn get_incoming_replica_action(&mut self) -> Option<ReplicaAction<T>> {
-        return self.replica_manager.pop_incoming_message();
+    // Pass-through methods to underlying entity manager
+    pub fn get_incoming_entity_action(&mut self) -> Option<EntityAction<T>> {
+        return self.entity_manager.pop_incoming_message();
     }
 
     pub fn has_component(&self, key: &LocalComponentKey) -> bool {
-        return self.replica_manager.has_component(key);
+        return self.entity_manager.has_component(key);
     }
 
     pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
-        return self.replica_manager.has_entity(key);
+        return self.entity_manager.has_entity(key);
     }
 
     pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
-        return self.replica_manager.get_component(key);
+        return self.entity_manager.get_component(key);
     }
 
     pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
-        return self.replica_manager.get_components(key);
+        return self.entity_manager.get_components(key);
     }
 
     pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
-        return self.replica_manager.get_pawn_components(key);
+        return self.entity_manager.get_pawn_components(key);
     }
 
     pub fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
-        return self.replica_manager.get_component_by_type::<R>(key);
+        return self.entity_manager.get_component_by_type::<R>(key);
     }
 
     pub fn get_pawn_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
-        return self.replica_manager.get_pawn_component_by_type::<R>(key);
+        return self.entity_manager.get_pawn_component_by_type::<R>(key);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
     pub fn frame_begin(&mut self, manifest: &Manifest<T>, tick_manager: &mut TickManager) -> bool {
         if tick_manager.mark_frame() {
-            // then we apply all received updates to replicas at once
+            // then we apply all received updates to components at once
             let target_tick = tick_manager.get_server_tick();
             while let Some((tick, packet_index, data_packet)) =
                 self.get_buffered_data_packet(target_tick)
@@ -255,7 +255,7 @@ impl<T: ProtocolType> ServerConnection<T> {
 
     pub fn process_replays(&mut self) {
         self.command_receiver
-            .process_command_replay::<T>(&mut self.replica_manager);
+            .process_command_replay::<T>(&mut self.entity_manager);
     }
 
     pub fn get_incoming_replay(&mut self) -> Option<(LocalEntityKey, Ref<dyn Replicate<T>>)> {

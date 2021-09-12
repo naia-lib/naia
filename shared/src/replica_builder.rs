@@ -7,7 +7,7 @@ use std::{
     fmt::{Debug, Formatter, Result},
 };
 
-/// Handles the creation of new Replica instances
+/// Handles the creation of new Replica (Message/Component) instances
 pub trait ReplicaBuilder<T: ProtocolType> {
     /// Create a new Replica instance
     fn build(&self, reader: &mut PacketReader) -> T;

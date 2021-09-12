@@ -25,7 +25,7 @@ pub trait Replicate<T: ProtocolType>: Any {
     /// Message/Component with it's replica on the Server
     fn read_full(&mut self, reader: &mut PacketReader, packet_index: u16);
     /// Reads data from an incoming packet, sufficient to sync the in-memory
-    /// Message/Component with it's replica on the Server
+    /// Component with it's replica on the Server
     fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16);
     /// Set the Message/Component's PropertyMutator, which keeps track
     /// of which Properties have been mutated, necessary to sync only the
@@ -39,7 +39,7 @@ pub trait Replicate<T: ProtocolType>: Any {
 /// Handles equality of Messages/Components.. can't just derive
 /// PartialEq because we want to only compare Properties
 pub trait ReplicaEq<T: ProtocolType, Impl = Self>: Replicate<T> {
-    /// Compare properties in another Replicate
+    /// Compare with properties in another Replica
     fn equals(&self, other: &Impl) -> bool;
     /// Sets the current Replica to the state of another Replica of the
     /// same type
@@ -50,7 +50,7 @@ pub trait ReplicaEq<T: ProtocolType, Impl = Self>: Replicate<T> {
 
 impl<T: ProtocolType> Debug for dyn Replicate<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        f.write_str("Replicate")
+        f.write_str("Replica")
     }
 }
 

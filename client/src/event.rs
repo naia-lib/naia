@@ -33,9 +33,9 @@ pub enum Event<T: ProtocolType> {
     AssignPawnEntity(LocalEntityKey),
     /// Occurs when a Pawn Entity has been unassigned from the local host,
     /// meaning it cannot receive Commands from this Client
-    UnassignPawnEntity(LocalEntityKey),
+    UnassignPawn(LocalEntityKey),
     /// Occurs when a Pawn Entity needs to be reset to local state
-    ResetPawnEntity(LocalEntityKey),
+    ResetPawn(LocalEntityKey),
     /// An Pawn Entity Command received which is to be simulated on the Client
     /// as well as on the Server
     NewCommandEntity(LocalEntityKey, T),

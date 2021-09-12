@@ -4,7 +4,7 @@ use naia_shared::{
     wrapping_diff, LocalEntityKey, ProtocolType, Ref, Replicate, SequenceBuffer, SequenceIterator,
 };
 
-use super::replica_manager::ReplicaManager;
+use super::entity_manager::EntityManager;
 
 const COMMAND_HISTORY_SIZE: u16 = 64;
 
@@ -43,11 +43,11 @@ impl<T: ProtocolType> CommandReceiver<T> {
     /// Process any necessary replayed Command
     pub fn process_command_replay<U: ProtocolType>(
         &mut self,
-        replica_manager: &mut ReplicaManager<U>,
+        entity_manager: &mut EntityManager<U>,
     ) {
         for (pawn_key, history_tick) in self.replay_trigger.iter() {
             // set pawn to server authoritative entity
-            replica_manager.pawn_reset_entity(pawn_key);
+            entity_manager.pawn_reset_entity(pawn_key);
 
             // trigger replay of historical commands
             if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
