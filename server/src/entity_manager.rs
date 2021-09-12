@@ -133,8 +133,8 @@ impl<P: ProtocolType> EntityManager<P> {
 
         //clear diff mask of component if need be
         match &action {
-            EntityAction::AddComponent(_, global_key, _, _) => {
-                self.pop_add_component_diff_mask(global_key);
+            EntityAction::InsertComponent(_, global_key, _, _) => {
+                self.pop_insert_component_diff_mask(global_key);
             }
             EntityAction::SpawnEntity(_, _, components_list_opt) => {
                 if let Some(components_list) = components_list_opt {
@@ -180,8 +180,8 @@ impl<P: ProtocolType> EntityManager<P> {
         }
 
         match &action {
-            EntityAction::AddComponent(_, global_key, _, _) => {
-                self.unpop_add_component_diff_mask(global_key);
+            EntityAction::InsertComponent(_, global_key, _, _) => {
+                self.unpop_insert_component_diff_mask(global_key);
             }
             EntityAction::SpawnEntity(_, _, _) => {
                 if let Some(last_popped_diff_mask_list) = &self.last_popped_diff_mask_list {
@@ -315,7 +315,7 @@ impl<P: ProtocolType> EntityManager<P> {
 
     // Components
 
-    pub fn add_component(
+    pub fn insert_component(
         &mut self,
         entity_key: &EntityKey,
         component_key: &ComponentKey,
@@ -337,8 +337,8 @@ impl<P: ProtocolType> EntityManager<P> {
                 // uncreated Components will be created after Entity is created
             }
             LocalityStatus::Created => {
-                // send AddComponent action
-                self.queued_actions.push_back(EntityAction::AddComponent(
+                // send InsertComponent action
+                self.queued_actions.push_back(EntityAction::InsertComponent(
                     entity_record.local_key,
                     *component_key,
                     local_component_key,
@@ -478,7 +478,7 @@ impl<P: ProtocolType> EntityManager<P> {
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            EntityAction::AddComponent(local_entity_key, _, local_component_key, component) => {
+            EntityAction::InsertComponent(local_entity_key, _, local_component_key, component) => {
                 //write component payload
                 let mut component_payload_bytes = Vec::<u8>::new();
                 component.borrow().write(&mut component_payload_bytes);
@@ -564,7 +564,7 @@ impl<P: ProtocolType> EntityManager<P> {
         }
     }
 
-    fn pop_add_component_diff_mask(&mut self, global_key: &ComponentKey) {
+    fn pop_insert_component_diff_mask(&mut self, global_key: &ComponentKey) {
         if let Some(record) = self.local_component_records.get(*global_key) {
             self.last_popped_diff_mask = Some(record.get_diff_mask().borrow().clone());
         }
@@ -573,7 +573,7 @@ impl<P: ProtocolType> EntityManager<P> {
             .clear_component(&self.address, global_key);
     }
 
-    fn unpop_add_component_diff_mask(&mut self, global_key: &ComponentKey) {
+    fn unpop_insert_component_diff_mask(&mut self, global_key: &ComponentKey) {
         if let Some(last_popped_diff_mask) = &self.last_popped_diff_mask {
             self.mut_handler.borrow_mut().set_component(
                 &self.address,
@@ -733,7 +733,7 @@ impl<P: ProtocolType> PacketNotifiable for EntityManager<P> {
                                         .local_component_store
                                         .get(component_key)
                                         .expect("component not created correctly?");
-                                    self.queued_actions.push_back(EntityAction::AddComponent(
+                                    self.queued_actions.push_back(EntityAction::InsertComponent(
                                         entity_record.local_key,
                                         component_key,
                                         component_record.local_key,
@@ -760,7 +760,7 @@ impl<P: ProtocolType> PacketNotifiable for EntityManager<P> {
                     }
                     EntityAction::AssignPawn(_, _) => {}
                     EntityAction::UnassignPawn(_, _) => {}
-                    EntityAction::AddComponent(_, global_component_key, _, _) => {
+                    EntityAction::InsertComponent(_, global_component_key, _, _) => {
                         let component_record = self
                             .local_component_records
                             .get_mut(global_component_key)
@@ -801,7 +801,7 @@ impl<P: ProtocolType> PacketNotifiable for EntityManager<P> {
                     | EntityAction::DespawnEntity(_, _)
                     | EntityAction::AssignPawn(_, _)
                     | EntityAction::UnassignPawn(_, _)
-                    | EntityAction::AddComponent(_, _, _, _) => {
+                    | EntityAction::InsertComponent(_, _, _, _) => {
                         self.queued_actions.push_back(dropped_action.clone());
                     }
                     // non-guaranteed delivery actions

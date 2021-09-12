@@ -7,7 +7,7 @@ pub enum EntityAction<P: ProtocolType> {
     AssignPawn(LocalEntityKey),
     UnassignPawn(LocalEntityKey),
     ResetPawn(LocalEntityKey),
-    AddComponent(LocalEntityKey, P),
+    InsertComponent(LocalEntityKey, P),
     RemoveComponent(LocalEntityKey, P),
     UpdateComponent(LocalEntityKey, P),
 }

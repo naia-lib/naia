@@ -209,7 +209,7 @@ impl<P: ProtocolType> EntityManager<P> {
                         }
                     }
                 }
-                EntityActionType::AddComponent => {
+                EntityActionType::InsertComponent => {
                     //TODO: handle adding Component to a Pawn...
 
                     // Add Component to Entity
@@ -244,7 +244,10 @@ impl<P: ProtocolType> EntityManager<P> {
                                 .insert_component(&component_key, &new_component.get_type_id());
 
                             self.queued_incoming_messages
-                                .push_back(EntityAction::AddComponent(entity_key, new_component));
+                                .push_back(EntityAction::InsertComponent(
+                                    entity_key,
+                                    new_component,
+                                ));
                         }
                     }
                 }

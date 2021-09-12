@@ -124,7 +124,7 @@ fn naia_server_update(
 
                         // add to Naia
                         let _position_component_key =
-                            server.add_component_to_entity(&naia_entity, &position_ref);
+                            server.insert_component_to_entity(&naia_entity, &position_ref);
 
                         // add to Bevy
                         bevy_entity.insert(Ref::clone(&position_ref));
@@ -142,7 +142,7 @@ fn naia_server_update(
 
                         // add to Naia
                         let _color_component_key =
-                            server.add_component_to_entity(&naia_entity, &color_ref);
+                            server.insert_component_to_entity(&naia_entity, &color_ref);
 
                         // add to Bevy
                         bevy_entity.insert(Ref::clone(&color_ref));
@@ -174,7 +174,7 @@ fn naia_server_update(
                     }
                 }
             }
-            Ok(Event::CommandEntity(_, naia_entity, Protocol::KeyCommand(key_command_ref))) => {
+            Ok(Event::Command(_, naia_entity, Protocol::KeyCommand(key_command_ref))) => {
                 if let Some(bevy_entity) = server_resource.naia_to_bevy_key_map.get(&naia_entity) {
                     if let Ok(position_ref) = c_q.get_mut(*bevy_entity) {
                         shared_behavior::process_command(&key_command_ref, position_ref);

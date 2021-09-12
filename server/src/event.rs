@@ -16,9 +16,11 @@ pub enum Event<P> {
     Disconnection(UserKey, User),
     /// A Message emitted to the Server from a Client
     Message(UserKey, P),
-    /// A Tick Event, the duration between Tick events is defined in the Config
-    /// passed to the Server on initialization
+    /// A Command emitted to the Server from a Client, related to some
+    /// user-assigned Entity
+    Command(UserKey, EntityKey, P),
+    /// A Tick Event.
+    /// The duration between Tick events is defined in the Config passed to the
+    /// Server on initialization
     Tick,
-    /// A Command emitted to the Server from a Client, related to an Entity
-    CommandEntity(UserKey, EntityKey, P),
 }

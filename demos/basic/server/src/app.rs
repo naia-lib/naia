@@ -41,7 +41,7 @@ impl App {
 
                 // Create a Character
                 let character = Character::new((count * 4) as u8, 0, first, last);
-                let character_key = server.spawn_entity().add_component(&character).key();
+                let character_key = server.spawn_entity().insert_component(&character).key();
 
                 // Add the Character Entity to the main Room
                 server.room_add_entity(&main_room_key, &character_key);

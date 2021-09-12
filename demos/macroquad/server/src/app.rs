@@ -72,7 +72,7 @@ impl App {
                     let entity_key = self
                         .server
                         .spawn_entity()
-                        .add_component(&square)
+                        .insert_component(&square)
                         .assign_user(&user_key)
                         .enter_room(&self.main_room_key)
                         .key();
@@ -93,7 +93,7 @@ impl App {
                             .despawn();
                     }
                 }
-                Ok(Event::CommandEntity(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
+                Ok(Event::Command(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
                     if let Some(square_ref) = self.server.component::<Square>(&entity_key) {
                         shared_behavior::process_command(&key_command_ref, &square_ref);
                     }

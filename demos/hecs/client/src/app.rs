@@ -118,7 +118,7 @@ impl App {
                         warn!("attempted deletion of non-existent entity");
                     }
                 }
-                Ok(Event::AddComponent(naia_entity_key, component)) => {
+                Ok(Event::InsertComponent(naia_entity_key, component)) => {
                     let hecs_entity_key = *self
                         .entity_key_map
                         .get(&naia_entity_key)

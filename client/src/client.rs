@@ -146,14 +146,16 @@ impl<P: ProtocolType> Client<P> {
                             EntityAction::SpawnEntity(local_key, component_list) => {
                                 Event::SpawnEntity(local_key, component_list)
                             }
-                            EntityAction::DespawnEntity(local_key) => Event::DespawnEntity(local_key),
-                            EntityAction::AssignPawn(local_key) => {
-                                Event::AssignPawnEntity(local_key)
+                            EntityAction::DespawnEntity(local_key) => {
+                                Event::DespawnEntity(local_key)
                             }
-                            EntityAction::UnassignPawn(local_key) => Event::UnassignPawn(local_key),
-                            EntityAction::ResetPawn(local_key) => Event::ResetPawn(local_key),
-                            EntityAction::AddComponent(entity_key, component_key) => {
-                                Event::AddComponent(entity_key, component_key)
+                            EntityAction::AssignPawn(local_key) => Event::AssignEntity(local_key),
+                            EntityAction::UnassignPawn(local_key) => {
+                                Event::UnassignEntity(local_key)
+                            }
+                            EntityAction::ResetPawn(local_key) => Event::RewindEntity(local_key),
+                            EntityAction::InsertComponent(entity_key, component_key) => {
+                                Event::InsertComponent(entity_key, component_key)
                             }
                             EntityAction::UpdateComponent(entity_key, component_key) => {
                                 Event::UpdateComponent(entity_key, component_key)
@@ -167,14 +169,14 @@ impl<P: ProtocolType> Client<P> {
                 }
                 // receive replay command
                 while let Some((pawn_key, command)) = connection.get_incoming_replay() {
-                    events.push_back(Ok(Event::ReplayCommandEntity(
+                    events.push_back(Ok(Event::ReplayCommand(
                         pawn_key,
                         command.borrow().copy_to_protocol(),
                     )));
                 }
                 // receive command
                 while let Some((pawn_key, command)) = connection.get_incoming_command() {
-                    events.push_back(Ok(Event::NewCommandEntity(
+                    events.push_back(Ok(Event::NewCommand(
                         pawn_key,
                         command.borrow().copy_to_protocol(),
                     )));

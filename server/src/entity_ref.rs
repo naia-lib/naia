@@ -63,17 +63,17 @@ impl<'s, P: ProtocolType> EntityMut<'s, P> {
     }
 
     // Add Component
-    pub fn add_component<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
+    pub fn insert_component<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
         self.server
-            .add_component_to_entity(&self.key, component_ref);
+            .insert_component_to_entity(&self.key, component_ref);
 
         self
     }
 
-    pub fn add_components<R: ImplRef<P>>(&mut self, component_refs: &[R]) -> &mut Self {
+    pub fn insert_components<R: ImplRef<P>>(&mut self, component_refs: &[R]) -> &mut Self {
         for component_ref in component_refs {
             self.server
-                .add_component_to_entity(&self.key, component_ref);
+                .insert_component_to_entity(&self.key, component_ref);
         }
 
         self
