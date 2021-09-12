@@ -217,7 +217,7 @@ fn naia_client_update(
                         .insert(naia_entity_key, bevy_entity_key);
                 }
             }
-            Ok(Event::UnassignPawnEntity(naia_entity_key)) => {
+            Ok(Event::UnassignPawn(naia_entity_key)) => {
                 info!("unassign pawn");
 
                 if let Some(bevy_entity_key) = client_resource.pawn_key_map.remove(&naia_entity_key)

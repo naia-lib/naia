@@ -24,7 +24,7 @@ impl<T: ProtocolType> Manifest<T> {
     }
 
     /// Register a ReplicaBuilder to handle the creation of
-    /// Messages/Components instances
+    /// Message/Component instances
     pub fn register_replica(&mut self, replica_builder: Box<dyn ReplicaBuilder<T>>) {
         let new_naia_id = self.naia_id_count;
         let type_id = replica_builder.get_type_id();

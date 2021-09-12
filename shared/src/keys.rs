@@ -53,7 +53,7 @@ impl fmt::Display for LocalEntityKey {
     }
 }
 
-// Local Replica Key
+// Local Component Key
 
 /// The key that represents a Component in the Client's scope, that is
 /// being synced to the Client

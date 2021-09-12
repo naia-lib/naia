@@ -37,7 +37,7 @@ pub struct Server<T: ProtocolType> {
     manifest: Manifest<T>,
     socket_sender: PacketSender,
     socket_receiver: Box<dyn PacketReceiver>,
-    global_replica_store: DenseSlotMap<ComponentKey, T>,
+    global_component_store: DenseSlotMap<ComponentKey, T>,
     mut_handler: Ref<MutHandler>,
     users: DenseSlotMap<UserKey, User>,
     rooms: DenseSlotMap<RoomKey, Room>,
@@ -87,7 +87,7 @@ impl<U: ProtocolType> Server<U> {
 
         Server {
             manifest,
-            global_replica_store: DenseSlotMap::with_key(),
+            global_component_store: DenseSlotMap::with_key(),
             entity_scope_map: HashMap::new(),
             mut_handler: MutHandler::new(),
             socket_sender,
@@ -225,7 +225,7 @@ impl<U: ProtocolType> Server<U> {
         // loop through all connections, send packet
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
-                connection.collect_replica_updates();
+                connection.collect_component_updates();
                 while let Some(payload) =
                     connection.get_outgoing_packet(self.tick_manager.get_tick(), &self.manifest)
                 {
@@ -238,7 +238,7 @@ impl<U: ProtocolType> Server<U> {
     }
 
     /// Register an Entity with the Server initializing the Entity with a list Component Refs.
-    /// The Server will sync replicas of the Entity to all connected Clients for which the Entity
+    /// The Server will sync the Entity to all connected Clients for which the Entity
     /// is in scope. Gives back an EntityKey which can be used to get the
     /// reference to the Entity from the Server once again
     pub fn register_entity_with_components<T: ImplRef<U>>(&mut self, component_refs: &[T]) -> EntityKey {
@@ -249,8 +249,7 @@ impl<U: ProtocolType> Server<U> {
         return entity_key;
     }
 
-    /// Register an Entity with the Server, whereby the Server will sync the
-    /// replica of all the given Entity's Components to all connected Clients
+    /// Register an Entity with the Server, whereby the Server will sync the given Entity's Components to all connected Clients
     /// for which the Entity is in scope. Gives back an EntityKey which can
     /// be used to get the reference to the Entity from the Server once
     /// again
@@ -281,7 +280,7 @@ impl<U: ProtocolType> Server<U> {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                 // add entity to user's connection
                 Self::user_add_entity(
-                    &self.global_replica_store,
+                    &self.global_component_store,
                     user_connection,
                     entity_key,
                     &entity_component_record,
@@ -303,8 +302,7 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    /// Register a Component with the Server, whereby the Server will sync the
-    /// replica of the Component to all connected Clients for which the
+    /// Register a Component with the Server, whereby the Server will sync the Component to all connected Clients for which the
     /// Component's Entity is in Scope.
     /// Gives back a ComponentKey which can be used to get the reference to the
     /// Component from the Server once again
@@ -360,9 +358,9 @@ impl<U: ProtocolType> Server<U> {
 
         self.mut_handler
             .borrow_mut()
-            .deregister_replica(component_key);
+            .deregister_component(component_key);
         return self
-            .global_replica_store
+            .global_component_store
             .remove(*component_key)
             .expect("component not initialized correctly?");
     }
@@ -370,7 +368,7 @@ impl<U: ProtocolType> Server<U> {
     /// Given an ComponentKey, get a reference to a registered Component being tracked
     /// by the Server
     pub fn get_component_by_key(&self, key: &ComponentKey) -> Option<&U> {
-        return self.global_replica_store.get(*key);
+        return self.global_component_store.get(*key);
     }
 
     /// Given an EntityKey & a Component type, get a reference to a registered Component being tracked
@@ -378,8 +376,8 @@ impl<U: ProtocolType> Server<U> {
     pub fn get_component_by_type<T: Replicate<U>>(&self, key: &EntityKey) -> Option<Ref<T>> {
         if let Some(component_record) = self.entity_component_map.get(key) {
             if let Some(component_key) = component_record.borrow().get_key_from_type(&TypeId::of::<T>()) {
-                if let Some(replica_protocol) = self.global_replica_store.get(*component_key) {
-                    return replica_protocol.to_typed_ref::<T>();
+                if let Some(component_protocol) = self.global_component_store.get(*component_key) {
+                    return component_protocol.to_typed_ref::<T>();
                 }
             }
         }
@@ -798,7 +796,7 @@ impl<U: ProtocolType> Server<U> {
 
                                     // add entity to the connections local scope
                                     Self::user_add_entity(
-                                        &self.global_replica_store,
+                                        &self.global_component_store,
                                         user_connection,
                                         entity_key,
                                         &entity_component_record,
@@ -817,8 +815,7 @@ impl<U: ProtocolType> Server<U> {
         }
     }
 
-    // Register an Component with the Server, whereby the Server will sync
-    // replicas of the Component to all connected Clients for which the Component
+    // Register an Component with the Server, whereby the Server will the Component to all connected Clients for which the Component
     // is in scope. Gives back an ComponentKey which can be used to get the
     // reference to the Component from the Server once again
     fn register_component<T: ImplRef<U>>(&mut self, component_ref: &T) -> ComponentKey {
@@ -831,9 +828,9 @@ impl<U: ProtocolType> Server<U> {
             .set_mutator(&to_property_mutator(new_mutator_ref.clone()));
 
         let component_protocol = component_ref.protocol();
-        let component_key = self.global_replica_store.insert(component_protocol);
+        let component_key = self.global_component_store.insert(component_protocol);
         new_mutator_ref.borrow_mut().set_component_key(component_key);
-        self.mut_handler.borrow_mut().register_replica(&component_key);
+        self.mut_handler.borrow_mut().register_component(&component_key);
         return component_key;
     }
 

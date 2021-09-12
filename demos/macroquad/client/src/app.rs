@@ -96,7 +96,7 @@ impl App {
                         self.pawn = Some((entity_key, square_ref.clone()));
                     }
                 }
-                Ok(Event::UnassignPawnEntity(_)) => {
+                Ok(Event::UnassignPawn(_)) => {
                     self.pawn = None;
                     info!("unassign pawn");
                 }

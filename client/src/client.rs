@@ -15,7 +15,7 @@ use super::{
     connection_state::{ConnectionState, ConnectionState::AwaitingChallengeResponse},
     error::NaiaClientError,
     event::Event,
-    replica_action::ReplicaAction,
+    entity_action::EntityAction,
     server_connection::ServerConnection,
     tick_manager::TickManager,
     Packet,
@@ -133,32 +133,32 @@ impl<T: ProtocolType> Client<T> {
                 while let Some(message) = connection.get_incoming_message() {
                     events.push_back(Ok(Event::Message(message)));
                 }
-                // receive replica actions
-                while let Some(action) = connection.get_incoming_replica_action() {
+                // receive entity actions
+                while let Some(action) = connection.get_incoming_entity_action() {
                     let event: Event<T> = {
                         match action {
-                            ReplicaAction::CreateEntity(local_key, component_list) => {
+                            EntityAction::CreateEntity(local_key, component_list) => {
                                 Event::CreateEntity(local_key, component_list)
                             }
-                            ReplicaAction::DeleteEntity(local_key) => {
+                            EntityAction::DeleteEntity(local_key) => {
                                 Event::DeleteEntity(local_key)
                             }
-                            ReplicaAction::AssignPawnEntity(local_key) => {
+                            EntityAction::AssignPawn(local_key) => {
                                 Event::AssignPawnEntity(local_key)
                             }
-                            ReplicaAction::UnassignPawnEntity(local_key) => {
-                                Event::UnassignPawnEntity(local_key)
+                            EntityAction::UnassignPawn(local_key) => {
+                                Event::UnassignPawn(local_key)
                             }
-                            ReplicaAction::ResetPawnEntity(local_key) => {
-                                Event::ResetPawnEntity(local_key)
+                            EntityAction::ResetPawn(local_key) => {
+                                Event::ResetPawn(local_key)
                             }
-                            ReplicaAction::AddComponent(entity_key, component_key) => {
+                            EntityAction::AddComponent(entity_key, component_key) => {
                                 Event::AddComponent(entity_key, component_key)
                             }
-                            ReplicaAction::UpdateComponent(entity_key, component_key) => {
+                            EntityAction::UpdateComponent(entity_key, component_key) => {
                                 Event::UpdateComponent(entity_key, component_key)
                             }
-                            ReplicaAction::RemoveComponent(entity_key, component) => {
+                            EntityAction::RemoveComponent(entity_key, component) => {
                                 Event::RemoveComponent(entity_key, component.clone())
                             }
                         }
