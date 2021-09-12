@@ -41,7 +41,7 @@ impl App {
 
                 // Create a Character
                 let character = Character::new((count * 4) as u8, 0, first, last);
-                let character_key = server.register_entity_with_components(&[character]);
+                let character_key = server.spawn_entity().insert(&character).key();
 
                 // Add the Character Entity to the main Room
                 server.room_add_entity(&main_room_key, &character_key);
@@ -71,7 +71,7 @@ impl App {
                     }
                 }
                 Ok(Event::Connection(user_key)) => {
-                    if let Some(user) = self.server.get_user(&user_key) {
+                    if let Some(user) = self.server.user(&user_key) {
                         info!("Naia Server connected to: {}", user.address);
                         self.server.room_add_user(&self.main_room_key, &user_key);
                     }
@@ -80,7 +80,7 @@ impl App {
                     info!("Naia Server disconnected from: {:?}", user.address);
                 }
                 Ok(Event::Message(user_key, Protocol::StringMessage(message_ref))) => {
-                    if let Some(user) = self.server.get_user(&user_key) {
+                    if let Some(user) = self.server.user(&user_key) {
                         let message = message_ref.borrow();
                         let message_contents = message.contents.get();
                         info!(
@@ -98,7 +98,7 @@ impl App {
                         iter_vec.push(user_key);
                     }
                     for user_key in iter_vec {
-                        let user = self.server.get_user(&user_key).unwrap();
+                        let user = self.server.user(&user_key).unwrap();
                         let new_message_contents = format!("Server Message ({})", self.tick_count);
                         info!(
                             "Server send to   ({}) -> {}",

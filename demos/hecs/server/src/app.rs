@@ -52,7 +52,7 @@ impl App {
                 count += 1;
 
                 // Create an Entity
-                let entity_key = server.register_entity();
+                let entity_key = server.create_entity();
                 server.room_add_entity(&main_room_key, &entity_key);
 
                 // Create Position component
@@ -104,7 +104,7 @@ impl App {
                 }
                 Ok(Event::Connection(user_key)) => {
                     self.server.room_add_user(&self.main_room_key, &user_key);
-                    if let Some(user) = self.server.get_user(&user_key) {
+                    if let Some(user) = self.server.user(&user_key) {
                         info!("Naia Server connected to: {}", user.address);
                     }
                 }
@@ -112,7 +112,7 @@ impl App {
                     info!("Naia Server disconnected from: {:?}", user.address);
                 }
                 Ok(Event::Message(user_key, Protocol::StringMessage(message_ref))) => {
-                    if let Some(user) = self.server.get_user(&user_key) {
+                    if let Some(user) = self.server.user(&user_key) {
                         let message = message_ref.borrow();
                         let message = message.message.get();
                         info!("Naia Server recv <- {}: {}", user.address, message);
@@ -215,7 +215,7 @@ impl App {
                         iter_vec.push(user_key);
                     }
                     for user_key in iter_vec {
-                        let user = self.server.get_user(&user_key).unwrap();
+                        let user = self.server.user(&user_key).unwrap();
                         let message_contents = format!("Server Packet (tick {})", self.tick_count);
                         info!("Naia Server send -> {}: {}", user.address, message_contents);
 

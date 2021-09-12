@@ -18,7 +18,8 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let read_full_method = get_read_full_method(&type_name, &input.data);
     let read_partial_method = get_read_partial_method(&type_name, &input.data);
     let inner_ref_method = get_inner_ref_method(&type_name, &input.data);
-    let to_typed_ref_method = get_to_typed_ref_method(&type_name, &input.data);
+    let to_typed_ref_method = get_to_typed_ref_method(&type_name);
+    let as_typed_ref_method = get_as_typed_ref_method(&type_name, &input.data);
     let conversion_methods = get_conversion_methods(&type_name, &input.data);
     let equals_method = get_equals_method(&type_name, &input.data);
     let mirror_method = get_mirror_method(&type_name, &input.data);
@@ -52,6 +53,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
             #read_partial_method
             #inner_ref_method
             #to_typed_ref_method
+            #as_typed_ref_method
             #equals_method
             #mirror_method
             #write_method
@@ -162,7 +164,18 @@ fn get_inner_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 }
 
-fn get_to_typed_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
+fn get_to_typed_ref_method(type_name: &Ident) -> TokenStream {
+    return quote! {
+        fn to_typed_ref<V: Replicate<#type_name>>(&self) -> Option<Ref<V>> {
+            if let Some(rep_ref) = self.as_typed_ref() {
+                return Some(rep_ref.clone());
+            }
+            return None;
+        }
+    };
+}
+
+fn get_as_typed_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     let variants = match *data {
         Data::Enum(ref data) => {
             let mut output = quote! {};
@@ -172,9 +185,7 @@ fn get_to_typed_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
                 let new_output_right = quote! {
                     #type_name::#variant_name(replica_ref) => {
                         let typed_ref = replica_ref as &dyn Any;
-                        if let Some(typed_ref) = typed_ref.downcast_ref::<Ref<V>>() {
-                            return Some(typed_ref.clone());
-                        }
+                        return typed_ref.downcast_ref::<Ref<V>>();
                     }
                 };
                 let new_output_result = quote! {
@@ -189,11 +200,10 @@ fn get_to_typed_ref_method(type_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn to_typed_ref<V: Replicate<#type_name>>(&self) -> Option<Ref<V>> {
+        fn as_typed_ref<V: Replicate<#type_name>>(&self) -> Option<&Ref<V>> {
             match self {
                 #variants
             }
-            return None;
         }
     };
 }

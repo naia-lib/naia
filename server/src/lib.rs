@@ -39,6 +39,7 @@ mod command_receiver;
 mod entity_action;
 mod entity_manager;
 mod entity_record;
+mod entity_ref;
 mod error;
 mod event;
 mod keys;

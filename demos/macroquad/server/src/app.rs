@@ -50,41 +50,56 @@ impl App {
                     }
                 }
                 Ok(Event::Connection(user_key)) => {
-                    self.server.room_add_user(&self.main_room_key, &user_key);
-                    if let Some(user) = self.server.get_user(&user_key) {
-                        info!("Naia Server connected to: {}", user.address);
+                    let user_address = self
+                        .server
+                        .user_mut(&user_key)
+                        .unwrap()
+                        .room_enter(&self.main_room_key)
+                        .address();
 
-                        let x = Random::gen_range_u32(0, 50) * 16;
-                        let y = Random::gen_range_u32(0, 37) * 16;
+                    info!("Naia Server connected to: {}", user_address);
 
-                        let square_color = match self.server.get_users_count() % 3 {
-                            0 => Color::Yellow,
-                            1 => Color::Red,
-                            _ => Color::Blue,
-                        };
+                    let x = Random::gen_range_u32(0, 50) * 16;
+                    let y = Random::gen_range_u32(0, 37) * 16;
 
-                        let square = Square::new(x as u16, y as u16, square_color);
-                        let entity_key = self.server.register_entity_with_components(&[square]);
-                        self.server
-                            .room_add_entity(&self.main_room_key, &entity_key);
-                        self.server.assign_pawn_entity(&user_key, &entity_key);
-                        self.user_to_pawn_map.insert(user_key, entity_key);
-                    }
+                    let square_color = match self.server.get_users_count() % 3 {
+                        0 => Color::Yellow,
+                        1 => Color::Red,
+                        _ => Color::Blue,
+                    };
+
+                    let square = Square::new(x as u16, y as u16, square_color);
+                    let entity_key = self
+                        .server
+                        .spawn_entity()
+                        .insert(&square)
+                        .user_assign(&user_key)
+                        .room_enter(&self.main_room_key)
+                        .key();
+                    self.user_to_pawn_map.insert(user_key, entity_key);
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
                     info!("Naia Server disconnected from: {:?}", user.address);
-                    self.server.room_remove_user(&self.main_room_key, &user_key);
+                    self.server
+                        .user_mut(&user_key)
+                        .unwrap()
+                        .room_leave(&self.main_room_key);
                     if let Some(entity_key) = self.user_to_pawn_map.remove(&user_key) {
                         self.server
-                            .room_remove_entity(&self.main_room_key, &entity_key);
-                        self.server.unassign_pawn_entity(&user_key, &entity_key);
-                        self.server.deregister_entity(&entity_key);
+                            .entity_mut(&entity_key)
+                            .unwrap()
+                            .user_unassign(&user_key)
+                            .room_leave(&self.main_room_key)
+                            .despawn();
                     }
                 }
                 Ok(Event::CommandEntity(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
-                    if let Some(square_ref) =
-                        self.server.get_component_by_type::<Square>(&entity_key)
-                    {
+                    // this should also work:
+                    if let Some(square_ref) = self.server.entity_mut(&entity_key).unwrap().get::<Square>() {
+                        shared_behavior::process_command(&key_command_ref, &square_ref);
+                    }
+
+                    if let Some(square_ref) = self.server.component::<Square>(&entity_key) {
                         shared_behavior::process_command(&key_command_ref, &square_ref);
                     }
                 }
