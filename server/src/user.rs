@@ -67,6 +67,10 @@ impl<'s, P: ProtocolType> UserMut<'s, P> {
         return self.server.get_user_address(&self.key).unwrap();
     }
 
+    pub fn disconnect(&mut self) {
+        self.server.user_force_disconnect(&self.key);
+    }
+
     // Rooms
 
     pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {

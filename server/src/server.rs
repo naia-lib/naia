@@ -665,6 +665,10 @@ impl<P: ProtocolType> Server<P> {
         Self::entity_disown_finish(client_connection, entity_key, entity_record);
     }
 
+    pub(crate) fn user_force_disconnect(&mut self, user_key: &UserKey) {
+        self.outstanding_disconnects.push_back(*user_key);
+    }
+
     //// Rooms
 
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
