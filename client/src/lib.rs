@@ -20,6 +20,7 @@ mod command_sender;
 mod connection_state;
 mod entity_action;
 mod entity_manager;
+mod entity_record;
 mod error;
 mod event;
 mod packet_writer;

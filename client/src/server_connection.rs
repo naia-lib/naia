@@ -133,7 +133,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         );
     }
 
-    // Pass-through methods to underlying entity manager
+    // Pass-through methods to underlying Entity Manager
     pub fn get_incoming_entity_action(&mut self) -> Option<EntityAction<T>> {
         return self.entity_manager.pop_incoming_message();
     }
@@ -146,16 +146,12 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.entity_manager.has_entity(key);
     }
 
+    pub fn entity_is_pawn(&self, key: &LocalEntityKey) -> bool {
+        return self.entity_manager.entity_is_pawn(key);
+    }
+
     pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
         return self.entity_manager.get_component(key);
-    }
-
-    pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
-        return self.entity_manager.get_components(key);
-    }
-
-    pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
-        return self.entity_manager.get_pawn_components(key);
     }
 
     pub fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
@@ -167,6 +163,14 @@ impl<T: ProtocolType> ServerConnection<T> {
         key: &LocalEntityKey,
     ) -> Option<Ref<R>> {
         return self.entity_manager.get_pawn_component_by_type::<R>(key);
+    }
+
+    pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
+        return self.entity_manager.get_components(key);
+    }
+
+    pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
+        return self.entity_manager.get_pawn_components(key);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
@@ -184,7 +188,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         return false;
     }
 
-    // Pass-through methods to underlying common connection
+    // Pass-through methods to underlying Connection
 
     pub fn mark_sent(&mut self) {
         return self.connection.mark_sent();
@@ -246,12 +250,8 @@ impl<T: ProtocolType> ServerConnection<T> {
         self.connection.get_last_received_tick()
     }
 
-    // command related
-    pub fn entity_queue_command(
-        &mut self,
-        entity_key: &LocalEntityKey,
-        command: &Ref<dyn Replicate<T>>,
-    ) {
+    // Commands
+    pub fn queue_command(&mut self, entity_key: &LocalEntityKey, command: &Ref<dyn Replicate<T>>) {
         return self.command_sender.queue_command(entity_key, command);
     }
 
@@ -275,7 +275,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         return None;
     }
 
-    // ping related
+    // Ping related
     pub fn should_send_ping(&self) -> bool {
         return self.ping_manager.should_send_ping();
     }
