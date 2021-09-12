@@ -265,10 +265,38 @@ impl<P: ProtocolType> Server<P> {
     // Entities
 
     /// Spawns a new Entity and returns a corresponding EntityMut, which can be
-    /// used to add components to the entity or retrieve its unique key
+    /// used for various operations
     pub fn spawn_entity(&mut self) -> EntityMut<P> {
         let entity_key: EntityKey = self.entity_key_generator.generate();
         self.entities.insert(entity_key, EntityRecord::new());
+
+        return EntityMut::new(self, &entity_key);
+    }
+
+    /// Spawns a new Entity with a single Component and returns a corresponding
+    /// EntityMut, which can be used for various operations
+    pub fn spawn_entity_with_component<R: ImplRef<P>>(
+        &mut self,
+        component_ref: &R,
+    ) -> EntityMut<P> {
+        let entity_key: EntityKey = self.entity_key_generator.generate();
+        self.entities.insert(entity_key, EntityRecord::new());
+
+        self.insert_component(&entity_key, component_ref);
+
+        return EntityMut::new(self, &entity_key);
+    }
+
+    /// Spawns a new Entity with a list of Components and returns a
+    /// corresponding EntityMut, which can be used for various operations
+    pub fn spawn_entity_with_components<R: ImplRef<P>>(
+        &mut self,
+        component_list: &[R],
+    ) -> EntityMut<P> {
+        let entity_key: EntityKey = self.entity_key_generator.generate();
+        self.entities.insert(entity_key, EntityRecord::new());
+
+        self.insert_components(&entity_key, component_list);
 
         return EntityMut::new(self, &entity_key);
     }
