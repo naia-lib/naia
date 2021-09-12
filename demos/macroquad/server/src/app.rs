@@ -95,7 +95,9 @@ impl App {
                 }
                 Ok(Event::CommandEntity(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
                     // this should also work:
-                    if let Some(square_ref) = self.server.entity_mut(&entity_key).unwrap().get::<Square>() {
+                    if let Some(square_ref) =
+                        self.server.entity_mut(&entity_key).unwrap().get::<Square>()
+                    {
                         shared_behavior::process_command(&key_command_ref, &square_ref);
                     }
 

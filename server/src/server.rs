@@ -274,9 +274,8 @@ impl<U: ProtocolType> Server<U> {
     }
 
     /// Retrieves an EntityMut that exposes read and write operations for the
-    /// Entity associated with the given EntityKey Returns None if the
-    /// entity does not exist. Use World::entity_mut if you don't want
-    /// to unwrap the EntityMut yourself.
+    /// Entity associated with the given EntityKey.
+    /// Returns None if the entity does not exist.
     pub fn entity(&self, entity_key: &EntityKey) -> Option<EntityRef<U>> {
         if self.entity_component_map.contains_key(entity_key) {
             return Some(EntityRef::new(self, &entity_key));
@@ -285,9 +284,8 @@ impl<U: ProtocolType> Server<U> {
     }
 
     /// Retrieves an EntityMut that exposes read and write operations for the
-    /// Entity associated with the given EntityKey Returns None if the
-    /// entity does not exist. Use World::entity_mut if you don't want
-    /// to unwrap the EntityMut yourself.
+    /// Entity associated with the given EntityKey.
+    /// Returns None if the entity does not exist.
     pub fn entity_mut(&mut self, entity_key: &EntityKey) -> Option<EntityMut<U>> {
         if self.entity_component_map.contains_key(entity_key) {
             return Some(EntityMut::new(self, &entity_key));
@@ -601,13 +599,17 @@ impl<U: ProtocolType> Server<U> {
         return None;
     }
 
-    /// Given an EntityKey & a Component type, get a ComponentKey to a registered
-    /// Component being tracked by the Server
-    pub(crate) fn remove_component_by_type<T: Replicate<U>>(&mut self, entity_key: &EntityKey) -> bool {
+    /// Given an EntityKey & a Component type, get a ComponentKey to a
+    /// registered Component being tracked by the Server
+    pub(crate) fn remove_component_by_type<T: Replicate<U>>(
+        &mut self,
+        entity_key: &EntityKey,
+    ) -> bool {
         if let Some(component_record_ref) = self.entity_component_map.get(entity_key) {
             let mut component_record = component_record_ref.borrow_mut();
             let component_key: ComponentKey = *component_record
-                .get_key_from_type(&TypeId::of::<T>()).expect("component not initialized correctly?");
+                .get_key_from_type(&TypeId::of::<T>())
+                .expect("component not initialized correctly?");
 
             for (user_key, _) in self.users.iter() {
                 if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
@@ -615,7 +617,8 @@ impl<U: ProtocolType> Server<U> {
                 }
             }
 
-            self.component_entity_map.remove(&component_key)
+            self.component_entity_map
+                .remove(&component_key)
                 .expect("attempting to remove a component which does not exist");
             component_record.remove_component(&component_key);
 
