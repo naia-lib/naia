@@ -278,7 +278,7 @@ impl<P: ProtocolType> Client<P> {
 
     /// Get whether or not the Entity associated with a given EntityKey has
     /// been assigned to the current User
-    pub fn entity_is_assigned(&self, entity_key: &LocalEntityKey) -> bool {
+    pub fn entity_is_owned(&self, entity_key: &LocalEntityKey) -> bool {
         if let Some(connection) = &self.server_connection {
             return connection.entity_is_pawn(entity_key);
         }
