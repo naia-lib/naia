@@ -71,7 +71,7 @@ impl App {
                     self.client.queue_message(&send_message, true);
                     self.message_count += 1;
                 }
-                Ok(Event::CreateEntity(naia_entity_key, component_list)) => {
+                Ok(Event::SpawnEntity(naia_entity_key, component_list)) => {
                     info!("creation of entity: {}", naia_entity_key.to_u16());
 
                     // initialize w/ starting components
@@ -108,7 +108,7 @@ impl App {
                     let hecs_entity_key = self.world.spawn(self.entity_builder.build());
                     self.entity_key_map.insert(naia_entity_key, hecs_entity_key);
                 }
-                Ok(Event::DeleteEntity(naia_entity_key)) => {
+                Ok(Event::DespawnEntity(naia_entity_key)) => {
                     info!("deletion of entity: {}", naia_entity_key.to_u16());
                     if let Some(hecs_entity_key) = self.entity_key_map.remove(&naia_entity_key) {
                         self.world

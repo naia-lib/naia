@@ -17,10 +17,10 @@ pub enum Event<P: ProtocolType> {
     Tick,
     /// Occurs when an Entity on the Server has come into scope for the Client,
     /// and should be added to the local client's ECS "world"
-    CreateEntity(LocalEntityKey, Vec<P>),
+    SpawnEntity(LocalEntityKey, Vec<P>),
     /// Occurs when an Entity on the Server has left the Client's scope, and
     /// should be removed from the local client's ECS "world"
-    DeleteEntity(LocalEntityKey),
+    DespawnEntity(LocalEntityKey),
     /// Occurs when a Component should be added to a given Entity
     AddComponent(LocalEntityKey, P),
     /// Occurs when a Component has had a state change on the Server while

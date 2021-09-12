@@ -7,12 +7,12 @@ use super::keys::component_key::ComponentKey;
 
 #[derive(Debug)]
 pub enum EntityAction<P: ProtocolType> {
-    CreateEntity(
+    SpawnEntity(
         EntityKey,
         LocalEntityKey,
         Option<Vec<(ComponentKey, LocalComponentKey, Ref<dyn Replicate<P>>)>>,
     ),
-    DeleteEntity(EntityKey, LocalEntityKey),
+    DespawnEntity(EntityKey, LocalEntityKey),
     AssignPawn(EntityKey, LocalEntityKey),
     UnassignPawn(EntityKey, LocalEntityKey),
     AddComponent(
@@ -33,8 +33,8 @@ pub enum EntityAction<P: ProtocolType> {
 impl<P: ProtocolType> EntityAction<P> {
     pub fn as_type(&self) -> EntityActionType {
         match self {
-            EntityAction::CreateEntity(_, _, _) => EntityActionType::CreateEntity,
-            EntityAction::DeleteEntity(_, _) => EntityActionType::DeleteEntity,
+            EntityAction::SpawnEntity(_, _, _) => EntityActionType::SpawnEntity,
+            EntityAction::DespawnEntity(_, _) => EntityActionType::DespawnEntity,
             EntityAction::AssignPawn(_, _) => EntityActionType::AssignPawn,
             EntityAction::UnassignPawn(_, _) => EntityActionType::UnassignPawn,
             EntityAction::AddComponent(_, _, _, _) => EntityActionType::AddComponent,
@@ -47,11 +47,11 @@ impl<P: ProtocolType> EntityAction<P> {
 impl<P: ProtocolType> Clone for EntityAction<P> {
     fn clone(&self) -> Self {
         match self {
-            EntityAction::CreateEntity(gk, lk, cs) => {
-                EntityAction::CreateEntity(gk.clone(), lk.clone(), cs.clone())
+            EntityAction::SpawnEntity(gk, lk, cs) => {
+                EntityAction::SpawnEntity(gk.clone(), lk.clone(), cs.clone())
             }
-            EntityAction::DeleteEntity(gk, lk) => {
-                EntityAction::DeleteEntity(gk.clone(), lk.clone())
+            EntityAction::DespawnEntity(gk, lk) => {
+                EntityAction::DespawnEntity(gk.clone(), lk.clone())
             }
             EntityAction::AssignPawn(gk, lk) => EntityAction::AssignPawn(gk.clone(), lk.clone()),
             EntityAction::UnassignPawn(gk, lk) => {

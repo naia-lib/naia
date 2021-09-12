@@ -143,10 +143,10 @@ impl<P: ProtocolType> Client<P> {
                 while let Some(action) = connection.get_incoming_entity_action() {
                     let event: Event<P> = {
                         match action {
-                            EntityAction::CreateEntity(local_key, component_list) => {
-                                Event::CreateEntity(local_key, component_list)
+                            EntityAction::SpawnEntity(local_key, component_list) => {
+                                Event::SpawnEntity(local_key, component_list)
                             }
-                            EntityAction::DeleteEntity(local_key) => Event::DeleteEntity(local_key),
+                            EntityAction::DespawnEntity(local_key) => Event::DespawnEntity(local_key),
                             EntityAction::AssignPawn(local_key) => {
                                 Event::AssignPawnEntity(local_key)
                             }
