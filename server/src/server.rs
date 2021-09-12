@@ -531,8 +531,7 @@ impl<P: ProtocolType> Server<P> {
 
     //// entities
 
-    /// Assigns an Entity to a specific User, making it a Pawn for that User
-    /// (meaning that the User will be able to issue Commands to that Pawn)
+    /// Assigns an Entity to a specific User, (meaning that the User will be able to issue Commands for that Entity)
     pub(crate) fn assign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
         // check that entity is initialized
         if let Some(entity_component_record) = self.entity_component_map.get(entity_key) {
@@ -551,8 +550,8 @@ impl<P: ProtocolType> Server<P> {
         }
     }
 
-    /// Unassigns a Pawn from a specific User (meaning that the User will be
-    /// unable to issue Commands to that Pawn)
+    /// Unassigns an Entity from a specific User (meaning that the User will be
+    /// unable to issue Commands to that Entity)
     pub(crate) fn unassign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
         if self.entity_component_map.contains_key(entity_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {

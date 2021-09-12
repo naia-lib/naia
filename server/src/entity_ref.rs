@@ -91,7 +91,7 @@ impl<'s, P: ProtocolType> EntityMut<'s, P> {
         self.server.despawn_entity(&self.key);
     }
 
-    // Pawns & Users
+    // Users & Assignment
 
     pub fn assign_user(&mut self, user_key: &UserKey) -> &mut Self {
         self.server.assign_pawn_entity(user_key, &self.key);

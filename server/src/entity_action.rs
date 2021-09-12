@@ -13,8 +13,8 @@ pub enum EntityAction<P: ProtocolType> {
         Option<Vec<(ComponentKey, LocalComponentKey, Ref<dyn Replicate<P>>)>>,
     ),
     DespawnEntity(EntityKey, LocalEntityKey),
-    AssignPawn(EntityKey, LocalEntityKey),
-    UnassignPawn(EntityKey, LocalEntityKey),
+    AssignEntity(EntityKey, LocalEntityKey),
+    UnassignEntity(EntityKey, LocalEntityKey),
     InsertComponent(
         LocalEntityKey,
         ComponentKey,
@@ -35,8 +35,8 @@ impl<P: ProtocolType> EntityAction<P> {
         match self {
             EntityAction::SpawnEntity(_, _, _) => EntityActionType::SpawnEntity,
             EntityAction::DespawnEntity(_, _) => EntityActionType::DespawnEntity,
-            EntityAction::AssignPawn(_, _) => EntityActionType::AssignPawn,
-            EntityAction::UnassignPawn(_, _) => EntityActionType::UnassignPawn,
+            EntityAction::AssignEntity(_, _) => EntityActionType::AssignEntity,
+            EntityAction::UnassignEntity(_, _) => EntityActionType::UnassignEntity,
             EntityAction::InsertComponent(_, _, _, _) => EntityActionType::InsertComponent,
             EntityAction::RemoveComponent(_, _) => EntityActionType::RemoveComponent,
             EntityAction::UpdateComponent(_, _, _, _) => EntityActionType::UpdateComponent,
@@ -53,9 +53,9 @@ impl<P: ProtocolType> Clone for EntityAction<P> {
             EntityAction::DespawnEntity(gk, lk) => {
                 EntityAction::DespawnEntity(gk.clone(), lk.clone())
             }
-            EntityAction::AssignPawn(gk, lk) => EntityAction::AssignPawn(gk.clone(), lk.clone()),
-            EntityAction::UnassignPawn(gk, lk) => {
-                EntityAction::UnassignPawn(gk.clone(), lk.clone())
+            EntityAction::AssignEntity(gk, lk) => EntityAction::AssignEntity(gk.clone(), lk.clone()),
+            EntityAction::UnassignEntity(gk, lk) => {
+                EntityAction::UnassignEntity(gk.clone(), lk.clone())
             }
             EntityAction::InsertComponent(lek, gck, lck, r) => {
                 EntityAction::InsertComponent(lek.clone(), gck.clone(), lck.clone(), r.clone())

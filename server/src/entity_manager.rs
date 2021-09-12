@@ -280,30 +280,30 @@ impl<P: ProtocolType> EntityManager<P> {
         let entity_record = self
             .local_entity_records
             .get_mut(key)
-            .expect("attempting to assign a nonexistent Entity to be a Pawn");
+            .expect("attempting to assign a nonexistent Entity");
         if entity_record.is_pawn {
-            panic!("attempting to assign an Entity as a Pawn twice!");
+            panic!("attempting to assign an Entity twice!");
         }
 
         // success
         entity_record.is_pawn = true;
         self.queued_actions
-            .push_back(EntityAction::AssignPawn(*key, entity_record.local_key));
+            .push_back(EntityAction::AssignEntity(*key, entity_record.local_key));
     }
 
     pub fn remove_pawn_entity(&mut self, key: &EntityKey) {
         let entity_record = self
             .local_entity_records
             .get_mut(key)
-            .expect("attempting to unassign a non-existant Entity as a Pawn");
+            .expect("attempting to unassign a non-existant Entity");
         if !entity_record.is_pawn {
-            panic!("attempting to unassign a Entity as a Pawn, but it is already not a Pawn");
+            panic!("attempting to unassign a Entity, but it is not currently assigned");
         }
 
         // success
         entity_record.is_pawn = false;
         self.queued_actions
-            .push_back(EntityAction::UnassignPawn(*key, entity_record.local_key));
+            .push_back(EntityAction::UnassignEntity(*key, entity_record.local_key));
     }
 
     pub fn has_pawn_entity(&self, key: &EntityKey) -> bool {
@@ -468,12 +468,12 @@ impl<P: ProtocolType> EntityManager<P> {
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            EntityAction::AssignPawn(_, local_key) => {
+            EntityAction::AssignEntity(_, local_key) => {
                 action_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            EntityAction::UnassignPawn(_, local_key) => {
+            EntityAction::UnassignEntity(_, local_key) => {
                 action_total_bytes
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
@@ -758,8 +758,8 @@ impl<P: ProtocolType> PacketNotifiable for EntityManager<P> {
                             deleted_components.push(component_key);
                         }
                     }
-                    EntityAction::AssignPawn(_, _) => {}
-                    EntityAction::UnassignPawn(_, _) => {}
+                    EntityAction::AssignEntity(_, _) => {}
+                    EntityAction::UnassignEntity(_, _) => {}
                     EntityAction::InsertComponent(_, global_component_key, _, _) => {
                         let component_record = self
                             .local_component_records
@@ -799,8 +799,8 @@ impl<P: ProtocolType> PacketNotifiable for EntityManager<P> {
                     EntityAction::RemoveComponent(_, _)
                     | EntityAction::SpawnEntity(_, _, _)
                     | EntityAction::DespawnEntity(_, _)
-                    | EntityAction::AssignPawn(_, _)
-                    | EntityAction::UnassignPawn(_, _)
+                    | EntityAction::AssignEntity(_, _)
+                    | EntityAction::UnassignEntity(_, _)
                     | EntityAction::InsertComponent(_, _, _, _) => {
                         self.queued_actions.push_back(dropped_action.clone());
                     }
