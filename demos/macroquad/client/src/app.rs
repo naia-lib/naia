@@ -106,12 +106,12 @@ impl App {
                         shared_behavior::process_command(&key_command_ref, &pawn_ref);
                     }
                 }
-                Ok(Event::CreateEntity(entity_key, _)) => {
+                Ok(Event::SpawnEntity(entity_key, _)) => {
                     if let Some(square_ref) = self.client.component_past::<Square>(&entity_key) {
                         self.square_map.insert(entity_key, square_ref.clone());
                     }
                 }
-                Ok(Event::DeleteEntity(entity_key)) => {
+                Ok(Event::DespawnEntity(entity_key)) => {
                     self.square_map.remove(&entity_key);
                 }
                 Err(err) => {

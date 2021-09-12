@@ -59,7 +59,7 @@ impl App {
                     self.client.queue_message(&string_message, true);
                     self.message_count += 1;
                 }
-                Ok(Event::CreateEntity(entity_key, component_list)) => {
+                Ok(Event::SpawnEntity(entity_key, component_list)) => {
                     for component_protocol in component_list {
                         if let Some(character_ref) = component_protocol.to_typed_ref::<Character>()
                         {
@@ -101,7 +101,7 @@ impl App {
                         );
                     }
                 }
-                Ok(Event::DeleteEntity(entity_key)) => {
+                Ok(Event::DespawnEntity(entity_key)) => {
                     info!("deletion of Character Entity: {}", entity_key,);
                 }
                 Ok(Event::Tick) => {

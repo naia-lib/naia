@@ -99,7 +99,7 @@ impl<P: ProtocolType> EntityManager<P> {
                             ));
                     }
                 }
-                EntityActionType::CreateEntity => {
+                EntityActionType::SpawnEntity => {
                     // Entity Creation
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     let components_num = reader.read_u8();
@@ -138,10 +138,10 @@ impl<P: ProtocolType> EntityManager<P> {
                         self.entities.insert(entity_key, entity_record);
 
                         self.queued_incoming_messages
-                            .push_back(EntityAction::CreateEntity(entity_key, component_list));
+                            .push_back(EntityAction::SpawnEntity(entity_key, component_list));
                     }
                 }
-                EntityActionType::DeleteEntity => {
+                EntityActionType::DespawnEntity => {
                     // Entity Deletion
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
 
@@ -158,7 +158,7 @@ impl<P: ProtocolType> EntityManager<P> {
                         }
 
                         self.queued_incoming_messages
-                            .push_back(EntityAction::DeleteEntity(entity_key));
+                            .push_back(EntityAction::DespawnEntity(entity_key));
                     } else {
                         // its possible we received a very late duplicate message
                         warn!(

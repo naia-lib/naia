@@ -138,7 +138,7 @@ fn naia_client_update(
                     }
                 }
             }
-            Ok(Event::CreateEntity(naia_entity_key, component_list)) => {
+            Ok(Event::SpawnEntity(naia_entity_key, component_list)) => {
                 let mut entity = commands.spawn();
                 entity.insert(NonPawn).insert(Key(naia_entity_key));
 
@@ -179,7 +179,7 @@ fn naia_client_update(
                     .entity_key_map
                     .insert(naia_entity_key, bevy_entity_key);
             }
-            Ok(Event::DeleteEntity(naia_entity_key)) => {
+            Ok(Event::DespawnEntity(naia_entity_key)) => {
                 if let Some(bevy_entity_key) =
                     client_resource.entity_key_map.remove(&naia_entity_key)
                 {

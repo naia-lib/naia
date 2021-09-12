@@ -8,9 +8,9 @@ pub enum EntityActionType {
     /// Action indicating a Replica to be deleted
     RemoveComponent,
     /// Action indicating an Entity to be created
-    CreateEntity,
+    SpawnEntity,
     /// Action indicating an Entity to be deleted
-    DeleteEntity,
+    DespawnEntity,
     /// Action indicating an Entity to be assigned as a Pawn
     AssignPawn,
     /// Action indicating an Entity to be unassigned as a Pawn
