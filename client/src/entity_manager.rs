@@ -268,10 +268,7 @@ impl<T: ProtocolType> EntityManager<T> {
         return None;
     }
 
-    pub fn get_pawn_component_by_type<R: Replicate<T>>(
-        &self,
-        key: &LocalEntityKey,
-    ) -> Option<&T> {
+    pub fn get_pawn_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<&T> {
         if let Some(entity_component_record) = self.entities.get(key) {
             if let Some(component_key) =
                 entity_component_record.get_key_from_type(&TypeId::of::<R>())
@@ -281,14 +278,6 @@ impl<T: ProtocolType> EntityManager<T> {
         }
         return None;
     }
-
-//    pub fn get_component(&self, key: &LocalComponentKey) -> Option<&T> {
-//        return self.component_store.get(key);
-//    }
-
-//    pub fn has_component(&self, key: &LocalComponentKey) -> bool {
-//        return self.component_store.contains_key(key);
-//    }
 
     pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
         return self.entities.contains_key(key);
@@ -300,32 +289,6 @@ impl<T: ProtocolType> EntityManager<T> {
         }
         return false;
     }
-
-//    pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
-//        let mut output = Vec::new();
-//        if let Some(entity_record) = self.entities.get(key) {
-//            for component_key in entity_record.get_component_keys() {
-//                if let Some(component_proto) = self.component_store.get(&component_key) {
-//                    output.push(component_proto.clone());
-//                }
-//            }
-//        }
-//        return output;
-//    }
-//
-//    pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
-//        let mut output = Vec::new();
-//        if let Some(entity_record) = self.entities.get(key) {
-//            if entity_record.is_pawn {
-//                for component_key in entity_record.get_component_keys() {
-//                    if let Some(component_proto) = self.pawn_component_store.get(&component_key) {
-//                        output.push(component_proto.clone());
-//                    }
-//                }
-//            }
-//        }
-//        return output;
-//    }
 
     pub fn pawn_reset_entity(&mut self, key: &LocalEntityKey) {
         if let Some(entity_record) = self.entities.get(key) {

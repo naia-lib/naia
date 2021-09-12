@@ -5,9 +5,9 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use naia_client_socket::{ClientSocket, PacketReceiver, PacketSender};
 
 pub use naia_shared::{
-    ConnectionConfig, HostTickManager, ImplRef, Instant, LocalEntityKey,
-    ManagerType, Manifest, PacketReader, PacketType, ProtocolType, Ref, Replicate,
-    SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
+    ConnectionConfig, HostTickManager, ImplRef, Instant, LocalEntityKey, ManagerType, Manifest,
+    PacketReader, PacketType, ProtocolType, Ref, Replicate, SequenceIterator, SharedConfig,
+    StandardHeader, Timer, Timestamp,
 };
 
 use super::{
@@ -265,7 +265,8 @@ impl<T: ProtocolType> Client<T> {
 
     // Components
 
-    /// Given an EntityKey & a Component type, get a reference to the appropriate ComponentRef
+    /// Given an EntityKey & a Component type, get a reference to the
+    /// appropriate ComponentRef
     pub fn component_past<R: Replicate<T>>(&self, entity_key: &LocalEntityKey) -> Option<&Ref<R>> {
         if let Some(protocol) = self.get_component_by_type::<R>(entity_key) {
             return protocol.as_typed_ref::<R>();
@@ -273,31 +274,17 @@ impl<T: ProtocolType> Client<T> {
         return None;
     }
 
-    /// Given an EntityKey & a Component type, get a reference to the appropriate ComponentRef
-    pub fn component_present<R: Replicate<T>>(&self, entity_key: &LocalEntityKey) -> Option<&Ref<R>> {
+    /// Given an EntityKey & a Component type, get a reference to the
+    /// appropriate ComponentRef
+    pub fn component_present<R: Replicate<T>>(
+        &self,
+        entity_key: &LocalEntityKey,
+    ) -> Option<&Ref<R>> {
         if let Some(protocol) = self.get_pawn_component_by_type::<R>(entity_key) {
             return protocol.as_typed_ref::<R>();
         }
         return None;
     }
-
-//    /// Get a set of Components for the Entity associated with the given
-//    /// EntityKey
-//    pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
-//        if let Some(connection) = &self.server_connection {
-//            return connection.get_components(key);
-//        }
-//        return Vec::<T>::new();
-//    }
-//
-//    /// Get a set of Components for the Pawn Entity associated with the given
-//    /// EntityKey
-//    pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
-//        if let Some(connection) = &self.server_connection {
-//            return connection.get_pawn_components(key);
-//        }
-//        return Vec::<T>::new();
-//    }
 
     // Connection
 
@@ -348,7 +335,10 @@ impl<T: ProtocolType> Client<T> {
 
     /// Given an EntityKey & a Component type, get a reference to a registered
     /// Component being tracked by the Server
-    pub(crate) fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<&T> {
+    pub(crate) fn get_component_by_type<R: Replicate<T>>(
+        &self,
+        key: &LocalEntityKey,
+    ) -> Option<&T> {
         if let Some(connection) = &self.server_connection {
             return connection.get_component_by_type::<R>(key);
         }
