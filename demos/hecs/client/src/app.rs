@@ -203,13 +203,13 @@ impl App {
         }
     }
 
-    fn remove_component<T: 'static + Replicate<Protocol>>(
+    fn remove_component<R: 'static + Replicate<Protocol>>(
         &mut self,
         hecs_entity_key: &HecsEntityKey,
-        _component_ref: &Ref<T>,
+        _component_ref: &Ref<R>,
     ) {
         self.world
-            .remove_one::<Ref<T>>(*hecs_entity_key)
+            .remove_one::<Ref<R>>(*hecs_entity_key)
             .expect("error removing component");
     }
 }
