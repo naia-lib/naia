@@ -21,11 +21,11 @@ impl EntityRecord {
     }
 
     pub fn insert_component(&mut self, key: &LocalComponentKey, type_id: &TypeId) {
-        self.component_record.insert_component(key, type_id);
+        return self.component_record.insert_component(key, type_id);
     }
 
     pub fn remove_component(&mut self, key: &LocalComponentKey) {
-        self.component_record.remove_component(key);
+        return self.component_record.remove_component(key);
     }
 
     pub fn get_component_keys(&self) -> Vec<LocalComponentKey> {

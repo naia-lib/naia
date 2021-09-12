@@ -30,6 +30,7 @@ use super::{
     tick_manager::TickManager,
     user::{user_key::UserKey, User, UserMut, UserRef},
 };
+use crate::entity_record::EntityRecord;
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -52,7 +53,7 @@ pub struct Server<P: ProtocolType> {
     // Entities
     entity_key_generator: KeyGenerator<EntityKey>,
     entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
-    entity_component_map: HashMap<EntityKey, Ref<ComponentRecord<ComponentKey>>>,
+    entities: HashMap<EntityKey, EntityRecord>,
     // Components
     global_component_store: DenseSlotMap<ComponentKey, P>,
     component_entity_map: HashMap<ComponentKey, EntityKey>,
@@ -113,7 +114,7 @@ impl<P: ProtocolType> Server<P> {
             // Entities
             entity_key_generator: KeyGenerator::new(),
             entity_scope_map: HashMap::new(),
-            entity_component_map: HashMap::new(),
+            entities: HashMap::new(),
             // Components
             global_component_store: DenseSlotMap::with_key(),
             component_entity_map: HashMap::new(),
@@ -267,17 +268,16 @@ impl<P: ProtocolType> Server<P> {
     /// used to add components to the entity or retrieve its unique key
     pub fn spawn_entity(&mut self) -> EntityMut<P> {
         let entity_key: EntityKey = self.entity_key_generator.generate();
-        self.entity_component_map
-            .insert(entity_key, Ref::new(ComponentRecord::new()));
+        self.entities.insert(entity_key, EntityRecord::new());
 
         return EntityMut::new(self, &entity_key);
     }
 
-    /// Retrieves an EntityMut that exposes read and write operations for the
+    /// Retrieves an EntityRef that exposes read-only operations for the
     /// Entity associated with the given EntityKey.
-    /// Returns None if the entity does not exist.
+    /// Returns None if the Entity does not exist.
     pub fn entity(&self, entity_key: &EntityKey) -> Option<EntityRef<P>> {
-        if self.entity_component_map.contains_key(entity_key) {
+        if self.entities.contains_key(entity_key) {
             return Some(EntityRef::new(self, &entity_key));
         }
         return None;
@@ -287,7 +287,7 @@ impl<P: ProtocolType> Server<P> {
     /// Entity associated with the given EntityKey.
     /// Returns None if the entity does not exist.
     pub fn entity_mut(&mut self, entity_key: &EntityKey) -> Option<EntityMut<P>> {
-        if self.entity_component_map.contains_key(entity_key) {
+        if self.entities.contains_key(entity_key) {
             return Some(EntityMut::new(self, &entity_key));
         }
         return None;
@@ -299,31 +299,35 @@ impl<P: ProtocolType> Server<P> {
     /// entity does not exist.
     pub fn despawn_entity(&mut self, key: &EntityKey) -> bool {
         // TODO: we can make this more efficient in the future by caching which Entities
-        // are in which User's scope
+        // are in each User's scope
         for (user_key, _) in self.users.iter() {
             if let Some(user_connection) = self.client_connections.get_mut(&user_key) {
                 Self::user_remove_entity(user_connection, key);
             }
         }
 
-        return self.entity_component_map.remove(key).is_some();
+        // TODO: WARNING! need to clean up associated components!!!
+
+        // TODO: Make sure to clean up ownership
+
+        return self.entities.remove(key).is_some();
     }
 
     /// Returns whether an Entity exists for the given EntityKey
     pub fn entity_exists(&self, entity_key: &EntityKey) -> bool {
-        return self.entity_component_map.contains_key(entity_key);
+        return self.entities.contains_key(entity_key);
     }
 
     /// Get a count of how many Entities currently exist
     pub fn entities_count(&self) -> usize {
-        self.entity_component_map.len()
+        self.entities.len()
     }
 
     /// Iterate through all the Server's Entities
     pub fn entities_iter(&self) -> Vec<EntityKey> {
         let mut output = Vec::<EntityKey>::new();
         // TODO: make this more efficient by some fancy 'collect' chaining type method?
-        for entity_key in self.entity_component_map.keys() {
+        for entity_key in self.entities.keys() {
             output.push(*entity_key);
         }
         return output;
@@ -377,7 +381,7 @@ impl<P: ProtocolType> Server<P> {
 
     /// Adds a Component to an Entity associated with the given EntityKey.
     pub fn insert_component<R: ImplRef<P>>(&mut self, entity_key: &EntityKey, component_ref: &R) {
-        if !self.entity_component_map.contains_key(&entity_key) {
+        if !self.entities.contains_key(&entity_key) {
             panic!("attempted to add component to non-existent entity");
         }
 
@@ -401,10 +405,8 @@ impl<P: ProtocolType> Server<P> {
 
         self.component_entity_map.insert(component_key, *entity_key);
 
-        if let Some(entity_component_record) = self.entity_component_map.get_mut(&entity_key) {
-            entity_component_record
-                .borrow_mut()
-                .insert_component(&component_key, &dyn_ref.borrow().get_type_id());
+        if let Some(entity_record) = self.entities.get_mut(&entity_key) {
+            entity_record.insert_component(&component_key, &dyn_ref.borrow().get_type_id());
         }
     }
 
@@ -422,9 +424,8 @@ impl<P: ProtocolType> Server<P> {
 
     /// Removes a Component from an Entity associated with the given EntityKey
     pub fn remove_component<R: Replicate<P>>(&mut self, entity_key: &EntityKey) -> bool {
-        if let Some(component_record_ref) = self.entity_component_map.get(entity_key) {
-            let mut component_record = component_record_ref.borrow_mut();
-            let component_key: ComponentKey = *component_record
+        if let Some(entity_record) = self.entities.get(entity_key) {
+            let component_key: ComponentKey = entity_record
                 .get_key_from_type(&TypeId::of::<R>())
                 .expect("component not initialized correctly?");
 
@@ -437,7 +438,7 @@ impl<P: ProtocolType> Server<P> {
             self.component_entity_map
                 .remove(&component_key)
                 .expect("attempting to remove a component which does not exist");
-            component_record.remove_component(&component_key);
+            entity_record.remove_component(&component_key);
 
             self.mut_handler
                 .borrow_mut()
@@ -605,47 +606,70 @@ impl<P: ProtocolType> Server<P> {
 
     // Crate-Public methods
 
-    //// entities
+    //// Entities
 
     /// Assigns an Entity to a specific User, (meaning that the User will be
     /// able to issue Commands for that Entity)
     pub(crate) fn assign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
         // check that entity is initialized
-        if let Some(entity_component_record) = self.entity_component_map.get(entity_key) {
+        if let Some(entity_record) = self.entities.get_mut(entity_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                 // add entity to user's connection
                 Self::user_add_entity(
                     &self.global_component_store,
                     user_connection,
                     entity_key,
-                    &entity_component_record,
+                    &entity_record,
                 );
 
-                // assign entity to user as a Pawn
+                // assign Entity to User as a Pawn
                 user_connection.add_pawn_entity(entity_key);
+
+                // put in ownership map
+                entity_record.set_owner(user_key);
             }
         }
     }
 
-    /// Unassigns an Entity from a specific User (meaning that the User will be
-    /// unable to issue Commands to that Entity)
-    pub(crate) fn unassign_pawn_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
-        if self.entity_component_map.contains_key(entity_key) {
+    /// Removes ownership of an Entity from a specific owner User (meaning that
+    /// User will be unable to issue Commands to that Entity)
+    pub(crate) fn disown_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
+        if self.entities.contains_key(entity_key) {
             if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                 user_connection.remove_pawn_entity(entity_key);
             }
         }
     }
 
+    /// Removes ownership of an Entity from their current owner User (meaning
+    /// that User will be unable to issue Commands to that Entity)
+    pub(crate) fn disown_entity_user_unknown(&mut self, entity_key: &EntityKey) {
+        let user_key_opt = self.get_entity_owner(entity_key);
+        if user_key_opt.is_none() {
+            return;
+        }
+        let owning_user_key: UserKey = *user_key_opt.unwrap();
+        self.disown_entity(&owning_user_key, entity_key);
+    }
+
+    /// Gets the UserKey of the User that currently owns an Entity associated
+    /// with the given EntityKey, if it exists
+    pub(crate) fn get_entity_owner(&mut self, entity_key: &EntityKey) -> Option<&UserKey> {
+        if let Some(record) = self.entities.get(entity_key) {
+            return record.get_owner();
+        }
+        return None;
+    }
+
     /// Given an EntityKey & a Component type, get a reference to a registered
     /// Component being tracked by the Server
-    pub(crate) fn get_component_by_type<R: Replicate<P>>(&self, key: &EntityKey) -> Option<&P> {
-        if let Some(component_record) = self.entity_component_map.get(key) {
-            if let Some(component_key) = component_record
-                .borrow()
-                .get_key_from_type(&TypeId::of::<R>())
-            {
-                return self.global_component_store.get(*component_key);
+    pub(crate) fn get_component_by_type<R: Replicate<P>>(
+        &self,
+        entity_key: &EntityKey,
+    ) -> Option<&P> {
+        if let Some(entity_record) = self.entities.get(entity_key) {
+            if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
+                return self.global_component_store.get(component_key);
             }
         }
         return None;
@@ -653,16 +677,13 @@ impl<P: ProtocolType> Server<P> {
 
     /// Returns whether or not an Entity has a Component of a given TypeId
     pub(crate) fn entity_contains_type_id(&self, key: &EntityKey, type_id: &TypeId) -> bool {
-        if let Some(component_record) = self.entity_component_map.get(key) {
-            return component_record
-                .borrow()
-                .get_key_from_type(type_id)
-                .is_some();
+        if let Some(entity_record) = self.entities.get(key) {
+            return entity_record.get_key_from_type(type_id).is_some();
         }
         return false;
     }
 
-    //// users
+    //// Users
     /// Get a User's Socket Address, given the associated UserKey
     pub(crate) fn get_user_address(&self, user_key: &UserKey) -> Option<SocketAddr> {
         if let Some(user) = self.users.get(*user_key) {
@@ -898,7 +919,7 @@ impl<P: ProtocolType> Server<P> {
 
             for user_key in room.users_iter() {
                 for entity_key in room.entities_iter() {
-                    if self.entity_component_map.contains_key(entity_key) {
+                    if self.entities.contains_key(entity_key) {
                         if let Some(user_connection) = self.client_connections.get_mut(user_key) {
                             let currently_in_scope = user_connection.has_entity(entity_key);
 
@@ -918,7 +939,7 @@ impl<P: ProtocolType> Server<P> {
                                 if !currently_in_scope {
                                     // get a reference to the component map
                                     let entity_component_record =
-                                        self.entity_component_map.get(entity_key).unwrap();
+                                        self.entities.get(entity_key).unwrap();
 
                                     // add entity to the connections local scope
                                     Self::user_add_entity(
@@ -977,18 +998,18 @@ impl<P: ProtocolType> Server<P> {
         component_store: &DenseSlotMap<ComponentKey, P>,
         user_connection: &mut ClientConnection<P>,
         entity_key: &EntityKey,
-        entity_component_record: &Ref<ComponentRecord<ComponentKey>>,
+        entity_record: &EntityRecord,
     ) {
         // Get list of components first
         let mut component_list: Vec<(ComponentKey, Ref<dyn Replicate<P>>)> = Vec::new();
-        for component_key in entity_component_record.borrow().get_component_keys() {
+        for component_key in entity_record.get_component_keys() {
             if let Some(component_ref) = component_store.get(component_key) {
                 component_list.push((component_key, component_ref.inner_ref().clone()));
             }
         }
 
         //add entity to user connection
-        user_connection.add_entity(entity_key, entity_component_record, &component_list);
+        user_connection.add_entity(entity_key, entity_record, &component_list);
     }
 
     fn user_remove_entity(user_connection: &mut ClientConnection<P>, entity_key: &EntityKey) {

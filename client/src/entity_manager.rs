@@ -167,7 +167,7 @@ impl<P: ProtocolType> EntityManager<P> {
                         );
                     }
                 }
-                EntityActionType::AssignEntity => {
+                EntityActionType::OwnEntity => {
                     // Assign Pawn Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if let Some(entity_record) = self.entities.get_mut(&entity_key) {
@@ -185,10 +185,10 @@ impl<P: ProtocolType> EntityManager<P> {
                         command_receiver.pawn_init(&entity_key);
 
                         self.queued_incoming_messages
-                            .push_back(EntityAction::AssignEntity(entity_key));
+                            .push_back(EntityAction::OwnEntity(entity_key));
                     }
                 }
-                EntityActionType::UnassignEntity => {
+                EntityActionType::DisownEntity => {
                     // Unassign Pawn Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if let Some(entity_record) = self.entities.get_mut(&entity_key) {
@@ -205,7 +205,7 @@ impl<P: ProtocolType> EntityManager<P> {
                             command_receiver.pawn_cleanup(&entity_key);
 
                             self.queued_incoming_messages
-                                .push_back(EntityAction::UnassignEntity(entity_key));
+                                .push_back(EntityAction::DisownEntity(entity_key));
                         }
                     }
                 }

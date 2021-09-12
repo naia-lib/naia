@@ -10,8 +10,6 @@ pub enum Event<P: ProtocolType> {
     /// Occurs when the Client has lost connection with the Server, usually as a
     /// result of a timeout
     Disconnection,
-    /// An Message emitted to the Client from the Server
-    Message(P),
     /// A Tick Event, the duration between Tick events is defined in the Config
     /// passed to the Client on initialization
     Tick,
@@ -23,10 +21,10 @@ pub enum Event<P: ProtocolType> {
     /// Occurs when an Entity has been assigned to the current User,
     /// meaning it can receive Commands from the Client, and be extrapolated
     /// into the "present"
-    AssignEntity(LocalEntityKey),
+    OwnEntity(LocalEntityKey),
     /// Occurs when an Entity has been unassigned from the current User,
     /// meaning it can no longer receive Commands from this Client
-    UnassignEntity(LocalEntityKey),
+    DisownEntity(LocalEntityKey),
     /// Occurs when an assigned Entity needs to be reset from the "present"
     /// state, back to it's authoritative "past", due to some misprediction
     /// error
@@ -38,6 +36,8 @@ pub enum Event<P: ProtocolType> {
     UpdateComponent(LocalEntityKey, P),
     /// Occurs when a Component should be removed from the given Entity
     RemoveComponent(LocalEntityKey, P),
+    /// An Message emitted to the Client from the Server
+    Message(P),
     /// A new Command received immediately to an assigned Entity, used to
     /// extrapolate Entity from the "past" to the "present"
     NewCommand(LocalEntityKey, P),

@@ -14,6 +14,7 @@ use super::{
     client_config::ClientConfig,
     connection_state::{ConnectionState, ConnectionState::AwaitingChallengeResponse},
     entity_action::EntityAction,
+    entity_ref::{PastEntityRef, PresentEntityRef},
     error::NaiaClientError,
     event::Event,
     server_connection::ServerConnection,
@@ -25,6 +26,7 @@ use super::{
 /// in-scope entities/components that are synced with the server
 #[derive(Debug)]
 pub struct Client<P: ProtocolType> {
+    // Manifest
     manifest: Manifest<P>,
     // Connection
     server_address: SocketAddr,
@@ -82,6 +84,7 @@ impl<P: ProtocolType> Client<P> {
         };
 
         Client {
+            // Manifest
             manifest,
             // Connection
             server_address,
@@ -149,10 +152,8 @@ impl<P: ProtocolType> Client<P> {
                             EntityAction::DespawnEntity(local_key) => {
                                 Event::DespawnEntity(local_key)
                             }
-                            EntityAction::AssignEntity(local_key) => Event::AssignEntity(local_key),
-                            EntityAction::UnassignEntity(local_key) => {
-                                Event::UnassignEntity(local_key)
-                            }
+                            EntityAction::OwnEntity(local_key) => Event::OwnEntity(local_key),
+                            EntityAction::DisownEntity(local_key) => Event::DisownEntity(local_key),
                             EntityAction::RewindEntity(local_key) => Event::RewindEntity(local_key),
                             EntityAction::InsertComponent(entity_key, component_key) => {
                                 Event::InsertComponent(entity_key, component_key)
@@ -246,20 +247,40 @@ impl<P: ProtocolType> Client<P> {
 
     // Entities
 
+    /// Retrieves an EntityRef that exposes read-only operations for the
+    /// Entity associated with the given LocalEntityKey.
+    /// Returns None if the Entity does not exist.
+    pub fn entity_past(&self, entity_key: &LocalEntityKey) -> Option<PastEntityRef<P>> {
+        if self.entity_exists(entity_key) {
+            return Some(PastEntityRef::new(self, &entity_key));
+        }
+        return None;
+    }
+
+    /// Retrieves an EntityRef that exposes read-only operations for the
+    /// Entity associated with the given LocalEntityKey.
+    /// Returns None if the Entity does not exist.
+    pub fn entity_present(&self, entity_key: &LocalEntityKey) -> Option<PresentEntityRef<P>> {
+        if self.entity_exists(entity_key) {
+            return Some(PresentEntityRef::new(self, &entity_key));
+        }
+        return None;
+    }
+
     /// Get whether or not the Entity currently in scope for the Client, given
     /// that Entity's Key
-    pub fn entity_exists(&self, key: &LocalEntityKey) -> bool {
+    pub fn entity_exists(&self, entity_key: &LocalEntityKey) -> bool {
         if let Some(connection) = &self.server_connection {
-            return connection.has_entity(key);
+            return connection.has_entity(entity_key);
         }
         return false;
     }
 
     /// Get whether or not the Entity associated with a given EntityKey has
     /// been assigned to the current User
-    pub fn entity_is_assigned(&self, key: &LocalEntityKey) -> bool {
+    pub fn entity_is_assigned(&self, entity_key: &LocalEntityKey) -> bool {
         if let Some(connection) = &self.server_connection {
-            return connection.entity_is_pawn(key);
+            return connection.entity_is_pawn(entity_key);
         }
         return false;
     }
@@ -334,14 +355,24 @@ impl<P: ProtocolType> Client<P> {
 
     // Crate-Public functions
 
+    //// Entities & Components
+
+    /// Returns whether or not an Entity has a Component of a given TypeId
+    pub(crate) fn entity_contains_type<R: Replicate<P>>(
+        &self,
+        entity_key: &LocalEntityKey,
+    ) -> bool {
+        return self.get_component_by_type::<R>(entity_key).is_some();
+    }
+
     /// Given an EntityKey & a Component type, get a reference to a registered
     /// Component being tracked by the Server
     pub(crate) fn get_component_by_type<R: Replicate<P>>(
         &self,
-        key: &LocalEntityKey,
+        entity_key: &LocalEntityKey,
     ) -> Option<&P> {
         if let Some(connection) = &self.server_connection {
-            return connection.get_component_by_type::<R>(key);
+            return connection.get_component_by_type::<R>(entity_key);
         }
         return None;
     }
@@ -350,10 +381,10 @@ impl<P: ProtocolType> Client<P> {
     /// Pawn Component being tracked by the Server
     pub(crate) fn get_pawn_component_by_type<R: Replicate<P>>(
         &self,
-        key: &LocalEntityKey,
+        entity_key: &LocalEntityKey,
     ) -> Option<&P> {
         if let Some(connection) = &self.server_connection {
-            return connection.get_pawn_component_by_type::<R>(key);
+            return connection.get_pawn_component_by_type::<R>(entity_key);
         }
         return None;
     }
