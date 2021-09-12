@@ -9,11 +9,11 @@ const COMMAND_BUFFER_MAX_SIZE: u16 = 64;
 
 /// Handles incoming commands, buffering them to be received on the correct tick
 #[derive(Debug)]
-pub struct CommandReceiver<T: ProtocolType> {
-    queued_incoming_commands: SequenceBuffer<HashMap<LocalEntityKey, T>>,
+pub struct CommandReceiver<P: ProtocolType> {
+    queued_incoming_commands: SequenceBuffer<HashMap<LocalEntityKey, P>>,
 }
 
-impl<T: ProtocolType> CommandReceiver<T> {
+impl<P: ProtocolType> CommandReceiver<P> {
     /// Creates a new CommandReceiver
     pub fn new() -> Self {
         CommandReceiver {
@@ -22,7 +22,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
     }
 
     /// Get the most recently received Command
-    pub fn pop_incoming_command(&mut self, server_tick: u16) -> Option<(LocalEntityKey, T)> {
+    pub fn pop_incoming_command(&mut self, server_tick: u16) -> Option<(LocalEntityKey, P)> {
         if let Some(map) = self.queued_incoming_commands.get_mut(server_tick) {
             let mut any_key: Option<LocalEntityKey> = None;
             if let Some(any_key_ref) = map.keys().next() {
@@ -44,7 +44,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
         server_tick: u16,
         client_tick: u16,
         reader: &mut PacketReader,
-        manifest: &Manifest<T>,
+        manifest: &Manifest<P>,
     ) {
         let command_count = reader.read_u8();
         for _x in 0..command_count {

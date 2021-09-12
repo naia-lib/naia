@@ -25,7 +25,7 @@ use super::{
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
 #[derive(Debug)]
-pub struct EntityManager<T: ProtocolType> {
+pub struct EntityManager<P: ProtocolType> {
     address: SocketAddr,
     // Entities
     entity_key_generator: KeyGenerator<LocalEntityKey>,
@@ -34,13 +34,13 @@ pub struct EntityManager<T: ProtocolType> {
     delayed_entity_deletions: HashSet<EntityKey>,
     // Components
     component_key_generator: KeyGenerator<LocalComponentKey>,
-    local_component_store: SparseSecondaryMap<ComponentKey, Ref<dyn Replicate<T>>>,
+    local_component_store: SparseSecondaryMap<ComponentKey, Ref<dyn Replicate<P>>>,
     local_to_global_component_key_map: HashMap<LocalComponentKey, ComponentKey>,
     local_component_records: SparseSecondaryMap<ComponentKey, LocalComponentRecord>,
     delayed_component_deletions: HashSet<ComponentKey>,
     // Actions / updates / ect
-    queued_actions: VecDeque<EntityAction<T>>,
-    sent_actions: HashMap<u16, Vec<EntityAction<T>>>,
+    queued_actions: VecDeque<EntityAction<P>>,
+    sent_actions: HashMap<u16, Vec<EntityAction<P>>>,
     sent_updates: HashMap<u16, HashMap<ComponentKey, Ref<DiffMask>>>,
     last_update_packet_index: u16,
     last_last_update_packet_index: u16,
@@ -49,7 +49,7 @@ pub struct EntityManager<T: ProtocolType> {
     last_popped_diff_mask_list: Option<Vec<(ComponentKey, DiffMask)>>,
 }
 
-impl<T: ProtocolType> EntityManager<T> {
+impl<P: ProtocolType> EntityManager<P> {
     /// Create a new EntityManager, given the client's address and a
     /// reference to a MutHandler associated with the Client
     pub fn new(address: SocketAddr, mut_handler: &Ref<MutHandler>) -> Self {
@@ -82,14 +82,14 @@ impl<T: ProtocolType> EntityManager<T> {
         return self.queued_actions.len() != 0;
     }
 
-    pub fn pop_outgoing_action(&mut self, packet_index: u16) -> Option<EntityAction<T>> {
+    pub fn pop_outgoing_action(&mut self, packet_index: u16) -> Option<EntityAction<P>> {
         let queued_action_opt = self.queued_actions.pop_front();
         if queued_action_opt.is_none() {
             return None;
         }
         let mut action = queued_action_opt.unwrap();
 
-        let replacement_action: Option<EntityAction<T>> = {
+        let replacement_action: Option<EntityAction<P>> = {
             match &action {
                 EntityAction::CreateEntity(global_entity_key, local_entity_key, _) => {
                     let mut component_list = Vec::new();
@@ -170,7 +170,7 @@ impl<T: ProtocolType> EntityManager<T> {
         return Some(action);
     }
 
-    pub fn unpop_outgoing_action(&mut self, packet_index: u16, action: &EntityAction<T>) {
+    pub fn unpop_outgoing_action(&mut self, packet_index: u16, action: &EntityAction<P>) {
         info!("unpopping");
         if let Some(sent_actions_list) = self.sent_actions.get_mut(&packet_index) {
             sent_actions_list.pop();
@@ -217,7 +217,7 @@ impl<T: ProtocolType> EntityManager<T> {
         &mut self,
         global_key: &EntityKey,
         component_record_ref: &Ref<ComponentRecord<ComponentKey>>,
-        component_list: &Vec<(ComponentKey, Ref<dyn Replicate<T>>)>,
+        component_list: &Vec<(ComponentKey, Ref<dyn Replicate<P>>)>,
     ) {
         if !self.local_entity_records.contains_key(global_key) {
             // first, add components
@@ -319,7 +319,7 @@ impl<T: ProtocolType> EntityManager<T> {
         &mut self,
         entity_key: &EntityKey,
         component_key: &ComponentKey,
-        component_ref: &Ref<dyn Replicate<T>>,
+        component_ref: &Ref<dyn Replicate<P>>,
     ) {
         if !self.local_entity_records.contains_key(entity_key) {
             panic!(
@@ -400,8 +400,8 @@ impl<T: ProtocolType> EntityManager<T> {
     pub fn write_entity_action(
         &self,
         packet_writer: &mut PacketWriter,
-        manifest: &Manifest<T>,
-        action: &EntityAction<T>,
+        manifest: &Manifest<P>,
+        action: &EntityAction<P>,
     ) -> bool {
         let mut action_total_bytes = Vec::<u8>::new();
 
@@ -521,7 +521,7 @@ impl<T: ProtocolType> EntityManager<T> {
     fn component_init(
         &mut self,
         key: &ComponentKey,
-        component: &Ref<dyn Replicate<T>>,
+        component: &Ref<dyn Replicate<P>>,
         status: LocalityStatus,
     ) -> LocalComponentKey {
         if self.local_component_store.contains_key(*key) {
@@ -589,8 +589,8 @@ impl<T: ProtocolType> EntityManager<T> {
         global_key: &ComponentKey,
         local_key: &LocalComponentKey,
         diff_mask: &Ref<DiffMask>,
-        component: &Ref<dyn Replicate<T>>,
-    ) -> EntityAction<T> {
+        component: &Ref<dyn Replicate<P>>,
+    ) -> EntityAction<P> {
         let locked_diff_mask = self.process_component_update(packet_index, global_key, diff_mask);
         // return new Update action to be written
         return EntityAction::UpdateComponent(
@@ -606,8 +606,8 @@ impl<T: ProtocolType> EntityManager<T> {
         packet_index: u16,
         global_key: &ComponentKey,
         local_key: &LocalComponentKey,
-        component: &Ref<dyn Replicate<T>>,
-    ) -> EntityAction<T> {
+        component: &Ref<dyn Replicate<P>>,
+    ) -> EntityAction<P> {
         let original_diff_mask = self.undo_component_update(&packet_index, &global_key);
 
         return EntityAction::UpdateComponent(
@@ -679,7 +679,7 @@ impl<T: ProtocolType> EntityManager<T> {
     }
 }
 
-impl<T: ProtocolType> PacketNotifiable for EntityManager<T> {
+impl<P: ProtocolType> PacketNotifiable for EntityManager<P> {
     fn notify_packet_delivered(&mut self, packet_index: u16) {
         let mut deleted_components: Vec<ComponentKey> = Vec::new();
 
@@ -844,8 +844,8 @@ impl<T: ProtocolType> PacketNotifiable for EntityManager<T> {
     }
 }
 
-fn component_delete<T: ProtocolType>(
-    queued_actions: &mut VecDeque<EntityAction<T>>,
+fn component_delete<P: ProtocolType>(
+    queued_actions: &mut VecDeque<EntityAction<P>>,
     record: &mut LocalComponentRecord,
     component_key: &ComponentKey,
 ) {
@@ -857,8 +857,8 @@ fn component_delete<T: ProtocolType>(
     ));
 }
 
-fn entity_delete<T: ProtocolType>(
-    queued_actions: &mut VecDeque<EntityAction<T>>,
+fn entity_delete<P: ProtocolType>(
+    queued_actions: &mut VecDeque<EntityAction<P>>,
     entity_record: &mut EntityRecord,
     entity_key: &EntityKey,
 ) {

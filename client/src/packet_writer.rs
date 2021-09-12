@@ -57,13 +57,13 @@ impl PacketWriter {
 
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_command<T: ProtocolType>(
+    pub fn write_command<P: ProtocolType>(
         &mut self,
         host_tick: u16,
-        manifest: &Manifest<T>,
-        command_receiver: &CommandReceiver<T>,
+        manifest: &Manifest<P>,
+        command_receiver: &CommandReceiver<P>,
         pawn_key: &LocalEntityKey,
-        command: &Ref<dyn Replicate<T>>,
+        command: &Ref<dyn Replicate<P>>,
     ) -> bool {
         //Write command payload
         let mut command_payload_bytes = Vec::<u8>::new();
@@ -123,10 +123,10 @@ impl PacketWriter {
 
     /// Writes a Message into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_message<T: ProtocolType>(
+    pub fn write_message<P: ProtocolType>(
         &mut self,
-        manifest: &Manifest<T>,
-        message: &Ref<dyn Replicate<T>>,
+        manifest: &Manifest<P>,
+        message: &Ref<dyn Replicate<P>>,
     ) -> bool {
         return self.message_writer.write_message(manifest, message);
     }

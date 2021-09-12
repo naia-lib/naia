@@ -3,7 +3,7 @@ use naia_shared::{LocalEntityKey, ProtocolType};
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
 #[derive(Debug)]
-pub enum Event<T: ProtocolType> {
+pub enum Event<P: ProtocolType> {
     /// Occurs when the Client has successfully established a connection with
     /// the Server
     Connection,
@@ -11,23 +11,23 @@ pub enum Event<T: ProtocolType> {
     /// result of a timeout
     Disconnection,
     /// An Message emitted to the Client from the Server
-    Message(T),
+    Message(P),
     /// A Tick Event, the duration between Tick events is defined in the Config
     /// passed to the Client on initialization
     Tick,
     /// Occurs when an Entity on the Server has come into scope for the Client,
     /// and should be added to the local client's ECS "world"
-    CreateEntity(LocalEntityKey, Vec<T>),
+    CreateEntity(LocalEntityKey, Vec<P>),
     /// Occurs when an Entity on the Server has left the Client's scope, and
     /// should be removed from the local client's ECS "world"
     DeleteEntity(LocalEntityKey),
     /// Occurs when a Component should be added to a given Entity
-    AddComponent(LocalEntityKey, T),
+    AddComponent(LocalEntityKey, P),
     /// Occurs when a Component has had a state change on the Server while
     /// the Entity it is attached to has come into scope for the Client
-    UpdateComponent(LocalEntityKey, T),
+    UpdateComponent(LocalEntityKey, P),
     /// Occurs when a Component should be removed from the given Entity
-    RemoveComponent(LocalEntityKey, T),
+    RemoveComponent(LocalEntityKey, P),
     /// Occurs when an Entity has been assigned to the local host as a Pawn,
     /// meaning it can receive Commands from the Client
     AssignPawnEntity(LocalEntityKey),
@@ -38,8 +38,8 @@ pub enum Event<T: ProtocolType> {
     ResetPawn(LocalEntityKey),
     /// An Pawn Entity Command received which is to be simulated on the Client
     /// as well as on the Server
-    NewCommandEntity(LocalEntityKey, T),
+    NewCommandEntity(LocalEntityKey, P),
     /// An Pawn Entity Command which is replayed to extrapolate from recently
     /// received authoritative state
-    ReplayCommandEntity(LocalEntityKey, T),
+    ReplayCommandEntity(LocalEntityKey, P),
 }

@@ -14,16 +14,16 @@ use super::{
 };
 
 #[derive(Debug)]
-pub struct ServerConnection<T: ProtocolType> {
-    connection: Connection<T>,
-    entity_manager: EntityManager<T>,
+pub struct ServerConnection<P: ProtocolType> {
+    connection: Connection<P>,
+    entity_manager: EntityManager<P>,
     ping_manager: PingManager,
-    command_sender: CommandSender<T>,
-    command_receiver: CommandReceiver<T>,
+    command_sender: CommandSender<P>,
+    command_receiver: CommandReceiver<P>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
-impl<T: ProtocolType> ServerConnection<T> {
+impl<P: ProtocolType> ServerConnection<P> {
     pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
@@ -41,7 +41,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     pub fn get_outgoing_packet(
         &mut self,
         host_tick: u16,
-        manifest: &Manifest<T>,
+        manifest: &Manifest<P>,
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_messages() || self.command_sender.has_command() {
             let mut writer = PacketWriter::new();
@@ -97,7 +97,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         &mut self,
         packet_tick: u16,
         packet_index: u16,
-        manifest: &Manifest<T>,
+        manifest: &Manifest<P>,
         data: &[u8],
     ) {
         let mut reader = PacketReader::new(data);
@@ -134,7 +134,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     }
 
     // Pass-through methods to underlying Entity Manager
-    pub fn get_incoming_entity_action(&mut self) -> Option<EntityAction<T>> {
+    pub fn get_incoming_entity_action(&mut self) -> Option<EntityAction<P>> {
         return self.entity_manager.pop_incoming_message();
     }
 
@@ -146,16 +146,16 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.entity_manager.entity_is_pawn(key);
     }
 
-    pub fn get_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<&T> {
+    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &LocalEntityKey) -> Option<&P> {
         return self.entity_manager.get_component_by_type::<R>(key);
     }
 
-    pub fn get_pawn_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<&T> {
+    pub fn get_pawn_component_by_type<R: Replicate<P>>(&self, key: &LocalEntityKey) -> Option<&P> {
         return self.entity_manager.get_pawn_component_by_type::<R>(key);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
-    pub fn frame_begin(&mut self, manifest: &Manifest<T>, tick_manager: &mut TickManager) -> bool {
+    pub fn frame_begin(&mut self, manifest: &Manifest<P>, tick_manager: &mut TickManager) -> bool {
         if tick_manager.mark_frame() {
             // then we apply all received updates to components at once
             let target_tick = tick_manager.get_server_tick();
@@ -219,11 +219,11 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<T>>, guaranteed_delivery: bool) {
+    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<P>>, guaranteed_delivery: bool) {
         return self.connection.queue_message(message, guaranteed_delivery);
     }
 
-    pub fn get_incoming_message(&mut self) -> Option<T> {
+    pub fn get_incoming_message(&mut self) -> Option<P> {
         return self.connection.get_incoming_message();
     }
 
@@ -232,24 +232,24 @@ impl<T: ProtocolType> ServerConnection<T> {
     }
 
     // Commands
-    pub fn queue_command(&mut self, entity_key: &LocalEntityKey, command: &Ref<dyn Replicate<T>>) {
+    pub fn queue_command(&mut self, entity_key: &LocalEntityKey, command: &Ref<dyn Replicate<P>>) {
         return self.command_sender.queue_command(entity_key, command);
     }
 
     pub fn process_replays(&mut self) {
         self.command_receiver
-            .process_command_replay::<T>(&mut self.entity_manager);
+            .process_command_replay(&mut self.entity_manager);
     }
 
-    pub fn get_incoming_replay(&mut self) -> Option<(LocalEntityKey, Ref<dyn Replicate<T>>)> {
-        if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command_replay::<T>() {
+    pub fn get_incoming_replay(&mut self) -> Option<(LocalEntityKey, Ref<dyn Replicate<P>>)> {
+        if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command_replay() {
             return Some((pawn_key, command));
         }
 
         return None;
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<(LocalEntityKey, Ref<dyn Replicate<T>>)> {
+    pub fn get_incoming_command(&mut self) -> Option<(LocalEntityKey, Ref<dyn Replicate<P>>)> {
         if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command() {
             return Some((pawn_key, command));
         }

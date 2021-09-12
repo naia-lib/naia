@@ -11,14 +11,14 @@ use super::{
     ping_manager::PingManager,
 };
 
-pub struct ClientConnection<U: ProtocolType> {
-    connection: Connection<U>,
-    entity_manager: EntityManager<U>,
+pub struct ClientConnection<P: ProtocolType> {
+    connection: Connection<P>,
+    entity_manager: EntityManager<P>,
     ping_manager: PingManager,
-    command_receiver: CommandReceiver<U>,
+    command_receiver: CommandReceiver<P>,
 }
 
-impl<U: ProtocolType> ClientConnection<U> {
+impl<P: ProtocolType> ClientConnection<P> {
     pub fn new(
         address: SocketAddr,
         mut_handler: Option<&Ref<MutHandler>>,
@@ -35,7 +35,7 @@ impl<U: ProtocolType> ClientConnection<U> {
     pub fn get_outgoing_packet(
         &mut self,
         host_tick: u16,
-        manifest: &Manifest<U>,
+        manifest: &Manifest<P>,
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_messages() || self.entity_manager.has_outgoing_actions() {
             let mut writer = PacketWriter::new();
@@ -85,7 +85,7 @@ impl<U: ProtocolType> ClientConnection<U> {
         &mut self,
         server_tick: u16,
         client_tick: u16,
-        manifest: &Manifest<U>,
+        manifest: &Manifest<P>,
         data: &[u8],
     ) {
         let mut reader = PacketReader::new(data);
@@ -116,7 +116,7 @@ impl<U: ProtocolType> ClientConnection<U> {
         self.entity_manager.collect_component_updates();
     }
 
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(EntityKey, U)> {
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(EntityKey, P)> {
         if let Some((local_pawn_key, command)) =
             self.command_receiver.pop_incoming_command(server_tick)
         {
@@ -144,7 +144,7 @@ impl<U: ProtocolType> ClientConnection<U> {
         &mut self,
         key: &EntityKey,
         entity_component_record: &Ref<ComponentRecord<ComponentKey>>,
-        component_list: &Vec<(ComponentKey, Ref<dyn Replicate<U>>)>,
+        component_list: &Vec<(ComponentKey, Ref<dyn Replicate<P>>)>,
     ) {
         self.entity_manager
             .add_entity(key, entity_component_record, component_list);
@@ -170,7 +170,7 @@ impl<U: ProtocolType> ClientConnection<U> {
         &mut self,
         entity_key: &EntityKey,
         component_key: &ComponentKey,
-        component_ref: &Ref<dyn Replicate<U>>,
+        component_ref: &Ref<dyn Replicate<P>>,
     ) {
         self.entity_manager
             .add_component(entity_key, component_key, component_ref);
@@ -218,11 +218,11 @@ impl<U: ProtocolType> ClientConnection<U> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<U>>, guaranteed_delivery: bool) {
+    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<P>>, guaranteed_delivery: bool) {
         return self.connection.queue_message(message, guaranteed_delivery);
     }
 
-    pub fn get_incoming_message(&mut self) -> Option<U> {
+    pub fn get_incoming_message(&mut self) -> Option<P> {
         return self.connection.get_incoming_message();
     }
 

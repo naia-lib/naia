@@ -6,11 +6,11 @@ use naia_shared::{
 use super::keys::component_key::ComponentKey;
 
 #[derive(Debug)]
-pub enum EntityAction<T: ProtocolType> {
+pub enum EntityAction<P: ProtocolType> {
     CreateEntity(
         EntityKey,
         LocalEntityKey,
-        Option<Vec<(ComponentKey, LocalComponentKey, Ref<dyn Replicate<T>>)>>,
+        Option<Vec<(ComponentKey, LocalComponentKey, Ref<dyn Replicate<P>>)>>,
     ),
     DeleteEntity(EntityKey, LocalEntityKey),
     AssignPawn(EntityKey, LocalEntityKey),
@@ -19,18 +19,18 @@ pub enum EntityAction<T: ProtocolType> {
         LocalEntityKey,
         ComponentKey,
         LocalComponentKey,
-        Ref<dyn Replicate<T>>,
+        Ref<dyn Replicate<P>>,
     ),
     UpdateComponent(
         ComponentKey,
         LocalComponentKey,
         Ref<DiffMask>,
-        Ref<dyn Replicate<T>>,
+        Ref<dyn Replicate<P>>,
     ),
     RemoveComponent(ComponentKey, LocalComponentKey),
 }
 
-impl<T: ProtocolType> EntityAction<T> {
+impl<P: ProtocolType> EntityAction<P> {
     pub fn as_type(&self) -> EntityActionType {
         match self {
             EntityAction::CreateEntity(_, _, _) => EntityActionType::CreateEntity,
@@ -44,7 +44,7 @@ impl<T: ProtocolType> EntityAction<T> {
     }
 }
 
-impl<T: ProtocolType> Clone for EntityAction<T> {
+impl<P: ProtocolType> Clone for EntityAction<P> {
     fn clone(&self) -> Self {
         match self {
             EntityAction::CreateEntity(gk, lk, cs) => {
