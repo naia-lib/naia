@@ -53,7 +53,9 @@ impl<P: ProtocolType> Clone for EntityAction<P> {
             EntityAction::DespawnEntity(gk, lk) => {
                 EntityAction::DespawnEntity(gk.clone(), lk.clone())
             }
-            EntityAction::AssignEntity(gk, lk) => EntityAction::AssignEntity(gk.clone(), lk.clone()),
+            EntityAction::AssignEntity(gk, lk) => {
+                EntityAction::AssignEntity(gk.clone(), lk.clone())
+            }
             EntityAction::UnassignEntity(gk, lk) => {
                 EntityAction::UnassignEntity(gk.clone(), lk.clone())
             }
