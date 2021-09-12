@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_server::{Event, EntityKey, Random, RoomKey, Server, ServerConfig, UserKey};
+use naia_server::{EntityKey, Event, Random, RoomKey, Server, ServerConfig, UserKey};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
@@ -82,7 +82,8 @@ impl App {
                     }
                 }
                 Ok(Event::CommandEntity(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
-                    if let Some(square_ref) = self.server.get_component_by_type::<Square>(&entity_key)
+                    if let Some(square_ref) =
+                        self.server.get_component_by_type::<Square>(&entity_key)
                     {
                         shared_behavior::process_command(&key_command_ref, &square_ref);
                     }

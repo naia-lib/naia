@@ -1,13 +1,14 @@
 use std::net::SocketAddr;
 
 use naia_shared::{
-    Connection, ConnectionConfig, EntityKey, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader, ComponentRecord
+    ComponentRecord, Connection, ConnectionConfig, EntityKey, ManagerType, Manifest, PacketReader,
+    PacketType, ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
 };
 
 use super::{
-    command_receiver::CommandReceiver, keys::component_key::ComponentKey, mut_handler::MutHandler,
-    packet_writer::PacketWriter, ping_manager::PingManager, entity_manager::EntityManager,
+    command_receiver::CommandReceiver, entity_manager::EntityManager,
+    keys::component_key::ComponentKey, mut_handler::MutHandler, packet_writer::PacketWriter,
+    ping_manager::PingManager,
 };
 
 pub struct ClientConnection<U: ProtocolType> {
@@ -120,8 +121,8 @@ impl<U: ProtocolType> ClientConnection<U> {
             self.command_receiver.pop_incoming_command(server_tick)
         {
             if let Some(global_pawn_key) = self
-                        .entity_manager
-                        .get_global_entity_key_from_local(local_pawn_key)
+                .entity_manager
+                .get_global_entity_key_from_local(local_pawn_key)
             {
                 return Some((*global_pawn_key, command));
             }

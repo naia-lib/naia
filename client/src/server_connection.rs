@@ -1,17 +1,16 @@
 use std::net::SocketAddr;
 
 use naia_shared::{
-    Connection, ConnectionConfig, LocalComponentKey, LocalEntityKey, ManagerType,
-    Manifest, PacketReader, PacketType, ProtocolType, Ref, Replicate, SequenceNumber,
-    StandardHeader,
+    Connection, ConnectionConfig, LocalComponentKey, LocalEntityKey, ManagerType, Manifest,
+    PacketReader, PacketType, ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
 };
 
 use crate::Packet;
 
 use super::{
-    command_receiver::CommandReceiver, command_sender::CommandSender,
-    packet_writer::PacketWriter, ping_manager::PingManager, entity_action::EntityAction,
-    entity_manager::EntityManager, tick_manager::TickManager, tick_queue::TickQueue,
+    command_receiver::CommandReceiver, command_sender::CommandSender, entity_action::EntityAction,
+    entity_manager::EntityManager, packet_writer::PacketWriter, ping_manager::PingManager,
+    tick_manager::TickManager, tick_queue::TickQueue,
 };
 
 #[derive(Debug)]
@@ -163,7 +162,10 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.entity_manager.get_component_by_type::<R>(key);
     }
 
-    pub fn get_pawn_component_by_type<R: Replicate<T>>(&self, key: &LocalEntityKey) -> Option<Ref<R>> {
+    pub fn get_pawn_component_by_type<R: Replicate<T>>(
+        &self,
+        key: &LocalEntityKey,
+    ) -> Option<Ref<R>> {
         return self.entity_manager.get_pawn_component_by_type::<R>(key);
     }
 

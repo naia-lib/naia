@@ -6,7 +6,10 @@ use crate::{PacketReader, Ref};
 
 /// An Enum with a variant for every Component/Message that can be sent
 /// between Client/Host
-pub trait ProtocolType<Impl = Self>: Clone where Impl: ProtocolType {
+pub trait ProtocolType<Impl = Self>: Clone
+where
+    Impl: ProtocolType,
+{
     // write & get_type_id are ONLY currently used for reading/writing auth
     // messages.. maybe should do something different here
     /// Writes the typed Component/Message into an outgoing byte stream

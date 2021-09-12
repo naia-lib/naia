@@ -48,7 +48,10 @@ impl MutHandler {
     }
 
     pub fn register_component(&mut self, component_key: &ComponentKey) {
-        if self.component_diff_mask_list_map.contains_key(component_key) {
+        if self
+            .component_diff_mask_list_map
+            .contains_key(component_key)
+        {
             panic!("Component cannot register with server more than once!");
         }
         self.component_diff_mask_list_map

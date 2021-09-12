@@ -111,7 +111,9 @@ impl App {
 
                     // Iterate through Characters, marching them from (0,0) to (20, N)
                     for entity_key in self.server.entities_iter() {
-                        if let Some(character_ref) = self.server.get_component_by_type::<Character>(&entity_key) {
+                        if let Some(character_ref) =
+                            self.server.get_component_by_type::<Character>(&entity_key)
+                        {
                             character_ref.borrow_mut().step();
                         }
                     }
