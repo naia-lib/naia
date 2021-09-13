@@ -95,7 +95,7 @@ impl App {
                     self.square_map.remove(&entity_key);
                 }
                 Ok(Event::OwnEntity(entity_key)) => {
-                    info!("entity assigned");
+                    info!("gave ownership of entity");
                     if let Some(square_ref) = self
                         .client
                         .entity(&entity_key)
@@ -107,7 +107,7 @@ impl App {
                 }
                 Ok(Event::DisownEntity(_)) => {
                     self.owned_square = None;
-                    info!("entity unassigned");
+                    info!("removed ownership of entity");
                 }
                 Ok(Event::NewCommand(_, Protocol::KeyCommand(key_command_ref)))
                 | Ok(Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref))) => {
