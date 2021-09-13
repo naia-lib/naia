@@ -86,10 +86,8 @@ impl<'s, P: ProtocolType> EntityMut<'s, P> {
         self
     }
 
-    pub fn remove_component<R: Replicate<P>>(&mut self) -> &mut Self {
-        self.server.remove_component::<R>(&self.key);
-
-        self
+    pub fn remove_component<R: Replicate<P>>(&mut self) -> Option<Ref<R>> {
+        return self.server.remove_component::<R>(&self.key);
     }
 
     // Users & Assignment

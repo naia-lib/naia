@@ -12,8 +12,8 @@ use naia_bevy_demo_shared::{
 const SQUARE_SIZE: f32 = 32.0;
 static ALL: &str = "all";
 
-struct Pawn;
-struct NonPawn;
+struct Predicted;
+struct Confirmed;
 struct Key(NaiaEntityKey);
 struct Materials {
     white: Handle<ColorMaterial>,
@@ -48,12 +48,7 @@ fn main() {
     // Add Naia Client
     let mut client_config = ClientConfig::default();
     client_config.socket_config.server_address = get_server_address();
-    let client = Client::new(
-        Protocol::load(),
-        Some(client_config),
-        get_shared_config(),
-        Some(auth),
-    );
+    let client = Client::new(Some(client_config), get_shared_config(), Some(auth));
     app.insert_non_send_resource(client);
 
     // Resources
@@ -120,7 +115,7 @@ fn naia_client_update(
     mut client: NonSendMut<Client<Protocol>>,
     mut client_resource: ResMut<ClientResource>,
     materials: Res<Materials>,
-    mut pawn_query: Query<(&Key, &Ref<Position>), With<Pawn>>,
+    mut pawn_query: Query<(&Key, &Ref<Position>), With<Predicted>>,
     mut queued_command: NonSendMut<QueuedCommand>,
 ) {
     for event in client.receive() {
@@ -134,13 +129,13 @@ fn naia_client_update(
             Ok(Event::Tick) => {
                 for (Key(pawn_key), _) in pawn_query.iter() {
                     if let Some(command) = queued_command.command.take() {
-                        client.send_entity_command(pawn_key, &command);
+                        client.queue_command(pawn_key, &command);
                     }
                 }
             }
             Ok(Event::SpawnEntity(naia_entity_key, component_list)) => {
                 let mut entity = commands.spawn();
-                entity.insert(NonPawn).insert(Key(naia_entity_key));
+                entity.insert(Confirmed).insert(Key(naia_entity_key));
 
                 info!("create entity");
 
@@ -189,29 +184,25 @@ fn naia_client_update(
             Ok(Event::OwnEntity(naia_entity_key)) => {
                 info!("assign pawn");
 
-                let pawn_components = client.get_pawn_components(&naia_entity_key);
-                if !pawn_components.is_empty() {
-                    let mut entity = commands.spawn();
-                    entity.insert(Pawn).insert(Key(naia_entity_key));
+                if let Some(position_ref) = client
+                    .entity(&naia_entity_key)
+                    .prediction()
+                    .component::<Position>()
+                {
+                    let mut bevy_entity = commands.spawn();
+                    bevy_entity.insert(Predicted).insert(Key(naia_entity_key));
 
-                    for pawn_component in pawn_components {
-                        match pawn_component {
-                            Protocol::Position(position_ref) => {
-                                info!("add position to pawn entity");
-                                entity.insert(position_ref);
-                            }
-                            _ => {}
-                        }
-                    }
+                    info!("add position to pawn entity");
+                    bevy_entity.insert(position_ref.clone());
 
-                    entity.insert_bundle(SpriteBundle {
+                    bevy_entity.insert_bundle(SpriteBundle {
                         material: materials.white.clone(),
                         sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
                         transform: Transform::from_xyz(0.0, 0.0, 0.0),
                         ..Default::default()
                     });
 
-                    let bevy_entity_key = entity.id();
+                    let bevy_entity_key = bevy_entity.id();
                     client_resource
                         .pawn_key_map
                         .insert(naia_entity_key, bevy_entity_key);
@@ -238,7 +229,7 @@ fn naia_client_update(
     }
 }
 
-fn pawn_sync(mut query: Query<(&Pawn, &Ref<Position>, &mut Transform)>) {
+fn pawn_sync(mut query: Query<(&Predicted, &Ref<Position>, &mut Transform)>) {
     for (_, pos_ref, mut transform) in query.iter_mut() {
         let pos = pos_ref.borrow();
         transform.translation.x = f32::from(*(pos.x.get()));
@@ -246,7 +237,7 @@ fn pawn_sync(mut query: Query<(&Pawn, &Ref<Position>, &mut Transform)>) {
     }
 }
 
-fn nonpawn_sync(mut query: Query<(&NonPawn, &Ref<Position>, &mut Transform)>) {
+fn nonpawn_sync(mut query: Query<(&Confirmed, &Ref<Position>, &mut Transform)>) {
     for (_, pos_ref, mut transform) in query.iter_mut() {
         let pos = pos_ref.borrow();
         transform.translation.x = f32::from(*(pos.x.get()));

@@ -38,8 +38,8 @@ impl<P: ProtocolType> EntityAction<P> {
             EntityAction::OwnEntity(_, _) => EntityActionType::OwnEntity,
             EntityAction::DisownEntity(_, _) => EntityActionType::DisownEntity,
             EntityAction::InsertComponent(_, _, _, _) => EntityActionType::InsertComponent,
-            EntityAction::RemoveComponent(_, _) => EntityActionType::RemoveComponent,
             EntityAction::UpdateComponent(_, _, _, _) => EntityActionType::UpdateComponent,
+            EntityAction::RemoveComponent(_, _) => EntityActionType::RemoveComponent,
         }
     }
 }

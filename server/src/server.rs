@@ -587,6 +587,14 @@ impl<P: ProtocolType> Server<P> {
         let component_key: ComponentKey = self.component_init(component_ref);
 
         let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
+        let type_id = &dyn_ref.borrow().get_type_id();
+
+        if self.entity_contains_type_id(entity_key, &type_id) {
+            panic!(
+                "attempted to add component to entity which already has one of that type! \
+                   an entity is not allowed to have more than 1 type of component at a time."
+            )
+        }
 
         // add component to connections already tracking entity
         for (user_key, _) in self.users.iter() {
@@ -605,7 +613,7 @@ impl<P: ProtocolType> Server<P> {
         self.component_entity_map.insert(component_key, *entity_key);
 
         if let Some(entity_record) = self.entities.get_mut(&entity_key) {
-            entity_record.insert_component(&component_key, &dyn_ref.borrow().get_type_id());
+            entity_record.insert_component(&component_key, &type_id);
         }
     }
 
@@ -622,25 +630,42 @@ impl<P: ProtocolType> Server<P> {
     }
 
     /// Removes a Component from an Entity associated with the given EntityKey
-    pub(crate) fn remove_component<R: Replicate<P>>(&mut self, entity_key: &EntityKey) -> bool {
+    pub(crate) fn remove_component<R: Replicate<P>>(
+        &mut self,
+        entity_key: &EntityKey,
+    ) -> Option<Ref<R>> {
+        // get at record
         if let Some(entity_record) = self.entities.get(entity_key) {
+            // get component key from type
             let component_key: ComponentKey = entity_record
                 .get_key_from_type(&TypeId::of::<R>())
                 .expect("component not initialized correctly?");
 
+            // get a reference to the component
+            let protocol = self
+                .global_component_store
+                .get(component_key)
+                .expect("component not initialized correctly?");
+            let component_ref = protocol.to_typed_ref::<R>().unwrap();
+
+            // clean up component on all connections
+            // TODO: should be able to make this more efficient by caching for every Entity
+            // which scopes they are part of
             for (user_key, _) in self.users.iter() {
                 if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
                     Self::connection_remove_component(client_connection, &component_key);
                 }
             }
 
+            // remove component from entity record
             entity_record.remove_component(&component_key);
 
+            // cleanup all other loose ends
             self.component_cleanup(&component_key);
 
-            return true;
+            return Some(component_ref);
         }
-        return false;
+        return None;
     }
 
     //// Users

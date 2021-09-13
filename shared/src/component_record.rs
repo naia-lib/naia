@@ -24,6 +24,9 @@ impl<K: Eq + Hash + Copy> ComponentRecord<K> {
     /// Inserts a new Component into the ComponentRecord
     pub fn insert_component(&mut self, key: &K, type_id: &TypeId) {
         self.key_set_ref.insert(*key, *type_id);
+        if self.type_map.contains_key(type_id) {
+            panic!("duplicate component types in entity!");
+        }
         self.type_map.insert(*type_id, *key);
     }
 
