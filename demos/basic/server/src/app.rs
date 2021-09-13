@@ -20,11 +20,11 @@ impl App {
         let mut server_config = ServerConfig::default();
         server_config.socket_config.session_listen_addr = get_server_address();
 
-        let mut server = Server::new(Protocol::load(), Some(server_config), shared_config);
+        let mut server = Server::new(Some(server_config), shared_config);
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
-        let main_room_key = server.make_room();
+        let main_room_key = server.make_room().key();
 
         // Create 4 Character entities, with a range of X and name values
         {
@@ -44,7 +44,7 @@ impl App {
                 let character_key = server.spawn_entity().insert_component(&character).key();
 
                 // Add the Character Entity to the main Room
-                server.room_add_entity(&main_room_key, &character_key);
+                server.room_mut(&main_room_key).add_entity(&character_key);
             }
         }
 
@@ -71,23 +71,25 @@ impl App {
                     }
                 }
                 Ok(Event::Connection(user_key)) => {
-                    if let Some(user) = self.server.user(&user_key) {
-                        info!("Naia Server connected to: {}", user.address);
-                        self.server.room_add_user(&self.main_room_key, &user_key);
-                    }
+                    info!(
+                        "Naia Server connected to: {}",
+                        self.server.user(&user_key).address()
+                    );
+                    self.server
+                        .room_mut(&self.main_room_key)
+                        .add_user(&user_key);
                 }
                 Ok(Event::Disconnection(_, user)) => {
                     info!("Naia Server disconnected from: {:?}", user.address);
                 }
                 Ok(Event::Message(user_key, Protocol::StringMessage(message_ref))) => {
-                    if let Some(user) = self.server.user(&user_key) {
-                        let message = message_ref.borrow();
-                        let message_contents = message.contents.get();
-                        info!(
-                            "Server recv from ({}) <- {}",
-                            user.address, message_contents
-                        );
-                    }
+                    let message = message_ref.borrow();
+                    let message_contents = message.contents.get();
+                    info!(
+                        "Server recv from ({}) <- {}",
+                        self.server.user(&user_key).address(),
+                        message_contents
+                    );
                 }
                 Ok(Event::Tick) => {
                     // All game logic should happen here, on a tick event
@@ -98,11 +100,11 @@ impl App {
                         iter_vec.push(user_key);
                     }
                     for user_key in iter_vec {
-                        let user = self.server.user(&user_key).unwrap();
                         let new_message_contents = format!("Server Message ({})", self.tick_count);
                         info!(
                             "Server send to   ({}) -> {}",
-                            user.address, new_message_contents
+                            self.server.user(&user_key).address(),
+                            new_message_contents
                         );
 
                         let new_message = StringMessage::new(new_message_contents);
@@ -112,7 +114,7 @@ impl App {
                     // Iterate through Characters, marching them from (0,0) to (20, N)
                     for entity_key in self.server.entities_iter() {
                         if let Some(character_ref) =
-                            self.server.get_component_by_type::<Character>(&entity_key)
+                            self.server.entity(&entity_key).component::<Character>()
                         {
                             character_ref.borrow_mut().step();
                         }
@@ -121,16 +123,14 @@ impl App {
                     // Update scopes of entities
                     for (room_key, user_key, entity_key) in self.server.scopes() {
                         if let Some(character_ref) =
-                            self.server.get_component_by_type::<Character>(&entity_key)
+                            self.server.entity(&entity_key).component::<Character>()
                         {
                             let x = *character_ref.borrow().x.get();
-                            let in_scope = x >= 5 && x <= 15;
-                            self.server.entity_set_scope(
-                                &room_key,
-                                &user_key,
-                                &entity_key,
-                                in_scope,
-                            );
+                            if x >= 5 && x <= 15 {
+                                self.server.accept_scope(room_key, user_key, entity_key);
+                            } else {
+                                self.server.reject_scope(room_key, user_key, entity_key);
+                            }
                         }
                     }
 

@@ -22,12 +22,7 @@ impl App {
         // This will be evaluated in the Server's 'on_auth()' method
         let auth = Auth::new("charlie", "12345");
 
-        let client = Client::new(
-            Protocol::load(),
-            Some(client_config),
-            get_shared_config(),
-            Some(auth),
-        );
+        let client = Client::new(Some(client_config), get_shared_config(), Some(auth));
 
         App {
             client,
@@ -59,24 +54,25 @@ impl App {
                     self.client.queue_message(&string_message, true);
                     self.message_count += 1;
                 }
-                Ok(Event::SpawnEntity(entity_key, component_list)) => {
-                    for component_protocol in component_list {
-                        if let Some(character_ref) = component_protocol.to_typed_ref::<Character>()
-                        {
-                            let character = character_ref.borrow();
-                            info!(
-                                "creation of Character with key: {}, x: {}, y: {}, name: {} {}",
-                                entity_key,
-                                character.x.get(),
-                                character.y.get(),
-                                character.fullname.get().first,
-                                character.fullname.get().last,
-                            );
-                        }
+                Ok(Event::SpawnEntity(entity_key, _)) => {
+                    if let Some(character_ref) =
+                        self.client.entity(&entity_key).component::<Character>()
+                    {
+                        let character = character_ref.borrow();
+                        info!(
+                            "creation of Character with key: {}, x: {}, y: {}, name: {} {}",
+                            entity_key,
+                            character.x.get(),
+                            character.y.get(),
+                            character.fullname.get().first,
+                            character.fullname.get().last,
+                        );
                     }
                 }
-                Ok(Event::UpdateComponent(entity_key, component_protocol)) => {
-                    if let Some(character_ref) = component_protocol.to_typed_ref::<Character>() {
+                Ok(Event::UpdateComponent(entity_key, _)) => {
+                    if let Some(character_ref) =
+                        self.client.entity(&entity_key).component::<Character>()
+                    {
                         let character = character_ref.borrow();
                         info!(
                             "update of Character with key: {}, x: {}, y: {}, name: {} {}",
@@ -102,7 +98,7 @@ impl App {
                     }
                 }
                 Ok(Event::DespawnEntity(entity_key)) => {
-                    info!("deletion of Character Entity: {}", entity_key,);
+                    info!("deletion of Character Entity: {}", entity_key);
                 }
                 Ok(Event::Tick) => {
                     //info!("tick event");
