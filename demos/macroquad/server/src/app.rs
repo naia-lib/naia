@@ -21,7 +21,7 @@ impl App {
         let mut server_config = ServerConfig::default();
         server_config.socket_config.session_listen_addr = get_server_address();
 
-        let mut server = Server::new(Protocol::load(), Some(server_config), shared_config);
+        let mut server = Server::new(Some(server_config), shared_config);
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
@@ -99,10 +99,16 @@ impl App {
                 Ok(Event::Tick) => {
                     // All game logic should happen here, on a tick event
 
-                    // Update scopes of entities
-                    for (room_key, user_key, entity_key) in self.server.entity_scope_sets() {
-                        self.server
-                            .entity_set_scope(&room_key, &user_key, &entity_key, true);
+                    // Check whether Entities are in/out of all possible Scopes
+                    for (room_key, user_key, entity_key) in self.server.scopes() {
+                        // You'd normally do whatever checks you need to in here..
+                        // to determine whether each Entity should be in scope or not.
+
+                        // This indicates the Entity should be in this scope.
+                        self.server.accept_scope(room_key, user_key, entity_key);
+
+                        // And call this if Entity should NOT be in this scope.
+                        // self.server.reject_scope(...);
                     }
 
                     // VERY IMPORTANT! Calling this actually sends all update data

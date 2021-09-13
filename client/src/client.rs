@@ -49,9 +49,8 @@ pub struct Client<P: ProtocolType> {
 impl<P: ProtocolType> Client<P> {
     /// Create a new Client
     pub fn new<R: ImplRef<P>>(
-        manifest: Manifest<P>,
         client_config: Option<ClientConfig>,
-        shared_config: SharedConfig,
+        shared_config: SharedConfig<P>,
         auth: Option<R>,
     ) -> Self {
         let mut client_config = match client_config {
@@ -85,7 +84,7 @@ impl<P: ProtocolType> Client<P> {
 
         Client {
             // Manifest
-            manifest,
+            manifest: shared_config.manifest,
             // Connection
             server_address,
             sender,
