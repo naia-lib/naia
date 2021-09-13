@@ -49,7 +49,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
         let command_count = reader.read_u8();
         for _x in 0..command_count {
             let local_key = reader.read_u16();
-            let pawn_key = LocalEntityKey::from_u16(local_key);
+            let prediction_key = LocalEntityKey::from_u16(local_key);
             let naia_id: u16 = reader.read_u16();
             let past_commands_number: u8 = reader.read_u8();
 
@@ -59,7 +59,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
                     .insert(client_tick, HashMap::new());
             }
             if let Some(map) = self.queued_incoming_commands.get_mut(client_tick) {
-                map.insert(pawn_key, new_command);
+                map.insert(prediction_key, new_command);
             }
 
             for _y in 0..past_commands_number {
@@ -73,8 +73,8 @@ impl<P: ProtocolType> CommandReceiver<P> {
                             .insert(past_tick, HashMap::new());
                     }
                     if let Some(map) = self.queued_incoming_commands.get_mut(past_tick) {
-                        if !map.contains_key(&pawn_key) {
-                            map.insert(pawn_key, new_command);
+                        if !map.contains_key(&prediction_key) {
+                            map.insert(prediction_key, new_command);
                         }
                     }
                 }

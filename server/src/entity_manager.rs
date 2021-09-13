@@ -241,8 +241,8 @@ impl<P: ProtocolType> EntityManager<P> {
     }
 
     pub fn remove_entity(&mut self, key: &EntityKey) {
-        if self.has_pawn_entity(key) {
-            self.remove_pawn_entity(key);
+        if self.has_prediction_entity(key) {
+            self.remove_prediction_entity(key);
         }
 
         if let Some(entity_record) = self.local_entity_records.get_mut(key) {
@@ -276,41 +276,41 @@ impl<P: ProtocolType> EntityManager<P> {
         return self.local_entity_records.contains_key(key);
     }
 
-    // Pawn Entities
+    // Prediction Entities
 
-    pub fn add_pawn_entity(&mut self, key: &EntityKey) {
+    pub fn add_prediction_entity(&mut self, key: &EntityKey) {
         let entity_record = self
             .local_entity_records
             .get_mut(key)
             .expect("attempting to assign a nonexistent Entity");
-        if entity_record.is_pawn {
+        if entity_record.is_prediction {
             panic!("attempting to assign an Entity twice!");
         }
 
         // success
-        entity_record.is_pawn = true;
+        entity_record.is_prediction = true;
         self.queued_actions
             .push_back(EntityAction::OwnEntity(*key, entity_record.local_key));
     }
 
-    pub fn remove_pawn_entity(&mut self, key: &EntityKey) {
+    pub fn remove_prediction_entity(&mut self, key: &EntityKey) {
         let entity_record = self
             .local_entity_records
             .get_mut(key)
             .expect("attempting to disown on Entity which is not in-scope");
-        if !entity_record.is_pawn {
+        if !entity_record.is_prediction {
             panic!("attempting to disown an Entity which is not currently assigned");
         }
 
         // success
-        entity_record.is_pawn = false;
+        entity_record.is_prediction = false;
         self.queued_actions
             .push_back(EntityAction::DisownEntity(*key, entity_record.local_key));
     }
 
-    pub fn has_pawn_entity(&self, key: &EntityKey) -> bool {
+    pub fn has_prediction_entity(&self, key: &EntityKey) -> bool {
         if let Some(entity_record) = self.local_entity_records.get(key) {
-            return entity_record.is_pawn;
+            return entity_record.is_prediction;
         }
         return false;
     }

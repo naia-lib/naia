@@ -180,10 +180,10 @@ impl<P: ProtocolType> Server<P> {
         // self.client_connections
         for (user_key, connection) in self.client_connections.iter_mut() {
             //receive commands from anyone
-            while let Some((pawn_key, command)) =
+            while let Some((prediction_key, command)) =
                 connection.get_incoming_command(self.tick_manager.get_tick())
             {
-                events.push_back(Ok(Event::Command(*user_key, pawn_key, command)));
+                events.push_back(Ok(Event::Command(*user_key, prediction_key, command)));
             }
             //receive messages from anyone
             while let Some(message) = connection.get_incoming_message() {
@@ -537,8 +537,8 @@ impl<P: ProtocolType> Server<P> {
             );
         }
 
-        // assign Entity to User as a Pawn
-        client_connection.add_pawn_entity(entity_key);
+        // assign Entity to User as a Prediction
+        client_connection.add_prediction_entity(entity_key);
 
         // put in ownership map
         entity_record.set_owner(user_key);
@@ -991,7 +991,7 @@ impl<P: ProtocolType> Server<P> {
         entity_key: &EntityKey,
         entity_record: &mut EntityRecord,
     ) {
-        client_connection.remove_pawn_entity(entity_key);
+        client_connection.remove_prediction_entity(entity_key);
         entity_record.remove_owner();
     }
 
@@ -1012,7 +1012,7 @@ impl<P: ProtocolType> Server<P> {
                             let currently_in_scope = client_connection.has_entity(entity_key);
 
                             let should_be_in_scope: bool;
-                            if client_connection.has_pawn_entity(entity_key) {
+                            if client_connection.has_prediction_entity(entity_key) {
                                 should_be_in_scope = true;
                             } else {
                                 let key = (room_key, *user_key, *entity_key);

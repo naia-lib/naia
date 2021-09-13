@@ -114,17 +114,20 @@ impl<P: ProtocolType> ClientConnection<P> {
     }
 
     pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(EntityKey, P)> {
-        if let Some((local_pawn_key, command)) =
+        if let Some((local_prediction_key, command)) =
             self.command_receiver.pop_incoming_command(server_tick)
         {
             // get global key from the local one
-            if let Some(global_pawn_key) = self
+            if let Some(global_prediction_key) = self
                 .entity_manager
-                .get_global_entity_key_from_local(local_pawn_key)
+                .get_global_entity_key_from_local(local_prediction_key)
             {
                 // make sure Command is valid (the entity really is owned by this connection)
-                if self.entity_manager.has_pawn_entity(global_pawn_key) {
-                    return Some((*global_pawn_key, command));
+                if self
+                    .entity_manager
+                    .has_prediction_entity(global_prediction_key)
+                {
+                    return Some((*global_prediction_key, command));
                 }
             }
         }
@@ -155,16 +158,16 @@ impl<P: ProtocolType> ClientConnection<P> {
         self.entity_manager.remove_entity(key);
     }
 
-    pub fn has_pawn_entity(&self, key: &EntityKey) -> bool {
-        return self.entity_manager.has_pawn_entity(key);
+    pub fn has_prediction_entity(&self, key: &EntityKey) -> bool {
+        return self.entity_manager.has_prediction_entity(key);
     }
 
-    pub fn add_pawn_entity(&mut self, key: &EntityKey) {
-        self.entity_manager.add_pawn_entity(key);
+    pub fn add_prediction_entity(&mut self, key: &EntityKey) {
+        self.entity_manager.add_prediction_entity(key);
     }
 
-    pub fn remove_pawn_entity(&mut self, key: &EntityKey) {
-        self.entity_manager.remove_pawn_entity(key);
+    pub fn remove_prediction_entity(&mut self, key: &EntityKey) {
+        self.entity_manager.remove_prediction_entity(key);
     }
 
     pub fn insert_component(

@@ -26,7 +26,7 @@ struct QueuedCommand {
 }
 struct ClientResource {
     entity_key_map: HashMap<NaiaEntityKey, BevyEntityKey>,
-    pawn_key_map: HashMap<NaiaEntityKey, BevyEntityKey>,
+    prediction_key_map: HashMap<NaiaEntityKey, BevyEntityKey>,
 }
 
 fn main() {
@@ -56,15 +56,15 @@ fn main() {
         .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
         .insert_resource(ClientResource {
             entity_key_map: HashMap::new(),
-            pawn_key_map: HashMap::new(),
+            prediction_key_map: HashMap::new(),
         });
 
     // Systems
     app.add_startup_system(init.system())
-       .add_system(pawn_input.system())
+       .add_system(prediction_input.system())
        .add_system_to_stage(ALL, naia_client_update.system())
-       .add_system_to_stage(ALL, pawn_sync.system())
-       .add_system_to_stage(ALL, nonpawn_sync.system())
+       .add_system_to_stage(ALL, predicted_sync.system())
+       .add_system_to_stage(ALL, confirmed_sync.system())
 
     // Run
        .run();
@@ -85,7 +85,10 @@ fn init(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     });
 }
 
-fn pawn_input(keyboard_input: Res<Input<KeyCode>>, mut queued_command: NonSendMut<QueuedCommand>) {
+fn prediction_input(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut queued_command: NonSendMut<QueuedCommand>,
+) {
     let w = keyboard_input.pressed(KeyCode::W);
     let s = keyboard_input.pressed(KeyCode::S);
     let a = keyboard_input.pressed(KeyCode::A);
@@ -115,7 +118,7 @@ fn naia_client_update(
     mut client: NonSendMut<Client<Protocol>>,
     mut client_resource: ResMut<ClientResource>,
     materials: Res<Materials>,
-    mut pawn_query: Query<(&Key, &Ref<Position>), With<Predicted>>,
+    mut prediction_query: Query<(&Key, &Ref<Position>), With<Predicted>>,
     mut queued_command: NonSendMut<QueuedCommand>,
 ) {
     for event in client.receive() {
@@ -127,9 +130,9 @@ fn naia_client_update(
                 info!("Client disconnected from: {}", client.server_address());
             }
             Ok(Event::Tick) => {
-                for (Key(pawn_key), _) in pawn_query.iter() {
+                for (Key(prediction_key), _) in prediction_query.iter() {
                     if let Some(command) = queued_command.command.take() {
-                        client.queue_command(pawn_key, &command);
+                        client.queue_command(prediction_key, &command);
                     }
                 }
             }
@@ -182,7 +185,7 @@ fn naia_client_update(
                 }
             }
             Ok(Event::OwnEntity(naia_entity_key)) => {
-                info!("assign pawn");
+                info!("assign prediction");
 
                 if let Some(position_ref) = client
                     .entity(&naia_entity_key)
@@ -192,7 +195,7 @@ fn naia_client_update(
                     let mut bevy_entity = commands.spawn();
                     bevy_entity.insert(Predicted).insert(Key(naia_entity_key));
 
-                    info!("add position to pawn entity");
+                    info!("add position to prediction entity");
                     bevy_entity.insert(position_ref.clone());
 
                     bevy_entity.insert_bundle(SpriteBundle {
@@ -204,22 +207,23 @@ fn naia_client_update(
 
                     let bevy_entity_key = bevy_entity.id();
                     client_resource
-                        .pawn_key_map
+                        .prediction_key_map
                         .insert(naia_entity_key, bevy_entity_key);
                 }
             }
             Ok(Event::DisownEntity(naia_entity_key)) => {
-                info!("unassign pawn");
+                info!("unassign prediction");
 
-                if let Some(bevy_entity_key) = client_resource.pawn_key_map.remove(&naia_entity_key)
+                if let Some(bevy_entity_key) =
+                    client_resource.prediction_key_map.remove(&naia_entity_key)
                 {
                     commands.entity(bevy_entity_key).despawn();
                 }
             }
             Ok(Event::NewCommand(naia_entity, Protocol::KeyCommand(key_command_ref)))
             | Ok(Event::ReplayCommand(naia_entity, Protocol::KeyCommand(key_command_ref))) => {
-                if let Some(bevy_entity) = client_resource.pawn_key_map.get(&naia_entity) {
-                    if let Ok((_, position)) = pawn_query.get_mut(*bevy_entity) {
+                if let Some(bevy_entity) = client_resource.prediction_key_map.get(&naia_entity) {
+                    if let Ok((_, position)) = prediction_query.get_mut(*bevy_entity) {
                         shared_behavior::process_command(&key_command_ref, position);
                     }
                 }
@@ -229,7 +233,7 @@ fn naia_client_update(
     }
 }
 
-fn pawn_sync(mut query: Query<(&Predicted, &Ref<Position>, &mut Transform)>) {
+fn predicted_sync(mut query: Query<(&Predicted, &Ref<Position>, &mut Transform)>) {
     for (_, pos_ref, mut transform) in query.iter_mut() {
         let pos = pos_ref.borrow();
         transform.translation.x = f32::from(*(pos.x.get()));
@@ -237,7 +241,7 @@ fn pawn_sync(mut query: Query<(&Predicted, &Ref<Position>, &mut Transform)>) {
     }
 }
 
-fn nonpawn_sync(mut query: Query<(&Confirmed, &Ref<Position>, &mut Transform)>) {
+fn confirmed_sync(mut query: Query<(&Confirmed, &Ref<Position>, &mut Transform)>) {
     for (_, pos_ref, mut transform) in query.iter_mut() {
         let pos = pos_ref.borrow();
         transform.translation.x = f32::from(*(pos.x.get()));

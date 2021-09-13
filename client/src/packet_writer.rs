@@ -62,7 +62,7 @@ impl PacketWriter {
         host_tick: u16,
         manifest: &Manifest<P>,
         command_receiver: &CommandReceiver<P>,
-        pawn_key: &LocalEntityKey,
+        prediction_key: &LocalEntityKey,
         command: &Ref<dyn Replicate<P>>,
     ) -> bool {
         //Write command payload
@@ -72,11 +72,11 @@ impl PacketWriter {
 
         // write past commands
         let past_commands_number = command_receiver
-            .command_history_count(&pawn_key)
+            .command_history_count(&prediction_key)
             .min(MAX_PAST_COMMANDS);
         let mut past_command_index: u8 = 0;
 
-        if let Some(mut iter) = command_receiver.command_history_iter(&pawn_key, true) {
+        if let Some(mut iter) = command_receiver.command_history_iter(&prediction_key, true) {
             while past_command_index < past_commands_number {
                 if let Some((past_tick, past_command)) = iter.next() {
                     // get tick diff between commands
@@ -99,8 +99,8 @@ impl PacketWriter {
         let mut command_total_bytes = Vec::<u8>::new();
 
         command_total_bytes
-            .write_u16::<BigEndian>(pawn_key.to_u16())
-            .unwrap(); // write pawn key
+            .write_u16::<BigEndian>(prediction_key.to_u16())
+            .unwrap(); // write prediction key
 
         let type_id = command.borrow().get_type_id();
         let naia_id = manifest.get_naia_id(&type_id); // get naia id

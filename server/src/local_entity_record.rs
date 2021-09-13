@@ -6,7 +6,7 @@ use super::{keys::component_key::ComponentKey, locality_status::LocalityStatus};
 pub struct LocalEntityRecord {
     pub local_key: LocalEntityKey,
     pub status: LocalityStatus,
-    pub is_pawn: bool,
+    pub is_prediction: bool,
     component_record: Ref<ComponentRecord<ComponentKey>>,
 }
 
@@ -18,7 +18,7 @@ impl LocalEntityRecord {
         LocalEntityRecord {
             local_key,
             status: LocalityStatus::Creating,
-            is_pawn: false,
+            is_prediction: false,
             component_record: components_ref.clone(),
         }
     }

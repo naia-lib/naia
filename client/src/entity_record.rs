@@ -5,14 +5,14 @@ use naia_shared::{ComponentRecord, LocalComponentKey};
 #[derive(Debug)]
 pub struct EntityRecord {
     component_record: ComponentRecord<LocalComponentKey>,
-    pub is_pawn: bool,
+    pub is_prediction: bool,
 }
 
 impl EntityRecord {
     pub fn new() -> Self {
         EntityRecord {
             component_record: ComponentRecord::new(),
-            is_pawn: false,
+            is_prediction: false,
         }
     }
 

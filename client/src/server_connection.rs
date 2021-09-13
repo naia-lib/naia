@@ -47,18 +47,18 @@ impl<P: ProtocolType> ServerConnection<P> {
             let mut writer = PacketWriter::new();
 
             // Commands
-            while let Some((pawn_key, command)) = self.command_sender.pop_command() {
+            while let Some((prediction_key, command)) = self.command_sender.pop_command() {
                 if writer.write_command(
                     host_tick,
                     manifest,
                     &self.command_receiver,
-                    &pawn_key,
+                    &prediction_key,
                     &command,
                 ) {
                     self.command_receiver
-                        .queue_command(host_tick, &pawn_key, &command);
+                        .queue_command(host_tick, &prediction_key, &command);
                 } else {
-                    self.command_sender.unpop_command(&pawn_key, &command);
+                    self.command_sender.unpop_command(&prediction_key, &command);
                     break;
                 }
             }
@@ -142,16 +142,21 @@ impl<P: ProtocolType> ServerConnection<P> {
         return self.entity_manager.has_entity(key);
     }
 
-    pub fn entity_is_pawn(&self, key: &LocalEntityKey) -> bool {
-        return self.entity_manager.entity_is_pawn(key);
+    pub fn entity_is_prediction(&self, key: &LocalEntityKey) -> bool {
+        return self.entity_manager.entity_is_prediction(key);
     }
 
     pub fn get_component_by_type<R: Replicate<P>>(&self, key: &LocalEntityKey) -> Option<&P> {
         return self.entity_manager.get_component_by_type::<R>(key);
     }
 
-    pub fn get_pawn_component_by_type<R: Replicate<P>>(&self, key: &LocalEntityKey) -> Option<&P> {
-        return self.entity_manager.get_pawn_component_by_type::<R>(key);
+    pub fn get_prediction_component_by_type<R: Replicate<P>>(
+        &self,
+        key: &LocalEntityKey,
+    ) -> Option<&P> {
+        return self
+            .entity_manager
+            .get_prediction_component_by_type::<R>(key);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
@@ -242,16 +247,16 @@ impl<P: ProtocolType> ServerConnection<P> {
     }
 
     pub fn get_incoming_replay(&mut self) -> Option<(LocalEntityKey, Ref<dyn Replicate<P>>)> {
-        if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command_replay() {
-            return Some((pawn_key, command));
+        if let Some((_tick, prediction_key, command)) = self.command_receiver.pop_command_replay() {
+            return Some((prediction_key, command));
         }
 
         return None;
     }
 
     pub fn get_incoming_command(&mut self) -> Option<(LocalEntityKey, Ref<dyn Replicate<P>>)> {
-        if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command() {
-            return Some((pawn_key, command));
+        if let Some((_tick, prediction_key, command)) = self.command_receiver.pop_command() {
+            return Some((prediction_key, command));
         }
         return None;
     }

@@ -22,7 +22,7 @@ struct ServerResource {
     main_room_key: RoomKey,
     naia_to_bevy_key_map: HashMap<NaiaEntityKey, BevyEntityKey>,
     bevy_to_naia_key_map: HashMap<BevyEntityKey, NaiaEntityKey>,
-    user_to_pawn_map: HashMap<UserKey, NaiaEntityKey>,
+    user_to_prediction_map: HashMap<UserKey, NaiaEntityKey>,
     ticked: bool,
 }
 
@@ -50,7 +50,7 @@ fn main() {
         main_room_key,
         naia_to_bevy_key_map: HashMap::new(),
         bevy_to_naia_key_map: HashMap::new(),
-        user_to_pawn_map: HashMap::new(),
+        user_to_prediction_map: HashMap::new(),
         ticked: false,
     });
 
@@ -155,10 +155,10 @@ fn naia_server_update(
                     bevy_entity.insert(Ref::clone(&color_ref));
                 }
 
-                // Assign as Pawn to User
+                // Assign as Prediction to User
                 server.user_mut(&user_key).own_entity(&naia_entity_key);
                 server_resource
-                    .user_to_pawn_map
+                    .user_to_prediction_map
                     .insert(user_key, naia_entity_key);
             }
             Ok(Event::Disconnection(user_key, user)) => {
@@ -167,7 +167,9 @@ fn naia_server_update(
                 server
                     .room_mut(&server_resource.main_room_key)
                     .remove_user(&user_key);
-                if let Some(naia_entity_key) = server_resource.user_to_pawn_map.remove(&user_key) {
+                if let Some(naia_entity_key) =
+                    server_resource.user_to_prediction_map.remove(&user_key)
+                {
                     server
                         .room_mut(&server_resource.main_room_key)
                         .remove_entity(&naia_entity_key);

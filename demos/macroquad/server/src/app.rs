@@ -10,7 +10,7 @@ use naia_macroquad_demo_shared::{
 pub struct App {
     server: Server<Protocol>,
     main_room_key: RoomKey,
-    user_to_pawn_map: HashMap<UserKey, EntityKey>,
+    user_to_prediction_map: HashMap<UserKey, EntityKey>,
 }
 
 impl App {
@@ -30,7 +30,7 @@ impl App {
         App {
             server,
             main_room_key,
-            user_to_pawn_map: HashMap::<UserKey, EntityKey>::new(),
+            user_to_prediction_map: HashMap::<UserKey, EntityKey>::new(),
         }
     }
 
@@ -75,14 +75,14 @@ impl App {
                         .set_owner(&user_key)
                         .enter_room(&self.main_room_key)
                         .key();
-                    self.user_to_pawn_map.insert(user_key, entity_key);
+                    self.user_to_prediction_map.insert(user_key, entity_key);
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
                     info!("Naia Server disconnected from: {:?}", user.address);
                     self.server
                         .user_mut(&user_key)
                         .leave_room(&self.main_room_key);
-                    if let Some(entity_key) = self.user_to_pawn_map.remove(&user_key) {
+                    if let Some(entity_key) = self.user_to_prediction_map.remove(&user_key) {
                         self.server
                             .entity_mut(&entity_key)
                             .disown()
