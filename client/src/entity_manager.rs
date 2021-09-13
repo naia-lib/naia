@@ -147,7 +147,6 @@ impl<P: ProtocolType> EntityManager<P> {
                             entity_record.is_pawn = false;
 
                             // remove pawn components //
-                            let entity_record = self.entities.get(&entity_key).unwrap();
                             for component_key in entity_record.get_component_keys() {
                                 self.pawn_component_store.remove(&component_key);
                             }
