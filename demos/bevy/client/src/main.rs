@@ -185,7 +185,7 @@ fn naia_client_update(
                 }
             }
             Ok(Event::OwnEntity(naia_entity_key)) => {
-                info!("assign prediction");
+                info!("gave ownership of entity");
 
                 if let Some(position_ref) = client
                     .entity(&naia_entity_key)
@@ -195,7 +195,7 @@ fn naia_client_update(
                     let mut bevy_entity = commands.spawn();
                     bevy_entity.insert(Predicted).insert(Key(naia_entity_key));
 
-                    info!("add position to prediction entity");
+                    info!("add position component to owned entity");
                     bevy_entity.insert(position_ref.clone());
 
                     bevy_entity.insert_bundle(SpriteBundle {
@@ -212,7 +212,7 @@ fn naia_client_update(
                 }
             }
             Ok(Event::DisownEntity(naia_entity_key)) => {
-                info!("unassign prediction");
+                info!("removed ownership of entity");
 
                 if let Some(bevy_entity_key) =
                     client_resource.prediction_key_map.remove(&naia_entity_key)
