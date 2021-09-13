@@ -19,6 +19,7 @@ pub use naia_shared::{
 
 use super::{
     client_connection::ClientConnection,
+    entity_record::EntityRecord,
     entity_ref::{EntityMut, EntityRef},
     error::NaiaServerError,
     event::Event,
@@ -30,7 +31,6 @@ use super::{
     tick_manager::TickManager,
     user::{user_key::UserKey, User, UserMut, UserRef},
 };
-use crate::entity_record::EntityRecord;
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -69,11 +69,7 @@ pub struct Server<P: ProtocolType> {
 
 impl<P: ProtocolType> Server<P> {
     /// Create a new Server
-    pub fn new(
-        manifest: Manifest<P>,
-        server_config: Option<ServerConfig>,
-        shared_config: SharedConfig,
-    ) -> Self {
+    pub fn new(server_config: Option<ServerConfig>, shared_config: SharedConfig<P>) -> Self {
         let mut server_config = match server_config {
             Some(config) => config,
             None => ServerConfig::default(),
@@ -98,7 +94,7 @@ impl<P: ProtocolType> Server<P> {
 
         Server {
             // Manifest
-            manifest,
+            manifest: shared_config.manifest,
             // Connection
             connection_config,
             socket_sender,
@@ -166,13 +162,13 @@ impl<P: ProtocolType> Server<P> {
 
         // new disconnections
         while let Some(user_key) = self.outstanding_disconnects.pop_front() {
+            // Clean up all user data
             for (_, room) in self.rooms.iter_mut() {
                 room.unsubscribe_user(&user_key);
             }
 
-            let address = self.users.get(user_key).unwrap().address;
-            self.address_to_user_key_map.remove(&address);
             let user_clone = self.users.get(user_key).unwrap().clone();
+            self.address_to_user_key_map.remove(&user_clone.address);
             self.users.remove(user_key);
             self.client_connections.remove(&user_key);
 
@@ -315,26 +311,28 @@ impl<P: ProtocolType> Server<P> {
 
     // Entity Scopes
 
+    /// Accepts Scope as valid
+    pub fn accept_scope(&mut self, room_key: RoomKey, user_key: UserKey, entity_key: EntityKey) {
+        let key = (room_key, user_key, entity_key);
+        self.entity_scope_map.insert(key, true);
+    }
+
+    /// Rejects Scope as invalid
+    pub fn reject_scope(&mut self, room_key: RoomKey, user_key: UserKey, entity_key: EntityKey) {
+        let key = (room_key, user_key, entity_key);
+        self.entity_scope_map.insert(key, false);
+    }
+
     /// Used to evaluate whether, given a User & Entity that are in the
     /// same Room, said Entity should be in scope for the given User.
     ///
     /// While Rooms allow for a very simple scope to which an Entity can belong,
     /// this provides complete customization for advanced scopes.
-    pub fn entity_set_scope(
-        &mut self,
-        room_key: &RoomKey,
-        user_key: &UserKey,
-        entity_key: &EntityKey,
-        in_scope: bool,
-    ) {
-        let key = (*room_key, *user_key, *entity_key);
-        self.entity_scope_map.insert(key, in_scope);
-    }
 
     /// Return a collection of Entity Scope Sets, being a unique combination of
     /// a related Room, User, and Entity, used to determine which entities to
     /// replicate to which users
-    pub fn entity_scope_sets(&self) -> Vec<(RoomKey, UserKey, EntityKey)> {
+    pub fn scopes(&self) -> Vec<(RoomKey, UserKey, EntityKey)> {
         let mut list: Vec<(RoomKey, UserKey, EntityKey)> = Vec::new();
 
         // TODO: precache this, instead of generating a new list every call

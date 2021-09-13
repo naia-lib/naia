@@ -119,7 +119,7 @@ impl App {
                     }
 
                     // Update scopes of entities
-                    for (room_key, user_key, entity_key) in self.server.entity_scope_sets() {
+                    for (room_key, user_key, entity_key) in self.server.scopes() {
                         if let Some(character_ref) =
                             self.server.get_component_by_type::<Character>(&entity_key)
                         {

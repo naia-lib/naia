@@ -205,7 +205,7 @@ fn on_tick(mut server: NonSendMut<Server<Protocol>>) {
     //info!("tick");
 
     // Update scopes of entities
-    for (room_key, user_key, entity_key) in server.entity_scope_sets() {
+    for (room_key, user_key, entity_key) in server.scope_checks() {
         server.entity_set_scope(&room_key, &user_key, &entity_key, true);
     }
 

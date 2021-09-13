@@ -195,7 +195,7 @@ impl App {
                     }
 
                     // Update scopes of entities
-                    for (room_key, user_key, entity_key) in self.server.entity_scope_sets() {
+                    for (room_key, user_key, entity_key) in self.server.scopes() {
                         if let Some(entity) = self.naia_to_hecs_key_map.get(&entity_key) {
                             if let Ok(pos_ref) = self.world.get::<Ref<Position>>(*entity) {
                                 let x = *pos_ref.borrow().x.get();
