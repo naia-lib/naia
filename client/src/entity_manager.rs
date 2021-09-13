@@ -18,7 +18,7 @@ use super::{
 pub struct EntityManager<P: ProtocolType> {
     entities: HashMap<LocalEntityKey, EntityRecord>,
     component_store: HashMap<LocalComponentKey, P>,
-    pawn_component_store: HashMap<LocalComponentKey, P>,
+    prediction_component_store: HashMap<LocalComponentKey, P>,
     component_entity_map: HashMap<LocalComponentKey, LocalEntityKey>,
     queued_incoming_messages: VecDeque<EntityAction<P>>,
 }
@@ -28,7 +28,7 @@ impl<P: ProtocolType> EntityManager<P> {
         EntityManager {
             entities: HashMap::new(),
             component_store: HashMap::new(),
-            pawn_component_store: HashMap::new(),
+            prediction_component_store: HashMap::new(),
             component_entity_map: HashMap::new(),
             queued_incoming_messages: VecDeque::new(),
         }
@@ -96,8 +96,8 @@ impl<P: ProtocolType> EntityManager<P> {
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
 
                     if let Some(entity_record) = self.entities.remove(&entity_key) {
-                        if entity_record.is_pawn {
-                            command_receiver.pawn_cleanup(&entity_key);
+                        if entity_record.is_prediction {
+                            command_receiver.prediction_cleanup(&entity_key);
                         }
 
                         for component_key in entity_record.get_component_keys() {
@@ -119,40 +119,40 @@ impl<P: ProtocolType> EntityManager<P> {
                     }
                 }
                 EntityActionType::OwnEntity => {
-                    // Assign Pawn Entity
+                    // Assign Prediction Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if let Some(entity_record) = self.entities.get_mut(&entity_key) {
-                        entity_record.is_pawn = true;
+                        entity_record.is_prediction = true;
 
                         // create copies of components //
                         for component_key in entity_record.get_component_keys() {
                             if let Some(protocol) = self.component_store.get(&component_key) {
-                                self.pawn_component_store
+                                self.prediction_component_store
                                     .insert(component_key, protocol.copy());
                             }
                         }
                         /////////////////////////////////
 
-                        command_receiver.pawn_init(&entity_key);
+                        command_receiver.prediction_init(&entity_key);
 
                         self.queued_incoming_messages
                             .push_back(EntityAction::OwnEntity(entity_key));
                     }
                 }
                 EntityActionType::DisownEntity => {
-                    // Unassign Pawn Entity
+                    // Unassign Prediction Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
                     if let Some(entity_record) = self.entities.get_mut(&entity_key) {
-                        if entity_record.is_pawn {
-                            entity_record.is_pawn = false;
+                        if entity_record.is_prediction {
+                            entity_record.is_prediction = false;
 
-                            // remove pawn components //
+                            // remove prediction components //
                             for component_key in entity_record.get_component_keys() {
-                                self.pawn_component_store.remove(&component_key);
+                                self.prediction_component_store.remove(&component_key);
                             }
                             ////////////////////////////
 
-                            command_receiver.pawn_cleanup(&entity_key);
+                            command_receiver.prediction_cleanup(&entity_key);
 
                             self.queued_incoming_messages
                                 .push_back(EntityAction::DisownEntity(entity_key));
@@ -160,7 +160,7 @@ impl<P: ProtocolType> EntityManager<P> {
                     }
                 }
                 EntityActionType::InsertComponent => {
-                    //TODO: handle adding Component to a Pawn...
+                    //TODO: handle adding Component to a Prediction...
 
                     // Add Component to Entity
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
@@ -215,12 +215,12 @@ impl<P: ProtocolType> EntityManager<P> {
                             .get(&component_key)
                             .expect("component not initialized correctly");
 
-                        // if Entity is a Pawn, replay commands
+                        // if Entity is a Prediction, replay commands
                         let entity_record = self
                             .entities
                             .get(entity_key)
                             .expect("component has no associated entity?");
-                        if entity_record.is_pawn {
+                        if entity_record.is_prediction {
                             command_receiver.replay_commands(packet_tick, &entity_key);
 
                             // remove command history until the tick that has already been
@@ -272,12 +272,15 @@ impl<P: ProtocolType> EntityManager<P> {
         return None;
     }
 
-    pub fn get_pawn_component_by_type<R: Replicate<P>>(&self, key: &LocalEntityKey) -> Option<&P> {
+    pub fn get_prediction_component_by_type<R: Replicate<P>>(
+        &self,
+        key: &LocalEntityKey,
+    ) -> Option<&P> {
         if let Some(entity_component_record) = self.entities.get(key) {
             if let Some(component_key) =
                 entity_component_record.get_key_from_type(&TypeId::of::<R>())
             {
-                return self.pawn_component_store.get(component_key);
+                return self.prediction_component_store.get(component_key);
             }
         }
         return None;
@@ -287,21 +290,21 @@ impl<P: ProtocolType> EntityManager<P> {
         return self.entities.contains_key(key);
     }
 
-    pub fn entity_is_pawn(&self, key: &LocalEntityKey) -> bool {
+    pub fn entity_is_prediction(&self, key: &LocalEntityKey) -> bool {
         if let Some(entity_record) = self.entities.get(key) {
-            return entity_record.is_pawn;
+            return entity_record.is_prediction;
         }
         return false;
     }
 
-    pub fn pawn_reset_entity(&mut self, key: &LocalEntityKey) {
+    pub fn prediction_reset_entity(&mut self, key: &LocalEntityKey) {
         if let Some(entity_record) = self.entities.get(key) {
             for component_key in entity_record.get_component_keys() {
                 if let Some(component_ref) = self.component_store.get(&component_key) {
-                    if let Some(pawn_component_ref) =
-                        self.pawn_component_store.get_mut(&component_key)
+                    if let Some(prediction_component_ref) =
+                        self.prediction_component_store.get_mut(&component_key)
                     {
-                        pawn_component_ref.mirror(component_ref);
+                        prediction_component_ref.mirror(component_ref);
                     }
                 }
             }
@@ -318,7 +321,7 @@ impl<P: ProtocolType> EntityManager<P> {
         entity_key: &LocalEntityKey,
         component_key: &LocalComponentKey,
     ) {
-        self.pawn_component_store.remove(&component_key);
+        self.prediction_component_store.remove(&component_key);
 
         if let Some(component) = self.component_store.remove(&component_key) {
             self.queued_incoming_messages

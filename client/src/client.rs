@@ -254,16 +254,16 @@ impl<P: ProtocolType> Client<P> {
                     events.push_back(Ok(event));
                 }
                 // receive replay command
-                while let Some((pawn_key, command)) = connection.get_incoming_replay() {
+                while let Some((prediction_key, command)) = connection.get_incoming_replay() {
                     events.push_back(Ok(Event::ReplayCommand(
-                        pawn_key,
+                        prediction_key,
                         command.borrow().copy_to_protocol(),
                     )));
                 }
                 // receive command
-                while let Some((pawn_key, command)) = connection.get_incoming_command() {
+                while let Some((prediction_key, command)) = connection.get_incoming_command() {
                     events.push_back(Ok(Event::NewCommand(
-                        pawn_key,
+                        prediction_key,
                         command.borrow().copy_to_protocol(),
                     )));
                 }
@@ -320,7 +320,7 @@ impl<P: ProtocolType> Client<P> {
     /// been assigned to the current User
     pub(crate) fn entity_is_owned(&self, entity_key: &LocalEntityKey) -> bool {
         if let Some(connection) = &self.server_connection {
-            return connection.entity_is_pawn(entity_key);
+            return connection.entity_is_prediction(entity_key);
         }
         return false;
     }
@@ -353,7 +353,7 @@ impl<P: ProtocolType> Client<P> {
         &self,
         entity_key: &LocalEntityKey,
     ) -> Option<&Ref<R>> {
-        if let Some(protocol) = self.get_pawn_component_by_type::<R>(entity_key) {
+        if let Some(protocol) = self.get_prediction_component_by_type::<R>(entity_key) {
             return protocol.as_typed_ref::<R>();
         }
         return None;
@@ -372,13 +372,13 @@ impl<P: ProtocolType> Client<P> {
     }
 
     /// Given an EntityKey & a Component type, get a reference to a registered
-    /// Pawn Component being tracked by the Server
-    pub(crate) fn get_pawn_component_by_type<R: Replicate<P>>(
+    /// Prediction Component being tracked by the Server
+    pub(crate) fn get_prediction_component_by_type<R: Replicate<P>>(
         &self,
         entity_key: &LocalEntityKey,
     ) -> Option<&P> {
         if let Some(connection) = &self.server_connection {
-            return connection.get_pawn_component_by_type::<R>(entity_key);
+            return connection.get_prediction_component_by_type::<R>(entity_key);
         }
         return None;
     }
