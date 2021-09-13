@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    sequence_greater_than, LocalEntityKey, LocalObjectKey, Manifest, NaiaKey, PacketReader,
-    PawnKey, ProtocolType, SequenceBuffer,
+    sequence_greater_than, LocalEntityKey, Manifest, NaiaKey, PacketReader, ProtocolType,
+    SequenceBuffer,
 };
 
 const COMMAND_BUFFER_MAX_SIZE: u16 = 64;
 
 /// Handles incoming commands, buffering them to be received on the correct tick
 #[derive(Debug)]
-pub struct CommandReceiver<T: ProtocolType> {
-    queued_incoming_commands: SequenceBuffer<HashMap<PawnKey, T>>,
+pub struct CommandReceiver<P: ProtocolType> {
+    queued_incoming_commands: SequenceBuffer<HashMap<LocalEntityKey, P>>,
 }
 
-impl<T: ProtocolType> CommandReceiver<T> {
+impl<P: ProtocolType> CommandReceiver<P> {
     /// Creates a new CommandReceiver
     pub fn new() -> Self {
         CommandReceiver {
@@ -22,9 +22,9 @@ impl<T: ProtocolType> CommandReceiver<T> {
     }
 
     /// Get the most recently received Command
-    pub fn pop_incoming_command(&mut self, server_tick: u16) -> Option<(PawnKey, T)> {
+    pub fn pop_incoming_command(&mut self, server_tick: u16) -> Option<(LocalEntityKey, P)> {
         if let Some(map) = self.queued_incoming_commands.get_mut(server_tick) {
-            let mut any_key: Option<PawnKey> = None;
+            let mut any_key: Option<LocalEntityKey> = None;
             if let Some(any_key_ref) = map.keys().next() {
                 any_key = Some(*any_key_ref);
             }
@@ -44,19 +44,12 @@ impl<T: ProtocolType> CommandReceiver<T> {
         server_tick: u16,
         client_tick: u16,
         reader: &mut PacketReader,
-        manifest: &Manifest<T>,
+        manifest: &Manifest<P>,
     ) {
         let command_count = reader.read_u8();
         for _x in 0..command_count {
-            let is_object = reader.read_u8() == 0;
             let local_key = reader.read_u16();
-            let pawn_key = {
-                if is_object {
-                    PawnKey::Object(LocalObjectKey::from_u16(local_key))
-                } else {
-                    PawnKey::Entity(LocalEntityKey::from_u16(local_key))
-                }
-            };
+            let pawn_key = LocalEntityKey::from_u16(local_key);
             let naia_id: u16 = reader.read_u16();
             let past_commands_number: u8 = reader.read_u8();
 

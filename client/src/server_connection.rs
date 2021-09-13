@@ -1,40 +1,39 @@
-use std::{collections::hash_map::Keys, net::SocketAddr};
+use std::net::SocketAddr;
 
 use naia_shared::{
-    Connection, ConnectionConfig, LocalComponentKey, LocalEntityKey, LocalObjectKey, ManagerType,
-    Manifest, PacketReader, PacketType, PawnKey, ProtocolType, Ref, Replicate, SequenceNumber,
-    StandardHeader,
+    Connection, ConnectionConfig, LocalEntityKey, ManagerType, Manifest, PacketReader, PacketType,
+    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
 };
 
 use crate::Packet;
 
 use super::{
-    dual_command_receiver::DualCommandReceiver, dual_command_sender::DualCommandSender,
-    packet_writer::PacketWriter, ping_manager::PingManager, replica_action::ReplicaAction,
-    replica_manager::ReplicaManager, tick_manager::TickManager, tick_queue::TickQueue,
+    command_receiver::CommandReceiver, command_sender::CommandSender, entity_action::EntityAction,
+    entity_manager::EntityManager, packet_writer::PacketWriter, ping_manager::PingManager,
+    tick_manager::TickManager, tick_queue::TickQueue,
 };
 
 #[derive(Debug)]
-pub struct ServerConnection<T: ProtocolType> {
-    connection: Connection<T>,
-    replica_manager: ReplicaManager<T>,
+pub struct ServerConnection<P: ProtocolType> {
+    connection: Connection<P>,
+    entity_manager: EntityManager<P>,
     ping_manager: PingManager,
-    command_sender: DualCommandSender<T>,
-    command_receiver: DualCommandReceiver<T>,
+    command_sender: CommandSender<P>,
+    command_receiver: CommandReceiver<P>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
-impl<T: ProtocolType> ServerConnection<T> {
+impl<P: ProtocolType> ServerConnection<P> {
     pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
-            replica_manager: ReplicaManager::new(),
+            entity_manager: EntityManager::new(),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
             ),
-            command_sender: DualCommandSender::new(),
-            command_receiver: DualCommandReceiver::new(),
+            command_sender: CommandSender::new(),
+            command_receiver: CommandReceiver::new(),
             jitter_buffer: TickQueue::new(),
         };
     }
@@ -42,7 +41,7 @@ impl<T: ProtocolType> ServerConnection<T> {
     pub fn get_outgoing_packet(
         &mut self,
         host_tick: u16,
-        manifest: &Manifest<T>,
+        manifest: &Manifest<P>,
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_messages() || self.command_sender.has_command() {
             let mut writer = PacketWriter::new();
@@ -98,7 +97,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         &mut self,
         packet_tick: u16,
         packet_index: u16,
-        manifest: &Manifest<T>,
+        manifest: &Manifest<P>,
         data: &[u8],
     ) {
         let mut reader = PacketReader::new(data);
@@ -108,8 +107,8 @@ impl<T: ProtocolType> ServerConnection<T> {
                 ManagerType::Message => {
                     self.connection.process_message_data(&mut reader, manifest);
                 }
-                ManagerType::Replica => {
-                    self.replica_manager.process_data(
+                ManagerType::Entity => {
+                    self.entity_manager.process_data(
                         manifest,
                         &mut self.command_receiver,
                         packet_tick,
@@ -134,61 +133,31 @@ impl<T: ProtocolType> ServerConnection<T> {
         );
     }
 
-
-
-    // Pass-through methods to underlying replica manager
-    pub fn get_incoming_replica_action(&mut self) -> Option<ReplicaAction<T>> {
-        return self.replica_manager.pop_incoming_message();
-    }
-
-    pub fn object_keys(&self) -> Vec<LocalObjectKey> {
-        return self.replica_manager.object_keys();
-    }
-
-    pub fn component_keys(&self) -> Vec<LocalComponentKey> {
-        return self.replica_manager.component_keys();
-    }
-
-    pub fn get_object(&self, key: &LocalObjectKey) -> Option<&T> {
-        return self.replica_manager.get_object(key);
-    }
-
-    pub fn has_object(&self, key: &LocalObjectKey) -> bool {
-        return self.replica_manager.has_object(key);
-    }
-
-    pub fn has_component(&self, key: &LocalComponentKey) -> bool {
-        return self.has_object(key);
-    }
-
-    pub fn pawn_keys(&self) -> Keys<LocalObjectKey, T> {
-        return self.replica_manager.pawn_keys();
-    }
-
-    pub fn get_pawn(&self, key: &LocalObjectKey) -> Option<&T> {
-        return self.replica_manager.get_pawn(key);
-    }
-
-    pub fn get_pawn_mut(&mut self, key: &LocalObjectKey) -> Option<&T> {
-        return self.replica_manager.get_pawn(key);
+    // Pass-through methods to underlying Entity Manager
+    pub fn get_incoming_entity_action(&mut self) -> Option<EntityAction<P>> {
+        return self.entity_manager.pop_incoming_message();
     }
 
     pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
-        return self.replica_manager.has_entity(key);
+        return self.entity_manager.has_entity(key);
     }
 
-    pub fn get_components(&self, key: &LocalEntityKey) -> Vec<T> {
-        return self.replica_manager.get_components(key);
+    pub fn entity_is_pawn(&self, key: &LocalEntityKey) -> bool {
+        return self.entity_manager.entity_is_pawn(key);
     }
 
-    pub fn get_pawn_components(&self, key: &LocalEntityKey) -> Vec<T> {
-        return self.replica_manager.get_pawn_components(key);
+    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &LocalEntityKey) -> Option<&P> {
+        return self.entity_manager.get_component_by_type::<R>(key);
+    }
+
+    pub fn get_pawn_component_by_type<R: Replicate<P>>(&self, key: &LocalEntityKey) -> Option<&P> {
+        return self.entity_manager.get_pawn_component_by_type::<R>(key);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
-    pub fn frame_begin(&mut self, manifest: &Manifest<T>, tick_manager: &mut TickManager) -> bool {
+    pub fn frame_begin(&mut self, manifest: &Manifest<P>, tick_manager: &mut TickManager) -> bool {
         if tick_manager.mark_frame() {
-            // then we apply all received updates to replicas at once
+            // then we apply all received updates to components at once
             let target_tick = tick_manager.get_server_tick();
             while let Some((tick, packet_index, data_packet)) =
                 self.get_buffered_data_packet(target_tick)
@@ -200,7 +169,7 @@ impl<T: ProtocolType> ServerConnection<T> {
         return false;
     }
 
-    // Pass-through methods to underlying common connection
+    // Pass-through methods to underlying Connection
 
     pub fn mark_sent(&mut self) {
         return self.connection.mark_sent();
@@ -250,11 +219,11 @@ impl<T: ProtocolType> ServerConnection<T> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<T>>, guaranteed_delivery: bool) {
+    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<P>>, guaranteed_delivery: bool) {
         return self.connection.queue_message(message, guaranteed_delivery);
     }
 
-    pub fn get_incoming_message(&mut self) -> Option<T> {
+    pub fn get_incoming_message(&mut self) -> Option<P> {
         return self.connection.get_incoming_message();
     }
 
@@ -262,46 +231,32 @@ impl<T: ProtocolType> ServerConnection<T> {
         self.connection.get_last_received_tick()
     }
 
-    // command related
-    pub fn object_queue_command(
-        &mut self,
-        object_key: &LocalObjectKey,
-        command: &Ref<dyn Replicate<T>>,
-    ) {
-        let pawn_key = PawnKey::Object(*object_key);
-        return self.command_sender.queue_command(&pawn_key, command);
-    }
-
-    pub fn entity_queue_command(
-        &mut self,
-        entity_key: &LocalEntityKey,
-        command: &Ref<dyn Replicate<T>>,
-    ) {
-        let pawn_key = PawnKey::Entity(*entity_key);
-        return self.command_sender.queue_command(&pawn_key, command);
+    // Commands
+    pub fn queue_command(&mut self, entity_key: &LocalEntityKey, command: &Ref<dyn Replicate<P>>) {
+        return self.command_sender.queue_command(entity_key, command);
     }
 
     pub fn process_replays(&mut self) {
         self.command_receiver
-            .process_command_replay::<T>(&mut self.replica_manager);
+            .process_command_replay(&mut self.entity_manager);
     }
 
-    pub fn get_incoming_replay(&mut self) -> Option<(PawnKey, Ref<dyn Replicate<T>>)> {
-        if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command_replay::<T>() {
+    pub fn get_incoming_replay(&mut self) -> Option<(LocalEntityKey, Ref<dyn Replicate<P>>)> {
+        if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command_replay() {
             return Some((pawn_key, command));
         }
 
         return None;
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<(PawnKey, Ref<dyn Replicate<T>>)> {
+    pub fn get_incoming_command(&mut self) -> Option<(LocalEntityKey, Ref<dyn Replicate<P>>)> {
         if let Some((_tick, pawn_key, command)) = self.command_receiver.pop_command() {
             return Some((pawn_key, command));
         }
         return None;
     }
 
-    // ping related
+    // Ping related
     pub fn should_send_ping(&self) -> bool {
         return self.ping_manager.should_send_ping();
     }

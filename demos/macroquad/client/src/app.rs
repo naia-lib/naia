@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use macroquad::prelude::*;
 
-use naia_client::{Client, ClientConfig, Event, LocalReplicaKey, Ref};
+use naia_client::{Client, ClientConfig, Event, LocalEntityKey, Ref};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
@@ -13,9 +13,9 @@ const SQUARE_SIZE: f32 = 32.0;
 
 pub struct App {
     client: Client<Protocol>,
-    pawn: Option<(LocalReplicaKey, Ref<Square>)>,
+    owned_square: Option<(LocalEntityKey, Ref<Square>)>,
     queued_command: Option<Ref<KeyCommand>>,
-    square_map: HashMap<LocalReplicaKey, Ref<Square>>,
+    square_map: HashMap<LocalEntityKey, Ref<Square>>,
 }
 
 impl App {
@@ -28,16 +28,11 @@ impl App {
         // This will be evaluated in the Server's 'on_auth()' method
         let auth = Auth::new("charlie", "12345");
 
-        let client = Client::new(
-            Protocol::load(),
-            Some(client_config),
-            get_shared_config(),
-            Some(auth),
-        );
+        let client = Client::new(Some(client_config), get_shared_config(), Some(auth));
 
         App {
             client,
-            pawn: None,
+            owned_square: None,
             queued_command: None,
             square_map: HashMap::new(),
         }
@@ -84,36 +79,41 @@ impl App {
                     info!("Client disconnected from: {}", self.client.server_address());
                 }
                 Ok(Event::Tick) => {
-                    if let Some((pawn_key, _)) = self.pawn {
+                    if let Some((square_key, _)) = self.owned_square {
                         if let Some(command) = self.queued_command.take() {
-                            self.client.send_object_command(&pawn_key, &command);
+                            self.client.queue_command(&square_key, &command);
                         }
                     }
                 }
-                Ok(Event::AssignPawn(object_key)) => {
-                    info!("assign pawn");
-                    if let Some(Protocol::Square(square_ref)) = self.client.get_pawn(&object_key) {
-                        self.pawn = Some((object_key, square_ref.clone()));
+                Ok(Event::SpawnEntity(entity_key, _)) => {
+                    if let Some(square_ref) = self.client.entity(&entity_key).component::<Square>()
+                    {
+                        self.square_map.insert(entity_key, square_ref.clone());
                     }
                 }
-                Ok(Event::UnassignPawn(_)) => {
-                    self.pawn = None;
-                    info!("unassign pawn");
+                Ok(Event::DespawnEntity(entity_key)) => {
+                    self.square_map.remove(&entity_key);
+                }
+                Ok(Event::OwnEntity(entity_key)) => {
+                    info!("entity assigned");
+                    if let Some(square_ref) = self
+                        .client
+                        .entity(&entity_key)
+                        .prediction()
+                        .component::<Square>()
+                    {
+                        self.owned_square = Some((entity_key, square_ref.clone()));
+                    }
+                }
+                Ok(Event::DisownEntity(_)) => {
+                    self.owned_square = None;
+                    info!("entity unassigned");
                 }
                 Ok(Event::NewCommand(_, Protocol::KeyCommand(key_command_ref)))
                 | Ok(Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref))) => {
-                    if let Some((_, pawn_ref)) = &self.pawn {
-                        shared_behavior::process_command(&key_command_ref, &pawn_ref);
+                    if let Some((_, square_ref)) = &self.owned_square {
+                        shared_behavior::process_command(&key_command_ref, &square_ref);
                     }
-                }
-                Ok(Event::CreateObject(object_key)) => {
-                    if let Some(Protocol::Square(square_ref)) = self.client.get_object(&object_key)
-                    {
-                        self.square_map.insert(object_key, square_ref.clone());
-                    }
-                }
-                Ok(Event::DeleteObject(object_key, _)) => {
-                    self.square_map.remove(&object_key);
                 }
                 Err(err) => {
                     info!("Client Error: {}", err);
@@ -126,8 +126,8 @@ impl App {
     fn draw(&mut self) {
         clear_background(BLACK);
 
-        if self.client.has_connection() {
-            // draw squares
+        if self.client.connected() {
+            // draw unowned squares
             for (_, square_ref) in &self.square_map {
                 let square = square_ref.borrow();
                 let color = match square.color.get() {
@@ -144,9 +144,9 @@ impl App {
                 );
             }
 
-            // draw pawn
-            if let Some((_, pawn_ref)) = &self.pawn {
-                let square = pawn_ref.borrow();
+            // draw own square
+            if let Some((_, square_ref)) = &self.owned_square {
+                let square = square_ref.borrow();
                 draw_rectangle(
                     f32::from(*(square.x.get())),
                     f32::from(*(square.y.get())),

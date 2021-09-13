@@ -1,10 +1,10 @@
 use log::info;
 
-use naia_client::{Client, ClientConfig, Event};
+use naia_client::{Client, ClientConfig, Event, ProtocolType};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
-    protocol::{Auth, Protocol, StringMessage},
+    protocol::{Auth, Character, Protocol, StringMessage},
 };
 
 pub struct App {
@@ -22,12 +22,7 @@ impl App {
         // This will be evaluated in the Server's 'on_auth()' method
         let auth = Auth::new("charlie", "12345");
 
-        let client = Client::new(
-            Protocol::load(),
-            Some(client_config),
-            get_shared_config(),
-            Some(auth),
-        );
+        let client = Client::new(Some(client_config), get_shared_config(), Some(auth));
 
         App {
             client,
@@ -56,17 +51,17 @@ impl App {
                     info!("Client send -> {}", new_message_contents);
 
                     let string_message = StringMessage::new(new_message_contents);
-                    self.client.send_message(&string_message, true);
+                    self.client.queue_message(&string_message, true);
                     self.message_count += 1;
                 }
-                Ok(Event::CreateObject(object_key)) => {
-                    if let Some(Protocol::Character(character_ref)) =
-                        self.client.get_object(&object_key)
+                Ok(Event::SpawnEntity(entity_key, _)) => {
+                    if let Some(character_ref) =
+                        self.client.entity(&entity_key).component::<Character>()
                     {
                         let character = character_ref.borrow();
                         info!(
                             "creation of Character with key: {}, x: {}, y: {}, name: {} {}",
-                            object_key,
+                            entity_key,
                             character.x.get(),
                             character.y.get(),
                             character.fullname.get().first,
@@ -74,14 +69,14 @@ impl App {
                         );
                     }
                 }
-                Ok(Event::UpdateObject(object_key)) => {
-                    if let Some(Protocol::Character(character_ref)) =
-                        self.client.get_object(&object_key)
+                Ok(Event::UpdateComponent(entity_key, _)) => {
+                    if let Some(character_ref) =
+                        self.client.entity(&entity_key).component::<Character>()
                     {
                         let character = character_ref.borrow();
                         info!(
                             "update of Character with key: {}, x: {}, y: {}, name: {} {}",
-                            object_key,
+                            entity_key,
                             character.x.get(),
                             character.y.get(),
                             character.fullname.get().first,
@@ -89,16 +84,21 @@ impl App {
                         );
                     }
                 }
-                Ok(Event::DeleteObject(object_key, Protocol::Character(character_ref))) => {
-                    let character = character_ref.borrow();
-                    info!(
-                        "deletion of Character with key: {}, x: {}, y: {}, name: {} {}",
-                        object_key,
-                        character.x.get(),
-                        character.y.get(),
-                        character.fullname.get().first,
-                        character.fullname.get().last,
-                    );
+                Ok(Event::RemoveComponent(entity_key, component_protocol)) => {
+                    if let Some(character_ref) = component_protocol.to_typed_ref::<Character>() {
+                        let character = character_ref.borrow();
+                        info!(
+                            "data delete of Character with key: {}, x: {}, y: {}, name: {} {}",
+                            entity_key,
+                            character.x.get(),
+                            character.y.get(),
+                            character.fullname.get().first,
+                            character.fullname.get().last,
+                        );
+                    }
+                }
+                Ok(Event::DespawnEntity(entity_key)) => {
+                    info!("deletion of Character Entity: {}", entity_key);
                 }
                 Ok(Event::Tick) => {
                     //info!("tick event");

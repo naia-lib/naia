@@ -1,23 +1,23 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    wrapping_diff, PawnKey, ProtocolType, Ref, Replicate, SequenceBuffer, SequenceIterator,
+    wrapping_diff, LocalEntityKey, ProtocolType, Ref, Replicate, SequenceBuffer, SequenceIterator,
 };
 
-use super::replica_manager::ReplicaManager;
+use super::entity_manager::EntityManager;
 
 const COMMAND_HISTORY_SIZE: u16 = 64;
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
-pub struct CommandReceiver<T: ProtocolType> {
-    queued_incoming_commands: VecDeque<(u16, PawnKey, Ref<dyn Replicate<T>>)>,
-    command_history: HashMap<PawnKey, SequenceBuffer<Ref<dyn Replicate<T>>>>,
-    queued_command_replays: VecDeque<(u16, PawnKey, Ref<dyn Replicate<T>>)>,
-    replay_trigger: HashMap<PawnKey, u16>,
+pub struct CommandReceiver<P: ProtocolType> {
+    queued_incoming_commands: VecDeque<(u16, LocalEntityKey, Ref<dyn Replicate<P>>)>,
+    command_history: HashMap<LocalEntityKey, SequenceBuffer<Ref<dyn Replicate<P>>>>,
+    queued_command_replays: VecDeque<(u16, LocalEntityKey, Ref<dyn Replicate<P>>)>,
+    replay_trigger: HashMap<LocalEntityKey, u16>,
 }
 
-impl<T: ProtocolType> CommandReceiver<T> {
+impl<P: ProtocolType> CommandReceiver<P> {
     /// Creates a new CommandSender
     pub fn new() -> Self {
         CommandReceiver {
@@ -29,28 +29,20 @@ impl<T: ProtocolType> CommandReceiver<T> {
     }
 
     /// Gets the next queued Command
-    pub fn pop_command(&mut self) -> Option<(u16, PawnKey, Ref<dyn Replicate<T>>)> {
+    pub fn pop_command(&mut self) -> Option<(u16, LocalEntityKey, Ref<dyn Replicate<P>>)> {
         self.queued_incoming_commands.pop_front()
     }
 
     /// Gets the next queued Replayed Command
-    pub fn pop_command_replay<U: ProtocolType>(
-        &mut self,
-    ) -> Option<(u16, PawnKey, Ref<dyn Replicate<T>>)> {
+    pub fn pop_command_replay(&mut self) -> Option<(u16, LocalEntityKey, Ref<dyn Replicate<P>>)> {
         self.queued_command_replays.pop_front()
     }
 
     /// Process any necessary replayed Command
-    pub fn process_command_replay<U: ProtocolType>(
-        &mut self,
-        replica_manager: &mut ReplicaManager<U>,
-    ) {
+    pub fn process_command_replay(&mut self, entity_manager: &mut EntityManager<P>) {
         for (pawn_key, history_tick) in self.replay_trigger.iter() {
-            // set pawn to server authoritative object/entity
-            match pawn_key {
-                PawnKey::Object(object_key) => replica_manager.pawn_reset(object_key),
-                PawnKey::Entity(entity_key) => replica_manager.pawn_reset_entity(entity_key),
-            }
+            // set pawn to server authoritative entity
+            entity_manager.pawn_reset_entity(pawn_key);
 
             // trigger replay of historical commands
             if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
@@ -74,8 +66,8 @@ impl<T: ProtocolType> CommandReceiver<T> {
     pub fn queue_command(
         &mut self,
         host_tick: u16,
-        pawn_key: &PawnKey,
-        command: &Ref<dyn Replicate<T>>,
+        pawn_key: &LocalEntityKey,
+        command: &Ref<dyn Replicate<P>>,
     ) {
         self.queued_incoming_commands
             .push_back((host_tick, *pawn_key, command.clone()));
@@ -86,7 +78,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
     }
 
     /// Get number of Commands in the command history for a given Pawn
-    pub fn command_history_count(&self, pawn_key: &PawnKey) -> u8 {
+    pub fn command_history_count(&self, pawn_key: &LocalEntityKey) -> u8 {
         if let Some(command_buffer) = self.command_history.get(&pawn_key) {
             return command_buffer.get_entries_count();
         }
@@ -96,9 +88,9 @@ impl<T: ProtocolType> CommandReceiver<T> {
     /// Get an iterator of Commands in the command history for a given Pawn
     pub fn command_history_iter(
         &self,
-        pawn_key: &PawnKey,
+        pawn_key: &LocalEntityKey,
         reverse: bool,
-    ) -> Option<SequenceIterator<Ref<dyn Replicate<T>>>> {
+    ) -> Option<SequenceIterator<Ref<dyn Replicate<P>>>> {
         if let Some(command_buffer) = self.command_history.get(&pawn_key) {
             return Some(command_buffer.iter(reverse));
         }
@@ -106,7 +98,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
     }
 
     /// Queues Commands to be replayed from a given tick
-    pub fn replay_commands(&mut self, history_tick: u16, pawn_key: &PawnKey) {
+    pub fn replay_commands(&mut self, history_tick: u16, pawn_key: &LocalEntityKey) {
         if let Some(tick) = self.replay_trigger.get_mut(&pawn_key) {
             if wrapping_diff(*tick, history_tick) > 0 {
                 *tick = history_tick;
@@ -117,14 +109,14 @@ impl<T: ProtocolType> CommandReceiver<T> {
     }
 
     /// Removes command history for a given Pawn until a specific tick
-    pub fn remove_history_until(&mut self, history_tick: u16, pawn_key: &PawnKey) {
+    pub fn remove_history_until(&mut self, history_tick: u16, pawn_key: &LocalEntityKey) {
         if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
             command_buffer.remove_until(history_tick);
         }
     }
 
     /// Perform initialization on Pawn creation
-    pub fn pawn_init(&mut self, pawn_key: &PawnKey) {
+    pub fn pawn_init(&mut self, pawn_key: &LocalEntityKey) {
         self.command_history.insert(
             *pawn_key,
             SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE),
@@ -132,7 +124,7 @@ impl<T: ProtocolType> CommandReceiver<T> {
     }
 
     /// Perform cleanup on Pawn deletion
-    pub fn pawn_cleanup(&mut self, pawn_key: &PawnKey) {
+    pub fn pawn_cleanup(&mut self, pawn_key: &LocalEntityKey) {
         self.command_history.remove(pawn_key);
     }
 }

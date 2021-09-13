@@ -10,13 +10,13 @@
 * [x] Connection / Disconnection events
 * [x] Customizable Client authentication
 * [x] Unguaranteed & guaranteed Messages sent between hosts
-* [x] Replicates sync with Clients when "in scope"
-* [x] Rooms restrict syncing to their contained Users & Replicates
+* [x] Entities & their Components sync with Clients when "in scope"
+* [x] Rooms restrict syncing to their contained Users & Entities
 * [x] Customizable scoping function for advanced usage
 * [x] Rtt estimations
 * [x] Client Tick events
 * [x] Synced Tick between Server/Client
-* [x] Support Client prediction of Replicates
+* [x] Support Client prediction of Entities
 * [x] Send consecutive copies of Messages (see Tribes 2 Networking Model's "MoveManager")
 
 ## Planned
@@ -27,11 +27,11 @@ This list is not sorted by order of priority
 * [ ] Load Testing & Benchmarks
 * [ ] Congestion Control
 * [ ] Custom Property read/write implementation
-* [ ] "Deep" Replicate property syncing
+* [ ] "Deep" Replica property syncing
 * [ ] Ordered Guaranteed Messages?
-* [ ] Replicate Priority (indicates certain updates should be sent earlier than others)
-* [ ] Dynamic Replicate Priority based on scope evaluation (conditionally raise priority on Replicates)
-* [ ] Set independent Replicate update rate
+* [ ] Update Priority (indicates certain updates should be sent earlier than others)
+* [ ] Dynamic Update Priority based on scope evaluation (conditionally raise priority)
+* [ ] Set independent Entity/Component update rate
 * [ ] Horizontally scale Servers
 * [ ] Support Debugging / Logging / Metrics visualizations
 * [ ] Bitwise (as opposed to current "Bytewise") reading/writing of messages, to save bandwidth

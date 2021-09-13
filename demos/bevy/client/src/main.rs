@@ -138,19 +138,19 @@ fn naia_client_update(
                     }
                 }
             }
-            Ok(Event::CreateEntity(naia_entity_key, component_keys)) => {
+            Ok(Event::SpawnEntity(naia_entity_key, component_list)) => {
                 let mut entity = commands.spawn();
                 entity.insert(NonPawn).insert(Key(naia_entity_key));
 
                 info!("create entity");
 
-                for component_key in component_keys {
-                    match client.get_component(&component_key).cloned() {
-                        Some(Protocol::Position(position_ref)) => {
+                for component_protocol in component_list {
+                    match component_protocol {
+                        Protocol::Position(position_ref) => {
                             info!("add position to entity");
                             entity.insert(position_ref);
                         }
-                        Some(Protocol::Color(color_ref)) => {
+                        Protocol::Color(color_ref) => {
                             info!("add color to entity");
                             entity.insert(Ref::clone(&color_ref));
                             let color = color_ref.borrow();
@@ -179,14 +179,14 @@ fn naia_client_update(
                     .entity_key_map
                     .insert(naia_entity_key, bevy_entity_key);
             }
-            Ok(Event::DeleteEntity(naia_entity_key)) => {
+            Ok(Event::DespawnEntity(naia_entity_key)) => {
                 if let Some(bevy_entity_key) =
                     client_resource.entity_key_map.remove(&naia_entity_key)
                 {
                     commands.entity(bevy_entity_key).despawn();
                 }
             }
-            Ok(Event::AssignPawnEntity(naia_entity_key)) => {
+            Ok(Event::OwnEntity(naia_entity_key)) => {
                 info!("assign pawn");
 
                 let pawn_components = client.get_pawn_components(&naia_entity_key);
@@ -217,7 +217,7 @@ fn naia_client_update(
                         .insert(naia_entity_key, bevy_entity_key);
                 }
             }
-            Ok(Event::UnassignPawnEntity(naia_entity_key)) => {
+            Ok(Event::DisownEntity(naia_entity_key)) => {
                 info!("unassign pawn");
 
                 if let Some(bevy_entity_key) = client_resource.pawn_key_map.remove(&naia_entity_key)
@@ -225,8 +225,8 @@ fn naia_client_update(
                     commands.entity(bevy_entity_key).despawn();
                 }
             }
-            Ok(Event::NewCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref))) |
-            Ok(Event::ReplayCommandEntity(naia_entity, Protocol::KeyCommand(key_command_ref))) => {
+            Ok(Event::NewCommand(naia_entity, Protocol::KeyCommand(key_command_ref)))
+            | Ok(Event::ReplayCommand(naia_entity, Protocol::KeyCommand(key_command_ref))) => {
                 if let Some(bevy_entity) = client_resource.pawn_key_map.get(&naia_entity) {
                     if let Ok((_, position)) = pawn_query.get_mut(*bevy_entity) {
                         shared_behavior::process_command(&key_command_ref, position);
