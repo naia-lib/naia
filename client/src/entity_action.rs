@@ -8,6 +8,6 @@ pub enum EntityAction<P: ProtocolType> {
     DisownEntity(LocalEntityKey),
     RewindEntity(LocalEntityKey),
     InsertComponent(LocalEntityKey, P),
-    RemoveComponent(LocalEntityKey, P),
     UpdateComponent(LocalEntityKey, P),
+    RemoveComponent(LocalEntityKey, P),
 }

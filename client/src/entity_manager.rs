@@ -48,57 +48,6 @@ impl<P: ProtocolType> EntityManager<P> {
             let message_type = EntityActionType::from_u8(reader.read_u8());
 
             match message_type {
-                EntityActionType::RemoveComponent => {
-                    // Component Removal
-                    let component_key = LocalComponentKey::from_u16(reader.read_u16());
-
-                    let entity_key = self
-                        .component_entity_map
-                        .remove(&component_key)
-                        .expect("deleting nonexistant/non-initialized component");
-
-                    // Get entity record
-                    let entity_record = self
-                        .entities
-                        .get_mut(&entity_key)
-                        .expect("entity not instantiated properly?");
-                    entity_record.remove_component(&component_key);
-                    self.component_delete_cleanup(&entity_key, &component_key);
-                }
-                EntityActionType::UpdateComponent => {
-                    // Component Update
-                    let component_key = LocalComponentKey::from_u16(reader.read_u16());
-
-                    if let Some(component_ref) = self.component_store.get_mut(&component_key) {
-                        let diff_mask: DiffMask = DiffMask::read(reader);
-
-                        component_ref.read_partial(&diff_mask, reader, packet_index);
-
-                        let entity_key = self
-                            .component_entity_map
-                            .get(&component_key)
-                            .expect("component not initialized correctly");
-
-                        // if Entity is a Pawn, replay commands
-                        let entity_record = self
-                            .entities
-                            .get(entity_key)
-                            .expect("component has no associated entity?");
-                        if entity_record.is_pawn {
-                            command_receiver.replay_commands(packet_tick, &entity_key);
-
-                            // remove command history until the tick that has already been
-                            // checked
-                            command_receiver.remove_history_until(packet_tick, &entity_key);
-                        }
-
-                        self.queued_incoming_messages
-                            .push_back(EntityAction::UpdateComponent(
-                                *entity_key,
-                                component_ref.clone(),
-                            ));
-                    }
-                }
                 EntityActionType::SpawnEntity => {
                     // Entity Creation
                     let entity_key = LocalEntityKey::from_u16(reader.read_u16());
@@ -117,7 +66,7 @@ impl<P: ProtocolType> EntityManager<P> {
                         let mut entity_record = EntityRecord::new();
 
                         for _ in 0..components_num {
-                            // Component Creation
+                            // Component Creation //
                             let naia_id: u16 = reader.read_u16();
                             let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
@@ -133,6 +82,7 @@ impl<P: ProtocolType> EntityManager<P> {
                                 entity_record
                                     .insert_component(&component_key, &new_component_type_id);
                             }
+                            ////////////////////////
                         }
 
                         self.entities.insert(entity_key, entity_record);
@@ -151,10 +101,11 @@ impl<P: ProtocolType> EntityManager<P> {
                         }
 
                         for component_key in entity_record.get_component_keys() {
-                            // delete all components
+                            // delete all components //
                             self.component_delete_cleanup(&entity_key, &component_key);
 
                             self.component_entity_map.remove(&component_key);
+                            ////////////////////////////
                         }
 
                         self.queued_incoming_messages
@@ -173,14 +124,14 @@ impl<P: ProtocolType> EntityManager<P> {
                     if let Some(entity_record) = self.entities.get_mut(&entity_key) {
                         entity_record.is_pawn = true;
 
-                        // create copies of components
+                        // create copies of components //
                         for component_key in entity_record.get_component_keys() {
                             if let Some(protocol) = self.component_store.get(&component_key) {
                                 self.pawn_component_store
                                     .insert(component_key, protocol.copy());
                             }
                         }
-                        //
+                        /////////////////////////////////
 
                         command_receiver.pawn_init(&entity_key);
 
@@ -250,6 +201,57 @@ impl<P: ProtocolType> EntityManager<P> {
                                 ));
                         }
                     }
+                }
+                EntityActionType::UpdateComponent => {
+                    // Component Update
+                    let component_key = LocalComponentKey::from_u16(reader.read_u16());
+
+                    if let Some(component_ref) = self.component_store.get_mut(&component_key) {
+                        let diff_mask: DiffMask = DiffMask::read(reader);
+
+                        component_ref.read_partial(&diff_mask, reader, packet_index);
+
+                        let entity_key = self
+                            .component_entity_map
+                            .get(&component_key)
+                            .expect("component not initialized correctly");
+
+                        // if Entity is a Pawn, replay commands
+                        let entity_record = self
+                            .entities
+                            .get(entity_key)
+                            .expect("component has no associated entity?");
+                        if entity_record.is_pawn {
+                            command_receiver.replay_commands(packet_tick, &entity_key);
+
+                            // remove command history until the tick that has already been
+                            // checked
+                            command_receiver.remove_history_until(packet_tick, &entity_key);
+                        }
+
+                        self.queued_incoming_messages
+                            .push_back(EntityAction::UpdateComponent(
+                                *entity_key,
+                                component_ref.clone(),
+                            ));
+                    }
+                }
+                EntityActionType::RemoveComponent => {
+                    // Component Removal
+                    let component_key = LocalComponentKey::from_u16(reader.read_u16());
+
+                    let entity_key = self
+                        .component_entity_map
+                        .remove(&component_key)
+                        .expect("deleting nonexistant/non-initialized component");
+
+                    // Get entity record
+                    let entity_record = self
+                        .entities
+                        .get_mut(&entity_key)
+                        .expect("entity not instantiated properly?");
+                    entity_record.remove_component(&component_key);
+                    self.component_delete_cleanup(&entity_key, &component_key);
                 }
                 EntityActionType::Unknown => {
                     panic!("received unknown type of entity action");

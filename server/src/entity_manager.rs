@@ -134,9 +134,6 @@ impl<P: ProtocolType> EntityManager<P> {
 
         //clear diff mask of component if need be
         match &action {
-            EntityAction::InsertComponent(_, global_key, _, _) => {
-                self.pop_insert_component_diff_mask(global_key);
-            }
             EntityAction::SpawnEntity(_, _, components_list_opt) => {
                 if let Some(components_list) = components_list_opt {
                     let mut diff_mask_list: Vec<(ComponentKey, DiffMask)> = Vec::new();
@@ -155,6 +152,9 @@ impl<P: ProtocolType> EntityManager<P> {
                     }
                     self.last_popped_diff_mask_list = Some(diff_mask_list);
                 }
+            }
+            EntityAction::InsertComponent(_, global_key, _, _) => {
+                self.pop_insert_component_diff_mask(global_key);
             }
             EntityAction::UpdateComponent(global_key, local_key, diff_mask, component) => {
                 return Some(self.pop_update_component_diff_mask(
@@ -181,9 +181,6 @@ impl<P: ProtocolType> EntityManager<P> {
         }
 
         match &action {
-            EntityAction::InsertComponent(_, global_key, _, _) => {
-                self.unpop_insert_component_diff_mask(global_key);
-            }
             EntityAction::SpawnEntity(_, _, _) => {
                 if let Some(last_popped_diff_mask_list) = &self.last_popped_diff_mask_list {
                     for (global_component_key, last_popped_diff_mask) in last_popped_diff_mask_list
@@ -195,6 +192,9 @@ impl<P: ProtocolType> EntityManager<P> {
                         );
                     }
                 }
+            }
+            EntityAction::InsertComponent(_, global_key, _, _) => {
+                self.unpop_insert_component_diff_mask(global_key);
             }
             EntityAction::UpdateComponent(global_key, local_key, _, component) => {
                 let cloned_action = self.unpop_update_component_diff_mask(
@@ -413,26 +413,6 @@ impl<P: ProtocolType> EntityManager<P> {
             .unwrap();
 
         match action {
-            EntityAction::RemoveComponent(_, local_key) => {
-                action_total_bytes
-                    .write_u16::<BigEndian>(local_key.to_u16())
-                    .unwrap(); //write local key
-            }
-            EntityAction::UpdateComponent(_, local_key, diff_mask, component) => {
-                //write component payload
-                let mut component_payload_bytes = Vec::<u8>::new();
-                component
-                    .borrow()
-                    .write_partial(&diff_mask.borrow(), &mut component_payload_bytes);
-
-                //Write component "header"
-                action_total_bytes
-                    .write_u16::<BigEndian>(local_key.to_u16())
-                    .unwrap(); //write local key
-                diff_mask.borrow_mut().write(&mut action_total_bytes); // write diff mask
-                action_total_bytes.append(&mut component_payload_bytes); // write
-                                                                         // payload
-            }
             EntityAction::SpawnEntity(_, local_entity_key, component_list_opt) => {
                 action_total_bytes
                     .write_u16::<BigEndian>(local_entity_key.to_u16())
@@ -496,6 +476,26 @@ impl<P: ProtocolType> EntityManager<P> {
                     .write_u16::<BigEndian>(local_component_key.to_u16())
                     .unwrap(); //write local component key
                 action_total_bytes.append(&mut component_payload_bytes); // write payload
+            }
+            EntityAction::UpdateComponent(_, local_key, diff_mask, component) => {
+                //write component payload
+                let mut component_payload_bytes = Vec::<u8>::new();
+                component
+                    .borrow()
+                    .write_partial(&diff_mask.borrow(), &mut component_payload_bytes);
+
+                //Write component "header"
+                action_total_bytes
+                    .write_u16::<BigEndian>(local_key.to_u16())
+                    .unwrap(); //write local key
+                diff_mask.borrow_mut().write(&mut action_total_bytes); // write diff mask
+                action_total_bytes.append(&mut component_payload_bytes); // write
+                                                                         // payload
+            }
+            EntityAction::RemoveComponent(_, local_key) => {
+                action_total_bytes
+                    .write_u16::<BigEndian>(local_key.to_u16())
+                    .unwrap(); //write local key
             }
         }
 
