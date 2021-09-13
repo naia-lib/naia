@@ -26,10 +26,9 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Hecs Server Demo started");
 
-        let shared_config = get_shared_config();
         let mut server_config = ServerConfig::default();
         server_config.socket_config.session_listen_addr = get_server_address();
-        let mut server = Server::new(Some(server_config), shared_config);
+        let mut server = Server::new(Some(server_config), get_shared_config());
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
