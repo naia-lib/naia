@@ -48,10 +48,10 @@ impl AckManager {
 
     /// Process an incoming packet, handle notifications of delivered / dropped
     /// packets
-    pub fn process_incoming<T: ProtocolType>(
+    pub fn process_incoming<P: ProtocolType>(
         &mut self,
         header: &StandardHeader,
-        message_manager: &mut MessageManager<T>,
+        message_manager: &mut MessageManager<P>,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         let remote_seq_num = header.local_packet_index();
@@ -124,10 +124,10 @@ impl AckManager {
         self.sequence_number = self.sequence_number.wrapping_add(1);
     }
 
-    fn notify_packet_delivered<T: ProtocolType>(
+    fn notify_packet_delivered<P: ProtocolType>(
         &self,
         packet_sequence_number: u16,
-        message_manager: &mut MessageManager<T>,
+        message_manager: &mut MessageManager<P>,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         message_manager.notify_packet_delivered(packet_sequence_number);
@@ -136,10 +136,10 @@ impl AckManager {
         }
     }
 
-    fn notify_packet_dropped<T: ProtocolType>(
+    fn notify_packet_dropped<P: ProtocolType>(
         &self,
         packet_sequence_number: u16,
-        message_manager: &mut MessageManager<T>,
+        message_manager: &mut MessageManager<P>,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         message_manager.notify_packet_dropped(packet_sequence_number);

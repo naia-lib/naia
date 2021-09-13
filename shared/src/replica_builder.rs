@@ -7,15 +7,15 @@ use std::{
     fmt::{Debug, Formatter, Result},
 };
 
-/// Handles the creation of new Replica instances
-pub trait ReplicaBuilder<T: ProtocolType> {
+/// Handles the creation of new Replica (Message/Component) instances
+pub trait ReplicaBuilder<P: ProtocolType> {
     /// Create a new Replica instance
-    fn build(&self, reader: &mut PacketReader) -> T;
+    fn build(&self, reader: &mut PacketReader) -> P;
     /// Gets the TypeId of the Replica the builder is able to build
     fn get_type_id(&self) -> TypeId;
 }
 
-impl<T: ProtocolType> Debug for Box<dyn ReplicaBuilder<T>> {
+impl<P: ProtocolType> Debug for Box<dyn ReplicaBuilder<P>> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str("Boxed ReplicaBuilder")
     }

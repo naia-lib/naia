@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_server::{Event, ObjectKey, Random, RoomKey, Server, ServerConfig, UserKey};
+use naia_server::{EntityKey, Event, Random, RoomKey, Server, ServerConfig, UserKey};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
@@ -10,7 +10,7 @@ use naia_macroquad_demo_shared::{
 pub struct App {
     server: Server<Protocol>,
     main_room_key: RoomKey,
-    user_to_pawn_map: HashMap<UserKey, ObjectKey>,
+    user_to_pawn_map: HashMap<UserKey, EntityKey>,
 }
 
 impl App {
@@ -21,16 +21,16 @@ impl App {
         let mut server_config = ServerConfig::default();
         server_config.socket_config.session_listen_addr = get_server_address();
 
-        let mut server = Server::new(Protocol::load(), Some(server_config), shared_config);
+        let mut server = Server::new(Some(server_config), shared_config);
 
-        // Create a new, singular room, which will contain Users and Objects that they
+        // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
-        let main_room_key = server.create_room();
+        let main_room_key = server.make_room().key();
 
         App {
             server,
             main_room_key,
-            user_to_pawn_map: HashMap::<UserKey, ObjectKey>::new(),
+            user_to_pawn_map: HashMap::<UserKey, EntityKey>::new(),
         }
     }
 
@@ -50,50 +50,65 @@ impl App {
                     }
                 }
                 Ok(Event::Connection(user_key)) => {
-                    self.server.room_add_user(&self.main_room_key, &user_key);
-                    if let Some(user) = self.server.get_user(&user_key) {
-                        info!("Naia Server connected to: {}", user.address);
+                    let user_address = self
+                        .server
+                        .user_mut(&user_key)
+                        .enter_room(&self.main_room_key)
+                        .address();
 
-                        let x = Random::gen_range_u32(0, 50) * 16;
-                        let y = Random::gen_range_u32(0, 37) * 16;
+                    info!("Naia Server connected to: {}", user_address);
 
-                        let square_color = match self.server.get_users_count() % 3 {
-                            0 => Color::Yellow,
-                            1 => Color::Red,
-                            _ => Color::Blue,
-                        };
+                    let x = Random::gen_range_u32(0, 50) * 16;
+                    let y = Random::gen_range_u32(0, 37) * 16;
 
-                        let square = Square::new(x as u16, y as u16, square_color);
-                        let square_key = self.server.register_object(&square);
-                        self.server
-                            .room_add_object(&self.main_room_key, &square_key);
-                        self.server.assign_pawn(&user_key, &square_key);
-                        self.user_to_pawn_map.insert(user_key, square_key);
-                    }
+                    let square_color = match self.server.users_count() % 3 {
+                        0 => Color::Yellow,
+                        1 => Color::Red,
+                        _ => Color::Blue,
+                    };
+
+                    let square = Square::new(x as u16, y as u16, square_color);
+                    let entity_key = self
+                        .server
+                        .spawn_entity()
+                        .insert_component(&square)
+                        .set_owner(&user_key)
+                        .enter_room(&self.main_room_key)
+                        .key();
+                    self.user_to_pawn_map.insert(user_key, entity_key);
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
                     info!("Naia Server disconnected from: {:?}", user.address);
-                    self.server.room_remove_user(&self.main_room_key, &user_key);
-                    if let Some(object_key) = self.user_to_pawn_map.remove(&user_key) {
+                    self.server
+                        .user_mut(&user_key)
+                        .leave_room(&self.main_room_key);
+                    if let Some(entity_key) = self.user_to_pawn_map.remove(&user_key) {
                         self.server
-                            .room_remove_object(&self.main_room_key, &object_key);
-                        self.server.unassign_pawn(&user_key, &object_key);
-                        self.server.deregister_object(&object_key);
+                            .entity_mut(&entity_key)
+                            .disown()
+                            .leave_room(&self.main_room_key)
+                            .despawn();
                     }
                 }
-                Ok(Event::Command(_, square_key, Protocol::KeyCommand(key_command_ref))) => {
-                    if let Some(Protocol::Square(square_ref)) = self.server.get_object(&square_key)
+                Ok(Event::Command(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
+                    if let Some(square_ref) = self.server.entity(&entity_key).component::<Square>()
                     {
-                        shared_behavior::process_command(&key_command_ref, square_ref);
+                        shared_behavior::process_command(&key_command_ref, &square_ref);
                     }
                 }
                 Ok(Event::Tick) => {
                     // All game logic should happen here, on a tick event
 
-                    // Update scopes of objects
-                    for (room_key, user_key, object_key) in self.server.object_scope_sets() {
-                        self.server
-                            .object_set_scope(&room_key, &user_key, &object_key, true);
+                    // Check whether Entities are in/out of all possible Scopes
+                    for (room_key, user_key, entity_key) in self.server.scopes() {
+                        // You'd normally do whatever checks you need to in here..
+                        // to determine whether each Entity should be in scope or not.
+
+                        // This indicates the Entity should be in this scope.
+                        self.server.accept_scope(room_key, user_key, entity_key);
+
+                        // And call this if Entity should NOT be in this scope.
+                        // self.server.reject_scope(...);
                     }
 
                     // VERY IMPORTANT! Calling this actually sends all update data
