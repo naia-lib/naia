@@ -290,6 +290,16 @@ impl<P: ProtocolType> EntityManager<P> {
         return self.entities.contains_key(key);
     }
 
+    pub fn entity_keys(&self) -> Vec<LocalEntityKey> {
+        let mut output = Vec::new();
+
+        for (key, _) in self.entities.iter() {
+            output.push(*key);
+        }
+
+        return output;
+    }
+
     pub fn entity_is_prediction(&self, key: &LocalEntityKey) -> bool {
         if let Some(entity_record) = self.entities.get(key) {
             return entity_record.is_prediction;

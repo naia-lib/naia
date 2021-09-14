@@ -159,6 +159,10 @@ impl<P: ProtocolType> ServerConnection<P> {
             .get_prediction_component_by_type::<R>(key);
     }
 
+    pub fn entity_keys(&self) -> Vec<LocalEntityKey> {
+        return self.entity_manager.entity_keys();
+    }
+
     /// Reads buffered incoming data on the appropriate tick boundary
     pub fn frame_begin(&mut self, manifest: &Manifest<P>, tick_manager: &mut TickManager) -> bool {
         if tick_manager.mark_frame() {

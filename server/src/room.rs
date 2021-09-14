@@ -38,7 +38,7 @@ impl Room {
         }
     }
 
-    pub(crate) fn users_iter(&self) -> Iter<UserKey> {
+    pub(crate) fn user_keys(&self) -> Iter<UserKey> {
         return self.users.iter();
     }
 
@@ -58,7 +58,7 @@ impl Room {
         }
     }
 
-    pub(crate) fn entities_iter(&self) -> Iter<EntityKey> {
+    pub(crate) fn entity_keys(&self) -> Iter<EntityKey> {
         return self.entities.iter();
     }
 

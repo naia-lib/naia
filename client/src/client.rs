@@ -143,6 +143,14 @@ impl<P: ProtocolType> Client<P> {
         return false;
     }
 
+    /// Return a list of all Entities' keys
+    pub fn entity_keys(&self) -> Vec<LocalEntityKey> {
+        if let Some(connection) = &self.server_connection {
+            return connection.entity_keys();
+        }
+        return Vec::new();
+    }
+
     // Connection
 
     /// Get the address currently associated with the Server

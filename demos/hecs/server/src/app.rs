@@ -216,7 +216,7 @@ impl App {
 
                     // Message Sending
                     let mut iter_vec: Vec<UserKey> = Vec::new();
-                    for (user_key, _) in self.server.users_iter() {
+                    for (user_key, _) in self.server.user_keys() {
                         iter_vec.push(user_key);
                     }
                     for user_key in iter_vec {

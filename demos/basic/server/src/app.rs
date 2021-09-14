@@ -104,7 +104,7 @@ impl App {
 
                     // Message sending
                     let mut iter_vec: Vec<UserKey> = Vec::new();
-                    for (user_key, _) in self.server.users_iter() {
+                    for (user_key, _) in self.server.user_keys() {
                         iter_vec.push(user_key);
                     }
                     for user_key in iter_vec {
@@ -120,7 +120,7 @@ impl App {
                     }
 
                     // Iterate through Characters, marching them from (0,0) to (20, N)
-                    for entity_key in self.server.entities_iter() {
+                    for entity_key in self.server.entity_keys() {
                         if let Some(character_ref) =
                             self.server.entity(&entity_key).component::<Character>()
                         {
