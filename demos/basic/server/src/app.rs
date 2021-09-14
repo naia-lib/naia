@@ -15,8 +15,6 @@ impl App {
     pub fn new() -> Self {
         info!("Basic Naia Server Demo started");
 
-        let mut server = Server::new(ServerConfig::default(), get_shared_config());
-
         let server_addresses = ServerAddrs::new(
             get_server_address(),
             // IP Address to listen on for UDP WebRTC data channels
@@ -29,6 +27,7 @@ impl App {
                 .expect("could not parse advertised public WebRTC data address/port"),
         );
 
+        let mut server = Server::new(ServerConfig::default(), get_shared_config());
         server.listen(server_addresses);
 
         // Create a new, singular room, which will contain Users and Entities that they
