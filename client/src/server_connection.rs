@@ -1,11 +1,11 @@
 use std::net::SocketAddr;
 
+use naia_client_socket::Packet;
+
 use naia_shared::{
     Connection, ConnectionConfig, LocalEntityKey, ManagerType, Manifest, PacketReader, PacketType,
     ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
 };
-
-use crate::Packet;
 
 use super::{
     command_receiver::CommandReceiver, command_sender::CommandSender, entity_action::EntityAction,
@@ -36,6 +36,10 @@ impl<P: ProtocolType> ServerConnection<P> {
             command_receiver: CommandReceiver::new(),
             jitter_buffer: TickQueue::new(),
         };
+    }
+
+    pub fn get_address(&self) -> SocketAddr {
+        return self.connection.get_address();
     }
 
     pub fn get_outgoing_packet(

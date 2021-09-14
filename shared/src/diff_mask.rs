@@ -1,7 +1,7 @@
 use byteorder::WriteBytesExt;
 use std::fmt;
 
-use crate::PacketReader;
+use naia_socket_shared::PacketReader;
 
 /// The DiffMask is a variable-length byte array, where each bit represents
 /// the current state of a Property owned by a Replica.

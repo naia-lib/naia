@@ -1,12 +1,12 @@
-use std::{default::Default, net::SocketAddr, time::Duration};
+use std::{default::Default, time::Duration};
 
-use naia_client_socket::{ClientSocketConfig, SocketSharedConfig};
+use naia_shared::SocketConfig;
 
 /// Contains Config properties which will be used by a Server or Client
 #[derive(Clone, Debug)]
 pub struct ClientConfig {
     /// Used to configure the Server's underlying socket
-    pub socket_config: ClientSocketConfig,
+    pub socket_config: SocketConfig,
     /// The duration between the resend of certain connection handshake messages
     pub send_handshake_interval: Duration,
     /// The duration to wait for communication from a remote host before
@@ -29,11 +29,8 @@ pub struct ClientConfig {
 
 impl Default for ClientConfig {
     fn default() -> Self {
-        let server_address: SocketAddr = "127.0.0.1:14191"
-            .parse()
-            .expect("couldn't parse input IP address");
         Self {
-            socket_config: ClientSocketConfig::new(server_address, SocketSharedConfig::default()),
+            socket_config: SocketConfig::default(),
             disconnection_timeout_duration: Duration::from_secs(10),
             heartbeat_interval: Duration::from_secs(3),
             send_handshake_interval: Duration::from_secs(1),

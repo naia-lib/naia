@@ -1,12 +1,13 @@
 use std::net::SocketAddr;
 
-use crate::{wrapping_diff, MessageManager, Ref, Timer};
+use naia_socket_shared::{PacketReader, Ref, Timer};
+
+use crate::{wrapping_diff, MessageManager};
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
     packet_notifiable::PacketNotifiable, packet_type::PacketType, protocol_type::ProtocolType,
     replicate::Replicate, sequence_buffer::SequenceNumber, standard_header::StandardHeader,
-    PacketReader,
 };
 
 /// Represents a connection to a remote host, and provides functionality to

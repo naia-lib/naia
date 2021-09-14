@@ -1,11 +1,11 @@
-use super::protocol_type::ProtocolType;
-
-use crate::PacketReader;
-
 use std::{
     any::TypeId,
     fmt::{Debug, Formatter, Result},
 };
+
+use naia_socket_shared::PacketReader;
+
+use super::protocol_type::ProtocolType;
 
 /// Handles the creation of new Replica (Message/Component) instances
 pub trait ReplicaBuilder<P: ProtocolType> {

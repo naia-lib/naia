@@ -27,12 +27,12 @@ compile_error!("Naia Server can only use UDP or WebRTC, you must pick one");
 #[cfg(all(not(feature = "use-udp"), not(feature = "use-webrtc")))]
 compile_error!("Naia Server requires either the 'use-udp' or 'use-webrtc' feature to be enabled, you must pick one.");
 
-pub use naia_shared::{
-    find_my_ip_address, EntityKey, LinkConditionerConfig, ProtocolType, Random, Ref, Replicate,
-    SharedConfig,
-};
+pub use naia_server_socket::ServerAddrs;
 
-pub use naia_server_socket::{ServerSocketConfig, SocketSharedConfig};
+pub use naia_shared::{
+    EntityKey, LinkConditionerConfig, ProtocolType, Random, Ref, Replicate, SharedConfig,
+    SocketConfig,
+};
 
 mod client_connection;
 mod command_receiver;

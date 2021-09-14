@@ -1,8 +1,8 @@
 use std::any::TypeId;
 
-use super::{diff_mask::DiffMask, replicate::Replicate};
+use naia_socket_shared::{PacketReader, Ref};
 
-use crate::{PacketReader, Ref};
+use super::{diff_mask::DiffMask, replicate::Replicate};
 
 /// An Enum with a variant for every Component/Message that can be sent
 /// between Client/Host

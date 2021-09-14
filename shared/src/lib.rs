@@ -42,7 +42,7 @@ mod wrapping_number;
 pub mod utils;
 
 pub use naia_socket_shared::{
-    find_my_ip_address, Instant, LinkConditionerConfig, PacketReader, Random, Ref, Timer, Timestamp,
+    Instant, LinkConditionerConfig, PacketReader, Random, Ref, SocketConfig, Timer, Timestamp,
 };
 
 pub use ack_manager::AckManager;
