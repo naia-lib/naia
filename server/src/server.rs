@@ -9,7 +9,10 @@ use byteorder::{BigEndian, WriteBytesExt};
 use ring::{hmac, rand};
 use slotmap::DenseSlotMap;
 
-use naia_server_socket::{Packet, PacketReceiver, PacketSender, ServerSocket};
+use naia_server_socket::{
+    NaiaServerSocketError, Packet, PacketReceiver, PacketSender, ServerAddrs, Socket,
+};
+
 pub use naia_shared::{
     wrapping_diff, ComponentRecord, Connection, ConnectionConfig, EntityKey, HostTickManager,
     ImplRef, Instant, KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader,
@@ -36,12 +39,12 @@ use super::{
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
 pub struct Server<P: ProtocolType> {
-    // Manifest
+    // Config
     manifest: Manifest<P>,
     // Connection
     connection_config: ConnectionConfig,
-    socket_sender: PacketSender,
-    socket_receiver: Box<dyn PacketReceiver>,
+    socket: Socket,
+    io: Io,
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
     // Users
@@ -69,12 +72,8 @@ pub struct Server<P: ProtocolType> {
 
 impl<P: ProtocolType> Server<P> {
     /// Create a new Server
-    pub fn new(server_config: Option<ServerConfig>, shared_config: SharedConfig<P>) -> Self {
-        let mut server_config = match server_config {
-            Some(config) => config,
-            None => ServerConfig::default(),
-        };
-        server_config.socket_config.shared.link_condition_config =
+    pub fn new(mut server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
+        server_config.socket_config.link_condition_config =
             shared_config.link_condition_config.clone();
 
         let connection_config = ConnectionConfig::new(
@@ -84,7 +83,7 @@ impl<P: ProtocolType> Server<P> {
             server_config.rtt_sample_size,
         );
 
-        let (socket_sender, socket_receiver) = ServerSocket::listen(server_config.socket_config);
+        let socket = Socket::new(server_config.socket_config);
 
         let clients_map = HashMap::new();
         let heartbeat_timer = Timer::new(connection_config.heartbeat_interval);
@@ -93,12 +92,12 @@ impl<P: ProtocolType> Server<P> {
             hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
 
         Server {
-            // Manifest
+            // Config
             manifest: shared_config.manifest,
             // Connection
             connection_config,
-            socket_sender,
-            socket_receiver,
+            socket,
+            io: Io::new(),
             heartbeat_timer,
             connection_hash_key,
             // Users
@@ -125,6 +124,15 @@ impl<P: ProtocolType> Server<P> {
         }
     }
 
+    /// Listen at the given addresses
+    pub fn listen(&mut self, server_addrs: ServerAddrs) {
+        self.socket.listen(server_addrs);
+        self.io.load(
+            self.socket.get_packet_sender(),
+            self.socket.get_packet_receiver(),
+        );
+    }
+
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
     pub fn receive(&mut self) -> VecDeque<Result<Event<P>, NaiaServerError>> {
@@ -149,11 +157,21 @@ impl<P: ProtocolType> Server<P> {
                     Some(&self.mut_handler),
                     &self.connection_config,
                 );
-                //new_connection.process_incoming_header(&header);
-                Server::<P>::send_connect_accept_message(
-                    &mut new_connection,
-                    &mut self.socket_sender,
+                //new_connection.process_incoming_header(&header);// not sure if I should
+                // uncomment this...
+
+                // send connect accept message //
+                let payload = new_connection.process_outgoing_header(
+                    0,
+                    0,
+                    PacketType::ServerConnectResponse,
+                    &[],
                 );
+                self.io
+                    .send_packet(Packet::new_raw(new_connection.get_address(), payload));
+                new_connection.mark_sent();
+                /////////////////////////////////
+
                 self.client_connections.insert(user_key, new_connection);
 
                 events.push_back(Ok(Event::Connection(user_key)));
@@ -250,8 +268,7 @@ impl<P: ProtocolType> Server<P> {
                 while let Some(payload) =
                     connection.get_outgoing_packet(self.tick_manager.get_tick(), &self.manifest)
                 {
-                    self.socket_sender
-                        .send(Packet::new_raw(user.address, payload));
+                    self.io.send_packet(Packet::new_raw(user.address, payload));
                     connection.mark_sent();
                 }
             }
@@ -769,8 +786,7 @@ impl<P: ProtocolType> Server<P> {
                                 PacketType::Heartbeat,
                                 &[],
                             );
-                            self.socket_sender
-                                .send(Packet::new_raw(user.address, payload));
+                            self.io.send_packet(Packet::new_raw(user.address, payload));
                             connection.mark_sent();
                         }
                     }
@@ -780,7 +796,7 @@ impl<P: ProtocolType> Server<P> {
 
         //receive socket events
         loop {
-            match self.socket_receiver.receive() {
+            match self.io.receive_packet() {
                 Ok(Some(packet)) => {
                     let address = packet.address();
                     if let Some(user_key) = self.address_to_user_key_map.get(&address) {
@@ -819,11 +835,15 @@ impl<P: ProtocolType> Server<P> {
                                 payload_bytes.push(*hash_byte);
                             }
 
-                            Server::<P>::internal_send_connectionless(
-                                &mut self.socket_sender,
+                            // Send connectionless //
+                            let packet = Packet::new(address, payload_bytes);
+                            let new_payload = naia_shared::utils::write_connectionless_payload(
                                 PacketType::ServerChallengeResponse,
-                                Packet::new(address, payload_bytes),
+                                packet.payload(),
                             );
+                            self.io
+                                .send_packet(Packet::new_raw(packet.address(), new_payload));
+                            /////////////////////////
                         }
                         PacketType::ClientConnectRequest => {
                             let mut reader = PacketReader::new(&payload);
@@ -837,13 +857,23 @@ impl<P: ProtocolType> Server<P> {
                                 if self.client_connections.contains_key(user_key) {
                                     let user = self.users.get(*user_key).unwrap();
                                     if user.timestamp == timestamp {
-                                        let mut connection =
+                                        let connection =
                                             self.client_connections.get_mut(user_key).unwrap();
                                         connection.process_incoming_header(&header);
-                                        Server::<P>::send_connect_accept_message(
-                                            &mut connection,
-                                            &mut self.socket_sender,
+
+                                        // send connect accept message //
+                                        let payload = connection.process_outgoing_header(
+                                            0,
+                                            0,
+                                            PacketType::ServerConnectResponse,
+                                            &[],
                                         );
+                                        self.io.send_packet(Packet::new_raw(
+                                            connection.get_address(),
+                                            payload,
+                                        ));
+                                        connection.mark_sent();
+                                        /////////////////////////////////
                                     } else {
                                         self.outstanding_disconnects.push_back(*user_key);
                                     }
@@ -930,7 +960,7 @@ impl<P: ProtocolType> Server<P> {
                                                 PacketType::Pong,
                                                 &ping_payload,
                                             );
-                                        self.socket_sender.send(Packet::new_raw(
+                                        self.io.send_packet(Packet::new_raw(
                                             connection.get_address(),
                                             payload_with_header,
                                         ));
@@ -1049,33 +1079,7 @@ impl<P: ProtocolType> Server<P> {
         }
     }
 
-    fn connection_add_entity(
-        component_store: &DenseSlotMap<ComponentKey, P>,
-        client_connection: &mut ClientConnection<P>,
-        entity_key: &EntityKey,
-        entity_record: &EntityRecord,
-    ) {
-        // Get list of components first
-        let mut component_list: Vec<(ComponentKey, Ref<dyn Replicate<P>>)> = Vec::new();
-        for component_key in entity_record.get_component_keys() {
-            if let Some(component_ref) = component_store.get(component_key) {
-                component_list.push((component_key, component_ref.inner_ref().clone()));
-            }
-        }
-
-        //add entity to user connection
-        client_connection.add_entity(entity_key, entity_record, &component_list);
-    }
-
-    fn connection_remove_entity(
-        client_connection: &mut ClientConnection<P>,
-        entity_key: &EntityKey,
-    ) {
-        //remove entity from user connection
-        client_connection.remove_entity(entity_key);
-    }
-
-    // Components
+    // Component Helpers
 
     fn component_init<R: ImplRef<P>>(&mut self, component_ref: &R) -> ComponentKey {
         let dyn_ref = component_ref.dyn_ref();
@@ -1109,7 +1113,33 @@ impl<P: ProtocolType> Server<P> {
             .expect("component not initialized correctly?");
     }
 
-    // Component Scopes
+    // Scope helper operations
+
+    fn connection_add_entity(
+        component_store: &DenseSlotMap<ComponentKey, P>,
+        client_connection: &mut ClientConnection<P>,
+        entity_key: &EntityKey,
+        entity_record: &EntityRecord,
+    ) {
+        // Get list of components first
+        let mut component_list: Vec<(ComponentKey, Ref<dyn Replicate<P>>)> = Vec::new();
+        for component_key in entity_record.get_component_keys() {
+            if let Some(component_ref) = component_store.get(component_key) {
+                component_list.push((component_key, component_ref.inner_ref().clone()));
+            }
+        }
+
+        //add entity to user connection
+        client_connection.add_entity(entity_key, entity_record, &component_list);
+    }
+
+    fn connection_remove_entity(
+        client_connection: &mut ClientConnection<P>,
+        entity_key: &EntityKey,
+    ) {
+        //remove entity from user connection
+        client_connection.remove_entity(entity_key);
+    }
 
     fn connection_insert_component(
         client_connection: &mut ClientConnection<P>,
@@ -1128,27 +1158,44 @@ impl<P: ProtocolType> Server<P> {
         //remove component from user connection
         client_connection.remove_component(component_key);
     }
+}
 
-    // Packet send helpers
+// IO
+struct Io {
+    packet_sender: Option<PacketSender>,
+    packet_receiver: Option<PacketReceiver>,
+}
 
-    fn send_connect_accept_message(
-        connection: &mut ClientConnection<P>,
-        sender: &mut PacketSender,
-    ) {
-        let payload =
-            connection.process_outgoing_header(0, 0, PacketType::ServerConnectResponse, &[]);
-        sender.send(Packet::new_raw(connection.get_address(), payload));
-        connection.mark_sent();
+impl Io {
+    pub fn new() -> Self {
+        Io {
+            packet_sender: None,
+            packet_receiver: None,
+        }
     }
 
-    fn internal_send_connectionless(
-        sender: &mut PacketSender,
-        packet_type: PacketType,
-        packet: Packet,
-    ) {
-        let new_payload =
-            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
-        sender.send(Packet::new_raw(packet.address(), new_payload));
+    pub fn load(&mut self, packet_sender: PacketSender, packet_receiver: PacketReceiver) {
+        if self.packet_sender.is_some() {
+            panic!("Packet sender/receiver already loaded! Cannot do this twice!");
+        }
+
+        self.packet_sender = Some(packet_sender);
+        self.packet_receiver = Some(packet_receiver);
+    }
+
+    pub fn send_packet(&self, packet: Packet) {
+        self.packet_sender
+            .as_ref()
+            .expect("Cannot call Server.send_packet() until you call Server.listen()!")
+            .send(packet);
+    }
+
+    pub fn receive_packet(&mut self) -> Result<Option<Packet>, NaiaServerSocketError> {
+        return self
+            .packet_receiver
+            .as_mut()
+            .expect("Cannot call Server.receive_packet() until you call Server.listen()!")
+            .receive();
     }
 }
 

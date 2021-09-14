@@ -1,6 +1,8 @@
 use std::{any::TypeId, collections::HashMap};
 
-use crate::{protocol_type::ProtocolType, replica_builder::ReplicaBuilder, PacketReader};
+use naia_socket_shared::PacketReader;
+
+use super::{protocol_type::ProtocolType, replica_builder::ReplicaBuilder};
 
 /// Contains the shared protocol between Client & Server, with a data that is
 /// able to map Message/Component TypeIds to their representation within

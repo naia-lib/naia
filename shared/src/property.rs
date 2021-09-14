@@ -1,8 +1,8 @@
 use nanoserde::{DeBin, SerBin};
 
-use crate::{wrapping_number::sequence_greater_than, PacketReader, Ref};
+use naia_socket_shared::{PacketReader, Ref};
 
-use super::property_mutate::PropertyMutate;
+use super::{property_mutate::PropertyMutate, wrapping_number::sequence_greater_than};
 
 /// A Property of an Component/Message, that contains data
 /// which must be tracked for updates

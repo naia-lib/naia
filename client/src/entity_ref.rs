@@ -1,6 +1,6 @@
-use naia_shared::{ProtocolType, Ref, Replicate};
+use naia_shared::{LocalEntityKey, ProtocolType, Ref, Replicate};
 
-use crate::{Client, LocalEntityKey};
+use super::client::Client;
 
 // EntityRef
 #[derive(Debug)]

@@ -1,12 +1,12 @@
 use std::{default::Default, time::Duration};
 
-use naia_server_socket::{ServerSocketConfig, SocketSharedConfig};
+use naia_shared::SocketConfig;
 
 /// Contains Config properties which will be used by a Server or Client
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
     /// Used to configure the Server's underlying socket
-    pub socket_config: ServerSocketConfig,
+    pub socket_config: SocketConfig,
     /// The duration between the resend of certain connection handshake messages
     pub send_handshake_interval: Duration,
     /// The duration to wait for communication from a remote host before
@@ -30,18 +30,7 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            socket_config: ServerSocketConfig::new(
-                "127.0.0.1:14191"
-                    .parse()
-                    .expect("could not parse HTTP address/port"),
-                "127.0.0.1:14192"
-                    .parse()
-                    .expect("could not parse WebRTC data address/port"),
-                "127.0.0.1:14192"
-                    .parse()
-                    .expect("could not parse advertised public WebRTC data address/port"),
-                SocketSharedConfig::default(),
-            ),
+            socket_config: SocketConfig::default(),
             disconnection_timeout_duration: Duration::from_secs(10),
             heartbeat_interval: Duration::from_secs(3),
             send_handshake_interval: Duration::from_secs(1),

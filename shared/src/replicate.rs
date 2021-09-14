@@ -3,9 +3,9 @@ use std::{
     fmt::{Debug, Formatter, Result},
 };
 
-use super::{diff_mask::DiffMask, property_mutate::PropertyMutate, protocol_type::ProtocolType};
+use naia_socket_shared::{PacketReader, Ref};
 
-use crate::{PacketReader, Ref};
+use super::{diff_mask::DiffMask, property_mutate::PropertyMutate, protocol_type::ProtocolType};
 
 /// A Replica is a Message/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host

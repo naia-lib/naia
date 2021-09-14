@@ -3,9 +3,11 @@ use std::{
     vec::Vec,
 };
 
-use crate::{
-    manifest::Manifest, protocol_type::ProtocolType, replicate::Replicate, PacketNotifiable,
-    PacketReader, Ref,
+use naia_socket_shared::{PacketReader, Ref};
+
+use super::{
+    manifest::Manifest, packet_notifiable::PacketNotifiable, protocol_type::ProtocolType,
+    replicate::Replicate,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages

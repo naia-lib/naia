@@ -2,10 +2,10 @@ use std::{collections::VecDeque, net::SocketAddr};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use naia_client_socket::{ClientSocket, PacketReceiver, PacketSender};
+use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, Socket};
 
 pub use naia_shared::{
-    ConnectionConfig, HostTickManager, ImplRef, Instant, LocalEntityKey, ManagerType, Manifest,
+    ConnectionConfig, HostTickManager, ImplRef, LocalEntityKey, ManagerType, Manifest,
     PacketReader, PacketType, ProtocolType, Ref, Replicate, SequenceIterator, SharedConfig,
     StandardHeader, Timer, Timestamp,
 };
@@ -29,10 +29,9 @@ pub struct Client<P: ProtocolType> {
     // Manifest
     manifest: Manifest<P>,
     // Connection
-    server_address: SocketAddr,
     connection_config: ConnectionConfig,
-    sender: PacketSender,
-    receiver: Box<dyn PacketReceiver>,
+    socket: Socket,
+    io: Io,
     server_connection: Option<ServerConnection<P>>,
     pre_connection_timestamp: Option<Timestamp>,
     pre_connection_digest: Option<Box<[u8]>>,
@@ -47,20 +46,27 @@ pub struct Client<P: ProtocolType> {
 }
 
 impl<P: ProtocolType> Client<P> {
-    /// Create a new Client
-    pub fn new<R: ImplRef<P>>(
-        client_config: Option<ClientConfig>,
-        shared_config: SharedConfig<P>,
-        auth: Option<R>,
-    ) -> Self {
-        let mut client_config = match client_config {
-            Some(config) => config,
-            None => ClientConfig::default(),
-        };
-        client_config.socket_config.shared.link_condition_config =
-            shared_config.link_condition_config.clone();
+    /// Connect to the given server address
+    pub fn connect<R: ImplRef<P>>(&mut self, server_address: SocketAddr, auth: Option<R>) {
+        self.socket.connect(server_address);
+        self.io.load(
+            self.socket.get_packet_sender(),
+            self.socket.get_packet_receiver(),
+        );
 
-        let server_address = client_config.socket_config.server_address;
+        self.auth_message = {
+            if auth.is_none() {
+                None
+            } else {
+                Some(auth.unwrap().dyn_ref())
+            }
+        };
+    }
+
+    /// Create a new Client
+    pub fn new(mut client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
+        client_config.socket_config.link_condition_config =
+            shared_config.link_condition_config.clone();
 
         let connection_config = ConnectionConfig::new(
             client_config.disconnection_timeout_duration,
@@ -69,33 +75,24 @@ impl<P: ProtocolType> Client<P> {
             client_config.rtt_sample_size,
         );
 
-        let (sender, receiver) = ClientSocket::connect(client_config.socket_config);
+        let socket = Socket::new(client_config.socket_config);
 
         let mut handshake_timer = Timer::new(client_config.send_handshake_interval);
         handshake_timer.ring_manual();
-
-        let auth_message: Option<Ref<dyn Replicate<P>>> = {
-            if auth.is_none() {
-                None
-            } else {
-                Some(auth.unwrap().dyn_ref())
-            }
-        };
 
         Client {
             // Manifest
             manifest: shared_config.manifest,
             // Connection
-            server_address,
-            sender,
-            receiver,
+            io: Io::new(),
+            socket,
             connection_config,
             handshake_timer,
             server_connection: None,
             pre_connection_timestamp: None,
             pre_connection_digest: None,
             connection_state: AwaitingChallengeResponse,
-            auth_message,
+            auth_message: None,
             // Events
             outstanding_connect: false,
             outstanding_errors: VecDeque::new(),
@@ -147,7 +144,11 @@ impl<P: ProtocolType> Client<P> {
 
     /// Get the address currently associated with the Server
     pub fn server_address(&self) -> SocketAddr {
-        return self.server_address;
+        return self
+            .server_connection
+            .as_ref()
+            .expect("Client has not initiated connection to Server yet!")
+            .get_address();
     }
 
     /// Return whether or not a connection has been established with the Server
@@ -271,7 +272,7 @@ impl<P: ProtocolType> Client<P> {
                 if connection.should_send_heartbeat() {
                     Client::internal_send_with_connection(
                         self.tick_manager.get_client_tick(),
-                        &mut self.sender,
+                        &mut self.io,
                         connection,
                         PacketType::Heartbeat,
                         Packet::empty(),
@@ -282,7 +283,7 @@ impl<P: ProtocolType> Client<P> {
                     let ping_payload = connection.get_ping_payload();
                     Client::internal_send_with_connection(
                         self.tick_manager.get_client_tick(),
-                        &mut self.sender,
+                        &mut self.io,
                         connection,
                         PacketType::Ping,
                         ping_payload,
@@ -292,7 +293,7 @@ impl<P: ProtocolType> Client<P> {
                 while let Some(payload) = connection
                     .get_outgoing_packet(self.tick_manager.get_client_tick(), &self.manifest)
                 {
-                    self.sender.send(Packet::new_raw(payload));
+                    self.io.send_packet(Packet::new_raw(payload));
                     connection.mark_sent();
                 }
                 // update current tick
@@ -401,7 +402,7 @@ impl<P: ProtocolType> Client<P> {
                     .unwrap()
                     .write(&mut timestamp_bytes);
                 Client::<P>::internal_send_connectionless(
-                    &mut self.sender,
+                    &mut self.io,
                     PacketType::ClientChallengeRequest,
                     Packet::new(timestamp_bytes),
                 );
@@ -424,7 +425,7 @@ impl<P: ProtocolType> Client<P> {
                     auth_message.borrow().write(&mut payload_bytes);
                 }
                 Client::<P>::internal_send_connectionless(
-                    &mut self.sender,
+                    &mut self.io,
                     PacketType::ClientConnectRequest,
                     Packet::new(payload_bytes),
                 );
@@ -435,7 +436,7 @@ impl<P: ProtocolType> Client<P> {
     fn maintain_socket(&mut self) {
         // receive from socket
         loop {
-            match self.receiver.receive() {
+            match self.io.receive_packet() {
                 Ok(event) => {
                     if let Some(packet) = event {
                         let server_connection_wrapper = self.server_connection.as_mut();
@@ -494,7 +495,7 @@ impl<P: ProtocolType> Client<P> {
                                 }
                                 PacketType::ServerConnectResponse => {
                                     let server_connection = ServerConnection::new(
-                                        self.server_address,
+                                        self.server_address(),
                                         &self.connection_config,
                                     );
 
@@ -519,7 +520,7 @@ impl<P: ProtocolType> Client<P> {
 
     fn internal_send_with_connection(
         host_tick: u16,
-        sender: &mut PacketSender,
+        io: &mut Io,
         connection: &mut ServerConnection<P>,
         packet_type: PacketType,
         packet: Packet,
@@ -530,17 +531,53 @@ impl<P: ProtocolType> Client<P> {
             packet_type,
             packet.payload(),
         );
-        sender.send(Packet::new_raw(new_payload));
+        io.send_packet(Packet::new_raw(new_payload));
         connection.mark_sent();
     }
 
-    fn internal_send_connectionless(
-        sender: &mut PacketSender,
-        packet_type: PacketType,
-        packet: Packet,
-    ) {
+    fn internal_send_connectionless(io: &mut Io, packet_type: PacketType, packet: Packet) {
         let new_payload =
             naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
-        sender.send(Packet::new_raw(new_payload));
+        io.send_packet(Packet::new_raw(new_payload));
+    }
+}
+
+// IO
+#[derive(Debug)]
+struct Io {
+    packet_sender: Option<PacketSender>,
+    packet_receiver: Option<PacketReceiver>,
+}
+
+impl Io {
+    pub fn new() -> Self {
+        Io {
+            packet_sender: None,
+            packet_receiver: None,
+        }
+    }
+
+    pub fn load(&mut self, packet_sender: PacketSender, packet_receiver: PacketReceiver) {
+        if self.packet_sender.is_some() {
+            panic!("Packet sender/receiver already loaded! Cannot do this twice!");
+        }
+
+        self.packet_sender = Some(packet_sender);
+        self.packet_receiver = Some(packet_receiver);
+    }
+
+    pub fn send_packet(&mut self, packet: Packet) {
+        self.packet_sender
+            .as_mut()
+            .expect("Cannot call Client.send_packet() until you call Client.connect()!")
+            .send(packet);
+    }
+
+    pub fn receive_packet(&mut self) -> Result<Option<Packet>, NaiaClientSocketError> {
+        return self
+            .packet_receiver
+            .as_mut()
+            .expect("Cannot call Client.receive_packet() until you call Client.connect()!")
+            .receive();
     }
 }
