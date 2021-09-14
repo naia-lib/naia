@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use hecs::{Entity as HecsEntityKey, World};
 
 use naia_server::{
-    EntityKey as NaiaEntityKey, EntityKey, Event, Ref, Replicate, RoomKey, Server, ServerConfig,
-    UserKey,
+    EntityKey as NaiaEntityKey, EntityKey, Event, Ref, Replicate, RoomKey, Server, ServerAddrs,
+    ServerConfig, UserKey,
 };
 
 use naia_hecs_demo_shared::{
@@ -26,9 +26,20 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Hecs Server Demo started");
 
-        let mut server_config = ServerConfig::default();
-        server_config.socket_config.session_listen_addr = get_server_address();
-        let mut server = Server::new(Some(server_config), get_shared_config());
+        let server_addresses = ServerAddrs::new(
+            get_server_address(),
+            // IP Address to listen on for UDP WebRTC data channels
+            "127.0.0.1:14192"
+                .parse()
+                .expect("could not parse WebRTC data address/port"),
+            // The public WebRTC IP address to advertise
+            "127.0.0.1:14192"
+                .parse()
+                .expect("could not parse advertised public WebRTC data address/port"),
+        );
+
+        let mut server = Server::new(ServerConfig::default(), get_shared_config());
+        server.listen(server_addresses);
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from

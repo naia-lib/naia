@@ -38,10 +38,6 @@ impl<P: ProtocolType> ServerConnection<P> {
         };
     }
 
-    pub fn get_address(&self) -> SocketAddr {
-        return self.connection.get_address();
-    }
-
     pub fn get_outgoing_packet(
         &mut self,
         host_tick: u16,

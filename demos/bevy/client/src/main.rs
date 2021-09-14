@@ -42,13 +42,14 @@ fn main() {
     #[cfg(target_arch = "wasm32")]
     app.add_plugin(bevy_webgl2::WebGL2Plugin);
 
-    // This will be evaluated in the Server's 'on_auth()' method
-    let auth = Auth::new("charlie", "12345");
+    // Init Naia Client
+    let server_address = get_server_address();
+    let auth = Some(Auth::new("charlie", "12345"));
+
+    let mut client = Client::new(ClientConfig::default(), get_shared_config());
+    client.connect(server_address, auth);
 
     // Add Naia Client
-    let mut client_config = ClientConfig::default();
-    client_config.socket_config.server_address = get_server_address();
-    let client = Client::new(Some(client_config), get_shared_config(), Some(auth));
     app.insert_non_send_resource(client);
 
     // Resources

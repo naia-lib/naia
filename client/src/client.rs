@@ -32,6 +32,7 @@ pub struct Client<P: ProtocolType> {
     connection_config: ConnectionConfig,
     socket: Socket,
     io: Io,
+    address: Option<SocketAddr>,
     server_connection: Option<ServerConnection<P>>,
     pre_connection_timestamp: Option<Timestamp>,
     pre_connection_digest: Option<Box<[u8]>>,
@@ -46,23 +47,6 @@ pub struct Client<P: ProtocolType> {
 }
 
 impl<P: ProtocolType> Client<P> {
-    /// Connect to the given server address
-    pub fn connect<R: ImplRef<P>>(&mut self, server_address: SocketAddr, auth: Option<R>) {
-        self.socket.connect(server_address);
-        self.io.load(
-            self.socket.get_packet_sender(),
-            self.socket.get_packet_receiver(),
-        );
-
-        self.auth_message = {
-            if auth.is_none() {
-                None
-            } else {
-                Some(auth.unwrap().dyn_ref())
-            }
-        };
-    }
-
     /// Create a new Client
     pub fn new(mut client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
         client_config.socket_config.link_condition_config =
@@ -87,6 +71,7 @@ impl<P: ProtocolType> Client<P> {
             io: Io::new(),
             socket,
             connection_config,
+            address: None,
             handshake_timer,
             server_connection: None,
             pre_connection_timestamp: None,
@@ -99,6 +84,24 @@ impl<P: ProtocolType> Client<P> {
             // Ticks
             tick_manager: TickManager::new(shared_config.tick_interval),
         }
+    }
+
+    /// Connect to the given server address
+    pub fn connect<R: ImplRef<P>>(&mut self, server_address: SocketAddr, auth: Option<R>) {
+        self.address = Some(server_address);
+        self.socket.connect(server_address);
+        self.io.load(
+            self.socket.get_packet_sender(),
+            self.socket.get_packet_receiver(),
+        );
+
+        self.auth_message = {
+            if auth.is_none() {
+                None
+            } else {
+                Some(auth.unwrap().dyn_ref())
+            }
+        };
     }
 
     // Messages
@@ -145,10 +148,8 @@ impl<P: ProtocolType> Client<P> {
     /// Get the address currently associated with the Server
     pub fn server_address(&self) -> SocketAddr {
         return self
-            .server_connection
-            .as_ref()
-            .expect("Client has not initiated connection to Server yet!")
-            .get_address();
+            .address
+            .expect("Client has not initiated connection to Server yet!");
     }
 
     /// Return whether or not a connection has been established with the Server

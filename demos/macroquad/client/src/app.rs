@@ -22,13 +22,11 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Macroquad Client Demo started");
 
-        let mut client_config = ClientConfig::default();
-        client_config.socket_config.server_address = get_server_address();
+        let server_address = get_server_address();
+        let auth = Some(Auth::new("charlie", "12345"));
 
-        // This will be evaluated in the Server's 'on_auth()' method
-        let auth = Auth::new("charlie", "12345");
-
-        let client = Client::new(Some(client_config), get_shared_config(), Some(auth));
+        let mut client = Client::new(ClientConfig::default(), get_shared_config());
+        client.connect(server_address, auth);
 
         App {
             client,
