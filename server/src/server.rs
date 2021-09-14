@@ -316,8 +316,8 @@ impl<P: ProtocolType> Server<P> {
         self.entities.len()
     }
 
-    /// Iterate through all the Server's Entities
-    pub fn entities_iter(&self) -> Vec<EntityKey> {
+    /// Return a list of all the Server's Entities' keys
+    pub fn entity_keys(&self) -> Vec<EntityKey> {
         let mut output = Vec::<EntityKey>::new();
         // TODO: make this more efficient by some fancy 'collect' chaining type method?
         for entity_key in self.entities.keys() {
@@ -355,8 +355,8 @@ impl<P: ProtocolType> Server<P> {
         // TODO: precache this, instead of generating a new list every call
         // likely this is called A LOT
         for (room_key, room) in self.rooms.iter() {
-            for user_key in room.users_iter() {
-                for entity_key in room.entities_iter() {
+            for user_key in room.user_keys() {
+                for entity_key in room.entity_keys() {
                     list.push((room_key, *user_key, *entity_key));
                 }
             }
@@ -401,9 +401,15 @@ impl<P: ProtocolType> Server<P> {
         panic!("No Room exists for given Key!");
     }
 
-    /// Iterate through all the Server's current Rooms
-    pub fn rooms_iter(&self) -> slotmap::dense::Iter<RoomKey, Room> {
-        return self.rooms.iter();
+    /// Return a list of all the Server's Rooms' keys
+    pub fn room_keys(&self) -> Vec<RoomKey> {
+        let mut output = Vec::new();
+
+        for (key, _) in self.rooms.iter() {
+            output.push(key);
+        }
+
+        return output;
     }
 
     /// Get a count of how many Rooms currently exist
@@ -438,9 +444,15 @@ impl<P: ProtocolType> Server<P> {
         panic!("No User exists for given Key!");
     }
 
-    /// Iterate through all currently connected Users
-    pub fn users_iter(&self) -> slotmap::dense::Iter<UserKey, User> {
-        return self.users.iter();
+    /// Return a list of all currently connected Users' keys
+    pub fn user_keys(&self) -> Vec<UserKey> {
+        let mut output = Vec::new();
+
+        for (user_key, _) in self.users.iter() {
+            output.push(user_key);
+        }
+
+        return output;
     }
 
     /// Get the number of Users currently connected
@@ -1035,8 +1047,8 @@ impl<P: ProtocolType> Server<P> {
                 }
             }
 
-            for user_key in room.users_iter() {
-                for entity_key in room.entities_iter() {
+            for user_key in room.user_keys() {
+                for entity_key in room.entity_keys() {
                     if self.entities.contains_key(entity_key) {
                         if let Some(client_connection) = self.client_connections.get_mut(user_key) {
                             let currently_in_scope = client_connection.has_entity(entity_key);
