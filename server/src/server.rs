@@ -55,8 +55,10 @@ pub struct Server<P: ProtocolType> {
     rooms: DenseSlotMap<RoomKey, Room>,
     // Entities
     entity_key_generator: KeyGenerator<EntityKey>,
-    entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
     entities: HashMap<EntityKey, EntityRecord>,
+    entity_room_map: HashMap<EntityKey, RoomKey>,
+    entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
+
     // Components
     global_component_store: DenseSlotMap<ComponentKey, P>,
     component_entity_map: HashMap<ComponentKey, EntityKey>,
@@ -108,8 +110,9 @@ impl<P: ProtocolType> Server<P> {
             rooms: DenseSlotMap::with_key(),
             // Entities
             entity_key_generator: KeyGenerator::new(),
-            entity_scope_map: HashMap::new(),
             entities: HashMap::new(),
+            entity_room_map: HashMap::new(),
+            entity_scope_map: HashMap::new(),
             // Components
             global_component_store: DenseSlotMap::with_key(),
             component_entity_map: HashMap::new(),
@@ -723,6 +726,36 @@ impl<P: ProtocolType> Server<P> {
 
     //// Rooms
 
+    /// Deletes the Room associated with a given RoomKey on the Server.
+    /// Returns true if the Room existed.
+    pub(crate) fn room_destroy(&mut self, room_key: &RoomKey) -> bool {
+        if self.rooms.contains_key(*room_key) {
+            // remove all entities from the entity_room_map
+            for entity_key in self.rooms.get(*room_key).unwrap().entity_keys() {
+                self.entity_room_map.remove(entity_key);
+            }
+
+            // TODO: what else kind of cleanup do we need to do here? Scopes?
+
+            // actually remove the room from the collection
+            self.rooms.remove(*room_key);
+
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    //////// users
+
+    /// Returns whether or not an User is currently in a specific Room, given their keys.
+    pub(crate) fn room_has_user(&self, room_key: &RoomKey, user_key: &UserKey) -> bool {
+        if let Some(room) = self.rooms.get(*room_key) {
+            return room.has_user(user_key);
+        }
+        return false;
+    }
+
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
     /// Entities will only ever be in-scope for Users which are in a
     /// Room with them
@@ -747,10 +780,24 @@ impl<P: ProtocolType> Server<P> {
         return 0;
     }
 
-    /// Add an Entity to a Room, given the appropriate RoomKey & EntityKey
+    //////// entities
+
+    /// Returns whether or not an Entity is currently in a specific Room, given their keys.
+    pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity_key: &EntityKey) -> bool {
+        if let Some(actual_room_key) = self.entity_room_map.get(entity_key) {
+            return room_key == actual_room_key;
+        }
+        return false;
+    }
+
+    /// Add an Entity to a Room, given the appropriate RoomKey & EntityKey.
     /// Entities will only ever be in-scope for Users which are in a Room with
-    /// them
+    /// them.
     pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
+        if self.entity_room_map.contains_key(entity_key) {
+            panic!("Entity already belongs to a Room! Remove the Entity from the Room before adding it to a new Room.");
+        }
+
         if let Some(room) = self.rooms.get_mut(*room_key) {
             room.add_entity(entity_key);
         }
@@ -759,7 +806,9 @@ impl<P: ProtocolType> Server<P> {
     /// Remove an Entity from a Room, given the appropriate RoomKey & EntityKey
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity_key: &EntityKey) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
-            room.remove_entity(entity_key);
+            if room.remove_entity(entity_key) {
+                self.entity_room_map.remove(entity_key);
+            }
         }
     }
 
@@ -769,12 +818,6 @@ impl<P: ProtocolType> Server<P> {
             return room.entities_count();
         }
         return 0;
-    }
-
-    /// Deletes the Room associated with a given RoomKey on the Server. Returns
-    /// true if the Room existed
-    pub(crate) fn room_destroy(&mut self, key: &RoomKey) -> bool {
-        return self.rooms.remove(*key).is_some();
     }
 
     // Private methods
