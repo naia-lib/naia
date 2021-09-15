@@ -26,6 +26,12 @@ impl Room {
         }
     }
 
+    // Users
+
+    pub(crate) fn has_user(&self, user_key: &UserKey) -> bool {
+        return self.users.contains(user_key);
+    }
+
     pub(crate) fn subscribe_user(&mut self, user_key: &UserKey) {
         self.users.insert(*user_key);
     }
@@ -46,15 +52,21 @@ impl Room {
         return self.users.len();
     }
 
+    // Entities
+
     pub(crate) fn add_entity(&mut self, entity_key: &EntityKey) {
         self.entities.insert(*entity_key);
     }
 
-    pub(crate) fn remove_entity(&mut self, entity_key: &EntityKey) {
-        self.entities.remove(entity_key);
-        for user_key in self.users.iter() {
-            self.entity_removal_queue
-                .push_back((*user_key, *entity_key));
+    pub(crate) fn remove_entity(&mut self, entity_key: &EntityKey) -> bool {
+        if self.entities.remove(entity_key) {
+            for user_key in self.users.iter() {
+                self.entity_removal_queue
+                    .push_back((*user_key, *entity_key));
+            }
+            return true;
+        } else {
+            panic!("Room does not contain Entity");
         }
     }
 
@@ -95,8 +107,20 @@ impl<'s, P: ProtocolType> RoomRef<'s, P> {
         self.key
     }
 
+    // Users
+
+    pub fn has_user(&self, user_key: &UserKey) -> bool {
+        return self.server.room_has_user(&self.key, user_key);
+    }
+
     pub fn users_count(&self) -> usize {
         return self.server.room_users_count(&self.key);
+    }
+
+    // Entities
+
+    pub fn has_entity(&self, entity_key: &EntityKey) -> bool {
+        return self.server.room_has_entity(&self.key, entity_key);
     }
 
     pub fn entities_count(&self) -> usize {
@@ -119,12 +143,14 @@ impl<'s, P: ProtocolType> RoomMut<'s, P> {
         self.key
     }
 
-    pub fn users_count(&self) -> usize {
-        return self.server.room_users_count(&self.key);
+    pub fn destroy(&mut self) {
+        self.server.room_destroy(&self.key);
     }
 
-    pub fn entities_count(&self) -> usize {
-        return self.server.room_entities_count(&self.key);
+    // Users
+
+    pub fn has_user(&self, user_key: &UserKey) -> bool {
+        return self.server.room_has_user(&self.key, user_key);
     }
 
     pub fn add_user(&mut self, user_key: &UserKey) -> &mut Self {
@@ -139,6 +165,16 @@ impl<'s, P: ProtocolType> RoomMut<'s, P> {
         self
     }
 
+    pub fn users_count(&self) -> usize {
+        return self.server.room_users_count(&self.key);
+    }
+
+    // Entities
+
+    pub fn has_entity(&self, entity_key: &EntityKey) -> bool {
+        return self.server.room_has_entity(&self.key, entity_key);
+    }
+
     pub fn add_entity(&mut self, entity_key: &EntityKey) -> &mut Self {
         self.server.room_add_entity(&self.key, entity_key);
 
@@ -151,7 +187,7 @@ impl<'s, P: ProtocolType> RoomMut<'s, P> {
         self
     }
 
-    pub fn destroy(&mut self) {
-        self.server.room_destroy(&self.key);
+    pub fn entities_count(&self) -> usize {
+        return self.server.room_entities_count(&self.key);
     }
 }
