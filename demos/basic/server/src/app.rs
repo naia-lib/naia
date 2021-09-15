@@ -1,4 +1,4 @@
-use naia_server::{Event, RoomKey, Server, ServerAddrs, ServerConfig, UserKey};
+use naia_server::{Event, RoomKey, Server, ServerAddrs, ServerConfig};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
@@ -103,11 +103,7 @@ impl App {
                     // All game logic should happen here, on a tick event
 
                     // Message sending
-                    let mut iter_vec: Vec<UserKey> = Vec::new();
-                    for (user_key, _) in self.server.user_keys() {
-                        iter_vec.push(user_key);
-                    }
-                    for user_key in iter_vec {
+                    for user_key in self.server.user_keys() {
                         let new_message_contents = format!("Server Message ({})", self.tick_count);
                         info!(
                             "Server send to   ({}) -> {}",
@@ -129,15 +125,15 @@ impl App {
                     }
 
                     // Update scopes of entities
-                    for (room_key, user_key, entity_key) in self.server.scopes() {
+                    for (_, user_key, entity_key) in self.server.scope_checks() {
                         if let Some(character_ref) =
                             self.server.entity(&entity_key).component::<Character>()
                         {
                             let x = *character_ref.borrow().x.get();
                             if x >= 5 && x <= 15 {
-                                self.server.accept_scope(room_key, user_key, entity_key);
+                                self.server.user_scope(&user_key).include(&entity_key);
                             } else {
-                                self.server.reject_scope(room_key, user_key, entity_key);
+                                self.server.user_scope(&user_key).exclude(&entity_key);
                             }
                         }
                     }

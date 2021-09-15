@@ -228,15 +228,15 @@ fn on_tick(mut server: NonSendMut<Server<Protocol>>) {
     //info!("tick");
 
     // Update scopes of entities
-    for (room_key, user_key, naia_entity_key) in server.scopes() {
+    for (_, user_key, naia_entity_key) in server.scope_checks() {
         // You'd normally do whatever checks you need to in here..
         // to determine whether each Entity should be in scope or not.
 
         // This indicates the Entity should be in this scope.
-        server.accept_scope(room_key, user_key, naia_entity_key);
+        server.user_scope(&user_key).include(&naia_entity_key);
 
         // And call this if Entity should NOT be in this scope.
-        // server.reject_scope(...);
+        // server.user_scope(..).exclude(..);
     }
 
     // VERY IMPORTANT! Calling this actually sends all update data

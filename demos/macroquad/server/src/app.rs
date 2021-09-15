@@ -109,15 +109,15 @@ impl App {
                     // All game logic should happen here, on a tick event
 
                     // Check whether Entities are in/out of all possible Scopes
-                    for (room_key, user_key, entity_key) in self.server.scopes() {
+                    for (_, user_key, entity_key) in self.server.scope_checks() {
                         // You'd normally do whatever checks you need to in here..
                         // to determine whether each Entity should be in scope or not.
 
                         // This indicates the Entity should be in this scope.
-                        self.server.accept_scope(room_key, user_key, entity_key);
+                        self.server.user_scope(&user_key).include(&entity_key);
 
                         // And call this if Entity should NOT be in this scope.
-                        // self.server.reject_scope(...);
+                        // self.server.user_scope(..).exclude(..);
                     }
 
                     // VERY IMPORTANT! Calling this actually sends all update data

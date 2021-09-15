@@ -4,7 +4,7 @@ use hecs::{Entity as HecsEntityKey, World};
 
 use naia_server::{
     EntityKey as NaiaEntityKey, EntityKey, Event, Ref, Replicate, RoomKey, Server, ServerAddrs,
-    ServerConfig, UserKey,
+    ServerConfig,
 };
 
 use naia_hecs_demo_shared::{
@@ -197,29 +197,23 @@ impl App {
                     }
 
                     // Update scopes of entities
-                    for (room_key, user_key, naia_entity_key) in self.server.scopes() {
+                    for (_, user_key, naia_entity_key) in self.server.scope_checks() {
                         if let Some(hecs_entity_key) =
                             self.naia_to_hecs_key_map.get(&naia_entity_key)
                         {
                             if let Ok(pos_ref) = self.world.get::<Ref<Position>>(*hecs_entity_key) {
                                 let x = *pos_ref.borrow().x.get();
                                 if x >= 5 && x <= 100 {
-                                    self.server
-                                        .accept_scope(room_key, user_key, naia_entity_key);
+                                    self.server.user_scope(&user_key).include(&naia_entity_key);
                                 } else {
-                                    self.server
-                                        .reject_scope(room_key, user_key, naia_entity_key);
+                                    self.server.user_scope(&user_key).exclude(&naia_entity_key);
                                 }
                             }
                         }
                     }
 
                     // Message Sending
-                    let mut iter_vec: Vec<UserKey> = Vec::new();
-                    for (user_key, _) in self.server.user_keys() {
-                        iter_vec.push(user_key);
-                    }
-                    for user_key in iter_vec {
+                    for user_key in self.server.user_keys() {
                         let address = self.server.user(&user_key).address();
                         let message_contents = format!("Server Packet (tick {})", self.tick_count);
                         info!("Naia Server send -> {}: {}", address, message_contents);
