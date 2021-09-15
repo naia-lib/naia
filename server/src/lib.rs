@@ -55,6 +55,7 @@ mod server;
 mod server_config;
 mod tick_manager;
 mod user;
+mod user_scope;
 
 pub use event::Event;
 pub use room::room_key::RoomKey;

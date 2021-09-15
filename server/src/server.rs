@@ -33,6 +33,7 @@ use super::{
     server_config::ServerConfig,
     tick_manager::TickManager,
     user::{user_key::UserKey, User, UserMut, UserRef},
+    user_scope::UserScopeMut,
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -57,7 +58,7 @@ pub struct Server<P: ProtocolType> {
     entity_key_generator: KeyGenerator<EntityKey>,
     entities: HashMap<EntityKey, EntityRecord>,
     entity_room_map: HashMap<EntityKey, RoomKey>,
-    entity_scope_map: HashMap<(RoomKey, UserKey, EntityKey), bool>,
+    entity_scope_map: HashMap<(UserKey, EntityKey), bool>,
 
     // Components
     global_component_store: DenseSlotMap<ComponentKey, P>,
@@ -331,16 +332,22 @@ impl<P: ProtocolType> Server<P> {
 
     // Entity Scopes
 
-    /// Accepts Scope as valid
-    pub fn accept_scope(&mut self, room_key: RoomKey, user_key: UserKey, entity_key: EntityKey) {
-        let key = (room_key, user_key, entity_key);
-        self.entity_scope_map.insert(key, true);
+    pub(crate) fn user_scope_set_entity(
+        &mut self,
+        user_key: &UserKey,
+        entity_key: &EntityKey,
+        is_contained: bool,
+    ) {
+        let key = (*user_key, *entity_key);
+        self.entity_scope_map.insert(key, is_contained);
     }
 
-    /// Rejects Scope as invalid
-    pub fn reject_scope(&mut self, room_key: RoomKey, user_key: UserKey, entity_key: EntityKey) {
-        let key = (room_key, user_key, entity_key);
-        self.entity_scope_map.insert(key, false);
+    /// Returns a UserScopeMut, which
+    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P> {
+        if self.users.contains_key(*user_key) {
+            return UserScopeMut::new(self, &user_key);
+        }
+        panic!("No User exists for given Key!");
     }
 
     /// Used to evaluate whether, given a User & Entity that are in the
@@ -348,11 +355,11 @@ impl<P: ProtocolType> Server<P> {
     ///
     /// While Rooms allow for a very simple scope to which an Entity can belong,
     /// this provides complete customization for advanced scopes.
-
+    ///
     /// Return a collection of Entity Scope Sets, being a unique combination of
-    /// a related Room, User, and Entity, used to determine which entities to
-    /// replicate to which users
-    pub fn scopes(&self) -> Vec<(RoomKey, UserKey, EntityKey)> {
+    /// a related Room, User, and Entity, used to determine which Entities to
+    /// replicate to which Users
+    pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, EntityKey)> {
         let mut list: Vec<(RoomKey, UserKey, EntityKey)> = Vec::new();
 
         // TODO: precache this, instead of generating a new list every call
@@ -1086,13 +1093,15 @@ impl<P: ProtocolType> Server<P> {
     // Entity Scopes
 
     fn update_entity_scopes(&mut self) {
-        for (room_key, room) in self.rooms.iter_mut() {
+        for (_, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
                 if let Some(client_connection) = self.client_connections.get_mut(&removed_user) {
                     Self::connection_remove_entity(client_connection, &removed_entity);
                 }
             }
 
+            // TODO: we should be able to cache these tuples of keys to avoid building a new
+            // list each time
             for user_key in room.user_keys() {
                 for entity_key in room.entity_keys() {
                     if self.entities.contains_key(entity_key) {
@@ -1103,7 +1112,7 @@ impl<P: ProtocolType> Server<P> {
                             if client_connection.has_prediction_entity(entity_key) {
                                 should_be_in_scope = true;
                             } else {
-                                let key = (room_key, *user_key, *entity_key);
+                                let key = (*user_key, *entity_key);
                                 if let Some(in_scope) = self.entity_scope_map.get(&key) {
                                     should_be_in_scope = *in_scope;
                                 } else {
