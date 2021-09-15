@@ -748,7 +748,8 @@ impl<P: ProtocolType> Server<P> {
 
     //////// users
 
-    /// Returns whether or not an User is currently in a specific Room, given their keys.
+    /// Returns whether or not an User is currently in a specific Room, given
+    /// their keys.
     pub(crate) fn room_has_user(&self, room_key: &RoomKey, user_key: &UserKey) -> bool {
         if let Some(room) = self.rooms.get(*room_key) {
             return room.has_user(user_key);
@@ -782,7 +783,8 @@ impl<P: ProtocolType> Server<P> {
 
     //////// entities
 
-    /// Returns whether or not an Entity is currently in a specific Room, given their keys.
+    /// Returns whether or not an Entity is currently in a specific Room, given
+    /// their keys.
     pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity_key: &EntityKey) -> bool {
         if let Some(actual_room_key) = self.entity_room_map.get(entity_key) {
             return room_key == actual_room_key;
@@ -800,6 +802,7 @@ impl<P: ProtocolType> Server<P> {
 
         if let Some(room) = self.rooms.get_mut(*room_key) {
             room.add_entity(entity_key);
+            self.entity_room_map.insert(*entity_key, *room_key);
         }
     }
 
