@@ -2,20 +2,21 @@ use std::any::TypeId;
 
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
-use crate::{EntityKey, RoomKey, Server, UserKey};
+use crate::{EntityKey, RoomKey, Server, UserKey, WorldType};
 
 // EntityRef
 
 /// A reference to an Entity being tracked by the Server
-pub struct EntityRef<'s, P: ProtocolType> {
+pub struct EntityRef<'s, 'w, P: ProtocolType, W: WorldType> {
     server: &'s Server<P>,
+    world: &'w W,
     key: EntityKey,
 }
 
-impl<'s, P: ProtocolType> EntityRef<'s, P> {
+impl<'s, 'w, P: ProtocolType, W: WorldType> EntityRef<'s, 'w, P, W> {
     /// Return a new EntityRef
-    pub fn new(server: &'s Server<P>, key: &EntityKey) -> Self {
-        EntityRef { server, key: *key }
+    pub(crate) fn new(server: &'s Server<P>, world: &'w W, key: &EntityKey) -> Self {
+        EntityRef { server, world, key: *key }
     }
 
     /// Gets the EntityKey associated with the Entity
@@ -51,14 +52,15 @@ impl<'s, P: ProtocolType> EntityRef<'s, P> {
 }
 
 // EntityMut
-pub struct EntityMut<'s, P: ProtocolType> {
+pub struct EntityMut<'s, 'w, P: ProtocolType, W: WorldType> {
     server: &'s mut Server<P>,
+    world: &'w mut W,
     key: EntityKey,
 }
 
-impl<'s, P: ProtocolType> EntityMut<'s, P> {
-    pub fn new(server: &'s mut Server<P>, key: &EntityKey) -> Self {
-        EntityMut { server, key: *key }
+impl<'s, 'w, P: ProtocolType, W: WorldType> EntityMut<'s, 'w, P, W> {
+    pub(crate) fn new(server: &'s mut Server<P>, world: &'w mut W, key: &EntityKey) -> Self {
+        EntityMut { server, world, key: *key }
     }
 
     pub fn key(&self) -> EntityKey {
@@ -82,6 +84,9 @@ impl<'s, P: ProtocolType> EntityMut<'s, P> {
     }
 
     pub fn insert_component<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
+
+        let new_ref = component_ref.clone_ref();
+        self.world.insert_component(&self.key, new_ref);
         self.server.insert_component(&self.key, component_ref);
 
         self

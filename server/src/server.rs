@@ -23,7 +23,6 @@ pub use naia_shared::{
 use super::{
     client_connection::ClientConnection,
     entity_record::EntityRecord,
-    entity_ref::{EntityMut, EntityRef},
     error::NaiaServerError,
     event::Event,
     keys::component_key::ComponentKey,
@@ -34,7 +33,7 @@ use super::{
     tick_manager::TickManager,
     user::{user_key::UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
-    world::{WorldType, World},
+    world::{WorldType, WorldRef, WorldMut},
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -279,35 +278,26 @@ impl<P: ProtocolType> Server<P> {
         }
     }
 
+    // World
+
+    /// Retrieves an WorldRef that exposes read-only World operations
+    pub fn world<'s, 'w, W: WorldType>(&'s self, world: &'w W) -> WorldRef<'s, 'w, P, W> {
+        return WorldRef::new(self, world);
+    }
+
+    /// Retrieves an WorldMut that exposes read and write World operations
+    pub fn world_mut<'s, 'w, W: WorldType>(&'s mut self, world: &'w mut W) -> WorldMut<'s, 'w, P, W> {
+        return WorldMut::new(self, world);
+    }
+
     // Entities
 
-    /// Spawns a new Entity and returns a corresponding EntityMut, which can be
-    /// used for various operations
-    pub fn spawn_entity(&mut self) -> EntityMut<P> {
+    /// Spawns a new Entity and returns a corresponding EntityKey
+    pub(crate) fn spawn_entity(&mut self) -> EntityKey {
         let entity_key: EntityKey = self.entity_key_generator.generate();
         self.entities.insert(entity_key, EntityRecord::new());
 
-        return EntityMut::new(self, &entity_key);
-    }
-
-    /// Retrieves an EntityRef that exposes read-only operations for the
-    /// Entity associated with the given EntityKey.
-    /// Panics if the Entity does not exist.
-    pub fn entity(&self, entity_key: &EntityKey) -> EntityRef<P> {
-        if self.entities.contains_key(entity_key) {
-            return EntityRef::new(self, &entity_key);
-        }
-        panic!("No Entity exists for given Key!");
-    }
-
-    /// Retrieves an EntityMut that exposes read and write operations for the
-    /// Entity associated with the given EntityKey.
-    /// Panics if the entity does not exist.
-    pub fn entity_mut(&mut self, entity_key: &EntityKey) -> EntityMut<P> {
-        if self.entities.contains_key(entity_key) {
-            return EntityMut::new(self, &entity_key);
-        }
-        panic!("No Entity exists for given Key!");
+        return entity_key;
     }
 
     /// Returns whether an Entity exists for the given EntityKey
