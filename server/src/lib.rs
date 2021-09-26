@@ -62,3 +62,4 @@ pub use room::room_key::RoomKey;
 pub use server::Server;
 pub use server_config::ServerConfig;
 pub use user::user_key::UserKey;
+pub use entity_ref::EntityRef;
