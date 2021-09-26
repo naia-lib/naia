@@ -1,4 +1,3 @@
-use std::any::TypeId;
 
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
@@ -29,13 +28,13 @@ impl<'s, 'w, P: ProtocolType, W: WorldType> EntityRef<'s, 'w, P, W> {
     /// Returns whether or not the Entity has an associated Component
     pub fn has_component<R: Replicate<P>>(&self) -> bool {
         return self
-            .server
-            .entity_contains_type_id(&self.key, &TypeId::of::<R>());
+            .world
+            .has_component::<P, R>(&self.key);
     }
 
     /// Gets a Ref to a Component associated with the Entity
-    pub fn component<R: Replicate<P>>(&self) -> Option<&Ref<R>> {
-        return self.server.component::<R>(&self.key);
+    pub fn component<R: Replicate<P>>(&self) -> Option<Ref<R>> {
+        return self.world.component::<P, R>(&self.key);
     }
 
     // Ownership
@@ -68,6 +67,7 @@ impl<'s, 'w, P: ProtocolType, W: WorldType> EntityMut<'s, 'w, P, W> {
     }
 
     pub fn despawn(&mut self) {
+        self.world.despawn_entity(&self.key);
         self.server.despawn_entity(&self.key);
     }
 
@@ -75,16 +75,15 @@ impl<'s, 'w, P: ProtocolType, W: WorldType> EntityMut<'s, 'w, P, W> {
 
     pub fn has_component<R: Replicate<P>>(&self) -> bool {
         return self
-            .server
-            .entity_contains_type_id(&self.key, &TypeId::of::<R>());
+            .world
+            .has_component::<P, R>(&self.key);
     }
 
-    pub fn component<R: Replicate<P>>(&self) -> Option<&Ref<R>> {
-        return self.server.component::<R>(&self.key);
+    pub fn component<R: Replicate<P>>(&self) -> Option<Ref<R>> {
+        return self.world.component::<P, R>(&self.key);
     }
 
     pub fn insert_component<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
-
         let new_ref = component_ref.clone_ref();
         self.world.insert_component(&self.key, new_ref);
         self.server.insert_component(&self.key, component_ref);
@@ -93,12 +92,15 @@ impl<'s, 'w, P: ProtocolType, W: WorldType> EntityMut<'s, 'w, P, W> {
     }
 
     pub fn insert_components<R: ImplRef<P>>(&mut self, component_refs: &[R]) -> &mut Self {
-        self.server.insert_components(&self.key, component_refs);
+        for component_ref in component_refs {
+            self.insert_component(component_ref);
+        }
 
         self
     }
 
     pub fn remove_component<R: Replicate<P>>(&mut self) -> Option<Ref<R>> {
+        self.world.remove_component::<P, R>(&self.key);
         return self.server.remove_component::<R>(&self.key);
     }
 

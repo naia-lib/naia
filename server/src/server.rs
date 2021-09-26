@@ -592,18 +592,18 @@ impl<P: ProtocolType> Server<P> {
 
     //// Components
 
-    /// Given an EntityKey & a Component type, get a reference to a registered
-    /// Component being tracked by the Server
-    pub(crate) fn component<R: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<&Ref<R>> {
-        if let Some(entity_record) = self.entities.get(entity_key) {
-            if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
-                if let Some(protocol) = self.components.get(component_key) {
-                    return protocol.as_typed_ref::<R>();
-                }
-            }
-        }
-        return None;
-    }
+//    /// Given an EntityKey & a Component type, get a reference to a registered
+//    /// Component being tracked by the Server
+//    pub(crate) fn component<R: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<&Ref<R>> {
+//        if let Some(entity_record) = self.entities.get(entity_key) {
+//            if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
+//                if let Some(protocol) = self.components.get(component_key) {
+//                    return protocol.as_typed_ref::<R>();
+//                }
+//            }
+//        }
+//        return None;
+//    }
 
     /// Adds a Component to an Entity associated with the given EntityKey.
     pub(crate) fn insert_component<R: ImplRef<P>>(
@@ -645,18 +645,6 @@ impl<P: ProtocolType> Server<P> {
 
         if let Some(entity_record) = self.entities.get_mut(&entity_key) {
             entity_record.insert_component(&component_key, &type_id);
-        }
-    }
-
-    /// Adds an array of Components to an Entity associated with the given
-    /// EntityKey.
-    pub(crate) fn insert_components<R: ImplRef<P>>(
-        &mut self,
-        entity_key: &EntityKey,
-        component_refs: &[R],
-    ) {
-        for component_ref in component_refs {
-            self.insert_component(entity_key, component_ref);
         }
     }
 
