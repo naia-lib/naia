@@ -39,10 +39,12 @@ impl<'s, P: ProtocolType> EntityRef<'s, P> {
 
     // Ownership
 
+    /// Returns whether or not the Entity is owned/controlled by a User
     pub fn has_owner(&self) -> bool {
         return self.server.entity_has_owner(&self.key);
     }
 
+    /// Returns the UserKey associated with the Entity's owner/controller
     pub fn get_owner(&self) -> Option<&UserKey> {
         return self.server.entity_get_owner(&self.key);
     }
