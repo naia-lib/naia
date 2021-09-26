@@ -60,4 +60,6 @@ pub trait ImplRef<P: ProtocolType>: Any {
     fn protocol(&self) -> P;
     /// Converts the Ref to a Trait Object Ref
     fn dyn_ref(&self) -> Ref<dyn Replicate<P>>;
+    /// Clones the Ref
+    fn clone_ref(&self) -> Self;
 }

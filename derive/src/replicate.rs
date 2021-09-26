@@ -72,6 +72,9 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                 let upcast_ref: Ref<dyn Replicate<#type_name>> = #type_name::#convert_method_name(self.clone());
                 return upcast_ref.clone();
             }
+            fn clone_ref(&self) -> Ref<#replica_name> {
+                return self.clone();
+            }
         }
         impl Replicate<#type_name> for #replica_name {
             fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }

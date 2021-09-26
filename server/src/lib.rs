@@ -31,7 +31,7 @@ pub use naia_server_socket::ServerAddrs;
 
 pub use naia_shared::{
     EntityKey, LinkConditionerConfig, ProtocolType, Random, Ref, Replicate, SharedConfig,
-    SocketConfig,
+    SocketConfig, ImplRef
 };
 
 mod client_connection;
@@ -64,4 +64,4 @@ pub use server::Server;
 pub use server_config::ServerConfig;
 pub use user::user_key::UserKey;
 pub use entity_ref::EntityRef;
-pub use world::WorldType;
+pub use world::{World, WorldType};
