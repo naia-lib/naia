@@ -1,9 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use hecs::Entity as HecsEntityKey;
 
 use naia_server::{
-    EntityKey as NaiaEntityKey, Event, Ref, Replicate, RoomKey, Server, ServerAddrs,
+    EntityKey as NaiaEntityKey, Event, Ref, RoomKey, Server, ServerAddrs,
     ServerConfig,
 };
 
@@ -19,8 +19,6 @@ pub struct App {
     world: World,
     main_room_key: RoomKey,
     tick_count: u32,
-    naia_to_hecs_key_map: HashMap<NaiaEntityKey, HecsEntityKey>,
-    hecs_to_naia_key_map: HashMap<HecsEntityKey, NaiaEntityKey>,
     has_marker: HashSet<NaiaEntityKey>,
 }
 
@@ -81,8 +79,6 @@ impl App {
         App {
             server,
             world,
-            naia_to_hecs_key_map: HashMap::new(),
-            hecs_to_naia_key_map: HashMap::new(),
             main_room_key,
             tick_count: 0,
             has_marker: HashSet::new(),
@@ -149,42 +145,34 @@ impl App {
                     // add marker
                     while let Some(hecs_entity_key) = entities_to_add.pop() {
                         let naia_entity_key = self
-                            .hecs_to_naia_key_map
-                            .get(&hecs_entity_key)
-                            .expect("hecs <-> naia map not working ..");
+                            .world
+                            .hecs_to_naia_key(&hecs_entity_key);
 
-                        if !self.has_marker.contains(naia_entity_key) {
+                        if !self.has_marker.contains(&naia_entity_key) {
                             // Create Marker component
                             let marker = Marker::new("new");
 
-                            // Add to Hecs World
-//                            self.world
-//                                .insert_one(hecs_entity_key, Ref::clone(&marker))
-//                                .expect("error inserting!");
-
                             // Add to Naia Server
-                            self.server.world_mut(&mut self.world)
+                            self.server
+                                .world_mut(&mut self.world)
                                 .entity_mut(&naia_entity_key)
                                 .insert_component(&marker);
 
                             // Track that this entity has a Marker
-                            self.has_marker.insert(*naia_entity_key);
+                            self.has_marker.insert(naia_entity_key);
                         }
                     }
 
                     // remove marker
                     while let Some(hecs_entity_key) = entities_to_remove.pop() {
-                        let naia_entity_key: NaiaEntityKey = *self
-                            .hecs_to_naia_key_map
-                            .get(&hecs_entity_key)
-                            .expect("hecs <-> naia map not working ..");
+                        let naia_entity_key: NaiaEntityKey = self
+                            .world
+                            .hecs_to_naia_key(&hecs_entity_key);
 
                         if self.has_marker.remove(&naia_entity_key) {
-                            // Remove from Hecs World
-                            //self.hecs_remove_component::<Marker>(&hecs_entity_key);
-
                             // Remove from Naia Server
-                            self.server.world_mut(&mut self.world)
+                            self.server
+                                .world_mut(&mut self.world)
                                 .entity_mut(&naia_entity_key)
                                 .remove_component::<Marker>();
                         }
@@ -192,16 +180,14 @@ impl App {
 
                     // Update scopes of entities
                     for (_, user_key, naia_entity_key) in self.server.scope_checks() {
-                        if let Some(hecs_entity_key) =
-                            self.naia_to_hecs_key_map.get(&naia_entity_key)
-                        {
-                            if let Ok(pos_ref) = self.world.hecs.get::<Ref<Position>>(*hecs_entity_key) {
-                                let x = *pos_ref.borrow().x.get();
-                                if x >= 5 && x <= 100 {
-                                    self.server.user_scope(&user_key).include(&naia_entity_key);
-                                } else {
-                                    self.server.user_scope(&user_key).exclude(&naia_entity_key);
-                                }
+                        let hecs_entity_key = self.world.naia_to_hecs_key(&naia_entity_key);
+
+                        if let Ok(pos_ref) = self.world.hecs.get::<Ref<Position>>(hecs_entity_key) {
+                            let x = *pos_ref.borrow().x.get();
+                            if x >= 5 && x <= 100 {
+                                self.server.user_scope(&user_key).include(&naia_entity_key);
+                            } else {
+                                self.server.user_scope(&user_key).exclude(&naia_entity_key);
                             }
                         }
                     }
@@ -229,14 +215,5 @@ impl App {
                 _ => {}
             }
         }
-    }
-
-    fn hecs_remove_component<R: 'static + Replicate<Protocol>>(
-        &mut self,
-        hecs_entity_key: &HecsEntityKey,
-    ) {
-        self.world.hecs
-            .remove_one::<Ref<R>>(*hecs_entity_key)
-            .expect("error removing component");
     }
 }
