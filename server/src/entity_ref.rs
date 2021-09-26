@@ -6,28 +6,33 @@ use crate::{EntityKey, RoomKey, Server, UserKey};
 
 // EntityRef
 
+/// A reference to an Entity being tracked by the Server
 pub struct EntityRef<'s, P: ProtocolType> {
     server: &'s Server<P>,
     key: EntityKey,
 }
 
 impl<'s, P: ProtocolType> EntityRef<'s, P> {
+    /// Return a new EntityRef
     pub fn new(server: &'s Server<P>, key: &EntityKey) -> Self {
         EntityRef { server, key: *key }
     }
 
+    /// Gets the EntityKey associated with the Entity
     pub fn key(&self) -> EntityKey {
         self.key
     }
 
     // Components
 
+    /// Returns whether or not the Entity has an associated Component
     pub fn has_component<R: Replicate<P>>(&self) -> bool {
         return self
             .server
             .entity_contains_type_id(&self.key, &TypeId::of::<R>());
     }
 
+    /// Gets a Ref to a Component associated with the Entity
     pub fn component<R: Replicate<P>>(&self) -> Option<&Ref<R>> {
         return self.server.component::<R>(&self.key);
     }

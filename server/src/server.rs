@@ -332,16 +332,6 @@ impl<P: ProtocolType> Server<P> {
 
     // Entity Scopes
 
-    pub(crate) fn user_scope_set_entity(
-        &mut self,
-        user_key: &UserKey,
-        entity_key: &EntityKey,
-        is_contained: bool,
-    ) {
-        let key = (*user_key, *entity_key);
-        self.entity_scope_map.insert(key, is_contained);
-    }
-
     /// Returns a UserScopeMut, which
     pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P> {
         if self.users.contains_key(*user_key) {
@@ -596,6 +586,18 @@ impl<P: ProtocolType> Server<P> {
             return entity_record.get_key_from_type(type_id).is_some();
         }
         return false;
+    }
+
+    //// Entity Scopes
+
+    pub(crate) fn user_scope_set_entity(
+        &mut self,
+        user_key: &UserKey,
+        entity_key: &EntityKey,
+        is_contained: bool,
+    ) {
+        let key = (*user_key, *entity_key);
+        self.entity_scope_map.insert(key, is_contained);
     }
 
     //// Components
