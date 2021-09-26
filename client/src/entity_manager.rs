@@ -17,8 +17,8 @@ use super::{
 #[derive(Debug)]
 pub struct EntityManager<P: ProtocolType> {
     entities: HashMap<LocalEntityKey, EntityRecord>,
-    component_store: HashMap<LocalComponentKey, P>,
-    prediction_component_store: HashMap<LocalComponentKey, P>,
+    components: HashMap<LocalComponentKey, P>,
+    prediction_components: HashMap<LocalComponentKey, P>,
     component_entity_map: HashMap<LocalComponentKey, LocalEntityKey>,
     queued_incoming_messages: VecDeque<EntityAction<P>>,
 }
@@ -27,8 +27,8 @@ impl<P: ProtocolType> EntityManager<P> {
     pub fn new() -> Self {
         EntityManager {
             entities: HashMap::new(),
-            component_store: HashMap::new(),
-            prediction_component_store: HashMap::new(),
+            components: HashMap::new(),
+            prediction_components: HashMap::new(),
             component_entity_map: HashMap::new(),
             queued_incoming_messages: VecDeque::new(),
         }
@@ -71,11 +71,11 @@ impl<P: ProtocolType> EntityManager<P> {
                             let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
                             let new_component = manifest.create_replica(naia_id, reader);
-                            if self.component_store.contains_key(&component_key) {
+                            if self.components.contains_key(&component_key) {
                                 panic!("attempted to insert duplicate component");
                             } else {
                                 let new_component_type_id = new_component.get_type_id();
-                                self.component_store
+                                self.components
                                     .insert(component_key, new_component.clone());
                                 self.component_entity_map.insert(component_key, entity_key);
                                 component_list.push(new_component);
@@ -126,8 +126,8 @@ impl<P: ProtocolType> EntityManager<P> {
 
                         // create copies of components //
                         for component_key in entity_record.get_component_keys() {
-                            if let Some(protocol) = self.component_store.get(&component_key) {
-                                self.prediction_component_store
+                            if let Some(protocol) = self.components.get(&component_key) {
+                                self.prediction_components
                                     .insert(component_key, protocol.copy());
                             }
                         }
@@ -148,7 +148,7 @@ impl<P: ProtocolType> EntityManager<P> {
 
                             // remove prediction components //
                             for component_key in entity_record.get_component_keys() {
-                                self.prediction_component_store.remove(&component_key);
+                                self.prediction_components.remove(&component_key);
                             }
                             ////////////////////////////
 
@@ -168,7 +168,7 @@ impl<P: ProtocolType> EntityManager<P> {
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
                     let new_component = manifest.create_replica(naia_id, reader);
-                    if self.component_store.contains_key(&component_key) {
+                    if self.components.contains_key(&component_key) {
                         // its possible we received a very late duplicate message
                         warn!(
                             "attempting to add duplicate local component key: {}, into entity: {}",
@@ -184,7 +184,7 @@ impl<P: ProtocolType> EntityManager<P> {
                                 entity_key.to_u16()
                             );
                         } else {
-                            self.component_store
+                            self.components
                                 .insert(component_key, new_component.clone());
 
                             self.component_entity_map.insert(component_key, entity_key);
@@ -205,7 +205,7 @@ impl<P: ProtocolType> EntityManager<P> {
                     // Component Update
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                    if let Some(component_ref) = self.component_store.get_mut(&component_key) {
+                    if let Some(component_ref) = self.components.get_mut(&component_key) {
                         let diff_mask: DiffMask = DiffMask::read(reader);
 
                         component_ref.read_partial(&diff_mask, reader, packet_index);
@@ -267,7 +267,7 @@ impl<P: ProtocolType> EntityManager<P> {
     pub fn get_component_by_type<R: Replicate<P>>(&self, key: &LocalEntityKey) -> Option<&P> {
         if let Some(entity_record) = self.entities.get(key) {
             if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
-                return self.component_store.get(component_key);
+                return self.components.get(component_key);
             }
         }
         return None;
@@ -281,7 +281,7 @@ impl<P: ProtocolType> EntityManager<P> {
             if let Some(component_key) =
                 entity_component_record.get_key_from_type(&TypeId::of::<R>())
             {
-                return self.prediction_component_store.get(component_key);
+                return self.prediction_components.get(component_key);
             }
         }
         return None;
@@ -311,9 +311,9 @@ impl<P: ProtocolType> EntityManager<P> {
     pub fn prediction_reset_entity(&mut self, key: &LocalEntityKey) {
         if let Some(entity_record) = self.entities.get(key) {
             for component_key in entity_record.get_component_keys() {
-                if let Some(component_ref) = self.component_store.get(&component_key) {
+                if let Some(component_ref) = self.components.get(&component_key) {
                     if let Some(prediction_component_ref) =
-                        self.prediction_component_store.get_mut(&component_key)
+                        self.prediction_components.get_mut(&component_key)
                     {
                         prediction_component_ref.mirror(component_ref);
                     }
@@ -332,9 +332,9 @@ impl<P: ProtocolType> EntityManager<P> {
         entity_key: &LocalEntityKey,
         component_key: &LocalComponentKey,
     ) {
-        self.prediction_component_store.remove(&component_key);
+        self.prediction_components.remove(&component_key);
 
-        if let Some(component) = self.component_store.remove(&component_key) {
+        if let Some(component) = self.components.remove(&component_key) {
             self.queued_incoming_messages
                 .push_back(EntityAction::RemoveComponent(*entity_key, component));
         }
