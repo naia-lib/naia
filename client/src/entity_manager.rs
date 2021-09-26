@@ -215,12 +215,13 @@ impl<P: ProtocolType> EntityManager<P> {
                             .get(&component_key)
                             .expect("component not initialized correctly");
 
-                        // if Entity is a Prediction, replay commands
-                        let entity_record = self
-                            .entities
+                        // check if Entity is a Prediction
+                        if self.entities
                             .get(entity_key)
-                            .expect("component has no associated entity?");
-                        if entity_record.is_prediction {
+                            .expect("component has no associated entity?")
+                            .is_prediction {
+
+                            // replay commands
                             command_receiver.replay_commands(packet_tick, &entity_key);
 
                             // remove command history until the tick that has already been
@@ -244,12 +245,12 @@ impl<P: ProtocolType> EntityManager<P> {
                         .remove(&component_key)
                         .expect("deleting nonexistant/non-initialized component");
 
-                    // Get entity record
-                    let entity_record = self
+                    // Get entity record, remove component
+                    self
                         .entities
                         .get_mut(&entity_key)
-                        .expect("entity not instantiated properly?");
-                    entity_record.remove_component(&component_key);
+                        .expect("entity not instantiated properly?")
+                        .remove_component(&component_key);
                     self.component_delete_cleanup(&entity_key, &component_key);
                 }
                 EntityActionType::Unknown => {
