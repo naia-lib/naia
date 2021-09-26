@@ -61,7 +61,7 @@ pub struct Server<P: ProtocolType> {
     entity_room_map: HashMap<EntityKey, RoomKey>,
     entity_scope_map: HashMap<(UserKey, EntityKey), bool>,
     // Components
-    global_component_store: DenseSlotMap<ComponentKey, P>,
+    components: DenseSlotMap<ComponentKey, P>,
     component_entity_map: HashMap<ComponentKey, EntityKey>,
     mut_handler: Ref<MutHandler>,
     // Events
@@ -115,7 +115,7 @@ impl<P: ProtocolType> Server<P> {
             entity_room_map: HashMap::new(),
             entity_scope_map: HashMap::new(),
             // Components
-            global_component_store: DenseSlotMap::with_key(),
+            components: DenseSlotMap::with_key(),
             component_entity_map: HashMap::new(),
             mut_handler: MutHandler::new(),
             // Events
@@ -559,7 +559,7 @@ impl<P: ProtocolType> Server<P> {
         // add Entity to User's connection if it's not already in-scope
         if !client_connection.has_entity(entity_key) {
             Self::connection_add_entity(
-                &self.global_component_store,
+                &self.components,
                 client_connection,
                 entity_key,
                 &entity_record,
@@ -607,7 +607,7 @@ impl<P: ProtocolType> Server<P> {
     pub(crate) fn component<R: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<&Ref<R>> {
         if let Some(entity_record) = self.entities.get(entity_key) {
             if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
-                if let Some(protocol) = self.global_component_store.get(component_key) {
+                if let Some(protocol) = self.components.get(component_key) {
                     return protocol.as_typed_ref::<R>();
                 }
             }
@@ -684,7 +684,7 @@ impl<P: ProtocolType> Server<P> {
 
             // get a reference to the component
             let protocol = self
-                .global_component_store
+                .components
                 .get(component_key)
                 .expect("component not initialized correctly?");
             let component_ref = protocol.to_typed_ref::<R>().unwrap();
@@ -717,16 +717,6 @@ impl<P: ProtocolType> Server<P> {
             return Some(user.address);
         }
         return None;
-    }
-
-    /// Removes ownership of an Entity from a specific owner User
-    /// This means that the User will be unable to issue Commands to that Entity
-    pub(crate) fn user_disown_entity(&mut self, user_key: &UserKey, entity_key: &EntityKey) {
-        let (client_connection, owner_key, entity_record) = self.entity_disown_start(entity_key);
-        if owner_key != *user_key {
-            panic!("user is attempting to disown an entity which is owned by another user");
-        }
-        Self::entity_disown_finish(client_connection, entity_key, entity_record);
     }
 
     pub(crate) fn user_force_disconnect(&mut self, user_key: &UserKey) {
@@ -1129,7 +1119,7 @@ impl<P: ProtocolType> Server<P> {
 
                                     // add entity to the connections local scope
                                     Self::connection_add_entity(
-                                        &self.global_component_store,
+                                        &self.components,
                                         client_connection,
                                         entity_key,
                                         &entity_record,
@@ -1160,7 +1150,7 @@ impl<P: ProtocolType> Server<P> {
             .set_mutator(&to_property_mutator(new_mutator_ref.clone()));
 
         let component_protocol = component_ref.protocol();
-        let component_key = self.global_component_store.insert(component_protocol);
+        let component_key = self.components.insert(component_protocol);
         new_mutator_ref
             .borrow_mut()
             .set_component_key(component_key);
@@ -1177,7 +1167,7 @@ impl<P: ProtocolType> Server<P> {
         self.mut_handler
             .borrow_mut()
             .deregister_component(component_key);
-        self.global_component_store
+        self.components
             .remove(*component_key)
             .expect("component not initialized correctly?");
     }

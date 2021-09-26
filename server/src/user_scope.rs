@@ -2,7 +2,7 @@ use naia_shared::{EntityKey, ProtocolType};
 
 use crate::UserKey;
 
-use super::{server::Server, world::WorldType};
+use super::server::Server;
 
 pub struct UserScopeMut<'s, P: ProtocolType> {
     server: &'s mut Server<P>,
