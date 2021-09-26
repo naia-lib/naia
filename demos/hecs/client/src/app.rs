@@ -52,14 +52,8 @@ impl App {
                 Ok(Event::Disconnection) => {
                     info!("Client disconnected from: {}", self.client.server_address());
                 }
-                Ok(Event::Message(Protocol::StringMessage(_recv_message_ref))) => {
-                    //let recv_message = _recv_message_ref.borrow();
-                    //let recv_message_contents = recv_message.contents.get();
-                    //info!("Client received message: {}", recv_message_contents);
-
-                    let send_message_contents = format!("Client Packet ({})", self.message_count);
-                    //info!("Client send: {}", send_message_contents);
-
+                Ok(Event::Message(Protocol::StringMessage(_))) => {
+                    let send_message_contents = format!("Client Packet (message {})", self.message_count);
                     let send_message = StringMessage::new(send_message_contents);
                     self.client.queue_message(&send_message, true);
                     self.message_count += 1;

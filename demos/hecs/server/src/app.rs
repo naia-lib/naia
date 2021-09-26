@@ -123,9 +123,9 @@ impl App {
                 }
                 Ok(Event::Message(user_key, Protocol::StringMessage(message_ref))) => {
                     let address = self.server.user(&user_key).address();
-                    let message_thang = message_ref.borrow();
-                    let message = message_thang.message.get();
-                    info!("Naia Server recv <- {}: {}", address, message);
+                    let message = message_ref.borrow();
+                    let message_inner = message.message.get();
+                    info!("Naia Server recv <- {}: {}", address, message_inner);
                 }
                 Ok(Event::Tick) => {
                     // Game logic, march entities across the screen
