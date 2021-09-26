@@ -34,6 +34,7 @@ use super::{
     tick_manager::TickManager,
     user::{user_key::UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
+    world::{WorldType, World},
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -59,7 +60,6 @@ pub struct Server<P: ProtocolType> {
     entities: HashMap<EntityKey, EntityRecord>,
     entity_room_map: HashMap<EntityKey, RoomKey>,
     entity_scope_map: HashMap<(UserKey, EntityKey), bool>,
-
     // Components
     global_component_store: DenseSlotMap<ComponentKey, P>,
     component_entity_map: HashMap<ComponentKey, EntityKey>,
