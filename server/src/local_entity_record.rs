@@ -1,4 +1,4 @@
-use naia_shared::{LocalEntityKey, Ref};
+use naia_shared::LocalEntityKey;
 
 use super::locality_status::LocalityStatus;
 

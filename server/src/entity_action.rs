@@ -4,7 +4,7 @@ use naia_shared::{
     DiffMask, EntityActionType, LocalComponentKey, LocalEntityKey, ProtocolType, Ref, Replicate,
 };
 
-use super::{world_type::WorldType, keys::{ComponentKey, KeyType}};
+use super::keys::{ComponentKey, KeyType};
 
 #[derive(Clone, Debug)]
 pub enum EntityAction<P: ProtocolType, K: KeyType> {

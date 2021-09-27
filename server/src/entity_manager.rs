@@ -1,12 +1,9 @@
 use std::{
-    any::TypeId,
     borrow::Borrow,
     clone::Clone,
     collections::{HashMap, HashSet, VecDeque},
     net::SocketAddr,
 };
-
-use slotmap::SparseSecondaryMap;
 
 use byteorder::{BigEndian, WriteBytesExt};
 
@@ -19,7 +16,7 @@ use crate::packet_writer::PacketWriter;
 
 use super::{
     entity_action::EntityAction,
-    keys::{ComponentKey, KeyType},
+    keys::ComponentKey,
     local_component_record::LocalComponentRecord,
     local_entity_record::LocalEntityRecord,
     locality_status::LocalityStatus,
@@ -98,9 +95,6 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
             match &action {
                 EntityAction::SpawnEntity(global_entity_key, local_entity_key, _) => {
                     let mut component_list = Vec::new();
-
-                    let entity_record = self.entity_records.get(global_entity_key)
-                        .expect("trying to pop an entity action for an entity which has not been initialized correctly");
 
                     for component_protocol in world.get_components(global_entity_key) {
                         let component_ref = component_protocol.inner_ref();
@@ -363,7 +357,6 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
     }
 
     pub fn remove_component(&mut self,
-                            world: &W,
                             component_key: &ComponentKey<W::EntityKey>) {
         let component_record = self
             .component_records
@@ -748,11 +741,6 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                             }
                         }
                         EntityAction::DespawnEntity(global_key, local_key) => {
-                            let entity_record = self
-                                .entity_records
-                                .remove(&global_key)
-                                .expect("deletion of nonexistent entity!");
-
                             // actually delete the entity from local records
                             self.local_to_global_entity_key_map.remove(&local_key);
                             self.entity_key_generator.recycle_key(&local_key);

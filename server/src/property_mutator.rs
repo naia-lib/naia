@@ -1,6 +1,6 @@
-use naia_shared::{PropertyMutate, Ref, ProtocolType};
+use naia_shared::{PropertyMutate, Ref};
 
-use super::{keys::{ComponentKey, KeyType}, mut_handler::MutHandler, world_type::WorldType};
+use super::{keys::{ComponentKey, KeyType}, mut_handler::MutHandler};
 
 pub struct PropertyMutator<K: KeyType> {
     key: Option<ComponentKey<K>>,

@@ -2,7 +2,6 @@ use naia_shared::ProtocolType;
 
 use super::{
     entity_ref::{EntityMut, EntityRef},
-    keys::KeyType,
     server::Server,
     world_type::WorldType,
 };

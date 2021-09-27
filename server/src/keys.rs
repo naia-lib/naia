@@ -1,9 +1,5 @@
 use std::any::TypeId;
 
-use naia_shared::ProtocolType;
-
-use super::world_type::WorldType;
-
 /// A KeyType aggregates all traits needed to be implemented to be used as an Entity Key
 pub trait KeyType: Copy + Clone + PartialEq + Eq + std::hash::Hash + 'static {}
 

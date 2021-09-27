@@ -13,7 +13,6 @@ use super::{
     packet_writer::PacketWriter,
     ping_manager::PingManager,
     world_type::WorldType,
-    keys::KeyType,
 };
 
 pub struct ClientConnection<P: ProtocolType, W: WorldType<P>> {
@@ -184,9 +183,8 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
     }
 
     pub fn remove_component(&mut self,
-                            world: &W,
                             component_key: &ComponentKey<W::EntityKey>) {
-        self.entity_manager.remove_component(world, component_key);
+        self.entity_manager.remove_component(component_key);
     }
 
     // Pass-through methods to underlying common connection

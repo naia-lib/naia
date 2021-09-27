@@ -1,5 +1,4 @@
 use std::{
-    any::TypeId,
     collections::{HashMap, VecDeque},
     net::SocketAddr,
     panic,
@@ -615,7 +614,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
             // which scopes they are part of
             for (user_key, _) in self.users.iter() {
                 if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                    Self::connection_remove_component(client_connection, world, &component_key);
+                    Self::connection_remove_component(client_connection, &component_key);
                 }
             }
 
@@ -1080,11 +1079,10 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     fn connection_remove_component(
         client_connection: &mut ClientConnection<P, W>,
-        world: &W,
         component_key: &ComponentKey<W::EntityKey>,
     ) {
         //remove component from user connection
-        client_connection.remove_component(world, component_key);
+        client_connection.remove_component(component_key);
     }
 }
 

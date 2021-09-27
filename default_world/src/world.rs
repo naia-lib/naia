@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashMap};
 
-use slotmap::{DenseSlotMap, Key};
+use slotmap::DenseSlotMap;
 
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
@@ -89,18 +89,19 @@ impl<P: ProtocolType> WorldType<P> for World<P> {
 
     fn remove_component<R: Replicate<P>>(&mut self, entity_key: &EntityKey) {
         if let Some(component_map) = self.entities.get_mut(*entity_key) {
-            let type_id = TypeId::of::<R>();
             component_map.remove(&TypeId::of::<R>());
         }
     }
 
     fn get_components(&self, entity_key: &EntityKey) -> Vec<P> {
         let mut output: Vec<P> = Vec::new();
+
         if let Some(component_map) = self.entities.get(*entity_key) {
-            for (key, value) in component_map {
-                output.push(value.clone());
+            for (_, component_protocol) in component_map {
+                output.push(component_protocol.clone());
             }
         }
+
         return output;
     }
 }

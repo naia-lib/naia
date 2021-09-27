@@ -1,7 +1,6 @@
 use naia_shared::ProtocolType;
 
 use super::{
-    keys::KeyType,
     user::{user_key::UserKey, User},
     world_type::WorldType,
 };
