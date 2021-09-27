@@ -1,8 +1,8 @@
-use std::{ops::Deref, any::TypeId};
+use std::{any::TypeId, ops::Deref};
 
 use hecs::{Entity, World as HecsWorld};
 
-use naia_server::{ImplRef, ProtocolType, Ref, Replicate, WorldType, KeyType};
+use naia_server::{ImplRef, KeyType, ProtocolType, Ref, Replicate, WorldType};
 
 // Key
 
@@ -54,7 +54,9 @@ impl<P: ProtocolType> WorldType<P> for World {
     }
 
     fn despawn_entity(&mut self, entity_key: &Self::EntityKey) {
-        self.hecs.despawn(entity_key.0).expect("error despawning Entity");
+        self.hecs
+            .despawn(entity_key.0)
+            .expect("error despawning Entity");
     }
 
     fn has_component<R: Replicate<P>>(&self, entity_key: &Self::EntityKey) -> bool {

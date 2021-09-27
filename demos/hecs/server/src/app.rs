@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 
-use naia_server::{
-    Event, Ref, RoomKey, Server, ServerAddrs, ServerConfig,
-};
+use naia_server::{Event, Ref, RoomKey, Server, ServerAddrs, ServerConfig};
 
 use naia_hecs_demo_shared::{
     get_server_address, get_shared_config,
@@ -121,8 +119,7 @@ impl App {
                     let mut entities_to_add: Vec<Key> = Vec::new();
                     let mut entities_to_remove: Vec<Key> = Vec::new();
 
-                    for (entity_key, position_ref) in
-                        self.world.hecs.query_mut::<&Ref<Position>>()
+                    for (entity_key, position_ref) in self.world.hecs.query_mut::<&Ref<Position>>()
                     {
                         let mut position = position_ref.borrow_mut();
                         let mut x = *position.x.get();
@@ -144,7 +141,8 @@ impl App {
 
                     // add marker
                     while let Some(entity_key) = entities_to_add.pop() {
-//                        let entity_key = self.world.hecs_to_naia_key(&entity_key);
+                        //                        let entity_key =
+                        // self.world.hecs_to_naia_key(&entity_key);
 
                         if !self.has_marker.contains(&entity_key) {
                             // Create Marker component
@@ -163,8 +161,8 @@ impl App {
 
                     // remove marker
                     while let Some(entity_key) = entities_to_remove.pop() {
-//                        let entity_key: EntityKey =
-//                            self.world.hecs_to_naia_key(&entity_key);
+                        //                        let entity_key: EntityKey =
+                        //                            self.world.hecs_to_naia_key(&entity_key);
 
                         if self.has_marker.remove(&entity_key) {
                             // Remove from Naia Server
@@ -179,7 +177,12 @@ impl App {
                     for (_, user_key, entity_key) in self.server.scope_checks() {
                         //let entity_key = self.world.naia_to_hecs_key(&entity_key);
 
-                        if let Some(pos_ref) = self.server.world(&self.world).entity(&entity_key).component::<Position>() {
+                        if let Some(pos_ref) = self
+                            .server
+                            .world(&self.world)
+                            .entity(&entity_key)
+                            .component::<Position>()
+                        {
                             let x = *pos_ref.borrow().x.get();
                             if x >= 5 && x <= 100 {
                                 self.server.user_scope(&user_key).include(&entity_key);
