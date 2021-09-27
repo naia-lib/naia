@@ -75,8 +75,7 @@ impl<P: ProtocolType> EntityManager<P> {
                                 panic!("attempted to insert duplicate component");
                             } else {
                                 let new_component_type_id = new_component.get_type_id();
-                                self.components
-                                    .insert(component_key, new_component.clone());
+                                self.components.insert(component_key, new_component.clone());
                                 self.component_entity_map.insert(component_key, entity_key);
                                 component_list.push(new_component);
                                 entity_record
@@ -184,8 +183,7 @@ impl<P: ProtocolType> EntityManager<P> {
                                 entity_key.to_u16()
                             );
                         } else {
-                            self.components
-                                .insert(component_key, new_component.clone());
+                            self.components.insert(component_key, new_component.clone());
 
                             self.component_entity_map.insert(component_key, entity_key);
                             let entity_record = self.entities.get_mut(&entity_key).unwrap();
@@ -216,11 +214,12 @@ impl<P: ProtocolType> EntityManager<P> {
                             .expect("component not initialized correctly");
 
                         // check if Entity is a Prediction
-                        if self.entities
+                        if self
+                            .entities
                             .get(entity_key)
                             .expect("component has no associated entity?")
-                            .is_prediction {
-
+                            .is_prediction
+                        {
                             // replay commands
                             command_receiver.replay_commands(packet_tick, &entity_key);
 
@@ -246,8 +245,7 @@ impl<P: ProtocolType> EntityManager<P> {
                         .expect("deleting nonexistant/non-initialized component");
 
                     // Get entity record, remove component
-                    self
-                        .entities
+                    self.entities
                         .get_mut(&entity_key)
                         .expect("entity not instantiated properly?")
                         .remove_component(&component_key);

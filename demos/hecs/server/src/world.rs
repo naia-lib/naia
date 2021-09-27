@@ -1,9 +1,8 @@
-
 use std::{collections::HashMap, ops::Deref};
 
 use hecs::{Entity as HecsEntityKey, World as HecsWorld};
 
-use naia_server::{WorldType, EntityKey as NaiaEntityKey, ProtocolType, ImplRef, Ref, Replicate};
+use naia_server::{EntityKey as NaiaEntityKey, ImplRef, ProtocolType, Ref, Replicate, WorldType};
 
 pub struct World {
     pub hecs: HecsWorld,
@@ -21,11 +20,17 @@ impl World {
     }
 
     pub fn naia_to_hecs_key(&self, key: &NaiaEntityKey) -> HecsEntityKey {
-        return *self.naia_to_hecs_key_map.get(key).expect("nonexistant key!");
+        return *self
+            .naia_to_hecs_key_map
+            .get(key)
+            .expect("nonexistant key!");
     }
 
     pub fn hecs_to_naia_key(&self, key: &HecsEntityKey) -> NaiaEntityKey {
-        return *self.hecs_to_naia_key_map.get(key).expect("nonexistant key!");
+        return *self
+            .hecs_to_naia_key_map
+            .get(key)
+            .expect("nonexistant key!");
     }
 }
 
@@ -33,8 +38,10 @@ impl WorldType for World {
     fn spawn_entity(&mut self, naia_entity_key: &NaiaEntityKey) {
         let hecs_entity_key = self.hecs.spawn(());
 
-        self.naia_to_hecs_key_map.insert(*naia_entity_key, hecs_entity_key);
-        self.hecs_to_naia_key_map.insert(hecs_entity_key, *naia_entity_key);
+        self.naia_to_hecs_key_map
+            .insert(*naia_entity_key, hecs_entity_key);
+        self.hecs_to_naia_key_map
+            .insert(hecs_entity_key, *naia_entity_key);
     }
 
     fn despawn_entity(&mut self, naia_entity_key: &NaiaEntityKey) {
@@ -43,14 +50,19 @@ impl WorldType for World {
             .remove(naia_entity_key)
             .expect("EntityKey not initialized correctly!");
 
-        self.hecs_to_naia_key_map.remove(&hecs_entity_key)
+        self.hecs_to_naia_key_map
+            .remove(&hecs_entity_key)
             .expect("Entity Keys not initialized correctly!");
 
-        self.hecs.despawn(hecs_entity_key)
+        self.hecs
+            .despawn(hecs_entity_key)
             .expect("Hecs entity not initialized correctly!");
     }
 
-    fn has_component<P: ProtocolType, R: Replicate<P>>(&self, naia_entity_key: &NaiaEntityKey) -> bool {
+    fn has_component<P: ProtocolType, R: Replicate<P>>(
+        &self,
+        naia_entity_key: &NaiaEntityKey,
+    ) -> bool {
         let hecs_entity_key = self
             .naia_to_hecs_key_map
             .get(naia_entity_key)
@@ -61,13 +73,19 @@ impl WorldType for World {
         return result.is_ok();
     }
 
-    fn component<P: ProtocolType, R: Replicate<P>>(&self, naia_entity_key: &NaiaEntityKey) -> Option<Ref<R>> {
+    fn component<P: ProtocolType, R: Replicate<P>>(
+        &self,
+        naia_entity_key: &NaiaEntityKey,
+    ) -> Option<Ref<R>> {
         let hecs_entity_key = self
             .naia_to_hecs_key_map
             .get(naia_entity_key)
             .expect("EntityKey not initialized correctly!");
 
-        return self.hecs.get::<Ref<R>>(*hecs_entity_key).map_or(None, |v| Some(v.deref().clone()));
+        return self
+            .hecs
+            .get::<Ref<R>>(*hecs_entity_key)
+            .map_or(None, |v| Some(v.deref().clone()));
     }
 
     fn insert_component<P: ProtocolType, R: ImplRef<P>>(

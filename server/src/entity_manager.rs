@@ -138,9 +138,7 @@ impl<P: ProtocolType> EntityManager<P> {
                 if let Some(components_list) = components_list_opt {
                     let mut diff_mask_list: Vec<(ComponentKey, DiffMask)> = Vec::new();
                     for (global_component_key, _, _) in components_list {
-                        if let Some(record) =
-                            self.component_records.get(*global_component_key)
-                        {
+                        if let Some(record) = self.component_records.get(*global_component_key) {
                             diff_mask_list.push((
                                 *global_component_key,
                                 record.get_diff_mask().borrow().clone(),
@@ -763,10 +761,8 @@ impl<P: ProtocolType> PacketNotifiable for EntityManager<P> {
                     EntityAction::OwnEntity(_, _) => {}
                     EntityAction::DisownEntity(_, _) => {}
                     EntityAction::InsertComponent(_, global_component_key, _, _) => {
-                        let component_record = self
-                            .component_records
-                            .get_mut(global_component_key)
-                            .expect(
+                        let component_record =
+                            self.component_records.get_mut(global_component_key).expect(
                                 "added component does not have a record .. initiation problem?",
                             );
                         // do we need to delete this now?
@@ -828,9 +824,7 @@ impl<P: ProtocolType> PacketNotifiable for EntityManager<P> {
                                     }
                                 }
 
-                                if let Some(record) =
-                                    self.component_records.get_mut(*global_key)
-                                {
+                                if let Some(record) = self.component_records.get_mut(*global_key) {
                                     let mut current_diff_mask = record.get_diff_mask().borrow_mut();
                                     current_diff_mask.or(new_diff_mask.borrow());
                                 }

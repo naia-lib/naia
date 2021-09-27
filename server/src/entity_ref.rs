@@ -1,4 +1,3 @@
-
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
 use crate::{EntityKey, RoomKey, Server, UserKey, WorldType};
@@ -15,7 +14,11 @@ pub struct EntityRef<'s, 'w, P: ProtocolType, W: WorldType> {
 impl<'s, 'w, P: ProtocolType, W: WorldType> EntityRef<'s, 'w, P, W> {
     /// Return a new EntityRef
     pub(crate) fn new(server: &'s Server<P>, world: &'w W, key: &EntityKey) -> Self {
-        EntityRef { server, world, key: *key }
+        EntityRef {
+            server,
+            world,
+            key: *key,
+        }
     }
 
     /// Gets the EntityKey associated with the Entity
@@ -27,9 +30,7 @@ impl<'s, 'w, P: ProtocolType, W: WorldType> EntityRef<'s, 'w, P, W> {
 
     /// Returns whether or not the Entity has an associated Component
     pub fn has_component<R: Replicate<P>>(&self) -> bool {
-        return self
-            .world
-            .has_component::<P, R>(&self.key);
+        return self.world.has_component::<P, R>(&self.key);
     }
 
     /// Gets a Ref to a Component associated with the Entity
@@ -59,7 +60,11 @@ pub struct EntityMut<'s, 'w, P: ProtocolType, W: WorldType> {
 
 impl<'s, 'w, P: ProtocolType, W: WorldType> EntityMut<'s, 'w, P, W> {
     pub(crate) fn new(server: &'s mut Server<P>, world: &'w mut W, key: &EntityKey) -> Self {
-        EntityMut { server, world, key: *key }
+        EntityMut {
+            server,
+            world,
+            key: *key,
+        }
     }
 
     pub fn key(&self) -> EntityKey {
@@ -74,9 +79,7 @@ impl<'s, 'w, P: ProtocolType, W: WorldType> EntityMut<'s, 'w, P, W> {
     // Components
 
     pub fn has_component<R: Replicate<P>>(&self) -> bool {
-        return self
-            .world
-            .has_component::<P, R>(&self.key);
+        return self.world.has_component::<P, R>(&self.key);
     }
 
     pub fn component<R: Replicate<P>>(&self) -> Option<Ref<R>> {
