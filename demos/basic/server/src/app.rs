@@ -1,4 +1,6 @@
-use naia_server::{Event, RoomKey, Server, ServerAddrs, ServerConfig, World};
+use naia_server::{Event, RoomKey, Server, ServerAddrs, ServerConfig};
+
+use naia_server_default_world::World;
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
@@ -6,8 +8,8 @@ use naia_basic_demo_shared::{
 };
 
 pub struct App {
-    world: World,
-    server: Server<Protocol>,
+    world: World<Protocol>,
+    server: Server<Protocol, World<Protocol>>,
     main_room_key: RoomKey,
     tick_count: u32,
 }
@@ -72,7 +74,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        for event in self.server.receive() {
+        for event in self.server.world_mut(&mut self.world).receive() {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
                     let auth_message = auth_ref.borrow();
@@ -124,7 +126,7 @@ impl App {
                     }
 
                     // Iterate through Characters, marching them from (0,0) to (20, N)
-                    for entity_key in self.server.entity_keys() {
+                    for entity_key in self.server.world(&self.world).entities() {
                         if let Some(character_ref) = self
                             .server
                             .world(&mut self.world)
@@ -155,7 +157,7 @@ impl App {
                     // VERY IMPORTANT! Calling this actually sends all update data
                     // packets to all Clients that require it. If you don't call this
                     // method, the Server will never communicate with it's connected Clients
-                    self.server.send_all_updates();
+                    self.server.world_mut(&mut self.world).send_all_updates();
 
                     self.tick_count = self.tick_count.wrapping_add(1);
                 }

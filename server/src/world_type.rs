@@ -11,12 +11,19 @@ pub trait WorldType<P: ProtocolType> {
     /// Key to be used to access Entities in the given World
     type EntityKey: KeyType;
 
+    // Entities
+
+    /// check whether entity exists
+    fn has_entity(&self, entity_key: &Self::EntityKey) -> bool;
+    /// get a list of all entities in the World
+    fn entities(&self) -> Vec<Self::EntityKey>;
     /// spawn an entity
     fn spawn_entity(&mut self) -> Self::EntityKey;
     /// despawn an entity
     fn despawn_entity(&mut self, entity_key: &Self::EntityKey);
-    /// check whether entity exists
-    fn has_entity(&self, entity_key: &Self::EntityKey) -> bool;
+
+    // Components
+
     /// check whether entity contains component
     fn has_component<R: Replicate<P>>(&self, entity_key: &Self::EntityKey) -> bool;
     /// check whether entity contains component, dynamically

@@ -15,6 +15,7 @@ multithread = [ "naia-server/multithread", "naia-basic-demo-shared/multithread" 
 [dependencies]
 naia-server = { path = "../../../server" }
 naia-basic-demo-shared = { path = "../shared" }
+naia-server-default-world = { path = "../../../default_world" }
 log = "0.4"
 simple_logger = { version = "1.4" }
 smol = { version = "1.2.4" }
