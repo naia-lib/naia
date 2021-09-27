@@ -10,9 +10,7 @@ pub struct LocalEntityRecord {
 }
 
 impl LocalEntityRecord {
-    pub fn new(
-        local_key: LocalEntityKey,
-    ) -> Self {
+    pub fn new(local_key: LocalEntityKey) -> Self {
         LocalEntityRecord {
             local_key,
             status: LocalityStatus::Creating,

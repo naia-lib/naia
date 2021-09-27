@@ -17,6 +17,7 @@ mod client;
 mod client_config;
 mod command_receiver;
 mod command_sender;
+mod component_record;
 mod connection_state;
 mod entity_action;
 mod entity_manager;
@@ -29,7 +30,6 @@ mod ping_manager;
 mod server_connection;
 mod tick_manager;
 mod tick_queue;
-mod component_record;
 
 pub use naia_shared::{
     wrapping_diff, Instant, LinkConditionerConfig, LocalEntityKey, NaiaKey, ProtocolType, Random,

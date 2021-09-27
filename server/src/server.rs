@@ -13,16 +13,16 @@ use naia_server_socket::{
 };
 
 pub use naia_shared::{
-    wrapping_diff, Connection, ConnectionConfig, HostTickManager, ImplRef,
-    Instant, KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType,
-    PropertyMutate, ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
+    wrapping_diff, Connection, ConnectionConfig, HostTickManager, ImplRef, Instant, KeyGenerator,
+    LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
+    ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
 };
 
 use super::{
     client_connection::ClientConnection,
     error::NaiaServerError,
     event::Event,
-    keys::{KeyType, ComponentKey},
+    keys::{ComponentKey, KeyType},
     mut_handler::MutHandler,
     property_mutator::PropertyMutator,
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},
@@ -130,7 +130,10 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub(crate) fn receive(&mut self, world: &mut W) -> VecDeque<Result<Event<P, W>, NaiaServerError>> {
+    pub(crate) fn receive(
+        &mut self,
+        world: &mut W,
+    ) -> VecDeque<Result<Event<P, W>, NaiaServerError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with all clients, and receive packets
@@ -260,9 +263,11 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
                 connection.collect_component_updates(world);
-                while let Some(payload) =
-                    connection.get_outgoing_packet(world, self.tick_manager.get_tick(), &self.manifest)
-                {
+                while let Some(payload) = connection.get_outgoing_packet(
+                    world,
+                    self.tick_manager.get_tick(),
+                    &self.manifest,
+                ) {
                     self.io.send_packet(Packet::new_raw(user.address, payload));
                     connection.mark_sent();
                 }
@@ -278,10 +283,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
     }
 
     /// Retrieves a WorldMut that exposes read and write World operations
-    pub fn world_mut<'s, 'w>(
-        &'s mut self,
-        world: &'w mut W,
-    ) -> WorldMut<'s, 'w, P, W> {
+    pub fn world_mut<'s, 'w>(&'s mut self, world: &'w mut W) -> WorldMut<'s, 'w, P, W> {
         return WorldMut::new(self, world);
     }
 
@@ -474,8 +476,8 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         }
     }
 
-    /// Returns whether or not an Entity associated with the given Entity Key has
-    /// an owner
+    /// Returns whether or not an Entity associated with the given Entity Key
+    /// has an owner
     pub(crate) fn entity_has_owner(&self, entity_key: &W::EntityKey) -> bool {
         if let Some(owner_opt) = self.entity_owner_map.get(entity_key) {
             return owner_opt.is_some();
@@ -492,10 +494,15 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         return None;
     }
 
-    /// Set the 'owner' of an Entity associated with a given Entity Key to a User
-    /// associated with a given UserKey. Users are only able to issue
+    /// Set the 'owner' of an Entity associated with a given Entity Key to a
+    /// User associated with a given UserKey. Users are only able to issue
     /// Commands to Entities of which they are the owner
-    pub(crate) fn entity_set_owner(&mut self, world: &W, entity_key: &W::EntityKey, user_key: &UserKey) {
+    pub(crate) fn entity_set_owner(
+        &mut self,
+        world: &W,
+        entity_key: &W::EntityKey,
+        user_key: &UserKey,
+    ) {
         // check that entity is initialized & un-owned
         if self
             .entity_owner_map
@@ -514,11 +521,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
         // add Entity to User's connection if it's not already in-scope
         if !client_connection.has_entity(entity_key) {
-            Self::connection_add_entity(
-                client_connection,
-                world,
-                entity_key,
-            );
+            Self::connection_add_entity(client_connection, world, entity_key);
         }
 
         // assign Entity to User as a Prediction
@@ -572,7 +575,8 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
             panic!("attempted to add component to non-existent entity");
         }
 
-        let component_key: ComponentKey<W::EntityKey> = self.component_init(entity_key, component_ref);
+        let component_key: ComponentKey<W::EntityKey> =
+            self.component_init(entity_key, component_ref);
 
         let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
         let type_id = &dyn_ref.borrow().get_type_id();
@@ -588,11 +592,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         for (user_key, _) in self.users.iter() {
             if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
                 if client_connection.has_entity(entity_key) {
-                    Self::connection_insert_component(
-                        client_connection,
-                        world,
-                        &component_key,
-                    );
+                    Self::connection_insert_component(client_connection, world, &component_key);
                 }
             }
         }
@@ -607,7 +607,8 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         // get at record
         if let Some(component_ref) = world.get_component::<R>(entity_key) {
             // get component key from type
-            let component_key = ComponentKey::new(entity_key, &component_ref.borrow().get_type_id());
+            let component_key =
+                ComponentKey::new(entity_key, &component_ref.borrow().get_type_id());
 
             // clean up component on all connections
             // TODO: should be able to make this more efficient by caching for every Entity
@@ -1011,7 +1012,11 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                             } else {
                                 if currently_in_scope {
                                     // remove entity from the connections local scope
-                                    Self::connection_remove_entity(client_connection, world, entity_key);
+                                    Self::connection_remove_entity(
+                                        client_connection,
+                                        world,
+                                        entity_key,
+                                    );
                                 }
                             }
                         }
@@ -1023,7 +1028,11 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     // Component Helpers
 
-    fn component_init<R: ImplRef<P>>(&mut self, entity_key: &W::EntityKey, component_ref: &R) -> ComponentKey<W::EntityKey> {
+    fn component_init<R: ImplRef<P>>(
+        &mut self,
+        entity_key: &W::EntityKey,
+        component_ref: &R,
+    ) -> ComponentKey<W::EntityKey> {
         let dyn_ref = component_ref.dyn_ref();
         let new_mutator_ref: Ref<PropertyMutator<W::EntityKey>> =
             Ref::new(PropertyMutator::new(&self.mut_handler));
@@ -1139,7 +1148,9 @@ cfg_if! {
     }
 }
 
-fn to_property_mutator<K: 'static + KeyType>(eref: Ref<PropertyMutator<K>>) -> Ref<dyn PropertyMutate> {
+fn to_property_mutator<K: 'static + KeyType>(
+    eref: Ref<PropertyMutator<K>>,
+) -> Ref<dyn PropertyMutate> {
     let upcast_ref = to_property_mutator_raw(eref.inner());
     Ref::new_raw(upcast_ref)
 }

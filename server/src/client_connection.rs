@@ -1,17 +1,13 @@
 use std::net::SocketAddr;
 
 use naia_shared::{
-    Connection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
+    Connection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolType,
+    Ref, Replicate, SequenceNumber, StandardHeader,
 };
 
 use super::{
-    command_receiver::CommandReceiver,
-    entity_manager::EntityManager,
-    keys::ComponentKey,
-    mut_handler::MutHandler,
-    packet_writer::PacketWriter,
-    ping_manager::PingManager,
+    command_receiver::CommandReceiver, entity_manager::EntityManager, keys::ComponentKey,
+    mut_handler::MutHandler, packet_writer::PacketWriter, ping_manager::PingManager,
     world_type::WorldType,
 };
 
@@ -54,8 +50,9 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
                     break;
                 }
             }
-            while let Some(popped_entity_action) =
-                self.entity_manager.pop_outgoing_action(world, next_packet_index)
+            while let Some(popped_entity_action) = self
+                .entity_manager
+                .pop_outgoing_action(world, next_packet_index)
             {
                 if !self.entity_manager.write_entity_action(
                     &mut writer,
@@ -127,10 +124,7 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
                 .get_global_entity_key_from_local(local_entity_key)
             {
                 // make sure Command is valid (the entity really is owned by this connection)
-                if self
-                    .entity_manager
-                    .has_entity_prediction(global_entity_key)
-                {
+                if self.entity_manager.has_entity_prediction(global_entity_key) {
                     return Some((*global_entity_key, command));
                 }
             }
@@ -148,13 +142,8 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         return self.entity_manager.has_entity(key);
     }
 
-    pub fn add_entity(
-        &mut self,
-        world: &W,
-        key: &W::EntityKey,
-    ) {
-        self.entity_manager
-            .add_entity(world, key);
+    pub fn add_entity(&mut self, world: &W, key: &W::EntityKey) {
+        self.entity_manager.add_entity(world, key);
     }
 
     pub fn remove_entity(&mut self, world: &W, key: &W::EntityKey) {
@@ -173,17 +162,11 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         self.entity_manager.remove_prediction_entity(key);
     }
 
-    pub fn insert_component(
-        &mut self,
-        world: &W,
-        component_key: &ComponentKey<W::EntityKey>,
-    ) {
-        self.entity_manager
-            .insert_component(world, component_key);
+    pub fn insert_component(&mut self, world: &W, component_key: &ComponentKey<W::EntityKey>) {
+        self.entity_manager.insert_component(world, component_key);
     }
 
-    pub fn remove_component(&mut self,
-                            component_key: &ComponentKey<W::EntityKey>) {
+    pub fn remove_component(&mut self, component_key: &ComponentKey<W::EntityKey>) {
         self.entity_manager.remove_component(component_key);
     }
 

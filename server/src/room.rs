@@ -1,6 +1,6 @@
 use std::collections::{hash_set::Iter, HashSet, VecDeque};
 
-use super::{world_type::WorldType, user::user_key::UserKey};
+use super::{user::user_key::UserKey, world_type::WorldType};
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
