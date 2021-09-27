@@ -33,7 +33,8 @@ use super::{
     tick_manager::TickManager,
     user::{user_key::UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
-    world::{WorldType, WorldRef, WorldMut},
+    world_ref::{WorldMut, WorldRef},
+    world_type::WorldType,
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -280,13 +281,16 @@ impl<P: ProtocolType> Server<P> {
 
     // World
 
-    /// Retrieves an WorldRef that exposes read-only World operations
+    /// Retrieves a WorldRef that exposes read-only World operations
     pub fn world<'s, 'w, W: WorldType>(&'s self, world: &'w W) -> WorldRef<'s, 'w, P, W> {
         return WorldRef::new(self, world);
     }
 
-    /// Retrieves an WorldMut that exposes read and write World operations
-    pub fn world_mut<'s, 'w, W: WorldType>(&'s mut self, world: &'w mut W) -> WorldMut<'s, 'w, P, W> {
+    /// Retrieves a WorldMut that exposes read and write World operations
+    pub fn world_mut<'s, 'w, W: WorldType>(
+        &'s mut self,
+        world: &'w mut W,
+    ) -> WorldMut<'s, 'w, P, W> {
         return WorldMut::new(self, world);
     }
 
@@ -592,18 +596,18 @@ impl<P: ProtocolType> Server<P> {
 
     //// Components
 
-//    /// Given an EntityKey & a Component type, get a reference to a registered
-//    /// Component being tracked by the Server
-//    pub(crate) fn component<R: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<&Ref<R>> {
-//        if let Some(entity_record) = self.entities.get(entity_key) {
-//            if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
-//                if let Some(protocol) = self.components.get(component_key) {
-//                    return protocol.as_typed_ref::<R>();
-//                }
-//            }
-//        }
-//        return None;
-//    }
+    //    /// Given an EntityKey & a Component type, get a reference to a registered
+    //    /// Component being tracked by the Server
+    //    pub(crate) fn component<R: Replicate<P>>(&self, entity_key: &EntityKey) ->
+    // Option<&Ref<R>> {        if let Some(entity_record) =
+    // self.entities.get(entity_key) {            if let Some(component_key) =
+    // entity_record.get_key_from_type(&TypeId::of::<R>()) {                if
+    // let Some(protocol) = self.components.get(component_key) {                
+    // return protocol.as_typed_ref::<R>();                }
+    //            }
+    //        }
+    //        return None;
+    //    }
 
     /// Adds a Component to an Entity associated with the given EntityKey.
     pub(crate) fn insert_component<R: ImplRef<P>>(

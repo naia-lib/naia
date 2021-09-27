@@ -3,8 +3,7 @@ use std::collections::HashSet;
 use hecs::Entity as HecsEntityKey;
 
 use naia_server::{
-    EntityKey as NaiaEntityKey, Event, Ref, RoomKey, Server, ServerAddrs,
-    ServerConfig,
+    EntityKey as NaiaEntityKey, Event, Ref, RoomKey, Server, ServerAddrs, ServerConfig,
 };
 
 use naia_hecs_demo_shared::{
@@ -122,7 +121,8 @@ impl App {
                     let mut entities_to_add: Vec<HecsEntityKey> = Vec::new();
                     let mut entities_to_remove: Vec<HecsEntityKey> = Vec::new();
 
-                    for (hecs_entity_key, position_ref) in self.world.hecs.query_mut::<&Ref<Position>>()
+                    for (hecs_entity_key, position_ref) in
+                        self.world.hecs.query_mut::<&Ref<Position>>()
                     {
                         let mut position = position_ref.borrow_mut();
                         let mut x = *position.x.get();
@@ -144,9 +144,7 @@ impl App {
 
                     // add marker
                     while let Some(hecs_entity_key) = entities_to_add.pop() {
-                        let naia_entity_key = self
-                            .world
-                            .hecs_to_naia_key(&hecs_entity_key);
+                        let naia_entity_key = self.world.hecs_to_naia_key(&hecs_entity_key);
 
                         if !self.has_marker.contains(&naia_entity_key) {
                             // Create Marker component
@@ -165,9 +163,8 @@ impl App {
 
                     // remove marker
                     while let Some(hecs_entity_key) = entities_to_remove.pop() {
-                        let naia_entity_key: NaiaEntityKey = self
-                            .world
-                            .hecs_to_naia_key(&hecs_entity_key);
+                        let naia_entity_key: NaiaEntityKey =
+                            self.world.hecs_to_naia_key(&hecs_entity_key);
 
                         if self.has_marker.remove(&naia_entity_key) {
                             // Remove from Naia Server

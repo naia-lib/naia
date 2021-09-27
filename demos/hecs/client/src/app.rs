@@ -53,7 +53,8 @@ impl App {
                     info!("Client disconnected from: {}", self.client.server_address());
                 }
                 Ok(Event::Message(Protocol::StringMessage(_))) => {
-                    let send_message_contents = format!("Client Packet (message {})", self.message_count);
+                    let send_message_contents =
+                        format!("Client Packet (message {})", self.message_count);
                     let send_message = StringMessage::new(send_message_contents);
                     self.client.queue_message(&send_message, true);
                     self.message_count += 1;
