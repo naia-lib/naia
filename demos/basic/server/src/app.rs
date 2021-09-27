@@ -1,4 +1,4 @@
-use naia_server::{Event, RoomKey, Server, ServerAddrs, ServerConfig};
+use naia_server::{Event, RoomKey, Server, ServerAddrs, ServerConfig, World};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
@@ -6,6 +6,7 @@ use naia_basic_demo_shared::{
 };
 
 pub struct App {
+    world: World,
     server: Server<Protocol>,
     main_room_key: RoomKey,
     tick_count: u32,
@@ -30,6 +31,8 @@ impl App {
         let mut server = Server::new(ServerConfig::default(), get_shared_config());
         server.listen(server_addresses);
 
+        let mut world = World::new();
+
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
         let main_room_key = server.make_room().key();
@@ -49,7 +52,7 @@ impl App {
 
                 // Create a Character
                 let character = Character::new((count * 4) as u8, 0, first, last);
-                let character_key = server.spawn_entity().insert_component(&character).key();
+                let character_key = server.world_mut(&mut world).spawn_entity().insert_component(&character).key();
 
                 // Add the Character Entity to the main Room
                 server.room_mut(&main_room_key).add_entity(&character_key);
@@ -58,6 +61,7 @@ impl App {
 
         App {
             server,
+            world,
             main_room_key,
             tick_count: 0,
         }
@@ -118,7 +122,7 @@ impl App {
                     // Iterate through Characters, marching them from (0,0) to (20, N)
                     for entity_key in self.server.entity_keys() {
                         if let Some(character_ref) =
-                            self.server.entity(&entity_key).component::<Character>()
+                            self.server.world(&mut self.world).entity(&entity_key).component::<Character>()
                         {
                             character_ref.borrow_mut().step();
                         }
@@ -127,7 +131,7 @@ impl App {
                     // Update scopes of entities
                     for (_, user_key, entity_key) in self.server.scope_checks() {
                         if let Some(character_ref) =
-                            self.server.entity(&entity_key).component::<Character>()
+                            self.server.world(&mut self.world).entity(&entity_key).component::<Character>()
                         {
                             let x = *character_ref.borrow().x.get();
                             if x >= 5 && x <= 15 {

@@ -11,7 +11,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
     DiffMask, EntityKey, KeyGenerator, LocalComponentKey, LocalEntityKey, Manifest, NaiaKey,
-    PacketNotifiable, ProtocolType, Ref, Replicate, MTU_SIZE,
+    PacketNotifiable, ProtocolType, Ref, Replicate, MTU_SIZE, ComponentRecord
 };
 
 use crate::packet_writer::PacketWriter;
@@ -21,7 +21,6 @@ use super::{
     local_component_record::LocalComponentRecord, local_entity_record::LocalEntityRecord,
     locality_status::LocalityStatus, mut_handler::MutHandler,
 };
-use crate::entity_record::EntityRecord;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
@@ -215,7 +214,7 @@ impl<P: ProtocolType> EntityManager<P> {
     pub fn add_entity(
         &mut self,
         global_key: &EntityKey,
-        entity_record: &EntityRecord,
+        component_record: &Ref<ComponentRecord<ComponentKey>>,
         component_list: &Vec<(ComponentKey, Ref<dyn Replicate<P>>)>,
     ) {
         if !self.entities.contains_key(global_key) {
@@ -228,9 +227,9 @@ impl<P: ProtocolType> EntityManager<P> {
             let local_key: LocalEntityKey = self.entity_key_generator.generate();
             self.local_to_global_entity_key_map
                 .insert(local_key, *global_key);
-            let entity_record =
-                LocalEntityRecord::new(local_key, &entity_record.get_component_record());
-            self.entities.insert(*global_key, entity_record);
+            let local_entity_record =
+                LocalEntityRecord::new(local_key, component_record);
+            self.entities.insert(*global_key, local_entity_record);
             self.queued_actions
                 .push_back(EntityAction::SpawnEntity(*global_key, local_key, None));
         } else {
