@@ -1,8 +1,8 @@
-use naia_shared::{EntityKey, ProtocolType};
+use naia_shared::ProtocolType;
 
 use crate::UserKey;
 
-use super::server::Server;
+use super::{keys::entity_key::EntityKey, server::Server};
 
 pub struct UserScopeMut<'s, P: ProtocolType> {
     server: &'s mut Server<P>,

@@ -10,16 +10,19 @@ use slotmap::SparseSecondaryMap;
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    DiffMask, EntityKey, KeyGenerator, LocalComponentKey, LocalEntityKey, Manifest, NaiaKey,
-    PacketNotifiable, ProtocolType, Ref, Replicate, MTU_SIZE, ComponentRecord
+    ComponentRecord, DiffMask, KeyGenerator, LocalComponentKey, LocalEntityKey, Manifest, NaiaKey,
+    PacketNotifiable, ProtocolType, Ref, Replicate, MTU_SIZE,
 };
 
 use crate::packet_writer::PacketWriter;
 
 use super::{
-    entity_action::EntityAction, keys::component_key::ComponentKey,
-    local_component_record::LocalComponentRecord, local_entity_record::LocalEntityRecord,
-    locality_status::LocalityStatus, mut_handler::MutHandler,
+    entity_action::EntityAction,
+    keys::{component_key::ComponentKey, entity_key::EntityKey},
+    local_component_record::LocalComponentRecord,
+    local_entity_record::LocalEntityRecord,
+    locality_status::LocalityStatus,
+    mut_handler::MutHandler,
 };
 
 /// Manages Entities for a given Client connection and keeps them in
@@ -227,8 +230,7 @@ impl<P: ProtocolType> EntityManager<P> {
             let local_key: LocalEntityKey = self.entity_key_generator.generate();
             self.local_to_global_entity_key_map
                 .insert(local_key, *global_key);
-            let local_entity_record =
-                LocalEntityRecord::new(local_key, component_record);
+            let local_entity_record = LocalEntityRecord::new(local_key, component_record);
             self.entities.insert(*global_key, local_entity_record);
             self.queued_actions
                 .push_back(EntityAction::SpawnEntity(*global_key, local_key, None));

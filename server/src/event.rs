@@ -1,6 +1,7 @@
-use naia_shared::EntityKey;
-
-use super::user::{user_key::UserKey, User};
+use super::{
+    keys::entity_key::EntityKey,
+    user::{user_key::UserKey, User},
+};
 
 /// An Event that is emitted as a result of some communication with a Client, or
 /// a Tick event

@@ -1,4 +1,6 @@
-use naia_shared::{EntityKey, ImplRef, ProtocolType, Ref, Replicate};
+use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
+
+use super::keys::entity_key::EntityKey;
 
 /// Structures that implement the WorldType trait will be able to be loaded into
 /// the Server at which point the Server will use this interface to keep the

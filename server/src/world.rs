@@ -1,6 +1,6 @@
-use naia_shared::{EntityKey, ImplRef, ProtocolType, Ref, Replicate};
+use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
-use super::world_type::WorldType;
+use super::{keys::entity_key::EntityKey, world_type::WorldType};
 
 /// A default World which implements WorldType and that Naia can use to store
 /// Entities/Components. It's recommended to use this only when you do not have

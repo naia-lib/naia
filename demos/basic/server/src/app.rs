@@ -52,7 +52,11 @@ impl App {
 
                 // Create a Character
                 let character = Character::new((count * 4) as u8, 0, first, last);
-                let character_key = server.world_mut(&mut world).spawn_entity().insert_component(&character).key();
+                let character_key = server
+                    .world_mut(&mut world)
+                    .spawn_entity()
+                    .insert_component(&character)
+                    .key();
 
                 // Add the Character Entity to the main Room
                 server.room_mut(&main_room_key).add_entity(&character_key);
@@ -121,8 +125,11 @@ impl App {
 
                     // Iterate through Characters, marching them from (0,0) to (20, N)
                     for entity_key in self.server.entity_keys() {
-                        if let Some(character_ref) =
-                            self.server.world(&mut self.world).entity(&entity_key).component::<Character>()
+                        if let Some(character_ref) = self
+                            .server
+                            .world(&mut self.world)
+                            .entity(&entity_key)
+                            .component::<Character>()
                         {
                             character_ref.borrow_mut().step();
                         }
@@ -130,8 +137,11 @@ impl App {
 
                     // Update scopes of entities
                     for (_, user_key, entity_key) in self.server.scope_checks() {
-                        if let Some(character_ref) =
-                            self.server.world(&mut self.world).entity(&entity_key).component::<Character>()
+                        if let Some(character_ref) = self
+                            .server
+                            .world(&mut self.world)
+                            .entity(&entity_key)
+                            .component::<Character>()
                         {
                             let x = *character_ref.borrow().x.get();
                             if x >= 5 && x <= 15 {
