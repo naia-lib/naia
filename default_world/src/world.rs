@@ -67,7 +67,7 @@ impl<P: ProtocolType> WorldType<P> for World<P> {
         return false;
     }
 
-    fn has_component_dynamic(&self, entity_key: &Self::EntityKey, component_type: &TypeId) -> bool {
+    fn has_component_of_type(&self, entity_key: &Self::EntityKey, component_type: &TypeId) -> bool {
         if let Some(component_map) = self.entities.get(*entity_key) {
             return component_map.contains_key(component_type);
         }
@@ -85,7 +85,7 @@ impl<P: ProtocolType> WorldType<P> for World<P> {
         return None;
     }
 
-    fn get_component_dynamic(
+    fn get_component_from_type(
         &self,
         entity_key: &Self::EntityKey,
         component_type: &TypeId,

@@ -327,7 +327,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
     pub fn insert_component(&mut self, world: &W, component_key: &ComponentKey<W::EntityKey>) {
         let entity_key = component_key.entity_key();
         if let Some(component_protocol) =
-            world.get_component_dynamic(component_key.entity_key(), component_key.component_type())
+            world.get_component_from_type(component_key.entity_key(), component_key.component_type())
         {
             let component_ref = component_protocol.inner_ref();
 
@@ -400,7 +400,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
             if record.status == LocalityStatus::Created
                 && !record.get_diff_mask().borrow().is_clear()
             {
-                if let Some(component_protocol) = world.get_component_dynamic(
+                if let Some(component_protocol) = world.get_component_from_type(
                     component_key.entity_key(),
                     component_key.component_type(),
                 ) {
