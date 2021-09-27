@@ -131,7 +131,7 @@ impl<P: ProtocolType> Client<P> {
         if self.entity_exists(entity_key) {
             return EntityRef::new(self, &entity_key);
         }
-        panic!("No Entity exists for given Key!");
+        panic!("No Entity exists for given Key: {}!", entity_key);
     }
 
     /// Get whether or not the Entity currently in scope for the Client, given

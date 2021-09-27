@@ -753,6 +753,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                         }
                         EntityAction::DespawnEntity(global_key, local_key) => {
                             // actually delete the entity from local records
+                            self.entity_records.remove(&global_key);
                             self.local_to_global_entity_key_map.remove(&local_key);
                             self.entity_key_generator.recycle_key(&local_key);
 

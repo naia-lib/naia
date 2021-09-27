@@ -130,10 +130,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub(crate) fn receive(
-        &mut self,
-        world: &mut W,
-    ) -> VecDeque<Result<Event<P, W>, NaiaServerError>> {
+    pub(crate) fn receive(&mut self, world: &W) -> VecDeque<Result<Event<P, W>, NaiaServerError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with all clients, and receive packets
@@ -567,16 +564,13 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
     /// Adds a Component to an Entity associated with the given Entity Key.
     pub(crate) fn insert_component<R: ImplRef<P>>(
         &mut self,
-        world: &W,
+        world: &mut W,
         entity_key: &W::EntityKey,
         component_ref: &R,
     ) {
         if !world.has_entity(entity_key) {
             panic!("attempted to add component to non-existent entity");
         }
-
-        let component_key: ComponentKey<W::EntityKey> =
-            self.component_init(entity_key, component_ref);
 
         let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
         let type_id = &dyn_ref.borrow().get_type_id();
@@ -587,6 +581,11 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                    an entity is not allowed to have more than 1 type of component at a time."
             )
         }
+
+        world.insert_component(entity_key, component_ref.clone_ref());
+
+        let component_key: ComponentKey<W::EntityKey> =
+            self.component_init(entity_key, component_ref);
 
         // add component to connections already tracking entity
         for (user_key, _) in self.users.iter() {
@@ -742,7 +741,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     // Private methods
 
-    fn maintain_socket(&mut self, world: &mut W) {
+    fn maintain_socket(&mut self, world: &W) {
         // heartbeats
         if self.heartbeat_timer.ringing() {
             self.heartbeat_timer.reset();

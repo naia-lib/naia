@@ -37,23 +37,17 @@ impl<P: ProtocolType> WorldType<P> for World<P> {
     type EntityKey = EntityKey;
 
     fn has_entity(&self, entity_key: &Self::EntityKey) -> bool {
-        todo!()
+        return self.entities.contains_key(*entity_key);
     }
 
-    fn has_component_dynamic(&self, entity_key: &Self::EntityKey, component_type: &TypeId) -> bool {
-        todo!()
-    }
+    fn entities(&self) -> Vec<Self::EntityKey> {
+        let mut output = Vec::new();
 
-    fn get_component_dynamic(
-        &self,
-        entity_key: &Self::EntityKey,
-        component_type: &TypeId,
-    ) -> Option<P> {
-        todo!()
-    }
+        for (key, _) in &self.entities {
+            output.push(key);
+        }
 
-    fn get_component_from_key(&self, component_key: &ComponentKey<Self::EntityKey>) -> Option<P> {
-        todo!()
+        return output;
     }
 
     fn spawn_entity(&mut self) -> EntityKey {
@@ -73,10 +67,42 @@ impl<P: ProtocolType> WorldType<P> for World<P> {
         return false;
     }
 
+    fn has_component_dynamic(&self, entity_key: &Self::EntityKey, component_type: &TypeId) -> bool {
+        if let Some(component_map) = self.entities.get(*entity_key) {
+            return component_map.contains_key(component_type);
+        }
+
+        return false;
+    }
+
     fn get_component<R: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<Ref<R>> {
         if let Some(component_map) = self.entities.get(*entity_key) {
             if let Some(component_protocol) = component_map.get(&TypeId::of::<R>()) {
                 return component_protocol.to_typed_ref::<R>();
+            }
+        }
+
+        return None;
+    }
+
+    fn get_component_dynamic(
+        &self,
+        entity_key: &Self::EntityKey,
+        component_type: &TypeId,
+    ) -> Option<P> {
+        if let Some(component_map) = self.entities.get(*entity_key) {
+            if let Some(protocol) = component_map.get(component_type) {
+                return Some(protocol.clone());
+            }
+        }
+
+        return None;
+    }
+
+    fn get_component_from_key(&self, component_key: &ComponentKey<Self::EntityKey>) -> Option<P> {
+        if let Some(component_map) = self.entities.get(*component_key.entity_key()) {
+            if let Some(protocol) = component_map.get(component_key.component_type()) {
+                return Some(protocol.clone());
             }
         }
 

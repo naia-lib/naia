@@ -89,8 +89,6 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityMut<'s, 'w, P, W> {
     }
 
     pub fn insert_component<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
-        let new_ref = component_ref.clone_ref();
-        self.world.insert_component(&self.key, new_ref);
         self.server
             .insert_component(&mut self.world, &self.key, component_ref);
 
