@@ -575,7 +575,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
         let type_id = &dyn_ref.borrow().get_type_id();
 
-        if world.has_component_dynamic(entity_key, &type_id) {
+        if world.has_component_of_type(entity_key, &type_id) {
             panic!(
                 "attempted to add component to entity which already has one of that type! \
                    an entity is not allowed to have more than 1 type of component at a time."

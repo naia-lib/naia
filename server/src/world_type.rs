@@ -27,11 +27,11 @@ pub trait WorldType<P: ProtocolType> {
     /// check whether entity contains component
     fn has_component<R: Replicate<P>>(&self, entity_key: &Self::EntityKey) -> bool;
     /// check whether entity contains component, dynamically
-    fn has_component_dynamic(&self, entity_key: &Self::EntityKey, type_id: &TypeId) -> bool;
+    fn has_component_of_type(&self, entity_key: &Self::EntityKey, type_id: &TypeId) -> bool;
     /// gets an entity's component
     fn get_component<R: Replicate<P>>(&self, entity_key: &Self::EntityKey) -> Option<Ref<R>>;
     /// gets an entity's component, dynamically
-    fn get_component_dynamic(&self, entity_key: &Self::EntityKey, type_id: &TypeId) -> Option<P>;
+    fn get_component_from_type(&self, entity_key: &Self::EntityKey, type_id: &TypeId) -> Option<P>;
     /// gets all of an entity's components, as a Protocol
     fn get_components(&self, entity_key: &Self::EntityKey) -> Vec<P>;
     /// insert a component

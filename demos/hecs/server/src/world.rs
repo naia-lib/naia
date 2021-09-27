@@ -64,7 +64,7 @@ impl<P: ProtocolType> WorldType<P> for World {
         return result.is_ok();
     }
 
-    fn has_component_dynamic(&self, entity_key: &Self::EntityKey, type_id: &TypeId) -> bool {
+    fn has_component_of_type(&self, entity_key: &Self::EntityKey, type_id: &TypeId) -> bool {
         unimplemented!()
     }
 
@@ -75,7 +75,7 @@ impl<P: ProtocolType> WorldType<P> for World {
             .map_or(None, |v| Some(v.deref().clone()));
     }
 
-    fn get_component_dynamic(&self, entity_key: &Self::EntityKey, type_id: &TypeId) -> Option<P> {
+    fn get_component_from_type(&self, entity_key: &Self::EntityKey, type_id: &TypeId) -> Option<P> {
         unimplemented!()
     }
 
