@@ -1,30 +1,32 @@
 use std::net::SocketAddr;
 
 use naia_shared::{
-    ComponentRecord, Connection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
+    Connection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
     ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
 };
 
 use super::{
     command_receiver::CommandReceiver,
     entity_manager::EntityManager,
-    keys::{component_key::ComponentKey, entity_key::EntityKey},
+    keys::ComponentKey,
     mut_handler::MutHandler,
     packet_writer::PacketWriter,
     ping_manager::PingManager,
+    world_type::WorldType,
+    keys::KeyType,
 };
 
-pub struct ClientConnection<P: ProtocolType> {
+pub struct ClientConnection<P: ProtocolType, W: WorldType<P>> {
     connection: Connection<P>,
-    entity_manager: EntityManager<P>,
+    entity_manager: EntityManager<P, W>,
     ping_manager: PingManager,
     command_receiver: CommandReceiver<P>,
 }
 
-impl<P: ProtocolType> ClientConnection<P> {
+impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
     pub fn new(
         address: SocketAddr,
-        mut_handler: Option<&Ref<MutHandler>>,
+        mut_handler: Option<&Ref<MutHandler<P, W>>>,
         connection_config: &ConnectionConfig,
     ) -> Self {
         ClientConnection {
@@ -115,7 +117,7 @@ impl<P: ProtocolType> ClientConnection<P> {
         self.entity_manager.collect_component_updates();
     }
 
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(EntityKey, P)> {
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(W::EntityKey, P)> {
         if let Some((local_prediction_key, command)) =
             self.command_receiver.pop_incoming_command(server_tick)
         {
@@ -142,48 +144,48 @@ impl<P: ProtocolType> ClientConnection<P> {
 
     // Entity management
 
-    pub fn has_entity(&self, key: &EntityKey) -> bool {
+    pub fn has_entity(&self, key: &W::EntityKey) -> bool {
         return self.entity_manager.has_entity(key);
     }
 
     pub fn add_entity(
         &mut self,
-        key: &EntityKey,
-        component_record: &Ref<ComponentRecord<ComponentKey>>,
-        component_list: &Vec<(ComponentKey, Ref<dyn Replicate<P>>)>,
+        world: &W,
+        key: &W::EntityKey,
     ) {
         self.entity_manager
-            .add_entity(key, component_record, component_list);
+            .add_entity(world, key);
     }
 
-    pub fn remove_entity(&mut self, key: &EntityKey) {
+    pub fn remove_entity(&mut self, key: &W::EntityKey) {
         self.entity_manager.remove_entity(key);
     }
 
-    pub fn has_prediction_entity(&self, key: &EntityKey) -> bool {
+    pub fn has_prediction_entity(&self, key: &W::EntityKey) -> bool {
         return self.entity_manager.has_prediction_entity(key);
     }
 
-    pub fn add_prediction_entity(&mut self, key: &EntityKey) {
+    pub fn add_prediction_entity(&mut self, key: &W::EntityKey) {
         self.entity_manager.add_prediction_entity(key);
     }
 
-    pub fn remove_prediction_entity(&mut self, key: &EntityKey) {
+    pub fn remove_prediction_entity(&mut self, key: &W::EntityKey) {
         self.entity_manager.remove_prediction_entity(key);
     }
 
     pub fn insert_component(
         &mut self,
-        entity_key: &EntityKey,
-        component_key: &ComponentKey,
-        component_ref: &Ref<dyn Replicate<P>>,
+        world: &W,
+        component_key: &ComponentKey<P, W>,
     ) {
         self.entity_manager
-            .insert_component(entity_key, component_key, component_ref);
+            .insert_component(world, component_key);
     }
 
-    pub fn remove_component(&mut self, key: &ComponentKey) {
-        self.entity_manager.remove_component(key);
+    pub fn remove_component(&mut self,
+                            world: &W,
+                            component_key: &ComponentKey<P, W>) {
+        self.entity_manager.remove_component(world, component_key);
     }
 
     // Pass-through methods to underlying common connection

@@ -14,7 +14,6 @@
 extern crate cfg_if;
 
 mod ack_manager;
-mod component_record;
 mod connection;
 mod connection_config;
 mod diff_mask;
@@ -46,7 +45,6 @@ pub use naia_socket_shared::{
 };
 
 pub use ack_manager::AckManager;
-pub use component_record::ComponentRecord;
 pub use connection::Connection;
 pub use connection_config::ConnectionConfig;
 pub use diff_mask::DiffMask;

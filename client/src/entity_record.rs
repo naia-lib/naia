@@ -1,6 +1,8 @@
 use std::any::TypeId;
 
-use naia_shared::{ComponentRecord, LocalComponentKey};
+use naia_shared::LocalComponentKey;
+
+use super::component_record::ComponentRecord;
 
 #[derive(Debug)]
 pub struct EntityRecord {
