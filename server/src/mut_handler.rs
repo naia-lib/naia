@@ -1,8 +1,8 @@
 use std::{collections::HashMap, net::SocketAddr};
 
-use naia_shared::{DiffMask, Ref, ProtocolType};
+use naia_shared::{DiffMask, Ref};
 
-use super::{world_type::WorldType, keys::{ComponentKey, KeyType}};
+use super::keys::{ComponentKey, KeyType};
 
 use indexmap::IndexMap;
 
