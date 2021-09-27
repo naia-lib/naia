@@ -326,7 +326,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
 
     pub fn insert_component(&mut self, world: &W, component_key: &ComponentKey<W::EntityKey>) {
         let entity_key = component_key.entity_key();
-        if let Some(component_protocol) = world.get_component_from_key(&component_key) {
+        if let Some(component_protocol) = world.get_component_dynamic(component_key.entity_key(), component_key.component_type()) {
             let component_ref = component_protocol.inner_ref();
 
             if !self.entity_records.contains_key(entity_key) {
@@ -394,13 +394,13 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
     }
 
     pub fn collect_component_updates(&mut self, world: &W) {
-        for (key, record) in self.component_records.iter() {
+        for (component_key, record) in self.component_records.iter() {
             if record.status == LocalityStatus::Created
                 && !record.get_diff_mask().borrow().is_clear()
             {
-                if let Some(component_protocol) = world.get_component_from_key(key) {
+                if let Some(component_protocol) = world.get_component_dynamic(component_key.entity_key(), component_key.component_type()) {
                     self.queued_actions.push_back(EntityAction::UpdateComponent(
-                        *key,
+                        *component_key,
                         record.local_key,
                         record.get_diff_mask().clone(),
                         component_protocol.inner_ref(),

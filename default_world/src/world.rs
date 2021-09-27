@@ -9,7 +9,7 @@ use naia_server::{ComponentKey, KeyType, WorldType};
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
 mod entity_key {
-    // The Key used to get a reference of a User
+    // The Key used to reference an Entity
     new_key_type! { pub struct EntityKey; }
 }
 
@@ -92,16 +92,6 @@ impl<P: ProtocolType> WorldType<P> for World<P> {
     ) -> Option<P> {
         if let Some(component_map) = self.entities.get(*entity_key) {
             if let Some(protocol) = component_map.get(component_type) {
-                return Some(protocol.clone());
-            }
-        }
-
-        return None;
-    }
-
-    fn get_component_from_key(&self, component_key: &ComponentKey<Self::EntityKey>) -> Option<P> {
-        if let Some(component_map) = self.entities.get(*component_key.entity_key()) {
-            if let Some(protocol) = component_map.get(component_key.component_type()) {
                 return Some(protocol.clone());
             }
         }
