@@ -67,12 +67,12 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
             // Components
             component_key_generator: KeyGenerator::new(),
             local_to_global_component_key_map: HashMap::new(),
-            component_records: SparseSecondaryMap::new(),
+            component_records: HashMap::new(),
             delayed_component_deletions: HashSet::new(),
             // Actions / updates / ect
             queued_actions: VecDeque::new(),
             sent_actions: HashMap::new(),
-            sent_updates: HashMap::<u16, HashMap<ComponentKey, Ref<DiffMask>>>::new(),
+            sent_updates: HashMap::<u16, HashMap<ComponentKey<P, W>, Ref<DiffMask>>>::new(),
             last_update_packet_index: 0,
             last_last_update_packet_index: 0,
             mut_handler: mut_handler.clone(),
@@ -138,7 +138,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
         match &action {
             EntityAction::SpawnEntity(_, _, components_list_opt) => {
                 if let Some(components_list) = components_list_opt {
-                    let mut diff_mask_list: Vec<(ComponentKey, DiffMask)> = Vec::new();
+                    let mut diff_mask_list: Vec<(ComponentKey<P, W>, DiffMask)> = Vec::new();
                     for (global_component_key, _, _) in components_list {
                         if let Some(record) = self.component_records.get(*global_component_key) {
                             diff_mask_list.push((

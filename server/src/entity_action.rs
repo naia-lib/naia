@@ -4,12 +4,12 @@ use naia_shared::{
 
 use super::{world_type::WorldType, keys::{ComponentKey, KeyType}};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum EntityAction<P: ProtocolType, W: WorldType<P>> {
     SpawnEntity(
         W::EntityKey,
         LocalEntityKey,
-        Option<Vec<(ComponentKey<P, W>, LocalComponentKey, Ref<dyn Replicate<P>>)>>,
+        Vec<(ComponentKey<P, W>, LocalComponentKey, Ref<dyn Replicate<P>>)>,
     ),
     DespawnEntity(W::EntityKey, LocalEntityKey),
     OwnEntity(W::EntityKey, LocalEntityKey),
@@ -42,29 +42,29 @@ impl<P: ProtocolType, W: WorldType<P>> EntityAction<P, W> {
         }
     }
 }
-
-impl<P: ProtocolType, W: WorldType<P>> Clone for EntityAction<P, W> {
-    fn clone(&self) -> Self {
-        match self {
-            EntityAction::SpawnEntity(gk, lk, cs) => {
-                EntityAction::SpawnEntity(gk.clone(), lk.clone(), cs.clone())
-            }
-            EntityAction::DespawnEntity(gk, lk) => {
-                EntityAction::DespawnEntity(gk.clone(), lk.clone())
-            }
-            EntityAction::OwnEntity(gk, lk) => EntityAction::OwnEntity(gk.clone(), lk.clone()),
-            EntityAction::DisownEntity(gk, lk) => {
-                EntityAction::DisownEntity(gk.clone(), lk.clone())
-            }
-            EntityAction::InsertComponent(lek, gck, lck, r) => {
-                EntityAction::InsertComponent(lek.clone(), gck.clone(), lck.clone(), r.clone())
-            }
-            EntityAction::RemoveComponent(gk, lk) => {
-                EntityAction::RemoveComponent(gk.clone(), lk.clone())
-            }
-            EntityAction::UpdateComponent(gk, lk, sm, e) => {
-                EntityAction::UpdateComponent(gk.clone(), lk.clone(), sm.clone(), e.clone())
-            }
-        }
-    }
-}
+//
+//impl<P: ProtocolType, W: WorldType<P>> Clone for EntityAction<P, W> {
+//    fn clone(&self) -> Self {
+//        match self {
+//            EntityAction::SpawnEntity(gk, lk, cs) => {
+//                EntityAction::SpawnEntity(gk.clone(), lk.clone(), *cs.clone())
+//            }
+//            EntityAction::DespawnEntity(gk, lk) => {
+//                EntityAction::DespawnEntity(gk.clone(), lk.clone())
+//            }
+//            EntityAction::OwnEntity(gk, lk) => EntityAction::OwnEntity(gk.clone(), lk.clone()),
+//            EntityAction::DisownEntity(gk, lk) => {
+//                EntityAction::DisownEntity(gk.clone(), lk.clone())
+//            }
+//            EntityAction::InsertComponent(lek, gck, lck, r) => {
+//                EntityAction::InsertComponent(lek.clone(), gck.clone(), lck.clone(), r.clone())
+//            }
+//            EntityAction::RemoveComponent(gk, lk) => {
+//                EntityAction::RemoveComponent(gk.clone(), lk.clone())
+//            }
+//            EntityAction::UpdateComponent(gk, lk, sm, e) => {
+//                EntityAction::UpdateComponent(gk.clone(), lk.clone(), sm.clone(), e.clone())
+//            }
+//        }
+//    }
+//}
