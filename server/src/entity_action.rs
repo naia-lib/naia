@@ -1,3 +1,5 @@
+use std::any::TypeId;
+
 use naia_shared::{
     DiffMask, EntityActionType, LocalComponentKey, LocalEntityKey, ProtocolType, Ref, Replicate,
 };
@@ -5,31 +7,31 @@ use naia_shared::{
 use super::{world_type::WorldType, keys::{ComponentKey, KeyType}};
 
 #[derive(Clone, Debug)]
-pub enum EntityAction<P: ProtocolType, W: WorldType<P>> {
+pub enum EntityAction<P: ProtocolType, K: KeyType> {
     SpawnEntity(
-        W::EntityKey,
+        K,
         LocalEntityKey,
-        Vec<(ComponentKey<P, W>, LocalComponentKey, Ref<dyn Replicate<P>>)>,
+        Vec<(TypeId, LocalComponentKey, Ref<dyn Replicate<P>>)>,
     ),
-    DespawnEntity(W::EntityKey, LocalEntityKey),
-    OwnEntity(W::EntityKey, LocalEntityKey),
-    DisownEntity(W::EntityKey, LocalEntityKey),
+    DespawnEntity(K, LocalEntityKey),
+    OwnEntity(K, LocalEntityKey),
+    DisownEntity(K, LocalEntityKey),
     InsertComponent(
         LocalEntityKey,
-        ComponentKey<P, W>,
+        ComponentKey<K>,
         LocalComponentKey,
         Ref<dyn Replicate<P>>,
     ),
     UpdateComponent(
-        ComponentKey<P, W>,
+        ComponentKey<K>,
         LocalComponentKey,
         Ref<DiffMask>,
         Ref<dyn Replicate<P>>,
     ),
-    RemoveComponent(ComponentKey<P, W>, LocalComponentKey),
+    RemoveComponent(ComponentKey<K>, LocalComponentKey),
 }
 
-impl<P: ProtocolType, W: WorldType<P>> EntityAction<P, W> {
+impl<P: ProtocolType, K: KeyType> EntityAction<P, K> {
     pub fn as_type(&self) -> EntityActionType {
         match self {
             EntityAction::SpawnEntity(_, _, _) => EntityActionType::SpawnEntity,
@@ -42,29 +44,3 @@ impl<P: ProtocolType, W: WorldType<P>> EntityAction<P, W> {
         }
     }
 }
-//
-//impl<P: ProtocolType, W: WorldType<P>> Clone for EntityAction<P, W> {
-//    fn clone(&self) -> Self {
-//        match self {
-//            EntityAction::SpawnEntity(gk, lk, cs) => {
-//                EntityAction::SpawnEntity(gk.clone(), lk.clone(), *cs.clone())
-//            }
-//            EntityAction::DespawnEntity(gk, lk) => {
-//                EntityAction::DespawnEntity(gk.clone(), lk.clone())
-//            }
-//            EntityAction::OwnEntity(gk, lk) => EntityAction::OwnEntity(gk.clone(), lk.clone()),
-//            EntityAction::DisownEntity(gk, lk) => {
-//                EntityAction::DisownEntity(gk.clone(), lk.clone())
-//            }
-//            EntityAction::InsertComponent(lek, gck, lck, r) => {
-//                EntityAction::InsertComponent(lek.clone(), gck.clone(), lck.clone(), r.clone())
-//            }
-//            EntityAction::RemoveComponent(gk, lk) => {
-//                EntityAction::RemoveComponent(gk.clone(), lk.clone())
-//            }
-//            EntityAction::UpdateComponent(gk, lk, sm, e) => {
-//                EntityAction::UpdateComponent(gk.clone(), lk.clone(), sm.clone(), e.clone())
-//            }
-//        }
-//    }
-//}
