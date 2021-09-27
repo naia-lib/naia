@@ -58,7 +58,7 @@ pub struct Server<P: ProtocolType, W: WorldType<P>> {
     entity_room_map: HashMap<W::EntityKey, RoomKey>,
     entity_scope_map: HashMap<(UserKey, W::EntityKey), bool>,
     // Components
-    mut_handler: Ref<MutHandler<P, W>>,
+    mut_handler: Ref<MutHandler<W::EntityKey>>,
     // Events
     outstanding_connects: VecDeque<UserKey>,
     outstanding_disconnects: VecDeque<UserKey>,
@@ -131,12 +131,12 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P, W>, NaiaServerError>> {
+    pub(crate) fn receive(&mut self, world: &mut W) -> VecDeque<Result<Event<P, W>, NaiaServerError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
-        self.maintain_socket();
+        self.maintain_socket(world);
 
         // new authorizations
         while let Some((user_key, auth_message)) = self.outstanding_auths.pop_front() {
@@ -253,16 +253,16 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
-    pub fn send_all_updates(&mut self) {
+    pub(crate) fn send_all_updates(&mut self, world: &W) {
         // update entity scopes
-        self.update_entity_scopes();
+        self.update_entity_scopes(world);
 
         // loop through all connections, send packet
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
-                connection.collect_component_updates();
+                connection.collect_component_updates(world);
                 while let Some(payload) =
-                    connection.get_outgoing_packet(self.tick_manager.get_tick(), &self.manifest)
+                    connection.get_outgoing_packet(world, self.tick_manager.get_tick(), &self.manifest)
                 {
                     self.io.send_packet(Packet::new_raw(user.address, payload));
                     connection.mark_sent();
@@ -451,8 +451,8 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
     /// This will also remove all of the entity’s Components.
     /// Returns true if the entity is successfully despawned and false if the
     /// entity does not exist.
-    pub(crate) fn despawn_entity(&mut self, entity_key: &W::EntityKey) {
-        if !self.entity_exists(entity_key) {
+    pub(crate) fn despawn_entity(&mut self, world: &W, entity_key: &W::EntityKey) {
+        if !world.has_entity(entity_key) {
             panic!("attempted to de-spawn nonexistent entity");
         }
         // Clean up ownership if applicable
@@ -464,13 +464,13 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         // are in each User's scope
         for (user_key, _) in self.users.iter() {
             if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                Self::connection_remove_entity(client_connection, entity_key);
+                Self::connection_remove_entity(client_connection, world, entity_key);
             }
         }
 
         // Clean up associated components
-        let component_record = self.entities.remove(*entity_key).unwrap();
-        for component_key in component_record.borrow().get_component_keys() {
+        for component_protocol in world.get_components(entity_key) {
+            let component_key = ComponentKey::new(entity_key, &component_protocol.get_type_id());
             self.component_cleanup(&component_key);
         }
     }
@@ -496,7 +496,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
     /// Set the 'owner' of an Entity associated with a given Entity Key to a User
     /// associated with a given UserKey. Users are only able to issue
     /// Commands to Entities of which they are the owner
-    pub(crate) fn entity_set_owner(&mut self, entity_key: &W::EntityKey, user_key: &UserKey) {
+    pub(crate) fn entity_set_owner(&mut self, world: &W, entity_key: &W::EntityKey, user_key: &UserKey) {
         // check that entity is initialized & un-owned
         if self
             .entity_owner_map
@@ -507,12 +507,6 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
             panic!("attempting to take ownership of an Entity that is already owned");
         };
 
-        // get entity record
-        let entity_record = self
-            .entities
-            .get_mut(*entity_key)
-            .expect("Entity associated with given Entity Key does not exist!");
-
         // get at the User's connection
         let client_connection = self
             .client_connections
@@ -522,10 +516,9 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         // add Entity to User's connection if it's not already in-scope
         if !client_connection.has_entity(entity_key) {
             Self::connection_add_entity(
-                &self.components,
                 client_connection,
+                world,
                 entity_key,
-                &entity_record,
             );
         }
 
@@ -555,17 +548,6 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         self.entity_owner_map.insert(*entity_key, None);
     }
 
-    /// Returns whether or not an Entity has a Component of a given TypeId
-    pub(crate) fn entity_contains_type_id(&self, key: &W::EntityKey, type_id: &TypeId) -> bool {
-        if let Some(component_record) = self.entities.get(*key) {
-            return component_record
-                .borrow()
-                .get_key_from_type(type_id)
-                .is_some();
-        }
-        return false;
-    }
-
     //// Entity Scopes
 
     pub(crate) fn user_scope_set_entity(
@@ -583,19 +565,20 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
     /// Adds a Component to an Entity associated with the given Entity Key.
     pub(crate) fn insert_component<R: ImplRef<P>>(
         &mut self,
+        world: &W,
         entity_key: &W::EntityKey,
         component_ref: &R,
     ) {
-        if !self.entities.contains_key(*entity_key) {
+        if !world.has_entity(entity_key) {
             panic!("attempted to add component to non-existent entity");
         }
 
-        let component_key: ComponentKey = self.component_init(component_ref);
+        let component_key: ComponentKey<W::EntityKey> = self.component_init(entity_key, component_ref);
 
         let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
         let type_id = &dyn_ref.borrow().get_type_id();
 
-        if self.entity_contains_type_id(entity_key, &type_id) {
+        if world.has_component_dynamic(entity_key, &type_id) {
             panic!(
                 "attempted to add component to entity which already has one of that type! \
                    an entity is not allowed to have more than 1 type of component at a time."
@@ -608,54 +591,33 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                 if client_connection.has_entity(entity_key) {
                     Self::connection_insert_component(
                         client_connection,
-                        entity_key,
+                        world,
                         &component_key,
-                        &dyn_ref,
                     );
                 }
             }
-        }
-
-        if let Some(component_record) = self.entities.get_mut(*entity_key) {
-            component_record
-                .borrow_mut()
-                .insert_component(&component_key, &type_id);
         }
     }
 
     /// Removes a Component from an Entity associated with the given Entity Key
     pub(crate) fn remove_component<R: Replicate<P>>(
         &mut self,
+        world: &mut W,
         entity_key: &W::EntityKey,
     ) -> Option<Ref<R>> {
         // get at record
-        if let Some(component_record) = self.entities.get(*entity_key) {
+        if let Some(component_ref) = world.get_component::<R>(entity_key) {
             // get component key from type
-            let component_key: ComponentKey = *component_record
-                .borrow()
-                .get_key_from_type(&TypeId::of::<R>())
-                .expect("component not initialized correctly?");
-
-            // get a reference to the component
-            let protocol = self
-                .components
-                .get(component_key)
-                .expect("component not initialized correctly?");
-            let component_ref = protocol.to_typed_ref::<R>().unwrap();
+            let component_key = ComponentKey::new(entity_key, &component_ref.borrow().get_type_id());
 
             // clean up component on all connections
             // TODO: should be able to make this more efficient by caching for every Entity
             // which scopes they are part of
             for (user_key, _) in self.users.iter() {
                 if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                    Self::connection_remove_component(client_connection, &component_key);
+                    Self::connection_remove_component(client_connection, world, &component_key);
                 }
             }
-
-            // remove component from entity record
-            component_record
-                .borrow_mut()
-                .remove_component(&component_key);
 
             // cleanup all other loose ends
             self.component_cleanup(&component_key);
@@ -780,7 +742,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     // Private methods
 
-    fn maintain_socket(&mut self) {
+    fn maintain_socket(&mut self, world: &mut W) {
         // heartbeats
         if self.heartbeat_timer.ringing() {
             self.heartbeat_timer.reset();
@@ -872,7 +834,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                                     if user.timestamp == timestamp {
                                         let connection =
                                             self.client_connections.get_mut(user_key).unwrap();
-                                        connection.process_incoming_header(&header);
+                                        connection.process_incoming_header(world, &header);
 
                                         // send connect accept message //
                                         let payload = connection.process_outgoing_header(
@@ -926,7 +888,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
                                 match self.client_connections.get_mut(user_key) {
                                     Some(connection) => {
-                                        connection.process_incoming_header(&header);
+                                        connection.process_incoming_header(world, &header);
                                         connection.process_incoming_data(
                                             self.tick_manager.get_tick(),
                                             header.host_tick(),
@@ -949,7 +911,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                                     Some(connection) => {
                                         // Still need to do this so that proper notify
                                         // events fire based on the heartbeat header
-                                        connection.process_incoming_header(&header);
+                                        connection.process_incoming_header(world, &header);
                                     }
                                     None => {
                                         warn!(
@@ -964,7 +926,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
                                 match self.client_connections.get_mut(user_key) {
                                     Some(connection) => {
-                                        connection.process_incoming_header(&header);
+                                        connection.process_incoming_header(world, &header);
                                         let ping_payload = connection.process_ping(&payload);
                                         let payload_with_header = connection
                                             .process_outgoing_header(
@@ -1010,11 +972,11 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     // Entity Scopes
 
-    fn update_entity_scopes(&mut self) {
+    fn update_entity_scopes(&mut self, world: &W) {
         for (_, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
                 if let Some(client_connection) = self.client_connections.get_mut(&removed_user) {
-                    Self::connection_remove_entity(client_connection, &removed_entity);
+                    Self::connection_remove_entity(client_connection, world, &removed_entity);
                 }
             }
 
@@ -1022,7 +984,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
             // list each time
             for user_key in room.user_keys() {
                 for entity_key in room.entity_keys() {
-                    if self.entities.contains_key(*entity_key) {
+                    if world.has_entity(entity_key) {
                         if let Some(client_connection) = self.client_connections.get_mut(user_key) {
                             let currently_in_scope = client_connection.has_entity(entity_key);
 
@@ -1040,21 +1002,17 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
                             if should_be_in_scope {
                                 if !currently_in_scope {
-                                    // get a reference to the entity record
-                                    let entity_record = self.entities.get(*entity_key).unwrap();
-
                                     // add entity to the connections local scope
                                     Self::connection_add_entity(
-                                        &self.components,
                                         client_connection,
+                                        world,
                                         entity_key,
-                                        &entity_record,
                                     );
                                 }
                             } else {
                                 if currently_in_scope {
                                     // remove entity from the connections local scope
-                                    Self::connection_remove_entity(client_connection, entity_key);
+                                    Self::connection_remove_entity(client_connection, world, entity_key);
                                 }
                             }
                         }
@@ -1066,17 +1024,16 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     // Component Helpers
 
-    fn component_init<R: ImplRef<P>>(&mut self, component_ref: &R) -> ComponentKey<P, W> {
+    fn component_init<R: ImplRef<P>>(&mut self, entity_key: &W::EntityKey, component_ref: &R) -> ComponentKey<W::EntityKey> {
         let dyn_ref = component_ref.dyn_ref();
-        let new_mutator_ref: Ref<PropertyMutator<P, W>> =
+        let new_mutator_ref: Ref<PropertyMutator<W::EntityKey>> =
             Ref::new(PropertyMutator::new(&self.mut_handler));
 
         dyn_ref
             .borrow_mut()
             .set_mutator(&to_property_mutator(new_mutator_ref.clone()));
 
-        let component_protocol = component_ref.protocol();
-        let component_key = self.components.insert(component_protocol);
+        let component_key = ComponentKey::new(entity_key, &dyn_ref.borrow().get_type_id());
         new_mutator_ref
             .borrow_mut()
             .set_component_key(component_key);
@@ -1086,13 +1043,10 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         return component_key;
     }
 
-    fn component_cleanup(&mut self, component_key: &ComponentKey<P, W>) {
+    fn component_cleanup(&mut self, component_key: &ComponentKey<W::EntityKey>) {
         self.mut_handler
             .borrow_mut()
             .deregister_component(component_key);
-        self.components
-            .remove(*component_key)
-            .expect("component not initialized correctly?");
     }
 
     // Scope helper operations
@@ -1108,28 +1062,29 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     fn connection_remove_entity(
         client_connection: &mut ClientConnection<P, W>,
+        world: &W,
         entity_key: &W::EntityKey,
     ) {
         //remove entity from user connection
-        client_connection.remove_entity(entity_key);
+        client_connection.remove_entity(world, entity_key);
     }
 
     fn connection_insert_component(
         client_connection: &mut ClientConnection<P, W>,
-        entity_key: &W::EntityKey,
-        component_key: &ComponentKey<P, W>,
-        component_ref: &Ref<dyn Replicate<P>>,
+        world: &W,
+        component_key: &ComponentKey<W::EntityKey>,
     ) {
         //add component to user connection
-        client_connection.insert_component(entity_key, component_key, component_ref);
+        client_connection.insert_component(world, component_key);
     }
 
     fn connection_remove_component(
         client_connection: &mut ClientConnection<P, W>,
-        component_key: &ComponentKey<P, W>,
+        world: &W,
+        component_key: &ComponentKey<W::EntityKey>,
     ) {
         //remove component from user connection
-        client_connection.remove_component(component_key);
+        client_connection.remove_component(world, component_key);
     }
 }
 
@@ -1175,18 +1130,18 @@ impl Io {
 cfg_if! {
     if #[cfg(feature = "multithread")] {
         use std::sync::{Arc, Mutex};
-        fn to_property_mutator_raw<P: ProtocolType, W: WorldType<P>>(eref: Arc<Mutex<PropertyMutator<P, W>>>) -> Arc<Mutex<dyn PropertyMutate>> {
+        fn to_property_mutator_raw<K: 'static + KeyType>(eref: Arc<Mutex<PropertyMutator<K>>>) -> Arc<Mutex<dyn PropertyMutate>> {
             eref.clone()
         }
     } else {
         use std::{cell::RefCell, rc::Rc};
-        fn to_property_mutator_raw<P: ProtocolType, W: WorldType<P>>(eref: Rc<RefCell<PropertyMutator<P, W>>>) -> Rc<RefCell<dyn PropertyMutate>> {
+        fn to_property_mutator_raw<K: 'static + KeyType>(eref: Rc<RefCell<PropertyMutator<K>>>) -> Rc<RefCell<dyn PropertyMutate>> {
             eref.clone()
         }
     }
 }
 
-fn to_property_mutator<P: ProtocolType, W: WorldType<P>>(eref: Ref<PropertyMutator<P, W>>) -> Ref<dyn PropertyMutate> {
+fn to_property_mutator<K: 'static + KeyType>(eref: Ref<PropertyMutator<K>>) -> Ref<dyn PropertyMutate> {
     let upcast_ref = to_property_mutator_raw(eref.inner());
     Ref::new_raw(upcast_ref)
 }

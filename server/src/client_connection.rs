@@ -26,7 +26,7 @@ pub struct ClientConnection<P: ProtocolType, W: WorldType<P>> {
 impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
     pub fn new(
         address: SocketAddr,
-        mut_handler: Option<&Ref<MutHandler<P, W>>>,
+        mut_handler: Option<&Ref<MutHandler<W::EntityKey>>>,
         connection_config: &ConnectionConfig,
     ) -> Self {
         ClientConnection {
@@ -39,6 +39,7 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
 
     pub fn get_outgoing_packet(
         &mut self,
+        world: &W,
         host_tick: u16,
         manifest: &Manifest<P>,
     ) -> Option<Box<[u8]>> {
@@ -55,7 +56,7 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
                 }
             }
             while let Some(popped_entity_action) =
-                self.entity_manager.pop_outgoing_action(next_packet_index)
+                self.entity_manager.pop_outgoing_action(world, next_packet_index)
             {
                 if !self.entity_manager.write_entity_action(
                     &mut writer,
@@ -113,25 +114,25 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         }
     }
 
-    pub fn collect_component_updates(&mut self) {
-        self.entity_manager.collect_component_updates();
+    pub fn collect_component_updates(&mut self, world: &W) {
+        self.entity_manager.collect_component_updates(world);
     }
 
     pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(W::EntityKey, P)> {
-        if let Some((local_prediction_key, command)) =
+        if let Some((local_entity_key, command)) =
             self.command_receiver.pop_incoming_command(server_tick)
         {
             // get global key from the local one
-            if let Some(global_prediction_key) = self
+            if let Some(global_entity_key) = self
                 .entity_manager
-                .get_global_entity_key_from_local(local_prediction_key)
+                .get_global_entity_key_from_local(local_entity_key)
             {
                 // make sure Command is valid (the entity really is owned by this connection)
                 if self
                     .entity_manager
-                    .has_prediction_entity(global_prediction_key)
+                    .has_entity_prediction(global_entity_key)
                 {
-                    return Some((*global_prediction_key, command));
+                    return Some((*global_entity_key, command));
                 }
             }
         }
@@ -157,12 +158,12 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
             .add_entity(world, key);
     }
 
-    pub fn remove_entity(&mut self, key: &W::EntityKey) {
-        self.entity_manager.remove_entity(key);
+    pub fn remove_entity(&mut self, world: &W, key: &W::EntityKey) {
+        self.entity_manager.remove_entity(world, key);
     }
 
     pub fn has_prediction_entity(&self, key: &W::EntityKey) -> bool {
-        return self.entity_manager.has_prediction_entity(key);
+        return self.entity_manager.has_entity_prediction(key);
     }
 
     pub fn add_prediction_entity(&mut self, key: &W::EntityKey) {
@@ -176,7 +177,7 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
     pub fn insert_component(
         &mut self,
         world: &W,
-        component_key: &ComponentKey<P, W>,
+        component_key: &ComponentKey<W::EntityKey>,
     ) {
         self.entity_manager
             .insert_component(world, component_key);
@@ -184,7 +185,7 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
 
     pub fn remove_component(&mut self,
                             world: &W,
-                            component_key: &ComponentKey<P, W>) {
+                            component_key: &ComponentKey<W::EntityKey>) {
         self.entity_manager.remove_component(world, component_key);
     }
 
@@ -206,9 +207,10 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         return self.connection.should_drop();
     }
 
-    pub fn process_incoming_header(&mut self, header: &StandardHeader) {
+    pub fn process_incoming_header(&mut self, world: &W, header: &StandardHeader) {
         self.connection
             .process_incoming_header(header, &mut Some(&mut self.entity_manager));
+        self.entity_manager.process_delivered_packets(world);
     }
 
     pub fn process_outgoing_header(

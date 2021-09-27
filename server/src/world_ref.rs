@@ -24,7 +24,7 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> WorldRef<'s, 'w, P, W> {
     /// Entity associated with the given Entity Key.
     /// Panics if the Entity does not exist.
     pub fn entity(&self, entity_key: &W::EntityKey) -> EntityRef<P, W> {
-        if self.server.entity_exists(entity_key) {
+        if self.world.has_entity(entity_key) {
             return EntityRef::new(self.server, self.world, &entity_key);
         }
         panic!("No Entity exists for given Key!");
@@ -56,9 +56,13 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> WorldMut<'s, 'w, P, W> {
     /// Entity associated with the given Entity Key.
     /// Panics if the entity does not exist.
     pub fn entity_mut(&mut self, entity_key: &W::EntityKey) -> EntityMut<P, W> {
-        if self.server.entity_exists(entity_key) {
+        if self.world.has_entity(entity_key) {
             return EntityMut::new(self.server, self.world, &entity_key);
         }
         panic!("No Entity exists for given Key!");
+    }
+
+    pub fn send_all_updates(&mut self) {
+        self.server.send_all_updates(self.world);
     }
 }
