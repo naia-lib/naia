@@ -1,9 +1,7 @@
 use std::collections::HashSet;
 
-use hecs::Entity as HecsEntityKey;
-
 use naia_server::{
-    EntityKey as NaiaEntityKey, Event, Ref, RoomKey, Server, ServerAddrs, ServerConfig,
+    Event, Ref, RoomKey, Server, ServerAddrs, ServerConfig,
 };
 
 use naia_hecs_demo_shared::{
@@ -11,14 +9,16 @@ use naia_hecs_demo_shared::{
     protocol::{Marker, Name, Position, Protocol, StringMessage},
 };
 
-use super::world::World;
+use super::world::{Key, World};
+
+//type EntityKey = <World as WorldType<Protocol>>::EntityKey;
 
 pub struct App {
-    server: Server<Protocol>,
+    server: Server<Protocol, World>,
     world: World,
     main_room_key: RoomKey,
     tick_count: u32,
-    has_marker: HashSet<NaiaEntityKey>,
+    has_marker: HashSet<Key>,
 }
 
 impl App {
@@ -85,7 +85,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        for event in self.server.receive() {
+        for event in self.server.world_mut(&mut self.world).receive() {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
                     let auth_message = auth_ref.borrow();
@@ -118,10 +118,10 @@ impl App {
                 }
                 Ok(Event::Tick) => {
                     // Game logic, march entities across the screen
-                    let mut entities_to_add: Vec<HecsEntityKey> = Vec::new();
-                    let mut entities_to_remove: Vec<HecsEntityKey> = Vec::new();
+                    let mut entities_to_add: Vec<Key> = Vec::new();
+                    let mut entities_to_remove: Vec<Key> = Vec::new();
 
-                    for (hecs_entity_key, position_ref) in
+                    for (entity_key, position_ref) in
                         self.world.hecs.query_mut::<&Ref<Position>>()
                     {
                         let mut position = position_ref.borrow_mut();
@@ -134,57 +134,57 @@ impl App {
                             position.y.set(y);
                         }
                         if x == 40 {
-                            entities_to_add.push(hecs_entity_key);
+                            entities_to_add.push(Key::new(entity_key));
                         }
                         if x == 75 {
-                            entities_to_remove.push(hecs_entity_key);
+                            entities_to_remove.push(Key::new(entity_key));
                         }
                         position.x.set(x);
                     }
 
                     // add marker
-                    while let Some(hecs_entity_key) = entities_to_add.pop() {
-                        let naia_entity_key = self.world.hecs_to_naia_key(&hecs_entity_key);
+                    while let Some(entity_key) = entities_to_add.pop() {
+//                        let entity_key = self.world.hecs_to_naia_key(&entity_key);
 
-                        if !self.has_marker.contains(&naia_entity_key) {
+                        if !self.has_marker.contains(&entity_key) {
                             // Create Marker component
                             let marker = Marker::new("new");
 
                             // Add to Naia Server
                             self.server
                                 .world_mut(&mut self.world)
-                                .entity_mut(&naia_entity_key)
+                                .entity_mut(&entity_key)
                                 .insert_component(&marker);
 
                             // Track that this entity has a Marker
-                            self.has_marker.insert(naia_entity_key);
+                            self.has_marker.insert(entity_key);
                         }
                     }
 
                     // remove marker
-                    while let Some(hecs_entity_key) = entities_to_remove.pop() {
-                        let naia_entity_key: NaiaEntityKey =
-                            self.world.hecs_to_naia_key(&hecs_entity_key);
+                    while let Some(entity_key) = entities_to_remove.pop() {
+//                        let entity_key: EntityKey =
+//                            self.world.hecs_to_naia_key(&entity_key);
 
-                        if self.has_marker.remove(&naia_entity_key) {
+                        if self.has_marker.remove(&entity_key) {
                             // Remove from Naia Server
                             self.server
                                 .world_mut(&mut self.world)
-                                .entity_mut(&naia_entity_key)
+                                .entity_mut(&entity_key)
                                 .remove_component::<Marker>();
                         }
                     }
 
                     // Update scopes of entities
-                    for (_, user_key, naia_entity_key) in self.server.scope_checks() {
-                        let hecs_entity_key = self.world.naia_to_hecs_key(&naia_entity_key);
+                    for (_, user_key, entity_key) in self.server.scope_checks() {
+                        //let entity_key = self.world.naia_to_hecs_key(&entity_key);
 
-                        if let Ok(pos_ref) = self.world.hecs.get::<Ref<Position>>(hecs_entity_key) {
+                        if let Some(pos_ref) = self.server.world(&self.world).entity(&entity_key).component::<Position>() {
                             let x = *pos_ref.borrow().x.get();
                             if x >= 5 && x <= 100 {
-                                self.server.user_scope(&user_key).include(&naia_entity_key);
+                                self.server.user_scope(&user_key).include(&entity_key);
                             } else {
-                                self.server.user_scope(&user_key).exclude(&naia_entity_key);
+                                self.server.user_scope(&user_key).exclude(&entity_key);
                             }
                         }
                     }
@@ -202,7 +202,7 @@ impl App {
                     // VERY IMPORTANT! Calling this actually sends all update data
                     // packets to all Clients that require it. If you don't call this
                     // method, the Server will never communicate with it's connected Clients
-                    self.server.send_all_updates();
+                    self.server.world_mut(&mut self.world).send_all_updates();
 
                     self.tick_count = self.tick_count.wrapping_add(1);
                 }

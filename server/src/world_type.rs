@@ -2,7 +2,7 @@ use std::any::TypeId;
 
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
-use super::keys::{ComponentKey, KeyType};
+use super::keys::KeyType;
 
 /// Structures that implement the WorldType trait will be able to be loaded into
 /// the Server at which point the Server will use this interface to keep the
@@ -32,8 +32,6 @@ pub trait WorldType<P: ProtocolType> {
     fn get_component<R: Replicate<P>>(&self, entity_key: &Self::EntityKey) -> Option<Ref<R>>;
     /// gets an entity's component, dynamically
     fn get_component_dynamic(&self, entity_key: &Self::EntityKey, type_id: &TypeId) -> Option<P>;
-    /// gets an entity's component, from a ComponentKey
-    fn get_component_from_key(&self, component_key: &ComponentKey<Self::EntityKey>) -> Option<P>;
     /// gets all of an entity's components, as a Protocol
     fn get_components(&self, entity_key: &Self::EntityKey) -> Vec<P>;
     /// insert a component
