@@ -14,17 +14,16 @@ use naia_server_socket::{
 };
 
 pub use naia_shared::{
-    wrapping_diff, ComponentRecord, Connection, ConnectionConfig, EntityKey, HostTickManager,
-    ImplRef, Instant, KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader,
-    PacketType, PropertyMutate, ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer,
-    Timestamp,
+    wrapping_diff, ComponentRecord, Connection, ConnectionConfig, HostTickManager, ImplRef,
+    Instant, KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType,
+    PropertyMutate, ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
 };
 
 use super::{
     client_connection::ClientConnection,
     error::NaiaServerError,
     event::Event,
-    keys::component_key::ComponentKey,
+    keys::{component_key::ComponentKey, entity_key::EntityKey},
     mut_handler::MutHandler,
     property_mutator::PropertyMutator,
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},
@@ -55,8 +54,7 @@ pub struct Server<P: ProtocolType> {
     // Rooms
     rooms: DenseSlotMap<RoomKey, Room>,
     // Entities
-    entity_key_generator: KeyGenerator<EntityKey>,
-    entities: HashMap<EntityKey, Ref<ComponentRecord<ComponentKey>>>,
+    entities: DenseSlotMap<EntityKey, Ref<ComponentRecord<ComponentKey>>>,
     entity_owner_map: HashMap<EntityKey, Option<UserKey>>,
     entity_room_map: HashMap<EntityKey, RoomKey>,
     entity_scope_map: HashMap<(UserKey, EntityKey), bool>,
@@ -110,8 +108,7 @@ impl<P: ProtocolType> Server<P> {
             // Rooms
             rooms: DenseSlotMap::with_key(),
             // Entities
-            entity_key_generator: KeyGenerator::new(),
-            entities: HashMap::new(),
+            entities: DenseSlotMap::with_key(),
             entity_owner_map: HashMap::new(),
             entity_room_map: HashMap::new(),
             entity_scope_map: HashMap::new(),
@@ -299,15 +296,14 @@ impl<P: ProtocolType> Server<P> {
 
     /// Spawns a new Entity and returns a corresponding EntityKey
     pub(crate) fn spawn_entity(&mut self) -> EntityKey {
-        let entity_key: EntityKey = self.entity_key_generator.generate();
-        self.entities.insert(entity_key, Ref::new(ComponentRecord::new()));
+        let entity_key: EntityKey = self.entities.insert(Ref::new(ComponentRecord::new()));
 
         return entity_key;
     }
 
     /// Returns whether an Entity exists for the given EntityKey
     pub fn entity_exists(&self, entity_key: &EntityKey) -> bool {
-        return self.entities.contains_key(entity_key);
+        return self.entities.contains_key(*entity_key);
     }
 
     /// Get a count of how many Entities currently exist
@@ -320,7 +316,7 @@ impl<P: ProtocolType> Server<P> {
         let mut output = Vec::<EntityKey>::new();
         // TODO: make this more efficient by some fancy 'collect' chaining type method?
         for entity_key in self.entities.keys() {
-            output.push(*entity_key);
+            output.push(entity_key);
         }
         return output;
     }
@@ -508,7 +504,7 @@ impl<P: ProtocolType> Server<P> {
         }
 
         // Clean up associated components
-        let component_record = self.entities.remove(entity_key).unwrap();
+        let component_record = self.entities.remove(*entity_key).unwrap();
         for component_key in component_record.borrow().get_component_keys() {
             self.component_cleanup(&component_key);
         }
@@ -537,17 +533,19 @@ impl<P: ProtocolType> Server<P> {
     /// Commands to Entities of which they are the owner
     pub(crate) fn entity_set_owner(&mut self, entity_key: &EntityKey, user_key: &UserKey) {
         // check that entity is initialized & un-owned
-        if self.entity_owner_map
+        if self
+            .entity_owner_map
             .get(entity_key)
             .expect("Entity/owner map must be uninitialized")
-            .is_some() {
+            .is_some()
+        {
             panic!("attempting to take ownership of an Entity that is already owned");
         };
 
         // get entity record
         let entity_record = self
             .entities
-            .get_mut(entity_key)
+            .get_mut(*entity_key)
             .expect("Entity associated with given EntityKey does not exist!");
 
         // get at the User's connection
@@ -577,7 +575,8 @@ impl<P: ProtocolType> Server<P> {
     /// No User is able to issue Commands to an un-owned Entity.
     pub(crate) fn entity_disown(&mut self, entity_key: &EntityKey) {
         // a couple sanity checks ..
-        let current_owner_key: UserKey = self.entity_owner_map
+        let current_owner_key: UserKey = self
+            .entity_owner_map
             .get(entity_key)
             .expect("entity does not exist in owner map")
             .expect("attempting to disown entity that does not have an owner..");
@@ -593,8 +592,11 @@ impl<P: ProtocolType> Server<P> {
 
     /// Returns whether or not an Entity has a Component of a given TypeId
     pub(crate) fn entity_contains_type_id(&self, key: &EntityKey, type_id: &TypeId) -> bool {
-        if let Some(component_record) = self.entities.get(key) {
-            return component_record.borrow().get_key_from_type(type_id).is_some();
+        if let Some(component_record) = self.entities.get(*key) {
+            return component_record
+                .borrow()
+                .get_key_from_type(type_id)
+                .is_some();
         }
         return false;
     }
@@ -619,7 +621,7 @@ impl<P: ProtocolType> Server<P> {
     // Option<&Ref<R>> {        if let Some(entity_record) =
     // self.entities.get(entity_key) {            if let Some(component_key) =
     // entity_record.get_key_from_type(&TypeId::of::<R>()) {                if
-    // let Some(protocol) = self.components.get(component_key) {                
+    // let Some(protocol) = self.components.get(component_key) {
     // return protocol.as_typed_ref::<R>();                }
     //            }
     //        }
@@ -632,7 +634,7 @@ impl<P: ProtocolType> Server<P> {
         entity_key: &EntityKey,
         component_ref: &R,
     ) {
-        if !self.entities.contains_key(&entity_key) {
+        if !self.entities.contains_key(*entity_key) {
             panic!("attempted to add component to non-existent entity");
         }
 
@@ -664,8 +666,10 @@ impl<P: ProtocolType> Server<P> {
 
         self.component_entity_map.insert(component_key, *entity_key);
 
-        if let Some(component_record) = self.entities.get_mut(&entity_key) {
-            component_record.borrow_mut().insert_component(&component_key, &type_id);
+        if let Some(component_record) = self.entities.get_mut(*entity_key) {
+            component_record
+                .borrow_mut()
+                .insert_component(&component_key, &type_id);
         }
     }
 
@@ -675,9 +679,10 @@ impl<P: ProtocolType> Server<P> {
         entity_key: &EntityKey,
     ) -> Option<Ref<R>> {
         // get at record
-        if let Some(component_record) = self.entities.get(entity_key) {
+        if let Some(component_record) = self.entities.get(*entity_key) {
             // get component key from type
-            let component_key: ComponentKey = *component_record.borrow()
+            let component_key: ComponentKey = *component_record
+                .borrow()
                 .get_key_from_type(&TypeId::of::<R>())
                 .expect("component not initialized correctly?");
 
@@ -698,7 +703,9 @@ impl<P: ProtocolType> Server<P> {
             }
 
             // remove component from entity record
-            component_record.borrow_mut().remove_component(&component_key);
+            component_record
+                .borrow_mut()
+                .remove_component(&component_key);
 
             // cleanup all other loose ends
             self.component_cleanup(&component_key);
@@ -1065,7 +1072,7 @@ impl<P: ProtocolType> Server<P> {
             // list each time
             for user_key in room.user_keys() {
                 for entity_key in room.entity_keys() {
-                    if self.entities.contains_key(entity_key) {
+                    if self.entities.contains_key(*entity_key) {
                         if let Some(client_connection) = self.client_connections.get_mut(user_key) {
                             let currently_in_scope = client_connection.has_entity(entity_key);
 
@@ -1084,7 +1091,7 @@ impl<P: ProtocolType> Server<P> {
                             if should_be_in_scope {
                                 if !currently_in_scope {
                                     // get a reference to the entity record
-                                    let entity_record = self.entities.get(entity_key).unwrap();
+                                    let entity_record = self.entities.get(*entity_key).unwrap();
 
                                     // add entity to the connections local scope
                                     Self::connection_add_entity(

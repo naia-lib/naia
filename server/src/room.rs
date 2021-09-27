@@ -1,8 +1,6 @@
 use std::collections::{hash_set::Iter, HashSet, VecDeque};
 
-use naia_shared::EntityKey;
-
-use super::user::user_key::UserKey;
+use super::{keys::entity_key::EntityKey, user::user_key::UserKey};
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
