@@ -7,6 +7,13 @@ use super::world_type::WorldType;
 /// another ECS library's own World available.
 pub struct World {}
 
+impl World {
+    /// Create a new default World
+    pub fn new() -> Self {
+        World {}
+    }
+}
+
 impl WorldType for World {
     fn spawn_entity(&mut self, entity_key: &EntityKey) {
         unimplemented!()

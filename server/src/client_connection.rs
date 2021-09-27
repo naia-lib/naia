@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityKey, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
+    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader, ComponentRecord
 };
 
 use super::{
@@ -10,7 +10,6 @@ use super::{
     keys::component_key::ComponentKey, mut_handler::MutHandler, packet_writer::PacketWriter,
     ping_manager::PingManager,
 };
-use crate::entity_record::EntityRecord;
 
 pub struct ClientConnection<P: ProtocolType> {
     connection: Connection<P>,
@@ -147,11 +146,11 @@ impl<P: ProtocolType> ClientConnection<P> {
     pub fn add_entity(
         &mut self,
         key: &EntityKey,
-        entity_record: &EntityRecord,
+        component_record: &Ref<ComponentRecord<ComponentKey>>,
         component_list: &Vec<(ComponentKey, Ref<dyn Replicate<P>>)>,
     ) {
         self.entity_manager
-            .add_entity(key, entity_record, component_list);
+            .add_entity(key, component_record, component_list);
     }
 
     pub fn remove_entity(&mut self, key: &EntityKey) {
