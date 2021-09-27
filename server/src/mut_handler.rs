@@ -54,6 +54,7 @@ impl<K: KeyType> MutHandler<K> {
         {
             panic!("Component cannot register with server more than once!");
         }
+
         self.component_diff_mask_list_map
             .insert(*component_key, IndexMap::new());
     }

@@ -9,11 +9,9 @@ use naia_hecs_demo_shared::{
 
 use super::world::{Key, World};
 
-//type EntityKey = <World as WorldType<Protocol>>::EntityKey;
-
 pub struct App {
-    server: Server<Protocol, World>,
-    world: World,
+    server: Server<Protocol, World<Protocol>>,
+    world: World<Protocol>,
     main_room_key: RoomKey,
     tick_count: u32,
     has_marker: HashSet<Key>,
@@ -141,9 +139,6 @@ impl App {
 
                     // add marker
                     while let Some(entity_key) = entities_to_add.pop() {
-                        //                        let entity_key =
-                        // self.world.hecs_to_naia_key(&entity_key);
-
                         if !self.has_marker.contains(&entity_key) {
                             // Create Marker component
                             let marker = Marker::new("new");
@@ -161,9 +156,6 @@ impl App {
 
                     // remove marker
                     while let Some(entity_key) = entities_to_remove.pop() {
-                        //                        let entity_key: EntityKey =
-                        //                            self.world.hecs_to_naia_key(&entity_key);
-
                         if self.has_marker.remove(&entity_key) {
                             // Remove from Naia Server
                             self.server
@@ -175,8 +167,6 @@ impl App {
 
                     // Update scopes of entities
                     for (_, user_key, entity_key) in self.server.scope_checks() {
-                        //let entity_key = self.world.naia_to_hecs_key(&entity_key);
-
                         if let Some(pos_ref) = self
                             .server
                             .world(&self.world)
