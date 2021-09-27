@@ -4,7 +4,7 @@ use slotmap::DenseSlotMap;
 
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
-use naia_server::{KeyType, WorldType, ComponentKey};
+use naia_server::{ComponentKey, KeyType, WorldType};
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
@@ -24,7 +24,7 @@ pub struct World<P: ProtocolType> {
     entities: DenseSlotMap<entity_key::EntityKey, HashMap<TypeId, P>>,
 }
 
-impl<P: ProtocolType>  World<P> {
+impl<P: ProtocolType> World<P> {
     /// Create a new default World
     pub fn new() -> Self {
         World {
@@ -36,10 +36,25 @@ impl<P: ProtocolType>  World<P> {
 impl<P: ProtocolType> WorldType<P> for World<P> {
     type EntityKey = EntityKey;
 
-    fn has_entity(&self, entity_key: &Self::EntityKey) -> bool { todo!() }
-    fn has_component_dynamic(&self, entity_key: &Self::EntityKey, component_type: &TypeId) -> bool { todo!() }
-    fn get_component_dynamic(&self, entity_key: &Self::EntityKey, component_type: &TypeId) -> Option<P> { todo!() }
-    fn get_component_from_key(&self, component_key: &ComponentKey<Self::EntityKey>) -> Option<P> { todo!() }
+    fn has_entity(&self, entity_key: &Self::EntityKey) -> bool {
+        todo!()
+    }
+
+    fn has_component_dynamic(&self, entity_key: &Self::EntityKey, component_type: &TypeId) -> bool {
+        todo!()
+    }
+
+    fn get_component_dynamic(
+        &self,
+        entity_key: &Self::EntityKey,
+        component_type: &TypeId,
+    ) -> Option<P> {
+        todo!()
+    }
+
+    fn get_component_from_key(&self, component_key: &ComponentKey<Self::EntityKey>) -> Option<P> {
+        todo!()
+    }
 
     fn spawn_entity(&mut self) -> EntityKey {
         let component_map = HashMap::new();
@@ -58,13 +73,9 @@ impl<P: ProtocolType> WorldType<P> for World<P> {
         return false;
     }
 
-    fn get_component<R: Replicate<P>>(
-        &self,
-        entity_key: &EntityKey,
-    ) -> Option<Ref<R>> {
-
+    fn get_component<R: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<Ref<R>> {
         if let Some(component_map) = self.entities.get(*entity_key) {
-            if let Some(component_protocol) = component_map.get(&TypeId::of::<R>()){
+            if let Some(component_protocol) = component_map.get(&TypeId::of::<R>()) {
                 return component_protocol.to_typed_ref::<R>();
             }
         }
@@ -72,11 +83,7 @@ impl<P: ProtocolType> WorldType<P> for World<P> {
         return None;
     }
 
-    fn insert_component<R: ImplRef<P>>(
-        &mut self,
-        entity_key: &EntityKey,
-        component_ref: R)
-    {
+    fn insert_component<R: ImplRef<P>>(&mut self, entity_key: &EntityKey, component_ref: R) {
         if let Some(component_map) = self.entities.get_mut(*entity_key) {
             let protocol = component_ref.protocol();
             let type_id = protocol.get_type_id();

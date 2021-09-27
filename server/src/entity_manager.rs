@@ -8,20 +8,16 @@ use std::{
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    DiffMask, KeyGenerator, LocalComponentKey, LocalEntityKey, Manifest, NaiaKey,
-    PacketNotifiable, ProtocolType, Ref, Replicate, MTU_SIZE,
+    DiffMask, KeyGenerator, LocalComponentKey, LocalEntityKey, Manifest, NaiaKey, PacketNotifiable,
+    ProtocolType, Ref, Replicate, MTU_SIZE,
 };
 
 use crate::packet_writer::PacketWriter;
 
 use super::{
-    entity_action::EntityAction,
-    keys::ComponentKey,
-    local_component_record::LocalComponentRecord,
-    local_entity_record::LocalEntityRecord,
-    locality_status::LocalityStatus,
-    mut_handler::MutHandler,
-    world_type::WorldType,
+    entity_action::EntityAction, keys::ComponentKey, local_component_record::LocalComponentRecord,
+    local_entity_record::LocalEntityRecord, locality_status::LocalityStatus,
+    mut_handler::MutHandler, world_type::WorldType,
 };
 
 /// Manages Entities for a given Client connection and keeps them in
@@ -84,7 +80,11 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
         return self.queued_actions.len() != 0;
     }
 
-    pub fn pop_outgoing_action(&mut self, world: &W, packet_index: u16) -> Option<EntityAction<P, W::EntityKey>> {
+    pub fn pop_outgoing_action(
+        &mut self,
+        world: &W,
+        packet_index: u16,
+    ) -> Option<EntityAction<P, W::EntityKey>> {
         let queued_action_opt = self.queued_actions.pop_front();
         if queued_action_opt.is_none() {
             return None;
@@ -98,7 +98,10 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
 
                     for component_protocol in world.get_components(global_entity_key) {
                         let component_ref = component_protocol.inner_ref();
-                        let component_key = ComponentKey::new(global_entity_key, &component_ref.borrow().get_type_id());
+                        let component_key = ComponentKey::new(
+                            global_entity_key,
+                            &component_ref.borrow().get_type_id(),
+                        );
                         let component_record = self.component_records.get(&component_key)
                             .expect("trying to initiate a component which has not been initialized correctly");
                         component_list.push((
@@ -166,7 +169,11 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
         return Some(action);
     }
 
-    pub fn unpop_outgoing_action(&mut self, packet_index: u16, action: &EntityAction<P, W::EntityKey>) {
+    pub fn unpop_outgoing_action(
+        &mut self,
+        packet_index: u16,
+        action: &EntityAction<P, W::EntityKey>,
+    ) {
         info!("unpopping");
         if let Some(sent_actions_list) = self.sent_actions.get_mut(&packet_index) {
             sent_actions_list.pop();
@@ -209,11 +216,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
 
     // Entities
 
-    pub fn add_entity(
-        &mut self,
-        world: &W,
-        global_entity_key: &W::EntityKey,
-    ) {
+    pub fn add_entity(&mut self, world: &W, global_entity_key: &W::EntityKey) {
         if !self.entity_records.contains_key(global_entity_key) {
             // first, get a list of components
             // then, add components
@@ -230,9 +233,13 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
             self.local_to_global_entity_key_map
                 .insert(local_key, *global_entity_key);
             let local_entity_record = LocalEntityRecord::new(local_key);
-            self.entity_records.insert(*global_entity_key, local_entity_record);
-            self.queued_actions
-                .push_back(EntityAction::SpawnEntity(*global_entity_key, local_key, Vec::new()));
+            self.entity_records
+                .insert(*global_entity_key, local_entity_record);
+            self.queued_actions.push_back(EntityAction::SpawnEntity(
+                *global_entity_key,
+                local_key,
+                Vec::new(),
+            ));
         } else {
             panic!("added entity twice");
         }
@@ -256,7 +263,8 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                     // Entity deletion IS Component deletion, so update those component records
                     // accordingly
                     for component_protocol in world.get_components(key) {
-                        let component_key = ComponentKey::new(key, &component_protocol.get_type_id());
+                        let component_key =
+                            ComponentKey::new(key, &component_protocol.get_type_id());
                         if let Some(component_record) =
                             self.component_records.get_mut(&component_key)
                         {
@@ -316,11 +324,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
 
     // Components
 
-    pub fn insert_component(
-        &mut self,
-        world: &W,
-        component_key: &ComponentKey<W::EntityKey>,
-    ) {
+    pub fn insert_component(&mut self, world: &W, component_key: &ComponentKey<W::EntityKey>) {
         let entity_key = component_key.entity_key();
         if let Some(component_protocol) = world.get_component_from_key(&component_key) {
             let component_ref = component_protocol.inner_ref();
@@ -331,14 +335,18 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                 );
             }
 
-            let local_component_key =
-                self.component_init(component_key, component_ref.borrow().get_diff_mask_size(), LocalityStatus::Creating);
+            let local_component_key = self.component_init(
+                component_key,
+                component_ref.borrow().get_diff_mask_size(),
+                LocalityStatus::Creating,
+            );
 
             let entity_record = self.entity_records.get(entity_key).unwrap(); // checked this above
 
             match entity_record.status {
                 LocalityStatus::Creating => {
-                    // uncreated Components will be created after Entity is created
+                    // uncreated Components will be created after Entity is
+                    // created
                 }
                 LocalityStatus::Created => {
                     // send InsertComponent action
@@ -356,13 +364,9 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
         }
     }
 
-    pub fn remove_component(&mut self,
-                            component_key: &ComponentKey<W::EntityKey>) {
-        let component_record = self
-            .component_records
-            .get_mut(component_key)
-            .expect(
-                "attempting to remove a component from a connection within which it does not exist",
+    pub fn remove_component(&mut self, component_key: &ComponentKey<W::EntityKey>) {
+        let component_record = self.component_records.get_mut(component_key).expect(
+            "attempting to remove a component from a connection within which it does not exist",
         );
 
         match component_record.status {
@@ -543,7 +547,8 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
             &component_key,
             component_record.get_diff_mask(),
         );
-        self.component_records.insert(*component_key, component_record);
+        self.component_records
+            .insert(*component_key, component_record);
         return local_key;
     }
 
@@ -633,7 +638,8 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
 
         // place diff mask in a special transmission record - like map
         if !self.sent_updates.contains_key(&packet_index) {
-            let sent_updates_map: HashMap<ComponentKey<W::EntityKey>, Ref<DiffMask>> = HashMap::new();
+            let sent_updates_map: HashMap<ComponentKey<W::EntityKey>, Ref<DiffMask>> =
+                HashMap::new();
             self.sent_updates.insert(packet_index, sent_updates_map);
             self.last_last_update_packet_index = self.last_update_packet_index;
             self.last_update_packet_index = packet_index;
@@ -709,9 +715,9 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                                 entity_record.status = LocalityStatus::Created;
 
                                 // set status of components to created
-                                while let Some((component_type, _, _)) = component_list.pop()
-                                {
-                                    let global_component_key = ComponentKey::new(&global_entity_key, &component_type);
+                                while let Some((component_type, _, _)) = component_list.pop() {
+                                    let global_component_key =
+                                        ComponentKey::new(&global_entity_key, &component_type);
                                     let component_record = self
                                         .component_records
                                         .get_mut(&global_component_key)
@@ -722,7 +728,10 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                                 // for any components on this entity that have not yet been created
                                 // initiate that now
                                 for component_protocol in world.get_components(&global_entity_key) {
-                                    let component_key = ComponentKey::new(&global_entity_key, &component_protocol.get_type_id());
+                                    let component_key = ComponentKey::new(
+                                        &global_entity_key,
+                                        &component_protocol.get_type_id(),
+                                    );
                                     let component_record = self
                                         .component_records
                                         .get(&component_key)
@@ -730,12 +739,14 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                                     // check if component has been successfully created
                                     // (perhaps through the previous entity_create operation)
                                     if component_record.status == LocalityStatus::Creating {
-                                        self.queued_actions.push_back(EntityAction::InsertComponent(
-                                            entity_record.local_key,
-                                            component_key,
-                                            component_record.local_key,
-                                            component_protocol.inner_ref(),
-                                        ));
+                                        self.queued_actions.push_back(
+                                            EntityAction::InsertComponent(
+                                                entity_record.local_key,
+                                                component_key,
+                                                component_record.local_key,
+                                                component_protocol.inner_ref(),
+                                            ),
+                                        );
                                     }
                                 }
                             }
@@ -747,15 +758,20 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
 
                             // delete all components associated with entity
                             for component_protocol in world.get_components(&global_key) {
-                                let component_key = ComponentKey::new(&global_key, &component_protocol.get_type_id());
+                                let component_key = ComponentKey::new(
+                                    &global_key,
+                                    &component_protocol.get_type_id(),
+                                );
                                 deleted_components.push(component_key);
                             }
                         }
                         EntityAction::OwnEntity(_, _) => {}
                         EntityAction::DisownEntity(_, _) => {}
                         EntityAction::InsertComponent(_, global_component_key, _, _) => {
-                            let component_record =
-                                self.component_records.get_mut(&global_component_key).expect(
+                            let component_record = self
+                                .component_records
+                                .get_mut(&global_component_key)
+                                .expect(
                                     "added component does not have a record .. initiation problem?",
                                 );
                             // do we need to delete this now?

@@ -1,6 +1,8 @@
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
-use super::{room::room_key::RoomKey, server::Server, user::user_key::UserKey, world_type::WorldType};
+use super::{
+    room::room_key::RoomKey, server::Server, user::user_key::UserKey, world_type::WorldType,
+};
 
 // EntityRef
 
@@ -89,7 +91,8 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityMut<'s, 'w, P, W> {
     pub fn insert_component<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
         let new_ref = component_ref.clone_ref();
         self.world.insert_component(&self.key, new_ref);
-        self.server.insert_component(&mut self.world, &self.key, component_ref);
+        self.server
+            .insert_component(&mut self.world, &self.key, component_ref);
 
         self
     }
@@ -104,7 +107,9 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityMut<'s, 'w, P, W> {
 
     pub fn remove_component<R: Replicate<P>>(&mut self) -> Option<Ref<R>> {
         self.world.remove_component::<R>(&self.key);
-        return self.server.remove_component::<R>(&mut self.world, &self.key);
+        return self
+            .server
+            .remove_component::<R>(&mut self.world, &self.key);
     }
 
     // Users & Assignment
@@ -119,7 +124,8 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityMut<'s, 'w, P, W> {
 
     pub fn set_owner(&mut self, user_key: &UserKey) -> &mut Self {
         // user_own?
-        self.server.entity_set_owner(&self.world, &self.key, user_key);
+        self.server
+            .entity_set_owner(&self.world, &self.key, user_key);
 
         self
     }
