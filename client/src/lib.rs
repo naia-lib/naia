@@ -29,6 +29,7 @@ mod ping_manager;
 mod server_connection;
 mod tick_manager;
 mod tick_queue;
+mod component_record;
 
 pub use naia_shared::{
     wrapping_diff, Instant, LinkConditionerConfig, LocalEntityKey, NaiaKey, ProtocolType, Random,

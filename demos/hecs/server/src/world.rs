@@ -73,7 +73,7 @@ impl WorldType for World {
         return result.is_ok();
     }
 
-    fn component<P: ProtocolType, R: Replicate<P>>(
+    fn get_component<P: ProtocolType, R: Replicate<P>>(
         &self,
         naia_entity_key: &NaiaEntityKey,
     ) -> Option<Ref<R>> {

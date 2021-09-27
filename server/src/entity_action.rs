@@ -2,34 +2,34 @@ use naia_shared::{
     DiffMask, EntityActionType, LocalComponentKey, LocalEntityKey, ProtocolType, Ref, Replicate,
 };
 
-use super::keys::{component_key::ComponentKey, entity_key::EntityKey};
+use super::{world_type::WorldType, keys::{ComponentKey, KeyType}};
 
 #[derive(Debug)]
-pub enum EntityAction<P: ProtocolType> {
+pub enum EntityAction<P: ProtocolType, W: WorldType<P>> {
     SpawnEntity(
-        EntityKey,
+        W::EntityKey,
         LocalEntityKey,
-        Option<Vec<(ComponentKey, LocalComponentKey, Ref<dyn Replicate<P>>)>>,
+        Option<Vec<(ComponentKey<P, W>, LocalComponentKey, Ref<dyn Replicate<P>>)>>,
     ),
-    DespawnEntity(EntityKey, LocalEntityKey),
-    OwnEntity(EntityKey, LocalEntityKey),
-    DisownEntity(EntityKey, LocalEntityKey),
+    DespawnEntity(W::EntityKey, LocalEntityKey),
+    OwnEntity(W::EntityKey, LocalEntityKey),
+    DisownEntity(W::EntityKey, LocalEntityKey),
     InsertComponent(
         LocalEntityKey,
-        ComponentKey,
+        ComponentKey<P, W>,
         LocalComponentKey,
         Ref<dyn Replicate<P>>,
     ),
     UpdateComponent(
-        ComponentKey,
+        ComponentKey<P, W>,
         LocalComponentKey,
         Ref<DiffMask>,
         Ref<dyn Replicate<P>>,
     ),
-    RemoveComponent(ComponentKey, LocalComponentKey),
+    RemoveComponent(ComponentKey<P, W>, LocalComponentKey),
 }
 
-impl<P: ProtocolType> EntityAction<P> {
+impl<P: ProtocolType, W: WorldType<P>> EntityAction<P, W> {
     pub fn as_type(&self) -> EntityActionType {
         match self {
             EntityAction::SpawnEntity(_, _, _) => EntityActionType::SpawnEntity,
@@ -43,7 +43,7 @@ impl<P: ProtocolType> EntityAction<P> {
     }
 }
 
-impl<P: ProtocolType> Clone for EntityAction<P> {
+impl<P: ProtocolType, W: WorldType<P>> Clone for EntityAction<P, W> {
     fn clone(&self) -> Self {
         match self {
             EntityAction::SpawnEntity(gk, lk, cs) => {

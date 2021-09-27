@@ -1,11 +1,16 @@
-#[allow(missing_docs)]
-#[allow(unused_doc_comments)]
-pub mod entity_key {
-    // The Global Key used to get a reference of a Entity
-    new_key_type! { pub struct EntityKey; }
-}
+use std::any::TypeId;
 
-pub mod component_key {
-    // The Global Key used to get a reference of a Component
-    new_key_type! { pub struct ComponentKey; }
+use naia_shared::ProtocolType;
+
+use super::world_type::WorldType;
+
+pub trait KeyType {}
+
+#[derive(Debug)]
+pub struct ComponentKey<P: ProtocolType, W: WorldType<P>>(pub W::EntityKey, pub TypeId);
+
+impl<P: ProtocolType, W: WorldType<P>> ComponentKey<P, W> {
+    pub fn new(key: &W::EntityKey, type_id: &TypeId) -> Self {
+        ComponentKey(key, type_id)
+    }
 }

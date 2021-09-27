@@ -2,26 +2,26 @@ use naia_shared::ProtocolType;
 
 use crate::UserKey;
 
-use super::{keys::entity_key::EntityKey, server::Server};
+use super::{keys::KeyType, server::Server, world_type::WorldType};
 
-pub struct UserScopeMut<'s, P: ProtocolType> {
-    server: &'s mut Server<P>,
+pub struct UserScopeMut<'s, P: ProtocolType, W: WorldType<P>> {
+    server: &'s mut Server<P, W>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType> UserScopeMut<'s, P> {
-    pub fn new(server: &'s mut Server<P>, key: &UserKey) -> Self {
+impl<'s, P: ProtocolType, W: WorldType<P>> UserScopeMut<'s, P, W> {
+    pub fn new(server: &'s mut Server<P, W>, key: &UserKey) -> Self {
         UserScopeMut { server, key: *key }
     }
 
-    pub fn include(&mut self, entity_key: &EntityKey) -> &mut Self {
+    pub fn include(&mut self, entity_key: &W::EntityKey) -> &mut Self {
         self.server
             .user_scope_set_entity(&self.key, entity_key, true);
 
         self
     }
 
-    pub fn exclude(&mut self, entity_key: &EntityKey) -> &mut Self {
+    pub fn exclude(&mut self, entity_key: &W::EntityKey) -> &mut Self {
         self.server
             .user_scope_set_entity(&self.key, entity_key, false);
 
