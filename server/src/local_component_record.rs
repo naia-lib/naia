@@ -12,12 +12,12 @@ pub struct LocalComponentRecord {
 impl LocalComponentRecord {
     pub fn new(
         local_key: LocalComponentKey,
-        diff_mask_size: u8,
+        diff_mask: &Ref<DiffMask>,
         status: LocalityStatus,
     ) -> LocalComponentRecord {
         LocalComponentRecord {
             local_key,
-            diff_mask: Ref::new(DiffMask::new(diff_mask_size)),
+            diff_mask: diff_mask.clone(),
             status,
         }
     }
