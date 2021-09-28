@@ -46,9 +46,9 @@ impl App {
             let mut count = 0;
             for (first, last) in [
                 ("alpha", "red"),
-//                ("bravo", "blue"),
-//                ("charlie", "green"),
-//                ("delta", "yellow"),
+                ("bravo", "blue"),
+                ("charlie", "green"),
+                ("delta", "yellow"),
             ]
             .iter()
             {
@@ -58,7 +58,7 @@ impl App {
                 let position_ref = Position::new((count * 4) as u8, 0);
 
                 // Create Name component
-                //let name_ref = Name::new(first, last);
+                let name_ref = Name::new(first, last);
 
                 // Create an Entity
                 server
@@ -66,7 +66,7 @@ impl App {
                     .spawn_entity()
                     .enter_room(&main_room_key)
                     .insert_component(&position_ref)
-                    //.insert_component(&name_ref)
+                    .insert_component(&name_ref)
                     .key();
             }
         }
@@ -129,41 +129,41 @@ impl App {
                             position.y.set(y);
                         }
                         if x == 40 {
-                            //entities_to_add.push(Key::new(entity_key));
+                            entities_to_add.push(Key::new(entity_key));
                         }
                         if x == 75 {
-                            //entities_to_remove.push(Key::new(entity_key));
+                            entities_to_remove.push(Key::new(entity_key));
                         }
                         position.x.set(x);
                     }
 
-//                    // add marker
-//                    while let Some(entity_key) = entities_to_add.pop() {
-//                        if !self.has_marker.contains(&entity_key) {
-//                            // Create Marker component
-//                            let marker = Marker::new("new");
-//
-//                            // Add to Naia Server
-//                            self.server
-//                                .world_mut(&mut self.world)
-//                                .entity_mut(&entity_key)
-//                                .insert_component(&marker);
-//
-//                            // Track that this entity has a Marker
-//                            self.has_marker.insert(entity_key);
-//                        }
-//                    }
-//
-//                    // remove marker
-//                    while let Some(entity_key) = entities_to_remove.pop() {
-//                        if self.has_marker.remove(&entity_key) {
-//                            // Remove from Naia Server
-//                            self.server
-//                                .world_mut(&mut self.world)
-//                                .entity_mut(&entity_key)
-//                                .remove_component::<Marker>();
-//                        }
-//                    }
+                    // add marker
+                    while let Some(entity_key) = entities_to_add.pop() {
+                        if !self.has_marker.contains(&entity_key) {
+                            // Create Marker component
+                            let marker = Marker::new("new");
+
+                            // Add to Naia Server
+                            self.server
+                                .world_mut(&mut self.world)
+                                .entity_mut(&entity_key)
+                                .insert_component(&marker);
+
+                            // Track that this entity has a Marker
+                            self.has_marker.insert(entity_key);
+                        }
+                    }
+
+                    // remove marker
+                    while let Some(entity_key) = entities_to_remove.pop() {
+                        if self.has_marker.remove(&entity_key) {
+                            // Remove from Naia Server
+                            self.server
+                                .world_mut(&mut self.world)
+                                .entity_mut(&entity_key)
+                                .remove_component::<Marker>();
+                        }
+                    }
 
                     // Update scopes of entities
                     for (_, user_key, entity_key) in self.server.scope_checks() {

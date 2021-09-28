@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashMap, ops::Deref, marker::PhantomData};
+use std::{any::TypeId, collections::HashMap, marker::PhantomData, ops::Deref};
 
 use hecs::{Entity, World as HecsWorld};
 
@@ -120,7 +120,9 @@ impl<P: 'static + ProtocolType> WorldType<P> for World<P> {
         if let Ok(entity_ref) = self.hecs.entity(entity_key.0) {
             for ref_type in entity_ref.component_types() {
                 if let Some(rep_type) = self.ref_type_to_rep_type_map.get(&ref_type) {
-                    if let Some(component) = WorldType::<P>::get_component_from_type(self, entity_key, &rep_type) {
+                    if let Some(component) =
+                        WorldType::<P>::get_component_from_type(self, entity_key, &rep_type)
+                    {
                         protocols.push(component);
                     }
                 }
@@ -134,8 +136,10 @@ impl<P: 'static + ProtocolType> WorldType<P> for World<P> {
         // cache type id for later
         let inner_type_id = component_ref.dyn_ref().borrow().get_type_id();
         if !self.rep_type_to_handler_map.contains_key(&inner_type_id) {
-            self.rep_type_to_handler_map.insert(inner_type_id, Handler::<P, R>::new());
-            self.ref_type_to_rep_type_map.insert(TypeId::of::<R>(), inner_type_id);
+            self.rep_type_to_handler_map
+                .insert(inner_type_id, Handler::<P, R>::new());
+            self.ref_type_to_rep_type_map
+                .insert(TypeId::of::<R>(), inner_type_id);
         }
 
         // insert into ecs

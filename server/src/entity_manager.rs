@@ -327,7 +327,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
     pub fn insert_component(&mut self, world: &W, component_key: &ComponentKey<W::EntityKey>) {
         let entity_key = component_key.entity_key();
         if let Some(component_protocol) =
-            world.get_component_from_type(component_key.entity_key(), component_key.component_type())
+            world.get_component_from_type(entity_key, component_key.component_type())
         {
             let component_ref = component_protocol.inner_ref();
 
@@ -543,15 +543,17 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
             panic!("attempted to add component twice..");
         }
 
+        // create DiffMask
+        let diff_mask = Ref::new(DiffMask::new(diff_mask_size));
+        self.mut_handler
+            .borrow_mut()
+            .register_mask(&self.address, &component_key, &diff_mask);
+
+        // register Component with various indexes
         let local_key: LocalComponentKey = self.component_key_generator.generate();
         self.local_to_global_component_key_map
             .insert(local_key, *component_key);
-        let component_record = LocalComponentRecord::new(local_key, diff_mask_size, status);
-        self.mut_handler.borrow_mut().register_mask(
-            &self.address,
-            &component_key,
-            component_record.get_diff_mask(),
-        );
+        let component_record = LocalComponentRecord::new(local_key, &diff_mask, status);
         self.component_records
             .insert(*component_key, component_record);
         return local_key;
@@ -560,10 +562,11 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
     fn component_cleanup(&mut self, global_component_key: &ComponentKey<W::EntityKey>) {
         if let Some(component_record) = self.component_records.remove(global_component_key) {
             // actually delete the component from local records
-            let local_component_key = component_record.local_key;
             self.mut_handler
                 .borrow_mut()
                 .deregister_mask(&self.address, global_component_key);
+
+            let local_component_key = component_record.local_key;
             self.local_to_global_component_key_map
                 .remove(&local_component_key);
             self.component_key_generator
