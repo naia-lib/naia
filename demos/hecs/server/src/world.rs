@@ -49,14 +49,16 @@ impl<P: ProtocolType, R: ImplRef<P>> HandlerTrait<P> for Handler<P, R> {
 
 pub struct World<P: ProtocolType> {
     pub hecs: HecsWorld,
-    type_map: HashMap<TypeId, Box<dyn HandlerTrait<P>>>,
+    rep_type_to_handler_map: HashMap<TypeId, Box<dyn HandlerTrait<P>>>,
+    ref_type_to_rep_type_map: HashMap<TypeId, TypeId>,
 }
 
 impl<P: ProtocolType> World<P> {
     pub fn new() -> Self {
         World {
             hecs: HecsWorld::new(),
-            type_map: HashMap::new(),
+            rep_type_to_handler_map: HashMap::new(),
+            ref_type_to_rep_type_map: HashMap::new(),
         }
     }
 }
@@ -106,7 +108,7 @@ impl<P: 'static + ProtocolType> WorldType<P> for World<P> {
     }
 
     fn get_component_from_type(&self, entity_key: &Self::EntityKey, type_id: &TypeId) -> Option<P> {
-        if let Some(handler) = self.type_map.get(type_id) {
+        if let Some(handler) = self.rep_type_to_handler_map.get(type_id) {
             return handler.get_component(self, &entity_key.0);
         }
         return None;
@@ -116,9 +118,11 @@ impl<P: 'static + ProtocolType> WorldType<P> for World<P> {
         let mut protocols = Vec::new();
 
         if let Ok(entity_ref) = self.hecs.entity(entity_key.0) {
-            for type_id in entity_ref.component_types() {
-                if let Some(component) = WorldType::<P>::get_component_from_type(self, entity_key, &type_id) {
-                    protocols.push(component);
+            for ref_type in entity_ref.component_types() {
+                if let Some(rep_type) = self.ref_type_to_rep_type_map.get(&ref_type) {
+                    if let Some(component) = WorldType::<P>::get_component_from_type(self, entity_key, &rep_type) {
+                        protocols.push(component);
+                    }
                 }
             }
         }
@@ -129,8 +133,9 @@ impl<P: 'static + ProtocolType> WorldType<P> for World<P> {
     fn insert_component<R: ImplRef<P>>(&mut self, entity_key: &Self::EntityKey, component_ref: R) {
         // cache type id for later
         let inner_type_id = component_ref.dyn_ref().borrow().get_type_id();
-        if !self.type_map.contains_key(&inner_type_id) {
-            self.type_map.insert(inner_type_id, Handler::<P, R>::new());
+        if !self.rep_type_to_handler_map.contains_key(&inner_type_id) {
+            self.rep_type_to_handler_map.insert(inner_type_id, Handler::<P, R>::new());
+            self.ref_type_to_rep_type_map.insert(TypeId::of::<R>(), inner_type_id);
         }
 
         // insert into ecs
