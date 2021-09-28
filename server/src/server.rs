@@ -462,7 +462,8 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         // are in each User's scope
         for (user_key, _) in self.users.iter() {
             if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                Self::connection_remove_entity(client_connection, world, entity_key);
+                //remove entity from user connection
+                client_connection.despawn_entity(world, entity_key);
             }
         }
 
@@ -518,7 +519,8 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
         // add Entity to User's connection if it's not already in-scope
         if !client_connection.has_entity(entity_key) {
-            Self::connection_add_entity(client_connection, world, entity_key);
+            //add entity to user connection
+            client_connection.spawn_entity(world, entity_key);
         }
 
         // assign Entity to User as a Prediction
@@ -591,7 +593,8 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         for (user_key, _) in self.users.iter() {
             if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
                 if client_connection.has_entity(entity_key) {
-                    Self::connection_insert_component(client_connection, world, &component_key);
+                    // insert component into user's connection
+                    client_connection.insert_component(world, &component_key);
                 }
             }
         }
@@ -614,7 +617,8 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
             // which scopes they are part of
             for (user_key, _) in self.users.iter() {
                 if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                    Self::connection_remove_component(client_connection, &component_key);
+                    //remove component from user connection
+                    client_connection.remove_component(&component_key);
                 }
             }
 
@@ -975,7 +979,8 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         for (_, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
                 if let Some(client_connection) = self.client_connections.get_mut(&removed_user) {
-                    Self::connection_remove_entity(client_connection, world, &removed_entity);
+                    //remove entity from user connection
+                    client_connection.despawn_entity(world, &removed_entity);
                 }
             }
 
@@ -1002,20 +1007,12 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                             if should_be_in_scope {
                                 if !currently_in_scope {
                                     // add entity to the connections local scope
-                                    Self::connection_add_entity(
-                                        client_connection,
-                                        world,
-                                        entity_key,
-                                    );
+                                    client_connection.spawn_entity(world, entity_key);
                                 }
                             } else {
                                 if currently_in_scope {
                                     // remove entity from the connections local scope
-                                    Self::connection_remove_entity(
-                                        client_connection,
-                                        world,
-                                        entity_key,
-                                    );
+                                    client_connection.despawn_entity(world, entity_key);
                                 }
                             }
                         }
@@ -1054,43 +1051,6 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         self.mut_handler
             .borrow_mut()
             .deregister_component(component_key);
-    }
-
-    // Scope helper operations
-
-    fn connection_add_entity(
-        client_connection: &mut ClientConnection<P, W>,
-        world: &W,
-        entity_key: &W::EntityKey,
-    ) {
-        //add entity to user connection
-        client_connection.add_entity(world, entity_key);
-    }
-
-    fn connection_remove_entity(
-        client_connection: &mut ClientConnection<P, W>,
-        world: &W,
-        entity_key: &W::EntityKey,
-    ) {
-        //remove entity from user connection
-        client_connection.remove_entity(world, entity_key);
-    }
-
-    fn connection_insert_component(
-        client_connection: &mut ClientConnection<P, W>,
-        world: &W,
-        component_key: &ComponentKey<W::EntityKey>,
-    ) {
-        //add component to user connection
-        client_connection.insert_component(world, component_key);
-    }
-
-    fn connection_remove_component(
-        client_connection: &mut ClientConnection<P, W>,
-        component_key: &ComponentKey<W::EntityKey>,
-    ) {
-        //remove component from user connection
-        client_connection.remove_component(component_key);
     }
 }
 

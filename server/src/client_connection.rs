@@ -142,11 +142,11 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         return self.entity_manager.has_entity(key);
     }
 
-    pub fn add_entity(&mut self, world: &W, key: &W::EntityKey) {
+    pub fn spawn_entity(&mut self, world: &W, key: &W::EntityKey) {
         self.entity_manager.add_entity(world, key);
     }
 
-    pub fn remove_entity(&mut self, world: &W, key: &W::EntityKey) {
+    pub fn despawn_entity(&mut self, world: &W, key: &W::EntityKey) {
         self.entity_manager.remove_entity(world, key);
     }
 
