@@ -9,8 +9,8 @@ use naia_hecs_demo_shared::{
 
 use super::world::{Key, World as HecsWorld};
 
-type Server = NaiaServer<Protocol, HecsWorld<Protocol>>;
 type World = HecsWorld<Protocol>;
+type Server = NaiaServer<Protocol, World>;
 
 pub struct App {
     server: Server,

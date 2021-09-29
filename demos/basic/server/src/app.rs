@@ -7,8 +7,8 @@ use naia_basic_demo_shared::{
     protocol::{Character, Protocol, StringMessage},
 };
 
-type Server = NaiaServer<Protocol, DefaultWorld<Protocol>>;
 type World = DefaultWorld<Protocol>;
+type Server = NaiaServer<Protocol, World>;
 
 pub struct App {
     server: Server,
