@@ -6,9 +6,9 @@ use naia_shared::{
 };
 
 use super::{
-    command_receiver::CommandReceiver, entity_manager::EntityManager, keys::ComponentKey,
-    mut_handler::MutHandler, packet_writer::PacketWriter, ping_manager::PingManager,
-    world_type::WorldType,
+    command_receiver::CommandReceiver, ecs_record::EcsRecord, entity_manager::EntityManager,
+    keys::ComponentKey, mut_handler::MutHandler, packet_writer::PacketWriter,
+    ping_manager::PingManager, world_type::WorldType,
 };
 
 pub struct ClientConnection<P: ProtocolType, W: WorldType<P>> {
@@ -21,7 +21,7 @@ pub struct ClientConnection<P: ProtocolType, W: WorldType<P>> {
 impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
     pub fn new(
         address: SocketAddr,
-        mut_handler: Option<&Ref<MutHandler<W::EntityKey>>>,
+        mut_handler: Option<&Ref<MutHandler>>,
         connection_config: &ConnectionConfig,
     ) -> Self {
         ClientConnection {
@@ -35,6 +35,7 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
     pub fn get_outgoing_packet(
         &mut self,
         world: &W,
+        ecs_record: &EcsRecord<W::EntityKey>,
         host_tick: u16,
         manifest: &Manifest<P>,
     ) -> Option<Box<[u8]>> {
@@ -50,9 +51,9 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
                     break;
                 }
             }
-            while let Some(popped_entity_action) = self
-                .entity_manager
-                .pop_outgoing_action(world, next_packet_index)
+            while let Some(popped_entity_action) =
+                self.entity_manager
+                    .pop_outgoing_action(world, ecs_record, next_packet_index)
             {
                 if !self.entity_manager.write_entity_action(
                     &mut writer,
@@ -110,8 +111,9 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         }
     }
 
-    pub fn collect_component_updates(&mut self, world: &W) {
-        self.entity_manager.collect_component_updates(world);
+    pub fn collect_component_updates(&mut self, world: &W, ecs_record: &EcsRecord<W::EntityKey>) {
+        self.entity_manager
+            .collect_component_updates(world, ecs_record);
     }
 
     pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(W::EntityKey, P)> {
@@ -142,12 +144,17 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         return self.entity_manager.has_entity(key);
     }
 
-    pub fn spawn_entity(&mut self, world: &W, key: &W::EntityKey) {
-        self.entity_manager.add_entity(world, key);
+    pub fn spawn_entity(
+        &mut self,
+        world: &W,
+        ecs_record: &EcsRecord<W::EntityKey>,
+        key: &W::EntityKey,
+    ) {
+        self.entity_manager.add_entity(world, ecs_record, key);
     }
 
-    pub fn despawn_entity(&mut self, world: &W, key: &W::EntityKey) {
-        self.entity_manager.remove_entity(world, key);
+    pub fn despawn_entity(&mut self, ecs_record: &EcsRecord<W::EntityKey>, key: &W::EntityKey) {
+        self.entity_manager.remove_entity(ecs_record, key);
     }
 
     pub fn has_prediction_entity(&self, key: &W::EntityKey) -> bool {
@@ -162,11 +169,17 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         self.entity_manager.remove_prediction_entity(key);
     }
 
-    pub fn insert_component(&mut self, world: &W, component_key: &ComponentKey<W::EntityKey>) {
-        self.entity_manager.insert_component(world, component_key);
+    pub fn insert_component(
+        &mut self,
+        world: &W,
+        ecs_record: &EcsRecord<W::EntityKey>,
+        component_key: &ComponentKey,
+    ) {
+        self.entity_manager
+            .insert_component(world, ecs_record, component_key);
     }
 
-    pub fn remove_component(&mut self, component_key: &ComponentKey<W::EntityKey>) {
+    pub fn remove_component(&mut self, component_key: &ComponentKey) {
         self.entity_manager.remove_component(component_key);
     }
 
@@ -188,10 +201,16 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         return self.connection.should_drop();
     }
 
-    pub fn process_incoming_header(&mut self, world: &W, header: &StandardHeader) {
+    pub fn process_incoming_header(
+        &mut self,
+        world: &W,
+        ecs_record: &EcsRecord<W::EntityKey>,
+        header: &StandardHeader,
+    ) {
         self.connection
             .process_incoming_header(header, &mut Some(&mut self.entity_manager));
-        self.entity_manager.process_delivered_packets(world);
+        self.entity_manager
+            .process_delivered_packets(world, ecs_record);
     }
 
     pub fn process_outgoing_header(

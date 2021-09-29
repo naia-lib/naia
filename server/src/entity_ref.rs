@@ -74,7 +74,6 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityMut<'s, 'w, P, W> {
     }
 
     pub fn despawn(&mut self) {
-        self.world.despawn_entity(&self.key);
         self.server.despawn_entity(&mut self.world, &self.key);
     }
 
@@ -104,13 +103,9 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityMut<'s, 'w, P, W> {
     }
 
     pub fn remove_component<R: Replicate<P>>(&mut self) -> Option<Ref<R>> {
-        let output = self
+        return self
             .server
             .remove_component::<R>(&mut self.world, &self.key);
-        if output.is_some() {
-            self.world.remove_component::<R>(&self.key);
-        }
-        return output;
     }
 
     // Users & Assignment

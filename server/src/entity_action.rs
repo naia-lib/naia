@@ -1,5 +1,3 @@
-use std::any::TypeId;
-
 use naia_shared::{
     DiffMask, EntityActionType, LocalComponentKey, LocalEntityKey, ProtocolType, Ref, Replicate,
 };
@@ -11,24 +9,24 @@ pub enum EntityAction<P: ProtocolType, K: KeyType> {
     SpawnEntity(
         K,
         LocalEntityKey,
-        Vec<(TypeId, LocalComponentKey, Ref<dyn Replicate<P>>)>,
+        Vec<(ComponentKey, LocalComponentKey, Ref<dyn Replicate<P>>)>,
     ),
     DespawnEntity(K, LocalEntityKey),
     OwnEntity(K, LocalEntityKey),
     DisownEntity(K, LocalEntityKey),
     InsertComponent(
         LocalEntityKey,
-        ComponentKey<K>,
+        ComponentKey,
         LocalComponentKey,
         Ref<dyn Replicate<P>>,
     ),
     UpdateComponent(
-        ComponentKey<K>,
+        ComponentKey,
         LocalComponentKey,
         Ref<DiffMask>,
         Ref<dyn Replicate<P>>,
     ),
-    RemoveComponent(ComponentKey<K>, LocalComponentKey),
+    RemoveComponent(ComponentKey, LocalComponentKey),
 }
 
 impl<P: ProtocolType, K: KeyType> EntityAction<P, K> {
