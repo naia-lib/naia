@@ -1,14 +1,21 @@
 use std::collections::HashMap;
 
-use naia_server::{EntityKey, Event, Random, RoomKey, Server, ServerAddrs, ServerConfig, UserKey};
+use naia_server::{Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey, WorldType};
+
+use naia_server_default_world::World as DefaultWorld;
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
     protocol::{Color, Protocol, Square},
 };
 
+type World = DefaultWorld<Protocol>;
+type Server = NaiaServer<Protocol, World>;
+type EntityKey = <World as WorldType<Protocol>>::EntityKey;
+
 pub struct App {
-    server: Server<Protocol>,
+    server: Server,
+    world: World,
     main_room_key: RoomKey,
     user_to_prediction_map: HashMap<UserKey, EntityKey>,
 }
@@ -32,19 +39,22 @@ impl App {
         let mut server = Server::new(ServerConfig::default(), get_shared_config());
         server.listen(server_addresses);
 
+        let world = World::new();
+
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
         let main_room_key = server.make_room().key();
 
         App {
             server,
+            world,
             main_room_key,
             user_to_prediction_map: HashMap::<UserKey, EntityKey>::new(),
         }
     }
 
     pub fn update(&mut self) {
-        for event in self.server.receive() {
+        for event in self.server.world_mut(&mut self.world).receive() {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
                     let auth_message = auth_ref.borrow();
@@ -79,6 +89,7 @@ impl App {
                     let square = Square::new(x as u16, y as u16, square_color);
                     let entity_key = self
                         .server
+                        .world_mut(&mut self.world)
                         .spawn_entity()
                         .insert_component(&square)
                         .set_owner(&user_key)
@@ -93,6 +104,7 @@ impl App {
                         .leave_room(&self.main_room_key);
                     if let Some(entity_key) = self.user_to_prediction_map.remove(&user_key) {
                         self.server
+                            .world_mut(&mut self.world)
                             .entity_mut(&entity_key)
                             .disown()
                             .leave_room(&self.main_room_key)
@@ -100,7 +112,7 @@ impl App {
                     }
                 }
                 Ok(Event::Command(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
-                    if let Some(square_ref) = self.server.entity(&entity_key).component::<Square>()
+                    if let Some(square_ref) = self.server.world(&mut self.world).entity(&entity_key).component::<Square>()
                     {
                         shared_behavior::process_command(&key_command_ref, &square_ref);
                     }
@@ -123,7 +135,7 @@ impl App {
                     // VERY IMPORTANT! Calling this actually sends all update data
                     // packets to all Clients that require it. If you don't call this
                     // method, the Server will never communicate with it's connected Clients
-                    self.server.send_all_updates();
+                    self.server.world_mut(&mut self.world).send_all_updates();
                 }
                 Err(error) => {
                     info!("Naia Server error: {}", error);

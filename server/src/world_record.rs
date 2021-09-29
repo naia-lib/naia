@@ -82,13 +82,6 @@ impl<K: KeyType> WorldRecord<K> {
         output
     }
 
-    pub fn get_type_from_key(&self, component_key: &ComponentKey) -> Option<TypeId> {
-        if let Some(record) = self.components.get(*component_key) {
-            return Some(record.1);
-        }
-        return None;
-    }
-
     pub fn get_key_from_type(&self, entity_key: &K, type_id: &TypeId) -> Option<ComponentKey> {
         if let Some(component_key_map) = self.entities.get(entity_key) {
             if let Some(component_key) = component_key_map.get(type_id) {
