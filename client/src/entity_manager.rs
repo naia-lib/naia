@@ -239,17 +239,25 @@ impl<P: ProtocolType> EntityManager<P> {
                     // Component Removal
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                    let entity_key = self
-                        .component_entity_map
-                        .remove(&component_key)
-                        .expect("deleting nonexistant/non-initialized component");
+                    if !self.component_entity_map.contains_key(&component_key) {
+                        // This could happen due to a duplicated unreliable message
+                        // (i.e. server re-sends "remove component" message because it believes it
+                        // hasn't been delivered and then it does get
+                        // delivered after, but then a duplicate message gets delivered too..)
+                        warn!(
+                            "attempting to remove a non-existant component: {}",
+                            component_key.to_u16()
+                        );
+                    } else {
+                        let entity_key = self.component_entity_map.remove(&component_key).unwrap();
 
-                    // Get entity record, remove component
-                    self.entities
-                        .get_mut(&entity_key)
-                        .expect("entity not instantiated properly?")
-                        .remove_component(&component_key);
-                    self.component_delete_cleanup(&entity_key, &component_key);
+                        // Get entity record, remove component
+                        self.entities
+                            .get_mut(&entity_key)
+                            .expect("entity not instantiated properly?")
+                            .remove_component(&component_key);
+                        self.component_delete_cleanup(&entity_key, &component_key);
+                    }
                 }
                 EntityActionType::Unknown => {
                     panic!("received unknown type of entity action");
