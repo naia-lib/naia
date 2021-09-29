@@ -36,7 +36,7 @@ pub use naia_shared::{
 
 mod client_connection;
 mod command_receiver;
-mod ecs_record;
+mod world_record;
 mod entity_action;
 mod entity_manager;
 mod entity_ref;
