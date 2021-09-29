@@ -55,7 +55,7 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> WorldMut<'s, 'w, P, W> {
     /// Spawns a new Entity and returns a corresponding EntityMut, which can be
     /// used for various operations
     pub fn spawn_entity(&mut self) -> EntityMut<P, W> {
-        let entity_key: W::EntityKey = self.world.spawn_entity();
+        let entity_key: W::EntityKey = self.server.spawn_entity(&mut self.world);
 
         return EntityMut::new(self.server, self.world, &entity_key);
     }
