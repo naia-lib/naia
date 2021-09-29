@@ -109,8 +109,8 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                         .get(&global_component_key)
                         .expect("component not currently tracked by this connection!");
 
-                    let type_id = world_record
-                        .get_type_from_key(&global_component_key)
+                    let (_, type_id) = world_record
+                        .get_component_record(&global_component_key)
                         .expect("component not tracked by server?");
                     let component_ref = world
                         .get_component_from_type(&global_entity_key, &type_id)
@@ -239,8 +239,8 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                 panic!("entity nonexistant!");
             }
             for global_component_key in world_record.get_component_keys(global_entity_key) {
-                let type_id = world_record
-                    .get_type_from_key(&global_component_key)
+                let (_, type_id) = world_record
+                    .get_component_record(&global_component_key)
                     .expect("component does not exist!");
                 let component_protocol = world
                     .get_component_from_type(global_entity_key, &type_id)
@@ -787,8 +787,8 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                                     // check if component has been successfully created
                                     // (perhaps through the previous entity_create operation)
                                     if component_record.status == LocalityStatus::Creating {
-                                        let component_type = world_record
-                                            .get_type_from_key(&global_component_key)
+                                        let (_, component_type) = world_record
+                                            .get_component_record(&global_component_key)
                                             .expect("component does not exist!");
                                         let component_protocol = world
                                             .get_component_from_type(

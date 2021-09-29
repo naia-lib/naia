@@ -56,7 +56,7 @@ pub struct Server<P: ProtocolType, W: WorldType<P>> {
     rooms: DenseSlotMap<RoomKey, Room<P, W>>,
     // Entities
     world_record: WorldRecord<W::EntityKey>,
-    entity_owner_map: HashMap<W::EntityKey, Option<UserKey>>,
+    entity_owner_map: HashMap<W::EntityKey, UserKey>,
     entity_room_map: HashMap<W::EntityKey, RoomKey>,
     entity_scope_map: HashMap<(UserKey, W::EntityKey), bool>,
     // Components
@@ -493,19 +493,13 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
     /// Returns whether or not an Entity associated with the given Entity Key
     /// has an owner
     pub(crate) fn entity_has_owner(&self, entity_key: &W::EntityKey) -> bool {
-        if let Some(owner_opt) = self.entity_owner_map.get(entity_key) {
-            return owner_opt.is_some();
-        }
-        return false;
+        return self.entity_owner_map.contains_key(entity_key);
     }
 
     /// Gets the UserKey of the User that currently owns an Entity associated
     /// with the given Entity Key, if it exists
     pub(crate) fn entity_get_owner(&self, entity_key: &W::EntityKey) -> Option<&UserKey> {
-        if let Some(owner_opt) = self.entity_owner_map.get(entity_key) {
-            return owner_opt.as_ref();
-        }
-        return None;
+        return self.entity_owner_map.get(entity_key);
     }
 
     /// Set the 'owner' of an Entity associated with a given Entity Key to a
@@ -521,7 +515,6 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         if self
             .entity_owner_map
             .get(entity_key)
-            .expect("Entity/owner map must be uninitialized")
             .is_some()
         {
             panic!("attempting to take ownership of an Entity that is already owned");
@@ -543,17 +536,16 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         client_connection.add_prediction_entity(entity_key);
 
         // put in ownership map
-        self.entity_owner_map.insert(*entity_key, Some(*user_key));
+        self.entity_owner_map.insert(*entity_key, *user_key);
     }
 
     /// Removes ownership of an Entity from their current owner User.
     /// No User is able to issue Commands to an un-owned Entity.
     pub(crate) fn entity_disown(&mut self, entity_key: &W::EntityKey) {
         // a couple sanity checks ..
-        let current_owner_key: UserKey = self
+        let current_owner_key: UserKey = *self
             .entity_owner_map
             .get(entity_key)
-            .expect("entity does not exist in owner map")
             .expect("attempting to disown entity that does not have an owner..");
 
         let client_connection = self
@@ -562,7 +554,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
             .expect("user which owns entity does not seem to have a connection still..");
 
         client_connection.remove_prediction_entity(entity_key);
-        self.entity_owner_map.insert(*entity_key, None);
+        self.entity_owner_map.remove(entity_key);
     }
 
     //// Entity Scopes
