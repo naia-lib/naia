@@ -134,7 +134,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub(crate) fn receive(&mut self, world: &W) -> VecDeque<Result<Event<P, W>, NaiaServerError>> {
+    pub fn receive(&mut self, world: &W) -> VecDeque<Result<Event<P, W>, NaiaServerError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with all clients, and receive packets
@@ -256,7 +256,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
-    pub(crate) fn send_all_updates(&mut self, world: &W) {
+    pub fn send_all_updates(&mut self, world: &W) {
         // update entity scopes
         self.update_entity_scopes(world);
 
