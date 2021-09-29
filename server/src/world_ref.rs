@@ -1,11 +1,7 @@
-use std::collections::VecDeque;
-
 use naia_shared::ProtocolType;
 
 use super::{
     entity_ref::{EntityMut, EntityRef},
-    error::NaiaServerError,
-    event::Event,
     server::Server,
     world_type::WorldType,
 };
@@ -68,15 +64,5 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> WorldMut<'s, 'w, P, W> {
             return EntityMut::new(self.server, self.world, &entity_key);
         }
         panic!("No Entity exists for given Key!");
-    }
-
-    /// Must be called regularly, maintains connection to and receives messages
-    /// from all Clients
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P, W>, NaiaServerError>> {
-        return self.server.receive(self.world);
-    }
-
-    pub fn send_all_updates(&mut self) {
-        self.server.send_all_updates(self.world);
     }
 }

@@ -84,7 +84,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        for event in self.server.world_mut(&mut self.world).receive() {
+        for event in self.server.receive(&self.world) {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
                     let auth_message = auth_ref.borrow();
@@ -198,7 +198,7 @@ impl App {
                     // VERY IMPORTANT! Calling this actually sends all update data
                     // packets to all Clients that require it. If you don't call this
                     // method, the Server will never communicate with it's connected Clients
-                    self.server.world_mut(&mut self.world).send_all_updates();
+                    self.server.send_all_updates(&self.world);
 
                     self.tick_count = self.tick_count.wrapping_add(1);
                 }
