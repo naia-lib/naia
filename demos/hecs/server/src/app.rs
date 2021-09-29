@@ -1,17 +1,20 @@
 use std::collections::HashSet;
 
-use naia_server::{Event, Ref, RoomKey, Server, ServerAddrs, ServerConfig};
+use naia_server::{Event, Ref, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig};
 
 use naia_hecs_demo_shared::{
     get_server_address, get_shared_config,
     protocol::{Marker, Name, Position, Protocol, StringMessage},
 };
 
-use super::world::{Key, World};
+use super::world::{Key, World as HecsWorld};
+
+type Server = NaiaServer<Protocol, HecsWorld<Protocol>>;
+type World = HecsWorld<Protocol>;
 
 pub struct App {
-    server: Server<Protocol, World<Protocol>>,
-    world: World<Protocol>,
+    server: Server,
+    world: World,
     main_room_key: RoomKey,
     tick_count: u32,
     has_marker: HashSet<Key>,

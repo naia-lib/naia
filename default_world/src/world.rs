@@ -4,7 +4,7 @@ use slotmap::DenseSlotMap;
 
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
-use naia_server::{ComponentKey, KeyType, WorldType};
+use naia_server::{KeyType, WorldType};
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]

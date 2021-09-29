@@ -1,15 +1,18 @@
-use naia_server::{Event, RoomKey, Server, ServerAddrs, ServerConfig};
+use naia_server::{Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig};
 
-use naia_server_default_world::World;
+use naia_server_default_world::World as DefaultWorld;
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
     protocol::{Character, Protocol, StringMessage},
 };
 
+type Server = NaiaServer<Protocol, DefaultWorld<Protocol>>;
+type World = DefaultWorld<Protocol>;
+
 pub struct App {
-    world: World<Protocol>,
-    server: Server<Protocol, World<Protocol>>,
+    server: Server,
+    world: World,
     main_room_key: RoomKey,
     tick_count: u32,
 }
