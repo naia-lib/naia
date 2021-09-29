@@ -586,10 +586,6 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         entity_key: &W::EntityKey,
         component_ref: &R,
     ) {
-        if !self.ecs_record.has_entity(entity_key) {
-            panic!("attempted to add component to non-existent entity");
-        }
-
         if !world.has_entity(entity_key) {
             panic!("attempted to add component to non-existent entity");
         }

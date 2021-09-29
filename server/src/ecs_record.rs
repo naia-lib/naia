@@ -55,7 +55,7 @@ impl<K: KeyType> EcsRecord<K> {
         }
 
         let (entity_key, type_id) = self.components.remove(*component_key).unwrap();
-        if let Some(mut component_map) = self.entities.remove(&entity_key) {
+        if let Some(component_map) = self.entities.get_mut(&entity_key) {
             component_map
                 .remove(&type_id)
                 .expect("type ids don't match?");
