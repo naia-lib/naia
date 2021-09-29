@@ -13,7 +13,7 @@ use naia_shared::{
 };
 
 use super::{
-    ecs_record::EcsRecord, entity_action::EntityAction, keys::ComponentKey,
+    world_record::WorldRecord, entity_action::EntityAction, keys::ComponentKey,
     local_component_record::LocalComponentRecord, local_entity_record::LocalEntityRecord,
     locality_status::LocalityStatus, mut_handler::MutHandler, packet_writer::PacketWriter,
     world_type::WorldType,
@@ -82,7 +82,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
     pub fn pop_outgoing_action(
         &mut self,
         world: &W,
-        ecs_record: &EcsRecord<W::EntityKey>,
+        world_record: &WorldRecord<W::EntityKey>,
         packet_index: u16,
     ) -> Option<EntityAction<P, W::EntityKey>> {
         let queued_action_opt = self.queued_actions.pop_front();
@@ -94,14 +94,14 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
             if let EntityAction::SpawnEntity(global_entity_key, local_entity_key, _) = queued_action
             {
                 // get the most recent list of components in here ...
-                if !ecs_record.has_entity(&global_entity_key) {
+                if !world_record.has_entity(&global_entity_key) {
                     panic!("entity does not exist!")
                 }
 
                 let mut component_list = Vec::new();
                 let mut diff_mask_list: Vec<(ComponentKey, DiffMask)> = Vec::new();
 
-                let global_component_keys = ecs_record.get_component_keys(&global_entity_key);
+                let global_component_keys = world_record.get_component_keys(&global_entity_key);
 
                 for global_component_key in global_component_keys {
                     let local_component_record = self
@@ -109,7 +109,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                         .get(&global_component_key)
                         .expect("component not currently tracked by this connection!");
 
-                    let type_id = ecs_record
+                    let type_id = world_record
                         .get_type_from_key(&global_component_key)
                         .expect("component not tracked by server?");
                     let component_ref = world
@@ -229,17 +229,17 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
     pub fn add_entity(
         &mut self,
         world: &W,
-        ecs_record: &EcsRecord<W::EntityKey>,
+        world_record: &WorldRecord<W::EntityKey>,
         global_entity_key: &W::EntityKey,
     ) {
         if !self.entity_records.contains_key(global_entity_key) {
             // first, get a list of components
             // then, add components
-            if !ecs_record.has_entity(global_entity_key) {
+            if !world_record.has_entity(global_entity_key) {
                 panic!("entity nonexistant!");
             }
-            for global_component_key in ecs_record.get_component_keys(global_entity_key) {
-                let type_id = ecs_record
+            for global_component_key in world_record.get_component_keys(global_entity_key) {
+                let type_id = world_record
                     .get_type_from_key(&global_component_key)
                     .expect("component does not exist!");
                 let component_protocol = world
@@ -273,7 +273,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
 
     pub fn remove_entity(
         &mut self,
-        ecs_record: &EcsRecord<W::EntityKey>,
+        world_record: &WorldRecord<W::EntityKey>,
         global_entity_key: &W::EntityKey,
     ) {
         if self.has_entity_prediction(global_entity_key) {
@@ -296,7 +296,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
 
                     // Entity deletion IS Component deletion, so update those component records
                     // accordingly
-                    for global_component_key in ecs_record.get_component_keys(global_entity_key) {
+                    for global_component_key in world_record.get_component_keys(global_entity_key) {
                         if let Some(component_record) =
                             self.component_records.get_mut(&global_component_key)
                         {
@@ -359,10 +359,10 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
     pub fn insert_component(
         &mut self,
         world: &W,
-        ecs_record: &EcsRecord<W::EntityKey>,
+        world_record: &WorldRecord<W::EntityKey>,
         component_key: &ComponentKey,
     ) {
-        let (entity_key, component_type) = ecs_record
+        let (entity_key, component_type) = world_record
             .get_component_record(component_key)
             .expect("component does not exist!");
 
@@ -435,12 +435,12 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
         return self.local_to_global_entity_key_map.get(&local_key);
     }
 
-    pub fn collect_component_updates(&mut self, world: &W, ecs_record: &EcsRecord<W::EntityKey>) {
+    pub fn collect_component_updates(&mut self, world: &W, world_record: &WorldRecord<W::EntityKey>) {
         for (component_key, record) in self.component_records.iter() {
             if record.status == LocalityStatus::Created
                 && !record.get_diff_mask().borrow().is_clear()
             {
-                let (entity_key, component_type) = ecs_record
+                let (entity_key, component_type) = world_record
                     .get_component_record(component_key)
                     .expect("component does not exist!");
 
@@ -737,7 +737,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
             .clone()
     }
 
-    pub fn process_delivered_packets(&mut self, world: &W, ecs_record: &EcsRecord<W::EntityKey>) {
+    pub fn process_delivered_packets(&mut self, world: &W, world_record: &WorldRecord<W::EntityKey>) {
         while let Some(packet_index) = self.delivered_packets.pop_front() {
             let mut deleted_components: Vec<ComponentKey> = Vec::new();
 
@@ -778,7 +778,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                                 // for any components on this entity that have not yet been created
                                 // initiate that now
                                 for global_component_key in
-                                    ecs_record.get_component_keys(&global_entity_key)
+                                    world_record.get_component_keys(&global_entity_key)
                                 {
                                     let component_record = self
                                         .component_records
@@ -787,7 +787,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
                                     // check if component has been successfully created
                                     // (perhaps through the previous entity_create operation)
                                     if component_record.status == LocalityStatus::Creating {
-                                        let component_type = ecs_record
+                                        let component_type = world_record
                                             .get_type_from_key(&global_component_key)
                                             .expect("component does not exist!");
                                         let component_protocol = world
@@ -818,7 +818,7 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
 
                             // delete all components associated with entity
                             for global_component_key in
-                                ecs_record.get_component_keys(&global_entity_key)
+                                world_record.get_component_keys(&global_entity_key)
                             {
                                 deleted_components.push(global_component_key);
                             }

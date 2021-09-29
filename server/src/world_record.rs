@@ -4,14 +4,14 @@ use slotmap::DenseSlotMap;
 
 use super::keys::{ComponentKey, KeyType};
 
-pub struct EcsRecord<K: KeyType> {
+pub struct WorldRecord<K: KeyType> {
     entities: HashMap<K, HashMap<TypeId, ComponentKey>>,
     components: DenseSlotMap<ComponentKey, (K, TypeId)>,
 }
 
-impl<K: KeyType> EcsRecord<K> {
+impl<K: KeyType> WorldRecord<K> {
     pub fn new() -> Self {
-        EcsRecord {
+        WorldRecord {
             entities: HashMap::new(),
             components: DenseSlotMap::with_key(),
         }

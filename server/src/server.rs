@@ -21,7 +21,7 @@ pub use naia_shared::{
 
 use super::{
     client_connection::ClientConnection,
-    ecs_record::EcsRecord,
+    world_record::WorldRecord,
     error::NaiaServerError,
     event::Event,
     keys::ComponentKey,
@@ -55,7 +55,7 @@ pub struct Server<P: ProtocolType, W: WorldType<P>> {
     // Rooms
     rooms: DenseSlotMap<RoomKey, Room<P, W>>,
     // Entities
-    ecs_record: EcsRecord<W::EntityKey>,
+    world_record: WorldRecord<W::EntityKey>,
     entity_owner_map: HashMap<W::EntityKey, Option<UserKey>>,
     entity_room_map: HashMap<W::EntityKey, RoomKey>,
     entity_scope_map: HashMap<(UserKey, W::EntityKey), bool>,
@@ -107,7 +107,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
             // Rooms
             rooms: DenseSlotMap::with_key(),
             // Entities
-            ecs_record: EcsRecord::new(),
+            world_record: WorldRecord::new(),
             entity_owner_map: HashMap::new(),
             entity_room_map: HashMap::new(),
             entity_scope_map: HashMap::new(),
@@ -263,10 +263,10 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         // loop through all connections, send packet
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
-                connection.collect_component_updates(world, &self.ecs_record);
+                connection.collect_component_updates(world, &self.world_record);
                 while let Some(payload) = connection.get_outgoing_packet(
                     world,
-                    &self.ecs_record,
+                    &self.world_record,
                     self.tick_manager.get_tick(),
                     &self.manifest,
                 ) {
@@ -452,7 +452,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     pub(crate) fn spawn_entity(&mut self, world: &mut W) -> W::EntityKey {
         let entity_key = world.spawn_entity();
-        self.ecs_record.spawn_entity(&entity_key);
+        self.world_record.spawn_entity(&entity_key);
         return entity_key;
     }
 
@@ -474,17 +474,17 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         for (user_key, _) in self.users.iter() {
             if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
                 //remove entity from user connection
-                client_connection.despawn_entity(&self.ecs_record, entity_key);
+                client_connection.despawn_entity(&self.world_record, entity_key);
             }
         }
 
         // Clean up associated components
-        for component_key in self.ecs_record.get_component_keys(entity_key) {
+        for component_key in self.world_record.get_component_keys(entity_key) {
             self.component_cleanup(&component_key);
         }
 
         // Remove from ECS Record
-        self.ecs_record.despawn_entity(entity_key);
+        self.world_record.despawn_entity(entity_key);
 
         // Delete from world
         world.despawn_entity(entity_key);
@@ -536,7 +536,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         // add Entity to User's connection if it's not already in-scope
         if !client_connection.has_entity(entity_key) {
             //add entity to user connection
-            client_connection.spawn_entity(world, &self.ecs_record, entity_key);
+            client_connection.spawn_entity(world, &self.world_record, entity_key);
         }
 
         // assign Entity to User as a Prediction
@@ -611,7 +611,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
             if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
                 if client_connection.has_entity(entity_key) {
                     // insert component into user's connection
-                    client_connection.insert_component(world, &self.ecs_record, &component_key);
+                    client_connection.insert_component(world, &self.world_record, &component_key);
                 }
             }
         }
@@ -627,7 +627,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         if let Some(component_ref) = world.get_component::<R>(entity_key) {
             // get component key from type
             let component_key = self
-                .ecs_record
+                .world_record
                 .get_key_from_type(entity_key, &TypeId::of::<R>())
                 .expect("component does not exist!");
 
@@ -861,7 +861,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                                             self.client_connections.get_mut(user_key).unwrap();
                                         connection.process_incoming_header(
                                             world,
-                                            &self.ecs_record,
+                                            &self.world_record,
                                             &header,
                                         );
 
@@ -919,7 +919,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                                     Some(connection) => {
                                         connection.process_incoming_header(
                                             world,
-                                            &self.ecs_record,
+                                            &self.world_record,
                                             &header,
                                         );
                                         connection.process_incoming_data(
@@ -946,7 +946,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                                         // events fire based on the heartbeat header
                                         connection.process_incoming_header(
                                             world,
-                                            &self.ecs_record,
+                                            &self.world_record,
                                             &header,
                                         );
                                     }
@@ -965,7 +965,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                                     Some(connection) => {
                                         connection.process_incoming_header(
                                             world,
-                                            &self.ecs_record,
+                                            &self.world_record,
                                             &header,
                                         );
                                         let ping_payload = connection.process_ping(&payload);
@@ -1018,7 +1018,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
                 if let Some(client_connection) = self.client_connections.get_mut(&removed_user) {
                     //remove entity from user connection
-                    client_connection.despawn_entity(&self.ecs_record, &removed_entity);
+                    client_connection.despawn_entity(&self.world_record, &removed_entity);
                 }
             }
 
@@ -1047,14 +1047,14 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                                     // add entity to the connections local scope
                                     client_connection.spawn_entity(
                                         world,
-                                        &self.ecs_record,
+                                        &self.world_record,
                                         entity_key,
                                     );
                                 }
                             } else {
                                 if currently_in_scope {
                                     // remove entity from the connections local scope
-                                    client_connection.despawn_entity(&self.ecs_record, entity_key);
+                                    client_connection.despawn_entity(&self.world_record, entity_key);
                                 }
                             }
                         }
@@ -1080,7 +1080,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
             .set_mutator(&to_property_mutator(new_mutator_ref.clone()));
 
         let component_key = self
-            .ecs_record
+            .world_record
             .add_component(entity_key, &dyn_ref.borrow().get_type_id());
 
         new_mutator_ref
@@ -1094,7 +1094,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
     }
 
     fn component_cleanup(&mut self, component_key: &ComponentKey) {
-        self.ecs_record.remove_component(component_key);
+        self.world_record.remove_component(component_key);
         self.mut_handler
             .borrow_mut()
             .deregister_component(component_key);
