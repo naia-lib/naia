@@ -36,7 +36,6 @@ pub use naia_shared::{
 
 mod client_connection;
 mod command_receiver;
-mod world_record;
 mod entity_action;
 mod entity_manager;
 mod entity_ref;
@@ -56,7 +55,7 @@ mod server_config;
 mod tick_manager;
 mod user;
 mod user_scope;
-mod world_ref;
+mod world_record;
 mod world_type;
 
 pub use entity_ref::EntityRef;

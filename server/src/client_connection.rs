@@ -6,9 +6,9 @@ use naia_shared::{
 };
 
 use super::{
-    command_receiver::CommandReceiver, world_record::WorldRecord, entity_manager::EntityManager,
-    keys::ComponentKey, mut_handler::MutHandler, packet_writer::PacketWriter,
-    ping_manager::PingManager, world_type::WorldType,
+    command_receiver::CommandReceiver, entity_manager::EntityManager, keys::ComponentKey,
+    mut_handler::MutHandler, packet_writer::PacketWriter, ping_manager::PingManager,
+    world_record::WorldRecord, world_type::WorldType,
 };
 
 pub struct ClientConnection<P: ProtocolType, W: WorldType<P>> {
@@ -111,7 +111,11 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         }
     }
 
-    pub fn collect_component_updates(&mut self, world: &W, world_record: &WorldRecord<W::EntityKey>) {
+    pub fn collect_component_updates(
+        &mut self,
+        world: &W,
+        world_record: &WorldRecord<W::EntityKey>,
+    ) {
         self.entity_manager
             .collect_component_updates(world, world_record);
     }

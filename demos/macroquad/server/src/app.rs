@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use naia_server::{Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey, WorldType};
+use naia_server::{
+    Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey, WorldType,
+};
 
 use naia_server_default_world::World as DefaultWorld;
 
@@ -89,8 +91,7 @@ impl App {
                     let square = Square::new(x as u16, y as u16, square_color);
                     let entity_key = self
                         .server
-                        .world_mut(&mut self.world)
-                        .spawn_entity()
+                        .spawn_entity(&mut self.world)
                         .insert_component(&square)
                         .set_owner(&user_key)
                         .enter_room(&self.main_room_key)
@@ -104,15 +105,17 @@ impl App {
                         .leave_room(&self.main_room_key);
                     if let Some(entity_key) = self.user_to_prediction_map.remove(&user_key) {
                         self.server
-                            .world_mut(&mut self.world)
-                            .entity_mut(&entity_key)
+                            .entity_mut(&mut self.world, &entity_key)
                             .disown()
                             .leave_room(&self.main_room_key)
                             .despawn();
                     }
                 }
                 Ok(Event::Command(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
-                    if let Some(square_ref) = self.server.world(&mut self.world).entity(&entity_key).component::<Square>()
+                    if let Some(square_ref) = self
+                        .server
+                        .entity(&self.world, &entity_key)
+                        .component::<Square>()
                     {
                         shared_behavior::process_command(&key_command_ref, &square_ref);
                     }
