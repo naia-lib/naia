@@ -1,21 +1,21 @@
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
 use super::{
-    room::room_key::RoomKey, server::Server, user::user_key::UserKey, world_type::WorldType,
+    room::room_key::RoomKey, server::Server, user::user_key::UserKey, world_type::WorldType, keys::KeyType
 };
 
 // EntityRef
 
 /// A reference to an Entity being tracked by the Server
-pub struct EntityRef<'s, 'w, P: ProtocolType, W: WorldType<P>> {
-    server: &'s Server<P, W>,
+pub struct EntityRef<'s, 'w, P: ProtocolType, K: KeyType, W: WorldType<P, K>> {
+    server: &'s Server<P, K>,
     world: &'w W,
-    key: W::EntityKey,
+    key: K,
 }
 
-impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityRef<'s, 'w, P, W> {
+impl<'s, 'w, P: ProtocolType, K: KeyType, W: WorldType<P, K>> EntityRef<'s, 'w, P, K, W> {
     /// Return a new EntityRef
-    pub(crate) fn new(server: &'s Server<P, W>, world: &'w W, key: &W::EntityKey) -> Self {
+    pub(crate) fn new(server: &'s Server<P, K>, world: &'w W, key: &K) -> Self {
         EntityRef {
             server,
             world,
@@ -24,7 +24,7 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityRef<'s, 'w, P, W> {
     }
 
     /// Gets the Key associated with the Entity
-    pub fn key(&self) -> W::EntityKey {
+    pub fn key(&self) -> K {
         self.key
     }
 
@@ -54,14 +54,14 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityRef<'s, 'w, P, W> {
 }
 
 // EntityMut
-pub struct EntityMut<'s, 'w, P: ProtocolType, W: WorldType<P>> {
-    server: &'s mut Server<P, W>,
+pub struct EntityMut<'s, 'w, P: ProtocolType, K: KeyType, W: WorldType<P, K>> {
+    server: &'s mut Server<P, K>,
     world: &'w mut W,
-    key: W::EntityKey,
+    key: K,
 }
 
-impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityMut<'s, 'w, P, W> {
-    pub(crate) fn new(server: &'s mut Server<P, W>, world: &'w mut W, key: &W::EntityKey) -> Self {
+impl<'s, 'w, P: ProtocolType, K: KeyType, W: WorldType<P, K>> EntityMut<'s, 'w, P, K, W> {
+    pub(crate) fn new(server: &'s mut Server<P, K>, world: &'w mut W, key: &K) -> Self {
         EntityMut {
             server,
             world,
@@ -69,12 +69,12 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityMut<'s, 'w, P, W> {
         }
     }
 
-    pub fn key(&self) -> W::EntityKey {
+    pub fn key(&self) -> K {
         self.key
     }
 
     pub fn despawn(&mut self) {
-        self.server.despawn_entity(&mut self.world, &self.key);
+        self.server.despawn_entity(self.world, &self.key);
     }
 
     // Components
@@ -89,7 +89,7 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityMut<'s, 'w, P, W> {
 
     pub fn insert_component<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
         self.server
-            .insert_component(&mut self.world, &self.key, component_ref);
+            .insert_component(self.world, &self.key, component_ref);
 
         self
     }
@@ -105,7 +105,7 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityMut<'s, 'w, P, W> {
     pub fn remove_component<R: Replicate<P>>(&mut self) -> Option<Ref<R>> {
         return self
             .server
-            .remove_component::<R>(&mut self.world, &self.key);
+            .remove_component::<R, W>(self.world, &self.key);
     }
 
     // Users & Assignment
@@ -121,7 +121,7 @@ impl<'s, 'w, P: ProtocolType, W: WorldType<P>> EntityMut<'s, 'w, P, W> {
     pub fn set_owner(&mut self, user_key: &UserKey) -> &mut Self {
         // user_own?
         self.server
-            .entity_set_owner(&self.world, &self.key, user_key);
+            .entity_set_owner(self.world, &self.key, user_key);
 
         self
     }

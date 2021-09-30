@@ -245,7 +245,7 @@ impl<P: ProtocolType> EntityManager<P> {
                         // hasn't been delivered and then it does get
                         // delivered after, but then a duplicate message gets delivered too..)
                         warn!(
-                            "attempting to remove a non-existant component: {}",
+                            "attempting to remove a non-existent component: {}",
                             component_key.to_u16()
                         );
                     } else {

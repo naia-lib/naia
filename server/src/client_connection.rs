@@ -6,19 +6,19 @@ use naia_shared::{
 };
 
 use super::{
-    command_receiver::CommandReceiver, entity_manager::EntityManager, keys::ComponentKey,
+    command_receiver::CommandReceiver, entity_manager::EntityManager, keys::{ComponentKey, KeyType},
     mut_handler::MutHandler, packet_writer::PacketWriter, ping_manager::PingManager,
     world_record::WorldRecord, world_type::WorldType,
 };
 
-pub struct ClientConnection<P: ProtocolType, W: WorldType<P>> {
+pub struct ClientConnection<P: ProtocolType, K: KeyType> {
     connection: Connection<P>,
-    entity_manager: EntityManager<P, W>,
+    entity_manager: EntityManager<P, K>,
     ping_manager: PingManager,
     command_receiver: CommandReceiver<P>,
 }
 
-impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
+impl<P: ProtocolType, K: KeyType> ClientConnection<P, K> {
     pub fn new(
         address: SocketAddr,
         mut_handler: Option<&Ref<MutHandler>>,
@@ -32,10 +32,10 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         }
     }
 
-    pub fn get_outgoing_packet(
+    pub fn get_outgoing_packet<W: WorldType<P, K>>(
         &mut self,
         world: &W,
-        world_record: &WorldRecord<W::EntityKey>,
+        world_record: &WorldRecord<K>,
         host_tick: u16,
         manifest: &Manifest<P>,
     ) -> Option<Box<[u8]>> {
@@ -111,16 +111,16 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         }
     }
 
-    pub fn collect_component_updates(
+    pub fn collect_component_updates<W: WorldType<P, K>>(
         &mut self,
         world: &W,
-        world_record: &WorldRecord<W::EntityKey>,
+        world_record: &WorldRecord<K>,
     ) {
         self.entity_manager
             .collect_component_updates(world, world_record);
     }
 
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(W::EntityKey, P)> {
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(K, P)> {
         if let Some((local_entity_key, command)) =
             self.command_receiver.pop_incoming_command(server_tick)
         {
@@ -144,39 +144,39 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
 
     // Entity management
 
-    pub fn has_entity(&self, key: &W::EntityKey) -> bool {
+    pub fn has_entity(&self, key: &K) -> bool {
         return self.entity_manager.has_entity(key);
     }
 
-    pub fn spawn_entity(
+    pub fn spawn_entity<W: WorldType<P, K>>(
         &mut self,
         world: &W,
-        world_record: &WorldRecord<W::EntityKey>,
-        key: &W::EntityKey,
+        world_record: &WorldRecord<K>,
+        key: &K,
     ) {
         self.entity_manager.add_entity(world, world_record, key);
     }
 
-    pub fn despawn_entity(&mut self, world_record: &WorldRecord<W::EntityKey>, key: &W::EntityKey) {
+    pub fn despawn_entity(&mut self, world_record: &WorldRecord<K>, key: &K) {
         self.entity_manager.remove_entity(world_record, key);
     }
 
-    pub fn has_prediction_entity(&self, key: &W::EntityKey) -> bool {
+    pub fn has_prediction_entity(&self, key: &K) -> bool {
         return self.entity_manager.has_entity_prediction(key);
     }
 
-    pub fn add_prediction_entity(&mut self, key: &W::EntityKey) {
+    pub fn add_prediction_entity(&mut self, key: &K) {
         self.entity_manager.add_prediction_entity(key);
     }
 
-    pub fn remove_prediction_entity(&mut self, key: &W::EntityKey) {
+    pub fn remove_prediction_entity(&mut self, key: &K) {
         self.entity_manager.remove_prediction_entity(key);
     }
 
-    pub fn insert_component(
+    pub fn insert_component<W: WorldType<P, K>>(
         &mut self,
         world: &W,
-        world_record: &WorldRecord<W::EntityKey>,
+        world_record: &WorldRecord<K>,
         component_key: &ComponentKey,
     ) {
         self.entity_manager
@@ -205,10 +205,10 @@ impl<P: ProtocolType, W: WorldType<P>> ClientConnection<P, W> {
         return self.connection.should_drop();
     }
 
-    pub fn process_incoming_header(
+    pub fn process_incoming_header<W: WorldType<P, K>>(
         &mut self,
         world: &W,
-        world_record: &WorldRecord<W::EntityKey>,
+        world_record: &WorldRecord<K>,
         header: &StandardHeader,
     ) {
         self.connection

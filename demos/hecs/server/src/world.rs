@@ -63,14 +63,13 @@ impl<P: ProtocolType> World<P> {
     }
 }
 
-impl<P: 'static + ProtocolType> WorldType<P> for World<P> {
-    type EntityKey = Key;
+impl<P: 'static + ProtocolType> WorldType<P, Key> for World<P> {
 
-    fn has_entity(&self, entity_key: &Self::EntityKey) -> bool {
+    fn has_entity(&self, entity_key: &Key) -> bool {
         return self.hecs.contains(entity_key.0);
     }
 
-    fn entities(&self) -> Vec<Self::EntityKey> {
+    fn entities(&self) -> Vec<Key> {
         let mut output = Vec::new();
 
         for (entity, _) in self.hecs.iter() {
@@ -80,48 +79,48 @@ impl<P: 'static + ProtocolType> WorldType<P> for World<P> {
         return output;
     }
 
-    fn spawn_entity(&mut self) -> Self::EntityKey {
+    fn spawn_entity(&mut self) -> Key {
         let entity = self.hecs.spawn(());
         return Key(entity);
     }
 
-    fn despawn_entity(&mut self, entity_key: &Self::EntityKey) {
+    fn despawn_entity(&mut self, entity_key: &Key) {
         self.hecs
             .despawn(entity_key.0)
             .expect("error despawning Entity");
     }
 
-    fn has_component<R: Replicate<P>>(&self, entity_key: &Self::EntityKey) -> bool {
+    fn has_component<R: Replicate<P>>(&self, entity_key: &Key) -> bool {
         let result = self.hecs.get::<Ref<R>>(entity_key.0);
         return result.is_ok();
     }
 
-    fn has_component_of_type(&self, entity_key: &Self::EntityKey, type_id: &TypeId) -> bool {
-        return WorldType::<P>::get_component_from_type(self, entity_key, type_id).is_some();
+    fn has_component_of_type(&self, entity_key: &Key, type_id: &TypeId) -> bool {
+        return WorldType::<P, Key>::get_component_from_type(self, entity_key, type_id).is_some();
     }
 
-    fn get_component<R: Replicate<P>>(&self, entity_key: &Self::EntityKey) -> Option<Ref<R>> {
+    fn get_component<R: Replicate<P>>(&self, entity_key: &Key) -> Option<Ref<R>> {
         return self
             .hecs
             .get::<Ref<R>>(entity_key.0)
             .map_or(None, |v| Some(v.deref().clone()));
     }
 
-    fn get_component_from_type(&self, entity_key: &Self::EntityKey, type_id: &TypeId) -> Option<P> {
+    fn get_component_from_type(&self, entity_key: &Key, type_id: &TypeId) -> Option<P> {
         if let Some(handler) = self.rep_type_to_handler_map.get(type_id) {
             return handler.get_component(self, &entity_key.0);
         }
         return None;
     }
 
-    fn get_components(&self, entity_key: &Self::EntityKey) -> Vec<P> {
+    fn get_components(&self, entity_key: &Key) -> Vec<P> {
         let mut protocols = Vec::new();
 
         if let Ok(entity_ref) = self.hecs.entity(entity_key.0) {
             for ref_type in entity_ref.component_types() {
                 if let Some(rep_type) = self.ref_type_to_rep_type_map.get(&ref_type) {
                     if let Some(component) =
-                        WorldType::<P>::get_component_from_type(self, entity_key, &rep_type)
+                        WorldType::<P, Key>::get_component_from_type(self, entity_key, &rep_type)
                     {
                         protocols.push(component);
                     }
@@ -132,7 +131,7 @@ impl<P: 'static + ProtocolType> WorldType<P> for World<P> {
         return protocols;
     }
 
-    fn insert_component<R: ImplRef<P>>(&mut self, entity_key: &Self::EntityKey, component_ref: R) {
+    fn insert_component<R: ImplRef<P>>(&mut self, entity_key: &Key, component_ref: R) {
         // cache type id for later
         let inner_type_id = component_ref.dyn_ref().borrow().get_type_id();
         if !self.rep_type_to_handler_map.contains_key(&inner_type_id) {
@@ -148,7 +147,7 @@ impl<P: 'static + ProtocolType> WorldType<P> for World<P> {
             .expect("error inserting Component");
     }
 
-    fn remove_component<R: Replicate<P>>(&mut self, entity_key: &Self::EntityKey) {
+    fn remove_component<R: Replicate<P>>(&mut self, entity_key: &Key) {
         // remove from ecs
         self.hecs
             .remove_one::<Ref<R>>(entity_key.0)

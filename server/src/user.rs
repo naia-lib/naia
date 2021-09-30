@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_shared::Timestamp;
 
-use super::world_type::WorldType;
+use super::keys::KeyType;
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
@@ -31,13 +31,13 @@ use crate::{RoomKey, Server, UserKey};
 
 // UserRef
 
-pub struct UserRef<'s, P: ProtocolType, W: WorldType<P>> {
-    server: &'s Server<P, W>,
+pub struct UserRef<'s, P: ProtocolType, K: KeyType> {
+    server: &'s Server<P, K>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, W: WorldType<P>> UserRef<'s, P, W> {
-    pub fn new(server: &'s Server<P, W>, key: &UserKey) -> Self {
+impl<'s, P: ProtocolType, K: KeyType> UserRef<'s, P, K> {
+    pub fn new(server: &'s Server<P, K>, key: &UserKey) -> Self {
         UserRef { server, key: *key }
     }
 
@@ -51,13 +51,13 @@ impl<'s, P: ProtocolType, W: WorldType<P>> UserRef<'s, P, W> {
 }
 
 // UserMut
-pub struct UserMut<'s, P: ProtocolType, W: WorldType<P>> {
-    server: &'s mut Server<P, W>,
+pub struct UserMut<'s, P: ProtocolType, K: KeyType> {
+    server: &'s mut Server<P, K>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, W: WorldType<P>> UserMut<'s, P, W> {
-    pub fn new(server: &'s mut Server<P, W>, key: &UserKey) -> Self {
+impl<'s, P: ProtocolType, K: KeyType> UserMut<'s, P, K> {
+    pub fn new(server: &'s mut Server<P, K>, key: &UserKey) -> Self {
         UserMut { server, key: *key }
     }
 

@@ -1,6 +1,6 @@
 use std::collections::{hash_set::Iter, HashSet, VecDeque};
 
-use super::{user::user_key::UserKey, world_type::WorldType};
+use super::{user::user_key::UserKey, keys::KeyType};
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
@@ -9,14 +9,14 @@ pub mod room_key {
     new_key_type! { pub struct RoomKey; }
 }
 
-pub struct Room<P: ProtocolType, W: WorldType<P>> {
+pub struct Room<K: KeyType> {
     users: HashSet<UserKey>,
-    entities: HashSet<W::EntityKey>,
-    entity_removal_queue: VecDeque<(UserKey, W::EntityKey)>,
+    entities: HashSet<K>,
+    entity_removal_queue: VecDeque<(UserKey, K)>,
 }
 
-impl<P: ProtocolType, W: WorldType<P>> Room<P, W> {
-    pub(crate) fn new() -> Room<P, W> {
+impl<K: KeyType> Room<K> {
+    pub(crate) fn new() -> Room<K> {
         Room {
             users: HashSet::new(),
             entities: HashSet::new(),
@@ -52,11 +52,11 @@ impl<P: ProtocolType, W: WorldType<P>> Room<P, W> {
 
     // Entities
 
-    pub(crate) fn add_entity(&mut self, entity_key: &W::EntityKey) {
+    pub(crate) fn add_entity(&mut self, entity_key: &K) {
         self.entities.insert(*entity_key);
     }
 
-    pub(crate) fn remove_entity(&mut self, entity_key: &W::EntityKey) -> bool {
+    pub(crate) fn remove_entity(&mut self, entity_key: &K) -> bool {
         if self.entities.remove(entity_key) {
             for user_key in self.users.iter() {
                 self.entity_removal_queue
@@ -68,11 +68,11 @@ impl<P: ProtocolType, W: WorldType<P>> Room<P, W> {
         }
     }
 
-    pub(crate) fn entity_keys(&self) -> Iter<W::EntityKey> {
+    pub(crate) fn entity_keys(&self) -> Iter<K> {
         return self.entities.iter();
     }
 
-    pub(crate) fn pop_entity_removal_queue(&mut self) -> Option<(UserKey, W::EntityKey)> {
+    pub(crate) fn pop_entity_removal_queue(&mut self) -> Option<(UserKey, K)> {
         return self.entity_removal_queue.pop_front();
     }
 
@@ -91,13 +91,13 @@ use room_key::RoomKey;
 
 // RoomRef
 
-pub struct RoomRef<'s, P: ProtocolType, W: WorldType<P>> {
-    server: &'s Server<P, W>,
+pub struct RoomRef<'s, P: ProtocolType, K: KeyType> {
+    server: &'s Server<P, K>,
     key: RoomKey,
 }
 
-impl<'s, P: ProtocolType, W: WorldType<P>> RoomRef<'s, P, W> {
-    pub fn new(server: &'s Server<P, W>, key: &RoomKey) -> Self {
+impl<'s, P: ProtocolType, K: KeyType> RoomRef<'s, P, K> {
+    pub fn new(server: &'s Server<P, K>, key: &RoomKey) -> Self {
         RoomRef { server, key: *key }
     }
 
@@ -117,7 +117,7 @@ impl<'s, P: ProtocolType, W: WorldType<P>> RoomRef<'s, P, W> {
 
     // Entities
 
-    pub fn has_entity(&self, entity_key: &W::EntityKey) -> bool {
+    pub fn has_entity(&self, entity_key: &K) -> bool {
         return self.server.room_has_entity(&self.key, entity_key);
     }
 
@@ -127,13 +127,13 @@ impl<'s, P: ProtocolType, W: WorldType<P>> RoomRef<'s, P, W> {
 }
 
 // RoomMut
-pub struct RoomMut<'s, P: ProtocolType, W: WorldType<P>> {
-    server: &'s mut Server<P, W>,
+pub struct RoomMut<'s, P: ProtocolType, K: KeyType> {
+    server: &'s mut Server<P, K>,
     key: RoomKey,
 }
 
-impl<'s, P: ProtocolType, W: WorldType<P>> RoomMut<'s, P, W> {
-    pub fn new(server: &'s mut Server<P, W>, key: &RoomKey) -> Self {
+impl<'s, P: ProtocolType, K: KeyType> RoomMut<'s, P, K> {
+    pub fn new(server: &'s mut Server<P, K>, key: &RoomKey) -> Self {
         RoomMut { server, key: *key }
     }
 
@@ -169,17 +169,17 @@ impl<'s, P: ProtocolType, W: WorldType<P>> RoomMut<'s, P, W> {
 
     // Entities
 
-    pub fn has_entity(&self, entity_key: &W::EntityKey) -> bool {
+    pub fn has_entity(&self, entity_key: &K) -> bool {
         return self.server.room_has_entity(&self.key, entity_key);
     }
 
-    pub fn add_entity(&mut self, entity_key: &W::EntityKey) -> &mut Self {
+    pub fn add_entity(&mut self, entity_key: &K) -> &mut Self {
         self.server.room_add_entity(&self.key, entity_key);
 
         self
     }
 
-    pub fn remove_entity(&mut self, entity_key: &W::EntityKey) -> &mut Self {
+    pub fn remove_entity(&mut self, entity_key: &K) -> &mut Self {
         self.server.room_remove_entity(&self.key, entity_key);
 
         self
