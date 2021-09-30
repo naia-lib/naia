@@ -2,12 +2,12 @@ use naia_shared::ProtocolType;
 
 use super::{
     user::{user_key::UserKey, User},
-    world_type::WorldType,
+    keys::KeyType,
 };
 
 /// An Event that is emitted as a result of some communication with a Client, or
 /// a Tick event
-pub enum Event<P: ProtocolType, W: WorldType<P>> {
+pub enum Event<P: ProtocolType, K: KeyType> {
     /// Occurs when a Client attempts to establish a connection with the Server.
     /// Used accept or reject incoming Clients
     Authorization(UserKey, P),
@@ -25,5 +25,5 @@ pub enum Event<P: ProtocolType, W: WorldType<P>> {
     Message(UserKey, P),
     /// A Command emitted to the Server from a Client, related to some
     /// user-assigned Entity
-    Command(UserKey, W::EntityKey, P),
+    Command(UserKey, K, P),
 }

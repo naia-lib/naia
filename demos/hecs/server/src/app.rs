@@ -7,17 +7,17 @@ use naia_hecs_demo_shared::{
     protocol::{Marker, Name, Position, Protocol, StringMessage},
 };
 
-use super::world::{Key, World as HecsWorld};
+use super::world::{Key as EntityKey, World as HecsWorld};
 
 type World = HecsWorld<Protocol>;
-type Server = NaiaServer<Protocol, World>;
+type Server = NaiaServer<Protocol, EntityKey>;
 
 pub struct App {
     server: Server,
     world: World,
     main_room_key: RoomKey,
     tick_count: u32,
-    has_marker: HashSet<Key>,
+    has_marker: HashSet<EntityKey>,
 }
 
 impl App {
@@ -116,8 +116,8 @@ impl App {
                 }
                 Ok(Event::Tick) => {
                     // Game logic, march entities across the screen
-                    let mut entities_to_add: Vec<Key> = Vec::new();
-                    let mut entities_to_remove: Vec<Key> = Vec::new();
+                    let mut entities_to_add: Vec<EntityKey> = Vec::new();
+                    let mut entities_to_remove: Vec<EntityKey> = Vec::new();
 
                     for (entity_key, position_ref) in self.world.hecs.query_mut::<&Ref<Position>>()
                     {
@@ -131,10 +131,10 @@ impl App {
                             position.y.set(y);
                         }
                         if x == 40 {
-                            entities_to_add.push(Key::new(entity_key));
+                            entities_to_add.push(EntityKey::new(entity_key));
                         }
                         if x == 75 {
-                            entities_to_remove.push(Key::new(entity_key));
+                            entities_to_remove.push(EntityKey::new(entity_key));
                         }
                         position.x.set(x);
                     }

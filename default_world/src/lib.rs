@@ -3,4 +3,4 @@ extern crate slotmap;
 
 mod world;
 
-pub use world::World;
+pub use world::{EntityKey, World};

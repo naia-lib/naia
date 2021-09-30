@@ -8,7 +8,7 @@ use naia_socket_shared::PacketReader;
 use super::protocol_type::ProtocolType;
 
 /// Handles the creation of new Replica (Message/Component) instances
-pub trait ReplicaBuilder<P: ProtocolType> {
+pub trait ReplicaBuilder<P: ProtocolType>: Send + Sync {
     /// Create a new Replica instance
     fn build(&self, reader: &mut PacketReader) -> P;
     /// Gets the TypeId of the Replica the builder is able to build
