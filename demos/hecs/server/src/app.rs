@@ -65,8 +65,7 @@ impl App {
 
                 // Create an Entity
                 server
-                    .world_mut(&mut world)
-                    .spawn_entity()
+                    .spawn_entity(&mut world)
                     .enter_room(&main_room_key)
                     .insert_component(&position_ref)
                     .insert_component(&name_ref)
@@ -148,8 +147,7 @@ impl App {
 
                             // Add to Naia Server
                             self.server
-                                .world_mut(&mut self.world)
-                                .entity_mut(&entity_key)
+                                .entity_mut(&mut self.world, &entity_key)
                                 .insert_component(&marker);
 
                             // Track that this entity has a Marker
@@ -162,8 +160,7 @@ impl App {
                         if self.has_marker.remove(&entity_key) {
                             // Remove from Naia Server
                             self.server
-                                .world_mut(&mut self.world)
-                                .entity_mut(&entity_key)
+                                .entity_mut(&mut self.world, &entity_key)
                                 .remove_component::<Marker>();
                         }
                     }
@@ -172,8 +169,7 @@ impl App {
                     for (_, user_key, entity_key) in self.server.scope_checks() {
                         if let Some(pos_ref) = self
                             .server
-                            .world(&self.world)
-                            .entity(&entity_key)
+                            .entity(&self.world, &entity_key)
                             .component::<Position>()
                         {
                             let x = *pos_ref.borrow().x.get();

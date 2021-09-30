@@ -21,7 +21,7 @@ pub use naia_shared::{
 
 use super::{
     client_connection::ClientConnection,
-    world_record::WorldRecord,
+    entity_ref::{EntityMut, EntityRef},
     error::NaiaServerError,
     event::Event,
     keys::ComponentKey,
@@ -32,7 +32,7 @@ use super::{
     tick_manager::TickManager,
     user::{user_key::UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
-    world_ref::{WorldMut, WorldRef},
+    world_record::WorldRecord,
     world_type::WorldType,
 };
 
@@ -277,16 +277,46 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         }
     }
 
-    // World
+    // Entities
 
-    /// Retrieves a WorldRef that exposes read-only World operations
-    pub fn world<'s, 'w>(&'s self, world: &'w W) -> WorldRef<'s, 'w, P, W> {
-        return WorldRef::new(self, world);
+    /// Creates a new Entity and returns the associated Key
+    pub fn spawn_entity<'s, 'w>(&'s mut self, world: &'w mut W) -> EntityMut<'s, 'w, P, W> {
+        let entity_key = world.spawn_entity();
+        self.world_record.spawn_entity(&entity_key);
+        return EntityMut::new(self, world, &entity_key);
     }
 
-    /// Retrieves a WorldMut that exposes read and write World operations
-    pub fn world_mut<'s, 'w>(&'s mut self, world: &'w mut W) -> WorldMut<'s, 'w, P, W> {
-        return WorldMut::new(self, world);
+    /// Retrieves an EntityRef that exposes read-only operations for the
+    /// Entity associated with the given Entity Key.
+    /// Panics if the entity does not exist.
+    pub fn entity<'s, 'w>(
+        &'s self,
+        world: &'w W,
+        entity_key: &W::EntityKey,
+    ) -> EntityRef<'s, 'w, P, W> {
+        if world.has_entity(entity_key) {
+            return EntityRef::new(self, world, &entity_key);
+        }
+        panic!("No Entity exists for given Key!");
+    }
+
+    /// Retrieves an EntityMut that exposes read and write operations for the
+    /// Entity associated with the given Entity Key.
+    /// Panics if the entity does not exist.
+    pub fn entity_mut<'s, 'w>(
+        &'s mut self,
+        world: &'w mut W,
+        entity_key: &W::EntityKey,
+    ) -> EntityMut<'s, 'w, P, W> {
+        if world.has_entity(entity_key) {
+            return EntityMut::new(self, world, &entity_key);
+        }
+        panic!("No Entity exists for given Key!");
+    }
+
+    /// Gets a Vec of all Keys associated with Entities in the given World
+    pub fn entities(&self, world: &W) -> Vec<W::EntityKey> {
+        return world.entities();
     }
 
     // Entity Scopes
@@ -450,12 +480,6 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
 
     //// Entities
 
-    pub(crate) fn spawn_entity(&mut self, world: &mut W) -> W::EntityKey {
-        let entity_key = world.spawn_entity();
-        self.world_record.spawn_entity(&entity_key);
-        return entity_key;
-    }
-
     /// Despawns the Entity associated with the given Entity Key, if it exists.
     /// This will also remove all of the entity’s Components.
     /// Returns true if the entity is successfully despawned and false if the
@@ -512,11 +536,7 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
         user_key: &UserKey,
     ) {
         // check that entity is initialized & un-owned
-        if self
-            .entity_owner_map
-            .get(entity_key)
-            .is_some()
-        {
+        if self.entity_owner_map.get(entity_key).is_some() {
             panic!("attempting to take ownership of an Entity that is already owned");
         };
 
@@ -1046,7 +1066,8 @@ impl<P: ProtocolType, W: WorldType<P>> Server<P, W> {
                             } else {
                                 if currently_in_scope {
                                     // remove entity from the connections local scope
-                                    client_connection.despawn_entity(&self.world_record, entity_key);
+                                    client_connection
+                                        .despawn_entity(&self.world_record, entity_key);
                                 }
                             }
                         }

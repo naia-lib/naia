@@ -58,8 +58,7 @@ impl App {
                 // Create a Character
                 let character = Character::new((count * 4) as u8, 0, first, last);
                 let character_key = server
-                    .world_mut(&mut world)
-                    .spawn_entity()
+                    .spawn_entity(&mut world)
                     .insert_component(&character)
                     .key();
 
@@ -129,11 +128,10 @@ impl App {
                     }
 
                     // Iterate through Characters, marching them from (0,0) to (20, N)
-                    for entity_key in self.server.world(&self.world).entities() {
+                    for entity_key in self.server.entities(&self.world) {
                         if let Some(character_ref) = self
                             .server
-                            .world(&mut self.world)
-                            .entity(&entity_key)
+                            .entity(&self.world, &entity_key)
                             .component::<Character>()
                         {
                             character_ref.borrow_mut().step();
@@ -144,8 +142,7 @@ impl App {
                     for (_, user_key, entity_key) in self.server.scope_checks() {
                         if let Some(character_ref) = self
                             .server
-                            .world(&mut self.world)
-                            .entity(&entity_key)
+                            .entity(&self.world, &entity_key)
                             .component::<Character>()
                         {
                             let x = *character_ref.borrow().x.get();

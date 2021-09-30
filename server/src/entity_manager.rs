@@ -13,9 +13,9 @@ use naia_shared::{
 };
 
 use super::{
-    world_record::WorldRecord, entity_action::EntityAction, keys::ComponentKey,
-    local_component_record::LocalComponentRecord, local_entity_record::LocalEntityRecord,
-    locality_status::LocalityStatus, mut_handler::MutHandler, packet_writer::PacketWriter,
+    entity_action::EntityAction, keys::ComponentKey, local_component_record::LocalComponentRecord,
+    local_entity_record::LocalEntityRecord, locality_status::LocalityStatus,
+    mut_handler::MutHandler, packet_writer::PacketWriter, world_record::WorldRecord,
     world_type::WorldType,
 };
 
@@ -435,7 +435,11 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
         return self.local_to_global_entity_key_map.get(&local_key);
     }
 
-    pub fn collect_component_updates(&mut self, world: &W, world_record: &WorldRecord<W::EntityKey>) {
+    pub fn collect_component_updates(
+        &mut self,
+        world: &W,
+        world_record: &WorldRecord<W::EntityKey>,
+    ) {
         for (component_key, record) in self.component_records.iter() {
             if record.status == LocalityStatus::Created
                 && !record.get_diff_mask().borrow().is_clear()
@@ -737,7 +741,11 @@ impl<P: ProtocolType, W: WorldType<P>> EntityManager<P, W> {
             .clone()
     }
 
-    pub fn process_delivered_packets(&mut self, world: &W, world_record: &WorldRecord<W::EntityKey>) {
+    pub fn process_delivered_packets(
+        &mut self,
+        world: &W,
+        world_record: &WorldRecord<W::EntityKey>,
+    ) {
         while let Some(packet_index) = self.delivered_packets.pop_front() {
             let mut deleted_components: Vec<ComponentKey> = Vec::new();
 
