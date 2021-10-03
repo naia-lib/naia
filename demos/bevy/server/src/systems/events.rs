@@ -13,7 +13,7 @@ use crate::resources::Global;
 
 type Server = NaiaServer<Protocol, Entity>;
 
-pub fn read_server_events(
+pub fn process_events(
     mut server: ResMut<Server>,
     mut server_commands: ResMut<ServerCommands>,
     mut events: EventReader<ServerEvent<Protocol, Entity>>,
