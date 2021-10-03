@@ -4,7 +4,7 @@ use naia_server::{
     Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
 };
 
-use naia_server_default_world::{World as DefaultWorld, EntityKey};
+use naia_server_default_world::{EntityKey, World as DefaultWorld};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,

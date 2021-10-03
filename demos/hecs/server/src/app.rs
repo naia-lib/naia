@@ -7,7 +7,7 @@ use naia_hecs_demo_shared::{
     protocol::{Marker, Name, Position, Protocol, StringMessage},
 };
 
-use super::world::{Key as EntityKey, World as HecsWorld};
+use super::world::{EntityKey, World as HecsWorld};
 
 type World = HecsWorld<Protocol>;
 type Server = NaiaServer<Protocol, EntityKey>;

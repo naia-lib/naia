@@ -7,8 +7,7 @@ use bevy::{
 use std::collections::HashMap;
 
 use naia_server::{
-    Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
-    UserKey,
+    Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
 };
 
 use naia_bevy_demo_shared::{
@@ -17,7 +16,7 @@ use naia_bevy_demo_shared::{
 };
 
 mod world;
-use world::{WorldRef, EntityKey};
+use world::{EntityKey, WorldRef};
 
 type Server = NaiaServer<Protocol, EntityKey>;
 
@@ -82,109 +81,118 @@ fn init() {
 }
 
 fn naia_server_update(world: &mut World) {
-        world.resource_scope(|world, mut resource: Mut<ServerResource>| {
-            let mut world_ref = WorldRef::new(world);
-            let main_room_key = resource.main_room_key;
+    world.resource_scope(|world, mut resource: Mut<ServerResource>| {
+        let mut world_ref = WorldRef::new(world);
+        let main_room_key = resource.main_room_key;
 
-            for event in resource.server.receive(&world_ref) {
-                match event {
-                    Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
-                        let auth_message = auth_ref.borrow();
-                        let username = auth_message.username.get();
-                        let password = auth_message.password.get();
-                        if username == "charlie" && password == "12345" {
-                            // Accept incoming connection
-                            resource.server.accept_connection(&user_key);
-                        } else {
-                            // Reject incoming connection
-                            resource.server.reject_connection(&user_key);
-                        }
+        for event in resource.server.receive(&world_ref) {
+            match event {
+                Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
+                    let auth_message = auth_ref.borrow();
+                    let username = auth_message.username.get();
+                    let password = auth_message.password.get();
+                    if username == "charlie" && password == "12345" {
+                        // Accept incoming connection
+                        resource.server.accept_connection(&user_key);
+                    } else {
+                        // Reject incoming connection
+                        resource.server.reject_connection(&user_key);
                     }
-                    Ok(Event::Connection(user_key)) => {
-                        resource.server
-                            .room_mut(&main_room_key)
-                            .add_user(&user_key);
-                        let address = resource.server.user(&user_key).address();
-                        info!("Naia Server connected to: {}", address);
-
-                        // Create new Square Entity
-                        let entity_key = resource.server.spawn_entity(&mut world_ref).key();
-
-                        // Add Entity to main Room
-                        resource.server
-                            .room_mut(&main_room_key)
-                            .add_entity(&entity_key);
-
-                        // Position component
-                        {
-                            // create
-                            let mut x = Random::gen_range_u32(0, 40) as i16;
-                            let mut y = Random::gen_range_u32(0, 30) as i16;
-                            x -= 20;
-                            y -= 15;
-                            x *= 16;
-                            y *= 16;
-                            let position_ref = Position::new(x, y);
-
-                            // add to entity
-                            resource.server
-                                .entity_mut(&mut world_ref, &entity_key)
-                                .insert_component(&position_ref);
-                        }
-
-                        // Color component
-                        {
-                            // create
-                            let color_value = match resource.server.users_count() % 3 {
-                                0 => ColorValue::Yellow,
-                                1 => ColorValue::Red,
-                                _ => ColorValue::Blue,
-                            };
-                            let color_ref = Color::new(color_value);
-
-                            // add to entity
-                            resource.server
-                                .entity_mut(&mut world_ref, &entity_key)
-                                .insert_component(&color_ref);
-                        }
-
-                        // Assign as Prediction to User
-                        resource.server.entity_mut(&mut world_ref, &entity_key).set_owner(&user_key);
-                        resource
-                            .user_to_prediction_map
-                            .insert(user_key, entity_key);
-                    }
-                    Ok(Event::Disconnection(user_key, user)) => {
-                        info!("Naia Server disconnected from: {:?}", user.address);
-
-                        resource.server
-                            .room_mut(&main_room_key)
-                            .remove_user(&user_key);
-                        if let Some(naia_entity_key) =
-                            resource.user_to_prediction_map.remove(&user_key)
-                        {
-                            resource.server
-                                .room_mut(&main_room_key)
-                                .remove_entity(&naia_entity_key);
-                            //resource.server.entity_mut(&mut world_ref, &naia_entity_key).disown(); // following line should do this..
-                            resource.server.entity_mut(&mut world_ref, &naia_entity_key).despawn();
-                        }
-                    }
-                    Ok(Event::Command(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
-                        if let Some(position_ref) = resource.server.entity(&world_ref, &entity_key).component::<Position>() {
-                            shared_behavior::process_command(&key_command_ref, &position_ref);
-                        }
-                    }
-                    Ok(Event::Tick) => {
-                        resource.ticked = true;
-                    }
-                    Err(error) => {
-                        info!("Naia Server error: {}", error);
-                    }
-                    _ => {}
                 }
+                Ok(Event::Connection(user_key)) => {
+                    resource.server.room_mut(&main_room_key).add_user(&user_key);
+                    let address = resource.server.user(&user_key).address();
+                    info!("Naia Server connected to: {}", address);
+
+                    // Create new Square Entity
+                    let entity_key = resource.server.spawn_entity(&mut world_ref).key();
+
+                    // Add Entity to main Room
+                    resource
+                        .server
+                        .room_mut(&main_room_key)
+                        .add_entity(&entity_key);
+
+                    // Position component
+                    {
+                        // create
+                        let mut x = Random::gen_range_u32(0, 40) as i16;
+                        let mut y = Random::gen_range_u32(0, 30) as i16;
+                        x -= 20;
+                        y -= 15;
+                        x *= 16;
+                        y *= 16;
+                        let position_ref = Position::new(x, y);
+
+                        // add to entity
+                        resource
+                            .server
+                            .entity_mut(&mut world_ref, &entity_key)
+                            .insert_component(&position_ref);
+                    }
+
+                    // Color component
+                    {
+                        // create
+                        let color_value = match resource.server.users_count() % 3 {
+                            0 => ColorValue::Yellow,
+                            1 => ColorValue::Red,
+                            _ => ColorValue::Blue,
+                        };
+                        let color_ref = Color::new(color_value);
+
+                        // add to entity
+                        resource
+                            .server
+                            .entity_mut(&mut world_ref, &entity_key)
+                            .insert_component(&color_ref);
+                    }
+
+                    // Assign as Prediction to User
+                    resource
+                        .server
+                        .entity_mut(&mut world_ref, &entity_key)
+                        .set_owner(&user_key);
+                    resource.user_to_prediction_map.insert(user_key, entity_key);
+                }
+                Ok(Event::Disconnection(user_key, user)) => {
+                    info!("Naia Server disconnected from: {:?}", user.address);
+
+                    resource
+                        .server
+                        .room_mut(&main_room_key)
+                        .remove_user(&user_key);
+                    if let Some(naia_entity_key) = resource.user_to_prediction_map.remove(&user_key)
+                    {
+                        resource
+                            .server
+                            .room_mut(&main_room_key)
+                            .remove_entity(&naia_entity_key);
+                        resource
+                            .server
+                            .entity_mut(&mut world_ref, &naia_entity_key)
+                            .despawn();
+                    }
+                }
+                Ok(Event::Command(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
+                    if let Some(position_ref) = resource
+                        .server
+                        .entity(&world_ref, &entity_key)
+                        .component::<Position>()
+                    {
+                        shared_behavior::process_command(&key_command_ref, &position_ref);
+                    }
+                }
+                Ok(Event::Tick) => {
+                    resource.ticked = true;
+                }
+                Err(error) => {
+                    info!("Naia Server error: {}", error);
+                }
+                _ => {}
             }
-        });
+        }
+    });
 }
 
 fn did_consume_tick(mut server_resource: ResMut<ServerResource>) -> ShouldRun {

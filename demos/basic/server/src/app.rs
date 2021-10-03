@@ -1,6 +1,6 @@
 use naia_server::{Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig};
 
-use naia_server_default_world::{World as DefaultWorld, EntityKey};
+use naia_server_default_world::{EntityKey, World as DefaultWorld};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,

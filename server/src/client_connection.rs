@@ -6,9 +6,14 @@ use naia_shared::{
 };
 
 use super::{
-    command_receiver::CommandReceiver, entity_manager::EntityManager, keys::{ComponentKey, KeyType},
-    mut_handler::MutHandler, packet_writer::PacketWriter, ping_manager::PingManager,
-    world_record::WorldRecord, world_type::WorldType,
+    command_receiver::CommandReceiver,
+    entity_manager::EntityManager,
+    keys::{ComponentKey, KeyType},
+    mut_handler::MutHandler,
+    packet_writer::PacketWriter,
+    ping_manager::PingManager,
+    world_record::WorldRecord,
+    world_type::WorldType,
 };
 
 pub struct ClientConnection<P: ProtocolType, K: KeyType> {
