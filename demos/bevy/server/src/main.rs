@@ -7,7 +7,7 @@ use bevy::{
 use std::collections::HashMap;
 
 use naia_server::{
-    Event, Random, Ref, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
+    Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
     UserKey,
 };
 
@@ -17,7 +17,7 @@ use naia_bevy_demo_shared::{
 };
 
 mod world;
-use world::{WorldMetadata, WorldRef, EntityKey};
+use world::{WorldRef, EntityKey};
 
 type Server = NaiaServer<Protocol, EntityKey>;
 

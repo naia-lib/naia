@@ -23,7 +23,7 @@ pub struct Handler<P: ProtocolType, R: ImplRef<P>> {
     phantom_r: PhantomData<R>,
 }
 
-impl<P: 'static + ProtocolType, R: ImplRef<P>> Handler<P, R> {
+impl<P: ProtocolType, R: ImplRef<P>> Handler<P, R> {
     pub fn new() -> Box<dyn HandlerTrait<P>> {
         Box::new(Handler {
             phantom_p: PhantomData::<P>,
@@ -63,7 +63,7 @@ impl<P: ProtocolType> World<P> {
     }
 }
 
-impl<P: 'static + ProtocolType> WorldType<P, Key> for World<P> {
+impl<P: ProtocolType> WorldType<P, Key> for World<P> {
 
     fn has_entity(&self, entity_key: &Key) -> bool {
         return self.hecs.contains(entity_key.0);
@@ -133,6 +133,7 @@ impl<P: 'static + ProtocolType> WorldType<P, Key> for World<P> {
 
     fn insert_component<R: ImplRef<P>>(&mut self, entity_key: &Key, component_ref: R) {
         // cache type id for later
+        // todo: can we initialize this map on startup via Protocol derive?
         let inner_type_id = component_ref.dyn_ref().borrow().get_type_id();
         if !self.rep_type_to_handler_map.contains_key(&inner_type_id) {
             self.rep_type_to_handler_map

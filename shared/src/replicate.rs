@@ -55,7 +55,7 @@ impl<P: ProtocolType> Debug for dyn Replicate<P> {
 }
 
 /// Represents a Ref of a concrete type that implements Replicate
-pub trait ImplRef<P: ProtocolType>: Any {
+pub trait ImplRef<P: ProtocolType>: Any + Send + Sync {
     /// Converts the Ref to a ProtocolType
     fn protocol(&self) -> P;
     /// Converts the Ref to a Trait Object Ref
