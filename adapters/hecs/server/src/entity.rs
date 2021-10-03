@@ -1,8 +1,8 @@
-use std::{any::TypeId, collections::HashMap, marker::PhantomData, ops::Deref};
+use std::ops::Deref;
 
-use hecs::{Entity as HecsEntity, World as HecsWorld};
+use hecs::Entity as HecsEntity;
 
-use naia_server::{ImplRef, EntityType, ProtocolType, Ref, Replicate, WorldType};
+use naia_server::EntityType;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Entity(HecsEntity);
@@ -14,3 +14,11 @@ impl Entity {
 }
 
 impl EntityType for Entity {}
+
+impl Deref for Entity {
+    type Target = HecsEntity;
+
+    fn deref(&self) -> &Self::Target {
+        return &self.0;
+    }
+}

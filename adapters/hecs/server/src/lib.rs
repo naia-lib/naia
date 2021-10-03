@@ -1,7 +1,7 @@
-mod world_adapt;
-mod world_data;
 mod component_access;
 mod entity;
+mod world_adapt;
+mod world_data;
 
-pub use world_adapt::WorldAdapt;
 pub use entity::Entity;
+pub use world_adapt::WorldAdapt;

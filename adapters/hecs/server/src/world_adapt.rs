@@ -1,10 +1,13 @@
-use std::{any::TypeId, collections::HashMap, marker::PhantomData, ops::Deref};
+use std::{any::TypeId, ops::Deref};
 
 use hecs::World;
 
-use naia_server::{ImplRef, EntityType, ProtocolType, Ref, Replicate, WorldType};
+use naia_server::{ImplRef, ProtocolType, Ref, Replicate, WorldType};
 
-use super::{component_access::ComponentAccess, entity::Entity};
+use super::{
+    entity::Entity,
+    world_data::{get_world_data, get_world_data_mut},
+};
 
 // WorldAdapt
 
@@ -23,15 +26,31 @@ pub struct WorldAdapter<'w> {
     world: &'w mut World,
 }
 
+impl<'w> WorldAdapter<'w> {
+    pub fn new(world: &'w mut World) -> Self {
+        WorldAdapter { world }
+    }
+
+    pub(crate) fn get_component_ref<P: ProtocolType, R: ImplRef<P>>(
+        &self,
+        entity: &Entity,
+    ) -> Option<R> {
+        return self
+            .world
+            .get::<R>(**entity)
+            .map_or(None, |v| Some(v.deref().clone_ref()));
+    }
+}
+
 impl<'w, P: ProtocolType> WorldType<P, Entity> for WorldAdapter<'w> {
     fn has_entity(&self, entity_key: &Entity) -> bool {
-        return self.hecs.contains(entity_key.0);
+        return self.world.contains(**entity_key);
     }
 
     fn entities(&self) -> Vec<Entity> {
         let mut output = Vec::new();
 
-        for (entity, _) in self.hecs.iter() {
+        for (entity, _) in self.world.iter() {
             output.push(Entity::new(entity));
         }
 
@@ -39,18 +58,18 @@ impl<'w, P: ProtocolType> WorldType<P, Entity> for WorldAdapter<'w> {
     }
 
     fn spawn_entity(&mut self) -> Entity {
-        let entity = self.hecs.spawn(());
+        let entity = self.world.spawn(());
         return Entity::new(entity);
     }
 
     fn despawn_entity(&mut self, entity_key: &Entity) {
-        self.hecs
-            .despawn(entity_key.0)
+        self.world
+            .despawn(**entity_key)
             .expect("error despawning Entity");
     }
 
     fn has_component<R: Replicate<P>>(&self, entity_key: &Entity) -> bool {
-        let result = self.hecs.get::<Ref<R>>(entity_key.0);
+        let result = self.world.get::<Ref<R>>(**entity_key);
         return result.is_ok();
     }
 
@@ -61,27 +80,30 @@ impl<'w, P: ProtocolType> WorldType<P, Entity> for WorldAdapter<'w> {
 
     fn get_component<R: Replicate<P>>(&self, entity_key: &Entity) -> Option<Ref<R>> {
         return self
-            .hecs
-            .get::<Ref<R>>(entity_key.0)
+            .world
+            .get::<Ref<R>>(**entity_key)
             .map_or(None, |v| Some(v.deref().clone()));
     }
 
     fn get_component_from_type(&self, entity_key: &Entity, type_id: &TypeId) -> Option<P> {
-        if let Some(handler) = self.rep_type_to_handler_map.get(type_id) {
-            return handler.get_component(self, &entity_key.0);
-        }
-        return None;
+        let world_data_ref = get_world_data();
+        let world_data = world_data_ref.lock().unwrap();
+
+        return world_data.get_component(self, entity_key, type_id);
     }
 
     fn get_components(&self, entity_key: &Entity) -> Vec<P> {
+        let world_data_ref = get_world_data();
+        let world_data = world_data_ref.lock().unwrap();
+
         let mut protocols = Vec::new();
 
-        if let Ok(entity_ref) = self.hecs.entity(entity_key.0) {
+        if let Ok(entity_ref) = self.world.entity(**entity_key) {
             for ref_type in entity_ref.component_types() {
-                if let Some(rep_type) = self.ref_type_to_rep_type_map.get(&ref_type) {
-                    if let Some(component) = WorldType::<P, Entity>::get_component_from_type(
-                        self, entity_key, &rep_type,
-                    ) {
+                if let Some(rep_type) = world_data.type_convert_ref_to_rep(&ref_type) {
+                    if let Some(component) =
+                        WorldType::<P, Entity>::get_component_from_type(self, entity_key, &rep_type)
+                    {
                         protocols.push(component);
                     }
                 }
@@ -92,26 +114,26 @@ impl<'w, P: ProtocolType> WorldType<P, Entity> for WorldAdapter<'w> {
     }
 
     fn insert_component<R: ImplRef<P>>(&mut self, entity_key: &Entity, component_ref: R) {
+        let world_data_ref = get_world_data_mut();
+        let world_data = world_data_ref.get_mut().unwrap();
+
         // cache type id for later
         // todo: can we initialize this map on startup via Protocol derive?
         let inner_type_id = component_ref.dyn_ref().borrow().get_type_id();
-        if !self.rep_type_to_handler_map.contains_key(&inner_type_id) {
-            self.rep_type_to_handler_map
-                .insert(inner_type_id, Handler::<P, R>::new());
-            self.ref_type_to_rep_type_map
-                .insert(TypeId::of::<R>(), inner_type_id);
+        if !world_data.has_type(&inner_type_id) {
+            world_data.put_type::<P, R>(&inner_type_id, &TypeId::of::<R>());
         }
 
         // insert into ecs
-        self.hecs
-            .insert_one(entity_key.0, component_ref)
+        self.world
+            .insert_one(**entity_key, component_ref)
             .expect("error inserting Component");
     }
 
     fn remove_component<R: Replicate<P>>(&mut self, entity_key: &Entity) {
         // remove from ecs
-        self.hecs
-            .remove_one::<Ref<R>>(entity_key.0)
+        self.world
+            .remove_one::<Ref<R>>(**entity_key)
             .expect("error removing Component");
     }
 }
