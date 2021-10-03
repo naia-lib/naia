@@ -24,7 +24,7 @@ use super::{
     entity_ref::{EntityMut, EntityRef},
     error::NaiaServerError,
     event::Event,
-    keys::{ComponentKey, KeyType},
+    keys::{ComponentKey, EntityType},
     mut_handler::MutHandler,
     property_mutator::PropertyMutator,
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},
@@ -39,7 +39,7 @@ use super::{
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
-pub struct Server<P: ProtocolType, K: KeyType> {
+pub struct Server<P: ProtocolType, K: EntityType> {
     // Config
     manifest: Manifest<P>,
     // Connection
@@ -70,7 +70,7 @@ pub struct Server<P: ProtocolType, K: KeyType> {
     tick_manager: TickManager,
 }
 
-impl<P: ProtocolType, K: KeyType> Server<P, K> {
+impl<P: ProtocolType, K: EntityType> Server<P, K> {
     /// Create a new Server
     pub fn new(mut server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
         server_config.socket_config.link_condition_config =

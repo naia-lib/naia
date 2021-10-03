@@ -2,12 +2,12 @@ use std::any::TypeId;
 
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
-use super::keys::KeyType;
+use super::keys::EntityType;
 
 /// Structures that implement the WorldType trait will be able to be loaded into
 /// the Server at which point the Server will use this interface to keep the
 /// WorldType in-sync with it's own Entities/Components
-pub trait WorldType<P: ProtocolType, K: KeyType> {
+pub trait WorldType<P: ProtocolType, K: EntityType> {
     /// Key to be used to access Entities in the given World
     //type EntityKey: KeyType;
 

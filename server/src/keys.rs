@@ -1,6 +1,5 @@
-/// A KeyType aggregates all traits needed to be implemented to be used as an
-/// Entity Key
-pub trait KeyType: Copy + Clone + PartialEq + Eq + std::hash::Hash + 'static {}
+/// A EntityType aggregates all traits needed to be used as an Entity
+pub trait EntityType: Copy + Clone + PartialEq + Eq + std::hash::Hash + 'static {}
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]

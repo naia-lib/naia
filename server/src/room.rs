@@ -1,6 +1,6 @@
 use std::collections::{hash_set::Iter, HashSet, VecDeque};
 
-use super::{keys::KeyType, user::user_key::UserKey};
+use super::{keys::EntityType, user::user_key::UserKey};
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
@@ -9,13 +9,13 @@ pub mod room_key {
     new_key_type! { pub struct RoomKey; }
 }
 
-pub struct Room<K: KeyType> {
+pub struct Room<K: EntityType> {
     users: HashSet<UserKey>,
     entities: HashSet<K>,
     entity_removal_queue: VecDeque<(UserKey, K)>,
 }
 
-impl<K: KeyType> Room<K> {
+impl<K: EntityType> Room<K> {
     pub(crate) fn new() -> Room<K> {
         Room {
             users: HashSet::new(),
@@ -91,12 +91,12 @@ use room_key::RoomKey;
 
 // RoomRef
 
-pub struct RoomRef<'s, P: ProtocolType, K: KeyType> {
+pub struct RoomRef<'s, P: ProtocolType, K: EntityType> {
     server: &'s Server<P, K>,
     key: RoomKey,
 }
 
-impl<'s, P: ProtocolType, K: KeyType> RoomRef<'s, P, K> {
+impl<'s, P: ProtocolType, K: EntityType> RoomRef<'s, P, K> {
     pub fn new(server: &'s Server<P, K>, key: &RoomKey) -> Self {
         RoomRef { server, key: *key }
     }
@@ -127,12 +127,12 @@ impl<'s, P: ProtocolType, K: KeyType> RoomRef<'s, P, K> {
 }
 
 // RoomMut
-pub struct RoomMut<'s, P: ProtocolType, K: KeyType> {
+pub struct RoomMut<'s, P: ProtocolType, K: EntityType> {
     server: &'s mut Server<P, K>,
     key: RoomKey,
 }
 
-impl<'s, P: ProtocolType, K: KeyType> RoomMut<'s, P, K> {
+impl<'s, P: ProtocolType, K: EntityType> RoomMut<'s, P, K> {
     pub fn new(server: &'s mut Server<P, K>, key: &RoomKey) -> Self {
         RoomMut { server, key: *key }
     }

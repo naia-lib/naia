@@ -4,7 +4,7 @@ use slotmap::DenseSlotMap;
 
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
-use naia_server::{KeyType, WorldType};
+use naia_server::{EntityType, WorldType};
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
@@ -17,7 +17,7 @@ use entity_key::EntityKey as Key;
 
 pub type EntityKey = Key;
 
-impl KeyType for EntityKey {}
+impl EntityType for EntityKey {}
 
 /// A default World which implements WorldType and that Naia can use to store
 /// Entities/Components. It's recommended to use this only when you do not have

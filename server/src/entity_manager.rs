@@ -14,7 +14,7 @@ use naia_shared::{
 
 use super::{
     entity_action::EntityAction,
-    keys::{ComponentKey, KeyType},
+    keys::{ComponentKey, EntityType},
     local_component_record::LocalComponentRecord,
     local_entity_record::LocalEntityRecord,
     locality_status::LocalityStatus,
@@ -27,7 +27,7 @@ use super::{
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
 #[derive(Debug)]
-pub struct EntityManager<P: ProtocolType, K: KeyType> {
+pub struct EntityManager<P: ProtocolType, K: EntityType> {
     address: SocketAddr,
     // Entities
     entity_key_generator: KeyGenerator<LocalEntityKey>,
@@ -51,7 +51,7 @@ pub struct EntityManager<P: ProtocolType, K: KeyType> {
     delivered_packets: VecDeque<u16>,
 }
 
-impl<P: ProtocolType, K: KeyType> EntityManager<P, K> {
+impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
     /// Create a new EntityManager, given the client's address and a
     /// reference to a MutHandler associated with the Client
     pub fn new(address: SocketAddr, mut_handler: &Ref<MutHandler>) -> Self {
@@ -860,7 +860,7 @@ impl<P: ProtocolType, K: KeyType> EntityManager<P, K> {
     }
 }
 
-impl<P: ProtocolType, K: KeyType> PacketNotifiable for EntityManager<P, K> {
+impl<P: ProtocolType, K: EntityType> PacketNotifiable for EntityManager<P, K> {
     fn notify_packet_delivered(&mut self, packet_index: u16) {
         self.delivered_packets.push_back(packet_index);
     }
@@ -920,7 +920,7 @@ impl<P: ProtocolType, K: KeyType> PacketNotifiable for EntityManager<P, K> {
     }
 }
 
-fn component_delete<P: ProtocolType, K: KeyType>(
+fn component_delete<P: ProtocolType, K: EntityType>(
     queued_actions: &mut VecDeque<EntityAction<P, K>>,
     record: &mut LocalComponentRecord,
     component_key: &ComponentKey,
@@ -933,7 +933,7 @@ fn component_delete<P: ProtocolType, K: KeyType>(
     ));
 }
 
-fn entity_delete<P: ProtocolType, K: KeyType>(
+fn entity_delete<P: ProtocolType, K: EntityType>(
     queued_actions: &mut VecDeque<EntityAction<P, K>>,
     entity_record: &mut LocalEntityRecord,
     entity_key: &K,

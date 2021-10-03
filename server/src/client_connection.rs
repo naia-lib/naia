@@ -8,7 +8,7 @@ use naia_shared::{
 use super::{
     command_receiver::CommandReceiver,
     entity_manager::EntityManager,
-    keys::{ComponentKey, KeyType},
+    keys::{ComponentKey, EntityType},
     mut_handler::MutHandler,
     packet_writer::PacketWriter,
     ping_manager::PingManager,
@@ -16,14 +16,14 @@ use super::{
     world_type::WorldType,
 };
 
-pub struct ClientConnection<P: ProtocolType, K: KeyType> {
+pub struct ClientConnection<P: ProtocolType, K: EntityType> {
     connection: Connection<P>,
     entity_manager: EntityManager<P, K>,
     ping_manager: PingManager,
     command_receiver: CommandReceiver<P>,
 }
 
-impl<P: ProtocolType, K: KeyType> ClientConnection<P, K> {
+impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
     pub fn new(
         address: SocketAddr,
         mut_handler: Option<&Ref<MutHandler>>,
