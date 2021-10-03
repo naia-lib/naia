@@ -11,7 +11,7 @@ use naia_server::{ImplRef, ProtocolType};
 use super::{
     component_access::{ComponentAccess, ComponentAccessor},
     entity::Entity,
-    world_adapt::WorldAdapter,
+    world_proxy::WorldMut,
 };
 
 static mut INSTANCE: OnceCell<Mutex<WorldData>> = OnceCell::new();
@@ -47,7 +47,7 @@ impl WorldData {
 
     pub(crate) fn get_component<P: ProtocolType>(
         &self,
-        world_adapter: &WorldAdapter,
+        world_adapter: &WorldMut,
         entity: &Entity,
         type_id: &TypeId,
     ) -> Option<P> {

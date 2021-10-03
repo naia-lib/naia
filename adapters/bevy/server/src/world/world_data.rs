@@ -8,7 +8,7 @@ use naia_server::{ImplRef, ProtocolType};
 use super::{
     component_access::{ComponentAccess, ComponentAccessor},
     entity::Entity,
-    world_adapt::WorldAdapter,
+    world_proxy::WorldMut,
 };
 
 pub struct WorldData<P: ProtocolType> {
@@ -26,12 +26,12 @@ impl<P: ProtocolType> WorldData<P> {
 
     pub(crate) fn get_component(
         &self,
-        world_adapter: &WorldAdapter,
+        world_mut: &WorldMut,
         entity: &Entity,
         type_id: &TypeId,
     ) -> Option<P> {
         if let Some(accessor) = self.rep_type_to_accessor_map.get(type_id) {
-            return accessor.get_component(world_adapter, entity);
+            return accessor.get_component(world_mut, entity);
         }
         return None;
     }
