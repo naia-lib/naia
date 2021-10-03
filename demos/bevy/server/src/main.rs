@@ -2,24 +2,18 @@ use std::collections::HashMap;
 
 use bevy::{log::LogPlugin, prelude::*};
 
-use naia_server::{
-    Event as ServerEvent, Random, Ref, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
-    UserKey,
-};
+use naia_server::{Server as NaiaServer, ServerAddrs, ServerConfig};
 
-use naia_bevy_server::{Entity, ServerCommands, ServerPlugin, ServerStage};
+use naia_bevy_server::{Entity, ServerPlugin, ServerStage};
 
-use naia_bevy_demo_shared::{
-    behavior as shared_behavior, get_server_address, get_shared_config,
-    protocol::{Color, ColorValue, Position, Protocol},
-};
+use naia_bevy_demo_shared::{get_server_address, get_shared_config, protocol::Protocol};
 
 type Server = NaiaServer<Protocol, Entity>;
 
-struct Global {
-    main_room_key: RoomKey,
-    user_to_prediction_map: HashMap<UserKey, Entity>,
-}
+mod resources;
+mod systems;
+
+use resources::Global;
 
 fn main() {
     info!("Naia Bevy Server Demo starting up");
@@ -46,9 +40,9 @@ fn main() {
 
     // Systems
     .add_startup_system(init.system())
-    .add_system_to_stage(ServerStage::ServerEvents, read_server_events.system())
-    .add_system_to_stage(ServerStage::Tick, tick.system())
-    .add_system_to_stage(ServerStage::UpdateScopes, update_scopes.system())
+    .add_system_to_stage(ServerStage::ServerEvents, systems::read_server_events.system())
+    .add_system_to_stage(ServerStage::Tick, systems::tick.system())
+    .add_system_to_stage(ServerStage::UpdateScopes, systems::update_scopes.system())
 
     // Run
     .run();
@@ -67,261 +61,3 @@ fn init(mut commands: Commands, mut server: ResMut<Server>) {
         user_to_prediction_map: HashMap::new(),
     })
 }
-
-fn read_server_events(
-    mut server: ResMut<Server>,
-    mut server_commands: ResMut<ServerCommands>,
-    mut events: EventReader<ServerEvent<Protocol, Entity>>,
-    mut global: ResMut<Global>,
-    q_position: Query<&Ref<Position>>,
-) {
-    for event in events.iter() {
-        match event {
-            ServerEvent::Authorization(user_key, Protocol::Auth(auth_ref)) => {
-                let auth_message = auth_ref.borrow();
-                let username = auth_message.username.get();
-                let password = auth_message.password.get();
-                if username == "charlie" && password == "12345" {
-                    // Accept incoming connection
-                    server.accept_connection(&user_key);
-                } else {
-                    // Reject incoming connection
-                    server.reject_connection(&user_key);
-                }
-            }
-            ServerEvent::Connection(user_key) => {
-                server.room_mut(&global.main_room_key).add_user(&user_key);
-                let address = server.user(&user_key).address();
-                info!("Naia Server connected to: {}", address);
-
-                // Create new Square Entity
-                let entity_key = server_commands.spawn().id();
-
-                // Add Entity to main Room
-                server
-                    .room_mut(&global.main_room_key)
-                    .add_entity(&entity_key);
-
-                // Position component
-                {
-                    // create
-                    let mut x = Random::gen_range_u32(0, 40) as i16;
-                    let mut y = Random::gen_range_u32(0, 30) as i16;
-                    x -= 20;
-                    y -= 15;
-                    x *= 16;
-                    y *= 16;
-                    let position_ref = Position::new(x, y);
-
-                    // add to entity
-                    server_commands.entity(&entity_key).insert(&position_ref);
-                }
-
-                // Color component
-                {
-                    // create
-                    let color_value = match server.users_count() % 3 {
-                        0 => ColorValue::Yellow,
-                        1 => ColorValue::Red,
-                        _ => ColorValue::Blue,
-                    };
-                    let color_ref = Color::new(color_value);
-
-                    // add to entity
-                    server_commands.entity(&entity_key).insert(&color_ref);
-                }
-
-                // Assign as Prediction to User
-                server_commands.entity(&entity_key).set_owner(&user_key);
-                global.user_to_prediction_map.insert(*user_key, entity_key);
-            }
-            ServerEvent::Disconnection(user_key, user) => {
-                info!("Naia Server disconnected from: {:?}", user.address);
-
-                server
-                    .room_mut(&global.main_room_key)
-                    .remove_user(&user_key);
-                if let Some(naia_entity_key) = global.user_to_prediction_map.remove(&user_key) {
-                    server
-                        .room_mut(&global.main_room_key)
-                        .remove_entity(&naia_entity_key);
-                    server_commands.entity(&naia_entity_key).despawn();
-                }
-            }
-            ServerEvent::Command(_, entity_key, Protocol::KeyCommand(key_command_ref)) => {
-                if let Ok(position_ref) = q_position.get(**entity_key) {
-                    shared_behavior::process_command(&key_command_ref, &position_ref);
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-fn tick() {
-    // All game logic should happen here, on a tick event
-    info!("tick");
-}
-
-fn update_scopes(mut server: ResMut<Server>) {
-    // Update scopes of entities
-    for (_, user_key, entity_key) in server.scope_checks() {
-        // You'd normally do whatever checks you need to in here..
-        // to determine whether each Entity should be in scope or not.
-
-        // This indicates the Entity should be in this scope.
-        server.user_scope(&user_key).include(&entity_key);
-
-        // And call this if Entity should NOT be in this scope.
-        // server.user_scope(..).exclude(..);
-    }
-}
-
-//fn naia_server_update(world: &mut World) {
-//    world.resource_scope(|world, mut resource: Mut<ServerResource>| {
-//        let main_room_key = resource.main_room_key;
-//
-//        for event in resource.server.receive(world.adapt()) {
-//            match event {
-//                Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref)))
-// => {                    let auth_message = auth_ref.borrow();
-//                    let username = auth_message.username.get();
-//                    let password = auth_message.password.get();
-//                    if username == "charlie" && password == "12345" {
-//                        // Accept incoming connection
-//                        resource.server.accept_connection(&user_key);
-//                    } else {
-//                        // Reject incoming connection
-//                        resource.server.reject_connection(&user_key);
-//                    }
-//                }
-//                Ok(Event::Connection(user_key)) => {
-//                    
-// resource.server.room_mut(&main_room_key).add_user(&user_key);                
-// let address = resource.server.user(&user_key).address();                    
-// info!("Naia Server connected to: {}", address);
-//
-//                    // Create new Square Entity
-//                    let entity_key =
-// resource.server.spawn(world.adapt()).key();
-//
-//                    // Add Entity to main Room
-//                    resource
-//                        .server
-//                        .room_mut(&main_room_key)
-//                        .add_entity(&entity_key);
-//
-//                    // Position component
-//                    {
-//                        // create
-//                        let mut x = Random::gen_range_u32(0, 40) as i16;
-//                        let mut y = Random::gen_range_u32(0, 30) as i16;
-//                        x -= 20;
-//                        y -= 15;
-//                        x *= 16;
-//                        y *= 16;
-//                        let position_ref = Position::new(x, y);
-//
-//                        // add to entity
-//                        resource
-//                            .server
-//                            .entity_mut(world.adapt(), &entity_key)
-//                            .insert_component(&position_ref);
-//                    }
-//
-//                    // Color component
-//                    {
-//                        // create
-//                        let color_value = match resource.server.users_count()
-// % 3 {                            0 => ColorValue::Yellow,
-//                            1 => ColorValue::Red,
-//                            _ => ColorValue::Blue,
-//                        };
-//                        let color_ref = Color::new(color_value);
-//
-//                        // add to entity
-//                        resource
-//                            .server
-//                            .entity_mut(world.adapt(), &entity_key)
-//                            .insert_component(&color_ref);
-//                    }
-//
-//                    // Assign as Prediction to User
-//                    resource
-//                        .server
-//                        .entity_mut(world.adapt(), &entity_key)
-//                        .set_owner(&user_key);
-//                    resource.user_to_prediction_map.insert(user_key,
-// entity_key);                }
-//                Ok(Event::Disconnection(user_key, user)) => {
-//                    info!("Naia Server disconnected from: {:?}",
-// user.address);
-//
-//                    resource
-//                        .server
-//                        .room_mut(&main_room_key)
-//                        .remove_user(&user_key);
-//                    if let Some(naia_entity_key) =
-// resource.user_to_prediction_map.remove(&user_key)                    {
-//                        resource
-//                            .server
-//                            .room_mut(&main_room_key)
-//                            .remove_entity(&naia_entity_key);
-//                        resource
-//                            .server
-//                            .entity_mut(world.adapt(), &naia_entity_key)
-//                            .despawn();
-//                    }
-//                }
-//                Ok(Event::Command(_, entity_key,
-// Protocol::KeyCommand(key_command_ref))) => {                    if let
-// Some(position_ref) = resource                        .server
-//                        .entity(world.adapt(), &entity_key)
-//                        .component::<Position>()
-//                    {
-//                        shared_behavior::process_command(&key_command_ref,
-// &position_ref);                    }
-//                }
-//                Ok(Event::Tick) => {
-//                    resource.ticked = true;
-//                }
-//                Err(error) => {
-//                    info!("Naia Server error: {}", error);
-//                }
-//                _ => {}
-//            }
-//        }
-//    });
-//}
-//
-//fn did_consume_tick(mut server_resource: ResMut<ServerResource>) -> ShouldRun
-// {    if server_resource.ticked {
-//        server_resource.ticked = false;
-//        return ShouldRun::Yes;
-//    }
-//    return ShouldRun::No;
-//}
-//
-//fn on_tick(world: &mut World) {
-//    world.resource_scope(|world, mut resource: Mut<ServerResource>| {
-//        // All game logic should happen here, on a tick event
-//        // info!("tick");
-//
-//        // Update scopes of entities
-//        for (_, user_key, entity_key) in resource.server.scope_checks() {
-//            // You'd normally do whatever checks you need to in here..
-//            // to determine whether each Entity should be in scope or not.
-//
-//            // This indicates the Entity should be in this scope.
-//            resource.server.user_scope(&user_key).include(&entity_key);
-//
-//            // And call this if Entity should NOT be in this scope.
-//            // server.user_scope(..).exclude(..);
-//        }
-//
-//        // VERY IMPORTANT! Calling this actually sends all update data
-//        // packets to all Clients that require it. If you don't call this
-//        // method, the Server will never communicate with it's connected
-// Clients        resource.server.send_all_updates(world.adapt());
-//    });
-//}
