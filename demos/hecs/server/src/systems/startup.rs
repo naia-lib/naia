@@ -2,32 +2,21 @@ use std::collections::HashSet;
 
 use hecs::World;
 
-use naia_server::{ServerAddrs, ServerConfig};
-
-use naia_hecs_demo_shared::{
-    get_server_address, get_shared_config,
-    protocol::{Name, Position},
-};
+use naia_server::{ServerAddrs, ServerConfig, SharedConfig};
 
 use naia_hecs_server::WorldProxy;
 
+use naia_hecs_demo_shared::protocol::{Name, Position, Protocol};
+
 use crate::app::{App, Server};
 
-pub fn app_init() -> App {
-    let server_addresses = ServerAddrs::new(
-        get_server_address(),
-        // IP Address to listen on for UDP WebRTC data channels
-        "127.0.0.1:14192"
-            .parse()
-            .expect("could not parse WebRTC data address/port"),
-        // The public WebRTC IP address to advertise
-        "127.0.0.1:14192"
-            .parse()
-            .expect("could not parse advertised public WebRTC data address/port"),
-    );
-
-    let mut server = Server::new(ServerConfig::default(), get_shared_config());
-    server.listen(server_addresses);
+pub fn app_init(
+    server_config: ServerConfig,
+    shared_config: SharedConfig<Protocol>,
+    server_addrs: ServerAddrs,
+) -> App {
+    let mut server = Server::new(server_config, shared_config);
+    server.listen(server_addrs);
 
     // Create a new, singular room, which will contain Users and Entities that they
     // can receive updates from

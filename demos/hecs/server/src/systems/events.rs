@@ -1,8 +1,8 @@
 use naia_server::Event;
 
-use naia_hecs_demo_shared::protocol::Protocol;
-
 use naia_hecs_server::WorldProxy;
+
+use naia_hecs_demo_shared::protocol::Protocol;
 
 use crate::app::App;
 
