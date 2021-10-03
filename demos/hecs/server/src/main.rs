@@ -6,7 +6,6 @@ use simple_logger::SimpleLogger;
 use smol::io;
 
 mod app;
-mod world;
 
 use app::App;
 
