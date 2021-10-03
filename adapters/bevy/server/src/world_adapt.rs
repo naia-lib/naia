@@ -109,8 +109,7 @@ impl<'w, P: 'static + ProtocolType> WorldType<P, Entity> for WorldAdapter<'w> {
         for component_id in self.world.entity(**entity).archetype().components() {
             if let Some(component_info) = components.get_info(component_id) {
                 if let Some(type_id) = component_info.type_id() {
-                    let protocol_opt: Option<P> =
-                        self.get_component_from_type(entity, &type_id);
+                    let protocol_opt: Option<P> = self.get_component_from_type(entity, &type_id);
                     if protocol_opt.is_some() {
                         protocols.push(protocol_opt.unwrap().clone());
                     }

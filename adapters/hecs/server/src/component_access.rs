@@ -1,14 +1,12 @@
-use std::{any::TypeId, collections::HashMap, marker::PhantomData, ops::Deref};
+use std::{any::Any, marker::PhantomData};
 
-use hecs::{World as HecsWorld};
+use naia_server::{ImplRef, ProtocolType};
 
-use naia_server::{ImplRef, EntityType, ProtocolType, Ref, Replicate, WorldType};
-
-use super::entity::Entity;
+use super::{entity::Entity, world_adapt::WorldAdapter};
 
 // ComponentAccess
 pub trait ComponentAccess<P: ProtocolType> {
-    fn get_component(&self, world: &World<P>, entity_key: &Entity) -> Option<P>;
+    fn get_component(&self, world: &WorldAdapter, entity_key: &Entity) -> Option<P>;
 }
 
 // ComponentAccessor
@@ -18,18 +16,19 @@ pub struct ComponentAccessor<P: ProtocolType, R: ImplRef<P>> {
 }
 
 impl<P: ProtocolType, R: ImplRef<P>> ComponentAccessor<P, R> {
-    pub fn new() -> Box<dyn ComponentAccess<P>> {
-        Box::new(ComponentAccessor {
+    pub fn new() -> Box<dyn Any> {
+        let inner_box: Box<dyn ComponentAccess<P>> = Box::new(ComponentAccessor {
             phantom_p: PhantomData::<P>,
             phantom_r: PhantomData::<R>,
-        })
+        });
+        return Box::new(inner_box);
     }
 }
 
 impl<P: ProtocolType, R: ImplRef<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
-    fn get_component(&self, world: &World<P>, entity_key: &Entity) -> Option<P> {
-        if let Ok(component_ref) = world.hecs.get::<R>(*entity_key) {
-            return Some(component_ref.deref().protocol());
+    fn get_component(&self, world: &WorldAdapter, entity: &Entity) -> Option<P> {
+        if let Some(component_ref) = world.get_component_ref::<P, R>(entity) {
+            return Some(component_ref.protocol());
         }
         return None;
     }
