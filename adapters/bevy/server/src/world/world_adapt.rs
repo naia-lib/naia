@@ -126,7 +126,7 @@ impl<'w, P: 'static + ProtocolType> WorldType<P, Entity> for WorldAdapter<'w> {
         let mut world_data: Mut<WorldData<P>> = self.get_or_init_world_data();
         let inner_type_id = component_ref.dyn_ref().borrow().get_type_id();
         if !world_data.has_type(&inner_type_id) {
-            world_data.put_type::<R>(&inner_type_id, &TypeId::of::<R>());
+            world_data.put_type::<R>(&inner_type_id);
         }
 
         // insert into ecs

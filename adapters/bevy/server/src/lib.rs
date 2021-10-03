@@ -1,7 +1,5 @@
-mod component_access;
-mod entity;
-mod world_adapt;
-mod world_data;
+mod plugin;
+mod world;
 
-pub use entity::Entity;
-pub use world_adapt::WorldAdapt;
+pub use plugin::{commands::ServerCommands, plugin::ServerPlugin, stages::ServerStage};
+pub use world::entity::Entity;
