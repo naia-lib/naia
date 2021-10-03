@@ -1,5 +1,5 @@
 mod entity;
-mod world;
+mod world_adapter;
 
 pub use entity::Entity;
-pub use world::WorldAdapt;
+pub use world_adapter::WorldAdapt;
