@@ -16,3 +16,4 @@ use-webrtc = [ "naia-server/use-webrtc" ]
 
 [dependencies]
 naia-server = { path = "../../../server" }
+bevy = { version="0.5.0", default-features=false }

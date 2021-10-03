@@ -136,13 +136,13 @@ impl<P: ProtocolType, K: KeyType> Server<P, K> {
     /// from all Clients
     pub fn receive<W: WorldType<P, K>>(
         &mut self,
-        world: &W,
+        world: W,
     ) -> VecDeque<Result<Event<P, K>, NaiaServerError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
-        self.maintain_socket(world);
+        self.maintain_socket(&world);
 
         // new authorizations
         while let Some((user_key, auth_message)) = self.outstanding_auths.pop_front() {
@@ -259,16 +259,16 @@ impl<P: ProtocolType, K: KeyType> Server<P, K> {
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
-    pub fn send_all_updates<W: WorldType<P, K>>(&mut self, world: &W) {
+    pub fn send_all_updates<W: WorldType<P, K>>(&mut self, world: W) {
         // update entity scopes
-        self.update_entity_scopes(world);
+        self.update_entity_scopes(&world);
 
         // loop through all connections, send packet
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
-                connection.collect_component_updates(world, &self.world_record);
+                connection.collect_component_updates(&world, &self.world_record);
                 while let Some(payload) = connection.get_outgoing_packet(
-                    world,
+                    &world,
                     &self.world_record,
                     self.tick_manager.get_tick(),
                     &self.manifest,
@@ -283,10 +283,10 @@ impl<P: ProtocolType, K: KeyType> Server<P, K> {
     // Entities
 
     /// Creates a new Entity and returns the associated Key
-    pub fn spawn_entity<'s, 'w, W: WorldType<P, K>>(
+    pub fn spawn_entity<'s, W: WorldType<P, K>>(
         &'s mut self,
-        world: &'w mut W,
-    ) -> EntityMut<'s, 'w, P, K, W> {
+        mut world: W,
+    ) -> EntityMut<'s, P, K, W> {
         let entity_key = world.spawn_entity();
         self.world_record.spawn_entity(&entity_key);
         return EntityMut::new(self, world, &entity_key);
@@ -295,11 +295,11 @@ impl<P: ProtocolType, K: KeyType> Server<P, K> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// Entity associated with the given Entity Key.
     /// Panics if the entity does not exist.
-    pub fn entity<'s, 'w, W: WorldType<P, K>>(
+    pub fn entity<'s, W: WorldType<P, K>>(
         &'s self,
-        world: &'w W,
+        world: W,
         entity_key: &K,
-    ) -> EntityRef<'s, 'w, P, K, W> {
+    ) -> EntityRef<'s, P, K, W> {
         if world.has_entity(entity_key) {
             return EntityRef::new(self, world, &entity_key);
         }
@@ -309,11 +309,11 @@ impl<P: ProtocolType, K: KeyType> Server<P, K> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity associated with the given Entity Key.
     /// Panics if the entity does not exist.
-    pub fn entity_mut<'s, 'w, W: WorldType<P, K>>(
+    pub fn entity_mut<'s, W: WorldType<P, K>>(
         &'s mut self,
-        world: &'w mut W,
+        world: W,
         entity_key: &K,
-    ) -> EntityMut<'s, 'w, P, K, W> {
+    ) -> EntityMut<'s, P, K, W> {
         if world.has_entity(entity_key) {
             return EntityMut::new(self, world, &entity_key);
         }

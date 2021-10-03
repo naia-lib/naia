@@ -15,8 +15,7 @@ use naia_bevy_demo_shared::{
     protocol::{Color, ColorValue, Position, Protocol},
 };
 
-mod world;
-use world::{EntityKey, WorldRef};
+use naia_bevy_server::{EntityKey, ToWorldMut};
 
 type Server = NaiaServer<Protocol, EntityKey>;
 
@@ -82,10 +81,10 @@ fn init() {
 
 fn naia_server_update(world: &mut World) {
     world.resource_scope(|world, mut resource: Mut<ServerResource>| {
-        let mut world_ref = WorldRef::new(world);
+        //let mut world_ref = WorldMut::new(world);
         let main_room_key = resource.main_room_key;
 
-        for event in resource.server.receive(&world_ref) {
+        for event in resource.server.receive(world.to_mut()) {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
                     let auth_message = auth_ref.borrow();
@@ -105,7 +104,7 @@ fn naia_server_update(world: &mut World) {
                     info!("Naia Server connected to: {}", address);
 
                     // Create new Square Entity
-                    let entity_key = resource.server.spawn_entity(&mut world_ref).key();
+                    let entity_key = resource.server.spawn_entity(world.to_mut()).key();
 
                     // Add Entity to main Room
                     resource
@@ -127,7 +126,7 @@ fn naia_server_update(world: &mut World) {
                         // add to entity
                         resource
                             .server
-                            .entity_mut(&mut world_ref, &entity_key)
+                            .entity_mut(world.to_mut(), &entity_key)
                             .insert_component(&position_ref);
                     }
 
@@ -144,14 +143,14 @@ fn naia_server_update(world: &mut World) {
                         // add to entity
                         resource
                             .server
-                            .entity_mut(&mut world_ref, &entity_key)
+                            .entity_mut(world.to_mut(), &entity_key)
                             .insert_component(&color_ref);
                     }
 
                     // Assign as Prediction to User
                     resource
                         .server
-                        .entity_mut(&mut world_ref, &entity_key)
+                        .entity_mut(world.to_mut(), &entity_key)
                         .set_owner(&user_key);
                     resource.user_to_prediction_map.insert(user_key, entity_key);
                 }
@@ -170,14 +169,14 @@ fn naia_server_update(world: &mut World) {
                             .remove_entity(&naia_entity_key);
                         resource
                             .server
-                            .entity_mut(&mut world_ref, &naia_entity_key)
+                            .entity_mut(world.to_mut(), &naia_entity_key)
                             .despawn();
                     }
                 }
                 Ok(Event::Command(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
                     if let Some(position_ref) = resource
                         .server
-                        .entity(&world_ref, &entity_key)
+                        .entity(world.to_mut(), &entity_key)
                         .component::<Position>()
                     {
                         shared_behavior::process_command(&key_command_ref, &position_ref);
@@ -205,7 +204,7 @@ fn did_consume_tick(mut server_resource: ResMut<ServerResource>) -> ShouldRun {
 
 fn on_tick(world: &mut World) {
     world.resource_scope(|world, mut resource: Mut<ServerResource>| {
-        let world_ref = WorldRef::new(world);
+        //let world_ref = WorldMut::new(world);
 
         // All game logic should happen here, on a tick event
         //info!("tick");
@@ -225,6 +224,6 @@ fn on_tick(world: &mut World) {
         // VERY IMPORTANT! Calling this actually sends all update data
         // packets to all Clients that require it. If you don't call this
         // method, the Server will never communicate with it's connected Clients
-        resource.server.send_all_updates(&world_ref);
+        resource.server.send_all_updates(world.to_mut());
     });
 }
