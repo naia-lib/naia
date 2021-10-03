@@ -1,0 +1,18 @@
+[package]
+name = "naia-bevy-server"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+homepage = "https://github.com/naia-rs/naia"
+repository = "https://github.com/naia-rs/naia"
+license = "MIT OR Apache-2.0"
+edition = "2018"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[features]
+use-udp = [ "naia-server/use-udp" ]
+use-webrtc = [ "naia-server/use-webrtc" ]
+
+[dependencies]
+naia-server = { path = "../../../server" }
