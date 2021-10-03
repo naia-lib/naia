@@ -13,9 +13,14 @@ use naia_shared::{
 };
 
 use super::{
-    entity_action::EntityAction, keys::{KeyType, ComponentKey}, local_component_record::LocalComponentRecord,
-    local_entity_record::LocalEntityRecord, locality_status::LocalityStatus,
-    mut_handler::MutHandler, packet_writer::PacketWriter, world_record::WorldRecord,
+    entity_action::EntityAction,
+    keys::{ComponentKey, KeyType},
+    local_component_record::LocalComponentRecord,
+    local_entity_record::LocalEntityRecord,
+    locality_status::LocalityStatus,
+    mut_handler::MutHandler,
+    packet_writer::PacketWriter,
+    world_record::WorldRecord,
     world_type::WorldType,
 };
 
@@ -174,11 +179,7 @@ impl<P: ProtocolType, K: KeyType> EntityManager<P, K> {
         return Some(action);
     }
 
-    pub fn unpop_outgoing_action(
-        &mut self,
-        packet_index: u16,
-        action: &EntityAction<P, K>,
-    ) {
+    pub fn unpop_outgoing_action(&mut self, packet_index: u16, action: &EntityAction<P, K>) {
         info!("unpopping");
         if let Some(sent_actions_list) = self.sent_actions.get_mut(&packet_index) {
             sent_actions_list.pop();
@@ -271,11 +272,7 @@ impl<P: ProtocolType, K: KeyType> EntityManager<P, K> {
         }
     }
 
-    pub fn remove_entity(
-        &mut self,
-        world_record: &WorldRecord<K>,
-        global_entity_key: &K,
-    ) {
+    pub fn remove_entity(&mut self, world_record: &WorldRecord<K>, global_entity_key: &K) {
         if self.has_entity_prediction(global_entity_key) {
             self.remove_prediction_entity(global_entity_key);
         }
@@ -428,10 +425,7 @@ impl<P: ProtocolType, K: KeyType> EntityManager<P, K> {
 
     // Ect..
 
-    pub fn get_global_entity_key_from_local(
-        &self,
-        local_key: LocalEntityKey,
-    ) -> Option<&K> {
+    pub fn get_global_entity_key_from_local(&self, local_key: LocalEntityKey) -> Option<&K> {
         return self.local_to_global_entity_key_map.get(&local_key);
     }
 

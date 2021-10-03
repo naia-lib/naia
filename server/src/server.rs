@@ -24,7 +24,7 @@ use super::{
     entity_ref::{EntityMut, EntityRef},
     error::NaiaServerError,
     event::Event,
-    keys::{KeyType, ComponentKey},
+    keys::{ComponentKey, KeyType},
     mut_handler::MutHandler,
     property_mutator::PropertyMutator,
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},
@@ -134,7 +134,10 @@ impl<P: ProtocolType, K: KeyType> Server<P, K> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive<W: WorldType<P, K>>(&mut self, world: &W) -> VecDeque<Result<Event<P, K>, NaiaServerError>> {
+    pub fn receive<W: WorldType<P, K>>(
+        &mut self,
+        world: &W,
+    ) -> VecDeque<Result<Event<P, K>, NaiaServerError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with all clients, and receive packets
@@ -280,7 +283,10 @@ impl<P: ProtocolType, K: KeyType> Server<P, K> {
     // Entities
 
     /// Creates a new Entity and returns the associated Key
-    pub fn spawn_entity<'s, 'w, W: WorldType<P, K>>(&'s mut self, world: &'w mut W) -> EntityMut<'s, 'w, P, K, W> {
+    pub fn spawn_entity<'s, 'w, W: WorldType<P, K>>(
+        &'s mut self,
+        world: &'w mut W,
+    ) -> EntityMut<'s, 'w, P, K, W> {
         let entity_key = world.spawn_entity();
         self.world_record.spawn_entity(&entity_key);
         return EntityMut::new(self, world, &entity_key);
@@ -1079,11 +1085,7 @@ impl<P: ProtocolType, K: KeyType> Server<P, K> {
 
     // Component Helpers
 
-    fn component_init<R: ImplRef<P>>(
-        &mut self,
-        entity_key: &K,
-        component_ref: &R,
-    ) -> ComponentKey {
+    fn component_init<R: ImplRef<P>>(&mut self, entity_key: &K, component_ref: &R) -> ComponentKey {
         let dyn_ref = component_ref.dyn_ref();
         let new_mutator_ref: Ref<PropertyMutator> =
             Ref::new(PropertyMutator::new(&self.mut_handler));

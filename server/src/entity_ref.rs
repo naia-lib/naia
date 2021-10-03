@@ -1,7 +1,8 @@
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
 use super::{
-    room::room_key::RoomKey, server::Server, user::user_key::UserKey, world_type::WorldType, keys::KeyType
+    keys::KeyType, room::room_key::RoomKey, server::Server, user::user_key::UserKey,
+    world_type::WorldType,
 };
 
 // EntityRef
@@ -103,9 +104,7 @@ impl<'s, 'w, P: ProtocolType, K: KeyType, W: WorldType<P, K>> EntityMut<'s, 'w, 
     }
 
     pub fn remove_component<R: Replicate<P>>(&mut self) -> Option<Ref<R>> {
-        return self
-            .server
-            .remove_component::<R, W>(self.world, &self.key);
+        return self.server.remove_component::<R, W>(self.world, &self.key);
     }
 
     // Users & Assignment

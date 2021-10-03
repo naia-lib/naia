@@ -1,8 +1,8 @@
 use naia_shared::ProtocolType;
 
 use super::{
-    user::{user_key::UserKey, User},
     keys::KeyType,
+    user::{user_key::UserKey, User},
 };
 
 /// An Event that is emitted as a result of some communication with a Client, or

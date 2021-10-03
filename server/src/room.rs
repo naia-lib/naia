@@ -1,6 +1,6 @@
 use std::collections::{hash_set::Iter, HashSet, VecDeque};
 
-use super::{user::user_key::UserKey, keys::KeyType};
+use super::{keys::KeyType, user::user_key::UserKey};
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
