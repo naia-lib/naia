@@ -1,20 +1,20 @@
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
 use super::{
-    keys::KeyType, room::room_key::RoomKey, server::Server, user::user_key::UserKey,
+    keys::EntityType, room::room_key::RoomKey, server::Server, user::user_key::UserKey,
     world_type::WorldType,
 };
 
 // EntityRef
 
 /// A reference to an Entity being tracked by the Server
-pub struct EntityRef<'s, P: ProtocolType, K: KeyType, W: WorldType<P, K>> {
+pub struct EntityRef<'s, P: ProtocolType, K: EntityType, W: WorldType<P, K>> {
     server: &'s Server<P, K>,
     world: W,
     key: K,
 }
 
-impl<'s, P: ProtocolType, K: KeyType, W: WorldType<P, K>> EntityRef<'s, P, K, W> {
+impl<'s, P: ProtocolType, K: EntityType, W: WorldType<P, K>> EntityRef<'s, P, K, W> {
     /// Return a new EntityRef
     pub(crate) fn new(server: &'s Server<P, K>, world: W, key: &K) -> Self {
         EntityRef {
@@ -55,13 +55,13 @@ impl<'s, P: ProtocolType, K: KeyType, W: WorldType<P, K>> EntityRef<'s, P, K, W>
 }
 
 // EntityMut
-pub struct EntityMut<'s, P: ProtocolType, K: KeyType, W: WorldType<P, K>> {
+pub struct EntityMut<'s, P: ProtocolType, K: EntityType, W: WorldType<P, K>> {
     server: &'s mut Server<P, K>,
     world: W,
     key: K,
 }
 
-impl<'s, P: ProtocolType, K: KeyType, W: WorldType<P, K>> EntityMut<'s, P, K, W> {
+impl<'s, P: ProtocolType, K: EntityType, W: WorldType<P, K>> EntityMut<'s, P, K, W> {
     pub(crate) fn new(server: &'s mut Server<P, K>, world: W, key: &K) -> Self {
         EntityMut {
             server,

@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_shared::Timestamp;
 
-use super::keys::KeyType;
+use super::keys::EntityType;
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
@@ -31,12 +31,12 @@ use crate::{RoomKey, Server, UserKey};
 
 // UserRef
 
-pub struct UserRef<'s, P: ProtocolType, K: KeyType> {
+pub struct UserRef<'s, P: ProtocolType, K: EntityType> {
     server: &'s Server<P, K>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, K: KeyType> UserRef<'s, P, K> {
+impl<'s, P: ProtocolType, K: EntityType> UserRef<'s, P, K> {
     pub fn new(server: &'s Server<P, K>, key: &UserKey) -> Self {
         UserRef { server, key: *key }
     }
@@ -51,12 +51,12 @@ impl<'s, P: ProtocolType, K: KeyType> UserRef<'s, P, K> {
 }
 
 // UserMut
-pub struct UserMut<'s, P: ProtocolType, K: KeyType> {
+pub struct UserMut<'s, P: ProtocolType, K: EntityType> {
     server: &'s mut Server<P, K>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, K: KeyType> UserMut<'s, P, K> {
+impl<'s, P: ProtocolType, K: EntityType> UserMut<'s, P, K> {
     pub fn new(server: &'s mut Server<P, K>, key: &UserKey) -> Self {
         UserMut { server, key: *key }
     }

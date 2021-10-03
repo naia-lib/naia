@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use bevy::ecs::entity::Entity as BevyEntity;
 
-use naia_server::KeyType;
+use naia_server::EntityType;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Entity(BevyEntity);
@@ -13,7 +13,7 @@ impl Entity {
     }
 }
 
-impl KeyType for Entity {}
+impl EntityType for Entity {}
 
 impl Deref for Entity {
     type Target = BevyEntity;

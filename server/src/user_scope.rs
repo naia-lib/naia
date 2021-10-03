@@ -2,14 +2,14 @@ use naia_shared::ProtocolType;
 
 use crate::UserKey;
 
-use super::{keys::KeyType, server::Server};
+use super::{keys::EntityType, server::Server};
 
-pub struct UserScopeMut<'s, P: ProtocolType, K: KeyType> {
+pub struct UserScopeMut<'s, P: ProtocolType, K: EntityType> {
     server: &'s mut Server<P, K>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, K: KeyType> UserScopeMut<'s, P, K> {
+impl<'s, P: ProtocolType, K: EntityType> UserScopeMut<'s, P, K> {
     pub fn new(server: &'s mut Server<P, K>, key: &UserKey) -> Self {
         UserScopeMut { server, key: *key }
     }

@@ -2,14 +2,14 @@ use std::{any::TypeId, collections::HashMap};
 
 use slotmap::DenseSlotMap;
 
-use super::keys::{ComponentKey, KeyType};
+use super::keys::{ComponentKey, EntityType};
 
-pub struct WorldRecord<K: KeyType> {
+pub struct WorldRecord<K: EntityType> {
     entities: HashMap<K, HashMap<TypeId, ComponentKey>>,
     components: DenseSlotMap<ComponentKey, (K, TypeId)>,
 }
 
-impl<K: KeyType> WorldRecord<K> {
+impl<K: EntityType> WorldRecord<K> {
     pub fn new() -> Self {
         WorldRecord {
             entities: HashMap::new(),

@@ -2,10 +2,10 @@ use naia_shared::{
     DiffMask, EntityActionType, LocalComponentKey, LocalEntityKey, ProtocolType, Ref, Replicate,
 };
 
-use super::keys::{ComponentKey, KeyType};
+use super::keys::{ComponentKey, EntityType};
 
 #[derive(Clone, Debug)]
-pub enum EntityAction<P: ProtocolType, K: KeyType> {
+pub enum EntityAction<P: ProtocolType, K: EntityType> {
     SpawnEntity(
         K,
         LocalEntityKey,
@@ -29,7 +29,7 @@ pub enum EntityAction<P: ProtocolType, K: KeyType> {
     RemoveComponent(ComponentKey, LocalComponentKey),
 }
 
-impl<P: ProtocolType, K: KeyType> EntityAction<P, K> {
+impl<P: ProtocolType, K: EntityType> EntityAction<P, K> {
     pub fn as_type(&self) -> EntityActionType {
         match self {
             EntityAction::SpawnEntity(_, _, _) => EntityActionType::SpawnEntity,

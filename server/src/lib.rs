@@ -59,7 +59,7 @@ mod world_type;
 
 pub use entity_ref::EntityRef;
 pub use event::Event;
-pub use keys::{ComponentKey, KeyType};
+pub use keys::{ComponentKey, EntityType};
 pub use room::room_key::RoomKey;
 pub use server::Server;
 pub use server_config::ServerConfig;

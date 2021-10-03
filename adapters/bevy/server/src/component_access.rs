@@ -23,8 +23,8 @@ impl<P: 'static + ProtocolType, R: ImplRef<P>> ComponentAccessor<P, R> {
 }
 
 impl<P: ProtocolType, R: ImplRef<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
-    fn get_component(&self, world: &WorldAdapter, entity_key: &Entity) -> Option<P> {
-        if let Some(component_ref) = world.get_component_ref::<P, R>(entity_key) {
+    fn get_component(&self, world: &WorldAdapter, entity: &Entity) -> Option<P> {
+        if let Some(component_ref) = world.get_component_ref::<P, R>(entity) {
             return Some(component_ref.protocol());
         }
         return None;
