@@ -14,7 +14,7 @@ mod resources;
 mod systems;
 
 use resources::Global;
-use systems::{events::read_server_events, scopes::update_scopes, tick::tick};
+use systems::{events::process_events, scopes::update_scopes, tick::tick};
 
 fn main() {
     info!("Naia Bevy Server Demo starting up");
@@ -41,7 +41,7 @@ fn main() {
 
     // Systems
     .add_startup_system(init.system())
-    .add_system_to_stage(ServerStage::ServerEvents, read_server_events.system())
+    .add_system_to_stage(ServerStage::ServerEvents, process_events.system())
     .add_system_to_stage(ServerStage::Tick, tick.system())
     .add_system_to_stage(ServerStage::UpdateScopes, update_scopes.system())
 
