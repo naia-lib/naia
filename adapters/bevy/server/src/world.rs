@@ -12,107 +12,27 @@ use bevy::ecs::{
 
 use naia_server::{ImplRef, KeyType, ProtocolType, Ref, Replicate, WorldType};
 
-// Key
+// testing...
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct EntityKey(Entity);
+pub trait ToWorldMut<'w> {
+    fn to_mut(self) -> WorldMut<'w>;
+}
 
-impl EntityKey {
-    pub fn new(entity: Entity) -> Self {
-        return EntityKey(entity);
+impl<'w> ToWorldMut<'w> for &'w mut World {
+    fn to_mut(self) -> WorldMut<'w> {
+        return WorldMut::new(self);
     }
 }
 
-impl KeyType for EntityKey {}
+// WorldMut
 
-// WorldMetadata
-
-pub struct WorldMetadata<P: ProtocolType> {
-    entities: HashSet<Entity>,
-    rep_type_to_handler_map: HashMap<TypeId, Box<dyn HandlerTrait<P>>>,
-    ref_type_to_rep_type_map: HashMap<TypeId, TypeId>,
-}
-
-impl<P: ProtocolType> WorldMetadata<P> {
-    pub fn new() -> Self {
-        WorldMetadata {
-            entities: HashSet::new(),
-            rep_type_to_handler_map: HashMap::new(),
-            ref_type_to_rep_type_map: HashMap::new(),
-        }
-    }
-
-    pub(crate) fn get_handler(&self, type_id: &TypeId) -> Option<&Box<dyn HandlerTrait<P>>> {
-        return self.rep_type_to_handler_map.get(type_id);
-    }
-
-    pub(crate) fn has_type(&self, type_id: &TypeId) -> bool {
-        return self.rep_type_to_handler_map.contains_key(type_id);
-    }
-
-    pub(crate) fn put_type<R: ImplRef<P>>(&mut self, rep_type_id: &TypeId, ref_type_id: &TypeId) {
-        self.rep_type_to_handler_map
-            .insert(*rep_type_id, Handler::<P, R>::new());
-        self.ref_type_to_rep_type_map
-            .insert(*ref_type_id, *rep_type_id);
-    }
-
-    pub(crate) fn spawn_entity(&mut self, entity: &Entity) {
-        self.entities.insert(*entity);
-    }
-
-    pub(crate) fn despawn_entity(&mut self, entity: &Entity) {
-        self.entities.remove(&entity);
-    }
-
-    pub(crate) fn get_entities(&self) -> Vec<EntityKey> {
-        let mut output = Vec::new();
-
-        for entity in &self.entities {
-            output.push(EntityKey(*entity));
-        }
-
-        return output;
-    }
-}
-
-// Handler
-pub struct Handler<P: ProtocolType, R: ImplRef<P>> {
-    phantom_p: PhantomData<P>,
-    phantom_r: PhantomData<R>,
-}
-
-impl<P: 'static + ProtocolType, R: ImplRef<P>> Handler<P, R> {
-    pub fn new() -> Box<dyn HandlerTrait<P>> {
-        Box::new(Handler {
-            phantom_p: PhantomData::<P>,
-            phantom_r: PhantomData::<R>,
-        })
-    }
-}
-
-pub trait HandlerTrait<P: ProtocolType>: Send + Sync {
-    fn get_component(&self, world: &WorldRef, entity_key: &EntityKey) -> Option<P>;
-}
-
-impl<P: ProtocolType, R: ImplRef<P>> HandlerTrait<P> for Handler<P, R> {
-    fn get_component(&self, world: &WorldRef, entity_key: &EntityKey) -> Option<P> {
-        if let Some(component_ref) = world.get_component_ref::<P, R>(entity_key) {
-            return Some(component_ref.protocol());
-        }
-        return None;
-    }
-}
-
-// WorldRef
-
-pub struct WorldRef<'w> {
+pub struct WorldMut<'w> {
     world: &'w mut World,
 }
 
-impl<'w> WorldRef<'w> {
+impl<'w> WorldMut<'w> {
     pub fn new(world: &'w mut World) -> Self {
-        WorldRef { world }
+        WorldMut { world }
     }
 
     pub(crate) fn get_component_ref<P: ProtocolType, R: ImplRef<P>>(
@@ -136,7 +56,7 @@ impl<'w> WorldRef<'w> {
     }
 }
 
-impl<'w, P: 'static + ProtocolType> WorldType<P, EntityKey> for WorldRef<'w> {
+impl<'w, P: 'static + ProtocolType> WorldType<P, EntityKey> for WorldMut<'w> {
     fn has_entity(&self, entity_key: &EntityKey) -> bool {
         return self.world.get_entity(entity_key.0).is_some();
     }
@@ -226,5 +146,97 @@ impl<'w, P: 'static + ProtocolType> WorldType<P, EntityKey> for WorldRef<'w> {
 
     fn remove_component<R: Replicate<P>>(&mut self, entity_key: &EntityKey) {
         self.world.entity_mut(entity_key.0).remove::<Ref<R>>();
+    }
+}
+
+// Key
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct EntityKey(Entity);
+
+impl EntityKey {
+    pub fn new(entity: Entity) -> Self {
+        return EntityKey(entity);
+    }
+}
+
+impl KeyType for EntityKey {}
+
+// WorldMetadata
+
+pub struct WorldMetadata<P: ProtocolType> {
+    entities: HashSet<Entity>,
+    rep_type_to_handler_map: HashMap<TypeId, Box<dyn HandlerTrait<P>>>,
+    ref_type_to_rep_type_map: HashMap<TypeId, TypeId>,
+}
+
+impl<P: ProtocolType> WorldMetadata<P> {
+    pub fn new() -> Self {
+        WorldMetadata {
+            entities: HashSet::new(),
+            rep_type_to_handler_map: HashMap::new(),
+            ref_type_to_rep_type_map: HashMap::new(),
+        }
+    }
+
+    pub(crate) fn get_handler(&self, type_id: &TypeId) -> Option<&Box<dyn HandlerTrait<P>>> {
+        return self.rep_type_to_handler_map.get(type_id);
+    }
+
+    pub(crate) fn has_type(&self, type_id: &TypeId) -> bool {
+        return self.rep_type_to_handler_map.contains_key(type_id);
+    }
+
+    pub(crate) fn put_type<R: ImplRef<P>>(&mut self, rep_type_id: &TypeId, ref_type_id: &TypeId) {
+        self.rep_type_to_handler_map
+            .insert(*rep_type_id, Handler::<P, R>::new());
+        self.ref_type_to_rep_type_map
+            .insert(*ref_type_id, *rep_type_id);
+    }
+
+    pub(crate) fn spawn_entity(&mut self, entity: &Entity) {
+        self.entities.insert(*entity);
+    }
+
+    pub(crate) fn despawn_entity(&mut self, entity: &Entity) {
+        self.entities.remove(&entity);
+    }
+
+    pub(crate) fn get_entities(&self) -> Vec<EntityKey> {
+        let mut output = Vec::new();
+
+        for entity in &self.entities {
+            output.push(EntityKey(*entity));
+        }
+
+        return output;
+    }
+}
+
+// Handler
+pub struct Handler<P: ProtocolType, R: ImplRef<P>> {
+    phantom_p: PhantomData<P>,
+    phantom_r: PhantomData<R>,
+}
+
+impl<P: 'static + ProtocolType, R: ImplRef<P>> Handler<P, R> {
+    pub fn new() -> Box<dyn HandlerTrait<P>> {
+        Box::new(Handler {
+            phantom_p: PhantomData::<P>,
+            phantom_r: PhantomData::<R>,
+        })
+    }
+}
+
+pub trait HandlerTrait<P: ProtocolType>: Send + Sync {
+    fn get_component(&self, world: &WorldMut, entity_key: &EntityKey) -> Option<P>;
+}
+
+impl<P: ProtocolType, R: ImplRef<P>> HandlerTrait<P> for Handler<P, R> {
+    fn get_component(&self, world: &WorldMut, entity_key: &EntityKey) -> Option<P> {
+        if let Some(component_ref) = world.get_component_ref::<P, R>(entity_key) {
+            return Some(component_ref.protocol());
+        }
+        return None;
     }
 }
