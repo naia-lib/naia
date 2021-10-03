@@ -104,7 +104,9 @@ impl<'s, P: ProtocolType, K: KeyType, W: WorldType<P, K>> EntityMut<'s, P, K, W>
     }
 
     pub fn remove_component<R: Replicate<P>>(&mut self) -> Option<Ref<R>> {
-        return self.server.remove_component::<R, W>(&mut self.world, &self.key);
+        return self
+            .server
+            .remove_component::<R, W>(&mut self.world, &self.key);
     }
 
     // Users & Assignment

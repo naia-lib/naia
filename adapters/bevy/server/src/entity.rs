@@ -1,8 +1,6 @@
 use std::ops::Deref;
 
-use bevy::ecs::{
-    entity::Entity as BevyEntity,
-};
+use bevy::ecs::entity::Entity as BevyEntity;
 
 use naia_server::KeyType;
 
@@ -19,6 +17,7 @@ impl KeyType for Entity {}
 
 impl Deref for Entity {
     type Target = BevyEntity;
+
     fn deref(&self) -> &Self::Target {
         return &self.0;
     }
