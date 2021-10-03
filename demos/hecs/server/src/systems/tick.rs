@@ -1,8 +1,8 @@
 use naia_server::Ref;
 
-use naia_hecs_demo_shared::protocol::{Marker, Position, StringMessage};
-
 use naia_hecs_server::{Entity, WorldProxy};
+
+use naia_hecs_demo_shared::protocol::{Marker, Position, StringMessage};
 
 use crate::app::App;
 

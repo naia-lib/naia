@@ -2,11 +2,11 @@ use std::collections::HashSet;
 
 use hecs::World;
 
-use naia_server::{RoomKey, Server as NaiaServer};
-
-use naia_hecs_demo_shared::protocol::Protocol;
+use naia_server::{RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig};
 
 use naia_hecs_server::Entity;
+
+use naia_hecs_demo_shared::{get_server_address, get_shared_config, protocol::Protocol};
 
 use super::systems::{
     events::process_events,
@@ -28,7 +28,24 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         info!("Naia Hecs Server Demo started");
-        app_init()
+
+        let server_addresses = ServerAddrs::new(
+            get_server_address(),
+            // IP Address to listen on for UDP WebRTC data channels
+            "127.0.0.1:14192"
+                .parse()
+                .expect("could not parse WebRTC data address/port"),
+            // The public WebRTC IP address to advertise
+            "127.0.0.1:14192"
+                .parse()
+                .expect("could not parse advertised public WebRTC data address/port"),
+        );
+
+        app_init(
+            ServerConfig::default(),
+            get_shared_config(),
+            server_addresses,
+        )
     }
 
     pub fn update(&mut self) {

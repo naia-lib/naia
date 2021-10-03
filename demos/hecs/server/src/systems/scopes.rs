@@ -1,6 +1,6 @@
-use naia_hecs_demo_shared::protocol::Position;
-
 use naia_hecs_server::WorldProxy;
+
+use naia_hecs_demo_shared::protocol::Position;
 
 use crate::app::App;
 
