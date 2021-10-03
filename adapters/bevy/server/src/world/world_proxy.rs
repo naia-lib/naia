@@ -6,27 +6,27 @@ use naia_server::{ImplRef, ProtocolType, Ref, Replicate, WorldType};
 
 use super::{entity::Entity, world_data::WorldData};
 
-// WorldAdapt
+// WorldProxy
 
-pub trait WorldAdapt<'w> {
-    fn adapt(self) -> WorldAdapter<'w>;
+pub trait WorldProxy<'w> {
+    fn proxy(self) -> WorldMut<'w>;
 }
 
-impl<'w> WorldAdapt<'w> for &'w mut World {
-    fn adapt(self) -> WorldAdapter<'w> {
-        return WorldAdapter::new(self);
+impl<'w> WorldProxy<'w> for &'w mut World {
+    fn proxy(self) -> WorldMut<'w> {
+        return WorldMut::new(self);
     }
 }
 
-// WorldAdapter
+// WorldMut
 
-pub struct WorldAdapter<'w> {
+pub struct WorldMut<'w> {
     world: &'w mut World,
 }
 
-impl<'w> WorldAdapter<'w> {
+impl<'w> WorldMut<'w> {
     pub fn new(world: &'w mut World) -> Self {
-        WorldAdapter { world }
+        WorldMut { world }
     }
 
     pub(crate) fn get_component_ref<P: ProtocolType, R: ImplRef<P>>(
@@ -50,7 +50,7 @@ impl<'w> WorldAdapter<'w> {
     }
 }
 
-impl<'w, P: 'static + ProtocolType> WorldType<P, Entity> for WorldAdapter<'w> {
+impl<'w, P: 'static + ProtocolType> WorldType<P, Entity> for WorldMut<'w> {
     fn has_entity(&self, entity: &Entity) -> bool {
         return self.world.get_entity(**entity).is_some();
     }

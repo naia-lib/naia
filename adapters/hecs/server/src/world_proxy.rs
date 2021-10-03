@@ -9,26 +9,27 @@ use super::{
     world_data::{get_world_data, get_world_data_mut},
 };
 
-// WorldAdapt
+// WorldProxy
 
-pub trait WorldAdapt<'w> {
-    fn adapt(self) -> WorldAdapter<'w>;
+pub trait WorldProxy<'w> {
+    fn proxy(self) -> WorldMut<'w>;
 }
 
-impl<'w> WorldAdapt<'w> for &'w mut World {
-    fn adapt(self) -> WorldAdapter<'w> {
-        return WorldAdapter::new(self);
+impl<'w> WorldProxy<'w> for &'w mut World {
+    fn proxy(self) -> WorldMut<'w> {
+        return WorldMut::new(self);
     }
 }
 
-// WorldAdapter
-pub struct WorldAdapter<'w> {
+// WorldMut
+
+pub struct WorldMut<'w> {
     world: &'w mut World,
 }
 
-impl<'w> WorldAdapter<'w> {
+impl<'w> WorldMut<'w> {
     pub fn new(world: &'w mut World) -> Self {
-        WorldAdapter { world }
+        WorldMut { world }
     }
 
     pub(crate) fn get_component_ref<P: ProtocolType, R: ImplRef<P>>(
@@ -42,7 +43,7 @@ impl<'w> WorldAdapter<'w> {
     }
 }
 
-impl<'w, P: ProtocolType> WorldType<P, Entity> for WorldAdapter<'w> {
+impl<'w, P: ProtocolType> WorldType<P, Entity> for WorldMut<'w> {
     fn has_entity(&self, entity_key: &Entity) -> bool {
         return self.world.contains(**entity_key);
     }
