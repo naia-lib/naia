@@ -14,25 +14,25 @@ use naia_server::{ImplRef, KeyType, ProtocolType, Ref, Replicate, WorldType};
 
 // testing...
 
-pub trait ToWorldMut<'w> {
-    fn to_mut(self) -> WorldMut<'w>;
+pub trait WorldAdapt<'w> {
+    fn adapt(self) -> WorldAdapter<'w>;
 }
 
-impl<'w> ToWorldMut<'w> for &'w mut World {
-    fn to_mut(self) -> WorldMut<'w> {
-        return WorldMut::new(self);
+impl<'w> WorldAdapt<'w> for &'w mut World {
+    fn adapt(self) -> WorldAdapter<'w> {
+        return WorldAdapter::new(self);
     }
 }
 
-// WorldMut
+// WorldAdapter
 
-pub struct WorldMut<'w> {
+pub struct WorldAdapter<'w> {
     world: &'w mut World,
 }
 
-impl<'w> WorldMut<'w> {
+impl<'w> WorldAdapter<'w> {
     pub fn new(world: &'w mut World) -> Self {
-        WorldMut { world }
+        WorldAdapter { world }
     }
 
     pub(crate) fn get_component_ref<P: ProtocolType, R: ImplRef<P>>(
@@ -56,7 +56,7 @@ impl<'w> WorldMut<'w> {
     }
 }
 
-impl<'w, P: 'static + ProtocolType> WorldType<P, EntityKey> for WorldMut<'w> {
+impl<'w, P: 'static + ProtocolType> WorldType<P, EntityKey> for WorldAdapter<'w> {
     fn has_entity(&self, entity_key: &EntityKey) -> bool {
         return self.world.get_entity(entity_key.0).is_some();
     }
@@ -149,7 +149,7 @@ impl<'w, P: 'static + ProtocolType> WorldType<P, EntityKey> for WorldMut<'w> {
     }
 }
 
-// Key
+// EntityKey
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct EntityKey(Entity);
@@ -161,6 +161,13 @@ impl EntityKey {
 }
 
 impl KeyType for EntityKey {}
+
+impl Deref for EntityKey {
+    type Target = Entity;
+    fn deref(&self) -> &Self::Target {
+        return &self.0;
+    }
+}
 
 // WorldMetadata
 
@@ -229,11 +236,11 @@ impl<P: 'static + ProtocolType, R: ImplRef<P>> Handler<P, R> {
 }
 
 pub trait HandlerTrait<P: ProtocolType>: Send + Sync {
-    fn get_component(&self, world: &WorldMut, entity_key: &EntityKey) -> Option<P>;
+    fn get_component(&self, world: &WorldAdapter, entity_key: &EntityKey) -> Option<P>;
 }
 
 impl<P: ProtocolType, R: ImplRef<P>> HandlerTrait<P> for Handler<P, R> {
-    fn get_component(&self, world: &WorldMut, entity_key: &EntityKey) -> Option<P> {
+    fn get_component(&self, world: &WorldAdapter, entity_key: &EntityKey) -> Option<P> {
         if let Some(component_ref) = world.get_component_ref::<P, R>(entity_key) {
             return Some(component_ref.protocol());
         }
