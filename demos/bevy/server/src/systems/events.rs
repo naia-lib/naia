@@ -9,7 +9,7 @@ use naia_bevy_demo_shared::{
     protocol::{Color, ColorValue, Position, Protocol},
 };
 
-use super::resources::Global;
+use crate::resources::Global;
 
 type Server = NaiaServer<Protocol, Entity>;
 
@@ -100,24 +100,5 @@ pub fn read_server_events(
             }
             _ => {}
         }
-    }
-}
-
-pub fn tick() {
-    // All game logic should happen here, on a tick event
-    info!("tick");
-}
-
-pub fn update_scopes(mut server: ResMut<Server>) {
-    // Update scopes of entities
-    for (_, user_key, entity_key) in server.scope_checks() {
-        // You'd normally do whatever checks you need to in here..
-        // to determine whether each Entity should be in scope or not.
-
-        // This indicates the Entity should be in this scope.
-        server.user_scope(&user_key).include(&entity_key);
-
-        // And call this if Entity should NOT be in this scope.
-        // server.user_scope(..).exclude(..);
     }
 }
