@@ -1,10 +1,10 @@
+use std::collections::HashMap;
+
 use bevy::{
     ecs::{schedule::ShouldRun, world::World},
     log::LogPlugin,
     prelude::*,
 };
-
-use std::collections::HashMap;
 
 use naia_server::{
     Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
@@ -15,16 +15,16 @@ use naia_bevy_demo_shared::{
     protocol::{Color, ColorValue, Position, Protocol},
 };
 
-use naia_bevy_server::{EntityKey, WorldAdapt};
+use naia_bevy_server::{Entity, WorldAdapt};
 
-type Server = NaiaServer<Protocol, EntityKey>;
+type Server = NaiaServer<Protocol, Entity>;
 
 static ALL: &str = "all";
 
 struct ServerResource {
     pub server: Server,
     main_room_key: RoomKey,
-    user_to_prediction_map: HashMap<UserKey, EntityKey>,
+    user_to_prediction_map: HashMap<UserKey, Entity>,
     ticked: bool,
 }
 

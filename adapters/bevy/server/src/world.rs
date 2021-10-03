@@ -6,13 +6,14 @@ use std::{
 };
 
 use bevy::ecs::{
-    entity::Entity,
     world::{Mut, World},
 };
 
-use naia_server::{ImplRef, KeyType, ProtocolType, Ref, Replicate, WorldType};
+use naia_server::{ImplRef, ProtocolType, Ref, Replicate, WorldType};
 
-// testing...
+use super::entity::Entity;
+
+// WorldAdapt trait makes it easy to turn a Bevy World mut into a WorldAdapter
 
 pub trait WorldAdapt<'w> {
     fn adapt(self) -> WorldAdapter<'w>;
@@ -37,11 +38,11 @@ impl<'w> WorldAdapter<'w> {
 
     pub(crate) fn get_component_ref<P: ProtocolType, R: ImplRef<P>>(
         &self,
-        entity_key: &EntityKey,
+        entity_key: &Entity,
     ) -> Option<R> {
         return self
             .world
-            .get::<R>(entity_key.0)
+            .get::<R>(**entity_key)
             .map_or(None, |v| Some(v.deref().clone_ref()));
     }
 
@@ -56,12 +57,12 @@ impl<'w> WorldAdapter<'w> {
     }
 }
 
-impl<'w, P: 'static + ProtocolType> WorldType<P, EntityKey> for WorldAdapter<'w> {
-    fn has_entity(&self, entity_key: &EntityKey) -> bool {
-        return self.world.get_entity(entity_key.0).is_some();
+impl<'w, P: 'static + ProtocolType> WorldType<P, Entity> for WorldAdapter<'w> {
+    fn has_entity(&self, entity_key: &Entity) -> bool {
+        return self.world.get_entity(**entity_key).is_some();
     }
 
-    fn entities(&self) -> Vec<EntityKey> {
+    fn entities(&self) -> Vec<Entity> {
         if let Some(world_metadata) = self.get_metadata::<P>() {
             return world_metadata.get_entities();
         } else {
@@ -69,40 +70,38 @@ impl<'w, P: 'static + ProtocolType> WorldType<P, EntityKey> for WorldAdapter<'w>
         }
     }
 
-    fn spawn_entity(&mut self) -> EntityKey {
-        let entity = self.world.spawn().id();
+    fn spawn_entity(&mut self) -> Entity {
+        let entity = Entity::new(self.world.spawn().id());
 
         let mut world_metadata: Mut<WorldMetadata<P>> = self.get_or_init_metadata();
         world_metadata.spawn_entity(&entity);
 
-        return EntityKey::new(entity);
+        return entity;
     }
 
-    fn despawn_entity(&mut self, entity_key: &EntityKey) {
-        let entity = entity_key.0;
-
+    fn despawn_entity(&mut self, entity_key: &Entity) {
         let mut world_metadata: Mut<WorldMetadata<P>> = self.get_or_init_metadata();
-        world_metadata.despawn_entity(&entity);
+        world_metadata.despawn_entity(entity_key);
 
-        self.world.despawn(entity);
+        self.world.despawn(**entity_key);
     }
 
-    fn has_component<R: Replicate<P>>(&self, entity_key: &EntityKey) -> bool {
-        return self.world.get::<Ref<R>>(entity_key.0).is_some();
+    fn has_component<R: Replicate<P>>(&self, entity_key: &Entity) -> bool {
+        return self.world.get::<Ref<R>>(**entity_key).is_some();
     }
 
-    fn has_component_of_type(&self, entity_key: &EntityKey, type_id: &TypeId) -> bool {
-        return self.world.entity(entity_key.0).contains_type_id(*type_id);
+    fn has_component_of_type(&self, entity_key: &Entity, type_id: &TypeId) -> bool {
+        return self.world.entity(**entity_key).contains_type_id(*type_id);
     }
 
-    fn get_component<R: Replicate<P>>(&self, entity_key: &EntityKey) -> Option<Ref<R>> {
+    fn get_component<R: Replicate<P>>(&self, entity_key: &Entity) -> Option<Ref<R>> {
         return self
             .world
-            .get::<Ref<R>>(entity_key.0)
+            .get::<Ref<R>>(**entity_key)
             .map_or(None, |v| Some(v.clone()));
     }
 
-    fn get_component_from_type(&self, entity_key: &EntityKey, type_id: &TypeId) -> Option<P> {
+    fn get_component_from_type(&self, entity_key: &Entity, type_id: &TypeId) -> Option<P> {
         if let Some(world_metadata) = self.get_metadata() {
             if let Some(handler) = world_metadata.get_handler(type_id) {
                 return handler.get_component(self, entity_key);
@@ -111,12 +110,12 @@ impl<'w, P: 'static + ProtocolType> WorldType<P, EntityKey> for WorldAdapter<'w>
         return None;
     }
 
-    fn get_components(&self, entity_key: &EntityKey) -> Vec<P> {
+    fn get_components(&self, entity_key: &Entity) -> Vec<P> {
         let mut protocols = Vec::new();
 
         let components = self.world.components();
 
-        for component_id in self.world.entity(entity_key.0).archetype().components() {
+        for component_id in self.world.entity(**entity_key).archetype().components() {
             if let Some(component_info) = components.get_info(component_id) {
                 if let Some(type_id) = component_info.type_id() {
                     let protocol_opt: Option<P> =
@@ -131,7 +130,7 @@ impl<'w, P: 'static + ProtocolType> WorldType<P, EntityKey> for WorldAdapter<'w>
         return protocols;
     }
 
-    fn insert_component<R: ImplRef<P>>(&mut self, entity_key: &EntityKey, component_ref: R) {
+    fn insert_component<R: ImplRef<P>>(&mut self, entity_key: &Entity, component_ref: R) {
         // cache type id for later
         // todo: can we initialize this map on startup via Protocol derive?
         let mut world_metadata: Mut<WorldMetadata<P>> = self.get_or_init_metadata();
@@ -141,31 +140,11 @@ impl<'w, P: 'static + ProtocolType> WorldType<P, EntityKey> for WorldAdapter<'w>
         }
 
         // insert into ecs
-        self.world.entity_mut(entity_key.0).insert(component_ref);
+        self.world.entity_mut(**entity_key).insert(component_ref);
     }
 
-    fn remove_component<R: Replicate<P>>(&mut self, entity_key: &EntityKey) {
-        self.world.entity_mut(entity_key.0).remove::<Ref<R>>();
-    }
-}
-
-// EntityKey
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct EntityKey(Entity);
-
-impl EntityKey {
-    pub fn new(entity: Entity) -> Self {
-        return EntityKey(entity);
-    }
-}
-
-impl KeyType for EntityKey {}
-
-impl Deref for EntityKey {
-    type Target = Entity;
-    fn deref(&self) -> &Self::Target {
-        return &self.0;
+    fn remove_component<R: Replicate<P>>(&mut self, entity_key: &Entity) {
+        self.world.entity_mut(**entity_key).remove::<Ref<R>>();
     }
 }
 
@@ -209,11 +188,11 @@ impl<P: ProtocolType> WorldMetadata<P> {
         self.entities.remove(&entity);
     }
 
-    pub(crate) fn get_entities(&self) -> Vec<EntityKey> {
+    pub(crate) fn get_entities(&self) -> Vec<Entity> {
         let mut output = Vec::new();
 
         for entity in &self.entities {
-            output.push(EntityKey(*entity));
+            output.push(*entity);
         }
 
         return output;
@@ -236,11 +215,11 @@ impl<P: 'static + ProtocolType, R: ImplRef<P>> Handler<P, R> {
 }
 
 pub trait HandlerTrait<P: ProtocolType>: Send + Sync {
-    fn get_component(&self, world: &WorldAdapter, entity_key: &EntityKey) -> Option<P>;
+    fn get_component(&self, world: &WorldAdapter, entity_key: &Entity) -> Option<P>;
 }
 
 impl<P: ProtocolType, R: ImplRef<P>> HandlerTrait<P> for Handler<P, R> {
-    fn get_component(&self, world: &WorldAdapter, entity_key: &EntityKey) -> Option<P> {
+    fn get_component(&self, world: &WorldAdapter, entity_key: &Entity) -> Option<P> {
         if let Some(component_ref) = world.get_component_ref::<P, R>(entity_key) {
             return Some(component_ref.protocol());
         }

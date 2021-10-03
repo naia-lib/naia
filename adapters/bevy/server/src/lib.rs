@@ -1,3 +1,5 @@
+mod entity;
 mod world;
 
-pub use world::{EntityKey, WorldAdapter, WorldAdapt};
+pub use entity::Entity;
+pub use world::WorldAdapt;
