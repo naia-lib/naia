@@ -1,3 +1,3 @@
 mod world;
 
-pub use world::{EntityKey, WorldMut, ToWorldMut};
+pub use world::{EntityKey, WorldAdapter, WorldAdapt};
