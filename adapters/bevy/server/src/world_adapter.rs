@@ -5,9 +5,7 @@ use std::{
     ops::Deref,
 };
 
-use bevy::ecs::{
-    world::{Mut, World},
-};
+use bevy::ecs::world::{Mut, World};
 
 use naia_server::{ImplRef, ProtocolType, Ref, Replicate, WorldType};
 
