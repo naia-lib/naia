@@ -6,7 +6,7 @@ use super::{diff_mask::DiffMask, replicate::Replicate};
 
 /// An Enum with a variant for every Component/Message that can be sent
 /// between Client/Host
-pub trait ProtocolType<Impl = Self>: Clone
+pub trait ProtocolType<Impl = Self>: Clone + Sync + Send + 'static
 where
     Impl: ProtocolType,
 {
