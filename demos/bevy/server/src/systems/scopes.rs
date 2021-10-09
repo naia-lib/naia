@@ -1,12 +1,6 @@
 use bevy::prelude::*;
 
-use naia_server::Server as NaiaServer;
-
-use naia_bevy_server::Entity;
-
-use naia_bevy_demo_shared::protocol::Protocol;
-
-type Server = NaiaServer<Protocol, Entity>;
+use crate::aliases::Server;
 
 pub fn update_scopes(mut server: ResMut<Server>) {
     // Update scopes of entities
