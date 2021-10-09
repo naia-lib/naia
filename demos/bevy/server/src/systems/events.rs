@@ -1,21 +1,19 @@
 use bevy::prelude::*;
 
-use naia_server::{Event as ServerEvent, Random, Ref, Server as NaiaServer};
+use naia_server::{Event as ServerEvent, Random, Ref};
 
-use naia_bevy_server::{Entity, ServerCommands};
+use naia_bevy_server::{Entity, CommandsExt};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     protocol::{Color, ColorValue, Position, Protocol},
 };
 
-use crate::resources::Global;
-
-type Server = NaiaServer<Protocol, Entity>;
+use crate::{aliases::Server, resources::Global};
 
 pub fn process_events(
+    mut commands: Commands,
     mut server: ResMut<Server>,
-    mut server_commands: ResMut<ServerCommands>,
     mut events: EventReader<ServerEvent<Protocol, Entity>>,
     mut global: ResMut<Global>,
     q_position: Query<&Ref<Position>>,
@@ -40,7 +38,7 @@ pub fn process_events(
                 info!("Naia Server connected to: {}", address);
 
                 // Create new Square Entity
-                let entity_key = server_commands.spawn().id();
+                let entity_key = commands.with(&mut server).spawn().id();
 
                 // Add Entity to main Room
                 server
@@ -59,7 +57,7 @@ pub fn process_events(
                     let position_ref = Position::new(x, y);
 
                     // add to entity
-                    server_commands.entity(&entity_key).insert(&position_ref);
+                    commands.with(&mut server).entity(&entity_key).insert(&position_ref);
                 }
 
                 // Color component
@@ -73,11 +71,11 @@ pub fn process_events(
                     let color_ref = Color::new(color_value);
 
                     // add to entity
-                    server_commands.entity(&entity_key).insert(&color_ref);
+                    commands.with(&mut server).entity(&entity_key).insert(&color_ref);
                 }
 
                 // Assign as Prediction to User
-                server_commands.entity(&entity_key).set_owner(&user_key);
+                commands.with(&mut server).entity(&entity_key).set_owner(&user_key);
                 global.user_to_prediction_map.insert(*user_key, entity_key);
             }
             ServerEvent::Disconnection(user_key, user) => {
@@ -90,7 +88,7 @@ pub fn process_events(
                     server
                         .room_mut(&global.main_room_key)
                         .remove_entity(&naia_entity_key);
-                    server_commands.entity(&naia_entity_key).despawn();
+                    commands.with(&mut server).entity(&naia_entity_key).despawn();
                 }
             }
             ServerEvent::Command(_, entity_key, Protocol::KeyCommand(key_command_ref)) => {

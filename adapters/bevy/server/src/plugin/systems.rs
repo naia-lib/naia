@@ -37,7 +37,7 @@ pub fn read_server_events<P: ProtocolType>(world: &mut World) {
 }
 
 pub fn flush_server_commands(world: &mut World) {
-    // todo!
+    todo!()
 }
 
 pub fn should_tick(server_resource: Res<ServerResource>) -> ShouldRun {

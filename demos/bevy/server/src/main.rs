@@ -2,17 +2,17 @@ use std::collections::HashMap;
 
 use bevy::{log::LogPlugin, prelude::*};
 
-use naia_server::{Server as NaiaServer, ServerAddrs, ServerConfig};
+use naia_server::{ServerAddrs, ServerConfig};
 
-use naia_bevy_server::{Entity, ServerPlugin, ServerStage};
+use naia_bevy_server::{ServerPlugin, ServerStage};
 
-use naia_bevy_demo_shared::{get_server_address, get_shared_config, protocol::Protocol};
+use naia_bevy_demo_shared::{get_server_address, get_shared_config};
 
-type Server = NaiaServer<Protocol, Entity>;
-
+mod aliases;
 mod resources;
 mod systems;
 
+use aliases::Server;
 use resources::Global;
 use systems::{events::process_events, scopes::update_scopes, tick::tick};
 
