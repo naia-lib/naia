@@ -1,9 +1,7 @@
-use bevy::{
-    ecs::{
-        schedule::ShouldRun,
-        system::Res,
-        world::{Mut, World},
-    },
+use bevy::ecs::{
+    schedule::ShouldRun,
+    system::Res,
+    world::{Mut, World},
 };
 
 use naia_server::{ProtocolType, Server};

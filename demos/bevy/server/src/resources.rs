@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_bevy_server::{RoomKey, UserKey, Entity};
+use naia_bevy_server::{Entity, RoomKey, UserKey};
 
 pub struct Global {
     pub main_room_key: RoomKey,

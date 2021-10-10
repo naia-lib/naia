@@ -21,7 +21,7 @@ use super::{
     mut_handler::MutHandler,
     packet_writer::PacketWriter,
     world_record::WorldRecord,
-    world_type::{WorldRefType, WorldMutType},
+    world_type::{WorldMutType, WorldRefType},
 };
 
 /// Manages Entities for a given Client connection and keeps them in

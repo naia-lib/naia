@@ -2,7 +2,7 @@ use std::any::TypeId;
 
 use bevy::ecs::world::{Mut, World};
 
-use naia_server::{ImplRef, ProtocolType, Ref, Replicate, WorldRefType, WorldMutType};
+use naia_server::{ImplRef, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType};
 
 use super::{entity::Entity, world_data::WorldData};
 
@@ -56,13 +56,20 @@ fn has_component_of_type(world: &World, entity: &Entity, type_id: &TypeId) -> bo
     return world.entity(**entity).contains_type_id(*type_id);
 }
 
-fn get_component<P: ProtocolType, R: Replicate<P>>(world: &World, entity: &Entity) -> Option<Ref<R>> {
+fn get_component<P: ProtocolType, R: Replicate<P>>(
+    world: &World,
+    entity: &Entity,
+) -> Option<Ref<R>> {
     return world
         .get::<Ref<R>>(**entity)
         .map_or(None, |v| Some(v.clone()));
 }
 
-fn get_component_from_type<P: ProtocolType>(world: &World, entity: &Entity, type_id: &TypeId) -> Option<P> {
+fn get_component_from_type<P: ProtocolType>(
+    world: &World,
+    entity: &Entity,
+    type_id: &TypeId,
+) -> Option<P> {
     if let Some(world_data) = get_world_data(world) {
         return world_data.get_component(world, entity, type_id);
     }
@@ -179,7 +186,6 @@ impl<'w, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldMut<'w> {
 }
 
 impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
-
     fn spawn_entity(&mut self) -> Entity {
         let entity = Entity::new(self.world.spawn().id());
 

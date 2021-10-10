@@ -33,7 +33,7 @@ use super::{
     user::{user_key::UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
-    world_type::{WorldRefType, WorldMutType},
+    world_type::{WorldMutType, WorldRefType},
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -293,10 +293,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     }
 
     /// Creates a new Entity with a specific key
-    pub fn spawn_entity_at<'s>(
-        &'s mut self,
-        entity_key: &K,
-    ) -> WorldlessEntityMut<'s, P, K> {
+    pub fn spawn_entity_at<'s>(&'s mut self, entity_key: &K) -> WorldlessEntityMut<'s, P, K> {
         self.world_record.spawn_entity(entity_key);
         return WorldlessEntityMut::new(self, entity_key);
     }
@@ -329,14 +326,11 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         panic!("No Entity exists for given Key!");
     }
 
-    /// Retrieves a WorldlessEntityMut that exposes read and write operations for the
-    /// Entity associated with the given Entity Key, with no references to the World.
-    /// This is a very niche use case.
+    /// Retrieves a WorldlessEntityMut that exposes read and write operations
+    /// for the Entity associated with the given Entity Key, with no
+    /// references to the World. This is a very niche use case.
     /// Panics if the entity does not exist.
-    pub fn worldless_entity_mut<'s>(
-        &'s mut self,
-        entity_key: &K,
-    ) -> WorldlessEntityMut<'s, P, K> {
+    pub fn worldless_entity_mut<'s>(&'s mut self, entity_key: &K) -> WorldlessEntityMut<'s, P, K> {
         return WorldlessEntityMut::new(self, &entity_key);
     }
 

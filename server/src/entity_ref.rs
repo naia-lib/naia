@@ -1,8 +1,11 @@
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
 use super::{
-    keys::EntityType, room::room_key::RoomKey, server::Server, user::user_key::UserKey,
-    world_type::{WorldRefType, WorldMutType},
+    keys::EntityType,
+    room::room_key::RoomKey,
+    server::Server,
+    user::user_key::UserKey,
+    world_type::{WorldMutType, WorldRefType},
 };
 
 // EntityRef
@@ -55,13 +58,13 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P,
 }
 
 // EntityMut
-pub struct EntityMut<'s, 'w,  P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> {
+pub struct EntityMut<'s, 'w, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> {
     server: &'s mut Server<P, K>,
     world: &'w mut W,
     key: K,
 }
 
-impl<'s, 'w, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s,'w, P, K, W> {
+impl<'s, 'w, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s, 'w, P, K, W> {
     pub(crate) fn new(server: &'s mut Server<P, K>, world: &'w mut W, key: &K) -> Self {
         EntityMut {
             server,
@@ -156,15 +159,37 @@ pub struct WorldlessEntityMut<'s, P: ProtocolType, K: EntityType> {
 
 impl<'s, P: ProtocolType, K: EntityType> WorldlessEntityMut<'s, P, K> {
     pub(crate) fn new(server: &'s mut Server<P, K>, key: &K) -> Self {
-        WorldlessEntityMut {
-            server,
-            key: *key,
-        }
+        WorldlessEntityMut { server, key: *key }
+    }
+
+    pub fn key(&self) -> K {
+        self.key
+    }
+
+    // Users & Assignment
+
+    pub fn has_owner(&self) -> bool {
+        return self.server.entity_has_owner(&self.key);
+    }
+
+    pub fn get_owner(&self) -> Option<&UserKey> {
+        return self.server.entity_get_owner(&self.key);
     }
 
     pub fn disown(&mut self) -> &mut Self {
         self.server.entity_disown(&self.key);
+        self
+    }
 
+    // Rooms
+
+    pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
+        self.server.room_add_entity(room_key, &self.key);
+        self
+    }
+
+    pub fn leave_room(&mut self, room_key: &RoomKey) -> &mut Self {
+        self.server.room_remove_entity(room_key, &self.key);
         self
     }
 }

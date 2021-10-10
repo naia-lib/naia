@@ -1,8 +1,11 @@
-use naia_server::{ProtocolType, ImplRef, Replicate, RoomKey, UserKey};
+use naia_server::{ImplRef, ProtocolType, Replicate, RoomKey, UserKey};
 
 use crate::world::entity::Entity;
 
-use super::{server::Server, commands::{InsertComponent, RemoveComponent, DespawnEntity, OwnEntity}};
+use super::{
+    commands::{DespawnEntity, InsertComponent, OwnEntity, RemoveComponent},
+    server::Server,
+};
 
 // EntityMut
 
@@ -12,12 +15,8 @@ pub struct EntityMut<'a, 'b, P: ProtocolType> {
 }
 
 impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
-
     pub fn new(entity: Entity, server: &'b mut Server<'a, P>) -> Self {
-        return EntityMut {
-            entity,
-            server,
-        };
+        return EntityMut { entity, server };
     }
 
     #[inline]
@@ -28,36 +27,26 @@ impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
     // Despawn
 
     pub fn despawn(&mut self) {
-        self.server.add(DespawnEntity::new(
-            &self.entity,
-        ))
+        self.server.add(DespawnEntity::new(&self.entity))
     }
 
     // Components
 
     pub fn insert<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
-        self.server.add(InsertComponent::new(
-            &self.entity,
-            component_ref,
-        ));
+        self.server
+            .add(InsertComponent::new(&self.entity, component_ref));
         self
     }
 
-    pub fn remove<R: Replicate<P>>(&mut self) -> &mut Self
-    {
-        self.server.add(RemoveComponent::<P, R>::new(
-            &self.entity
-        ));
+    pub fn remove<R: Replicate<P>>(&mut self) -> &mut Self {
+        self.server.add(RemoveComponent::<P, R>::new(&self.entity));
         self
     }
 
     // Users
 
     pub fn set_owner(&mut self, user_key: &UserKey) -> &mut Self {
-        self.server.add(OwnEntity::new(
-            &self.entity,
-            user_key,
-        ));
+        self.server.add(OwnEntity::new(&self.entity, user_key));
         self
     }
 

@@ -102,9 +102,9 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
         if let Ok(entity_ref) = self.world.entity(**entity_key) {
             for ref_type in entity_ref.component_types() {
                 if let Some(rep_type) = world_data.type_convert_ref_to_rep(&ref_type) {
-                    if let Some(component) =
-                        WorldMutType::<P, Entity>::get_component_from_type(self, entity_key, &rep_type)
-                    {
+                    if let Some(component) = WorldMutType::<P, Entity>::get_component_from_type(
+                        self, entity_key, &rep_type,
+                    ) {
                         protocols.push(component);
                     }
                 }

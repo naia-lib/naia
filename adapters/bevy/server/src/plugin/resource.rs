@@ -4,8 +4,6 @@ pub struct ServerResource {
 
 impl ServerResource {
     pub fn new() -> Self {
-        return ServerResource {
-            ticked: false,
-        }
+        return ServerResource { ticked: false };
     }
 }

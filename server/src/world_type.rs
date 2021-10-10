@@ -4,9 +4,9 @@ use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
 use super::keys::EntityType;
 
-/// Structures that implement the WorldMutType trait will be able to be loaded into
-/// the Server at which point the Server will use this interface to keep the
-/// WorldMutType in-sync with it's own Entities/Components
+/// Structures that implement the WorldMutType trait will be able to be loaded
+/// into the Server at which point the Server will use this interface to keep
+/// the WorldMutType in-sync with it's own Entities/Components
 pub trait WorldRefType<P: ProtocolType, K: EntityType> {
     // Entities
 
@@ -29,9 +29,9 @@ pub trait WorldRefType<P: ProtocolType, K: EntityType> {
     fn get_components(&self, entity_key: &K) -> Vec<P>;
 }
 
-/// Structures that implement the WorldMutType trait will be able to be loaded into
-/// the Server at which point the Server will use this interface to keep the
-/// WorldMutType in-sync with it's own Entities/Components
+/// Structures that implement the WorldMutType trait will be able to be loaded
+/// into the Server at which point the Server will use this interface to keep
+/// the WorldMutType in-sync with it's own Entities/Components
 pub trait WorldMutType<P: ProtocolType, K: EntityType>: WorldRefType<P, K> {
     // Entities
 

@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use bevy::{log::LogPlugin, prelude::*};
 
-use naia_bevy_server::{Server, ServerPlugin, ServerStage, ServerAddrs, ServerConfig};
+use naia_bevy_server::{Server, ServerAddrs, ServerConfig, ServerPlugin, ServerStage};
 
-use naia_bevy_demo_shared::{protocol::Protocol, get_server_address, get_shared_config};
+use naia_bevy_demo_shared::{get_server_address, get_shared_config, protocol::Protocol};
 
 mod aliases;
 mod resources;
