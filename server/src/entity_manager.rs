@@ -21,7 +21,7 @@ use super::{
     mut_handler::MutHandler,
     packet_writer::PacketWriter,
     world_record::WorldRecord,
-    world_type::WorldType,
+    world_type::{WorldRefType, WorldMutType},
 };
 
 /// Manages Entities for a given Client connection and keeps them in
@@ -84,7 +84,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         return self.queued_actions.len() != 0;
     }
 
-    pub fn pop_outgoing_action<W: WorldType<P, K>>(
+    pub fn pop_outgoing_action<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
         world_record: &WorldRecord<K>,
@@ -227,7 +227,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
     // Entities
 
-    pub fn add_entity<W: WorldType<P, K>>(
+    pub fn add_entity<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
         world_record: &WorldRecord<K>,
@@ -353,7 +353,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
     // Components
 
-    pub fn insert_component<W: WorldType<P, K>>(
+    pub fn insert_component<W: WorldMutType<P, K>>(
         &mut self,
         world: &W,
         world_record: &WorldRecord<K>,
@@ -429,7 +429,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         return self.local_to_global_entity_key_map.get(&local_key);
     }
 
-    pub fn collect_component_updates<W: WorldType<P, K>>(
+    pub fn collect_component_updates<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
         world_record: &WorldRecord<K>,
@@ -735,7 +735,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
             .clone()
     }
 
-    pub fn process_delivered_packets<W: WorldType<P, K>>(
+    pub fn process_delivered_packets<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
         world_record: &WorldRecord<K>,

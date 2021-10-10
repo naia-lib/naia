@@ -13,7 +13,7 @@ use super::{
     packet_writer::PacketWriter,
     ping_manager::PingManager,
     world_record::WorldRecord,
-    world_type::WorldType,
+    world_type::{WorldMutType, WorldRefType},
 };
 
 pub struct ClientConnection<P: ProtocolType, K: EntityType> {
@@ -37,7 +37,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         }
     }
 
-    pub fn get_outgoing_packet<W: WorldType<P, K>>(
+    pub fn get_outgoing_packet<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
         world_record: &WorldRecord<K>,
@@ -116,7 +116,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         }
     }
 
-    pub fn collect_component_updates<W: WorldType<P, K>>(
+    pub fn collect_component_updates<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
         world_record: &WorldRecord<K>,
@@ -153,7 +153,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         return self.entity_manager.has_entity(key);
     }
 
-    pub fn spawn_entity<W: WorldType<P, K>>(
+    pub fn spawn_entity<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
         world_record: &WorldRecord<K>,
@@ -178,7 +178,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         self.entity_manager.remove_prediction_entity(key);
     }
 
-    pub fn insert_component<W: WorldType<P, K>>(
+    pub fn insert_component<W: WorldMutType<P, K>>(
         &mut self,
         world: &W,
         world_record: &WorldRecord<K>,
@@ -210,7 +210,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         return self.connection.should_drop();
     }
 
-    pub fn process_incoming_header<W: WorldType<P, K>>(
+    pub fn process_incoming_header<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
         world_record: &WorldRecord<K>,

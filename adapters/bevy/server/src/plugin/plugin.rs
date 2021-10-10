@@ -1,18 +1,15 @@
 use std::{ops::DerefMut, sync::Mutex};
 
-use bevy::{
-    app::{AppBuilder, CoreStage, Plugin},
-    ecs::schedule::SystemStage,
-    prelude::*,
-};
+use bevy::{prelude::*, app::{AppBuilder, CoreStage, Plugin}, ecs::schedule::SystemStage};
 
-use naia_server::{Event, ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig};
+use naia_server::{ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig};
 
 use crate::world::entity::Entity;
 
 use super::{
+    resource::ServerResource,
     stages::{PrivateStage, ServerStage},
-    systems::{read_server_events, send_server_packets, should_tick},
+    systems::{send_server_packets, should_tick},
 };
 
 struct ServerPluginConfig<P: ProtocolType> {
@@ -33,10 +30,6 @@ impl<P: ProtocolType> ServerPluginConfig<P> {
             server_addrs: server_addresses,
         }
     }
-}
-
-pub struct ServerResource {
-    pub ticked: bool,
 }
 
 pub struct ServerPlugin<P: ProtocolType> {
@@ -62,17 +55,14 @@ impl<P: ProtocolType> Plugin for ServerPlugin<P> {
         let mut server = Server::<P, Entity>::new(config.server_config, config.shared_config);
         server.listen(config.server_addrs);
 
-        // EVENTS //
-        app.add_event::<Event<P, Entity>>()
+        app
+        // RESOURCES //
+            .insert_resource(server)
+            .insert_resource(ServerResource::new())
 
         // STAGES //
-            // ReadEvents //
-            .add_stage_before(CoreStage::PreUpdate, PrivateStage::ReadEvents,
-                              SystemStage::single_threaded())
-            .add_system_to_stage(PrivateStage::ReadEvents,
-                                 read_server_events::<P>.exclusive_system())
-            // SendEvents //
-            .add_stage_after(PrivateStage::ReadEvents, ServerStage::ServerEvents,
+            // ServerEvents //
+            .add_stage_before(CoreStage::PreUpdate, ServerStage::ServerEvents,
                              SystemStage::single_threaded())
             // Tick //
             .add_stage_after(CoreStage::PostUpdate, ServerStage::Tick,
