@@ -7,7 +7,6 @@
     missing_debug_implementations,
     trivial_casts,
     trivial_numeric_casts,
-    unsafe_code,
     unstable_features,
     unused_import_braces
 )]
@@ -31,13 +30,13 @@ mod tick_manager;
 mod tick_queue;
 
 pub use naia_shared::{
-    wrapping_diff, Instant, LinkConditionerConfig, LocalEntity, NaiaKey, ProtocolType, Random,
-    Ref, ReplicaEq, Replicate, ImplRef, SharedConfig,
+    wrapping_diff, ImplRef, Instant, LinkConditionerConfig, LocalEntity, NaiaKey, ProtocolType,
+    Random, Ref, ReplicaEq, Replicate, SharedConfig,
 };
 
 pub use client::Client;
 pub use client_config::ClientConfig;
+pub use entity_ref::EntityRef;
+pub use error::NaiaClientError;
 pub use event::Event;
 pub use naia_client_socket::Packet;
-pub use error::NaiaClientError;
-pub use entity_ref::EntityRef;

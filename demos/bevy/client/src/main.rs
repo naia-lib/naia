@@ -1,237 +1,85 @@
-use std::collections::HashMap;
+use bevy::prelude::*;
 
-use bevy::{ecs::entity::Entity as BevyEntityKey, prelude::*};
-
-use naia_client::{Client, ClientConfig, Event, LocalEntityKey as NaiaEntityKey, Ref};
+use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, Ref};
 
 use naia_bevy_demo_shared::{
-    behavior as shared_behavior, get_server_address, get_shared_config,
-    protocol::{Auth, ColorValue, KeyCommand, Position, Protocol},
+    get_server_address, get_shared_config,
+    protocol::{Auth, Position},
 };
 
-const SQUARE_SIZE: f32 = 32.0;
-static ALL: &str = "all";
+mod components;
+mod resources;
+mod systems;
 
-struct Predicted;
-struct Confirmed;
-struct Key(NaiaEntityKey);
-struct Materials {
-    white: Handle<ColorMaterial>,
-    red: Handle<ColorMaterial>,
-    blue: Handle<ColorMaterial>,
-    yellow: Handle<ColorMaterial>,
-}
-struct QueuedCommand {
-    command: Option<Ref<KeyCommand>>,
-}
-struct ClientResource {
-    entity_key_map: HashMap<NaiaEntityKey, BevyEntityKey>,
-    prediction_key_map: HashMap<NaiaEntityKey, BevyEntityKey>,
-}
+use components::{Confirmed, Predicted};
+use systems::{init, player_input, receive_events, should_tick, tick};
 
 fn main() {
     let mut app = App::build();
 
     // Plugins
-    app.add_plugins(DefaultPlugins).add_stage_before(
-        CoreStage::PreUpdate,
-        ALL,
-        SystemStage::single_threaded(),
-    );
+    app.add_plugins(DefaultPlugins)
+        .add_plugin(ClientPlugin::new(
+            ClientConfig::default(),
+            get_shared_config(),
+            get_server_address(),
+            Some(Auth::new("charlie", "12345")),
+        ));
 
     #[cfg(target_arch = "wasm32")]
     app.add_plugin(bevy_webgl2::WebGL2Plugin);
 
-    // Init Naia Client
-    let server_address = get_server_address();
-    let auth = Some(Auth::new("charlie", "12345"));
+    app
+    // Startup System
+    .add_startup_system(
+        init.system())
+    // Receive Server Events
+    .add_system_to_stage(
+        CoreStage::PreUpdate,
+        player_input.system())
+    // Realtime Gameplay Loop
+    .add_system_to_stage(
+        CoreStage::Update,
+        receive_events.system())
+    .add_system_to_stage(
+        CoreStage::Update,
+        predicted_sync.system())
+    .add_system_to_stage(
+        CoreStage::Update,
+        confirmed_sync.system())
+    // Gameplay Loop on Tick
+    .add_system_to_stage(
+        CoreStage::PostUpdate,
+        tick.system()
+            .with_run_criteria(
+                should_tick.system()))
 
-    let mut client = Client::new(ClientConfig::default(), get_shared_config());
-    client.connect(server_address, auth);
+    // Run App
+    .run();
 
-    // Add Naia Client
-    app.insert_non_send_resource(client);
-
-    // Resources
-    app.insert_non_send_resource(QueuedCommand { command: None })
-        .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
-        .insert_resource(ClientResource {
-            entity_key_map: HashMap::new(),
-            prediction_key_map: HashMap::new(),
-        });
-
-    // Systems
-    app.add_startup_system(init.system())
-       .add_system(prediction_input.system())
-       .add_system_to_stage(ALL, naia_client_update.system())
-       .add_system_to_stage(ALL, predicted_sync.system())
-       .add_system_to_stage(ALL, confirmed_sync.system())
-
-    // Run
-       .run();
-}
-
-fn init(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
-    info!("Naia Bevy Client Demo started");
-
-    // Setup Camera
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
-
-    // Setup Colors
-    commands.insert_resource(Materials {
-        white: materials.add(Color::rgb(1.0, 1.0, 1.0).into()),
-        red: materials.add(Color::rgb(1.0, 0.0, 0.0).into()),
-        blue: materials.add(Color::rgb(0.0, 0.0, 1.0).into()),
-        yellow: materials.add(Color::rgb(1.0, 1.0, 0.0).into()),
-    });
-}
-
-fn prediction_input(
-    keyboard_input: Res<Input<KeyCode>>,
-    mut queued_command: NonSendMut<QueuedCommand>,
-) {
-    let w = keyboard_input.pressed(KeyCode::W);
-    let s = keyboard_input.pressed(KeyCode::S);
-    let a = keyboard_input.pressed(KeyCode::A);
-    let d = keyboard_input.pressed(KeyCode::D);
-
-    if let Some(command_ref) = &mut queued_command.command {
-        let mut command = command_ref.borrow_mut();
-        if w {
-            command.w.set(true);
-        }
-        if s {
-            command.s.set(true);
-        }
-        if a {
-            command.a.set(true);
-        }
-        if d {
-            command.d.set(true);
-        }
-    } else {
-        queued_command.command = Some(KeyCommand::new(w, s, a, d));
-    }
-}
-
-fn naia_client_update(
-    mut commands: Commands,
-    mut client: NonSendMut<Client<Protocol>>,
-    mut client_resource: ResMut<ClientResource>,
-    materials: Res<Materials>,
-    mut prediction_query: Query<(&Key, &Ref<Position>), With<Predicted>>,
-    mut queued_command: NonSendMut<QueuedCommand>,
-) {
-    for event in client.receive() {
-        match event {
-            Ok(Event::Connection) => {
-                info!("Client connected to: {}", client.server_address());
-            }
-            Ok(Event::Disconnection) => {
-                info!("Client disconnected from: {}", client.server_address());
-            }
-            Ok(Event::Tick) => {
-                for (Key(prediction_key), _) in prediction_query.iter() {
-                    if let Some(command) = queued_command.command.take() {
-                        client.queue_command(prediction_key, &command);
-                    }
-                }
-            }
-            Ok(Event::SpawnEntity(naia_entity_key, component_list)) => {
-                let mut entity = commands.spawn();
-                entity.insert(Confirmed).insert(Key(naia_entity_key));
-
-                info!("create entity");
-
-                for component_protocol in component_list {
-                    match component_protocol {
-                        Protocol::Position(position_ref) => {
-                            info!("add position to entity");
-                            entity.insert(position_ref);
-                        }
-                        Protocol::Color(color_ref) => {
-                            info!("add color to entity");
-                            entity.insert(Ref::clone(&color_ref));
-                            let color = color_ref.borrow();
-
-                            let material = {
-                                match &color.value.get() {
-                                    ColorValue::Red => materials.red.clone(),
-                                    ColorValue::Blue => materials.blue.clone(),
-                                    ColorValue::Yellow => materials.yellow.clone(),
-                                }
-                            };
-
-                            entity.insert_bundle(SpriteBundle {
-                                material: material.clone(),
-                                sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                                transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                                ..Default::default()
-                            });
-                        }
-                        _ => {}
-                    }
-                }
-
-                let bevy_entity_key = entity.id();
-                client_resource
-                    .entity_key_map
-                    .insert(naia_entity_key, bevy_entity_key);
-            }
-            Ok(Event::DespawnEntity(naia_entity_key)) => {
-                if let Some(bevy_entity_key) =
-                    client_resource.entity_key_map.remove(&naia_entity_key)
-                {
-                    commands.entity(bevy_entity_key).despawn();
-                }
-            }
-            Ok(Event::OwnEntity(naia_entity_key)) => {
-                info!("gave ownership of entity");
-
-                if let Some(position_ref) = client
-                    .entity(&naia_entity_key)
-                    .prediction()
-                    .component::<Position>()
-                {
-                    let mut bevy_entity = commands.spawn();
-                    bevy_entity.insert(Predicted).insert(Key(naia_entity_key));
-
-                    info!("add position component to owned entity");
-                    bevy_entity.insert(position_ref.clone());
-
-                    bevy_entity.insert_bundle(SpriteBundle {
-                        material: materials.white.clone(),
-                        sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                        transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                        ..Default::default()
-                    });
-
-                    let bevy_entity_key = bevy_entity.id();
-                    client_resource
-                        .prediction_key_map
-                        .insert(naia_entity_key, bevy_entity_key);
-                }
-            }
-            Ok(Event::DisownEntity(naia_entity_key)) => {
-                info!("removed ownership of entity");
-
-                if let Some(bevy_entity_key) =
-                    client_resource.prediction_key_map.remove(&naia_entity_key)
-                {
-                    commands.entity(bevy_entity_key).despawn();
-                }
-            }
-            Ok(Event::NewCommand(naia_entity, Protocol::KeyCommand(key_command_ref)))
-            | Ok(Event::ReplayCommand(naia_entity, Protocol::KeyCommand(key_command_ref))) => {
-                if let Some(bevy_entity) = client_resource.prediction_key_map.get(&naia_entity) {
-                    if let Ok((_, position)) = prediction_query.get_mut(*bevy_entity) {
-                        shared_behavior::process_command(&key_command_ref, position);
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
+    //    let mut client = Client::new(ClientConfig::default(),
+    // get_shared_config());    client.connect(server_address, auth);
+    //
+    //    // Add Naia Client
+    //    app.insert_non_send_resource(client);
+    //
+    //    // Resources
+    //    app.insert_non_send_resource(QueuedCommand { command: None })
+    //        .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
+    //        .insert_resource(ClientResource {
+    //            entity_key_map: HashMap::new(),
+    //            prediction_key_map: HashMap::new(),
+    //        });
+    //
+    //    // Systems
+    //    app.add_startup_system(init.system())
+    //       .add_system(prediction_input.system())
+    //       .add_system_to_stage(ALL, naia_client_update.system())
+    //       .add_system_to_stage(ALL, predicted_sync.system())
+    //       .add_system_to_stage(ALL, confirmed_sync.system())
+    //
+    //    // Run
+    //       .run();
 }
 
 fn predicted_sync(mut query: Query<(&Predicted, &Ref<Position>, &mut Transform)>) {

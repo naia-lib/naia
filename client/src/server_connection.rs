@@ -159,7 +159,7 @@ impl<P: ProtocolType> ServerConnection<P> {
             .get_prediction_component_by_type::<R>(key);
     }
 
-    pub fn entity_keys(&self) -> Vec<LocalEntity> {
+    pub fn entities(&self) -> Vec<LocalEntity> {
         return self.entity_manager.entity_keys();
     }
 
