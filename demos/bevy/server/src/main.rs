@@ -1,18 +1,13 @@
-use std::collections::HashMap;
-
 use bevy::{log::LogPlugin, prelude::*};
 
 use naia_bevy_server::{Plugin, ServerAddrs, ServerConfig};
 
 use naia_bevy_demo_shared::{get_server_address, get_shared_config};
 
-mod aliases;
 mod resources;
 mod systems;
 
-use aliases::Server;
-use resources::Global;
-use systems::{check_scopes, receive_events, send_updates, should_tick, tick};
+use systems::{check_scopes, init, receive_events, send_updates, should_tick, tick};
 
 fn main() {
     info!("Naia Bevy Server Demo starting up");
@@ -49,18 +44,4 @@ fn main() {
 
     // Run
     .run();
-}
-
-fn init(mut commands: Commands, mut server: Server) {
-    info!("Naia Bevy Server Demo is running");
-
-    // Create a new, singular room, which will contain Users and Entities that they
-    // can receive updates from
-    let main_room_key = server.make_room().key();
-
-    // Resources
-    commands.insert_resource(Global {
-        main_room_key,
-        user_to_prediction_map: HashMap::new(),
-    })
 }
