@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, LocalEntityKey, ManagerType, Manifest, MessagePacketWriter, NaiaKey,
+    wrapping_diff, LocalEntity, ManagerType, Manifest, MessagePacketWriter, NaiaKey,
     ProtocolType, Ref, Replicate, MTU_SIZE,
 };
 
@@ -62,7 +62,7 @@ impl PacketWriter {
         host_tick: u16,
         manifest: &Manifest<P>,
         command_receiver: &CommandReceiver<P>,
-        prediction_key: &LocalEntityKey,
+        prediction_key: &LocalEntity,
         command: &Ref<dyn Replicate<P>>,
     ) -> bool {
         //Write command payload

@@ -8,16 +8,16 @@ pub trait NaiaKey<Impl = Self>: Eq + PartialEq + Clone + Copy + fmt::Display {
     fn to_u16(&self) -> u16;
 }
 
-// Local Entity Key
+// Local Entity
 
-/// The key that represents an Entity in the Client's scope, that is being
+/// An Entity in the Client's scope, that is being
 /// synced to the Client
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct LocalEntityKey(u16);
+pub struct LocalEntity(u16);
 
-impl NaiaKey for LocalEntityKey {
+impl NaiaKey for LocalEntity {
     fn from_u16(k: u16) -> Self {
-        LocalEntityKey(k)
+        LocalEntity(k)
     }
 
     fn to_u16(&self) -> u16 {
@@ -25,7 +25,7 @@ impl NaiaKey for LocalEntityKey {
     }
 }
 
-impl fmt::Display for LocalEntityKey {
+impl fmt::Display for LocalEntity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }

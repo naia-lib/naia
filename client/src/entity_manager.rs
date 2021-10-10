@@ -6,7 +6,7 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    DiffMask, EntityActionType, LocalComponentKey, LocalEntityKey, Manifest, NaiaKey, PacketReader,
+    DiffMask, EntityActionType, LocalComponentKey, LocalEntity, Manifest, NaiaKey, PacketReader,
     ProtocolType, Replicate,
 };
 
@@ -16,10 +16,10 @@ use super::{
 
 #[derive(Debug)]
 pub struct EntityManager<P: ProtocolType> {
-    entities: HashMap<LocalEntityKey, EntityRecord>,
+    entities: HashMap<LocalEntity, EntityRecord>,
     components: HashMap<LocalComponentKey, P>,
     prediction_components: HashMap<LocalComponentKey, P>,
-    component_entity_map: HashMap<LocalComponentKey, LocalEntityKey>,
+    component_entity_map: HashMap<LocalComponentKey, LocalEntity>,
     queued_incoming_messages: VecDeque<EntityAction<P>>,
 }
 
@@ -50,7 +50,7 @@ impl<P: ProtocolType> EntityManager<P> {
             match message_type {
                 EntityActionType::SpawnEntity => {
                     // Entity Creation
-                    let entity_key = LocalEntityKey::from_u16(reader.read_u16());
+                    let entity_key = LocalEntity::from_u16(reader.read_u16());
                     let components_num = reader.read_u8();
                     if self.entities.contains_key(&entity_key) {
                         // its possible we received a very late duplicate message
@@ -92,7 +92,7 @@ impl<P: ProtocolType> EntityManager<P> {
                 }
                 EntityActionType::DespawnEntity => {
                     // Entity Deletion
-                    let entity_key = LocalEntityKey::from_u16(reader.read_u16());
+                    let entity_key = LocalEntity::from_u16(reader.read_u16());
 
                     if let Some(entity_record) = self.entities.remove(&entity_key) {
                         if entity_record.is_prediction {
@@ -119,7 +119,7 @@ impl<P: ProtocolType> EntityManager<P> {
                 }
                 EntityActionType::OwnEntity => {
                     // Assign Prediction Entity
-                    let entity_key = LocalEntityKey::from_u16(reader.read_u16());
+                    let entity_key = LocalEntity::from_u16(reader.read_u16());
                     if let Some(entity_record) = self.entities.get_mut(&entity_key) {
                         entity_record.is_prediction = true;
 
@@ -140,7 +140,7 @@ impl<P: ProtocolType> EntityManager<P> {
                 }
                 EntityActionType::DisownEntity => {
                     // Unassign Prediction Entity
-                    let entity_key = LocalEntityKey::from_u16(reader.read_u16());
+                    let entity_key = LocalEntity::from_u16(reader.read_u16());
                     if let Some(entity_record) = self.entities.get_mut(&entity_key) {
                         if entity_record.is_prediction {
                             entity_record.is_prediction = false;
@@ -162,7 +162,7 @@ impl<P: ProtocolType> EntityManager<P> {
                     //TODO: handle adding Component to a Prediction...
 
                     // Add Component to Entity
-                    let entity_key = LocalEntityKey::from_u16(reader.read_u16());
+                    let entity_key = LocalEntity::from_u16(reader.read_u16());
                     let naia_id: u16 = reader.read_u16();
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
@@ -270,7 +270,7 @@ impl<P: ProtocolType> EntityManager<P> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &LocalEntityKey) -> Option<&P> {
+    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &LocalEntity) -> Option<&P> {
         if let Some(entity_record) = self.entities.get(key) {
             if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
                 return self.components.get(component_key);
@@ -281,7 +281,7 @@ impl<P: ProtocolType> EntityManager<P> {
 
     pub fn get_prediction_component_by_type<R: Replicate<P>>(
         &self,
-        key: &LocalEntityKey,
+        key: &LocalEntity,
     ) -> Option<&P> {
         if let Some(entity_component_record) = self.entities.get(key) {
             if let Some(component_key) =
@@ -293,11 +293,11 @@ impl<P: ProtocolType> EntityManager<P> {
         return None;
     }
 
-    pub fn has_entity(&self, key: &LocalEntityKey) -> bool {
+    pub fn has_entity(&self, key: &LocalEntity) -> bool {
         return self.entities.contains_key(key);
     }
 
-    pub fn entity_keys(&self) -> Vec<LocalEntityKey> {
+    pub fn entity_keys(&self) -> Vec<LocalEntity> {
         let mut output = Vec::new();
 
         for (key, _) in self.entities.iter() {
@@ -307,14 +307,14 @@ impl<P: ProtocolType> EntityManager<P> {
         return output;
     }
 
-    pub fn entity_is_prediction(&self, key: &LocalEntityKey) -> bool {
+    pub fn entity_is_prediction(&self, key: &LocalEntity) -> bool {
         if let Some(entity_record) = self.entities.get(key) {
             return entity_record.is_prediction;
         }
         return false;
     }
 
-    pub fn prediction_reset_entity(&mut self, key: &LocalEntityKey) {
+    pub fn prediction_reset_entity(&mut self, key: &LocalEntity) {
         if let Some(entity_record) = self.entities.get(key) {
             for component_key in entity_record.get_component_keys() {
                 if let Some(component_ref) = self.components.get(&component_key) {
@@ -335,7 +335,7 @@ impl<P: ProtocolType> EntityManager<P> {
 
     fn component_delete_cleanup(
         &mut self,
-        entity_key: &LocalEntityKey,
+        entity_key: &LocalEntity,
         component_key: &LocalComponentKey,
     ) {
         self.prediction_components.remove(&component_key);

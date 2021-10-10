@@ -4,7 +4,6 @@
 //! server.
 
 #![deny(
-    missing_docs,
     missing_debug_implementations,
     trivial_casts,
     trivial_numeric_casts,
@@ -32,11 +31,13 @@ mod tick_manager;
 mod tick_queue;
 
 pub use naia_shared::{
-    wrapping_diff, Instant, LinkConditionerConfig, LocalEntityKey, NaiaKey, ProtocolType, Random,
-    Ref, ReplicaEq, Replicate,
+    wrapping_diff, Instant, LinkConditionerConfig, LocalEntity, NaiaKey, ProtocolType, Random,
+    Ref, ReplicaEq, Replicate, ImplRef, SharedConfig,
 };
 
 pub use client::Client;
 pub use client_config::ClientConfig;
 pub use event::Event;
 pub use naia_client_socket::Packet;
+pub use error::NaiaClientError;
+pub use entity_ref::EntityRef;

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    sequence_greater_than, LocalEntityKey, Manifest, NaiaKey, PacketReader, ProtocolType,
+    sequence_greater_than, LocalEntity, Manifest, NaiaKey, PacketReader, ProtocolType,
     SequenceBuffer,
 };
 
@@ -10,7 +10,7 @@ const COMMAND_BUFFER_MAX_SIZE: u16 = 64;
 /// Handles incoming commands, buffering them to be received on the correct tick
 #[derive(Debug)]
 pub struct CommandReceiver<P: ProtocolType> {
-    queued_incoming_commands: SequenceBuffer<HashMap<LocalEntityKey, P>>,
+    queued_incoming_commands: SequenceBuffer<HashMap<LocalEntity, P>>,
 }
 
 impl<P: ProtocolType> CommandReceiver<P> {
@@ -22,9 +22,9 @@ impl<P: ProtocolType> CommandReceiver<P> {
     }
 
     /// Get the most recently received Command
-    pub fn pop_incoming_command(&mut self, server_tick: u16) -> Option<(LocalEntityKey, P)> {
+    pub fn pop_incoming_command(&mut self, server_tick: u16) -> Option<(LocalEntity, P)> {
         if let Some(map) = self.queued_incoming_commands.get_mut(server_tick) {
-            let mut any_key: Option<LocalEntityKey> = None;
+            let mut any_key: Option<LocalEntity> = None;
             if let Some(any_key_ref) = map.keys().next() {
                 any_key = Some(*any_key_ref);
             }
@@ -49,7 +49,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
         let command_count = reader.read_u8();
         for _x in 0..command_count {
             let local_key = reader.read_u16();
-            let prediction_key = LocalEntityKey::from_u16(local_key);
+            let prediction_key = LocalEntity::from_u16(local_key);
             let naia_id: u16 = reader.read_u16();
             let past_commands_number: u8 = reader.read_u8();
 

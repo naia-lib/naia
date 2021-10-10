@@ -8,19 +8,19 @@ use naia_bevy_shared::Entity;
 
 use super::ticker::Ticker;
 
-struct ServerPluginConfig<P: ProtocolType> {
+struct PluginConfig<P: ProtocolType> {
     server_config: ServerConfig,
     shared_config: SharedConfig<P>,
     server_addrs: ServerAddrs,
 }
 
-impl<P: ProtocolType> ServerPluginConfig<P> {
+impl<P: ProtocolType> PluginConfig<P> {
     pub fn new(
         server_config: ServerConfig,
         shared_config: SharedConfig<P>,
         server_addresses: ServerAddrs,
     ) -> Self {
-        ServerPluginConfig {
+        PluginConfig {
             server_config,
             shared_config,
             server_addrs: server_addresses,
@@ -29,7 +29,7 @@ impl<P: ProtocolType> ServerPluginConfig<P> {
 }
 
 pub struct Plugin<P: ProtocolType> {
-    config: Mutex<Option<ServerPluginConfig<P>>>,
+    config: Mutex<Option<PluginConfig<P>>>,
 }
 
 impl<P: ProtocolType> Plugin<P> {
@@ -38,7 +38,7 @@ impl<P: ProtocolType> Plugin<P> {
         shared_config: SharedConfig<P>,
         server_addresses: ServerAddrs,
     ) -> Self {
-        let config = ServerPluginConfig::new(server_config, shared_config, server_addresses);
+        let config = PluginConfig::new(server_config, shared_config, server_addresses);
         return Plugin {
             config: Mutex::new(Some(config)),
         };
