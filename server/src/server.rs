@@ -16,7 +16,7 @@ use naia_server_socket::{
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, HostTickManager, ImplRef, Instant, KeyGenerator,
     LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
-    ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
+    ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp, EntityType
 };
 
 use super::{
@@ -24,7 +24,7 @@ use super::{
     entity_ref::{EntityMut, EntityRef, WorldlessEntityMut},
     error::NaiaServerError,
     event::Event,
-    keys::{ComponentKey, EntityType},
+    keys::ComponentKey,
     mut_handler::MutHandler,
     property_mutator::PropertyMutator,
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},

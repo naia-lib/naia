@@ -1,7 +1,6 @@
-use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
+use naia_shared::{ImplRef, ProtocolType, Ref, Replicate, EntityType};
 
 use super::{
-    keys::EntityType,
     room::room_key::RoomKey,
     server::Server,
     user::user_key::UserKey,

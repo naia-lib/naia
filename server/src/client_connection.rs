@@ -2,13 +2,13 @@ use std::net::SocketAddr;
 
 use naia_shared::{
     Connection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolType,
-    Ref, Replicate, SequenceNumber, StandardHeader,
+    Ref, Replicate, SequenceNumber, StandardHeader, EntityType
 };
 
 use super::{
     command_receiver::CommandReceiver,
     entity_manager::EntityManager,
-    keys::{ComponentKey, EntityType},
+    keys::ComponentKey,
     mut_handler::MutHandler,
     packet_writer::PacketWriter,
     ping_manager::PingManager,

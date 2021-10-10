@@ -9,12 +9,12 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
     DiffMask, KeyGenerator, LocalComponentKey, LocalEntityKey, Manifest, NaiaKey, PacketNotifiable,
-    ProtocolType, Ref, Replicate, MTU_SIZE,
+    ProtocolType, Ref, Replicate, MTU_SIZE, EntityType
 };
 
 use super::{
     entity_action::EntityAction,
-    keys::{ComponentKey, EntityType},
+    keys::ComponentKey,
     local_component_record::LocalComponentRecord,
     local_entity_record::LocalEntityRecord,
     locality_status::LocalityStatus,

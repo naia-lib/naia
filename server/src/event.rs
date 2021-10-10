@@ -1,7 +1,6 @@
-use naia_shared::ProtocolType;
+use naia_shared::{ProtocolType, EntityType};
 
 use super::{
-    keys::EntityType,
     user::{user_key::UserKey, User},
 };
 

@@ -1,6 +1,6 @@
 use bevy::{log::LogPlugin, prelude::*};
 
-use naia_bevy_server::{Plugin, ServerAddrs, ServerConfig};
+use naia_bevy_server::{Plugin as ServerPlugin, ServerAddrs, ServerConfig};
 
 use naia_bevy_demo_shared::{get_server_address, get_shared_config};
 
@@ -32,7 +32,7 @@ fn main() {
     // Plugins
     .add_plugins(MinimalPlugins)
     .add_plugin(LogPlugin::default())
-    .add_plugin(Plugin::new(ServerConfig::default(), get_shared_config(), server_addresses))
+    .add_plugin(ServerPlugin::new(ServerConfig::default(), get_shared_config(), server_addresses))
 
     // Startup System
     .add_startup_system(
@@ -52,6 +52,6 @@ fn main() {
             .with_run_criteria(
                 should_tick.system()))
 
-    // Run
+    // Run App
     .run();
 }
