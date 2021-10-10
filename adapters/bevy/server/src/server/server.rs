@@ -2,7 +2,7 @@ use std::{collections::VecDeque, marker::PhantomData};
 
 use bevy::{ecs::{world::{World, Mut}, system::SystemParam}};
 
-use naia_server::{Server as NaiaServer, Event, ProtocolType, UserKey, RoomMut, UserMut, NaiaServerError, RoomKey, EntityRef};
+use naia_server::{Server as NaiaServer, Event, ProtocolType, UserKey, RoomMut, UserMut, NaiaServerError, RoomKey, EntityRef, UserScopeMut};
 
 use crate::{world::{entity::Entity, world_proxy::{WorldProxy, WorldRef}}, plugin::resource::ServerResource};
 
@@ -55,9 +55,10 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     //// Entities ////
 
     pub fn spawn(&mut self) -> EntityMut<'a, '_, P> {
-        let entity = self.world.entities().reserve_entity();
+        let entity = Entity::new(self.world.entities().reserve_entity());
+        self.server.spawn_entity_at(&entity);
         EntityMut::new(
-            Entity::new(entity),
+            entity,
             self,
         )
     }
@@ -71,6 +72,16 @@ impl<'a, P: ProtocolType> Server<'a, P> {
             *entity,
             self,
         )
+    }
+
+    //// Entity Scopes ////
+
+    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, Entity> {
+        return self.server.user_scope(user_key);
+    }
+
+    pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, Entity)> {
+        return self.server.scope_checks();
     }
 
     //// Users ////
@@ -97,17 +108,11 @@ impl<'a, P: ProtocolType> Server<'a, P> {
 
     // Crate-public methods
 
-    pub(crate) fn add<C: Command>(&mut self, command: C) {
+    pub(crate) fn add<C: Command<P>>(&mut self, command: C) {
         self.state.push(command);
     }
 
     // users
-
-    pub(crate) fn entity_set_owner(&mut self,
-        entity: &Entity,
-        user_key: &UserKey) {
-        self.server.world_ref_entity_mut(self.world.proxy(), entity).set_owner(user_key);
-    }
 
     pub(crate) fn entity_disown(&mut self, entity: &Entity) {
         self.server.worldless_entity_mut(entity).disown();

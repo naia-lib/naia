@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+//use bevy::prelude::*;
 
 //use crate::aliases::Server;
 
@@ -7,5 +7,5 @@ pub fn tick()
 //    mut server: ResMut<Server>,)
 {
     // All game logic should happen here, on a tick event
-    info!("tick");
+    //info!("tick");
 }

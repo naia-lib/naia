@@ -2,7 +2,7 @@ use naia_server::{ProtocolType, ImplRef, Replicate, RoomKey, UserKey};
 
 use crate::world::entity::Entity;
 
-use super::{server::Server, commands::{InsertComponent, RemoveComponent, DespawnEntity}};
+use super::{server::Server, commands::{InsertComponent, RemoveComponent, DespawnEntity, OwnEntity}};
 
 // EntityMut
 
@@ -29,7 +29,7 @@ impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
 
     pub fn despawn(&mut self) {
         self.server.add(DespawnEntity::new(
-            self.entity,
+            &self.entity,
         ))
     }
 
@@ -37,8 +37,8 @@ impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
 
     pub fn insert<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
         self.server.add(InsertComponent::new(
-            self.entity,
-            component_ref.clone_ref(),
+            &self.entity,
+            component_ref,
         ));
         self
     }
@@ -46,7 +46,7 @@ impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
     pub fn remove<R: Replicate<P>>(&mut self) -> &mut Self
     {
         self.server.add(RemoveComponent::<P, R>::new(
-            self.entity
+            &self.entity
         ));
         self
     }
@@ -54,9 +54,10 @@ impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
     // Users
 
     pub fn set_owner(&mut self, user_key: &UserKey) -> &mut Self {
-        self.server
-            .entity_set_owner(&self.entity, user_key);
-
+        self.server.add(OwnEntity::new(
+            &self.entity,
+            user_key,
+        ));
         self
     }
 

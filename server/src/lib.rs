@@ -57,11 +57,12 @@ mod world_record;
 mod world_type;
 
 pub use error::NaiaServerError;
-pub use entity_ref::{EntityRef, WorldRefEntityMut};
+pub use entity_ref::{EntityRef, EntityMut};
 pub use event::Event;
 pub use keys::{ComponentKey, EntityType};
 pub use room::{room_key::RoomKey, RoomMut};
 pub use server::Server;
 pub use server_config::ServerConfig;
 pub use user::{user_key::UserKey, UserMut};
+pub use user_scope::UserScopeMut;
 pub use world_type::{WorldRefType, WorldMutType};
