@@ -282,56 +282,57 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     // Entities
 
-    /// Creates a new Entity and returns the associated Key
+    /// Creates a new Entity and returns an EntityMut which can be used for
+    /// further operations on the Entity
     pub fn spawn_entity<'s, 'w, W: WorldMutType<P, K>>(
         &'s mut self,
         world: &'w mut W,
     ) -> EntityMut<'s, 'w, P, K, W> {
-        let entity_key = world.spawn_entity();
-        self.world_record.spawn_entity(&entity_key);
-        return EntityMut::new(self, world, &entity_key);
+        let entity = world.spawn_entity();
+        self.world_record.spawn_entity(&entity);
+        return EntityMut::new(self, world, &entity);
     }
 
-    /// Creates a new Entity with a specific key
-    pub fn spawn_entity_at<'s>(&'s mut self, entity_key: &K) -> WorldlessEntityMut<'s, P, K> {
-        self.world_record.spawn_entity(entity_key);
-        return WorldlessEntityMut::new(self, entity_key);
+    /// Creates a new Entity with a specific id
+    pub fn spawn_entity_at<'s>(&'s mut self, entity: &K) -> WorldlessEntityMut<'s, P, K> {
+        self.world_record.spawn_entity(entity);
+        return WorldlessEntityMut::new(self, entity);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
-    /// Entity associated with the given Entity Key.
-    /// Panics if the entity does not exist.
+    /// Entity.
+    /// Panics if the Entity does not exist.
     pub fn entity<'s, W: WorldRefType<P, K>>(
         &'s self,
         world: W,
-        entity_key: &K,
+        entity: &K,
     ) -> EntityRef<'s, P, K, W> {
-        if world.has_entity(entity_key) {
-            return EntityRef::new(self, world, &entity_key);
+        if world.has_entity(entity) {
+            return EntityRef::new(self, world, &entity);
         }
         panic!("No Entity exists for given Key!");
     }
 
     /// Retrieves an EntityMut that exposes read and write operations for the
-    /// Entity associated with the given Entity Key.
-    /// Panics if the entity does not exist.
+    /// Entity.
+    /// Panics if the Entity does not exist.
     pub fn entity_mut<'s, 'w, W: WorldMutType<P, K>>(
         &'s mut self,
         world: &'w mut W,
-        entity_key: &K,
+        entity: &K,
     ) -> EntityMut<'s, 'w, P, K, W> {
-        if world.has_entity(entity_key) {
-            return EntityMut::new(self, world, &entity_key);
+        if world.has_entity(entity) {
+            return EntityMut::new(self, world, &entity);
         }
         panic!("No Entity exists for given Key!");
     }
 
     /// Retrieves a WorldlessEntityMut that exposes read and write operations
-    /// for the Entity associated with the given Entity Key, with no
-    /// references to the World. This is a very niche use case.
-    /// Panics if the entity does not exist.
-    pub fn worldless_entity_mut<'s>(&'s mut self, entity_key: &K) -> WorldlessEntityMut<'s, P, K> {
-        return WorldlessEntityMut::new(self, &entity_key);
+    /// on the Entity, but with no references allowed to the World.
+    /// This is a very niche use case.
+    /// Panics if the Entity does not exist.
+    pub fn worldless_entity_mut<'s>(&'s mut self, entity: &K) -> WorldlessEntityMut<'s, P, K> {
+        return WorldlessEntityMut::new(self, &entity);
     }
 
     /// Gets a Vec of all Keys associated with Entities in the given World
@@ -365,8 +366,8 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         // likely this is called A LOT
         for (room_key, room) in self.rooms.iter() {
             for user_key in room.user_keys() {
-                for entity_key in room.entity_keys() {
-                    list.push((room_key, *user_key, *entity_key));
+                for entity in room.entities() {
+                    list.push((room_key, *user_key, *entity));
                 }
             }
         }
@@ -471,11 +472,10 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     // User Scopes
 
-    /// Returns true if a given User has an Entity with a given Entity Key
-    /// in-scope currently
-    pub fn user_scope_has_entity(&self, user_key: &UserKey, entity_key: &K) -> bool {
+    /// Returns whether a given User has a particular Entity in-scope currently
+    pub fn user_scope_has_entity(&self, user_key: &UserKey, entity: &K) -> bool {
         if let Some(client_connection) = self.client_connections.get(user_key) {
-            return client_connection.has_entity(entity_key);
+            return client_connection.has_entity(entity);
         }
 
         return false;
@@ -500,17 +500,17 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     //// Entities
 
-    /// Despawns the Entity associated with the given Entity Key, if it exists.
-    /// This will also remove all of the entity’s Components.
-    /// Returns true if the entity is successfully despawned and false if the
-    /// entity does not exist.
-    pub(crate) fn despawn_entity<W: WorldMutType<P, K>>(&mut self, world: &mut W, entity_key: &K) {
-        if !world.has_entity(entity_key) {
+    /// Despawns the Entity, if it exists.
+    /// This will also remove all of the Entity’s Components.
+    /// Returns true if the Entity is successfully despawned and false if the
+    /// Entity does not exist.
+    pub(crate) fn despawn_entity<W: WorldMutType<P, K>>(&mut self, world: &mut W, entity: &K) {
+        if !world.has_entity(entity) {
             panic!("attempted to de-spawn nonexistent entity");
         }
         // Clean up ownership if applicable
-        if self.entity_has_owner(entity_key) {
-            self.entity_disown(entity_key);
+        if self.entity_has_owner(entity) {
+            self.entity_disown(entity);
         }
 
         // TODO: we can make this more efficient in the future by caching which Entities
@@ -518,45 +518,43 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         for (user_key, _) in self.users.iter() {
             if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
                 //remove entity from user connection
-                client_connection.despawn_entity(&self.world_record, entity_key);
+                client_connection.despawn_entity(&self.world_record, entity);
             }
         }
 
         // Clean up associated components
-        for component_key in self.world_record.get_component_keys(entity_key) {
+        for component_key in self.world_record.get_component_keys(entity) {
             self.component_cleanup(&component_key);
         }
 
         // Remove from ECS Record
-        self.world_record.despawn_entity(entity_key);
+        self.world_record.despawn_entity(entity);
 
         // Delete from world
-        world.despawn_entity(entity_key);
+        world.despawn_entity(entity);
     }
 
-    /// Returns whether or not an Entity associated with the given Entity Key
-    /// has an owner
-    pub(crate) fn entity_has_owner(&self, entity_key: &K) -> bool {
-        return self.entity_owner_map.contains_key(entity_key);
+    /// Returns whether or not an Entity has an owner
+    pub(crate) fn entity_has_owner(&self, entity: &K) -> bool {
+        return self.entity_owner_map.contains_key(entity);
     }
 
-    /// Gets the UserKey of the User that currently owns an Entity associated
-    /// with the given Entity Key, if it exists
-    pub(crate) fn entity_get_owner(&self, entity_key: &K) -> Option<&UserKey> {
-        return self.entity_owner_map.get(entity_key);
+    /// Gets the UserKey of the User that currently owns an Entity, if it exists
+    pub(crate) fn entity_get_owner(&self, entity: &K) -> Option<&UserKey> {
+        return self.entity_owner_map.get(entity);
     }
 
-    /// Set the 'owner' of an Entity associated with a given Entity Key to a
-    /// User associated with a given UserKey. Users are only able to issue
-    /// Commands to Entities of which they are the owner
+    /// Set the 'owner' of an Entity to a User associated with a given UserKey.
+    /// Users are only able to issue Commands to Entities of which they are the
+    /// owner
     pub(crate) fn entity_set_owner<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
-        entity_key: &K,
+        entity: &K,
         user_key: &UserKey,
     ) {
         // check that entity is initialized & un-owned
-        if self.entity_owner_map.get(entity_key).is_some() {
+        if self.entity_owner_map.get(entity).is_some() {
             panic!("attempting to take ownership of an Entity that is already owned");
         };
 
@@ -567,25 +565,25 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
             .expect("User associated with given UserKey does not exist!");
 
         // add Entity to User's connection if it's not already in-scope
-        if !client_connection.has_entity(entity_key) {
+        if !client_connection.has_entity(entity) {
             //add entity to user connection
-            client_connection.spawn_entity(world, &self.world_record, entity_key);
+            client_connection.spawn_entity(world, &self.world_record, entity);
         }
 
         // assign Entity to User as a Prediction
-        client_connection.add_prediction_entity(entity_key);
+        client_connection.add_prediction_entity(entity);
 
         // put in ownership map
-        self.entity_owner_map.insert(*entity_key, *user_key);
+        self.entity_owner_map.insert(*entity, *user_key);
     }
 
     /// Removes ownership of an Entity from their current owner User.
     /// No User is able to issue Commands to an un-owned Entity.
-    pub(crate) fn entity_disown(&mut self, entity_key: &K) {
+    pub(crate) fn entity_disown(&mut self, entity: &K) {
         // a couple sanity checks ..
         let current_owner_key: UserKey = *self
             .entity_owner_map
-            .get(entity_key)
+            .get(entity)
             .expect("attempting to disown entity that does not have an owner..");
 
         let client_connection = self
@@ -593,8 +591,8 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
             .get_mut(&current_owner_key)
             .expect("user which owns entity does not seem to have a connection still..");
 
-        client_connection.remove_prediction_entity(entity_key);
-        self.entity_owner_map.remove(entity_key);
+        client_connection.remove_prediction_entity(entity);
+        self.entity_owner_map.remove(entity);
     }
 
     //// Entity Scopes
@@ -602,30 +600,30 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     pub(crate) fn user_scope_set_entity(
         &mut self,
         user_key: &UserKey,
-        entity_key: &K,
+        entity: &K,
         is_contained: bool,
     ) {
-        let key = (*user_key, *entity_key);
+        let key = (*user_key, *entity);
         self.entity_scope_map.insert(key, is_contained);
     }
 
     //// Components
 
-    /// Adds a Component to an Entity associated with the given Entity Key.
+    /// Adds a Component to an Entity
     pub(crate) fn insert_component<R: ImplRef<P>, W: WorldMutType<P, K>>(
         &mut self,
         world: &mut W,
-        entity_key: &K,
+        entity: &K,
         component_ref: &R,
     ) {
-        if !world.has_entity(entity_key) {
+        if !world.has_entity(entity) {
             panic!("attempted to add component to non-existent entity");
         }
 
         let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
         let type_id = &dyn_ref.borrow().get_type_id();
 
-        if world.has_component_of_type(entity_key, &type_id) {
+        if world.has_component_of_type(entity, &type_id) {
             panic!(
                 "attempted to add component to entity which already has one of that type! \
                    an entity is not allowed to have more than 1 type of component at a time."
@@ -633,15 +631,15 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         }
 
         // actually insert component into world
-        world.insert_component(entity_key, component_ref.clone_ref());
+        world.insert_component(entity, component_ref.clone_ref());
 
         // generate unique component key
-        let component_key: ComponentKey = self.component_init(entity_key, component_ref);
+        let component_key: ComponentKey = self.component_init(entity, component_ref);
 
         // add component to connections already tracking entity
         for (user_key, _) in self.users.iter() {
             if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                if client_connection.has_entity(entity_key) {
+                if client_connection.has_entity(entity) {
                     // insert component into user's connection
                     client_connection.insert_component(world, &self.world_record, &component_key);
                 }
@@ -649,18 +647,18 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         }
     }
 
-    /// Removes a Component from an Entity associated with the given Entity Key
+    /// Removes a Component from an Entity
     pub(crate) fn remove_component<R: Replicate<P>, W: WorldMutType<P, K>>(
         &mut self,
         world: &mut W,
-        entity_key: &K,
+        entity: &K,
     ) -> Option<Ref<R>> {
         // get at record
-        if let Some(component_ref) = world.get_component::<R>(entity_key) {
+        if let Some(component_ref) = world.get_component::<R>(entity) {
             // get component key from type
             let component_key = self
                 .world_record
-                .get_key_from_type(entity_key, &TypeId::of::<R>())
+                .get_key_from_type(entity, &TypeId::of::<R>())
                 .expect("component does not exist!");
 
             // clean up component on all connections
@@ -677,7 +675,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
             self.component_cleanup(&component_key);
 
             // remove from world
-            world.remove_component::<R>(entity_key);
+            world.remove_component::<R>(entity);
 
             return Some(component_ref);
         }
@@ -705,8 +703,8 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     pub(crate) fn room_destroy(&mut self, room_key: &RoomKey) -> bool {
         if self.rooms.contains_key(*room_key) {
             // remove all entities from the entity_room_map
-            for entity_key in self.rooms.get(*room_key).unwrap().entity_keys() {
-                self.entity_room_map.remove(entity_key);
+            for entity in self.rooms.get(*room_key).unwrap().entities() {
+                self.entity_room_map.remove(entity);
             }
 
             // TODO: what else kind of cleanup do we need to do here? Scopes?
@@ -759,32 +757,32 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     /// Returns whether or not an Entity is currently in a specific Room, given
     /// their keys.
-    pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity_key: &K) -> bool {
-        if let Some(actual_room_key) = self.entity_room_map.get(entity_key) {
+    pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity: &K) -> bool {
+        if let Some(actual_room_key) = self.entity_room_map.get(entity) {
             return room_key == actual_room_key;
         }
         return false;
     }
 
-    /// Add an Entity to a Room, given the appropriate RoomKey & Entity Key.
+    /// Add an Entity to a Room associated with the given RoomKey.
     /// Entities will only ever be in-scope for Users which are in a Room with
     /// them.
-    pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, entity_key: &K) {
-        if self.entity_room_map.contains_key(entity_key) {
+    pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, entity: &K) {
+        if self.entity_room_map.contains_key(entity) {
             panic!("Entity already belongs to a Room! Remove the Entity from the Room before adding it to a new Room.");
         }
 
         if let Some(room) = self.rooms.get_mut(*room_key) {
-            room.add_entity(entity_key);
-            self.entity_room_map.insert(*entity_key, *room_key);
+            room.add_entity(entity);
+            self.entity_room_map.insert(*entity, *room_key);
         }
     }
 
-    /// Remove an Entity from a Room, given the appropriate RoomKey & Entity Key
-    pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity_key: &K) {
+    /// Remove an Entity from a Room, associated with the given RoomKey
+    pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &K) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
-            if room.remove_entity(entity_key) {
-                self.entity_room_map.remove(entity_key);
+            if room.remove_entity(entity) {
+                self.entity_room_map.remove(entity);
             }
         }
     }
@@ -1057,16 +1055,16 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
             // TODO: we should be able to cache these tuples of keys to avoid building a new
             // list each time
             for user_key in room.user_keys() {
-                for entity_key in room.entity_keys() {
-                    if world.has_entity(entity_key) {
+                for entity in room.entities() {
+                    if world.has_entity(entity) {
                         if let Some(client_connection) = self.client_connections.get_mut(user_key) {
-                            let currently_in_scope = client_connection.has_entity(entity_key);
+                            let currently_in_scope = client_connection.has_entity(entity);
 
                             let should_be_in_scope: bool;
-                            if client_connection.has_prediction_entity(entity_key) {
+                            if client_connection.has_prediction_entity(entity) {
                                 should_be_in_scope = true;
                             } else {
-                                let key = (*user_key, *entity_key);
+                                let key = (*user_key, *entity);
                                 if let Some(in_scope) = self.entity_scope_map.get(&key) {
                                     should_be_in_scope = *in_scope;
                                 } else {
@@ -1080,14 +1078,13 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                                     client_connection.spawn_entity(
                                         world,
                                         &self.world_record,
-                                        entity_key,
+                                        entity,
                                     );
                                 }
                             } else {
                                 if currently_in_scope {
                                     // remove entity from the connections local scope
-                                    client_connection
-                                        .despawn_entity(&self.world_record, entity_key);
+                                    client_connection.despawn_entity(&self.world_record, entity);
                                 }
                             }
                         }
@@ -1099,7 +1096,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     // Component Helpers
 
-    fn component_init<R: ImplRef<P>>(&mut self, entity_key: &K, component_ref: &R) -> ComponentKey {
+    fn component_init<R: ImplRef<P>>(&mut self, entity: &K, component_ref: &R) -> ComponentKey {
         let dyn_ref = component_ref.dyn_ref();
         let new_mutator_ref: Ref<PropertyMutator> =
             Ref::new(PropertyMutator::new(&self.mut_handler));
@@ -1110,7 +1107,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
         let component_key = self
             .world_record
-            .add_component(entity_key, &dyn_ref.borrow().get_type_id());
+            .add_component(entity, &dyn_ref.borrow().get_type_id());
 
         new_mutator_ref
             .borrow_mut()

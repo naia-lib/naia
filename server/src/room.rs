@@ -68,7 +68,7 @@ impl<K: EntityType> Room<K> {
         }
     }
 
-    pub(crate) fn entity_keys(&self) -> Iter<K> {
+    pub(crate) fn entities(&self) -> Iter<K> {
         return self.entities.iter();
     }
 

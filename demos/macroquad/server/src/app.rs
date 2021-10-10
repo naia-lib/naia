@@ -94,7 +94,7 @@ impl App {
                         .insert_component(&square)
                         .set_owner(&user_key)
                         .enter_room(&self.main_room_key)
-                        .key();
+                        .id();
                     self.user_to_prediction_map.insert(user_key, entity_key);
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
