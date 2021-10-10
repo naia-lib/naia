@@ -25,22 +25,32 @@ fn main() {
             .expect("could not parse advertised public WebRTC data address/port"),
     );
 
+    // Build App
     let mut app = App::build();
 
+    app
     // Plugins
-    app.add_plugins(MinimalPlugins)
-        .add_plugin(LogPlugin::default())
-        .add_plugin(Plugin::new(ServerConfig::default(), get_shared_config(), server_addresses))
+    .add_plugins(MinimalPlugins)
+    .add_plugin(LogPlugin::default())
+    .add_plugin(Plugin::new(ServerConfig::default(), get_shared_config(), server_addresses))
 
-    // Systems
-    .add_startup_system(init.system())
-    .add_system_to_stage(CoreStage::PreUpdate,
-                         receive_events.system())
-    .add_system_to_stage(CoreStage::PostUpdate,
-                         tick.system().chain(
-                             check_scopes.system().chain(
-                                 send_updates.system()))
-                             .with_run_criteria(should_tick.system()))
+    // Startup System
+    .add_startup_system(
+        init.system())
+    // Receive Server Events
+    .add_system_to_stage(
+        CoreStage::PreUpdate,
+        receive_events.system())
+    // Gameplay Loop on Tick
+    .add_system_to_stage(
+        CoreStage::PostUpdate,
+        tick.system()
+            .chain(
+                check_scopes.system())
+            .chain(
+                send_updates.system())
+            .with_run_criteria(
+                should_tick.system()))
 
     // Run
     .run();
