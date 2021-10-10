@@ -15,7 +15,6 @@ mod client;
 mod client_config;
 mod command_receiver;
 mod command_sender;
-mod component_record;
 mod connection_state;
 mod entity_action;
 mod entity_manager;

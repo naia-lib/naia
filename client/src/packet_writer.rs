@@ -1,11 +1,11 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, ManagerType, Manifest, MessagePacketWriter, NaiaKey, ProtocolType,
-    Ref, Replicate, MTU_SIZE, EntityType
+    wrapping_diff, EntityType, ManagerType, Manifest, MessagePacketWriter, NaiaKey, ProtocolType,
+    Ref, Replicate, MTU_SIZE,
 };
 
-use super::command_receiver::CommandReceiver;
+use super::{command_receiver::CommandReceiver, entity_manager::EntityManager};
 
 const MAX_PAST_COMMANDS: u8 = 3;
 
@@ -61,64 +61,69 @@ impl PacketWriter {
         &mut self,
         host_tick: u16,
         manifest: &Manifest<P>,
+        entity_manager: &EntityManager<P, K>,
         command_receiver: &CommandReceiver<P, K>,
-        prediction_key: &K,
+        owned_entity: &K,
         command: &Ref<dyn Replicate<P>>,
     ) -> bool {
-        //Write command payload
-        let mut command_payload_bytes = Vec::<u8>::new();
+        if let Some(local_entity) = entity_manager.world_to_local_entity(owned_entity) {
+            //Write command payload
+            let mut command_payload_bytes = Vec::<u8>::new();
 
-        command.borrow().write(&mut command_payload_bytes);
+            command.borrow().write(&mut command_payload_bytes);
 
-        // write past commands
-        let past_commands_number = command_receiver
-            .command_history_count(&prediction_key)
-            .min(MAX_PAST_COMMANDS);
-        let mut past_command_index: u8 = 0;
+            // write past commands
+            let past_commands_number = command_receiver
+                .command_history_count(&owned_entity)
+                .min(MAX_PAST_COMMANDS);
+            let mut past_command_index: u8 = 0;
 
-        if let Some(mut iter) = command_receiver.command_history_iter(&prediction_key, true) {
-            while past_command_index < past_commands_number {
-                if let Some((past_tick, past_command)) = iter.next() {
-                    // get tick diff between commands
-                    let diff_i8: i16 = wrapping_diff(past_tick, host_tick);
-                    if diff_i8 > 0 && diff_i8 <= 255 {
-                        // write the tick diff
-                        command_payload_bytes.write_u8(diff_i8 as u8).unwrap();
-                        // write the command payload
-                        past_command.borrow().write(&mut command_payload_bytes);
+            if let Some(mut iter) = command_receiver.command_history_iter(&owned_entity, true) {
+                while past_command_index < past_commands_number {
+                    if let Some((past_tick, past_command)) = iter.next() {
+                        // get tick diff between commands
+                        let diff_i8: i16 = wrapping_diff(past_tick, host_tick);
+                        if diff_i8 > 0 && diff_i8 <= 255 {
+                            // write the tick diff
+                            command_payload_bytes.write_u8(diff_i8 as u8).unwrap();
+                            // write the command payload
+                            past_command.borrow().write(&mut command_payload_bytes);
 
-                        past_command_index += 1;
+                            past_command_index += 1;
+                        }
+                    } else {
+                        break;
                     }
-                } else {
-                    break;
                 }
             }
+
+            //Write command "header"
+            let mut command_total_bytes = Vec::<u8>::new();
+
+            command_total_bytes
+                .write_u16::<BigEndian>(local_entity.to_u16())
+                .unwrap(); // write local entity
+
+            let type_id = command.borrow().get_type_id();
+            let naia_id = manifest.get_naia_id(&type_id); // get naia id
+            command_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
+            command_total_bytes.write_u8(past_command_index).unwrap(); // write past command number
+            command_total_bytes.append(&mut command_payload_bytes); // write payload
+
+            let mut hypothetical_next_payload_size =
+                self.bytes_number() + command_total_bytes.len();
+            if self.command_count == 0 {
+                hypothetical_next_payload_size += 2;
+            }
+            if hypothetical_next_payload_size < MTU_SIZE {
+                self.command_count += 1;
+                self.command_working_bytes.append(&mut command_total_bytes);
+                return true;
+            } else {
+                return false;
+            }
         }
-
-        //Write command "header"
-        let mut command_total_bytes = Vec::<u8>::new();
-
-        command_total_bytes
-            .write_u16::<BigEndian>(prediction_key.to_u16())
-            .unwrap(); // write prediction key
-
-        let type_id = command.borrow().get_type_id();
-        let naia_id = manifest.get_naia_id(&type_id); // get naia id
-        command_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-        command_total_bytes.write_u8(past_command_index).unwrap(); // write past command number
-        command_total_bytes.append(&mut command_payload_bytes); // write payload
-
-        let mut hypothetical_next_payload_size = self.bytes_number() + command_total_bytes.len();
-        if self.command_count == 0 {
-            hypothetical_next_payload_size += 2;
-        }
-        if hypothetical_next_payload_size < MTU_SIZE {
-            self.command_count += 1;
-            self.command_working_bytes.append(&mut command_total_bytes);
-            return true;
-        } else {
-            return false;
-        }
+        return true;
     }
 
     /// Writes a Message into the Writer's internal buffer, which will

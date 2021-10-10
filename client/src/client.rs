@@ -1,17 +1,13 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    marker::PhantomData,
-    net::SocketAddr,
-};
+use std::{collections::VecDeque, marker::PhantomData, net::SocketAddr};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, Socket};
 
 pub use naia_shared::{
-    ConnectionConfig, EntityType, HostTickManager, ImplRef, ManagerType, Manifest,
-    PacketReader, PacketType, ProtocolType, Ref, Replicate, SequenceIterator, SharedConfig,
-    StandardHeader, Timer, Timestamp, WorldRefType,
+    ConnectionConfig, EntityType, HostTickManager, ImplRef, ManagerType, Manifest, PacketReader,
+    PacketType, ProtocolType, Ref, Replicate, SequenceIterator, SharedConfig, StandardHeader,
+    Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -203,9 +199,9 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     /// Must call this regularly (preferably at the beginning of every draw
     /// frame), in a loop until it returns None.
     /// Retrieves incoming update data, and maintains the connection.
-    pub fn receive<W: WorldRefType<P, K>>(
+    pub fn receive<W: WorldMutType<P, K>>(
         &mut self,
-        world: W,
+        world: &mut W,
     ) -> VecDeque<Result<Event<P, K>, NaiaClientError>> {
         let mut events = VecDeque::new();
 
@@ -235,7 +231,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                     return events; // exit early, we're disconnected, who cares?
                 }
                 // process replays
-                connection.process_replays();
+                connection.process_replays(world);
                 // receive messages
                 while let Some(message) = connection.get_incoming_message() {
                     events.push_back(Ok(Event::Message(message)));
@@ -247,18 +243,10 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                             EntityAction::SpawnEntity(entity, component_list) => {
                                 Event::SpawnEntity(entity, component_list)
                             }
-                            EntityAction::DespawnEntity(entity) => {
-                                Event::DespawnEntity(entity)
-                            }
-                            EntityAction::OwnEntity(entity) => {
-                                Event::OwnEntity(entity)
-                            }
-                            EntityAction::DisownEntity(entity) => {
-                                Event::DisownEntity(entity)
-                            }
-                            EntityAction::RewindEntity(entity) => {
-                                Event::RewindEntity(entity)
-                            }
+                            EntityAction::DespawnEntity(entity) => Event::DespawnEntity(entity),
+                            EntityAction::OwnEntity(entity) => Event::OwnEntity(entity),
+                            EntityAction::DisownEntity(entity) => Event::DisownEntity(entity),
+                            EntityAction::RewindEntity(entity) => Event::RewindEntity(entity),
                             EntityAction::InsertComponent(entity, component_key) => {
                                 Event::InsertComponent(entity, component_key)
                             }
@@ -316,7 +304,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                 }
                 // update current tick
                 // apply updates on tick boundary
-                if connection.frame_begin(&self.manifest, &mut self.tick_manager) {
+                if connection.frame_begin(world, &self.manifest, &mut self.tick_manager) {
                     events.push_back(Ok(Event::Tick));
                 }
             }
@@ -339,56 +327,56 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     /// been assigned to the current User
     pub(crate) fn entity_is_owned(&self, entity: &K) -> bool {
         if let Some(connection) = &self.server_connection {
-            return connection.entity_is_prediction(entity);
+            return connection.entity_is_owned(entity);
         }
         return false;
     }
 
-    /// Returns whether or not an Entity has a Component of a given TypeId
-    pub(crate) fn entity_contains_type<R: Replicate<P>>(&self, entity_key: &K) -> bool {
-        return self.get_component_by_type::<R>(entity_key).is_some();
-    }
+    //    /// Returns whether or not an Entity has a Component of a given TypeId
+    //    pub(crate) fn entity_contains_type<R: Replicate<P>>(&self, entity_key: &K)
+    // -> bool {        return
+    // self.get_component_by_type::<R>(entity_key).is_some();    }
 
     //// Components
 
-//    /// Given an EntityKey & a Component type, get a reference to the
-//    /// appropriate ComponentRef
-//    pub(crate) fn component<R: Replicate<P>>(&self, entity_key: &K) -> Option<&Ref<R>> {
-//        if let Some(protocol) = self.get_component_by_type::<R>(entity_key) {
-//            return protocol.as_typed_ref::<R>();
-//        }
-//        return None;
-//    }
+    //    /// Given an EntityKey & a Component type, get a reference to the
+    //    /// appropriate ComponentRef
+    //    pub(crate) fn component<R: Replicate<P>>(&self, entity_key: &K) ->
+    // Option<&Ref<R>> {        if let Some(protocol) =
+    // self.get_component_by_type::<R>(entity_key) {            return
+    // protocol.as_typed_ref::<R>();        }
+    //        return None;
+    //    }
 
-    /// Given an EntityKey & a Component type, get a reference to the
-    /// appropriate ComponentRef
-    pub(crate) fn component_prediction<R: Replicate<P>>(&self, entity_key: &K) -> Option<&Ref<R>> {
-        if let Some(protocol) = self.get_prediction_component_by_type::<R>(entity_key) {
-            return protocol.as_typed_ref::<R>();
-        }
-        return None;
-    }
-
-    /// Given an EntityKey & a Component type, get a reference to a registered
-    /// Component being tracked by the Server
-    pub(crate) fn get_component_by_type<R: Replicate<P>>(&self, entity: &K) -> Option<&P> {
-        if let Some(connection) = &self.server_connection {
-            return connection.get_component_by_type::<R>(entity);
-        }
-        return None;
-    }
-
-    /// Given an EntityKey & a Component type, get a reference to a registered
-    /// Prediction Component being tracked by the Server
-    pub(crate) fn get_prediction_component_by_type<R: Replicate<P>>(
-        &self,
-        entity: &K,
-    ) -> Option<&P> {
-        if let Some(connection) = &self.server_connection {
-            return connection.get_prediction_component_by_type::<R>(entity);
-        }
-        return None;
-    }
+    //    /// Given an EntityKey & a Component type, get a reference to the
+    //    /// appropriate ComponentRef
+    //    pub(crate) fn component_prediction<R: Replicate<P>>(&self, entity_key: &K)
+    // -> Option<&Ref<R>> {        if let Some(protocol) =
+    // self.get_prediction_component_by_type::<R>(entity_key) {            
+    // return protocol.as_typed_ref::<R>();        }
+    //        return None;
+    //    }
+    //
+    //    /// Given an EntityKey & a Component type, get a reference to a registered
+    //    /// Component being tracked by the Server
+    //    pub(crate) fn get_component_by_type<R: Replicate<P>>(&self, entity: &K) ->
+    // Option<&P> {        if let Some(connection) = &self.server_connection {
+    //            return connection.get_component_by_type::<R>(entity);
+    //        }
+    //        return None;
+    //    }
+    //
+    //    /// Given an EntityKey & a Component type, get a reference to a registered
+    //    /// Prediction Component being tracked by the Server
+    //    pub(crate) fn get_prediction_component_by_type<R: Replicate<P>>(
+    //        &self,
+    //        entity: &K,
+    //    ) -> Option<&P> {
+    //        if let Some(connection) = &self.server_connection {
+    //            return connection.get_prediction_component_by_type::<R>(entity);
+    //        }
+    //        return None;
+    //    }
 
     // internal functions
 

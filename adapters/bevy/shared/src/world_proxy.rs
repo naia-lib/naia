@@ -2,7 +2,9 @@ use std::any::TypeId;
 
 use bevy::ecs::world::{Mut, World};
 
-use naia_shared::{ImplRef, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType};
+use naia_shared::{
+    ImplRef, ProtocolRefExtractor, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType,
+};
 
 use super::{entity::Entity, world_data::WorldData};
 
@@ -202,13 +204,13 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
         self.world.despawn(**entity);
     }
 
-    fn insert_component<R: ImplRef<P>>(&mut self, entity: &Entity, component_ref: R) {
+    fn insert_component<I: ImplRef<P>>(&mut self, entity: &Entity, component_ref: I) {
         // cache type id for later
         // todo: can we initialize this map on startup via Protocol derive?
         let mut world_data: Mut<WorldData<P>> = self.get_or_init_world_data();
         let inner_type_id = component_ref.dyn_ref().borrow().get_type_id();
         if !world_data.has_type(&inner_type_id) {
-            world_data.put_type::<R>(&inner_type_id);
+            world_data.put_type::<I>(&inner_type_id);
         }
 
         // insert into ecs
@@ -217,5 +219,11 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
 
     fn remove_component<R: Replicate<P>>(&mut self, entity: &Entity) {
         self.world.entity_mut(**entity).remove::<Ref<R>>();
+    }
+}
+
+impl<'w, P: ProtocolType> ProtocolRefExtractor<P, Entity> for WorldMut<'w> {
+    fn extract<I: ImplRef<P>>(&mut self, entity: &Entity, impl_ref: I) {
+        self.insert_component::<I>(entity, impl_ref);
     }
 }

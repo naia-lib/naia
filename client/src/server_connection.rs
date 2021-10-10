@@ -3,8 +3,8 @@ use std::net::SocketAddr;
 use naia_client_socket::Packet;
 
 use naia_shared::{
-    Connection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader, EntityType
+    Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
+    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader, WorldMutType,
 };
 
 use super::{
@@ -18,7 +18,7 @@ pub struct ServerConnection<P: ProtocolType, K: EntityType> {
     connection: Connection<P>,
     entity_manager: EntityManager<P, K>,
     ping_manager: PingManager,
-    command_sender: CommandSender<P>,
+    command_sender: CommandSender<P, K>,
     command_receiver: CommandReceiver<P, K>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
@@ -47,18 +47,19 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
             let mut writer = PacketWriter::new();
 
             // Commands
-            while let Some((prediction_key, command)) = self.command_sender.pop_command() {
+            while let Some((owned_entity, command)) = self.command_sender.pop_command() {
                 if writer.write_command(
                     host_tick,
                     manifest,
+                    &self.entity_manager,
                     &self.command_receiver,
-                    &prediction_key,
+                    &owned_entity,
                     &command,
                 ) {
                     self.command_receiver
-                        .queue_command(host_tick, &prediction_key, &command);
+                        .queue_command(host_tick, &owned_entity, &command);
                 } else {
-                    self.command_sender.unpop_command(&prediction_key, &command);
+                    self.command_sender.unpop_command(&owned_entity, &command);
                     break;
                 }
             }
@@ -93,8 +94,9 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
         return None;
     }
 
-    pub fn process_incoming_data(
+    pub fn process_incoming_data<W: WorldMutType<P, K>>(
         &mut self,
+        world: &mut W,
         packet_tick: u16,
         packet_index: u16,
         manifest: &Manifest<P>,
@@ -109,6 +111,7 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
                 }
                 ManagerType::Entity => {
                     self.entity_manager.process_data(
+                        world,
                         manifest,
                         &mut self.command_receiver,
                         packet_tick,
@@ -138,32 +141,37 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
         return self.entity_manager.pop_incoming_message();
     }
 
-    pub fn entity_is_prediction(&self, key: &K) -> bool {
-        return self.entity_manager.entity_is_prediction(key);
+    pub fn entity_is_owned(&self, key: &K) -> bool {
+        return self.entity_manager.entity_is_owned(key);
     }
 
-    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &K) -> Option<&P> {
-        return self.entity_manager.get_component_by_type::<R>(key);
-    }
-
-    pub fn get_prediction_component_by_type<R: Replicate<P>>(
-        &self,
-        key: &K,
-    ) -> Option<&P> {
-        return self
-            .entity_manager
-            .get_prediction_component_by_type::<R>(key);
-    }
+    //    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &K) ->
+    // Option<&P> {        return
+    // self.entity_manager.get_component_by_type::<R>(key);    }
+    //
+    //    pub fn get_prediction_component_by_type<R: Replicate<P>>(
+    //        &self,
+    //        key: &K,
+    //    ) -> Option<&P> {
+    //        return self
+    //            .entity_manager
+    //            .get_prediction_component_by_type::<R>(key);
+    //    }
 
     /// Reads buffered incoming data on the appropriate tick boundary
-    pub fn frame_begin(&mut self, manifest: &Manifest<P>, tick_manager: &mut TickManager) -> bool {
+    pub fn frame_begin<W: WorldMutType<P, K>>(
+        &mut self,
+        world: &mut W,
+        manifest: &Manifest<P>,
+        tick_manager: &mut TickManager,
+    ) -> bool {
         if tick_manager.mark_frame() {
             // then we apply all received updates to components at once
             let target_tick = tick_manager.get_server_tick();
             while let Some((tick, packet_index, data_packet)) =
                 self.get_buffered_data_packet(target_tick)
             {
-                self.process_incoming_data(tick, packet_index, manifest, &data_packet);
+                self.process_incoming_data(world, tick, packet_index, manifest, &data_packet);
             }
             return true;
         }
@@ -237,9 +245,9 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
         return self.command_sender.queue_command(entity, command);
     }
 
-    pub fn process_replays(&mut self) {
+    pub fn process_replays<W: WorldMutType<P, K>>(&mut self, world: &mut W) {
         self.command_receiver
-            .process_command_replay(&mut self.entity_manager);
+            .process_command_replay(world, &mut self.entity_manager);
     }
 
     pub fn get_incoming_replay(&mut self) -> Option<(K, Ref<dyn Replicate<P>>)> {

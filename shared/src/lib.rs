@@ -2,7 +2,6 @@
 //! Common functionality shared between naia-server & naia-client crates.
 
 #![deny(
-    missing_docs,
     trivial_casts,
     trivial_numeric_casts,
     unsafe_code,
@@ -63,7 +62,7 @@ pub use packet_notifiable::PacketNotifiable;
 pub use packet_type::PacketType;
 pub use property::Property;
 pub use property_mutate::PropertyMutate;
-pub use protocol_type::ProtocolType;
+pub use protocol_type::{ProtocolRefExtractor, ProtocolType};
 pub use replica_builder::ReplicaBuilder;
 pub use replicate::{ImplRef, ReplicaEq, Replicate};
 pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
