@@ -38,22 +38,14 @@ impl<P: ProtocolType> CommandSender<P> {
 
     /// If  the last popped Command from the queue somehow wasn't able to be
     /// written into a packet, put the Command back into the front of the queue
-    pub fn unpop_command(
-        &mut self,
-        prediction_key: &LocalEntity,
-        command: &Ref<dyn Replicate<P>>,
-    ) {
+    pub fn unpop_command(&mut self, prediction_key: &LocalEntity, command: &Ref<dyn Replicate<P>>) {
         let cloned_command = command.clone();
         self.queued_outgoing_command
             .insert(*prediction_key, cloned_command);
     }
 
     /// Queues an Command to be transmitted to the remote host
-    pub fn queue_command(
-        &mut self,
-        prediction_key: &LocalEntity,
-        command: &Ref<dyn Replicate<P>>,
-    ) {
+    pub fn queue_command(&mut self, prediction_key: &LocalEntity, command: &Ref<dyn Replicate<P>>) {
         self.queued_outgoing_command
             .insert(*prediction_key, command.clone());
     }

@@ -1,4 +1,4 @@
-use naia_shared::{ProtocolType, EntityType};
+use naia_shared::{EntityType, ProtocolType};
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server

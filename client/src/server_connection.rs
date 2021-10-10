@@ -3,8 +3,8 @@ use std::net::SocketAddr;
 use naia_client_socket::Packet;
 
 use naia_shared::{
-    Connection, ConnectionConfig, LocalEntity, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader,
+    Connection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
+    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader, EntityType
 };
 
 use super::{
@@ -14,16 +14,16 @@ use super::{
 };
 
 #[derive(Debug)]
-pub struct ServerConnection<P: ProtocolType> {
+pub struct ServerConnection<P: ProtocolType, K: EntityType> {
     connection: Connection<P>,
-    entity_manager: EntityManager<P>,
+    entity_manager: EntityManager<P, K>,
     ping_manager: PingManager,
     command_sender: CommandSender<P>,
-    command_receiver: CommandReceiver<P>,
+    command_receiver: CommandReceiver<P, K>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
-impl<P: ProtocolType> ServerConnection<P> {
+impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
     pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
@@ -134,33 +134,25 @@ impl<P: ProtocolType> ServerConnection<P> {
     }
 
     // Pass-through methods to underlying Entity Manager
-    pub fn get_incoming_entity_action(&mut self) -> Option<EntityAction<P>> {
+    pub fn get_incoming_entity_action(&mut self) -> Option<EntityAction<P, K>> {
         return self.entity_manager.pop_incoming_message();
     }
 
-    pub fn has_entity(&self, key: &LocalEntity) -> bool {
-        return self.entity_manager.has_entity(key);
-    }
-
-    pub fn entity_is_prediction(&self, key: &LocalEntity) -> bool {
+    pub fn entity_is_prediction(&self, key: &K) -> bool {
         return self.entity_manager.entity_is_prediction(key);
     }
 
-    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &LocalEntity) -> Option<&P> {
+    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &K) -> Option<&P> {
         return self.entity_manager.get_component_by_type::<R>(key);
     }
 
     pub fn get_prediction_component_by_type<R: Replicate<P>>(
         &self,
-        key: &LocalEntity,
+        key: &K,
     ) -> Option<&P> {
         return self
             .entity_manager
             .get_prediction_component_by_type::<R>(key);
-    }
-
-    pub fn entities(&self) -> Vec<LocalEntity> {
-        return self.entity_manager.entity_keys();
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
@@ -241,8 +233,8 @@ impl<P: ProtocolType> ServerConnection<P> {
     }
 
     // Commands
-    pub fn queue_command(&mut self, entity_key: &LocalEntity, command: &Ref<dyn Replicate<P>>) {
-        return self.command_sender.queue_command(entity_key, command);
+    pub fn queue_command(&mut self, entity: &K, command: &Ref<dyn Replicate<P>>) {
+        return self.command_sender.queue_command(entity, command);
     }
 
     pub fn process_replays(&mut self) {
@@ -250,7 +242,7 @@ impl<P: ProtocolType> ServerConnection<P> {
             .process_command_replay(&mut self.entity_manager);
     }
 
-    pub fn get_incoming_replay(&mut self) -> Option<(LocalEntity, Ref<dyn Replicate<P>>)> {
+    pub fn get_incoming_replay(&mut self) -> Option<(K, Ref<dyn Replicate<P>>)> {
         if let Some((_tick, prediction_key, command)) = self.command_receiver.pop_command_replay() {
             return Some((prediction_key, command));
         }
@@ -258,7 +250,7 @@ impl<P: ProtocolType> ServerConnection<P> {
         return None;
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<(LocalEntity, Ref<dyn Replicate<P>>)> {
+    pub fn get_incoming_command(&mut self) -> Option<(K, Ref<dyn Replicate<P>>)> {
         if let Some((_tick, prediction_key, command)) = self.command_receiver.pop_command() {
             return Some((prediction_key, command));
         }
