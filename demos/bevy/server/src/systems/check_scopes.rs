@@ -1,6 +1,7 @@
-use crate::aliases::Server;
+use naia_bevy_demo_shared::protocol::Protocol;
+use naia_bevy_server::Server;
 
-pub fn check_scopes(mut server: Server) {
+pub fn check_scopes(mut server: Server<Protocol>) {
     // Update scopes of entities
     for (_, user_key, entity_key) in server.scope_checks() {
         // You'd normally do whatever checks you need to in here..
