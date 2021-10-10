@@ -9,7 +9,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
     DiffMask, KeyGenerator, LocalComponentKey, LocalEntityKey, Manifest, NaiaKey, PacketNotifiable,
-    ProtocolType, Ref, Replicate, MTU_SIZE, EntityType
+    ProtocolType, Ref, Replicate, MTU_SIZE, EntityType, WorldMutType, WorldRefType
 };
 
 use super::{
@@ -21,7 +21,6 @@ use super::{
     mut_handler::MutHandler,
     packet_writer::PacketWriter,
     world_record::WorldRecord,
-    world_type::{WorldMutType, WorldRefType},
 };
 
 /// Manages Entities for a given Client connection and keeps them in

@@ -1,10 +1,9 @@
-use naia_shared::{ImplRef, ProtocolType, Ref, Replicate, EntityType};
+use naia_shared::{ImplRef, ProtocolType, Ref, Replicate, EntityType, WorldMutType, WorldRefType};
 
 use super::{
     room::room_key::RoomKey,
     server::Server,
     user::user_key::UserKey,
-    world_type::{WorldMutType, WorldRefType},
 };
 
 // EntityRef

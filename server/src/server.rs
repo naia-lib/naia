@@ -16,7 +16,7 @@ use naia_server_socket::{
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, HostTickManager, ImplRef, Instant, KeyGenerator,
     LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
-    ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp, EntityType
+    ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp, EntityType, WorldMutType, WorldRefType
 };
 
 use super::{
@@ -33,7 +33,6 @@ use super::{
     user::{user_key::UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
-    world_type::{WorldMutType, WorldRefType},
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
