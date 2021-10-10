@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use naia_server::{ImplRef, ProtocolType, Replicate, Server, UserKey};
 
-use crate::world::{entity::Entity, world_proxy::WorldMut};
+use naia_bevy_shared::{Entity, WorldMut};
 
 // Command Trait
 

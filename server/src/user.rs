@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use naia_shared::{Timestamp, EntityType};
+use naia_shared::{EntityType, Timestamp};
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]

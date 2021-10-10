@@ -13,3 +13,5 @@ maintenance = { status = "actively-developed" }
 [features]
 
 [dependencies]
+naia-shared = { path = "../../../shared" }
+bevy = { version="0.5.0", default-features=false }

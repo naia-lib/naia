@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use bevy::ecs::entity::Entity as BevyEntity;
 
-use naia_server::EntityType;
+use naia_shared::EntityType;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Entity(BevyEntity);

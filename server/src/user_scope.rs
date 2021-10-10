@@ -1,4 +1,4 @@
-use naia_shared::{ProtocolType, EntityType};
+use naia_shared::{EntityType, ProtocolType};
 
 use crate::UserKey;
 

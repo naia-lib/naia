@@ -7,7 +7,7 @@ use bevy::ecs::{
 
 use naia_server::{ProtocolType, Server as NaiaServer};
 
-use crate::world::{entity::Entity, world_proxy::WorldProxyMut};
+use naia_bevy_shared::{Entity, WorldProxyMut};
 
 use super::{commands::Command, server::Server};
 

@@ -2,7 +2,11 @@ use std::any::TypeId;
 
 use naia_socket_shared::Ref;
 
-use super::{replicate::{ImplRef, Replicate}, protocol_type::ProtocolType, entity_type::EntityType};
+use super::{
+    entity_type::EntityType,
+    protocol_type::ProtocolType,
+    replicate::{ImplRef, Replicate},
+};
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep

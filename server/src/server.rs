@@ -14,9 +14,10 @@ use naia_server_socket::{
 };
 
 pub use naia_shared::{
-    wrapping_diff, Connection, ConnectionConfig, HostTickManager, ImplRef, Instant, KeyGenerator,
-    LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
-    ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp, EntityType, WorldMutType, WorldRefType
+    wrapping_diff, Connection, ConnectionConfig, EntityType, HostTickManager, ImplRef, Instant,
+    KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType,
+    PropertyMutate, ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
+    WorldMutType, WorldRefType,
 };
 
 use super::{

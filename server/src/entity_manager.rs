@@ -8,19 +8,14 @@ use std::{
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    DiffMask, KeyGenerator, LocalComponentKey, LocalEntityKey, Manifest, NaiaKey, PacketNotifiable,
-    ProtocolType, Ref, Replicate, MTU_SIZE, EntityType, WorldMutType, WorldRefType
+    DiffMask, EntityType, KeyGenerator, LocalComponentKey, LocalEntityKey, Manifest, NaiaKey,
+    PacketNotifiable, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType, MTU_SIZE,
 };
 
 use super::{
-    entity_action::EntityAction,
-    keys::ComponentKey,
-    local_component_record::LocalComponentRecord,
-    local_entity_record::LocalEntityRecord,
-    locality_status::LocalityStatus,
-    mut_handler::MutHandler,
-    packet_writer::PacketWriter,
-    world_record::WorldRecord,
+    entity_action::EntityAction, keys::ComponentKey, local_component_record::LocalComponentRecord,
+    local_entity_record::LocalEntityRecord, locality_status::LocalityStatus,
+    mut_handler::MutHandler, packet_writer::PacketWriter, world_record::WorldRecord,
 };
 
 /// Manages Entities for a given Client connection and keeps them in
