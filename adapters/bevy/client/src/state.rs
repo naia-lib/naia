@@ -2,12 +2,10 @@ use std::marker::PhantomData;
 
 use bevy::ecs::{
     system::{SystemParamFetch, SystemParamState, SystemState},
-    world::{Mut, World},
+    world::World,
 };
 
-use naia_client::{ProtocolType, Client as NaiaClient};
-
-use naia_bevy_shared::{Entity, WorldProxyMut};
+use naia_client::ProtocolType;
 
 use super::client::Client;
 
@@ -37,11 +35,11 @@ impl<'a, P: ProtocolType> SystemParamFetch<'a> for State<P> {
 
     #[inline]
     unsafe fn get_param(
-        state: &'a mut Self,
+        _state: &'a mut Self,
         _system_state: &'a SystemState,
         world: &'a World,
         _change_tick: u32,
     ) -> Self::Item {
-        Client::new(state, world)
+        Client::new(world)
     }
 }

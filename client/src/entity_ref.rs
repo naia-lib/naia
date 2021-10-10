@@ -1,4 +1,4 @@
-use naia_shared::{LocalEntity, ProtocolType, Ref, Replicate, EntityType, WorldRefType};
+use naia_shared::{EntityType, ProtocolType, Ref, Replicate, WorldRefType};
 
 use super::client::Client;
 
@@ -12,7 +12,11 @@ pub struct EntityRef<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> 
 
 impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P, K, W> {
     pub fn new(client: &'s Client<P, K>, world: W, key: &K) -> Self {
-        EntityRef { client, world, id: *key }
+        EntityRef {
+            client,
+            world,
+            id: *key,
+        }
     }
 
     pub fn id(&self) -> K {

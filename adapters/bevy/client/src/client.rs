@@ -1,11 +1,11 @@
-use std::{collections::VecDeque, marker::PhantomData};
+use std::{collections::VecDeque, marker::PhantomData, net::SocketAddr};
 
 use bevy::ecs::{
     system::SystemParam,
     world::{Mut, World},
 };
 
-use naia_client::{Client as NaiaClient, NaiaClientError, ProtocolType, Event, ImplRef, EntityRef};
+use naia_client::{Client as NaiaClient, EntityRef, Event, ImplRef, NaiaClientError, ProtocolType};
 
 use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
 
@@ -14,7 +14,6 @@ use super::{state::State, ticker::Ticker};
 // Client
 
 pub struct Client<'a, P: ProtocolType> {
-    state: &'a mut State<P>,
     world: &'a World,
     client: Mut<'a, NaiaClient<P, Entity>>,
     ticker: Mut<'a, Ticker>,
@@ -24,7 +23,7 @@ pub struct Client<'a, P: ProtocolType> {
 impl<'a, P: ProtocolType> Client<'a, P> {
     // Public Methods //
 
-    pub fn new(state: &'a mut State<P>, world: &'a World) -> Self {
+    pub fn new(world: &'a World) -> Self {
         unsafe {
             let client = world
                 .get_resource_unchecked_mut::<NaiaClient<P, Entity>>()
@@ -35,7 +34,6 @@ impl<'a, P: ProtocolType> Client<'a, P> {
                 .expect("Naia Client has not been correctly initialized!");
 
             Self {
-                state,
                 world,
                 client,
                 ticker,
@@ -44,19 +42,41 @@ impl<'a, P: ProtocolType> Client<'a, P> {
         }
     }
 
+    //// Connections ////
+
+    pub fn server_address(&self) -> SocketAddr {
+        return self.client.server_address();
+    }
+
+    pub fn connected(&self) -> bool {
+        return self.client.connected();
+    }
+
+    pub fn rtt(&self) -> f32 {
+        return self.client.rtt();
+    }
+
+    pub fn jitter(&self) -> f32 {
+        return self.client.jitter();
+    }
+
     pub fn receive(&mut self) -> VecDeque<Result<Event<P, Entity>, NaiaClientError>> {
         return self.client.receive(self.world.proxy());
     }
 
+    // Interpolation
+
+    pub fn interpolation(&self) -> f32 {
+        return self.client.interpolation();
+    }
+
     //// Messages ////
-    pub fn queue_message<R: ImplRef<P>>(
-        &mut self,
-        message_ref: &R,
-        guaranteed_delivery: bool,
-    ) {
-        return self
-            .client
-            .queue_message(message_ref, guaranteed_delivery);
+    pub fn queue_message<R: ImplRef<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
+        return self.client.queue_message(message_ref, guaranteed_delivery);
+    }
+
+    pub fn queue_command<R: ImplRef<P>>(&mut self, entity: &Entity, command_ref: &R) {
+        return self.client.queue_command(entity, command_ref);
     }
 
     //// Entities ////
