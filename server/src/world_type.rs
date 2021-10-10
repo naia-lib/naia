@@ -1,8 +1,6 @@
 use std::any::TypeId;
 
-use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
-
-use super::keys::EntityType;
+use naia_shared::{ImplRef, ProtocolType, Ref, Replicate, EntityType};
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep

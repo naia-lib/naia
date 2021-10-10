@@ -29,7 +29,7 @@ pub use naia_server_socket::ServerAddrs;
 
 pub use naia_shared::{
     ImplRef, LinkConditionerConfig, ProtocolType, Random, Ref, Replicate, SharedConfig,
-    SocketConfig,
+    SocketConfig, EntityType
 };
 
 mod client_connection;
@@ -59,7 +59,7 @@ mod world_type;
 pub use entity_ref::{EntityMut, EntityRef};
 pub use error::NaiaServerError;
 pub use event::Event;
-pub use keys::{ComponentKey, EntityType};
+pub use keys::ComponentKey;
 pub use room::{room_key::RoomKey, RoomMut, RoomRef};
 pub use server::Server;
 pub use server_config::ServerConfig;

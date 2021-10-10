@@ -2,7 +2,9 @@ use std::{any::TypeId, collections::HashMap};
 
 use slotmap::DenseSlotMap;
 
-use super::keys::{ComponentKey, EntityType};
+use naia_shared::EntityType;
+
+use super::keys::ComponentKey;
 
 pub struct WorldRecord<K: EntityType> {
     entities: HashMap<K, HashMap<TypeId, ComponentKey>>,

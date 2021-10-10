@@ -36,6 +36,7 @@ mod sequence_buffer;
 mod shared_config;
 mod standard_header;
 mod wrapping_number;
+mod entity_type;
 
 /// Commonly used utility methods to be used by naia-server & naia-client
 pub mod utils;
@@ -67,3 +68,4 @@ pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
 pub use shared_config::SharedConfig;
 pub use standard_header::StandardHeader;
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
+pub use entity_type::EntityType;
