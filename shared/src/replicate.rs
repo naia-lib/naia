@@ -9,7 +9,7 @@ use super::{diff_mask::DiffMask, property_mutate::PropertyMutate, protocol_type:
 
 /// A Replica is a Message/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
-pub trait Replicate<P: ProtocolType>: Any {
+pub trait Replicate<P: ProtocolType>: Any + Sync + Send + 'static {
     /// Gets the number of bytes of the Message/Component's DiffMask
     fn get_diff_mask_size(&self) -> u8;
     /// Gets the TypeId of the Message/Component, used to map to a

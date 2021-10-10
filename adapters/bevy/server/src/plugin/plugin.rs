@@ -12,7 +12,7 @@ use crate::world::entity::Entity;
 
 use super::{
     stages::{PrivateStage, ServerStage},
-    systems::{flush_server_commands, read_server_events, send_server_packets, should_tick},
+    systems::{read_server_events, send_server_packets, should_tick},
 };
 
 struct ServerPluginConfig<P: ProtocolType> {
@@ -74,28 +74,12 @@ impl<P: ProtocolType> Plugin for ServerPlugin<P> {
             // SendEvents //
             .add_stage_after(PrivateStage::ReadEvents, ServerStage::ServerEvents,
                              SystemStage::single_threaded())
-            // AfterEvents //
-            .add_stage_after(ServerStage::ServerEvents, PrivateStage::AfterEvents,
-                             SystemStage::single_threaded())
-            .add_system_to_stage(PrivateStage::AfterEvents,
-                                 flush_server_commands.exclusive_system())
-            // AfterUpdate //
-            .add_stage_after(CoreStage::PostUpdate, PrivateStage::AfterUpdate,
-                             SystemStage::single_threaded())
-            .add_system_to_stage(PrivateStage::AfterUpdate,
-                                 flush_server_commands.exclusive_system())
             // Tick //
-            .add_stage_after(PrivateStage::AfterUpdate, ServerStage::Tick,
+            .add_stage_after(CoreStage::PostUpdate, ServerStage::Tick,
                              SystemStage::single_threaded()
                                         .with_run_criteria(should_tick.system()))
-            // AfterTick //
-            .add_stage_after(ServerStage::Tick, PrivateStage::AfterTick,
-                             SystemStage::single_threaded()
-                                        .with_run_criteria(should_tick.system()))
-            .add_system_to_stage(PrivateStage::AfterTick,
-                                 flush_server_commands.exclusive_system())
             // ScopeUpdate //
-            .add_stage_after(PrivateStage::AfterTick, ServerStage::UpdateScopes,
+            .add_stage_after(ServerStage::Tick, ServerStage::UpdateScopes,
                              SystemStage::single_threaded()
                                         .with_run_criteria(should_tick.system()))
             // SendPackets //

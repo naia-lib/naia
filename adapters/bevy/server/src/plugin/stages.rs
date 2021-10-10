@@ -11,8 +11,4 @@ pub enum ServerStage {
 pub enum PrivateStage {
     ReadEvents,
     SendPackets,
-    // these are here to flush any ServerCommands
-    AfterEvents,
-    AfterUpdate,
-    AfterTick,
 }
