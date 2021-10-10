@@ -15,7 +15,6 @@ use super::{commands::Command, server::Server};
 
 pub struct State<P: ProtocolType> {
     commands: Vec<Box<dyn Command<P>>>,
-    pub ticked: bool,
     phantom_p: PhantomData<P>,
 }
 
@@ -55,7 +54,6 @@ unsafe impl<P: ProtocolType> SystemParamState for State<P> {
     fn init(_world: &mut World, _system_state: &mut SystemState, _config: Self::Config) -> Self {
         State {
             commands: Vec::new(),
-            ticked: false,
             phantom_p: PhantomData,
         }
     }

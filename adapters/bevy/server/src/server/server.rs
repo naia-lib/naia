@@ -15,7 +15,7 @@ use crate::world::{
     world_proxy::{WorldProxy, WorldRef},
 };
 
-use super::{commands::Command, entity_mut::EntityMut, state::State};
+use super::{commands::Command, entity_mut::EntityMut, state::State, ticker::Ticker};
 
 // Server
 
@@ -23,6 +23,7 @@ pub struct Server<'a, P: ProtocolType> {
     state: &'a mut State<P>,
     world: &'a World,
     server: Mut<'a, NaiaServer<P, Entity>>,
+    ticker: Mut<'a, Ticker>,
     phantom_p: PhantomData<P>,
 }
 
@@ -35,10 +36,15 @@ impl<'a, P: ProtocolType> Server<'a, P> {
                 .get_resource_unchecked_mut::<NaiaServer<P, Entity>>()
                 .expect("Naia Server has not been correctly initialized!");
 
+            let ticker = world
+                .get_resource_unchecked_mut::<Ticker>()
+                .expect("Naia Server has not been correctly initialized!");
+
             Self {
                 state,
                 world,
                 server,
+                ticker,
                 phantom_p: PhantomData,
             }
         }
@@ -121,15 +127,15 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     //// Ticks ////
 
     pub fn tick_start(&mut self) {
-        self.state.ticked = true;
+        self.ticker.ticked = true;
     }
 
     pub fn tick_finish(&mut self) {
-        self.state.ticked = false;
+        self.ticker.ticked = false;
     }
 
     pub fn has_ticked(&self) -> bool {
-        return self.state.ticked;
+        return self.ticker.ticked;
     }
 
     // Crate-public methods

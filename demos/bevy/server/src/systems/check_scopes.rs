@@ -1,6 +1,6 @@
 use crate::aliases::Server;
 
-pub fn update_scopes(mut server: Server) {
+pub fn check_scopes(mut server: Server) {
     // Update scopes of entities
     for (_, user_key, entity_key) in server.scope_checks() {
         // You'd normally do whatever checks you need to in here..

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bevy::{log::LogPlugin, prelude::*};
 
-use naia_bevy_server::{ServerAddrs, ServerConfig, ServerPlugin, ServerStage};
+use naia_bevy_server::{Plugin, ServerAddrs, ServerConfig};
 
 use naia_bevy_demo_shared::{get_server_address, get_shared_config};
 
@@ -12,7 +12,7 @@ mod systems;
 
 use aliases::Server;
 use resources::Global;
-use systems::{process_events, send_updates, tick, update_scopes};
+use systems::{check_scopes, receive_events, send_updates, should_tick, tick};
 
 fn main() {
     info!("Naia Bevy Server Demo starting up");
@@ -35,18 +35,17 @@ fn main() {
     // Plugins
     app.add_plugins(MinimalPlugins)
         .add_plugin(LogPlugin::default())
-        .add_plugin(ServerPlugin::new(ServerConfig::default(), get_shared_config(), server_addresses))
+        .add_plugin(Plugin::new(ServerConfig::default(), get_shared_config(), server_addresses))
 
     // Systems
     .add_startup_system(init.system())
-    .add_system_to_stage(ServerStage::ServerEvents,
-                         process_events.system())
-    .add_system_to_stage(ServerStage::Tick,
-                         tick.system()
-                             .chain(
-                                 update_scopes.system()
-                                     .chain(
-                                         send_updates.system())))
+    .add_system_to_stage(CoreStage::PreUpdate,
+                         receive_events.system())
+    .add_system_to_stage(CoreStage::PostUpdate,
+                         tick.system().chain(
+                             check_scopes.system().chain(
+                                 send_updates.system()))
+                             .with_run_criteria(should_tick.system()))
 
     // Run
     .run();
