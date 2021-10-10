@@ -10,11 +10,7 @@ use naia_server::{ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig}
 
 use crate::world::entity::Entity;
 
-use super::{
-    resource::ServerResource,
-    stages::{PrivateStage, ServerStage},
-    systems::{send_server_packets, should_tick},
-};
+use super::{stages::ServerStage, systems::should_tick};
 
 struct ServerPluginConfig<P: ProtocolType> {
     server_config: ServerConfig,
@@ -62,7 +58,6 @@ impl<P: ProtocolType> Plugin for ServerPlugin<P> {
         app
         // RESOURCES //
             .insert_resource(server)
-            .insert_resource(ServerResource::new())
 
         // STAGES //
             // ServerEvents //
@@ -71,16 +66,6 @@ impl<P: ProtocolType> Plugin for ServerPlugin<P> {
             // Tick //
             .add_stage_after(CoreStage::PostUpdate, ServerStage::Tick,
                              SystemStage::single_threaded()
-                                        .with_run_criteria(should_tick.system()))
-            // ScopeUpdate //
-            .add_stage_after(ServerStage::Tick, ServerStage::UpdateScopes,
-                             SystemStage::single_threaded()
-                                        .with_run_criteria(should_tick.system()))
-            // SendPackets //
-            .add_stage_after(ServerStage::UpdateScopes, PrivateStage::SendPackets,
-                             SystemStage::single_threaded()
-                                        .with_run_criteria(should_tick.system()))
-            .add_system_to_stage(PrivateStage::SendPackets,
-                                send_server_packets::<P>.exclusive_system());
+                                        .with_run_criteria(should_tick::<P>.system()));
     }
 }

@@ -6,16 +6,13 @@ use bevy::ecs::{
 };
 
 use naia_server::{
-    EntityRef, Event, NaiaServerError, ProtocolType, RoomKey, RoomMut, Server as NaiaServer,
-    UserKey, UserMut, UserScopeMut,
+    EntityRef, Event, ImplRef, NaiaServerError, ProtocolType, RoomKey, RoomMut,
+    Server as NaiaServer, UserKey, UserMut, UserScopeMut,
 };
 
-use crate::{
-    plugin::resource::ServerResource,
-    world::{
-        entity::Entity,
-        world_proxy::{WorldProxy, WorldRef},
-    },
+use crate::world::{
+    entity::Entity,
+    world_proxy::{WorldProxy, WorldRef},
 };
 
 use super::{commands::Command, entity_mut::EntityMut, state::State};
@@ -26,7 +23,6 @@ pub struct Server<'a, P: ProtocolType> {
     state: &'a mut State<P>,
     world: &'a World,
     server: Mut<'a, NaiaServer<P, Entity>>,
-    resource: Mut<'a, ServerResource>,
     phantom_p: PhantomData<P>,
 }
 
@@ -38,14 +34,11 @@ impl<'a, P: ProtocolType> Server<'a, P> {
             let server = world
                 .get_resource_unchecked_mut::<NaiaServer<P, Entity>>()
                 .expect("Naia Server has not been correctly initialized!");
-            let resource = world
-                .get_resource_unchecked_mut::<ServerResource>()
-                .expect("Naia Server has not been correctly initialized!");
+
             Self {
                 state,
                 world,
                 server,
-                resource,
                 phantom_p: PhantomData,
             }
         }
@@ -63,6 +56,24 @@ impl<'a, P: ProtocolType> Server<'a, P> {
 
     pub fn reject_connection(&mut self, user_key: &UserKey) {
         self.server.reject_connection(user_key);
+    }
+
+    //// Messages ////
+    pub fn queue_message<R: ImplRef<P>>(
+        &mut self,
+        user_key: &UserKey,
+        message_ref: &R,
+        guaranteed_delivery: bool,
+    ) {
+        return self
+            .server
+            .queue_message(user_key, message_ref, guaranteed_delivery);
+    }
+
+    //// Updates ////
+
+    pub fn send_all_updates(&mut self) {
+        return self.server.send_all_updates(self.world.proxy());
     }
 
     //// Entities ////
@@ -107,10 +118,18 @@ impl<'a, P: ProtocolType> Server<'a, P> {
         return self.server.make_room();
     }
 
-    //// Timing ////
+    //// Ticks ////
 
-    pub fn tick(&mut self) {
-        self.resource.ticked = true;
+    pub fn tick_start(&mut self) {
+        self.state.ticked = true;
+    }
+
+    pub fn tick_finish(&mut self) {
+        self.state.ticked = false;
+    }
+
+    pub fn has_ticked(&self) -> bool {
+        return self.state.ticked;
     }
 
     // Crate-public methods

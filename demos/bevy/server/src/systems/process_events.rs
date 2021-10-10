@@ -3,17 +3,20 @@ use bevy::{
     log::info,
 };
 
-use naia_bevy_server::{Random, Ref, Server};
+use naia_bevy_server::{Random, Ref};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     protocol::{Color, ColorValue, Position, Protocol},
 };
 
-use crate::{aliases::ServerEvent, resources::Global};
+use crate::{
+    aliases::{Server, ServerEvent},
+    resources::Global,
+};
 
 pub fn process_events(
-    mut server: Server<Protocol>,
+    mut server: Server,
     mut global: ResMut<Global>,
     q_position: Query<&Ref<Position>>,
 ) {
@@ -94,7 +97,7 @@ pub fn process_events(
                 }
             }
             Ok(ServerEvent::Tick) => {
-                server.tick();
+                server.tick_start();
             }
             _ => {}
         }

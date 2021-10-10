@@ -2,16 +2,17 @@ use std::collections::HashMap;
 
 use bevy::{log::LogPlugin, prelude::*};
 
-use naia_bevy_server::{Server, ServerAddrs, ServerConfig, ServerPlugin, ServerStage};
+use naia_bevy_server::{ServerAddrs, ServerConfig, ServerPlugin, ServerStage};
 
-use naia_bevy_demo_shared::{get_server_address, get_shared_config, protocol::Protocol};
+use naia_bevy_demo_shared::{get_server_address, get_shared_config};
 
 mod aliases;
 mod resources;
 mod systems;
 
+use aliases::Server;
 use resources::Global;
-use systems::{events::process_events, scopes::update_scopes, tick::tick};
+use systems::{process_events, send_updates, tick, update_scopes};
 
 fn main() {
     info!("Naia Bevy Server Demo starting up");
@@ -38,15 +39,20 @@ fn main() {
 
     // Systems
     .add_startup_system(init.system())
-    .add_system_to_stage(ServerStage::ServerEvents, process_events.system())
-    .add_system_to_stage(ServerStage::Tick, tick.system())
-    .add_system_to_stage(ServerStage::UpdateScopes, update_scopes.system())
+    .add_system_to_stage(ServerStage::ServerEvents,
+                         process_events.system())
+    .add_system_to_stage(ServerStage::Tick,
+                         tick.system()
+                             .chain(
+                                 update_scopes.system()
+                                     .chain(
+                                         send_updates.system())))
 
     // Run
     .run();
 }
 
-fn init(mut commands: Commands, mut server: Server<Protocol>) {
+fn init(mut commands: Commands, mut server: Server) {
     info!("Naia Bevy Server Demo is running");
 
     // Create a new, singular room, which will contain Users and Entities that they
