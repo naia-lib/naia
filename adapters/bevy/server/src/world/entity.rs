@@ -4,7 +4,7 @@ use bevy::ecs::entity::Entity as BevyEntity;
 
 use naia_server::EntityType;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Entity(BevyEntity);
 
 impl Entity {

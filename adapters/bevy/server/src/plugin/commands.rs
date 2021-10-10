@@ -1,93 +1,205 @@
-use bevy::ecs::prelude::Commands;
+use std::marker::PhantomData;
 
-use naia_server::{Server, ImplRef, ProtocolType, EntityType, Replicate, UserKey};
+use bevy::{ecs::{entity::Entities, world::World, system::{SystemParam, SystemParamState, SystemParamFetch, SystemState}}, log::debug};
+
+use naia_server::{ProtocolType, ImplRef, Replicate, Ref};
 
 use crate::world::entity::Entity;
 
-// CommandsExt
+// Command Trait
 
-pub trait CommandsExt<P: ProtocolType, K: EntityType> {
-    fn with(&mut self, server: &mut Server<P, K>) -> ServerCommands;
+pub trait Command: Send + Sync + 'static {
+    fn write(self: Box<Self>, world: &mut World);
 }
 
-impl<'a, P: ProtocolType, K: EntityType> CommandsExt<P, K> for Commands<'a> {
-    fn with(&mut self, server: &mut Server<P, K>) -> ServerCommands {
-        unimplemented!()
-    }
+// CommandQueue
+
+#[derive(Default)]
+pub struct CommandQueue {
+    commands: Vec<Box<dyn Command>>,
 }
 
-// ServerCommands
+impl CommandQueue {
+    pub fn apply(&mut self, world: &mut World) {
+        // Have to do this to get around 'world.flush()' only being crate-public
+        world.spawn().despawn();
 
-enum ServerCommand {
-
-}
-
-pub struct ServerCommands<'a, 'c> {
-    queue: Vec<ServerCommand>,
-    bevy_commands: &'c mut Commands<'a>
-}
-
-impl<'a, 'c> ServerCommands<'a, 'c> {
-
-    // Public Methods
-
-    pub fn spawn<'x>(&'x mut self) -> EntityCommands<'a, 'c, 'x> {
-        let entity = self.bevy_commands.spawn().id();
-        let new_entity = Entity::new(entity);
-        return EntityCommands::new(self, new_entity);
-    }
-
-    pub fn entity<'x>(&'x mut self, entity: &Entity) -> EntityCommands<'a, 'c, 'x> {
-        let new_entity = *entity;
-        return EntityCommands::new(self, new_entity);
-    }
-
-    // Crate-public Methods
-
-    pub(crate) fn new(commands: &'c mut Commands<'a>) -> Self {
-        ServerCommands {
-            queue: Vec::new(),
-            bevy_commands: commands,
+        // Process queued commands
+        for command in self.commands.drain(..) {
+            command.write(world);
         }
     }
+
+    #[inline]
+    pub fn push_boxed(&mut self, command: Box<dyn Command>) {
+        self.commands.push(command);
+    }
+
+    #[inline]
+    pub fn push<T: Command>(&mut self, command: T) {
+        self.push_boxed(Box::new(command));
+    }
+}
+
+// SAFE: only local state is accessed
+unsafe impl SystemParamState for CommandQueue {
+    type Config = ();
+
+    fn init(_world: &mut World, _system_state: &mut SystemState, _config: Self::Config) -> Self {
+        Default::default()
+    }
+
+    fn apply(&mut self, world: &mut World) {
+        self.apply(world);
+    }
+
+    fn default_config() {}
+}
+
+impl<'a> SystemParamFetch<'a> for CommandQueue {
+    type Item = Commands<'a>;
+
+    #[inline]
+    unsafe fn get_param(
+        state: &'a mut Self,
+        _system_state: &'a SystemState,
+        world: &'a World,
+        _change_tick: u32,
+    ) -> Self::Item {
+        Commands::new(state, world)
+    }
+}
+
+// Commands
+
+pub struct Commands<'a> {
+    queue: &'a mut CommandQueue,
+    entities: &'a Entities,
+}
+
+impl<'a> Commands<'a> {
+    pub fn new(queue: &'a mut CommandQueue, world: &'a World) -> Self {
+        Self {
+            queue,
+            entities: world.entities(),
+        }
+    }
+
+    pub fn spawn(&mut self) -> EntityCommands<'a, '_> {
+        let entity = self.entities.reserve_entity();
+        EntityCommands {
+            entity: Entity::new(entity),
+            commands: self,
+        }
+    }
+
+    pub fn entity(&mut self, entity: &Entity) -> EntityCommands<'a, '_> {
+        EntityCommands {
+            entity: *entity,
+            commands: self,
+        }
+    }
+
+    pub(crate) fn add<C: Command>(&mut self, command: C) {
+        self.queue.push(command);
+    }
+}
+
+impl<'a> SystemParam for Commands<'a> {
+    type Fetch = CommandQueue;
 }
 
 // EntityCommands
 
-pub struct EntityCommands<'a, 'c, 'x> {
+pub struct EntityCommands<'a, 'b> {
     entity: Entity,
-    server_commands: &'x mut ServerCommands<'a, 'c>,
+    commands: &'b mut Commands<'a>,
 }
 
-impl<'a, 'c, 'x> EntityCommands<'a, 'c, 'x> {
+impl<'a, 'b> EntityCommands<'a, 'b> {
 
-    // Public Methods
-
+    #[inline]
     pub fn id(&self) -> Entity {
-        return self.entity;
+        self.entity
     }
 
-    pub fn insert<P: ProtocolType, R: ImplRef<P>>(&mut self, component_ref: &R) -> Self {
-        todo!()
+    pub fn insert<P: ProtocolType, R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
+        self.commands.add(Insert {
+            entity: self.entity,
+            component: component_ref.clone_ref(),
+            phantom_p: PhantomData,
+        });
+        self
     }
 
-    pub fn remove<P: ProtocolType, R: Replicate<P>>(&mut self) -> Self {
-        todo!()
+    pub fn remove<P: ProtocolType, R: Replicate<P>>(&mut self) -> &mut Self
+    {
+        self.commands.add(Remove::<P, R> {
+            entity: self.entity,
+            phantom_p: PhantomData,
+            phantom_r: PhantomData,
+        });
+        self
     }
 
-    pub fn set_owner(&mut self, user_key: &UserKey) -> Self {
-        todo!()
+    pub fn despawn(&mut self) {
+        self.commands.add(Despawn {
+            entity: self.entity,
+        })
     }
 
-    pub fn despawn(&mut self) -> Self {
-        todo!()
+    pub fn commands(&mut self) -> &mut Commands<'a> {
+        self.commands
     }
+}
 
-    // Crate-public Methods
-    pub(crate) fn new(server_commands: &'x mut ServerCommands<'a, 'c>, entity: Entity) -> Self {
-        EntityCommands {
-            server_commands,
-            entity,
+// Specific Commands
+
+//// despawn ////
+
+#[derive(Debug)]
+pub(crate) struct Despawn {
+    entity: Entity,
+}
+
+impl Command for Despawn {
+    fn write(self: Box<Self>, world: &mut World) {
+        if !world.despawn(*self.entity) {
+            debug!("Failed to despawn non-existent entity {:?}", self.entity);
+        }
+    }
+}
+
+//// insert ////
+
+#[derive(Debug)]
+pub(crate) struct Insert<P: ProtocolType, R: ImplRef<P>> {
+    entity: Entity,
+    component: R,
+    phantom_p: PhantomData<P>,
+}
+
+impl<P: ProtocolType, R: ImplRef<P>> Command for Insert<P, R>
+{
+    fn write(self: Box<Self>, world: &mut World) {
+        world.entity_mut(*self.entity).insert(self.component);
+    }
+}
+
+//// remove ////
+
+#[derive(Debug)]
+pub(crate) struct Remove<P: ProtocolType, R: Replicate<P>> {
+    entity: Entity,
+    phantom_p: PhantomData<P>,
+    phantom_r: PhantomData<R>,
+}
+
+impl<P: ProtocolType, R: Replicate<P>> Command for Remove<P, R>
+{
+    fn write(self: Box<Self>, world: &mut World) {
+        if let Some(mut entity_mut) = world.get_entity_mut(*self.entity) {
+            entity_mut.remove::<Ref<R>>();
         }
     }
 }
