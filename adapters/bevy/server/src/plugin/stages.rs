@@ -4,10 +4,4 @@ use bevy::ecs::schedule::StageLabel;
 pub enum ServerStage {
     ServerEvents,
     Tick,
-    UpdateScopes,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, StageLabel)]
-pub enum PrivateStage {
-    SendPackets,
 }
