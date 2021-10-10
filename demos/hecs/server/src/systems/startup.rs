@@ -48,7 +48,7 @@ pub fn app_init(
                 .enter_room(&main_room_key)
                 .insert_component(&position_ref)
                 .insert_component(&name_ref)
-                .key();
+                .id();
         }
     }
 

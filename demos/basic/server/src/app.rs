@@ -60,7 +60,7 @@ impl App {
                 let character_key = server
                     .spawn_entity(&mut world)
                     .insert_component(&character)
-                    .key();
+                    .id();
 
                 // Add the Character Entity to the main Room
                 server.room_mut(&main_room_key).add_entity(&character_key);
