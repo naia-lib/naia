@@ -2,17 +2,14 @@ use std::collections::HashMap;
 
 use bevy::{log::LogPlugin, prelude::*};
 
-use naia_server::{ServerAddrs, ServerConfig};
+use naia_bevy_server::{Server, ServerPlugin, ServerStage, ServerAddrs, ServerConfig};
 
-use naia_bevy_server::{ServerPlugin, ServerStage};
-
-use naia_bevy_demo_shared::{get_server_address, get_shared_config};
+use naia_bevy_demo_shared::{protocol::Protocol, get_server_address, get_shared_config};
 
 mod aliases;
 mod resources;
 mod systems;
 
-use aliases::Server;
 use resources::Global;
 use systems::{events::process_events, scopes::update_scopes, tick::tick};
 
@@ -49,7 +46,7 @@ fn main() {
     .run();
 }
 
-fn init(mut commands: Commands, mut server: ResMut<Server>) {
+fn init(mut commands: Commands, mut server: Server<Protocol>) {
     info!("Naia Bevy Server Demo is running");
 
     // Create a new, singular room, which will contain Users and Entities that they

@@ -1,24 +1,20 @@
-use bevy::{log::info, ecs::system::{Query, ResMut}, app::EventReader};
+use bevy::{log::info, ecs::system::{Query, ResMut}};
 
-use naia_server::{Event as ServerEvent, Random, Ref};
-
-use naia_bevy_server::{Entity, Commands};
+use naia_bevy_server::{Server, Random, Ref};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     protocol::{Color, ColorValue, Position, Protocol},
 };
 
-use crate::{aliases::Server, resources::Global};
+use crate::{aliases::ServerEvent, resources::Global};
 
 pub fn process_events(
-    mut commands: Commands,
-    mut server: ResMut<Server>,
-    mut events: EventReader<ServerEvent<Protocol, Entity>>,
+    mut server: Server<Protocol>,
     mut global: ResMut<Global>,
     q_position: Query<&Ref<Position>>,
 ) {
-    for event in events.iter() {
+    for event in server.receive() {
         match event {
             ServerEvent::Authorization(user_key, Protocol::Auth(auth_ref)) => {
                 let auth_message = auth_ref.borrow();
@@ -33,66 +29,61 @@ pub fn process_events(
                 }
             }
             ServerEvent::Connection(user_key) => {
-                server.room_mut(&global.main_room_key).add_user(&user_key);
+                server.user(&user_key).enter_room(&global.main_room_key).address();
                 let address = server.user(&user_key).address();
                 info!("Naia Server connected to: {}", address);
 
-                // Create new Square Entity
-                let entity_key = commands.spawn().id();
-
-                // Add Entity to main Room
-                server
-                    .room_mut(&global.main_room_key)
-                    .add_entity(&entity_key);
+                // Create components for Entity to represent new player
 
                 // Position component
-                {
-                    // create
-                    let mut x = Random::gen_range_u32(0, 40) as i16;
-                    let mut y = Random::gen_range_u32(0, 30) as i16;
-                    x -= 20;
-                    y -= 15;
-                    x *= 16;
-                    y *= 16;
-                    let position_ref = Position::new(x, y);
-
-                    // add to entity
-                    commands.entity(&entity_key).insert(&position_ref);
-                }
+                let position_ref = {
+                    let x = 16 * ((Random::gen_range_u32(0, 40) as i16) - 20);
+                    let y = 16 * ((Random::gen_range_u32(0, 30) as i16) - 15);
+                    Position::new(x, y)
+                };
 
                 // Color component
-                {
-                    // create
+                let color_ref = {
                     let color_value = match server.users_count() % 3 {
                         0 => ColorValue::Yellow,
                         1 => ColorValue::Red,
                         _ => ColorValue::Blue,
                     };
-                    let color_ref = Color::new(color_value);
+                    Color::new(color_value)
+                };
 
-                    // add to entity
-                    commands.entity(&entity_key).insert(&color_ref);
-                }
+                let entity = server
+                    // Spawn new Square Entity
+                    .spawn()
+                    // Add Entity to main Room
+                    .enter_room(&global.main_room_key)
+                    // Insert Position component
+                    .insert(position_ref)
+                    // Insert Color component
+                    .insert(color_ref)
+                    // Set Entity's owner to user
+                    .set_owner(&user_key)
+                    // return Entity id
+                    .id();
 
-                // Assign as Prediction to User
-                commands.entity(&entity_key).set_owner(&user_key);
-                global.user_to_prediction_map.insert(*user_key, entity_key);
+                global.user_to_prediction_map.insert(*user_key, entity);
             }
             ServerEvent::Disconnection(user_key, user) => {
                 info!("Naia Server disconnected from: {:?}", user.address);
 
                 server
-                    .room_mut(&global.main_room_key)
-                    .remove_user(&user_key);
-                if let Some(naia_entity_key) = global.user_to_prediction_map.remove(&user_key) {
+                    .user_mut(&user_key)
+                    .leave_room(&global.main_room_key);
+
+                if let Some(entity) = global.user_to_prediction_map.remove(&user_key) {
                     server
-                        .room_mut(&global.main_room_key)
-                        .remove_entity(&naia_entity_key);
-                    commands.entity(&naia_entity_key).despawn();
+                        .entity_mut(&entity)
+                        .leave_room(&global.main_room_key)
+                        .despawn();
                 }
             }
-            ServerEvent::Command(_, entity_key, Protocol::KeyCommand(key_command_ref)) => {
-                if let Ok(position_ref) = q_position.get(**entity_key) {
+            ServerEvent::Command(_, entity, Protocol::KeyCommand(key_command_ref)) => {
+                if let Ok(position_ref) = q_position.get(**entity) {
                     shared_behavior::process_command(&key_command_ref, &position_ref);
                 }
             }
