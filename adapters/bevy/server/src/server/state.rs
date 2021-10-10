@@ -1,12 +1,15 @@
 use std::marker::PhantomData;
 
-use bevy::{ecs::{world::{World, Mut}, system::{SystemParamState, SystemParamFetch, SystemState}}};
+use bevy::ecs::{
+    system::{SystemParamFetch, SystemParamState, SystemState},
+    world::{Mut, World},
+};
 
 use naia_server::{ProtocolType, Server as NaiaServer};
 
 use crate::world::{entity::Entity, world_proxy::WorldProxyMut};
 
-use super::{server::Server, commands::Command};
+use super::{commands::Command, server::Server};
 
 // State
 
@@ -21,14 +24,16 @@ impl<P: ProtocolType> State<P> {
         world.spawn().despawn();
 
         // resource scope
-        world.resource_scope(|world: &mut World, mut server: Mut<NaiaServer<P, Entity>>| {
-            let world_proxy = &mut world.proxy_mut();
+        world.resource_scope(
+            |world: &mut World, mut server: Mut<NaiaServer<P, Entity>>| {
+                let world_proxy = &mut world.proxy_mut();
 
-            // Process queued commands
-            for command in self.commands.drain(..) {
-                command.write(&mut server, world_proxy);
-            }
-        });
+                // Process queued commands
+                for command in self.commands.drain(..) {
+                    command.write(&mut server, world_proxy);
+                }
+            },
+        );
     }
 
     #[inline]

@@ -1,6 +1,10 @@
 use std::{ops::DerefMut, sync::Mutex};
 
-use bevy::{prelude::*, app::{AppBuilder, CoreStage, Plugin}, ecs::schedule::SystemStage};
+use bevy::{
+    app::{AppBuilder, CoreStage, Plugin},
+    ecs::schedule::SystemStage,
+    prelude::*,
+};
 
 use naia_server::{ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig};
 

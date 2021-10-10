@@ -1,6 +1,9 @@
-use bevy::{log::info, ecs::system::{Query, ResMut}};
+use bevy::{
+    ecs::system::{Query, ResMut},
+    log::info,
+};
 
-use naia_bevy_server::{Server, Random, Ref};
+use naia_bevy_server::{Random, Ref, Server};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
@@ -29,7 +32,6 @@ pub fn process_events(
                 }
             }
             Ok(ServerEvent::Connection(user_key)) => {
-
                 let address = server
                     .user_mut(&user_key)
                     // Add User to the main Room
@@ -77,9 +79,7 @@ pub fn process_events(
             Ok(ServerEvent::Disconnection(user_key, user)) => {
                 info!("Naia Server disconnected from: {:?}", user.address);
 
-                server
-                    .user_mut(&user_key)
-                    .leave_room(&global.main_room_key);
+                server.user_mut(&user_key).leave_room(&global.main_room_key);
 
                 if let Some(entity) = global.user_to_prediction_map.remove(&user_key) {
                     server

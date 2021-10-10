@@ -1,12 +1,24 @@
 use std::{collections::VecDeque, marker::PhantomData};
 
-use bevy::{ecs::{world::{World, Mut}, system::SystemParam}};
+use bevy::ecs::{
+    system::SystemParam,
+    world::{Mut, World},
+};
 
-use naia_server::{Server as NaiaServer, Event, ProtocolType, UserKey, RoomMut, UserMut, NaiaServerError, RoomKey, EntityRef, UserScopeMut};
+use naia_server::{
+    EntityRef, Event, NaiaServerError, ProtocolType, RoomKey, RoomMut, Server as NaiaServer,
+    UserKey, UserMut, UserScopeMut,
+};
 
-use crate::{world::{entity::Entity, world_proxy::{WorldProxy, WorldRef}}, plugin::resource::ServerResource};
+use crate::{
+    plugin::resource::ServerResource,
+    world::{
+        entity::Entity,
+        world_proxy::{WorldProxy, WorldRef},
+    },
+};
 
-use super::{entity_mut::EntityMut, state::State, commands::Command};
+use super::{commands::Command, entity_mut::EntityMut, state::State};
 
 // Server
 
@@ -19,15 +31,16 @@ pub struct Server<'a, P: ProtocolType> {
 }
 
 impl<'a, P: ProtocolType> Server<'a, P> {
-
     // Public Methods //
 
     pub fn new(state: &'a mut State<P>, world: &'a World) -> Self {
         unsafe {
-            let server = world.get_resource_unchecked_mut::<NaiaServer<P, Entity>>()
-                    .expect("Naia Server has not been correctly initialized!");
-            let resource = world.get_resource_unchecked_mut::<ServerResource>()
-                    .expect("Naia Server has not been correctly initialized!");
+            let server = world
+                .get_resource_unchecked_mut::<NaiaServer<P, Entity>>()
+                .expect("Naia Server has not been correctly initialized!");
+            let resource = world
+                .get_resource_unchecked_mut::<ServerResource>()
+                .expect("Naia Server has not been correctly initialized!");
             Self {
                 state,
                 world,
@@ -57,10 +70,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     pub fn spawn(&mut self) -> EntityMut<'a, '_, P> {
         let entity = Entity::new(self.world.entities().reserve_entity());
         self.server.spawn_entity_at(&entity);
-        EntityMut::new(
-            entity,
-            self,
-        )
+        EntityMut::new(entity, self)
     }
 
     pub fn entity(&self, entity: &Entity) -> EntityRef<P, Entity, WorldRef> {
@@ -68,10 +78,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     }
 
     pub fn entity_mut(&mut self, entity: &Entity) -> EntityMut<'a, '_, P> {
-        EntityMut::new(
-            *entity,
-            self,
-        )
+        EntityMut::new(*entity, self)
     }
 
     //// Entity Scopes ////
@@ -129,7 +136,6 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     }
 
     // Private methods
-
 }
 
 impl<'a, P: ProtocolType> SystemParam for Server<'a, P> {

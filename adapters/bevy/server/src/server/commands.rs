@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use naia_server::{ProtocolType, ImplRef, Replicate, UserKey, Server};
+use naia_server::{ImplRef, ProtocolType, Replicate, Server, UserKey};
 
 use crate::world::{entity::Entity, world_proxy::WorldMut};
 
@@ -19,9 +19,7 @@ pub(crate) struct DespawnEntity {
 
 impl DespawnEntity {
     pub fn new(entity: &Entity) -> Self {
-        return DespawnEntity {
-            entity: *entity
-        };
+        return DespawnEntity { entity: *entity };
     }
 }
 
@@ -50,10 +48,11 @@ impl<P: ProtocolType, R: ImplRef<P>> InsertComponent<P, R> {
     }
 }
 
-impl<P: ProtocolType, R: ImplRef<P>> Command<P> for InsertComponent<P, R>
-{
+impl<P: ProtocolType, R: ImplRef<P>> Command<P> for InsertComponent<P, R> {
     fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: &mut WorldMut) {
-        server.entity_mut(world, &self.entity).insert_component(&self.component);
+        server
+            .entity_mut(world, &self.entity)
+            .insert_component(&self.component);
     }
 }
 
@@ -76,10 +75,11 @@ impl<P: ProtocolType, R: Replicate<P>> RemoveComponent<P, R> {
     }
 }
 
-impl<P: ProtocolType, R: Replicate<P>> Command<P> for RemoveComponent<P, R>
-{
+impl<P: ProtocolType, R: Replicate<P>> Command<P> for RemoveComponent<P, R> {
     fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: &mut WorldMut) {
-        server.entity_mut(world, &self.entity).remove_component::<R>();
+        server
+            .entity_mut(world, &self.entity)
+            .remove_component::<R>();
     }
 }
 
@@ -100,9 +100,10 @@ impl OwnEntity {
     }
 }
 
-impl<P: ProtocolType> Command<P> for OwnEntity
-{
+impl<P: ProtocolType> Command<P> for OwnEntity {
     fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: &mut WorldMut) {
-        server.entity_mut(world, &self.entity).set_owner(&self.user_key);
+        server
+            .entity_mut(world, &self.entity)
+            .set_owner(&self.user_key);
     }
 }
