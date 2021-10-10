@@ -6,8 +6,8 @@ use bevy::ecs::{
 };
 
 use naia_server::{
-    EntityRef, Event, ImplRef, NaiaServerError, ProtocolType, RoomKey, RoomMut,
-    Server as NaiaServer, UserKey, UserMut, UserScopeMut,
+    EntityRef, Event, ImplRef, NaiaServerError, ProtocolType, RoomKey, RoomMut, RoomRef,
+    Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
 use crate::world::{
@@ -78,6 +78,10 @@ impl<'a, P: ProtocolType> Server<'a, P> {
 
     //// Updates ////
 
+    pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, Entity)> {
+        return self.server.scope_checks();
+    }
+
     pub fn send_all_updates(&mut self) {
         return self.server.send_all_updates(self.world.proxy());
     }
@@ -98,24 +102,38 @@ impl<'a, P: ProtocolType> Server<'a, P> {
         EntityMut::new(*entity, self)
     }
 
-    //// Entity Scopes ////
-
-    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, Entity> {
-        return self.server.user_scope(user_key);
-    }
-
-    pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, Entity)> {
-        return self.server.scope_checks();
+    pub fn entities(&self) -> Vec<Entity> {
+        return self.server.entities(&self.world.proxy());
     }
 
     //// Users ////
+
+    pub fn user_exists(&self, user_key: &UserKey) -> bool {
+        return self.server.user_exists(user_key);
+    }
+
+    pub fn user(&self, user_key: &UserKey) -> UserRef<P, Entity> {
+        return self.server.user(user_key);
+    }
 
     pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, Entity> {
         return self.server.user_mut(user_key);
     }
 
+    pub fn user_keys(&self) -> Vec<UserKey> {
+        return self.server.user_keys();
+    }
+
     pub fn users_count(&self) -> usize {
         return self.server.users_count();
+    }
+
+    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, Entity> {
+        return self.server.user_scope(user_key);
+    }
+
+    pub fn user_scope_has_entity(&self, user_key: &UserKey, entity: &Entity) -> bool {
+        return self.server.user_scope_has_entity(user_key, entity);
     }
 
     //// Rooms ////
@@ -124,7 +142,35 @@ impl<'a, P: ProtocolType> Server<'a, P> {
         return self.server.make_room();
     }
 
+    pub fn room_exists(&self, room_key: &RoomKey) -> bool {
+        return self.server.room_exists(room_key);
+    }
+
+    pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, Entity> {
+        return self.server.room(room_key);
+    }
+
+    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, Entity> {
+        return self.server.room_mut(room_key);
+    }
+
+    pub fn room_keys(&self) -> Vec<RoomKey> {
+        return self.server.room_keys();
+    }
+
+    pub fn rooms_count(&self) -> usize {
+        return self.server.rooms_count();
+    }
+
     //// Ticks ////
+
+    pub fn client_tick(&self, user_key: &UserKey) -> Option<u16> {
+        return self.server.client_tick(user_key);
+    }
+
+    pub fn server_tick(&self) -> u16 {
+        return self.server.server_tick();
+    }
 
     pub fn tick_start(&mut self) {
         self.ticker.ticked = true;
