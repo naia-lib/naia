@@ -15,7 +15,7 @@ use crate::{
     resources::Global,
 };
 
-pub fn process_events(
+pub fn receive_events(
     mut server: Server,
     mut global: ResMut<Global>,
     q_position: Query<&Ref<Position>>,
@@ -47,14 +47,14 @@ pub fn process_events(
                 // Create components for Entity to represent new player
 
                 // Position component
-                let position_ref = {
+                let position = {
                     let x = 16 * ((Random::gen_range_u32(0, 40) as i16) - 20);
                     let y = 16 * ((Random::gen_range_u32(0, 30) as i16) - 15);
                     Position::new(x, y)
                 };
 
                 // Color component
-                let color_ref = {
+                let color = {
                     let color_value = match server.users_count() % 3 {
                         0 => ColorValue::Yellow,
                         1 => ColorValue::Red,
@@ -69,9 +69,9 @@ pub fn process_events(
                     // Add Entity to main Room
                     .enter_room(&global.main_room_key)
                     // Insert Position component
-                    .insert(&position_ref)
+                    .insert(&position)
                     // Insert Color component
-                    .insert(&color_ref)
+                    .insert(&color)
                     // Set Entity's owner to user
                     .set_owner(&user_key)
                     // return Entity id

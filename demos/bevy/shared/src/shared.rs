@@ -11,7 +11,7 @@ pub fn get_server_address() -> SocketAddr {
 }
 
 pub fn get_shared_config() -> SharedConfig<Protocol> {
-    let tick_interval = Duration::from_millis(50);
+    let tick_interval = Duration::from_millis(1000);
 
     //    let link_condition = None;
     let link_condition = Some(LinkConditionerConfig::average_condition());

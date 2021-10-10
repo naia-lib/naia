@@ -1,9 +1,9 @@
-mod process_events;
+mod check_scopes;
+mod receive_events;
 mod send_updates;
 mod tick;
-mod update_scopes;
 
-pub use process_events::process_events;
+pub use check_scopes::check_scopes;
+pub use receive_events::receive_events;
 pub use send_updates::send_updates;
-pub use tick::tick;
-pub use update_scopes::update_scopes;
+pub use tick::{should_tick, tick};

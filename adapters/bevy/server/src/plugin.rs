@@ -1,16 +1,10 @@
 use std::{ops::DerefMut, sync::Mutex};
 
-use bevy::{
-    app::{AppBuilder, CoreStage, Plugin},
-    ecs::schedule::SystemStage,
-    prelude::*,
-};
+use bevy::app::{AppBuilder, Plugin as PluginType};
 
 use naia_server::{ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig};
 
-use crate::world::entity::Entity;
-
-use super::{stages::ServerStage, systems::should_tick};
+use crate::{server::ticker::Ticker, world::entity::Entity};
 
 struct ServerPluginConfig<P: ProtocolType> {
     server_config: ServerConfig,
@@ -32,24 +26,24 @@ impl<P: ProtocolType> ServerPluginConfig<P> {
     }
 }
 
-pub struct ServerPlugin<P: ProtocolType> {
+pub struct Plugin<P: ProtocolType> {
     config: Mutex<Option<ServerPluginConfig<P>>>,
 }
 
-impl<P: ProtocolType> ServerPlugin<P> {
+impl<P: ProtocolType> Plugin<P> {
     pub fn new(
         server_config: ServerConfig,
         shared_config: SharedConfig<P>,
         server_addresses: ServerAddrs,
     ) -> Self {
         let config = ServerPluginConfig::new(server_config, shared_config, server_addresses);
-        return ServerPlugin {
+        return Plugin {
             config: Mutex::new(Some(config)),
         };
     }
 }
 
-impl<P: ProtocolType> Plugin for ServerPlugin<P> {
+impl<P: ProtocolType> PluginType for Plugin<P> {
     fn build(&self, app: &mut AppBuilder) {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
         let mut server = Server::<P, Entity>::new(config.server_config, config.shared_config);
@@ -58,14 +52,6 @@ impl<P: ProtocolType> Plugin for ServerPlugin<P> {
         app
         // RESOURCES //
             .insert_resource(server)
-
-        // STAGES //
-            // ServerEvents //
-            .add_stage_before(CoreStage::PreUpdate, ServerStage::ServerEvents,
-                             SystemStage::single_threaded())
-            // Tick //
-            .add_stage_after(CoreStage::PostUpdate, ServerStage::Tick,
-                             SystemStage::single_threaded()
-                                        .with_run_criteria(should_tick::<P>.system()));
+            .insert_resource(Ticker::new());
     }
 }
