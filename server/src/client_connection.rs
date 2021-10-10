@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_shared::{
     Connection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolType,
-    Ref, Replicate, SequenceNumber, StandardHeader, EntityType
+    Ref, Replicate, SequenceNumber, StandardHeader, EntityType, WorldMutType, WorldRefType
 };
 
 use super::{
@@ -13,7 +13,6 @@ use super::{
     packet_writer::PacketWriter,
     ping_manager::PingManager,
     world_record::WorldRecord,
-    world_type::{WorldMutType, WorldRefType},
 };
 
 pub struct ClientConnection<P: ProtocolType, K: EntityType> {

@@ -29,7 +29,7 @@ pub use naia_server_socket::ServerAddrs;
 
 pub use naia_shared::{
     ImplRef, LinkConditionerConfig, ProtocolType, Random, Ref, Replicate, SharedConfig,
-    SocketConfig, EntityType
+    SocketConfig, EntityType, WorldMutType, WorldRefType
 };
 
 mod client_connection;
@@ -54,7 +54,6 @@ mod tick_manager;
 mod user;
 mod user_scope;
 mod world_record;
-mod world_type;
 
 pub use entity_ref::{EntityMut, EntityRef};
 pub use error::NaiaServerError;
@@ -65,4 +64,3 @@ pub use server::Server;
 pub use server_config::ServerConfig;
 pub use user::{user_key::UserKey, UserMut, UserRef};
 pub use user_scope::UserScopeMut;
-pub use world_type::{WorldMutType, WorldRefType};
