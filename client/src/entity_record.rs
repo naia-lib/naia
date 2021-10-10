@@ -1,19 +1,17 @@
-use std::any::TypeId;
+use std::{any::TypeId, collections::HashMap};
 
 use naia_shared::LocalComponentKey;
 
-use super::component_record::ComponentRecord;
-
 #[derive(Debug)]
 pub struct EntityRecord {
-    component_record: ComponentRecord<LocalComponentKey>,
+    component_map: HashMap<TypeId, LocalComponentKey>,
     pub is_prediction: bool,
 }
 
 impl EntityRecord {
     pub fn new() -> Self {
         EntityRecord {
-            component_record: ComponentRecord::new(),
+            component_map: HashMap::new(),
             is_prediction: false,
         }
     }

@@ -2,7 +2,7 @@ use std::{net::SocketAddr, ops::DerefMut, sync::Mutex};
 
 use bevy::app::{AppBuilder, Plugin as PluginType};
 
-use naia_client::{ProtocolType, Client, ClientConfig, SharedConfig, ImplRef};
+use naia_client::{Client, ClientConfig, ImplRef, ProtocolType, SharedConfig};
 
 use naia_bevy_shared::Entity;
 
@@ -26,7 +26,7 @@ impl<P: ProtocolType, R: ImplRef<P>> PluginConfig<P, R> {
             client_config,
             shared_config,
             server_address,
-            auth_ref
+            auth_ref,
         }
     }
 }

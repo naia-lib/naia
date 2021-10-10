@@ -1,13 +1,13 @@
-use naia_shared::{LocalEntity, ProtocolType};
+use naia_shared::{ProtocolType, EntityType};
 
 #[derive(Debug, Clone)]
-pub enum EntityAction<P: ProtocolType> {
-    SpawnEntity(LocalEntity, Vec<P>),
-    DespawnEntity(LocalEntity),
-    OwnEntity(LocalEntity),
-    DisownEntity(LocalEntity),
-    RewindEntity(LocalEntity),
-    InsertComponent(LocalEntity, P),
-    UpdateComponent(LocalEntity, P),
-    RemoveComponent(LocalEntity, P),
+pub enum EntityAction<P: ProtocolType, K: EntityType> {
+    SpawnEntity(K, Vec<P>),
+    DespawnEntity(K),
+    OwnEntity(K),
+    DisownEntity(K),
+    RewindEntity(K),
+    InsertComponent(K, P),
+    UpdateComponent(K, P),
+    RemoveComponent(K, P),
 }

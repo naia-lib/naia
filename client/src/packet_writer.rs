@@ -1,8 +1,8 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, LocalEntity, ManagerType, Manifest, MessagePacketWriter, NaiaKey,
-    ProtocolType, Ref, Replicate, MTU_SIZE,
+    wrapping_diff, ManagerType, Manifest, MessagePacketWriter, NaiaKey, ProtocolType,
+    Ref, Replicate, MTU_SIZE, EntityType
 };
 
 use super::command_receiver::CommandReceiver;
@@ -57,12 +57,12 @@ impl PacketWriter {
 
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_command<P: ProtocolType>(
+    pub fn write_command<P: ProtocolType, K: EntityType>(
         &mut self,
         host_tick: u16,
         manifest: &Manifest<P>,
-        command_receiver: &CommandReceiver<P>,
-        prediction_key: &LocalEntity,
+        command_receiver: &CommandReceiver<P, K>,
+        prediction_key: &K,
         command: &Ref<dyn Replicate<P>>,
     ) -> bool {
         //Write command payload
