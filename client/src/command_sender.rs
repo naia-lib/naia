@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use naia_shared::{LocalEntityKey, ProtocolType, Ref, Replicate};
+use naia_shared::{LocalEntity, ProtocolType, Ref, Replicate};
 
 /// Handles outgoing Commands
 #[derive(Debug)]
 pub struct CommandSender<P: ProtocolType> {
-    queued_outgoing_command: HashMap<LocalEntityKey, Ref<dyn Replicate<P>>>,
+    queued_outgoing_command: HashMap<LocalEntity, Ref<dyn Replicate<P>>>,
 }
 
 impl<P: ProtocolType> CommandSender<P> {
@@ -22,7 +22,7 @@ impl<P: ProtocolType> CommandSender<P> {
     }
 
     /// Gets the next queued Command to be transmitted
-    pub fn pop_command(&mut self) -> Option<(LocalEntityKey, Ref<dyn Replicate<P>>)> {
+    pub fn pop_command(&mut self) -> Option<(LocalEntity, Ref<dyn Replicate<P>>)> {
         let mut out_key = None;
         if let Some((key, _)) = self.queued_outgoing_command.iter().next() {
             out_key = Some(*key);
@@ -40,7 +40,7 @@ impl<P: ProtocolType> CommandSender<P> {
     /// written into a packet, put the Command back into the front of the queue
     pub fn unpop_command(
         &mut self,
-        prediction_key: &LocalEntityKey,
+        prediction_key: &LocalEntity,
         command: &Ref<dyn Replicate<P>>,
     ) {
         let cloned_command = command.clone();
@@ -51,7 +51,7 @@ impl<P: ProtocolType> CommandSender<P> {
     /// Queues an Command to be transmitted to the remote host
     pub fn queue_command(
         &mut self,
-        prediction_key: &LocalEntityKey,
+        prediction_key: &LocalEntity,
         command: &Ref<dyn Replicate<P>>,
     ) {
         self.queued_outgoing_command

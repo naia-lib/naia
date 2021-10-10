@@ -1,7 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    wrapping_diff, LocalEntityKey, ProtocolType, Ref, Replicate, SequenceBuffer, SequenceIterator,
+    wrapping_diff, LocalEntity, ProtocolType, Ref, Replicate, SequenceBuffer, SequenceIterator,
 };
 
 use super::entity_manager::EntityManager;
@@ -11,10 +11,10 @@ const COMMAND_HISTORY_SIZE: u16 = 64;
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
 pub struct CommandReceiver<P: ProtocolType> {
-    queued_incoming_commands: VecDeque<(u16, LocalEntityKey, Ref<dyn Replicate<P>>)>,
-    command_history: HashMap<LocalEntityKey, SequenceBuffer<Ref<dyn Replicate<P>>>>,
-    queued_command_replays: VecDeque<(u16, LocalEntityKey, Ref<dyn Replicate<P>>)>,
-    replay_trigger: HashMap<LocalEntityKey, u16>,
+    queued_incoming_commands: VecDeque<(u16, LocalEntity, Ref<dyn Replicate<P>>)>,
+    command_history: HashMap<LocalEntity, SequenceBuffer<Ref<dyn Replicate<P>>>>,
+    queued_command_replays: VecDeque<(u16, LocalEntity, Ref<dyn Replicate<P>>)>,
+    replay_trigger: HashMap<LocalEntity, u16>,
 }
 
 impl<P: ProtocolType> CommandReceiver<P> {
@@ -29,12 +29,12 @@ impl<P: ProtocolType> CommandReceiver<P> {
     }
 
     /// Gets the next queued Command
-    pub fn pop_command(&mut self) -> Option<(u16, LocalEntityKey, Ref<dyn Replicate<P>>)> {
+    pub fn pop_command(&mut self) -> Option<(u16, LocalEntity, Ref<dyn Replicate<P>>)> {
         self.queued_incoming_commands.pop_front()
     }
 
     /// Gets the next queued Replayed Command
-    pub fn pop_command_replay(&mut self) -> Option<(u16, LocalEntityKey, Ref<dyn Replicate<P>>)> {
+    pub fn pop_command_replay(&mut self) -> Option<(u16, LocalEntity, Ref<dyn Replicate<P>>)> {
         self.queued_command_replays.pop_front()
     }
 
@@ -69,7 +69,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
     pub fn queue_command(
         &mut self,
         host_tick: u16,
-        prediction_key: &LocalEntityKey,
+        prediction_key: &LocalEntity,
         command: &Ref<dyn Replicate<P>>,
     ) {
         self.queued_incoming_commands
@@ -81,7 +81,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
     }
 
     /// Get number of Commands in the command history for a given Prediction
-    pub fn command_history_count(&self, prediction_key: &LocalEntityKey) -> u8 {
+    pub fn command_history_count(&self, prediction_key: &LocalEntity) -> u8 {
         if let Some(command_buffer) = self.command_history.get(&prediction_key) {
             return command_buffer.get_entries_count();
         }
@@ -92,7 +92,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
     /// Prediction
     pub fn command_history_iter(
         &self,
-        prediction_key: &LocalEntityKey,
+        prediction_key: &LocalEntity,
         reverse: bool,
     ) -> Option<SequenceIterator<Ref<dyn Replicate<P>>>> {
         if let Some(command_buffer) = self.command_history.get(&prediction_key) {
@@ -102,7 +102,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
     }
 
     /// Queues Commands to be replayed from a given tick
-    pub fn replay_commands(&mut self, history_tick: u16, prediction_key: &LocalEntityKey) {
+    pub fn replay_commands(&mut self, history_tick: u16, prediction_key: &LocalEntity) {
         if let Some(tick) = self.replay_trigger.get_mut(&prediction_key) {
             if wrapping_diff(*tick, history_tick) > 0 {
                 *tick = history_tick;
@@ -113,14 +113,14 @@ impl<P: ProtocolType> CommandReceiver<P> {
     }
 
     /// Removes command history for a given Prediction until a specific tick
-    pub fn remove_history_until(&mut self, history_tick: u16, prediction_key: &LocalEntityKey) {
+    pub fn remove_history_until(&mut self, history_tick: u16, prediction_key: &LocalEntity) {
         if let Some(command_buffer) = self.command_history.get_mut(&prediction_key) {
             command_buffer.remove_until(history_tick);
         }
     }
 
     /// Perform initialization on Prediction creation
-    pub fn prediction_init(&mut self, prediction_key: &LocalEntityKey) {
+    pub fn prediction_init(&mut self, prediction_key: &LocalEntity) {
         self.command_history.insert(
             *prediction_key,
             SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE),
@@ -128,7 +128,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
     }
 
     /// Perform cleanup on Prediction deletion
-    pub fn prediction_cleanup(&mut self, prediction_key: &LocalEntityKey) {
+    pub fn prediction_cleanup(&mut self, prediction_key: &LocalEntity) {
         self.command_history.remove(prediction_key);
     }
 }

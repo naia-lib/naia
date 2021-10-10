@@ -1,7 +1,9 @@
+pub use naia_bevy_shared::Entity;
+
 mod plugin;
 mod client;
-mod world;
+mod state;
+mod ticker;
 
 pub use plugin::Plugin;
-pub use client::client::Client;
-pub use world::entity::Entity;
+pub use client::Client;

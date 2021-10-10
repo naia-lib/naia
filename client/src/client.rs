@@ -1,13 +1,13 @@
-use std::{collections::VecDeque, net::SocketAddr};
+use std::{collections::{HashMap, VecDeque}, net::SocketAddr, marker::PhantomData};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, Socket};
 
 pub use naia_shared::{
-    ConnectionConfig, HostTickManager, ImplRef, LocalEntityKey, ManagerType, Manifest,
+    ConnectionConfig, HostTickManager, ImplRef, LocalEntity, ManagerType, Manifest,
     PacketReader, PacketType, ProtocolType, Ref, Replicate, SequenceIterator, SharedConfig,
-    StandardHeader, Timer, Timestamp,
+    StandardHeader, Timer, Timestamp, EntityType, WorldRefType
 };
 
 use super::{
@@ -25,7 +25,7 @@ use super::{
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
 #[derive(Debug)]
-pub struct Client<P: ProtocolType> {
+pub struct Client<P: ProtocolType, K: EntityType> {
     // Manifest
     manifest: Manifest<P>,
     // Connection
@@ -42,11 +42,16 @@ pub struct Client<P: ProtocolType> {
     // Events
     outstanding_connect: bool,
     outstanding_errors: VecDeque<NaiaClientError>,
+    // Entities
+    local_to_world_entity_map: HashMap<LocalEntity, K>,
+    world_to_local_entity_map: HashMap<K, LocalEntity>,
     // Ticks
     tick_manager: TickManager,
+    // Phantom
+    phantom_k: PhantomData<K>,
 }
 
-impl<P: ProtocolType> Client<P> {
+impl<P: ProtocolType, K: EntityType> Client<P, K> {
     /// Create a new Client
     pub fn new(mut client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
         client_config.socket_config.link_condition_config =
@@ -81,8 +86,13 @@ impl<P: ProtocolType> Client<P> {
             // Events
             outstanding_connect: false,
             outstanding_errors: VecDeque::new(),
+            // Entities
+            local_to_world_entity_map: HashMap::new(),
+            world_to_local_entity_map: HashMap::new(),
             // Ticks
             tick_manager: TickManager::new(shared_config.tick_interval),
+            // Phantom
+            phantom_k: PhantomData,
         }
     }
 
@@ -115,10 +125,11 @@ impl<P: ProtocolType> Client<P> {
     }
 
     /// Queues up a Command for an assigned Entity to be sent to the Server
-    pub fn queue_command<R: ImplRef<P>>(&mut self, entity_key: &LocalEntityKey, command_ref: &R) {
+    pub fn queue_command<R: ImplRef<P>>(&mut self, entity: &K, command_ref: &R) {
+        let local_entity = *self.local_entity(entity).expect("duh!");
         if let Some(connection) = &mut self.server_connection {
             let dyn_ref = command_ref.dyn_ref();
-            connection.queue_command(entity_key, &dyn_ref);
+            connection.queue_command(&local_entity, &dyn_ref);
         }
     }
 
@@ -127,28 +138,39 @@ impl<P: ProtocolType> Client<P> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// Entity associated with the given LocalEntityKey.
     /// Panics if the Entity does not exist for the given LocalEntityKey.
-    pub fn entity(&self, entity_key: &LocalEntityKey) -> EntityRef<P> {
-        if self.entity_exists(entity_key) {
-            return EntityRef::new(self, &entity_key);
+    pub fn entity<'s, W: WorldRefType<P, K>>(
+        &'s self,
+        world: W,
+        entity: &K
+    ) -> EntityRef<'s, P, K, W> {
+        if world.has_entity(entity) {
+            return EntityRef::new(self, world, &entity);
         }
-        panic!("No Entity exists for given Key: {}!", entity_key);
+        panic!("No Entity exists for given Key!");
     }
 
     /// Get whether or not the Entity currently in scope for the Client, given
     /// that Entity's Key
-    pub fn entity_exists(&self, entity_key: &LocalEntityKey) -> bool {
+    pub fn entity_exists(&self, entity: &K) -> bool {
         if let Some(connection) = &self.server_connection {
-            return connection.has_entity(entity_key);
+            if let Some(local_entity) = self.local_entity(entity) {
+                return connection.has_entity(&local_entity);
+            }
         }
         return false;
     }
 
-    /// Return a list of all Entities' keys
-    pub fn entity_keys(&self) -> Vec<LocalEntityKey> {
+    /// Return a list of all Entities
+    pub fn entities(&self) -> Vec<K> {
+        let mut output = Vec::new();
         if let Some(connection) = &self.server_connection {
-            return connection.entity_keys();
+            for local_key in connection.entity_keys() {
+                if let Some(world_key) = self.world_entity(&local_key) {
+                    output.push(*world_key);
+                }
+            }
         }
-        return Vec::new();
+        return output;
     }
 
     // Connection
@@ -203,7 +225,7 @@ impl<P: ProtocolType> Client<P> {
     /// Must call this regularly (preferably at the beginning of every draw
     /// frame), in a loop until it returns None.
     /// Retrieves incoming update data, and maintains the connection.
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P>, NaiaClientError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P, K>, NaiaClientError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with server, and receive packets
@@ -239,25 +261,39 @@ impl<P: ProtocolType> Client<P> {
                 }
                 // receive entity actions
                 while let Some(action) = connection.get_incoming_entity_action() {
-                    let event: Event<P> = {
+                    let event: Event<P, K> = {
                         match action {
                             EntityAction::SpawnEntity(local_key, component_list) => {
-                                Event::SpawnEntity(local_key, component_list)
+                                let world_key = self.local_to_world_entity_map.get(&local_key).expect("duh");
+                                Event::SpawnEntity(*world_key, component_list)
                             }
                             EntityAction::DespawnEntity(local_key) => {
-                                Event::DespawnEntity(local_key)
+                                let world_key = self.local_to_world_entity_map.get(&local_key).expect("duh");
+                                Event::DespawnEntity(*world_key)
                             }
-                            EntityAction::OwnEntity(local_key) => Event::OwnEntity(local_key),
-                            EntityAction::DisownEntity(local_key) => Event::DisownEntity(local_key),
-                            EntityAction::RewindEntity(local_key) => Event::RewindEntity(local_key),
-                            EntityAction::InsertComponent(entity_key, component_key) => {
-                                Event::InsertComponent(entity_key, component_key)
+                            EntityAction::OwnEntity(local_key) => {
+                                let world_key = self.local_to_world_entity_map.get(&local_key).expect("duh");
+                                Event::OwnEntity(*world_key)
+                            },
+                            EntityAction::DisownEntity(local_key) => {
+                                let world_key = self.local_to_world_entity_map.get(&local_key).expect("duh");
+                                Event::DisownEntity(*world_key)
+                            },
+                            EntityAction::RewindEntity(local_key) => {
+                                let world_key = self.local_to_world_entity_map.get(&local_key).expect("duh");
+                                Event::RewindEntity(*world_key)
+                            },
+                            EntityAction::InsertComponent(local_key, component_key) => {
+                                let world_key = self.local_to_world_entity_map.get(&local_key).expect("duh");
+                                Event::InsertComponent(*world_key, component_key)
                             }
-                            EntityAction::UpdateComponent(entity_key, component_key) => {
-                                Event::UpdateComponent(entity_key, component_key)
+                            EntityAction::UpdateComponent(local_key, component_key) => {
+                                let world_key = self.local_to_world_entity_map.get(&local_key).expect("duh");
+                                Event::UpdateComponent(*world_key, component_key)
                             }
-                            EntityAction::RemoveComponent(entity_key, component) => {
-                                Event::RemoveComponent(entity_key, component.clone())
+                            EntityAction::RemoveComponent(local_key, component) => {
+                                let world_key = self.local_to_world_entity_map.get(&local_key).expect("duh");
+                                Event::RemoveComponent(*world_key, component.clone())
                             }
                         }
                     };
@@ -265,21 +301,23 @@ impl<P: ProtocolType> Client<P> {
                 }
                 // receive replay command
                 while let Some((prediction_key, command)) = connection.get_incoming_replay() {
+                    let world_key = self.local_to_world_entity_map.get(&prediction_key).expect("duh");
                     events.push_back(Ok(Event::ReplayCommand(
-                        prediction_key,
+                        *world_key,
                         command.borrow().copy_to_protocol(),
                     )));
                 }
                 // receive command
                 while let Some((prediction_key, command)) = connection.get_incoming_command() {
+                    let world_key = self.local_to_world_entity_map.get(&prediction_key).expect("duh");
                     events.push_back(Ok(Event::NewCommand(
-                        prediction_key,
+                        *world_key,
                         command.borrow().copy_to_protocol(),
                     )));
                 }
                 // send heartbeats
                 if connection.should_send_heartbeat() {
-                    Client::internal_send_with_connection(
+                    Client::<P, K>::internal_send_with_connection(
                         self.tick_manager.get_client_tick(),
                         &mut self.io,
                         connection,
@@ -290,7 +328,7 @@ impl<P: ProtocolType> Client<P> {
                 // send pings
                 if connection.should_send_ping() {
                     let ping_payload = connection.get_ping_payload();
-                    Client::internal_send_with_connection(
+                    Client::<P, K>::internal_send_with_connection(
                         self.tick_manager.get_client_tick(),
                         &mut self.io,
                         connection,
@@ -326,11 +364,22 @@ impl<P: ProtocolType> Client<P> {
 
     //// Entities
 
+    //conversion
+    pub(crate) fn local_entity(&self, entity: &K) -> Option<&LocalEntity> {
+        return self.world_to_local_entity_map.get(entity);
+    }
+
+    pub(crate) fn world_entity(&self, entity: &LocalEntity) -> Option<&K> {
+        return self.local_to_world_entity_map.get(entity);
+    }
+
     /// Get whether or not the Entity associated with a given EntityKey has
     /// been assigned to the current User
-    pub(crate) fn entity_is_owned(&self, entity_key: &LocalEntityKey) -> bool {
+    pub(crate) fn entity_is_owned(&self, entity: &K) -> bool {
         if let Some(connection) = &self.server_connection {
-            return connection.entity_is_prediction(entity_key);
+            if let Some(local_key) = self.local_entity(entity) {
+                return connection.entity_is_prediction(local_key);
+            }
         }
         return false;
     }
@@ -338,7 +387,7 @@ impl<P: ProtocolType> Client<P> {
     /// Returns whether or not an Entity has a Component of a given TypeId
     pub(crate) fn entity_contains_type<R: Replicate<P>>(
         &self,
-        entity_key: &LocalEntityKey,
+        entity_key: &K,
     ) -> bool {
         return self.get_component_by_type::<R>(entity_key).is_some();
     }
@@ -349,7 +398,7 @@ impl<P: ProtocolType> Client<P> {
     /// appropriate ComponentRef
     pub(crate) fn component<R: Replicate<P>>(
         &self,
-        entity_key: &LocalEntityKey,
+        entity_key: &K,
     ) -> Option<&Ref<R>> {
         if let Some(protocol) = self.get_component_by_type::<R>(entity_key) {
             return protocol.as_typed_ref::<R>();
@@ -361,7 +410,7 @@ impl<P: ProtocolType> Client<P> {
     /// appropriate ComponentRef
     pub(crate) fn component_prediction<R: Replicate<P>>(
         &self,
-        entity_key: &LocalEntityKey,
+        entity_key: &K,
     ) -> Option<&Ref<R>> {
         if let Some(protocol) = self.get_prediction_component_by_type::<R>(entity_key) {
             return protocol.as_typed_ref::<R>();
@@ -373,10 +422,12 @@ impl<P: ProtocolType> Client<P> {
     /// Component being tracked by the Server
     pub(crate) fn get_component_by_type<R: Replicate<P>>(
         &self,
-        entity_key: &LocalEntityKey,
+        entity: &K,
     ) -> Option<&P> {
         if let Some(connection) = &self.server_connection {
-            return connection.get_component_by_type::<R>(entity_key);
+            if let Some(local_key) = self.local_entity(entity) {
+                return connection.get_component_by_type::<R>(local_key);
+            }
         }
         return None;
     }
@@ -385,10 +436,12 @@ impl<P: ProtocolType> Client<P> {
     /// Prediction Component being tracked by the Server
     pub(crate) fn get_prediction_component_by_type<R: Replicate<P>>(
         &self,
-        entity_key: &LocalEntityKey,
+        entity: &K,
     ) -> Option<&P> {
         if let Some(connection) = &self.server_connection {
-            return connection.get_prediction_component_by_type::<R>(entity_key);
+            if let Some(local_key) = self.local_entity(entity) {
+                return connection.get_prediction_component_by_type::<R>(local_key);
+            }
         }
         return None;
     }
@@ -410,7 +463,7 @@ impl<P: ProtocolType> Client<P> {
                     .as_mut()
                     .unwrap()
                     .write(&mut timestamp_bytes);
-                Client::<P>::internal_send_connectionless(
+                Client::<P, K>::internal_send_connectionless(
                     &mut self.io,
                     PacketType::ClientChallengeRequest,
                     Packet::new(timestamp_bytes),
@@ -433,7 +486,7 @@ impl<P: ProtocolType> Client<P> {
                     payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
                     auth_message.borrow().write(&mut payload_bytes);
                 }
-                Client::<P>::internal_send_connectionless(
+                Client::<P, K>::internal_send_connectionless(
                     &mut self.io,
                     PacketType::ClientConnectRequest,
                     Packet::new(payload_bytes),

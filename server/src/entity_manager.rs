@@ -8,7 +8,7 @@ use std::{
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    DiffMask, EntityType, KeyGenerator, LocalComponentKey, LocalEntityKey, Manifest, NaiaKey,
+    DiffMask, EntityType, KeyGenerator, LocalComponentKey, LocalEntity, Manifest, NaiaKey,
     PacketNotifiable, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType, MTU_SIZE,
 };
 
@@ -24,9 +24,9 @@ use super::{
 pub struct EntityManager<P: ProtocolType, K: EntityType> {
     address: SocketAddr,
     // Entities
-    entity_key_generator: KeyGenerator<LocalEntityKey>,
+    entity_key_generator: KeyGenerator<LocalEntity>,
     entity_records: HashMap<K, LocalEntityRecord>,
-    local_to_global_entity_key_map: HashMap<LocalEntityKey, K>,
+    local_to_global_entity_key_map: HashMap<LocalEntity, K>,
     delayed_entity_deletions: HashSet<K>,
     // Components
     component_key_generator: KeyGenerator<LocalComponentKey>,
@@ -250,7 +250,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
             }
 
             // then, add entity
-            let local_key: LocalEntityKey = self.entity_key_generator.generate();
+            let local_key: LocalEntity = self.entity_key_generator.generate();
             self.local_to_global_entity_key_map
                 .insert(local_key, *global_entity_key);
             let local_entity_record = LocalEntityRecord::new(local_key);
@@ -419,7 +419,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
     // Ect..
 
-    pub fn get_global_entity_key_from_local(&self, local_key: LocalEntityKey) -> Option<&K> {
+    pub fn get_global_entity_key_from_local(&self, local_key: LocalEntity) -> Option<&K> {
         return self.local_to_global_entity_key_map.get(&local_key);
     }
 

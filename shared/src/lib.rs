@@ -54,7 +54,7 @@ pub use entity_action_type::EntityActionType;
 pub use entity_type::EntityType;
 pub use host_tick_manager::HostTickManager;
 pub use key_store::KeyGenerator;
-pub use keys::{LocalComponentKey, LocalEntityKey, NaiaKey};
+pub use keys::{LocalComponentKey, LocalEntity, NaiaKey};
 pub use manager_type::ManagerType;
 pub use manifest::Manifest;
 pub use message_manager::MessageManager;
