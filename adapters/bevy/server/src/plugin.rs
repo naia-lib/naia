@@ -4,7 +4,9 @@ use bevy::app::{AppBuilder, Plugin as PluginType};
 
 use naia_server::{ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig};
 
-use crate::{server::ticker::Ticker, world::entity::Entity};
+use naia_bevy_shared::Entity;
+
+use super::ticker::Ticker;
 
 struct ServerPluginConfig<P: ProtocolType> {
     server_config: ServerConfig,

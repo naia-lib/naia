@@ -5,7 +5,7 @@ use std::{
 
 use bevy::ecs::world::World;
 
-use naia_server::{ImplRef, ProtocolType};
+use naia_shared::{ImplRef, ProtocolType};
 
 use super::{
     component_access::{ComponentAccess, ComponentAccessor},

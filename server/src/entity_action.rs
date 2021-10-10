@@ -1,5 +1,6 @@
 use naia_shared::{
-    DiffMask, EntityActionType, LocalComponentKey, LocalEntityKey, ProtocolType, Ref, Replicate, EntityType
+    DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntityKey, ProtocolType, Ref,
+    Replicate,
 };
 
 use super::keys::ComponentKey;

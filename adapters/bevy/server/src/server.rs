@@ -10,10 +10,7 @@ use naia_server::{
     Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
-use crate::world::{
-    entity::Entity,
-    world_proxy::{WorldProxy, WorldRef},
-};
+use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
 
 use super::{commands::Command, entity_mut::EntityMut, state::State, ticker::Ticker};
 

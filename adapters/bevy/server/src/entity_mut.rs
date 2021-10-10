@@ -1,6 +1,6 @@
 use naia_server::{ImplRef, ProtocolType, Replicate, RoomKey, UserKey};
 
-use crate::world::entity::Entity;
+use naia_bevy_shared::Entity;
 
 use super::{
     commands::{DespawnEntity, InsertComponent, OwnEntity, RemoveComponent},

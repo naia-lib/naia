@@ -2,12 +2,12 @@ use std::{marker::PhantomData, ops::Deref};
 
 use bevy::ecs::world::World;
 
-use naia_server::{ImplRef, ProtocolType};
+use naia_shared::{ImplRef, ProtocolType};
 
 use super::entity::Entity;
 
 pub trait ComponentAccess<P: ProtocolType>: Send + Sync {
-    fn get_component(&self, world: &World, entity_key: &Entity) -> Option<P>;
+    fn get_component(&self, world: &World, entity: &Entity) -> Option<P>;
 }
 
 pub struct ComponentAccessor<P: ProtocolType, R: ImplRef<P>> {

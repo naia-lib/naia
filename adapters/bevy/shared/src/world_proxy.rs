@@ -2,7 +2,7 @@ use std::any::TypeId;
 
 use bevy::ecs::world::{Mut, World};
 
-use naia_server::{ImplRef, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType};
+use naia_shared::{ImplRef, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType};
 
 use super::{entity::Entity, world_data::WorldData};
 
