@@ -254,7 +254,32 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         }
     }
 
-    // Updates ... ?
+    // Updates
+
+    /// Used to evaluate whether, given a User & Entity that are in the
+    /// same Room, said Entity should be in scope for the given User.
+    ///
+    /// While Rooms allow for a very simple scope to which an Entity can belong,
+    /// this provides complete customization for advanced scopes.
+    ///
+    /// Return a collection of Entity Scope Sets, being a unique combination of
+    /// a related Room, User, and Entity, used to determine which Entities to
+    /// replicate to which Users
+    pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, K)> {
+        let mut list: Vec<(RoomKey, UserKey, K)> = Vec::new();
+
+        // TODO: precache this, instead of generating a new list every call
+        // likely this is called A LOT
+        for (room_key, room) in self.rooms.iter() {
+            for user_key in room.user_keys() {
+                for entity in room.entities() {
+                    list.push((room_key, *user_key, *entity));
+                }
+            }
+        }
+
+        return list;
+    }
 
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
@@ -335,14 +360,56 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         return WorldlessEntityMut::new(self, &entity);
     }
 
-    /// Gets a Vec of all Keys associated with Entities in the given World
+    /// Gets a Vec of all Entities in the given World
     pub fn entities<W: WorldRefType<P, K>>(&self, world: &W) -> Vec<K> {
         return world.entities();
     }
 
-    // Entity Scopes
+    // Users
 
-    /// Returns a UserScopeMut, which
+    /// Returns whether or not a User exists for the given RoomKey
+    pub fn user_exists(&self, user_key: &UserKey) -> bool {
+        return self.users.contains_key(*user_key);
+    }
+
+    /// Retrieves an UserRef that exposes read-only operations for the User
+    /// associated with the given UserKey.
+    /// Panics if the user does not exist.
+    pub fn user(&self, user_key: &UserKey) -> UserRef<P, K> {
+        if self.users.contains_key(*user_key) {
+            return UserRef::new(self, &user_key);
+        }
+        panic!("No User exists for given Key!");
+    }
+
+    /// Retrieves an UserMut that exposes read and write operations for the User
+    /// associated with the given UserKey.
+    /// Returns None if the user does not exist.
+    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, K> {
+        if self.users.contains_key(*user_key) {
+            return UserMut::new(self, &user_key);
+        }
+        panic!("No User exists for given Key!");
+    }
+
+    /// Return a list of all currently connected Users' keys
+    pub fn user_keys(&self) -> Vec<UserKey> {
+        let mut output = Vec::new();
+
+        for (user_key, _) in self.users.iter() {
+            output.push(user_key);
+        }
+
+        return output;
+    }
+
+    /// Get the number of Users currently connected
+    pub fn users_count(&self) -> usize {
+        return self.users.len();
+    }
+
+    /// Returns a UserScopeMut, which is used to include/exclude Entities for a
+    /// given User
     pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, K> {
         if self.users.contains_key(*user_key) {
             return UserScopeMut::new(self, &user_key);
@@ -350,29 +417,13 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         panic!("No User exists for given Key!");
     }
 
-    /// Used to evaluate whether, given a User & Entity that are in the
-    /// same Room, said Entity should be in scope for the given User.
-    ///
-    /// While Rooms allow for a very simple scope to which an Entity can belong,
-    /// this provides complete customization for advanced scopes.
-    ///
-    /// Return a collection of Entity Scope Sets, being a unique combination of
-    /// a related Room, User, and Entity, used to determine which Entities to
-    /// replicate to which Users
-    pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, K)> {
-        let mut list: Vec<(RoomKey, UserKey, K)> = Vec::new();
-
-        // TODO: precache this, instead of generating a new list every call
-        // likely this is called A LOT
-        for (room_key, room) in self.rooms.iter() {
-            for user_key in room.user_keys() {
-                for entity in room.entities() {
-                    list.push((room_key, *user_key, *entity));
-                }
-            }
+    /// Returns whether a given User has a particular Entity in-scope currently
+    pub fn user_scope_has_entity(&self, user_key: &UserKey, entity: &K) -> bool {
+        if let Some(client_connection) = self.client_connections.get(user_key) {
+            return client_connection.has_entity(entity);
         }
 
-        return list;
+        return false;
     }
 
     // Rooms
@@ -425,60 +476,6 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     /// Get a count of how many Rooms currently exist
     pub fn rooms_count(&self) -> usize {
         self.rooms.len()
-    }
-
-    // Users
-
-    /// Returns whether or not a User exists for the given RoomKey
-    pub fn user_exists(&self, user_key: &UserKey) -> bool {
-        return self.users.contains_key(*user_key);
-    }
-
-    /// Retrieves an UserRef that exposes read-only operations for the User
-    /// associated with the given UserKey.
-    /// Panics if the user does not exist.
-    pub fn user(&self, user_key: &UserKey) -> UserRef<P, K> {
-        if self.users.contains_key(*user_key) {
-            return UserRef::new(self, &user_key);
-        }
-        panic!("No User exists for given Key!");
-    }
-
-    /// Retrieves an UserMut that exposes read and write operations for the User
-    /// associated with the given UserKey.
-    /// Returns None if the user does not exist.
-    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, K> {
-        if self.users.contains_key(*user_key) {
-            return UserMut::new(self, &user_key);
-        }
-        panic!("No User exists for given Key!");
-    }
-
-    /// Return a list of all currently connected Users' keys
-    pub fn user_keys(&self) -> Vec<UserKey> {
-        let mut output = Vec::new();
-
-        for (user_key, _) in self.users.iter() {
-            output.push(user_key);
-        }
-
-        return output;
-    }
-
-    /// Get the number of Users currently connected
-    pub fn users_count(&self) -> usize {
-        return self.users.len();
-    }
-
-    // User Scopes
-
-    /// Returns whether a given User has a particular Entity in-scope currently
-    pub fn user_scope_has_entity(&self, user_key: &UserKey, entity: &K) -> bool {
-        if let Some(client_connection) = self.client_connections.get(user_key) {
-            return client_connection.has_entity(entity);
-        }
-
-        return false;
     }
 
     // Ticks
