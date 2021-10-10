@@ -21,7 +21,7 @@ pub use naia_shared::{
 
 use super::{
     client_connection::ClientConnection,
-    entity_ref::{EntityMut, EntityRef, WorldRefEntityMut, WorldlessEntityMut},
+    entity_ref::{EntityMut, EntityRef, WorldlessEntityMut},
     error::NaiaServerError,
     event::Event,
     keys::{ComponentKey, EntityType},
@@ -283,13 +283,22 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     // Entities
 
     /// Creates a new Entity and returns the associated Key
-    pub fn spawn_entity<'s, W: WorldMutType<P, K>>(
+    pub fn spawn_entity<'s, 'w, W: WorldMutType<P, K>>(
         &'s mut self,
-        mut world: W,
-    ) -> EntityMut<'s, P, K, W> {
+        world: &'w mut W,
+    ) -> EntityMut<'s, 'w, P, K, W> {
         let entity_key = world.spawn_entity();
         self.world_record.spawn_entity(&entity_key);
         return EntityMut::new(self, world, &entity_key);
+    }
+
+    /// Creates a new Entity with a specific key
+    pub fn spawn_entity_at<'s>(
+        &'s mut self,
+        entity_key: &K,
+    ) -> WorldlessEntityMut<'s, P, K> {
+        self.world_record.spawn_entity(entity_key);
+        return WorldlessEntityMut::new(self, entity_key);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -309,28 +318,13 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity associated with the given Entity Key.
     /// Panics if the entity does not exist.
-    pub fn entity_mut<'s, W: WorldMutType<P, K>>(
+    pub fn entity_mut<'s, 'w, W: WorldMutType<P, K>>(
         &'s mut self,
-        world: W,
+        world: &'w mut W,
         entity_key: &K,
-    ) -> EntityMut<'s, P, K, W> {
+    ) -> EntityMut<'s, 'w, P, K, W> {
         if world.has_entity(entity_key) {
             return EntityMut::new(self, world, &entity_key);
-        }
-        panic!("No Entity exists for given Key!");
-    }
-
-    /// Retrieves a WorldRefEntityMut that exposes read and write operations for the
-    /// Entity associated with the given Entity Key, but only read operations for the
-    /// World... a very niche use case here.
-    /// Panics if the entity does not exist.
-    pub fn world_ref_entity_mut<'s, W: WorldRefType<P, K>>(
-        &'s mut self,
-        world: W,
-        entity_key: &K,
-    ) -> WorldRefEntityMut<'s, P, K, W> {
-        if world.has_entity(entity_key) {
-            return WorldRefEntityMut::new(self, world, &entity_key);
         }
         panic!("No Entity exists for given Key!");
     }

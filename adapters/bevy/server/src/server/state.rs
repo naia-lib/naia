@@ -1,15 +1,17 @@
 use std::marker::PhantomData;
 
-use bevy::{ecs::{world::World, system::{SystemParamState, SystemParamFetch, SystemState}}};
+use bevy::{ecs::{world::{World, Mut}, system::{SystemParamState, SystemParamFetch, SystemState}}};
 
-use naia_server::ProtocolType;
+use naia_server::{ProtocolType, Server as NaiaServer};
+
+use crate::world::{entity::Entity, world_proxy::WorldProxyMut};
 
 use super::{server::Server, commands::Command};
 
 // State
 
 pub struct State<P: ProtocolType> {
-    commands: Vec<Box<dyn Command>>,
+    commands: Vec<Box<dyn Command<P>>>,
     phantom_p: PhantomData<P>,
 }
 
@@ -18,19 +20,24 @@ impl<P: ProtocolType> State<P> {
         // Have to do this to get around 'world.flush()' only being crate-public
         world.spawn().despawn();
 
-        // Process queued commands
-        for command in self.commands.drain(..) {
-            command.write(world);
-        }
+        // resource scope
+        world.resource_scope(|world: &mut World, mut server: Mut<NaiaServer<P, Entity>>| {
+            let world_proxy = &mut world.proxy_mut();
+
+            // Process queued commands
+            for command in self.commands.drain(..) {
+                command.write(&mut server, world_proxy);
+            }
+        });
     }
 
     #[inline]
-    pub fn push_boxed(&mut self, command: Box<dyn Command>) {
+    pub fn push_boxed(&mut self, command: Box<dyn Command<P>>) {
         self.commands.push(command);
     }
 
     #[inline]
-    pub fn push<T: Command>(&mut self, command: T) {
+    pub fn push<T: Command<P>>(&mut self, command: T) {
         self.push_boxed(Box::new(command));
     }
 }

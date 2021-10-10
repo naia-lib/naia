@@ -96,6 +96,7 @@ pub fn process_events(
             Ok(ServerEvent::Tick) => {
                 server.tick();
             }
+            _ => {}
         }
     }
 }

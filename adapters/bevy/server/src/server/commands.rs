@@ -1,15 +1,13 @@
 use std::marker::PhantomData;
 
-use bevy::{ecs::world::World, log::debug};
+use naia_server::{ProtocolType, ImplRef, Replicate, UserKey, Server};
 
-use naia_server::{ProtocolType, ImplRef, Replicate, Ref};
-
-use crate::world::entity::Entity;
+use crate::world::{entity::Entity, world_proxy::WorldMut};
 
 // Command Trait
 
-pub trait Command: Send + Sync + 'static {
-    fn write(self: Box<Self>, world: &mut World);
+pub trait Command<P: ProtocolType>: Send + Sync + 'static {
+    fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: &mut WorldMut);
 }
 
 //// Despawn Component ////
@@ -20,18 +18,16 @@ pub(crate) struct DespawnEntity {
 }
 
 impl DespawnEntity {
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(entity: &Entity) -> Self {
         return DespawnEntity {
-            entity
+            entity: *entity
         };
     }
 }
 
-impl Command for DespawnEntity {
-    fn write(self: Box<Self>, world: &mut World) {
-        if !world.despawn(*self.entity) {
-            debug!("Failed to despawn non-existent entity {:?}", self.entity);
-        }
+impl<P: ProtocolType> Command<P> for DespawnEntity {
+    fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: &mut WorldMut) {
+        server.entity_mut(world, &self.entity).despawn();
     }
 }
 
@@ -45,19 +41,19 @@ pub(crate) struct InsertComponent<P: ProtocolType, R: ImplRef<P>> {
 }
 
 impl<P: ProtocolType, R: ImplRef<P>> InsertComponent<P, R> {
-    pub fn new(entity: Entity, component: R) -> Self {
+    pub fn new(entity: &Entity, component: &R) -> Self {
         return InsertComponent {
-            entity,
-            component,
+            entity: *entity,
+            component: component.clone_ref(),
             phantom_p: PhantomData,
         };
     }
 }
 
-impl<P: ProtocolType, R: ImplRef<P>> Command for InsertComponent<P, R>
+impl<P: ProtocolType, R: ImplRef<P>> Command<P> for InsertComponent<P, R>
 {
-    fn write(self: Box<Self>, world: &mut World) {
-        world.entity_mut(*self.entity).insert(self.component);
+    fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: &mut WorldMut) {
+        server.entity_mut(world, &self.entity).insert_component(&self.component);
     }
 }
 
@@ -71,20 +67,42 @@ pub(crate) struct RemoveComponent<P: ProtocolType, R: Replicate<P>> {
 }
 
 impl<P: ProtocolType, R: Replicate<P>> RemoveComponent<P, R> {
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(entity: &Entity) -> Self {
         return RemoveComponent {
-            entity,
+            entity: *entity,
             phantom_p: PhantomData,
             phantom_r: PhantomData,
         };
     }
 }
 
-impl<P: ProtocolType, R: Replicate<P>> Command for RemoveComponent<P, R>
+impl<P: ProtocolType, R: Replicate<P>> Command<P> for RemoveComponent<P, R>
 {
-    fn write(self: Box<Self>, world: &mut World) {
-        if let Some(mut entity_mut) = world.get_entity_mut(*self.entity) {
-            entity_mut.remove::<Ref<R>>();
-        }
+    fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: &mut WorldMut) {
+        server.entity_mut(world, &self.entity).remove_component::<R>();
+    }
+}
+
+//// Own Entity ////
+
+#[derive(Debug)]
+pub(crate) struct OwnEntity {
+    entity: Entity,
+    user_key: UserKey,
+}
+
+impl OwnEntity {
+    pub fn new(entity: &Entity, user_key: &UserKey) -> Self {
+        return OwnEntity {
+            entity: *entity,
+            user_key: *user_key,
+        };
+    }
+}
+
+impl<P: ProtocolType> Command<P> for OwnEntity
+{
+    fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: &mut WorldMut) {
+        server.entity_mut(world, &self.entity).set_owner(&self.user_key);
     }
 }

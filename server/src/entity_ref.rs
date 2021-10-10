@@ -55,14 +55,14 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P,
 }
 
 // EntityMut
-pub struct EntityMut<'s, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> {
+pub struct EntityMut<'s, 'w,  P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> {
     server: &'s mut Server<P, K>,
-    world: W,
+    world: &'w mut W,
     key: K,
 }
 
-impl<'s, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s, P, K, W> {
-    pub(crate) fn new(server: &'s mut Server<P, K>, world: W, key: &K) -> Self {
+impl<'s, 'w, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s,'w, P, K, W> {
+    pub(crate) fn new(server: &'s mut Server<P, K>, world: &'w mut W, key: &K) -> Self {
         EntityMut {
             server,
             world,
@@ -75,7 +75,7 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s, P,
     }
 
     pub fn despawn(&mut self) {
-        self.server.despawn_entity(&mut self.world, &self.key);
+        self.server.despawn_entity(self.world, &self.key);
     }
 
     // Components
@@ -90,7 +90,7 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s, P,
 
     pub fn insert_component<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
         self.server
-            .insert_component(&mut self.world, &self.key, component_ref);
+            .insert_component(self.world, &self.key, component_ref);
 
         self
     }
@@ -122,7 +122,7 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s, P,
     pub fn set_owner(&mut self, user_key: &UserKey) -> &mut Self {
         // user_own?
         self.server
-            .entity_set_owner(&self.world, &self.key, user_key);
+            .entity_set_owner(self.world, &self.key, user_key);
 
         self
     }
@@ -143,30 +143,6 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s, P,
 
     pub fn leave_room(&mut self, room_key: &RoomKey) -> &mut Self {
         self.server.room_remove_entity(room_key, &self.key);
-
-        self
-    }
-}
-
-// WorldRefEntityMut
-pub struct WorldRefEntityMut<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> {
-    server: &'s mut Server<P, K>,
-    world: W,
-    key: K,
-}
-
-impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> WorldRefEntityMut<'s, P, K, W> {
-    pub(crate) fn new(server: &'s mut Server<P, K>, world: W, key: &K) -> Self {
-        WorldRefEntityMut {
-            server,
-            world,
-            key: *key,
-        }
-    }
-
-    pub fn set_owner(&mut self, user_key: &UserKey) -> &mut Self {
-        self.server
-            .entity_set_owner(&self.world, &self.key, user_key);
 
         self
     }
