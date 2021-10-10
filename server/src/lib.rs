@@ -4,7 +4,6 @@
 //! Entities/Components to clients to whom they are in-scope.
 
 #![deny(
-    missing_docs,
     trivial_casts,
     trivial_numeric_casts,
     unstable_features,
@@ -57,11 +56,12 @@ mod user_scope;
 mod world_record;
 mod world_type;
 
-pub use entity_ref::EntityRef;
+pub use error::NaiaServerError;
+pub use entity_ref::{EntityRef, WorldRefEntityMut};
 pub use event::Event;
 pub use keys::{ComponentKey, EntityType};
-pub use room::room_key::RoomKey;
+pub use room::{room_key::RoomKey, RoomMut};
 pub use server::Server;
 pub use server_config::ServerConfig;
-pub use user::user_key::UserKey;
-pub use world_type::WorldType;
+pub use user::{user_key::UserKey, UserMut};
+pub use world_type::{WorldRefType, WorldMutType};

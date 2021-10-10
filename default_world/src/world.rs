@@ -4,7 +4,7 @@ use slotmap::DenseSlotMap;
 
 use naia_shared::{ImplRef, ProtocolType, Ref, Replicate};
 
-use naia_server::{EntityType, WorldType};
+use naia_server::{EntityType, WorldMutType};
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
@@ -19,7 +19,7 @@ pub type EntityKey = Key;
 
 impl EntityType for EntityKey {}
 
-/// A default World which implements WorldType and that Naia can use to store
+/// A default World which implements WorldMutType and that Naia can use to store
 /// Entities/Components. It's recommended to use this only when you do not have
 /// another ECS library's own World available.
 pub struct World<P: ProtocolType> {
@@ -35,7 +35,7 @@ impl<P: ProtocolType> World<P> {
     }
 }
 
-impl<P: ProtocolType> WorldType<P, EntityKey> for World<P> {
+impl<P: ProtocolType> WorldMutType<P, EntityKey> for World<P> {
     fn has_entity(&self, entity_key: &EntityKey) -> bool {
         return self.entities.contains_key(*entity_key);
     }

@@ -16,7 +16,7 @@ pub fn process_events(
 ) {
     for event in server.receive() {
         match event {
-            ServerEvent::Authorization(user_key, Protocol::Auth(auth_ref)) => {
+            Ok(ServerEvent::Authorization(user_key, Protocol::Auth(auth_ref))) => {
                 let auth_message = auth_ref.borrow();
                 let username = auth_message.username.get();
                 let password = auth_message.password.get();
@@ -28,9 +28,15 @@ pub fn process_events(
                     server.reject_connection(&user_key);
                 }
             }
-            ServerEvent::Connection(user_key) => {
-                server.user(&user_key).enter_room(&global.main_room_key).address();
-                let address = server.user(&user_key).address();
+            Ok(ServerEvent::Connection(user_key)) => {
+
+                let address = server
+                    .user_mut(&user_key)
+                    // Add User to the main Room
+                    .enter_room(&global.main_room_key)
+                    // Get User's address for logging
+                    .address();
+
                 info!("Naia Server connected to: {}", address);
 
                 // Create components for Entity to represent new player
@@ -58,17 +64,17 @@ pub fn process_events(
                     // Add Entity to main Room
                     .enter_room(&global.main_room_key)
                     // Insert Position component
-                    .insert(position_ref)
+                    .insert(&position_ref)
                     // Insert Color component
-                    .insert(color_ref)
+                    .insert(&color_ref)
                     // Set Entity's owner to user
                     .set_owner(&user_key)
                     // return Entity id
                     .id();
 
-                global.user_to_prediction_map.insert(*user_key, entity);
+                global.user_to_prediction_map.insert(user_key, entity);
             }
-            ServerEvent::Disconnection(user_key, user) => {
+            Ok(ServerEvent::Disconnection(user_key, user)) => {
                 info!("Naia Server disconnected from: {:?}", user.address);
 
                 server
@@ -82,12 +88,14 @@ pub fn process_events(
                         .despawn();
                 }
             }
-            ServerEvent::Command(_, entity, Protocol::KeyCommand(key_command_ref)) => {
-                if let Ok(position_ref) = q_position.get(**entity) {
+            Ok(ServerEvent::Command(_, entity, Protocol::KeyCommand(key_command_ref))) => {
+                if let Ok(position_ref) = q_position.get(*entity) {
                     shared_behavior::process_command(&key_command_ref, &position_ref);
                 }
             }
-            _ => {}
+            Ok(ServerEvent::Tick) => {
+                server.tick();
+            }
         }
     }
 }

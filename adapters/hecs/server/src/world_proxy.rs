@@ -2,7 +2,7 @@ use std::{any::TypeId, ops::Deref};
 
 use hecs::World;
 
-use naia_server::{ImplRef, ProtocolType, Ref, Replicate, WorldType};
+use naia_server::{ImplRef, ProtocolType, Ref, Replicate, WorldMutType};
 
 use super::{
     entity::Entity,
@@ -43,7 +43,7 @@ impl<'w> WorldMut<'w> {
     }
 }
 
-impl<'w, P: ProtocolType> WorldType<P, Entity> for WorldMut<'w> {
+impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
     fn has_entity(&self, entity_key: &Entity) -> bool {
         return self.world.contains(**entity_key);
     }
@@ -75,7 +75,7 @@ impl<'w, P: ProtocolType> WorldType<P, Entity> for WorldMut<'w> {
     }
 
     fn has_component_of_type(&self, entity_key: &Entity, type_id: &TypeId) -> bool {
-        return WorldType::<P, Entity>::get_component_from_type(self, entity_key, type_id)
+        return WorldMutType::<P, Entity>::get_component_from_type(self, entity_key, type_id)
             .is_some();
     }
 
@@ -103,7 +103,7 @@ impl<'w, P: ProtocolType> WorldType<P, Entity> for WorldMut<'w> {
             for ref_type in entity_ref.component_types() {
                 if let Some(rep_type) = world_data.type_convert_ref_to_rep(&ref_type) {
                     if let Some(component) =
-                        WorldType::<P, Entity>::get_component_from_type(self, entity_key, &rep_type)
+                        WorldMutType::<P, Entity>::get_component_from_type(self, entity_key, &rep_type)
                     {
                         protocols.push(component);
                     }

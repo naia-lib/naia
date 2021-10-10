@@ -1,21 +1,22 @@
-use naia_server::{ProtocolType, ImplRef, Replicate};
+use naia_server::{ProtocolType, ImplRef, Replicate, RoomKey, UserKey};
 
 use crate::world::entity::Entity;
 
-use super::{server::Server, commands::{Insert, Remove, Despawn}};
+use super::{server::Server, commands::{InsertComponent, RemoveComponent, DespawnEntity}};
 
 // EntityMut
 
 pub struct EntityMut<'a, 'b, P: ProtocolType> {
     entity: Entity,
-    commands: &'b mut Server<'a, P>,
+    server: &'b mut Server<'a, P>,
 }
 
 impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
 
-    pub fn new(entity: Entity, commands: &'b mut Server<'a, P>) -> Self {
+    pub fn new(entity: Entity, server: &'b mut Server<'a, P>) -> Self {
         return EntityMut {
-            entity, commands,
+            entity,
+            server,
         };
     }
 
@@ -24,8 +25,18 @@ impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
         self.entity
     }
 
+    // Despawn
+
+    pub fn despawn(&mut self) {
+        self.server.add(DespawnEntity::new(
+            self.entity,
+        ))
+    }
+
+    // Components
+
     pub fn insert<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
-        self.commands.add(Insert::new(
+        self.server.add(InsertComponent::new(
             self.entity,
             component_ref.clone_ref(),
         ));
@@ -34,19 +45,44 @@ impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
 
     pub fn remove<R: Replicate<P>>(&mut self) -> &mut Self
     {
-        self.commands.add(Remove::<P, R>::new(
+        self.server.add(RemoveComponent::<P, R>::new(
             self.entity
         ));
         self
     }
 
-    pub fn despawn(&mut self) {
-        self.commands.add(Despawn::new(
-            self.entity,
-        ))
+    // Users
+
+    pub fn set_owner(&mut self, user_key: &UserKey) -> &mut Self {
+        self.server
+            .entity_set_owner(&self.entity, user_key);
+
+        self
     }
 
-    pub fn commands(&mut self) -> &mut Server<'a, P> {
-        self.commands
+    pub fn disown(&mut self) -> &mut Self {
+        self.server.entity_disown(&self.entity);
+
+        self
+    }
+
+    // Rooms
+
+    pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
+        self.server.room_add_entity(room_key, &self.entity);
+
+        self
+    }
+
+    pub fn leave_room(&mut self, room_key: &RoomKey) -> &mut Self {
+        self.server.room_remove_entity(room_key, &self.entity);
+
+        self
+    }
+
+    // Exit
+
+    pub fn server(&mut self) -> &mut Server<'a, P> {
+        self.server
     }
 }

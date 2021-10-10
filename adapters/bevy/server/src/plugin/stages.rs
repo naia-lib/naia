@@ -9,6 +9,5 @@ pub enum ServerStage {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, StageLabel)]
 pub enum PrivateStage {
-    ReadEvents,
     SendPackets,
 }
