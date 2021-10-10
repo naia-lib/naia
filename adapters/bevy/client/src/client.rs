@@ -7,7 +7,7 @@ use bevy::ecs::{
 
 use naia_client::{Client as NaiaClient, EntityRef, Event, ImplRef, NaiaClientError, ProtocolType};
 
-use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
+use naia_bevy_shared::{Entity, WorldProxy, WorldProxyMut, WorldRef};
 
 use super::{state::State, ticker::Ticker};
 
@@ -61,7 +61,7 @@ impl<'a, P: ProtocolType> Client<'a, P> {
     }
 
     pub fn receive(&mut self) -> VecDeque<Result<Event<P, Entity>, NaiaClientError>> {
-        return self.client.receive(self.world.proxy());
+        return self.client.receive(&mut self.world.proxy_mut());
     }
 
     // Interpolation

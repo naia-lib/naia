@@ -1,11 +1,11 @@
-use std::{
-    any::TypeId,
-    collections::{HashMap, VecDeque},
-};
+use std::collections::{HashMap, VecDeque};
 
 use log::warn;
 
-use naia_shared::{DiffMask, EntityActionType, LocalComponentKey, LocalEntity as OldEntity, Manifest, NaiaKey, PacketReader, ProtocolType, Replicate, WorldRefType, EntityType, WorldMutType};
+use naia_shared::{
+    DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity, Manifest, NaiaKey,
+    PacketReader, ProtocolType, WorldMutType,
+};
 
 use super::{
     command_receiver::CommandReceiver, entity_action::EntityAction, entity_record::EntityRecord,
@@ -13,8 +13,8 @@ use super::{
 
 #[derive(Debug)]
 pub struct EntityManager<P: ProtocolType, K: EntityType> {
-    entities: HashMap<K, EntityRecord>,
-    local_to_world_entity: HashMap<OldEntity, K>,
+    entity_records: HashMap<K, EntityRecord<K>>,
+    local_to_world_entity: HashMap<LocalEntity, K>,
     component_to_entity_map: HashMap<LocalComponentKey, K>,
     queued_incoming_messages: VecDeque<EntityAction<P, K>>,
 }
@@ -23,10 +23,8 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
     pub fn new() -> Self {
         EntityManager {
             local_to_world_entity: HashMap::new(),
-            entities: HashMap::new(),
+            entity_records: HashMap::new(),
             component_to_entity_map: HashMap::new(),
-//            prediction_components: HashMap::new(),
-//            component_entity_map: HashMap::new(),
             queued_incoming_messages: VecDeque::new(),
         }
     }
@@ -48,7 +46,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
             match message_type {
                 EntityActionType::SpawnEntity => {
                     // Entity Creation
-                    let local_entity = OldEntity::from_u16(reader.read_u16());
+                    let local_entity = LocalEntity::from_u16(reader.read_u16());
                     let components_num = reader.read_u8();
                     if self.local_to_world_entity.contains_key(&local_entity) {
                         // its possible we received a very late duplicate message
@@ -62,9 +60,11 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                     } else {
                         // set up entity
                         let world_entity = world.spawn_entity();
-                        self.local_to_world_entity.insert(local_entity, world_entity);
-                        self.entities.insert(world_entity, EntityRecord::new());
-                        let mut entity_record = self.entities.get_mut(&world_entity).unwrap();
+                        self.local_to_world_entity
+                            .insert(local_entity, world_entity);
+                        self.entity_records
+                            .insert(world_entity, EntityRecord::new(&local_entity));
+                        let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
 
                         let mut component_list: Vec<P> = Vec::new();
                         for _ in 0..components_num {
@@ -77,8 +77,9 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                                 panic!("attempted to insert duplicate component");
                             } else {
                                 let new_component_type_id = new_component.get_type_id();
-                                self.component_to_entity_map.insert(component_key, world_entity);
-                                world.insert_component(&world_entity, new_component.clone());
+                                self.component_to_entity_map
+                                    .insert(component_key, world_entity);
+                                new_component.extract_and_insert(&world_entity, world);
                                 component_list.push(new_component);
                                 entity_record
                                     .insert_component(&component_key, &new_component_type_id);
@@ -93,19 +94,19 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                 }
                 EntityActionType::DespawnEntity => {
                     // Entity Deletion
-                    let local_entity = OldEntity::from_u16(reader.read_u16());
+                    let local_entity = LocalEntity::from_u16(reader.read_u16());
                     if let Some(world_entity) = self.local_to_world_entity.remove(&local_entity) {
-                        if let Some(entity_record) = self.entities.remove(&world_entity) {
-                            if entity_record.is_prediction {
+                        if let Some(entity_record) = self.entity_records.remove(&world_entity) {
+                            if entity_record.is_owned() {
                                 command_receiver.prediction_cleanup(&world_entity);
                             }
 
-                            for component_key in entity_record.get_component_keys() {
-                                // delete all components //
-                                self.component_delete_cleanup(&world_entity, &component_key);
-
-                                self.component_to_entity_map.remove(&component_key);
-                                ////////////////////////////
+                            // Generate event for each component, handing references off just in
+                            // case
+                            for component in world.get_components(&world_entity) {
+                                self.queued_incoming_messages.push_back(
+                                    EntityAction::RemoveComponent(world_entity, component),
+                                );
                             }
 
                             self.queued_incoming_messages
@@ -113,58 +114,51 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                             continue;
                         }
                     }
-                    warn!(
-                        "received message attempting to delete nonexistent entity"
-                    );
+                    warn!("received message attempting to delete nonexistent entity");
                 }
                 EntityActionType::OwnEntity => {
                     // Assign Prediction Entity
-                    let local_entity = OldEntity::from_u16(reader.read_u16());
+                    let local_entity = LocalEntity::from_u16(reader.read_u16());
                     if let Some(world_entity) = self.local_to_world_entity.remove(&local_entity) {
-                        if let Some(entity_record) = self.entities.get_mut(&world_entity) {
-                            entity_record.is_prediction = true;
+                        if let Some(entity_record) = self.entity_records.get_mut(&world_entity) {
+                            let prediction_entity = world.spawn_entity();
+                            entity_record.set_prediction(&prediction_entity);
 
                             // create copies of components //
-                            for component_key in entity_record.get_component_keys() {
-                                if let Some(protocol) = self.component_to_entity_map.get(&component_key) {
-                                    self.prediction_components
-                                        .insert(component_key, protocol.copy());
-                                }
+                            for component in world.get_components(&world_entity) {
+                                let component_copy = component.copy();
+                                component_copy.extract_and_insert(&prediction_entity, world);
                             }
                             /////////////////////////////////
 
-                            command_receiver.prediction_init(&local_entity);
+                            command_receiver.prediction_init(&world_entity);
 
                             self.queued_incoming_messages
-                                .push_back(EntityAction::OwnEntity(local_entity));
+                                .push_back(EntityAction::OwnEntity(world_entity));
                         }
                     }
                 }
                 EntityActionType::DisownEntity => {
                     // Unassign Prediction Entity
-                    let entity_key = OldEntity::from_u16(reader.read_u16());
-                    if let Some(entity_record) = self.entities.get_mut(&entity_key) {
-                        if entity_record.is_prediction {
-                            entity_record.is_prediction = false;
+                    let local_entity = LocalEntity::from_u16(reader.read_u16());
+                    if let Some(world_entity) = self.local_to_world_entity.get(&local_entity) {
+                        if let Some(entity_record) = self.entity_records.get_mut(&world_entity) {
+                            if entity_record.is_owned() {
+                                let prediction_entity = entity_record.disown().unwrap();
 
-                            // remove prediction components //
-                            for component_key in entity_record.get_component_keys() {
-                                self.prediction_components.remove(&component_key);
+                                world.despawn_entity(&prediction_entity);
+
+                                command_receiver.prediction_cleanup(&world_entity);
+
+                                self.queued_incoming_messages
+                                    .push_back(EntityAction::DisownEntity(*world_entity));
                             }
-                            ////////////////////////////
-
-                            command_receiver.prediction_cleanup(&entity_key);
-
-                            self.queued_incoming_messages
-                                .push_back(EntityAction::DisownEntity(entity_key));
                         }
                     }
                 }
                 EntityActionType::InsertComponent => {
-                    //TODO: handle adding Component to a Prediction...
-
                     // Add Component to Entity
-                    let entity_key = OldEntity::from_u16(reader.read_u16());
+                    let local_entity = LocalEntity::from_u16(reader.read_u16());
                     let naia_id: u16 = reader.read_u16();
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
@@ -174,28 +168,34 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                         warn!(
                             "attempting to add duplicate local component key: {}, into entity: {}",
                             component_key.to_u16(),
-                            entity_key.to_u16()
+                            local_entity.to_u16()
                         );
                     } else {
-                        if !self.entities.contains_key(&entity_key) {
+                        if !self.local_to_world_entity.contains_key(&local_entity) {
                             // its possible we received a very late duplicate message
                             warn!(
                                 "attempting to add a component: {}, to nonexistent entity: {}",
                                 component_key.to_u16(),
-                                entity_key.to_u16()
+                                local_entity.to_u16()
                             );
                         } else {
-                            self.component_to_entity_map.insert(component_key, new_component.clone());
+                            let world_entity =
+                                self.local_to_world_entity.get(&local_entity).unwrap();
+                            self.component_to_entity_map
+                                .insert(component_key, *world_entity);
 
-                            self.component_entity_map.insert(component_key, entity_key);
-                            let entity_record = self.entities.get_mut(&entity_key).unwrap();
+                            let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
 
                             entity_record
                                 .insert_component(&component_key, &new_component.get_type_id());
 
+                            new_component.extract_and_insert(world_entity, world);
+
+                            //TODO: handle adding Component to a Prediction...
+
                             self.queued_incoming_messages
                                 .push_back(EntityAction::InsertComponent(
-                                    entity_key,
+                                    *world_entity,
                                     new_component,
                                 ));
                         }
@@ -205,43 +205,47 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                     // Component Update
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                    if let Some(component_ref) = self.component_to_entity_map.get_mut(&component_key) {
-                        let diff_mask: DiffMask = DiffMask::read(reader);
+                    if let Some(world_entity) = self.component_to_entity_map.get_mut(&component_key)
+                    {
+                        if let Some(entity_record) = self.entity_records.get(world_entity) {
+                            let type_id = entity_record.get_type_from_key(&component_key).unwrap();
+                            if let Some(component_protocol) =
+                                world.get_component_from_type(world_entity, &type_id)
+                            {
+                                // read incoming delta
+                                let diff_mask: DiffMask = DiffMask::read(reader);
+                                component_protocol.inner_ref().borrow_mut().read_partial(
+                                    &diff_mask,
+                                    reader,
+                                    packet_index,
+                                );
 
-                        component_ref.read_partial(&diff_mask, reader, packet_index);
+                                // check if Entity is a Prediction
+                                if entity_record.is_owned() {
+                                    // replay commands
+                                    command_receiver.replay_commands(packet_tick, &world_entity);
 
-                        let entity_key = self
-                            .component_entity_map
-                            .get(&component_key)
-                            .expect("component not initialized correctly");
+                                    // remove command history until the tick that has already been
+                                    // checked
+                                    command_receiver
+                                        .remove_history_until(packet_tick, &world_entity);
+                                }
 
-                        // check if Entity is a Prediction
-                        if self
-                            .entities
-                            .get(entity_key)
-                            .expect("component has no associated entity?")
-                            .is_prediction
-                        {
-                            // replay commands
-                            command_receiver.replay_commands(packet_tick, &entity_key);
-
-                            // remove command history until the tick that has already been
-                            // checked
-                            command_receiver.remove_history_until(packet_tick, &entity_key);
+                                self.queued_incoming_messages.push_back(
+                                    EntityAction::UpdateComponent(
+                                        *world_entity,
+                                        component_protocol.clone(),
+                                    ),
+                                );
+                            }
                         }
-
-                        self.queued_incoming_messages
-                            .push_back(EntityAction::UpdateComponent(
-                                *entity_key,
-                                component_ref.clone(),
-                            ));
                     }
                 }
                 EntityActionType::RemoveComponent => {
                     // Component Removal
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                    if !self.component_entity_map.contains_key(&component_key) {
+                    if !self.component_to_entity_map.contains_key(&component_key) {
                         // This could happen due to a duplicated unreliable message
                         // (i.e. server re-sends "remove component" message because it believes it
                         // hasn't been delivered and then it does get
@@ -251,14 +255,27 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                             component_key.to_u16()
                         );
                     } else {
-                        let entity_key = self.component_entity_map.remove(&component_key).unwrap();
+                        let world_entity =
+                            self.component_to_entity_map.remove(&component_key).unwrap();
 
                         // Get entity record, remove component
-                        self.entities
-                            .get_mut(&entity_key)
-                            .expect("entity not instantiated properly?")
-                            .remove_component(&component_key);
-                        self.component_delete_cleanup(&entity_key, &component_key);
+                        let component_type = self
+                            .entity_records
+                            .get_mut(&world_entity)
+                            .expect("entity not instantiated properly? no such entity")
+                            .remove_component(&component_key)
+                            .expect("entity not instantiated properly? no type");
+
+                        // Get component for last change
+                        let component = world
+                            .get_component_from_type(&world_entity, &component_type)
+                            .expect(
+                                "component should still exist in the World, was it tampered with?",
+                            );
+
+                        // Generate event
+                        self.queued_incoming_messages
+                            .push_back(EntityAction::RemoveComponent(world_entity, component));
                     }
                 }
                 EntityActionType::Unknown => {
@@ -268,73 +285,59 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         }
     }
 
+    pub fn world_to_local_entity(&self, world_entity: &K) -> Option<LocalEntity> {
+        if let Some(entity_record) = self.entity_records.get(world_entity) {
+            return Some(entity_record.local_entity());
+        }
+        return None;
+    }
+
     pub fn pop_incoming_message(&mut self) -> Option<EntityAction<P, K>> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &K) -> Option<&P> {
-        if let Some(entity_record) = self.entities.get(key) {
-            if let Some(component_key) = entity_record.get_key_from_type(&TypeId::of::<R>()) {
-                return self.component_to_entity_map.get(component_key);
-            }
-        }
-        return None;
-    }
+    //    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &K) ->
+    // Option<&P> {        if let Some(entity_record) =
+    // self.entity_records.get(key) {            if let Some(component_key) =
+    // entity_record.get_key_from_type(&TypeId::of::<R>()) {                
+    // return self.component_to_entity_map.get(component_key);            }
+    //        }
+    //        return None;
+    //    }
 
-    pub fn get_prediction_component_by_type<R: Replicate<P>>(
-        &self,
-        key: &K,
-    ) -> Option<&P> {
-        if let Some(entity_component_record) = self.entities.get(key) {
-            if let Some(component_key) =
-                entity_component_record.get_key_from_type(&TypeId::of::<R>())
-            {
-                return self.prediction_components.get(component_key);
-            }
-        }
-        return None;
-    }
+    //    pub fn get_prediction_component_by_type<R: Replicate<P>>(
+    //        &self,
+    //        key: &K,
+    //    ) -> Option<&P> {
+    //        if let Some(entity_component_record) = self.entity_records.get(key) {
+    //            if let Some(component_key) =
+    //                entity_component_record.get_key_from_type(&TypeId::of::<R>())
+    //            {
+    //                return self.prediction_components.get(component_key);
+    //            }
+    //        }
+    //        return None;
+    //    }
 
-    pub fn has_entity(&self, key: &K) -> bool {
-        return self.entities.contains_key(key);
-    }
+    //    pub fn has_entity(&self, key: &K) -> bool {
+    //        return self.entity_records.contains_key(key);
+    //    }
 
-    pub fn entity_is_prediction(&self, key: &K) -> bool {
-        if let Some(entity_record) = self.entities.get(key) {
-            return entity_record.is_prediction;
+    pub fn entity_is_owned(&self, key: &K) -> bool {
+        if let Some(entity_record) = self.entity_records.get(key) {
+            return entity_record.is_owned();
         }
         return false;
     }
 
-    pub fn prediction_reset_entity(&mut self, key: &K) {
-        if let Some(entity_record) = self.entities.get(key) {
-            for component_key in entity_record.get_component_keys() {
-                if let Some(component_ref) = self.component_to_entity_map.get(&component_key) {
-                    if let Some(prediction_component_ref) =
-                        self.prediction_components.get_mut(&component_key)
-                    {
-                        prediction_component_ref.mirror(component_ref);
-                    }
-                }
-            }
+    pub fn prediction_reset_entity<W: WorldMutType<P, K>>(&mut self, _world: &mut W, key: &K) {
+        if let Some(_entity_record) = self.entity_records.get(key) {
+            // loop through all predicted & confirmed components
+            // have the predicted ones mirror the confirmed ones
+            todo!()
         }
 
         self.queued_incoming_messages
             .push_back(EntityAction::RewindEntity(*key));
-    }
-
-    // internal
-
-    fn component_delete_cleanup(
-        &mut self,
-        entity_key: &K,
-        component_key: &LocalComponentKey,
-    ) {
-        self.prediction_components.remove(&component_key);
-
-        if let Some(component) = self.component_to_entity_map.remove(&component_key) {
-            self.queued_incoming_messages
-                .push_back(EntityAction::RemoveComponent(*entity_key, component));
-        }
     }
 }

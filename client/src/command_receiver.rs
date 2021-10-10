@@ -1,7 +1,8 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    wrapping_diff, ProtocolType, Ref, Replicate, SequenceBuffer, SequenceIterator, EntityType
+    wrapping_diff, EntityType, ProtocolType, Ref, Replicate, SequenceBuffer, SequenceIterator,
+    WorldMutType,
 };
 
 use super::entity_manager::EntityManager;
@@ -39,13 +40,17 @@ impl<P: ProtocolType, K: EntityType> CommandReceiver<P, K> {
     }
 
     /// Process any necessary replayed Command
-    pub fn process_command_replay(&mut self, entity_manager: &mut EntityManager<P, K>) {
-        for (prediction_key, history_tick) in self.replay_trigger.iter() {
+    pub fn process_command_replay<W: WorldMutType<P, K>>(
+        &mut self,
+        world: &mut W,
+        entity_manager: &mut EntityManager<P, K>,
+    ) {
+        for (owned_entity, history_tick) in self.replay_trigger.iter() {
             // set prediction to server authoritative entity
-            entity_manager.prediction_reset_entity(prediction_key);
+            entity_manager.prediction_reset_entity(world, owned_entity);
 
             // trigger replay of historical commands
-            if let Some(command_buffer) = self.command_history.get_mut(&prediction_key) {
+            if let Some(command_buffer) = self.command_history.get_mut(&owned_entity) {
                 self.queued_incoming_commands.clear();
                 self.queued_command_replays.clear();
 
@@ -54,7 +59,7 @@ impl<P: ProtocolType, K: EntityType> CommandReceiver<P, K> {
                     if let Some(command) = command_buffer.get_mut(tick) {
                         self.queued_command_replays.push_back((
                             tick,
-                            *prediction_key,
+                            *owned_entity,
                             command.clone(),
                         ));
                     }
@@ -69,20 +74,20 @@ impl<P: ProtocolType, K: EntityType> CommandReceiver<P, K> {
     pub fn queue_command(
         &mut self,
         host_tick: u16,
-        prediction_key: &K,
+        owned_entity: &K,
         command: &Ref<dyn Replicate<P>>,
     ) {
         self.queued_incoming_commands
-            .push_back((host_tick, *prediction_key, command.clone()));
+            .push_back((host_tick, *owned_entity, command.clone()));
 
-        if let Some(command_buffer) = self.command_history.get_mut(&prediction_key) {
+        if let Some(command_buffer) = self.command_history.get_mut(owned_entity) {
             command_buffer.insert(host_tick, command.clone());
         }
     }
 
     /// Get number of Commands in the command history for a given Prediction
-    pub fn command_history_count(&self, prediction_key: &K) -> u8 {
-        if let Some(command_buffer) = self.command_history.get(&prediction_key) {
+    pub fn command_history_count(&self, owned_entity: &K) -> u8 {
+        if let Some(command_buffer) = self.command_history.get(owned_entity) {
             return command_buffer.get_entries_count();
         }
         return 0;
@@ -92,43 +97,43 @@ impl<P: ProtocolType, K: EntityType> CommandReceiver<P, K> {
     /// Prediction
     pub fn command_history_iter(
         &self,
-        prediction_key: &K,
+        owned_entity: &K,
         reverse: bool,
     ) -> Option<SequenceIterator<Ref<dyn Replicate<P>>>> {
-        if let Some(command_buffer) = self.command_history.get(&prediction_key) {
+        if let Some(command_buffer) = self.command_history.get(owned_entity) {
             return Some(command_buffer.iter(reverse));
         }
         return None;
     }
 
     /// Queues Commands to be replayed from a given tick
-    pub fn replay_commands(&mut self, history_tick: u16, prediction_key: &K) {
-        if let Some(tick) = self.replay_trigger.get_mut(&prediction_key) {
+    pub fn replay_commands(&mut self, history_tick: u16, owned_entity: &K) {
+        if let Some(tick) = self.replay_trigger.get_mut(owned_entity) {
             if wrapping_diff(*tick, history_tick) > 0 {
                 *tick = history_tick;
             }
         } else {
-            self.replay_trigger.insert(*prediction_key, history_tick);
+            self.replay_trigger.insert(*owned_entity, history_tick);
         }
     }
 
     /// Removes command history for a given Prediction until a specific tick
-    pub fn remove_history_until(&mut self, history_tick: u16, prediction_key: &K) {
-        if let Some(command_buffer) = self.command_history.get_mut(&prediction_key) {
+    pub fn remove_history_until(&mut self, history_tick: u16, owned_entity: &K) {
+        if let Some(command_buffer) = self.command_history.get_mut(owned_entity) {
             command_buffer.remove_until(history_tick);
         }
     }
 
     /// Perform initialization on Prediction creation
-    pub fn prediction_init(&mut self, prediction_key: &K) {
+    pub fn prediction_init(&mut self, owned_entity: &K) {
         self.command_history.insert(
-            *prediction_key,
+            *owned_entity,
             SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE),
         );
     }
 
     /// Perform cleanup on Prediction deletion
-    pub fn prediction_cleanup(&mut self, prediction_key: &K) {
-        self.command_history.remove(prediction_key);
+    pub fn prediction_cleanup(&mut self, owned_entity: &K) {
+        self.command_history.remove(owned_entity);
     }
 }

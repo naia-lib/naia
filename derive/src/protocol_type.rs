@@ -27,6 +27,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let get_type_id_method = get_type_id_method(&type_name, &input.data);
     let load_method = get_load_method(&type_name, &input.data);
     let copy_method = get_copy_method(&type_name, &input.data);
+    let extract_and_insert_method = get_extract_and_insert_method(&type_name, &input.data);
 
     let ref_imports = {
         if MULTITHREAD {
@@ -42,7 +43,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
     let gen = quote! {
         use std::any::{Any, TypeId};
-        use naia_shared::{ProtocolType, Replicate, ReplicaEq, ImplRef, DiffMask, PacketReader};
+        use naia_shared::{ProtocolType, ProtocolRefExtractor, Replicate, ReplicaEq, ImplRef, DiffMask, PacketReader, EntityType};
         #ref_imports
         impl #type_name {
             #load_method
@@ -59,6 +60,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
             #write_method
             #get_type_id_method
             #copy_method
+            #extract_and_insert_method
         }
     };
 
@@ -460,6 +462,39 @@ fn get_copy_method(type_name: &Ident, data: &Data) -> TokenStream {
 
     return quote! {
         fn copy(&self) -> #type_name {
+            match self {
+                #variants
+            }
+        }
+    };
+}
+
+fn get_extract_and_insert_method(type_name: &Ident, data: &Data) -> TokenStream {
+    let variants = match *data {
+        Data::Enum(ref data) => {
+            let mut output = quote! {};
+            for variant in data.variants.iter() {
+                let variant_name = &variant.ident;
+                let new_output_right = quote! {
+                    #type_name::#variant_name(replica_ref) => {
+                        extractor.extract(key, replica_ref.clone());
+                    }
+                };
+                let new_output_result = quote! {
+                    #output
+                    #new_output_right
+                };
+                output = new_output_result;
+            }
+            output
+        }
+        _ => unimplemented!(),
+    };
+
+    return quote! {
+        fn extract_and_insert<K: EntityType, E: ProtocolRefExtractor<#type_name, K>>(&self,
+                                      key: &K,
+                                      extractor: &mut E) {
             match self {
                 #variants
             }
