@@ -338,7 +338,6 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         world_entity: &K,
     ) {
         if let Some(predicted_entity) = self.get_predicted_entity(&world_entity) {
-
             // go through all components to make prediction components = world components
             for confirmed_protocol in world.get_components(world_entity) {
                 let type_id = confirmed_protocol.get_type_id();

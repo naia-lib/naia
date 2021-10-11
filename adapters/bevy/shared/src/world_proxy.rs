@@ -86,10 +86,10 @@ fn get_components<P: ProtocolType>(world: &mut World, entity: &Entity) -> Vec<P>
             ref_type
         };
 
-
         if let Some(rep_type) = world_data.type_convert_ref_to_rep(&ref_type) {
-            let protocol: P = get_component_from_type(world, entity, &rep_type)
-                .expect("Need to be able to extract the protocol from the component to instantiate");
+            let protocol: P = get_component_from_type(world, entity, &rep_type).expect(
+                "Need to be able to extract the protocol from the component to instantiate",
+            );
             protocols.push(protocol.clone());
         }
     }
