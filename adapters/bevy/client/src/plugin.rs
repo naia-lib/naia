@@ -1,12 +1,12 @@
 use std::{net::SocketAddr, ops::DerefMut, sync::Mutex};
 
-use bevy::{app::{AppBuilder, Plugin as PluginType, CoreStage}, ecs::schedule::SystemStage};
+use bevy::{app::{AppBuilder, Plugin as PluginType, CoreStage}, ecs::schedule::SystemStage, prelude::*};
 
 use naia_client::{Client, ClientConfig, ImplRef, ProtocolType, SharedConfig};
 
-use naia_bevy_shared::Entity;
+use naia_bevy_shared::{Entity, Stage, tick::{Ticker, should_tick, finish_tick}, PrivateStage};
 
-use super::{resource::ClientResource, stage::Stage, systems::receive_events};
+use super::{resource::ClientResource, systems::before_receive_events, stage::ClientStage};
 
 struct PluginConfig<P: ProtocolType, R: ImplRef<P>> {
     client_config: ClientConfig,
@@ -58,10 +58,37 @@ impl<P: ProtocolType, R: ImplRef<P>> PluginType for Plugin<P, R> {
         app
         // RESOURCES //
             .insert_resource(client)
-            .insert_resource(ClientResource::new())
+            .insert_resource(ClientResource::<P>::new())
+            .insert_resource(Ticker::new())
         // STAGES //
-            .add_stage_before(CoreStage::PreUpdate, Stage::ReceiveEvents, SystemStage::single_threaded())
+            .add_stage_before(CoreStage::PreUpdate,
+                              ClientStage::BeforeReceiveEvents,
+                              SystemStage::parallel())
+            .add_stage_after(ClientStage::BeforeReceiveEvents,
+                              Stage::ReceiveEvents,
+                              SystemStage::single_threaded())
+            .add_stage_after(CoreStage::PostUpdate,
+                              Stage::PreFrame,
+                              SystemStage::single_threaded())
+            .add_stage_after(Stage::PreFrame,
+                              Stage::Frame,
+                              SystemStage::single_threaded())
+            .add_stage_after(Stage::Frame,
+                              Stage::PostFrame,
+                              SystemStage::single_threaded())
+            .add_stage_after(Stage::PostFrame,
+                              Stage::Tick,
+                              SystemStage::single_threaded()
+                                 .with_run_criteria(should_tick.system()))
+            .add_stage_after(Stage::Tick,
+                              PrivateStage::AfterTick,
+                              SystemStage::parallel()
+                                 .with_run_criteria(should_tick.system()))
         // SYSTEMS //
-            .add_system_to_stage(Stage::ReceiveEvents, receive_events.exclusive_system());
+            .add_system_to_stage(ClientStage::BeforeReceiveEvents,
+                                 before_receive_events::<P>.exclusive_system())
+            .add_system_to_stage(PrivateStage::AfterTick,
+                                 finish_tick.system())
+        ;
     }
 }

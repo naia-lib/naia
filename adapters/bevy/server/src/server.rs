@@ -10,9 +10,9 @@ use naia_server::{
     Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
-use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
+use naia_bevy_shared::{Entity, WorldProxy, WorldRef, tick::Ticker};
 
-use super::{commands::Command, entity_mut::EntityMut, state::State, ticker::Ticker};
+use super::{commands::Command, entity_mut::EntityMut, state::State};
 
 // Server
 
