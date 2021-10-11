@@ -120,13 +120,12 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
 
     /// Queues up a Command for an assigned Entity to be sent to the Server
     pub fn queue_command<R: ImplRef<P>>(&mut self, predicted_entity: &K, command_ref: &R) {
-        if let Some(connection) = &mut self.server_connection {
+        if let Some(connection) = self.server_connection.as_mut() {
             if let Some(confirmed_entity) = connection.get_confirmed_entity(predicted_entity) {
                 let dyn_ref = command_ref.dyn_ref();
-                connection.queue_command(
-                    OwnedEntity::new(&confirmed_entity, predicted_entity),
-                    dyn_ref,
-                );
+                let entity_pair: OwnedEntity<K> =
+                    OwnedEntity::new(&confirmed_entity, &predicted_entity);
+                connection.queue_command(entity_pair, dyn_ref);
             }
         }
     }

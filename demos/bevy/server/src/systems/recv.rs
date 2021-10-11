@@ -60,6 +60,7 @@ pub fn receive_events(
                     Color::new(color_value)
                 };
 
+                // Spawn entity
                 let entity = server
                     // Spawn new Square Entity
                     .spawn()
