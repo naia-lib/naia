@@ -9,14 +9,14 @@ use naia_client::{Client as NaiaClient, EntityRef, Event, ImplRef, NaiaClientErr
 
 use naia_bevy_shared::{Entity, WorldProxy, WorldProxyMut, WorldRef};
 
-use super::{state::State, ticker::Ticker};
+use super::{state::State, resource::ClientResource};
 
 // Client
 
 pub struct Client<'a, P: ProtocolType> {
     world: &'a World,
     client: Mut<'a, NaiaClient<P, Entity>>,
-    ticker: Mut<'a, Ticker>,
+    resource: Mut<'a, ClientResource>,
     phantom_p: PhantomData<P>,
 }
 
@@ -29,14 +29,14 @@ impl<'a, P: ProtocolType> Client<'a, P> {
                 .get_resource_unchecked_mut::<NaiaClient<P, Entity>>()
                 .expect("Naia Client has not been correctly initialized!");
 
-            let ticker = world
-                .get_resource_unchecked_mut::<Ticker>()
+            let resource = world
+                .get_resource_unchecked_mut::<ClientResource>()
                 .expect("Naia Client has not been correctly initialized!");
 
             Self {
                 world,
                 client,
-                ticker,
+                resource,
                 phantom_p: PhantomData,
             }
         }
@@ -100,15 +100,15 @@ impl<'a, P: ProtocolType> Client<'a, P> {
     }
 
     pub fn tick_start(&mut self) {
-        self.ticker.ticked = true;
+        self.resource.ticked = true;
     }
 
     pub fn tick_finish(&mut self) {
-        self.ticker.ticked = false;
+        self.resource.ticked = false;
     }
 
     pub fn has_ticked(&self) -> bool {
-        return self.ticker.ticked;
+        return self.resource.ticked;
     }
 }
 

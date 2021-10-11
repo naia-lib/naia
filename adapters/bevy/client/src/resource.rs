@@ -1,11 +1,15 @@
-pub struct Ticker {
+pub struct ClientResource {
     ticked: bool,
 }
 
-impl Ticker {
+impl ClientResource {
     pub fn new() -> Self {
         Self { ticked: false }
     }
+
+    // Events //
+
+    // Ticks //
 
     pub fn tick_start(&mut self) {
         self.ticked = true;
