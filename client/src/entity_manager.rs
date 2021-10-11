@@ -334,23 +334,24 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
     pub fn prediction_reset_entity<W: WorldMutType<P, K>>(
         &mut self,
-        _world: &mut W,
-        owned_entity: &K,
+        world: &mut W,
+        world_entity: &K,
     ) {
-        if let Some(entity_record) = self.entity_records.get(owned_entity) {
-            // loop through all predicted & confirmed components
-            // have the predicted ones mirror the confirmed ones
+        if let Some(predicted_entity) = self.get_predicted_entity(&world_entity) {
 
-            //TODO!
-            //todo!()
-
-            if let Some(prediction_entity) = entity_record.get_prediction() {
-                self.queued_incoming_messages
-                    .push_back(EntityAction::RewindEntity(OwnedEntity::new(
-                        owned_entity,
-                        &prediction_entity,
-                    )));
+            // go through all components to make prediction components = world components
+            for confirmed_protocol in world.get_components(world_entity) {
+                let type_id = confirmed_protocol.get_type_id();
+                let mut predicted_protocol = world.get_component_from_type(&predicted_entity, &type_id)
+                    .expect("Predicted and Confirmed entities must always contain the same types of components!");
+                predicted_protocol.mirror(&confirmed_protocol);
             }
+
+            self.queued_incoming_messages
+                .push_back(EntityAction::RewindEntity(OwnedEntity::new(
+                    world_entity,
+                    &predicted_entity,
+                )));
         }
     }
 }

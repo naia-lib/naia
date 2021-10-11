@@ -73,6 +73,7 @@ fn get_components<P: ProtocolType>(world: &mut World, entity: &Entity) -> Vec<P>
     let mut protocols = Vec::new();
 
     let components = world.components();
+    let world_data = get_world_data::<P>(world);
 
     for component_id in world.entity(**entity).archetype().components() {
         let ref_type = {
@@ -85,12 +86,12 @@ fn get_components<P: ProtocolType>(world: &mut World, entity: &Entity) -> Vec<P>
             ref_type
         };
 
-        let world_data = get_world_data::<P>(world);
-        let rep_type = world_data.type_convert_ref_to_rep(&ref_type)
-            .expect("Need to be able to convert from Ref type to Replicate type in order to instantiate component");
-        let protocol: P = get_component_from_type(world, entity, &rep_type)
-            .expect("Need to be able to extract the protocol from the component to instantiate");
-        protocols.push(protocol.clone());
+
+        if let Some(rep_type) = world_data.type_convert_ref_to_rep(&ref_type) {
+            let protocol: P = get_component_from_type(world, entity, &rep_type)
+                .expect("Need to be able to extract the protocol from the component to instantiate");
+            protocols.push(protocol.clone());
+        }
     }
 
     return protocols;
