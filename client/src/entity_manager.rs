@@ -17,6 +17,7 @@ pub struct EntityManager<P: ProtocolType, K: EntityType> {
     entity_records: HashMap<K, EntityRecord<K>>,
     local_to_world_entity: HashMap<LocalEntity, K>,
     component_to_entity_map: HashMap<LocalComponentKey, K>,
+    predicted_to_confirmed_entity: HashMap<K, K>,
     queued_incoming_messages: VecDeque<EntityAction<P, K>>,
 }
 
@@ -26,6 +27,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
             local_to_world_entity: HashMap::new(),
             entity_records: HashMap::new(),
             component_to_entity_map: HashMap::new(),
+            predicted_to_confirmed_entity: HashMap::new(),
             queued_incoming_messages: VecDeque::new(),
         }
     }
@@ -99,6 +101,8 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                     if let Some(world_entity) = self.local_to_world_entity.remove(&local_entity) {
                         if let Some(entity_record) = self.entity_records.remove(&world_entity) {
                             if entity_record.is_owned() {
+                                let prediction_entity = entity_record.get_prediction().unwrap();
+                                self.predicted_to_confirmed_entity.remove(&prediction_entity);
                                 command_receiver.prediction_cleanup(&world_entity);
                             }
 
@@ -123,7 +127,9 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                     if let Some(world_entity) = self.local_to_world_entity.remove(&local_entity) {
                         if let Some(entity_record) = self.entity_records.get_mut(&world_entity) {
                             let prediction_entity = world.spawn_entity();
+
                             entity_record.set_prediction(&prediction_entity);
+                            self.predicted_to_confirmed_entity.insert(prediction_entity, world_entity);
 
                             // create copies of components //
                             for component in world.get_components(&world_entity) {
@@ -148,6 +154,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                         if let Some(entity_record) = self.entity_records.get_mut(&world_entity) {
                             if entity_record.is_owned() {
                                 let prediction_entity = entity_record.disown().unwrap();
+                                self.predicted_to_confirmed_entity.remove(&prediction_entity);
 
                                 world.despawn_entity(&prediction_entity);
 
@@ -302,6 +309,10 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
             return entity_record.get_prediction();
         }
         return None;
+    }
+
+    pub fn get_confirmed_entity(&self, predicted_entity: &K) -> Option<&K> {
+        return self.predicted_to_confirmed_entity.get(predicted_entity);
     }
 
     pub fn pop_incoming_message(&mut self) -> Option<EntityAction<P, K>> {

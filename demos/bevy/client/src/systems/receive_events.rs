@@ -63,7 +63,7 @@ pub fn receive_events(
             Ok(Event::OwnEntity(owned_entity)) => {
                 info!("gave ownership of entity");
 
-                let predicted_entity = owned_entity.get_predicted();
+                let predicted_entity = owned_entity.predicted;
 
                 local.entity(*predicted_entity)
                     .insert_bundle(SpriteBundle {
@@ -78,7 +78,7 @@ pub fn receive_events(
             }
             Ok(Event::NewCommand(owned_entity, Protocol::KeyCommand(key_command_ref)))
             | Ok(Event::ReplayCommand(owned_entity, Protocol::KeyCommand(key_command_ref))) => {
-                let predicted_entity = owned_entity.get_predicted();
+                let predicted_entity = owned_entity.predicted;
                 if let Ok(position) = q_player_position.get_mut(*predicted_entity) {
                     shared_behavior::process_command(&key_command_ref, position);
                 }

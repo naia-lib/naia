@@ -20,7 +20,7 @@ pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
                             world.entity_mut(*entity).insert(Confirmed);
                         }
                         Ok(Event::OwnEntity(ref owned_entity)) => {
-                            let predicted_entity = owned_entity.get_predicted();
+                            let predicted_entity = owned_entity.predicted;
                             world.entity_mut(*predicted_entity).insert(Predicted);
                         }
                         _ => {}

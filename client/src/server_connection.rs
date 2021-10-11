@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{collections::VecDeque, net::SocketAddr};
 
 use naia_client_socket::Packet;
 
@@ -8,7 +8,7 @@ use naia_shared::{
 };
 
 use super::{
-    command_receiver::CommandReceiver, command_sender::CommandSender, entity_action::EntityAction,
+    command_receiver::CommandReceiver, entity_action::EntityAction,
     entity_manager::EntityManager, packet_writer::PacketWriter, ping_manager::PingManager,
     tick_manager::TickManager, tick_queue::TickQueue, event::OwnedEntity
 };
@@ -18,7 +18,7 @@ pub struct ServerConnection<P: ProtocolType, K: EntityType> {
     connection: Connection<P>,
     entity_manager: EntityManager<P, K>,
     ping_manager: PingManager,
-    command_sender: CommandSender<P, K>,
+    command_sender: VecDeque<(OwnedEntity<K>, Ref<dyn Replicate<P>>)>,
     command_receiver: CommandReceiver<P, K>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
@@ -32,7 +32,7 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
                 connection_config.ping_interval,
                 connection_config.rtt_sample_size,
             ),
-            command_sender: CommandSender::new(),
+            command_sender: VecDeque::new(),
             command_receiver: CommandReceiver::new(),
             jitter_buffer: TickQueue::new(),
         };
@@ -43,11 +43,11 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
         host_tick: u16,
         manifest: &Manifest<P>,
     ) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_messages() || self.command_sender.has_command() {
+        if self.connection.has_outgoing_messages() || !self.command_sender.is_empty() {
             let mut writer = PacketWriter::new();
 
             // Commands
-            while let Some((owned_entity, command)) = self.command_sender.pop_command() {
+            while let Some((owned_entity, command)) = self.command_sender.pop_front() {
                 if writer.write_command(
                     host_tick,
                     manifest,
@@ -57,9 +57,9 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
                     &command,
                 ) {
                     self.command_receiver
-                        .queue_command(host_tick, &owned_entity, &command);
+                        .queue_command(host_tick, owned_entity, command);
                 } else {
-                    self.command_sender.unpop_command(&owned_entity, &command);
+                    self.command_sender.push_front((owned_entity, command));
                     break;
                 }
             }
@@ -241,8 +241,8 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
     }
 
     // Commands
-    pub fn queue_command(&mut self, entity: &K, command: &Ref<dyn Replicate<P>>) {
-        return self.command_sender.queue_command(entity, command);
+    pub fn queue_command(&mut self, entity: OwnedEntity<K>, command: Ref<dyn Replicate<P>>) {
+        return self.command_sender.push_back((entity, command));
     }
 
     pub fn process_replays<W: WorldMutType<P, K>>(&mut self, world: &mut W) {
@@ -251,32 +251,22 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
     }
 
     pub fn get_incoming_replay(&mut self) -> Option<(OwnedEntity<K>, Ref<dyn Replicate<P>>)> {
-        if let Some((_tick, confirmed_entity, command)) = self.command_receiver.pop_command_replay() {
-            if let Some(predicted_entity) = self.entity_manager.get_predicted_entity(&confirmed_entity) {
-                return Some((
-                    OwnedEntity::new(
-                        &confirmed_entity,
-                        &predicted_entity
-                    ),
-                    command));
-            }
+        if let Some((_tick, owned_entity, command)) = self.command_receiver.pop_command_replay() {
+            return Some((owned_entity, command));
         }
 
         return None;
     }
 
     pub fn get_incoming_command(&mut self) -> Option<(OwnedEntity<K>, Ref<dyn Replicate<P>>)> {
-        if let Some((_tick, confirmed_entity, command)) = self.command_receiver.pop_command() {
-            if let Some(predicted_entity) = self.entity_manager.get_predicted_entity(&confirmed_entity) {
-                return Some((
-                    OwnedEntity::new(
-                        &confirmed_entity,
-                        &predicted_entity
-                    ),
-                    command));
-            }
+        if let Some((_tick, owned_entity, command)) = self.command_receiver.pop_command() {
+            return Some((owned_entity, command));
         }
         return None;
+    }
+
+    pub fn get_confirmed_entity(&self, predicted_entity: &K) -> Option<&K> {
+        return self.entity_manager.get_confirmed_entity(predicted_entity);
     }
 
     // Ping related
