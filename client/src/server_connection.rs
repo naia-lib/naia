@@ -10,7 +10,7 @@ use naia_shared::{
 use super::{
     command_receiver::CommandReceiver, command_sender::CommandSender, entity_action::EntityAction,
     entity_manager::EntityManager, packet_writer::PacketWriter, ping_manager::PingManager,
-    tick_manager::TickManager, tick_queue::TickQueue,
+    tick_manager::TickManager, tick_queue::TickQueue, event::OwnedEntity
 };
 
 #[derive(Debug)]
@@ -250,17 +250,31 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
             .process_command_replay(world, &mut self.entity_manager);
     }
 
-    pub fn get_incoming_replay(&mut self) -> Option<(K, Ref<dyn Replicate<P>>)> {
-        if let Some((_tick, prediction_key, command)) = self.command_receiver.pop_command_replay() {
-            return Some((prediction_key, command));
+    pub fn get_incoming_replay(&mut self) -> Option<(OwnedEntity<K>, Ref<dyn Replicate<P>>)> {
+        if let Some((_tick, confirmed_entity, command)) = self.command_receiver.pop_command_replay() {
+            if let Some(predicted_entity) = self.entity_manager.get_predicted_entity(&confirmed_entity) {
+                return Some((
+                    OwnedEntity::new(
+                        &confirmed_entity,
+                        &predicted_entity
+                    ),
+                    command));
+            }
         }
 
         return None;
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<(K, Ref<dyn Replicate<P>>)> {
-        if let Some((_tick, prediction_key, command)) = self.command_receiver.pop_command() {
-            return Some((prediction_key, command));
+    pub fn get_incoming_command(&mut self) -> Option<(OwnedEntity<K>, Ref<dyn Replicate<P>>)> {
+        if let Some((_tick, confirmed_entity, command)) = self.command_receiver.pop_command() {
+            if let Some(predicted_entity) = self.entity_manager.get_predicted_entity(&confirmed_entity) {
+                return Some((
+                    OwnedEntity::new(
+                        &confirmed_entity,
+                        &predicted_entity
+                    ),
+                    command));
+            }
         }
         return None;
     }

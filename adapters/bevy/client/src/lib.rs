@@ -1,4 +1,4 @@
-pub use naia_client::{ClientConfig, Event, LocalEntity, Random, Ref};
+pub use naia_client::{ClientConfig, Event, Random, Ref};
 
 pub use naia_bevy_shared::{Entity, Stage};
 

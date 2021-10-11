@@ -51,9 +51,13 @@ impl<P: ProtocolType, K: EntityType> CommandReceiver<P, K> {
 
             // trigger replay of historical commands
             if let Some(command_buffer) = self.command_history.get_mut(&owned_entity) {
+
+                // this is suspect .. but I seem to remember it's required to be this
+                // way because we're handling it elsewhere?
                 self.queued_incoming_commands.clear();
                 self.queued_command_replays.clear();
 
+                // load up the replays
                 let current_tick = command_buffer.sequence_num();
                 for tick in *history_tick..=current_tick {
                     if let Some(command) = command_buffer.get_mut(tick) {

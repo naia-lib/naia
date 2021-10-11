@@ -59,7 +59,7 @@ impl<P: ProtocolType> PluginType for Plugin<P> {
                               SystemStage::single_threaded())
             .add_stage_after(CoreStage::PostUpdate,
                               Stage::Tick,
-                              SystemStage::parallel()
+                              SystemStage::single_threaded()
                                  .with_run_criteria(should_tick.system()))
             .add_stage_after(Stage::Tick,
                               PrivateStage::AfterTick,
