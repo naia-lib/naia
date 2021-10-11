@@ -1,11 +1,7 @@
-mod check_scopes;
 mod init;
-mod receive_events;
-mod send_updates;
+mod recv;
 mod tick;
 
-pub use check_scopes::check_scopes;
 pub use init::init;
-pub use receive_events::receive_events;
-pub use send_updates::send_updates;
+pub use recv::receive_events;
 pub use tick::tick;

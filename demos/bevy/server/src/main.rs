@@ -7,7 +7,7 @@ use naia_bevy_demo_shared::{get_server_address, get_shared_config};
 mod resources;
 mod systems;
 
-use systems::{check_scopes, init, receive_events, send_updates, tick};
+use systems::{init, receive_events, tick};
 
 fn main() {
     info!("Naia Bevy Server Demo starting up");
@@ -44,11 +44,7 @@ fn main() {
     // Gameplay Loop on Tick
     .add_system_to_stage(
         Stage::Tick,
-        tick.system()
-            .chain(
-                check_scopes.system())
-            .chain(
-                send_updates.system()))
+        tick.system())
 
     // Run App
     .run();

@@ -1,4 +1,7 @@
-use bevy::{ecs::{system::Query, query::With}, transform::components::Transform};
+use bevy::{
+    ecs::{query::With, system::Query},
+    transform::components::Transform,
+};
 
 use naia_bevy_client::{
     components::{Confirmed, Predicted},
