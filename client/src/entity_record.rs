@@ -69,4 +69,8 @@ impl<K: EntityType> EntityRecord<K> {
     pub fn disown(&mut self) -> Option<K> {
         return self.prediction_key.take();
     }
+
+    pub fn get_prediction(&self) -> Option<K> {
+        return self.prediction_key;
+    }
 }

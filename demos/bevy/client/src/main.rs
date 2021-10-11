@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 
-use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, Ref, components::{Confirmed, Predicted}, Stage};
+use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, Stage};
 
 use naia_bevy_demo_shared::{
     get_server_address, get_shared_config,
-    protocol::{Auth, Position},
+    protocol::Auth,
 };
 
 mod resources;

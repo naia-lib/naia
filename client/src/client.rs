@@ -129,8 +129,8 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     // Entities
 
     /// Retrieves an EntityRef that exposes read-only operations for the
-    /// Entity associated with the given LocalEntityKey.
-    /// Panics if the Entity does not exist for the given LocalEntityKey.
+    /// given Entity.
+    /// Panics if the Entity does not exist.
     pub fn entity<'s, W: WorldRefType<P, K>>(
         &'s self,
         world: W,

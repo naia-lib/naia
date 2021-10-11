@@ -9,6 +9,7 @@ use naia_shared::{
 
 use super::{
     command_receiver::CommandReceiver, entity_action::EntityAction, entity_record::EntityRecord,
+    event::OwnedEntity,
 };
 
 #[derive(Debug)]
@@ -134,7 +135,9 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                             command_receiver.prediction_init(&world_entity);
 
                             self.queued_incoming_messages
-                                .push_back(EntityAction::OwnEntity(world_entity));
+                                .push_back(EntityAction::OwnEntity(
+                                    OwnedEntity::new(&world_entity, &prediction_entity)
+                                ));
                         }
                     }
                 }
@@ -151,7 +154,9 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                                 command_receiver.prediction_cleanup(&world_entity);
 
                                 self.queued_incoming_messages
-                                    .push_back(EntityAction::DisownEntity(*world_entity));
+                                    .push_back(EntityAction::DisownEntity(
+                                        OwnedEntity::new(world_entity, &prediction_entity)
+                                    ));
                             }
                         }
                     }
@@ -191,7 +196,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
                             new_component.extract_and_insert(world_entity, world);
 
-                            //TODO: handle adding Component to a Prediction...
+                            //TODO: handle adding Component to a Prediction... !!!
 
                             self.queued_incoming_messages
                                 .push_back(EntityAction::InsertComponent(
@@ -220,7 +225,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                                     packet_index,
                                 );
 
-                                // check if Entity is a Prediction
+                                // check if Entity is Owned
                                 if entity_record.is_owned() {
                                     // replay commands
                                     command_receiver.replay_commands(packet_tick, &world_entity);
@@ -292,36 +297,16 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         return None;
     }
 
+    pub fn get_predicted_entity(&self, world_entity: &K) -> Option<K> {
+        if let Some(entity_record) = self.entity_records.get(world_entity) {
+            return entity_record.get_prediction();
+        }
+        return None;
+    }
+
     pub fn pop_incoming_message(&mut self) -> Option<EntityAction<P, K>> {
         return self.queued_incoming_messages.pop_front();
     }
-
-    //    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &K) ->
-    // Option<&P> {        if let Some(entity_record) =
-    // self.entity_records.get(key) {            if let Some(component_key) =
-    // entity_record.get_key_from_type(&TypeId::of::<R>()) {                
-    // return self.component_to_entity_map.get(component_key);            }
-    //        }
-    //        return None;
-    //    }
-
-    //    pub fn get_prediction_component_by_type<R: Replicate<P>>(
-    //        &self,
-    //        key: &K,
-    //    ) -> Option<&P> {
-    //        if let Some(entity_component_record) = self.entity_records.get(key) {
-    //            if let Some(component_key) =
-    //                entity_component_record.get_key_from_type(&TypeId::of::<R>())
-    //            {
-    //                return self.prediction_components.get(component_key);
-    //            }
-    //        }
-    //        return None;
-    //    }
-
-    //    pub fn has_entity(&self, key: &K) -> bool {
-    //        return self.entity_records.contains_key(key);
-    //    }
 
     pub fn entity_is_owned(&self, key: &K) -> bool {
         if let Some(entity_record) = self.entity_records.get(key) {
@@ -330,14 +315,22 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         return false;
     }
 
-    pub fn prediction_reset_entity<W: WorldMutType<P, K>>(&mut self, _world: &mut W, key: &K) {
-        if let Some(_entity_record) = self.entity_records.get(key) {
+    pub fn prediction_reset_entity<W: WorldMutType<P, K>>(&mut self, _world: &mut W, owned_entity: &K) {
+        if let Some(entity_record) = self.entity_records.get(owned_entity) {
             // loop through all predicted & confirmed components
             // have the predicted ones mirror the confirmed ones
-            todo!()
+
+            //TODO!
+            //todo!()
+
+            if let Some(prediction_entity) = entity_record.get_prediction() {
+                self.queued_incoming_messages
+                    .push_back(EntityAction::RewindEntity(
+                        OwnedEntity::new(owned_entity, &prediction_entity)
+                    ));
+            }
         }
 
-        self.queued_incoming_messages
-            .push_back(EntityAction::RewindEntity(*key));
+
     }
 }

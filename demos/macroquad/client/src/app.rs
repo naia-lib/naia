@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use macroquad::prelude::*;
 
-use naia_client::{Client, ClientConfig, Event, LocalEntity, Ref};
+use naia_client::{Client, ClientConfig, Event, Ref};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
@@ -13,9 +13,9 @@ const SQUARE_SIZE: f32 = 32.0;
 
 pub struct App {
     client: Client<Protocol>,
-    owned_square: Option<(LocalEntity, Ref<Square>)>,
+    owned_square: Option<(EntityKey, Ref<Square>)>,
     queued_command: Option<Ref<KeyCommand>>,
-    square_map: HashMap<LocalEntity, Ref<Square>>,
+    square_map: HashMap<EntityKey, Ref<Square>>,
 }
 
 impl App {
