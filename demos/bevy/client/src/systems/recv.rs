@@ -18,7 +18,7 @@ use crate::resources::Global;
 
 const SQUARE_SIZE: f32 = 32.0;
 
-pub fn receive_events(
+pub fn recv(
     mut local: Commands,
     mut client: Client<Protocol>,
     global: ResMut<Global>,
