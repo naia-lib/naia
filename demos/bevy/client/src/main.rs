@@ -2,15 +2,12 @@ use bevy::prelude::*;
 
 use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, Stage};
 
-use naia_bevy_demo_shared::{
-    get_server_address, get_shared_config,
-    protocol::Auth,
-};
+use naia_bevy_demo_shared::{get_server_address, get_shared_config, protocol::Auth};
 
 mod resources;
 mod systems;
 
-use systems::{init, player_input, receive_events, tick, confirmed_sync, predicted_sync};
+use systems::{confirmed_sync, init, player_input, predicted_sync, receive_events, tick};
 
 fn main() {
     let mut app = App::build();

@@ -76,9 +76,11 @@ fn get_components<P: ProtocolType>(world: &mut World, entity: &Entity) -> Vec<P>
 
     for component_id in world.entity(**entity).archetype().components() {
         let ref_type = {
-            let component_info = components.get_info(component_id)
-            .expect("Components need info to instantiate");
-            let ref_type = component_info.type_id()
+            let component_info = components
+                .get_info(component_id)
+                .expect("Components need info to instantiate");
+            let ref_type = component_info
+                .type_id()
                 .expect("Components need type_id to instantiate");
             ref_type
         };
@@ -95,13 +97,15 @@ fn get_components<P: ProtocolType>(world: &mut World, entity: &Entity) -> Vec<P>
 }
 
 fn get_world_data<P: ProtocolType>(world: &World) -> &WorldData<P> {
-    return world.get_resource::<WorldData<P>>()
+    return world
+        .get_resource::<WorldData<P>>()
         .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
 }
 
 fn get_world_data_mut<P: ProtocolType>(world: &World) -> Mut<WorldData<P>> {
     unsafe {
-        return world.get_resource_unchecked_mut::<WorldData<P>>()
+        return world
+            .get_resource_unchecked_mut::<WorldData<P>>()
             .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
     }
 }
@@ -143,9 +147,9 @@ impl<'w, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldRef<'w> {
         return get_component_from_type(self.world, entity, type_id);
     }
 
-//    fn get_components(&self, entity: &Entity) -> Vec<P> {
-//        return get_components(self.world, entity);
-//    }
+    //    fn get_components(&self, entity: &Entity) -> Vec<P> {
+    //        return get_components(self.world, entity);
+    //    }
 }
 
 // WorldMut
@@ -158,8 +162,6 @@ impl<'w> WorldMut<'w> {
     pub fn new(world: &'w mut World) -> Self {
         WorldMut { world }
     }
-
-
 }
 
 impl<'w, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldMut<'w> {

@@ -7,16 +7,14 @@ use bevy::{
     prelude::*,
 };
 
-use naia_bevy_client::{Client, Event, Ref, components::Predicted};
+use naia_bevy_client::{components::Predicted, Client, Event, Ref};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     protocol::{ColorValue, Position, Protocol},
 };
 
-use crate::{
-    resources::Global,
-};
+use crate::resources::Global;
 
 const SQUARE_SIZE: f32 = 32.0;
 
@@ -50,13 +48,12 @@ pub fn receive_events(
                             }
                         };
 
-                        local.entity(*entity)
-                            .insert_bundle(SpriteBundle {
-                                material: material.clone(),
-                                sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                                transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                                ..Default::default()
-                            });
+                        local.entity(*entity).insert_bundle(SpriteBundle {
+                            material: material.clone(),
+                            sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                            ..Default::default()
+                        });
                     }
                 }
             }
@@ -65,13 +62,12 @@ pub fn receive_events(
 
                 let predicted_entity = owned_entity.predicted;
 
-                local.entity(*predicted_entity)
-                    .insert_bundle(SpriteBundle {
-                        material: global.materials.white.clone(),
-                        sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                        transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                        ..Default::default()
-                    });
+                local.entity(*predicted_entity).insert_bundle(SpriteBundle {
+                    material: global.materials.white.clone(),
+                    sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                    transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                    ..Default::default()
+                });
             }
             Ok(Event::DisownEntity(_entity)) => {
                 info!("removed ownership of entity");

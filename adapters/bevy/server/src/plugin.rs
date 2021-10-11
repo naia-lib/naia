@@ -1,10 +1,17 @@
 use std::{ops::DerefMut, sync::Mutex};
 
-use bevy::{app::{AppBuilder, Plugin as PluginType, CoreStage}, ecs::schedule::SystemStage, prelude::*};
+use bevy::{
+    app::{AppBuilder, CoreStage, Plugin as PluginType},
+    ecs::schedule::SystemStage,
+    prelude::*,
+};
 
 use naia_server::{ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig};
 
-use naia_bevy_shared::{Entity, Stage, PrivateStage, tick::{Ticker, should_tick, finish_tick}, WorldData};
+use naia_bevy_shared::{
+    tick::{finish_tick, should_tick, Ticker},
+    Entity, PrivateStage, Stage, WorldData,
+};
 
 struct PluginConfig<P: ProtocolType> {
     server_config: ServerConfig,
@@ -67,7 +74,6 @@ impl<P: ProtocolType> PluginType for Plugin<P> {
                               SystemStage::parallel()
                                  .with_run_criteria(should_tick.system()))
             .add_system_to_stage(PrivateStage::AfterTick,
-                                 finish_tick.system())
-        ;
+                                 finish_tick.system());
     }
 }

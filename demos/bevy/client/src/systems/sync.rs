@@ -1,6 +1,9 @@
-use bevy::{transform::components::Transform, ecs::system::Query};
+use bevy::{ecs::system::Query, transform::components::Transform};
 
-use naia_bevy_client::{Ref, components::{Confirmed, Predicted}};
+use naia_bevy_client::{
+    components::{Confirmed, Predicted},
+    Ref,
+};
 
 use naia_bevy_demo_shared::protocol::Position;
 

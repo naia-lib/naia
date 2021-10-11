@@ -102,7 +102,8 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                         if let Some(entity_record) = self.entity_records.remove(&world_entity) {
                             if entity_record.is_owned() {
                                 let prediction_entity = entity_record.get_prediction().unwrap();
-                                self.predicted_to_confirmed_entity.remove(&prediction_entity);
+                                self.predicted_to_confirmed_entity
+                                    .remove(&prediction_entity);
                                 command_receiver.prediction_cleanup(&world_entity);
                             }
 
@@ -129,7 +130,8 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                             let prediction_entity = world.spawn_entity();
 
                             entity_record.set_prediction(&prediction_entity);
-                            self.predicted_to_confirmed_entity.insert(prediction_entity, world_entity);
+                            self.predicted_to_confirmed_entity
+                                .insert(prediction_entity, world_entity);
 
                             // create copies of components //
                             for component in world.get_components(&world_entity) {
@@ -141,9 +143,10 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                             command_receiver.prediction_init(&world_entity);
 
                             self.queued_incoming_messages
-                                .push_back(EntityAction::OwnEntity(
-                                    OwnedEntity::new(&world_entity, &prediction_entity)
-                                ));
+                                .push_back(EntityAction::OwnEntity(OwnedEntity::new(
+                                    &world_entity,
+                                    &prediction_entity,
+                                )));
                         }
                     }
                 }
@@ -154,16 +157,19 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                         if let Some(entity_record) = self.entity_records.get_mut(&world_entity) {
                             if entity_record.is_owned() {
                                 let prediction_entity = entity_record.disown().unwrap();
-                                self.predicted_to_confirmed_entity.remove(&prediction_entity);
+                                self.predicted_to_confirmed_entity
+                                    .remove(&prediction_entity);
 
                                 world.despawn_entity(&prediction_entity);
 
                                 command_receiver.prediction_cleanup(&world_entity);
 
-                                self.queued_incoming_messages
-                                    .push_back(EntityAction::DisownEntity(
-                                        OwnedEntity::new(world_entity, &prediction_entity)
-                                    ));
+                                self.queued_incoming_messages.push_back(
+                                    EntityAction::DisownEntity(OwnedEntity::new(
+                                        world_entity,
+                                        &prediction_entity,
+                                    )),
+                                );
                             }
                         }
                     }
@@ -326,7 +332,11 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         return false;
     }
 
-    pub fn prediction_reset_entity<W: WorldMutType<P, K>>(&mut self, _world: &mut W, owned_entity: &K) {
+    pub fn prediction_reset_entity<W: WorldMutType<P, K>>(
+        &mut self,
+        _world: &mut W,
+        owned_entity: &K,
+    ) {
         if let Some(entity_record) = self.entity_records.get(owned_entity) {
             // loop through all predicted & confirmed components
             // have the predicted ones mirror the confirmed ones
@@ -336,12 +346,11 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
             if let Some(prediction_entity) = entity_record.get_prediction() {
                 self.queued_incoming_messages
-                    .push_back(EntityAction::RewindEntity(
-                        OwnedEntity::new(owned_entity, &prediction_entity)
-                    ));
+                    .push_back(EntityAction::RewindEntity(OwnedEntity::new(
+                        owned_entity,
+                        &prediction_entity,
+                    )));
             }
         }
-
-
     }
 }
