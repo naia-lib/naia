@@ -1,4 +1,7 @@
-use bevy::{ecs::{schedule::ShouldRun, system::{Res, ResMut}}};
+use bevy::ecs::{
+    schedule::ShouldRun,
+    system::{Res, ResMut},
+};
 
 pub struct Ticker {
     ticked: bool,

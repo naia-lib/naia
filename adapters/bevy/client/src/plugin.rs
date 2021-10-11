@@ -1,12 +1,19 @@
 use std::{net::SocketAddr, ops::DerefMut, sync::Mutex};
 
-use bevy::{app::{AppBuilder, Plugin as PluginType, CoreStage}, ecs::schedule::SystemStage, prelude::*};
+use bevy::{
+    app::{AppBuilder, CoreStage, Plugin as PluginType},
+    ecs::schedule::SystemStage,
+    prelude::*,
+};
 
 use naia_client::{Client, ClientConfig, ImplRef, ProtocolType, SharedConfig};
 
-use naia_bevy_shared::{Entity, Stage, tick::{Ticker, should_tick, finish_tick}, PrivateStage, WorldData};
+use naia_bevy_shared::{
+    tick::{finish_tick, should_tick, Ticker},
+    Entity, PrivateStage, Stage, WorldData,
+};
 
-use super::{resource::ClientResource, systems::before_receive_events, stage::ClientStage};
+use super::{resource::ClientResource, stage::ClientStage, systems::before_receive_events};
 
 struct PluginConfig<P: ProtocolType, R: ImplRef<P>> {
     client_config: ClientConfig,
@@ -89,7 +96,6 @@ impl<P: ProtocolType, R: ImplRef<P>> PluginType for Plugin<P, R> {
             .add_system_to_stage(ClientStage::BeforeReceiveEvents,
                                  before_receive_events::<P>.exclusive_system())
             .add_system_to_stage(PrivateStage::AfterTick,
-                                 finish_tick.system())
-        ;
+                                 finish_tick.system());
     }
 }

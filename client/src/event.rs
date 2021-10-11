@@ -40,7 +40,6 @@ pub enum Event<P: ProtocolType, E: EntityType> {
     Message(P),
     /// A new Command received immediately to an assigned Entity, used to
     /// extrapolate Entity from the "past" to the "present".
-    ///
     NewCommand(OwnedEntity<E>, P),
     /// An old Command which has already been received by the assigned Entity,
     /// but which must be replayed after a "RewindEntity" event in order
@@ -59,6 +58,6 @@ impl<E: EntityType> OwnedEntity<E> {
         return Self {
             confirmed: *confirmed_entity,
             predicted: *predicted_entity,
-        }
+        };
     }
 }

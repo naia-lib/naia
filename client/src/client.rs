@@ -123,7 +123,10 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
         if let Some(connection) = &mut self.server_connection {
             if let Some(confirmed_entity) = connection.get_confirmed_entity(predicted_entity) {
                 let dyn_ref = command_ref.dyn_ref();
-                connection.queue_command(OwnedEntity::new(&confirmed_entity, predicted_entity), dyn_ref);
+                connection.queue_command(
+                    OwnedEntity::new(&confirmed_entity, predicted_entity),
+                    dyn_ref,
+                );
             }
         }
     }
@@ -354,7 +357,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     //    /// appropriate ComponentRef
     //    pub(crate) fn component_prediction<R: Replicate<P>>(&self, entity_key: &K)
     // -> Option<&Ref<R>> {        if let Some(protocol) =
-    // self.get_prediction_component_by_type::<R>(entity_key) {            
+    // self.get_prediction_component_by_type::<R>(entity_key) {
     // return protocol.as_typed_ref::<R>();        }
     //        return None;
     //    }

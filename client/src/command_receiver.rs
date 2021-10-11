@@ -5,7 +5,7 @@ use naia_shared::{
     WorldMutType,
 };
 
-use super::{event::OwnedEntity, entity_manager::EntityManager};
+use super::{entity_manager::EntityManager, event::OwnedEntity};
 
 const COMMAND_HISTORY_SIZE: u16 = 64;
 
@@ -52,7 +52,6 @@ impl<P: ProtocolType, K: EntityType> CommandReceiver<P, K> {
 
                 // trigger replay of historical commands
                 if let Some(command_buffer) = self.command_history.get_mut(&world_entity) {
-
                     // this is suspect .. but I seem to remember it's required to be this
                     // way because we're handling it elsewhere?
                     self.queued_incoming_commands.clear();

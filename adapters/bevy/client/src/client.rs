@@ -9,7 +9,7 @@ use naia_client::{Client as NaiaClient, EntityRef, Event, ImplRef, NaiaClientErr
 
 use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
 
-use super::{state::State, resource::ClientResource};
+use super::{resource::ClientResource, state::State};
 
 // Client
 

@@ -1,10 +1,13 @@
 use bevy::ecs::world::{Mut, World};
 
-use naia_client::{Event, ProtocolType, Client};
+use naia_client::{Client, Event, ProtocolType};
 
-use naia_bevy_shared::{Entity, WorldProxyMut, tick::Ticker};
+use naia_bevy_shared::{tick::Ticker, Entity, WorldProxyMut};
 
-use super::{resource::ClientResource, components::Predicted, components::Confirmed};
+use super::{
+    components::{Confirmed, Predicted},
+    resource::ClientResource,
+};
 
 pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<Client<P, Entity>>| {

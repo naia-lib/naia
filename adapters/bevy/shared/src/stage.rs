@@ -11,5 +11,5 @@ pub enum Stage {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, StageLabel)]
 pub enum PrivateStage {
-    AfterTick
+    AfterTick,
 }

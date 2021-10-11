@@ -8,9 +8,9 @@ use naia_shared::{
 };
 
 use super::{
-    command_receiver::CommandReceiver, entity_action::EntityAction,
-    entity_manager::EntityManager, packet_writer::PacketWriter, ping_manager::PingManager,
-    tick_manager::TickManager, tick_queue::TickQueue, event::OwnedEntity
+    command_receiver::CommandReceiver, entity_action::EntityAction, entity_manager::EntityManager,
+    event::OwnedEntity, packet_writer::PacketWriter, ping_manager::PingManager,
+    tick_manager::TickManager, tick_queue::TickQueue,
 };
 
 #[derive(Debug)]

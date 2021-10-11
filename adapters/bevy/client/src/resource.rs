@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, mem::swap};
 
-use naia_client::{Event, ProtocolType, NaiaClientError};
+use naia_client::{Event, NaiaClientError, ProtocolType};
 
 use naia_bevy_shared::Entity;
 
@@ -10,7 +10,9 @@ pub struct ClientResource<P: ProtocolType> {
 
 impl<P: ProtocolType> ClientResource<P> {
     pub fn new() -> Self {
-        Self { events: VecDeque::new() }
+        Self {
+            events: VecDeque::new(),
+        }
     }
 
     // Events //

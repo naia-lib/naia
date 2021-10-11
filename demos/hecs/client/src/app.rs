@@ -4,9 +4,7 @@ use log::{info, warn};
 
 use hecs::{Entity as HecsEntityKey, EntityBuilder as HecsEntityBuilder, World};
 
-use naia_client::{
-    Client, ClientConfig, Event, Ref, Replicate,
-};
+use naia_client::{Client, ClientConfig, Event, Ref, Replicate};
 
 use naia_hecs_demo_shared::{
     get_server_address, get_shared_config,
