@@ -1,13 +1,13 @@
 use bevy::{log::LogPlugin, prelude::*};
 
-use naia_bevy_server::{Plugin as ServerPlugin, ServerAddrs, ServerConfig};
+use naia_bevy_server::{Plugin as ServerPlugin, ServerAddrs, ServerConfig, Stage};
 
 use naia_bevy_demo_shared::{get_server_address, get_shared_config};
 
 mod resources;
 mod systems;
 
-use systems::{check_scopes, init, receive_events, send_updates, should_tick, tick};
+use systems::{check_scopes, init, receive_events, send_updates, tick};
 
 fn main() {
     info!("Naia Bevy Server Demo starting up");
@@ -39,18 +39,16 @@ fn main() {
         init.system())
     // Receive Server Events
     .add_system_to_stage(
-        CoreStage::PreUpdate,
+        Stage::ReceiveEvents,
         receive_events.system())
     // Gameplay Loop on Tick
     .add_system_to_stage(
-        CoreStage::PostUpdate,
+        Stage::Tick,
         tick.system()
             .chain(
                 check_scopes.system())
             .chain(
-                send_updates.system())
-            .with_run_criteria(
-                should_tick.system()))
+                send_updates.system()))
 
     // Run App
     .run();

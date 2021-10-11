@@ -1,12 +1,12 @@
 use std::{ops::DerefMut, sync::Mutex};
 
-use bevy::app::{AppBuilder, Plugin as PluginType};
+use bevy::{app::{AppBuilder, Plugin as PluginType, CoreStage}, ecs::schedule::SystemStage, prelude::*};
 
 use naia_server::{ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig};
 
-use naia_bevy_shared::Entity;
+use naia_bevy_shared::{Entity, Stage, PrivateStage};
 
-use super::ticker::Ticker;
+use super::{ticker::Ticker, systems::{should_tick, finish_tick}};
 
 struct PluginConfig<P: ProtocolType> {
     server_config: ServerConfig,
@@ -54,6 +54,21 @@ impl<P: ProtocolType> PluginType for Plugin<P> {
         app
         // RESOURCES //
             .insert_resource(server)
-            .insert_resource(Ticker::new());
+            .insert_resource(Ticker::new())
+        // STAGES //
+            .add_stage_before(CoreStage::PreUpdate,
+                              Stage::ReceiveEvents,
+                              SystemStage::parallel())
+            .add_stage_after(CoreStage::PostUpdate,
+                              Stage::Tick,
+                              SystemStage::parallel()
+                                 .with_run_criteria(should_tick.system()))
+            .add_stage_after(Stage::Tick,
+                              PrivateStage::AfterTick,
+                              SystemStage::parallel()
+                                 .with_run_criteria(should_tick.system()))
+            .add_system_to_stage(PrivateStage::AfterTick,
+                                 finish_tick.system())
+        ;
     }
 }

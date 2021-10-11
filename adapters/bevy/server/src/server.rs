@@ -170,15 +170,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     }
 
     pub fn tick_start(&mut self) {
-        self.ticker.ticked = true;
-    }
-
-    pub fn tick_finish(&mut self) {
-        self.ticker.ticked = false;
-    }
-
-    pub fn has_ticked(&self) -> bool {
-        return self.ticker.ticked;
+        self.ticker.tick_start();
     }
 
     // Crate-public methods
