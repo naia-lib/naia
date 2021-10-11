@@ -10,14 +10,15 @@ use naia_bevy_client::{
 
 use naia_bevy_demo_shared::protocol::Position;
 
-pub fn predicted_sync(mut query: Query<(&Ref<Position>, &mut Transform), With<Predicted>>) {
-    for (pos_ref, mut transform) in query.iter_mut() {
+pub fn sync(
+    mut predicted: Query<(&Ref<Position>, &mut Transform), With<Predicted>>,
+    mut confirmed: Query<(&Ref<Position>, &mut Transform), With<Confirmed>>,
+) {
+    for (pos_ref, mut transform) in confirmed.iter_mut() {
         sync_transform(pos_ref, &mut transform);
     }
-}
 
-pub fn confirmed_sync(mut query: Query<(&Ref<Position>, &mut Transform), With<Confirmed>>) {
-    for (pos_ref, mut transform) in query.iter_mut() {
+    for (pos_ref, mut transform) in predicted.iter_mut() {
         sync_transform(pos_ref, &mut transform);
     }
 }

@@ -4,7 +4,7 @@ use naia_bevy_demo_shared::protocol::KeyCommand;
 
 use crate::resources::Global;
 
-pub fn player_input(keyboard_input: Res<Input<KeyCode>>, mut global: ResMut<Global>) {
+pub fn input(keyboard_input: Res<Input<KeyCode>>, mut global: ResMut<Global>) {
     let w = keyboard_input.pressed(KeyCode::W);
     let s = keyboard_input.pressed(KeyCode::S);
     let a = keyboard_input.pressed(KeyCode::A);

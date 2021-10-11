@@ -12,7 +12,7 @@ use naia_bevy_demo_shared::{
 
 use crate::resources::Global;
 
-pub fn receive_events(
+pub fn recv(
     mut server: Server<Protocol>,
     mut global: ResMut<Global>,
     q_position: Query<&Ref<Position>>,
