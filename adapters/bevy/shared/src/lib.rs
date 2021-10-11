@@ -3,6 +3,7 @@ mod entity;
 mod world_data;
 mod world_proxy;
 mod stage;
+pub mod tick;
 
 pub use component_access::{ComponentAccess, ComponentAccessor};
 pub use entity::Entity;

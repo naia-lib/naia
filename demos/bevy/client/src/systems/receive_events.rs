@@ -8,7 +8,7 @@ use bevy::{
     prelude::*,
 };
 
-use naia_bevy_client::{Client, Entity, Event, Ref};
+use naia_bevy_client::{Client, Event, Ref, components::{Confirmed, Predicted}};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
@@ -16,7 +16,6 @@ use naia_bevy_demo_shared::{
 };
 
 use crate::{
-    components::{Confirmed, Predicted},
     resources::Global,
 };
 
@@ -25,7 +24,7 @@ const SQUARE_SIZE: f32 = 32.0;
 pub fn receive_events(
     mut local: Commands,
     mut client: Client<Protocol>,
-    mut global: ResMut<Global>,
+    global: ResMut<Global>,
     mut q_player_position: Query<(BevyEntity, &Ref<Position>), With<Predicted>>,
 ) {
     for event in client.receive() {
@@ -35,13 +34,6 @@ pub fn receive_events(
             }
             Ok(Event::Disconnection) => {
                 info!("Client disconnected from: {}", client.server_address());
-            }
-            Ok(Event::Tick) => {
-                for (entity, _) in q_player_position.iter() {
-                    if let Some(command) = global.queued_command.take() {
-                        client.queue_command(&Entity::new(entity), &command);
-                    }
-                }
             }
             Ok(Event::SpawnEntity(entity, component_list)) => {
                 local.entity(*entity).insert(Confirmed);

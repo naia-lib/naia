@@ -7,7 +7,7 @@ use bevy::ecs::{
 
 use naia_client::{Client as NaiaClient, EntityRef, Event, ImplRef, NaiaClientError, ProtocolType};
 
-use naia_bevy_shared::{Entity, WorldProxy, WorldProxyMut, WorldRef};
+use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
 
 use super::{state::State, resource::ClientResource};
 
@@ -16,7 +16,7 @@ use super::{state::State, resource::ClientResource};
 pub struct Client<'a, P: ProtocolType> {
     world: &'a World,
     client: Mut<'a, NaiaClient<P, Entity>>,
-    resource: Mut<'a, ClientResource>,
+    resource: Mut<'a, ClientResource<P>>,
     phantom_p: PhantomData<P>,
 }
 
@@ -30,7 +30,7 @@ impl<'a, P: ProtocolType> Client<'a, P> {
                 .expect("Naia Client has not been correctly initialized!");
 
             let resource = world
-                .get_resource_unchecked_mut::<ClientResource>()
+                .get_resource_unchecked_mut::<ClientResource<P>>()
                 .expect("Naia Client has not been correctly initialized!");
 
             Self {
@@ -61,7 +61,7 @@ impl<'a, P: ProtocolType> Client<'a, P> {
     }
 
     pub fn receive(&mut self) -> VecDeque<Result<Event<P, Entity>, NaiaClientError>> {
-        return self.client.receive(&mut self.world.proxy_mut());
+        return self.resource.take_events();
     }
 
     // Interpolation
@@ -97,18 +97,6 @@ impl<'a, P: ProtocolType> Client<'a, P> {
 
     pub fn server_tick(&self) -> u16 {
         return self.client.server_tick();
-    }
-
-    pub fn tick_start(&mut self) {
-        self.resource.ticked = true;
-    }
-
-    pub fn tick_finish(&mut self) {
-        self.resource.ticked = false;
-    }
-
-    pub fn has_ticked(&self) -> bool {
-        return self.resource.ticked;
     }
 }
 
