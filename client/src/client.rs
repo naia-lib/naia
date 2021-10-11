@@ -16,7 +16,7 @@ use super::{
     entity_action::EntityAction,
     entity_ref::EntityRef,
     error::NaiaClientError,
-    event::Event,
+    event::{Event, OwnedEntity},
     server_connection::ServerConnection,
     tick_manager::TickManager,
     Packet,
@@ -119,10 +119,12 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     }
 
     /// Queues up a Command for an assigned Entity to be sent to the Server
-    pub fn queue_command<R: ImplRef<P>>(&mut self, entity: &K, command_ref: &R) {
+    pub fn queue_command<R: ImplRef<P>>(&mut self, predicted_entity: &K, command_ref: &R) {
         if let Some(connection) = &mut self.server_connection {
-            let dyn_ref = command_ref.dyn_ref();
-            connection.queue_command(&entity, &dyn_ref);
+            if let Some(confirmed_entity) = connection.get_confirmed_entity(predicted_entity) {
+                let dyn_ref = command_ref.dyn_ref();
+                connection.queue_command(OwnedEntity::new(&confirmed_entity, predicted_entity), dyn_ref);
+            }
         }
     }
 
@@ -261,16 +263,16 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                     events.push_back(Ok(event));
                 }
                 // receive replay command
-                while let Some((entity, command)) = connection.get_incoming_replay() {
+                while let Some((owned_entity, command)) = connection.get_incoming_replay() {
                     events.push_back(Ok(Event::ReplayCommand(
-                        entity,
+                        owned_entity,
                         command.borrow().copy_to_protocol(),
                     )));
                 }
                 // receive command
-                while let Some((entity, command)) = connection.get_incoming_command() {
+                while let Some((owned_entity, command)) = connection.get_incoming_command() {
                     events.push_back(Ok(Event::NewCommand(
-                        entity,
+                        owned_entity,
                         command.borrow().copy_to_protocol(),
                     )));
                 }

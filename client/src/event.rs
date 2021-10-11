@@ -50,23 +50,15 @@ pub enum Event<P: ProtocolType, E: EntityType> {
 
 #[derive(Debug, Clone)]
 pub struct OwnedEntity<E: EntityType> {
-    confirmed_entity: E,
-    predicted_entity: E,
+    pub confirmed: E,
+    pub predicted: E,
 }
 
 impl<E: EntityType> OwnedEntity<E> {
     pub fn new(confirmed_entity: &E, predicted_entity: &E) -> Self {
         return Self {
-            confirmed_entity: *confirmed_entity,
-            predicted_entity: *predicted_entity,
+            confirmed: *confirmed_entity,
+            predicted: *predicted_entity,
         }
-    }
-
-    pub fn get_confirmed(&self) -> E {
-        return self.confirmed_entity;
-    }
-
-    pub fn get_predicted(&self) -> E {
-        return self.predicted_entity;
     }
 }

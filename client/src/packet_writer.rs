@@ -5,7 +5,7 @@ use naia_shared::{
     Ref, Replicate, MTU_SIZE,
 };
 
-use super::{command_receiver::CommandReceiver, entity_manager::EntityManager};
+use super::{command_receiver::CommandReceiver, entity_manager::EntityManager, event::OwnedEntity};
 
 const MAX_PAST_COMMANDS: u8 = 3;
 
@@ -63,10 +63,11 @@ impl PacketWriter {
         manifest: &Manifest<P>,
         entity_manager: &EntityManager<P, K>,
         command_receiver: &CommandReceiver<P, K>,
-        owned_entity: &K,
+        owned_entity: &OwnedEntity<K>,
         command: &Ref<dyn Replicate<P>>,
     ) -> bool {
-        if let Some(local_entity) = entity_manager.world_to_local_entity(owned_entity) {
+        let world_entity = owned_entity.confirmed;
+        if let Some(local_entity) = entity_manager.world_to_local_entity(&world_entity) {
             //Write command payload
             let mut command_payload_bytes = Vec::<u8>::new();
 
@@ -74,11 +75,11 @@ impl PacketWriter {
 
             // write past commands
             let past_commands_number = command_receiver
-                .command_history_count(&owned_entity)
+                .command_history_count(&world_entity)
                 .min(MAX_PAST_COMMANDS);
             let mut past_command_index: u8 = 0;
 
-            if let Some(mut iter) = command_receiver.command_history_iter(&owned_entity, true) {
+            if let Some(mut iter) = command_receiver.command_history_iter(&world_entity, true) {
                 while past_command_index < past_commands_number {
                     if let Some((past_tick, past_command)) = iter.next() {
                         // get tick diff between commands

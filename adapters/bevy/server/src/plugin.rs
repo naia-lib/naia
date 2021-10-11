@@ -4,7 +4,7 @@ use bevy::{app::{AppBuilder, Plugin as PluginType, CoreStage}, ecs::schedule::Sy
 
 use naia_server::{ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig};
 
-use naia_bevy_shared::{Entity, Stage, PrivateStage, tick::{Ticker, should_tick, finish_tick}};
+use naia_bevy_shared::{Entity, Stage, PrivateStage, tick::{Ticker, should_tick, finish_tick}, WorldData};
 
 struct PluginConfig<P: ProtocolType> {
     server_config: ServerConfig,
@@ -53,6 +53,7 @@ impl<P: ProtocolType> PluginType for Plugin<P> {
         // RESOURCES //
             .insert_resource(server)
             .insert_resource(Ticker::new())
+            .insert_resource(WorldData::<P>::new())
         // STAGES //
             .add_stage_before(CoreStage::PreUpdate,
                               Stage::ReceiveEvents,
