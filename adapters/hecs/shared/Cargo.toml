@@ -23,4 +23,3 @@ mquad = [ "naia-shared/mquad" ]
 [dependencies]
 naia-shared = { path = "../../../shared" }
 hecs = { path = "../../../../Forks/hecs" }
-once_cell = "1.8.0"

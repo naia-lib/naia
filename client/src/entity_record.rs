@@ -47,14 +47,13 @@ impl<K: EntityType> EntityRecord<K> {
         return None;
     }
 
-    //
-    //    pub fn get_component_keys(&self) -> Vec<LocalComponentKey> {
-    //        let mut output = Vec::<LocalComponentKey>::new();
-    //        for (key, type_id) in self.key_to_type_map.iter() {
-    //            output.push(*key);
-    //        }
-    //        return output;
-    //    }
+    pub fn get_component_keys(&self) -> Vec<LocalComponentKey> {
+        let mut output = Vec::<LocalComponentKey>::new();
+        for (key, _) in self.key_to_type_map.iter() {
+            output.push(*key);
+        }
+        return output;
+    }
 
     // Ownership / Prediction //
 

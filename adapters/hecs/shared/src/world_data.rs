@@ -1,10 +1,7 @@
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
-    sync::Mutex,
 };
-
-use once_cell::sync::OnceCell;
 
 use hecs::World;
 
@@ -14,23 +11,6 @@ use super::{
     component_access::{ComponentAccess, ComponentAccessor},
     entity::Entity,
 };
-
-static mut INSTANCE: OnceCell<Mutex<WorldData>> = OnceCell::new();
-
-pub fn get_world_data() -> &'static Mutex<WorldData> {
-    unsafe { INSTANCE.get_or_init(|| Mutex::new(WorldData::new())) }
-}
-
-pub fn get_world_data_mut() -> &'static mut Mutex<WorldData> {
-    unsafe {
-        if let Some(inner_mut) = INSTANCE.get_mut() {
-            return inner_mut;
-        } else {
-            INSTANCE.set(Mutex::new(WorldData::new())).unwrap();
-            return get_world_data_mut();
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct WorldData {

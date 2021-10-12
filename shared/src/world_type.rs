@@ -54,4 +54,6 @@ pub trait WorldMutType<P: ProtocolType, K: EntityType>:
     fn insert_component<I: ImplRef<P>>(&mut self, entity_key: &K, component_ref: I);
     /// remove a component
     fn remove_component<R: Replicate<P>>(&mut self, entity_key: &K);
+    /// remove a component by type
+    fn remove_component_by_type(&self, entity_key: &K, type_id: &TypeId);
 }

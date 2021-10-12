@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use hecs::World;
 
-use naia_hecs_server::{ServerAddrs, ServerConfig, SharedConfig, WorldProxyMut};
+use naia_hecs_server::{ServerAddrs, ServerConfig, SharedConfig, WorldProxyMut, WorldData};
 
 use naia_hecs_demo_shared::protocol::{Name, Position, Protocol};
 
@@ -21,6 +21,7 @@ pub fn app_init(
     let main_room_key = server.make_room().key();
 
     let mut world = World::new();
+    let mut world_data = WorldData::new();
 
     {
         let mut count = 0;
@@ -42,7 +43,7 @@ pub fn app_init(
 
             // Create an Entity
             server
-                .spawn_entity(&mut world.proxy_mut())
+                .spawn_entity(&mut world.proxy_mut(&mut world_data))
                 .enter_room(&main_room_key)
                 .insert_component(&position_ref)
                 .insert_component(&name_ref)
@@ -53,6 +54,7 @@ pub fn app_init(
     App {
         server,
         world,
+        world_data,
         main_room_key,
         tick_count: 0,
         has_marker: HashSet::new(),
