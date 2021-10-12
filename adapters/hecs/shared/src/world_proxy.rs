@@ -149,17 +149,21 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd> {
             self.world_data.put_type::<P, R>(&inner_type_id, &TypeId::of::<R>());
         }
 
-        // insert into ecs
         self.world
             .insert_one(**entity, component_ref)
             .expect("error inserting Component");
     }
 
-    fn remove_component_by_type<R: Replicate<P>>(&mut self, entity: &Entity) {
-        // remove from ecs
+    fn remove_component<R: Replicate<P>>(&mut self, entity: &Entity) {
         self.world
             .remove_one::<Ref<R>>(**entity)
             .expect("error removing Component");
+    }
+
+    fn remove_component_by_type(&mut self, entity: &Entity, type_id: &TypeId) {
+        if let Some(accessor) = self.world_data.get_component_access::<P>(type_id) {
+            accessor.remove_component(self.world, entity);
+        }
     }
 }
 
@@ -213,5 +217,8 @@ fn get_component_from_type<P: ProtocolType>(
     entity: &Entity,
     type_id: &TypeId,
 ) -> Option<P> {
-    return world_data.get_component(world, entity, type_id);
+    if let Some(access) = world_data.get_component_access(type_id) {
+        return access.get_component(world, entity);
+    }
+    return None;
 }

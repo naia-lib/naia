@@ -3,14 +3,9 @@ use std::{
     collections::HashMap,
 };
 
-use hecs::World;
-
 use naia_shared::{ImplRef, ProtocolType};
 
-use super::{
-    component_access::{ComponentAccess, ComponentAccessor},
-    entity::Entity,
-};
+use super::component_access::{ComponentAccess, ComponentAccessor};
 
 #[derive(Debug)]
 pub struct WorldData {
@@ -26,16 +21,12 @@ impl WorldData {
         }
     }
 
-    pub(crate) fn get_component<P: ProtocolType>(
+    pub(crate) fn get_component_access<P: ProtocolType>(
         &self,
-        world: &World,
-        entity: &Entity,
         type_id: &TypeId,
-    ) -> Option<P> {
+    ) -> Option<&Box<dyn ComponentAccess<P>>> {
         if let Some(accessor_any) = self.rep_type_to_accessor_map.get(type_id) {
-            if let Some(accessor) = accessor_any.downcast_ref::<Box<dyn ComponentAccess<P>>>() {
-                return accessor.get_component(world, entity);
-            }
+            return accessor_any.downcast_ref::<Box<dyn ComponentAccess<P>>>();
         }
         return None;
     }
