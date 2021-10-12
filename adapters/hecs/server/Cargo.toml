@@ -22,4 +22,4 @@ use-webrtc = [ "naia-server/use-webrtc" ]
 [dependencies]
 naia-server = { path = "../../../server" }
 naia-hecs-shared = { path = "../shared" }
-once_cell = "1.8.0"
+hecs = { path = "../../../../Forks/hecs" }

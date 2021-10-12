@@ -5,7 +5,7 @@ use naia_hecs_demo_shared::protocol::Protocol;
 use crate::app::App;
 
 pub fn process_events(app: &mut App) {
-    for event in app.server.receive(app.world.proxy()) {
+    for event in app.server.receive(app.world.proxy(&mut app.world_data)) {
         match event {
             Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
                 let auth_message = auth_ref.borrow();

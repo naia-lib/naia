@@ -115,6 +115,12 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                                 );
                             }
 
+                            for component_key in entity_record.get_component_keys() {
+                                self.component_to_entity_map.remove(&component_key);
+                            }
+
+                            world.despawn_entity(&world_entity);
+
                             self.queued_incoming_messages
                                 .push_back(EntityAction::DespawnEntity(world_entity));
                             continue;
@@ -290,6 +296,8 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                             .expect(
                                 "component should still exist in the World, was it tampered with?",
                             );
+
+                        world.remove_component(&world_entity);
 
                         // Generate event
                         self.queued_incoming_messages
