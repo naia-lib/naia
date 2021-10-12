@@ -1,6 +1,4 @@
-use naia_server::Ref;
-
-use naia_hecs_server::{Entity, WorldProxy};
+use naia_hecs_server::{Ref, Entity, WorldProxy, WorldProxyMut};
 
 use naia_hecs_demo_shared::protocol::{Marker, Position, StringMessage};
 
@@ -38,7 +36,7 @@ pub fn march_and_mark(app: &mut App) {
 
             // Add to Naia Server
             app.server
-                .entity_mut(app.world.proxy(), &entity_key)
+                .entity_mut(&mut app.world.proxy_mut(), &entity_key)
                 .insert_component(&marker);
 
             // Track that this entity has a Marker
@@ -51,7 +49,7 @@ pub fn march_and_mark(app: &mut App) {
         if app.has_marker.remove(&entity_key) {
             // Remove from Naia Server
             app.server
-                .entity_mut(app.world.proxy(), &entity_key)
+                .entity_mut(&mut app.world.proxy_mut(), &entity_key)
                 .remove_component::<Marker>();
         }
     }

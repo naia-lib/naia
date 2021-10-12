@@ -6,12 +6,14 @@ use std::{
 
 use once_cell::sync::OnceCell;
 
-use naia_server::{ImplRef, ProtocolType};
+use hecs::World;
+
+use naia_shared::{ImplRef, ProtocolType};
 
 use super::{
     component_access::{ComponentAccess, ComponentAccessor},
     entity::Entity,
-    world_proxy::WorldMut,
+    world_proxy::{WorldMut, WorldRef},
 };
 
 static mut INSTANCE: OnceCell<Mutex<WorldData>> = OnceCell::new();
@@ -47,13 +49,13 @@ impl WorldData {
 
     pub(crate) fn get_component<P: ProtocolType>(
         &self,
-        world_adapter: &WorldMut,
+        world: &World,
         entity: &Entity,
         type_id: &TypeId,
     ) -> Option<P> {
         if let Some(accessor_any) = self.rep_type_to_accessor_map.get(type_id) {
             if let Some(accessor) = accessor_any.downcast_ref::<Box<dyn ComponentAccess<P>>>() {
-                return accessor.get_component(world_adapter, entity);
+                return accessor.get_component(world, entity);
             }
         }
         return None;

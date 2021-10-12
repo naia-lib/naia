@@ -1,6 +1,4 @@
-use naia_server::Event;
-
-use naia_hecs_server::WorldProxy;
+use naia_hecs_server::{WorldProxy, Event};
 
 use naia_hecs_demo_shared::protocol::Protocol;
 
