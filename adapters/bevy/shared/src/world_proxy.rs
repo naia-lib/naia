@@ -10,11 +10,11 @@ use super::{entity::Entity, world_data::WorldData};
 
 // WorldProxy
 
-pub trait IntoWorldRefType<'w> {
+pub trait WorldProxy<'w> {
     fn proxy(self) -> WorldRef<'w>;
 }
 
-impl<'w> IntoWorldRefType<'w> for &'w World {
+impl<'w> WorldProxy<'w> for &'w World {
     fn proxy(self) -> WorldRef<'w> {
         return WorldRef::new(self);
     }
@@ -22,11 +22,11 @@ impl<'w> IntoWorldRefType<'w> for &'w World {
 
 // WorldProxyMut
 
-pub trait IntoWorldMutType<'w> {
+pub trait WorldProxyMut<'w> {
     fn proxy_mut(self) -> WorldMut<'w>;
 }
 
-impl<'w> IntoWorldMutType<'w> for &'w mut World {
+impl<'w> WorldProxyMut<'w> for &'w mut World {
     fn proxy_mut(self) -> WorldMut<'w> {
         return WorldMut::new(self);
     }

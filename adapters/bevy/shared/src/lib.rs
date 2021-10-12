@@ -9,4 +9,4 @@ pub use component_access::{ComponentAccess, ComponentAccessor};
 pub use entity::Entity;
 pub use stage::{PrivateStage, Stage};
 pub use world_data::WorldData;
-pub use world_proxy::{WorldMut, IntoWorldRefType, IntoWorldMutType, WorldRef};
+pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};

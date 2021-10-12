@@ -7,7 +7,7 @@ use bevy::ecs::{
 
 use naia_client::{Client as NaiaClient, EntityRef, Event, ImplRef, NaiaClientError, ProtocolType};
 
-use naia_bevy_shared::{Entity, IntoWorldRefType, WorldRef};
+use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
 
 use super::{resource::ClientResource, state::State};
 
