@@ -1,10 +1,10 @@
-use std::{any::Any, ops::Deref, marker::PhantomData};
+use std::{any::Any, marker::PhantomData, ops::Deref};
 
 use hecs::World;
 
 use naia_shared::{ImplRef, ProtocolType};
 
-use super::{entity::Entity, world_proxy::WorldRef};
+use super::entity::Entity;
 
 // ComponentAccess
 pub trait ComponentAccess<P: ProtocolType> {
