@@ -112,14 +112,14 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
     fn spawn_entity(&mut self) -> Entity {
         let entity = Entity::new(self.world.spawn().id());
 
-        let mut world_data = get_world_data_mut::<P>(&mut self.world);
+        let mut world_data = get_world_data_unchecked_mut::<P>(&mut self.world);
         world_data.spawn_entity(&entity);
 
         return entity;
     }
 
     fn despawn_entity(&mut self, entity: &Entity) {
-        let mut world_data = get_world_data_mut::<P>(&self.world);
+        let mut world_data = get_world_data_unchecked_mut::<P>(&self.world);
         world_data.despawn_entity(entity);
 
         self.world.despawn(**entity);
@@ -132,7 +132,7 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
     fn insert_component<I: ImplRef<P>>(&mut self, entity: &Entity, component_ref: I) {
         // cache type id for later
         // todo: can we initialize this map on startup via Protocol derive?
-        let mut world_data = get_world_data_mut(&self.world);
+        let mut world_data = get_world_data_unchecked_mut(&self.world);
         let inner_type_id = component_ref.dyn_ref().borrow().get_type_id();
         if !world_data.has_type(&inner_type_id) {
             world_data.put_type::<I>(&inner_type_id, &TypeId::of::<I>());
@@ -144,6 +144,14 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
 
     fn remove_component<R: Replicate<P>>(&mut self, entity: &Entity) {
         self.world.entity_mut(**entity).remove::<Ref<R>>();
+    }
+
+    fn remove_component_by_type(&mut self, entity: &Entity, type_id: &TypeId) {
+        self.world.resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
+            if let Some(accessor) = data.get_component_access(type_id) {
+                accessor.remove_component(world, entity);
+            }
+        });
     }
 }
 
@@ -187,7 +195,10 @@ fn get_component_from_type<P: ProtocolType>(
     type_id: &TypeId,
 ) -> Option<P> {
     let world_data = get_world_data(world);
-    return world_data.get_component(world, entity, type_id);
+    if let Some(component_access) = world_data.get_component_access(type_id) {
+        return component_access.get_component(world, entity);
+    }
+    return None;
 }
 
 fn get_components<P: ProtocolType>(world: &mut World, entity: &Entity) -> Vec<P> {
@@ -224,7 +235,7 @@ fn get_world_data<P: ProtocolType>(world: &World) -> &WorldData<P> {
         .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
 }
 
-fn get_world_data_mut<P: ProtocolType>(world: &World) -> Mut<WorldData<P>> {
+fn get_world_data_unchecked_mut<P: ProtocolType>(world: &World) -> Mut<WorldData<P>> {
     unsafe {
         return world
             .get_resource_unchecked_mut::<WorldData<P>>()
