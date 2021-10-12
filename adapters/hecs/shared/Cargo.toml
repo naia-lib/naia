@@ -16,5 +16,11 @@ edition = "2018"
 maintenance = { status = "actively-developed" }
 
 [features]
+multithread = [ "naia-shared/multithread" ]
+wbindgen = [ "naia-shared/wbindgen" ]
+mquad = [ "naia-shared/mquad" ]
 
 [dependencies]
+naia-shared = { path = "../../../shared" }
+hecs = { path = "../../../../Forks/hecs" }
+once_cell = "1.8.0"

@@ -10,11 +10,11 @@ use super::{entity::Entity, world_data::WorldData};
 
 // WorldProxy
 
-pub trait WorldProxy<'w> {
+pub trait IntoWorldRefType<'w> {
     fn proxy(self) -> WorldRef<'w>;
 }
 
-impl<'w> WorldProxy<'w> for &'w World {
+impl<'w> IntoWorldRefType<'w> for &'w World {
     fn proxy(self) -> WorldRef<'w> {
         return WorldRef::new(self);
     }
@@ -22,92 +22,13 @@ impl<'w> WorldProxy<'w> for &'w World {
 
 // WorldProxyMut
 
-pub trait WorldProxyMut<'w> {
+pub trait IntoWorldMutType<'w> {
     fn proxy_mut(self) -> WorldMut<'w>;
 }
 
-impl<'w> WorldProxyMut<'w> for &'w mut World {
+impl<'w> IntoWorldMutType<'w> for &'w mut World {
     fn proxy_mut(self) -> WorldMut<'w> {
         return WorldMut::new(self);
-    }
-}
-
-// WorldRef private static methods
-
-fn has_entity(world: &World, entity: &Entity) -> bool {
-    return world.get_entity(**entity).is_some();
-}
-
-fn entities<P: ProtocolType>(world: &World) -> Vec<Entity> {
-    let world_data = get_world_data::<P>(world);
-    return world_data.get_entities();
-}
-
-fn has_component<P: ProtocolType, R: Replicate<P>>(world: &World, entity: &Entity) -> bool {
-    return world.get::<Ref<R>>(**entity).is_some();
-}
-
-fn has_component_of_type(world: &World, entity: &Entity, type_id: &TypeId) -> bool {
-    return world.entity(**entity).contains_type_id(*type_id);
-}
-
-fn get_component<P: ProtocolType, R: Replicate<P>>(
-    world: &World,
-    entity: &Entity,
-) -> Option<Ref<R>> {
-    return world
-        .get::<Ref<R>>(**entity)
-        .map_or(None, |v| Some(v.clone()));
-}
-
-fn get_component_from_type<P: ProtocolType>(
-    world: &World,
-    entity: &Entity,
-    type_id: &TypeId,
-) -> Option<P> {
-    let world_data = get_world_data(world);
-    return world_data.get_component(world, entity, type_id);
-}
-
-fn get_components<P: ProtocolType>(world: &mut World, entity: &Entity) -> Vec<P> {
-    let mut protocols = Vec::new();
-
-    let components = world.components();
-    let world_data = get_world_data::<P>(world);
-
-    for component_id in world.entity(**entity).archetype().components() {
-        let ref_type = {
-            let component_info = components
-                .get_info(component_id)
-                .expect("Components need info to instantiate");
-            let ref_type = component_info
-                .type_id()
-                .expect("Components need type_id to instantiate");
-            ref_type
-        };
-
-        if let Some(rep_type) = world_data.type_convert_ref_to_rep(&ref_type) {
-            let protocol: P = get_component_from_type(world, entity, &rep_type).expect(
-                "Need to be able to extract the protocol from the component to instantiate",
-            );
-            protocols.push(protocol.clone());
-        }
-    }
-
-    return protocols;
-}
-
-fn get_world_data<P: ProtocolType>(world: &World) -> &WorldData<P> {
-    return world
-        .get_resource::<WorldData<P>>()
-        .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
-}
-
-fn get_world_data_mut<P: ProtocolType>(world: &World) -> Mut<WorldData<P>> {
-    unsafe {
-        return world
-            .get_resource_unchecked_mut::<WorldData<P>>()
-            .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
     }
 }
 
@@ -147,10 +68,6 @@ impl<'w, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldRef<'w> {
     fn get_component_from_type(&self, entity: &Entity, type_id: &TypeId) -> Option<P> {
         return get_component_from_type(self.world, entity, type_id);
     }
-
-    //    fn get_components(&self, entity: &Entity) -> Vec<P> {
-    //        return get_components(self.world, entity);
-    //    }
 }
 
 // WorldMut
@@ -233,5 +150,84 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
 impl<'w, P: ProtocolType> ProtocolRefExtractor<P, Entity> for WorldMut<'w> {
     fn extract<I: ImplRef<P>>(&mut self, entity: &Entity, impl_ref: I) {
         self.insert_component::<I>(entity, impl_ref);
+    }
+}
+
+// private static methods
+
+fn has_entity(world: &World, entity: &Entity) -> bool {
+    return world.get_entity(**entity).is_some();
+}
+
+fn entities<P: ProtocolType>(world: &World) -> Vec<Entity> {
+    let world_data = get_world_data::<P>(world);
+    return world_data.get_entities();
+}
+
+fn has_component<P: ProtocolType, R: Replicate<P>>(world: &World, entity: &Entity) -> bool {
+    return world.get::<Ref<R>>(**entity).is_some();
+}
+
+fn has_component_of_type(world: &World, entity: &Entity, type_id: &TypeId) -> bool {
+    return world.entity(**entity).contains_type_id(*type_id);
+}
+
+fn get_component<P: ProtocolType, R: Replicate<P>>(
+    world: &World,
+    entity: &Entity,
+) -> Option<Ref<R>> {
+    return world
+        .get::<Ref<R>>(**entity)
+        .map_or(None, |v| Some(v.clone()));
+}
+
+fn get_component_from_type<P: ProtocolType>(
+    world: &World,
+    entity: &Entity,
+    type_id: &TypeId,
+) -> Option<P> {
+    let world_data = get_world_data(world);
+    return world_data.get_component(world, entity, type_id);
+}
+
+fn get_components<P: ProtocolType>(world: &mut World, entity: &Entity) -> Vec<P> {
+    let mut protocols = Vec::new();
+
+    let components = world.components();
+    let world_data = get_world_data::<P>(world);
+
+    for component_id in world.entity(**entity).archetype().components() {
+        let ref_type = {
+            let component_info = components
+                .get_info(component_id)
+                .expect("Components need info to instantiate");
+            let ref_type = component_info
+                .type_id()
+                .expect("Components need type_id to instantiate");
+            ref_type
+        };
+
+        if let Some(rep_type) = world_data.type_convert_ref_to_rep(&ref_type) {
+            let protocol: P = get_component_from_type(world, entity, &rep_type).expect(
+                "Need to be able to extract the protocol from the component to instantiate",
+            );
+            protocols.push(protocol.clone());
+        }
+    }
+
+    return protocols;
+}
+
+fn get_world_data<P: ProtocolType>(world: &World) -> &WorldData<P> {
+    return world
+        .get_resource::<WorldData<P>>()
+        .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
+}
+
+fn get_world_data_mut<P: ProtocolType>(world: &World) -> Mut<WorldData<P>> {
+    unsafe {
+        return world
+            .get_resource_unchecked_mut::<WorldData<P>>()
+            .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
     }
 }
