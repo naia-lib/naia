@@ -155,7 +155,7 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd> {
             .expect("error inserting Component");
     }
 
-    fn remove_component<R: Replicate<P>>(&mut self, entity: &Entity) {
+    fn remove_component_by_type<R: Replicate<P>>(&mut self, entity: &Entity) {
         // remove from ecs
         self.world
             .remove_one::<Ref<R>>(**entity)

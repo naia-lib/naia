@@ -3,8 +3,6 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use bevy::ecs::world::World;
-
 use naia_shared::{ImplRef, ProtocolType};
 
 use super::{
@@ -27,16 +25,37 @@ impl<P: ProtocolType> WorldData<P> {
         }
     }
 
-    pub(crate) fn get_component(
-        &self,
-        world: &World,
-        entity: &Entity,
-        type_id: &TypeId,
-    ) -> Option<P> {
-        if let Some(accessor) = self.rep_type_to_accessor_map.get(type_id) {
-            return accessor.get_component(world, entity);
+    // Entities //
+
+    pub(crate) fn get_entities(&self) -> Vec<Entity> {
+        let mut output = Vec::new();
+
+        for entity in &self.entities {
+            output.push(*entity);
         }
-        return None;
+
+        return output;
+    }
+
+    pub(crate) fn spawn_entity(&mut self, entity: &Entity) {
+        self.entities.insert(*entity);
+    }
+
+    pub(crate) fn despawn_entity(&mut self, entity: &Entity) {
+        self.entities.remove(&entity);
+    }
+
+    // Components //
+
+    pub(crate) fn get_component_access(
+        &self,
+        type_id: &TypeId,
+    ) -> Option<&Box<dyn ComponentAccess<P>>> {
+        return self.rep_type_to_accessor_map.get(type_id);
+    }
+
+    pub(crate) fn type_convert_ref_to_rep(&self, ref_type_id: &TypeId) -> Option<&TypeId> {
+        return self.ref_type_to_rep_type_map.get(ref_type_id);
     }
 
     pub(crate) fn has_type(&self, type_id: &TypeId) -> bool {
@@ -48,27 +67,5 @@ impl<P: ProtocolType> WorldData<P> {
             .insert(*rep_type_id, ComponentAccessor::<P, R>::new());
         self.ref_type_to_rep_type_map
             .insert(*ref_type_id, *rep_type_id);
-    }
-
-    pub(crate) fn type_convert_ref_to_rep(&self, ref_type_id: &TypeId) -> Option<&TypeId> {
-        return self.ref_type_to_rep_type_map.get(ref_type_id);
-    }
-
-    pub(crate) fn spawn_entity(&mut self, entity: &Entity) {
-        self.entities.insert(*entity);
-    }
-
-    pub(crate) fn despawn_entity(&mut self, entity: &Entity) {
-        self.entities.remove(&entity);
-    }
-
-    pub(crate) fn get_entities(&self) -> Vec<Entity> {
-        let mut output = Vec::new();
-
-        for entity in &self.entities {
-            output.push(*entity);
-        }
-
-        return output;
     }
 }

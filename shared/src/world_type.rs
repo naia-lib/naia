@@ -49,11 +49,10 @@ pub trait WorldMutType<P: ProtocolType, K: EntityType>:
 
     /// gets all of an entity's components, as a Protocol
     fn get_components(&mut self, entity_key: &K) -> Vec<P>;
-
     /// insert a component
     fn insert_component<I: ImplRef<P>>(&mut self, entity_key: &K, component_ref: I);
-    /// remove a component
+    /// remove a component by type
     fn remove_component<R: Replicate<P>>(&mut self, entity_key: &K);
     /// remove a component by type
-    fn remove_component_by_type(&self, entity_key: &K, type_id: &TypeId);
+    fn remove_component_by_type(&mut self, entity_key: &K, type_id: &TypeId);
 }

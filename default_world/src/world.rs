@@ -110,7 +110,7 @@ impl<P: ProtocolType> WorldMutType<P, EntityKey> for World<P> {
         }
     }
 
-    fn remove_component<R: Replicate<P>>(&mut self, entity_key: &EntityKey) {
+    fn remove_component_by_type<R: Replicate<P>>(&mut self, entity_key: &EntityKey) {
         if let Some(component_map) = self.entities.get_mut(*entity_key) {
             component_map.remove(&TypeId::of::<R>());
         }
