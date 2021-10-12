@@ -2,7 +2,9 @@ use std::{any::TypeId, ops::Deref};
 
 use hecs::World;
 
-use naia_shared::{ImplRef, ProtocolType, Ref, Replicate, WorldRefType, WorldMutType, ProtocolRefExtractor};
+use naia_shared::{
+    ImplRef, ProtocolRefExtractor, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType,
+};
 
 use super::{
     entity::Entity,
@@ -130,9 +132,7 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
         if let Ok(entity_ref) = self.world.entity(**entity_key) {
             for ref_type in entity_ref.component_types() {
                 if let Some(rep_type) = world_data.type_convert_ref_to_rep(&ref_type) {
-                    if let Some(component) = self.get_component_from_type(
-                        entity_key, &rep_type,
-                    ) {
+                    if let Some(component) = self.get_component_from_type(entity_key, &rep_type) {
                         protocols.push(component);
                     }
                 }
@@ -193,17 +193,28 @@ fn has_component<P: ProtocolType, R: Replicate<P>>(world: &World, entity_key: &E
     return result.is_ok();
 }
 
-fn has_component_of_type<P: ProtocolType>(world: &World, entity_key: &Entity, type_id: &TypeId) -> bool {
+fn has_component_of_type<P: ProtocolType>(
+    world: &World,
+    entity_key: &Entity,
+    type_id: &TypeId,
+) -> bool {
     return get_component_from_type::<P>(world, entity_key, type_id).is_some();
 }
 
-fn get_component<P: ProtocolType, R: Replicate<P>>(world: &World, entity_key: &Entity) -> Option<Ref<R>> {
+fn get_component<P: ProtocolType, R: Replicate<P>>(
+    world: &World,
+    entity_key: &Entity,
+) -> Option<Ref<R>> {
     return world
         .get::<Ref<R>>(**entity_key)
         .map_or(None, |v| Some(v.deref().clone()));
 }
 
-fn get_component_from_type<P: ProtocolType>(world: &World, entity_key: &Entity, type_id: &TypeId) -> Option<P> {
+fn get_component_from_type<P: ProtocolType>(
+    world: &World,
+    entity_key: &Entity,
+    type_id: &TypeId,
+) -> Option<P> {
     let world_data_ref = get_world_data();
     let world_data = world_data_ref.lock().unwrap();
 

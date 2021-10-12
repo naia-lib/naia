@@ -13,7 +13,6 @@ use naia_shared::{ImplRef, ProtocolType};
 use super::{
     component_access::{ComponentAccess, ComponentAccessor},
     entity::Entity,
-    world_proxy::{WorldMut, WorldRef},
 };
 
 static mut INSTANCE: OnceCell<Mutex<WorldData>> = OnceCell::new();

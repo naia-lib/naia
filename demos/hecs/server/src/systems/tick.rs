@@ -1,4 +1,4 @@
-use naia_hecs_server::{Ref, Entity, WorldProxy, WorldProxyMut};
+use naia_hecs_server::{Entity, Ref, WorldProxy, WorldProxyMut};
 
 use naia_hecs_demo_shared::protocol::{Marker, Position, StringMessage};
 
@@ -67,6 +67,24 @@ pub fn send_messages(app: &mut App) {
     }
 
     app.tick_count = app.tick_count.wrapping_add(1);
+}
+
+pub fn check_scopes(app: &mut App) {
+    // Update scopes of entities
+    for (_, user_key, entity_key) in app.server.scope_checks() {
+        if let Some(pos_ref) = app
+            .server
+            .entity(app.world.proxy(), &entity_key)
+            .component::<Position>()
+        {
+            let x = *pos_ref.borrow().x.get();
+            if x >= 5 && x <= 100 {
+                app.server.user_scope(&user_key).include(&entity_key);
+            } else {
+                app.server.user_scope(&user_key).exclude(&entity_key);
+            }
+        }
+    }
 }
 
 pub fn send_updates(app: &mut App) {
