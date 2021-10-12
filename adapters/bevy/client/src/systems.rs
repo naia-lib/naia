@@ -2,7 +2,7 @@ use bevy::ecs::world::{Mut, World};
 
 use naia_client::{Client, Event, ProtocolType};
 
-use naia_bevy_shared::{tick::Ticker, Entity, IntoWorldMutType};
+use naia_bevy_shared::{tick::Ticker, Entity, WorldProxyMut};
 
 use super::{
     components::{Confirmed, Predicted},
