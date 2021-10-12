@@ -2,9 +2,7 @@ use std::collections::HashSet;
 
 use hecs::World;
 
-use naia_server::{RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig};
-
-use naia_hecs_server::Entity;
+use naia_hecs_server::{Entity, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig};
 
 use naia_hecs_demo_shared::{get_server_address, get_shared_config, protocol::Protocol};
 

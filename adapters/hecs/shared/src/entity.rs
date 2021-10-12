@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use hecs::Entity as HecsEntity;
 
-use naia_server::EntityType;
+use naia_shared::EntityType;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Entity(HecsEntity);
