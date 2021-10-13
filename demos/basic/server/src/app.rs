@@ -1,4 +1,4 @@
-use naia_server::{Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, ProtocolType};
+use naia_server::{Event, ProtocolType, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig};
 
 use naia_default_world::{Entity, World as DefaultWorld};
 

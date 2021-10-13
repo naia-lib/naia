@@ -50,7 +50,10 @@ fn get_component_ref<P: ProtocolType, R: ImplRef<P>>(world: &World, entity: &Ent
         .map_or(None, |v| Some(v.deref().clone_ref()));
 }
 
-fn remove_component_ref<P: ProtocolType, R: ImplRef<P>>(world: &mut World, entity: &Entity) -> Option<R> {
+fn remove_component_ref<P: ProtocolType, R: ImplRef<P>>(
+    world: &mut World,
+    entity: &Entity,
+) -> Option<R> {
     return world
         .remove_one::<R>(**entity)
         .map_or(None, |v| Some(v.clone_ref()));

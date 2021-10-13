@@ -2,17 +2,14 @@ use log::info;
 
 use hecs::World;
 
-use naia_hecs_client::{Entity, Client as NaiaClient, ClientConfig, WorldData};
+use naia_hecs_client::{Client as NaiaClient, ClientConfig, Entity, WorldData};
 
 use naia_hecs_demo_shared::{
     get_server_address, get_shared_config,
     protocol::{Auth, Protocol},
 };
 
-use super::systems::{
-    startup::app_init,
-    events::process_events,
-};
+use super::systems::{events::process_events, startup::app_init};
 
 pub type Client = NaiaClient<Protocol, Entity>;
 

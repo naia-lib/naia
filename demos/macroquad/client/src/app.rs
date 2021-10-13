@@ -107,7 +107,8 @@ impl App {
                 Ok(Event::NewCommand(_, Protocol::KeyCommand(key_command_ref)))
                 | Ok(Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref))) => {
                     if let Some(entity) = &self.owned_entity {
-                        if let Some(square_ref) = self.world.proxy().get_component::<Square>(entity) {
+                        if let Some(square_ref) = self.world.proxy().get_component::<Square>(entity)
+                        {
                             shared_behavior::process_command(&key_command_ref, &square_ref);
                         }
                     }

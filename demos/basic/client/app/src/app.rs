@@ -57,11 +57,10 @@ impl App {
                     self.message_count += 1;
                 }
                 Ok(Event::SpawnEntity(entity, _)) => {
-                    if let Some(character_ref) =
-                        self
-                            .client
-                            .entity(self.world.proxy(), &entity)
-                            .component::<Character>()
+                    if let Some(character_ref) = self
+                        .client
+                        .entity(self.world.proxy(), &entity)
+                        .component::<Character>()
                     {
                         let character = character_ref.borrow();
                         info!(
@@ -74,11 +73,10 @@ impl App {
                     }
                 }
                 Ok(Event::UpdateComponent(entity, _)) => {
-                    if let Some(character_ref) =
-                        self
-                            .client
-                            .entity(self.world.proxy(), &entity)
-                            .component::<Character>()
+                    if let Some(character_ref) = self
+                        .client
+                        .entity(self.world.proxy(), &entity)
+                        .component::<Character>()
                     {
                         let character = character_ref.borrow();
                         info!(

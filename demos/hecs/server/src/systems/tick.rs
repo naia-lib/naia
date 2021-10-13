@@ -91,5 +91,6 @@ pub fn send_updates(app: &mut App) {
     // VERY IMPORTANT! Calling this actually sends all update data
     // packets to all Clients that require it. If you don't call this
     // method, the Server will never communicate with it's connected Clients
-    app.server.send_all_updates(app.world.proxy(&app.world_data));
+    app.server
+        .send_all_updates(app.world.proxy(&app.world_data));
 }
