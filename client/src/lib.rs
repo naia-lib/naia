@@ -36,5 +36,5 @@ pub use client::Client;
 pub use client_config::ClientConfig;
 pub use entity_ref::EntityRef;
 pub use error::NaiaClientError;
-pub use event::Event;
+pub use event::{Event, OwnedEntity};
 pub use naia_client_socket::Packet;

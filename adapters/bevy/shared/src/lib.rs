@@ -1,7 +1,6 @@
 mod component_access;
 mod entity;
 mod stage;
-pub mod tick;
 mod world_data;
 mod world_proxy;
 
