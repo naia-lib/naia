@@ -9,11 +9,18 @@ use bevy::{
 use naia_client::{Client, ClientConfig, ImplRef, ProtocolType, SharedConfig};
 
 use naia_bevy_shared::{
-    tick::{finish_tick, should_tick, Ticker},
     Entity, PrivateStage, Stage, WorldData,
 };
 
-use super::{resource::ClientResource, stage::ClientStage, systems::before_receive_events};
+use super::{resource::ClientResource,
+            stage::ClientStage,
+            systems::{before_receive_events, should_tick, finish_tick, finish_connect, should_connect, finish_disconnect, should_disconnect},
+            events::{
+                SpawnEntityEvent, DespawnEntityEvent, OwnEntity, DisownEntity, RewindEntity,
+                InsertComponent, UpdateComponent, RemoveComponent,
+                Message, NewCommand, ReplayCommand,
+            }
+};
 
 struct PluginConfig<P: ProtocolType, R: ImplRef<P>> {
     client_config: ClientConfig,
@@ -66,15 +73,44 @@ impl<P: ProtocolType, R: ImplRef<P>> PluginType for Plugin<P, R> {
         // RESOURCES //
             .insert_resource(client)
             .insert_resource(ClientResource::<P>::new())
-            .insert_resource(Ticker::new())
             .insert_resource(WorldData::<P>::new())
+        // EVENTS //
+            .add_event::<SpawnEntityEvent<P>>()
+            .add_event::<DespawnEntityEvent>()
+            .add_event::<OwnEntity>()
+            .add_event::<DisownEntity>()
+            .add_event::<RewindEntity>()
+            .add_event::<InsertComponent<P>>()
+            .add_event::<UpdateComponent<P>>()
+            .add_event::<RemoveComponent<P>>()
+            .add_event::<Message<P>>()
+            .add_event::<NewCommand<P>>()
+            .add_event::<ReplayCommand<P>>()
         // STAGES //
+            // events //
             .add_stage_before(CoreStage::PreUpdate,
                               ClientStage::BeforeReceiveEvents,
                               SystemStage::parallel())
             .add_stage_after(ClientStage::BeforeReceiveEvents,
                               Stage::ReceiveEvents,
                               SystemStage::single_threaded())
+            .add_stage_after(ClientStage::BeforeReceiveEvents,
+                              Stage::Connection,
+                              SystemStage::single_threaded()
+                                 .with_run_criteria(should_connect::<P>.system()))
+            .add_stage_after(Stage::Connection,
+                              PrivateStage::AfterConnection,
+                              SystemStage::parallel()
+                                 .with_run_criteria(should_connect::<P>.system()))
+            .add_stage_after(ClientStage::BeforeReceiveEvents,
+                              Stage::Disconnection,
+                              SystemStage::single_threaded()
+                                 .with_run_criteria(should_disconnect::<P>.system()))
+            .add_stage_after(Stage::Disconnection,
+                              PrivateStage::AfterDisconnection,
+                              SystemStage::parallel()
+                                 .with_run_criteria(should_disconnect::<P>.system()))
+            // frame //
             .add_stage_after(CoreStage::PostUpdate,
                               Stage::PreFrame,
                               SystemStage::single_threaded())
@@ -84,18 +120,23 @@ impl<P: ProtocolType, R: ImplRef<P>> PluginType for Plugin<P, R> {
             .add_stage_after(Stage::Frame,
                               Stage::PostFrame,
                               SystemStage::single_threaded())
+            // tick //
             .add_stage_after(Stage::PostFrame,
                               Stage::Tick,
                               SystemStage::single_threaded()
-                                 .with_run_criteria(should_tick.system()))
+                                 .with_run_criteria(should_tick::<P>.system()))
             .add_stage_after(Stage::Tick,
                               PrivateStage::AfterTick,
                               SystemStage::parallel()
-                                 .with_run_criteria(should_tick.system()))
+                                 .with_run_criteria(should_tick::<P>.system()))
         // SYSTEMS //
             .add_system_to_stage(ClientStage::BeforeReceiveEvents,
                                  before_receive_events::<P>.exclusive_system())
+            .add_system_to_stage(PrivateStage::AfterConnection,
+                                 finish_connect::<P>.system())
+            .add_system_to_stage(PrivateStage::AfterDisconnection,
+                                 finish_disconnect::<P>.system())
             .add_system_to_stage(PrivateStage::AfterTick,
-                                 finish_tick.system());
+                                 finish_tick::<P>.system());
     }
 }

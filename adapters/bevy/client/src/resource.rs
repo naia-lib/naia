@@ -4,14 +4,22 @@ use naia_client::{Event, NaiaClientError, ProtocolType};
 
 use naia_bevy_shared::Entity;
 
+use super::flag::Flag;
+
 pub struct ClientResource<P: ProtocolType> {
     events: VecDeque<Result<Event<P, Entity>, NaiaClientError>>,
+    pub ticker: Flag,
+    pub connector: Flag,
+    pub disconnector: Flag,
 }
 
 impl<P: ProtocolType> ClientResource<P> {
     pub fn new() -> Self {
         Self {
             events: VecDeque::new(),
+            ticker: Flag::new(),
+            connector: Flag::new(),
+            disconnector: Flag::new(),
         }
     }
 
