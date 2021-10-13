@@ -2,7 +2,10 @@ use std::{any::TypeId, collections::HashMap, ops::Deref};
 
 use slotmap::DenseSlotMap;
 
-use naia_shared::{ImplRef, ProtocolType, Ref, Replicate, ProtocolRefExtractor, EntityType, WorldMutType, WorldRefType};
+use naia_shared::{
+    EntityType, ImplRef, ProtocolRefExtractor, ProtocolType, Ref, Replicate, WorldMutType,
+    WorldRefType,
+};
 
 // Entity
 
@@ -29,9 +32,10 @@ impl EntityType for Entity {}
 
 // World //
 
-/// A default World which implements WorldRefType/WorldMutType and that Naia can use to store
-/// Entities/Components.
-/// It's recommended to use this only when you do not have another ECS library's own World available.
+/// A default World which implements WorldRefType/WorldMutType and that Naia can
+/// use to store Entities/Components.
+/// It's recommended to use this only when you do not have another ECS library's
+/// own World available.
 pub struct World<P: ProtocolType> {
     pub entities: DenseSlotMap<entity::Entity, HashMap<TypeId, P>>,
 }
@@ -102,11 +106,7 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, P> {
         return get_component(self.world, entity);
     }
 
-    fn get_component_from_type(
-        &self,
-        entity: &Entity,
-        component_type: &TypeId,
-    ) -> Option<P> {
+    fn get_component_from_type(&self, entity: &Entity, component_type: &TypeId) -> Option<P> {
         return get_component_from_type(self.world, entity, component_type);
     }
 }
@@ -132,17 +132,12 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, P> {
         return get_component(self.world, entity);
     }
 
-    fn get_component_from_type(
-        &self,
-        entity: &Entity,
-        component_type: &TypeId,
-    ) -> Option<P> {
+    fn get_component_from_type(&self, entity: &Entity, component_type: &TypeId) -> Option<P> {
         return get_component_from_type(self.world, entity, component_type);
     }
 }
 
 impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
-
     fn get_components(&mut self, entity: &Entity) -> Vec<P> {
         let mut output: Vec<P> = Vec::new();
 
@@ -218,7 +213,11 @@ fn has_component<P: ProtocolType, R: Replicate<P>>(world: &World<P>, entity: &En
     return false;
 }
 
-fn has_component_of_type<P: ProtocolType>(world: &World<P>, entity: &Entity, component_type: &TypeId) -> bool {
+fn has_component_of_type<P: ProtocolType>(
+    world: &World<P>,
+    entity: &Entity,
+    component_type: &TypeId,
+) -> bool {
     if let Some(component_map) = world.entities.get(*entity) {
         return component_map.contains_key(component_type);
     }
@@ -226,7 +225,10 @@ fn has_component_of_type<P: ProtocolType>(world: &World<P>, entity: &Entity, com
     return false;
 }
 
-fn get_component<P: ProtocolType, R: Replicate<P>>(world: &World<P>, entity: &Entity) -> Option<Ref<R>> {
+fn get_component<P: ProtocolType, R: Replicate<P>>(
+    world: &World<P>,
+    entity: &Entity,
+) -> Option<Ref<R>> {
     if let Some(component_map) = world.entities.get(*entity) {
         if let Some(component_protocol) = component_map.get(&TypeId::of::<R>()) {
             return component_protocol.to_typed_ref::<R>();

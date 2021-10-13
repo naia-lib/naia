@@ -6,9 +6,7 @@ use naia_shared::{
     ImplRef, ProtocolRefExtractor, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType,
 };
 
-use super::{
-    entity::Entity, world_data::WorldData,
-};
+use super::{entity::Entity, world_data::WorldData};
 
 // WorldProxy
 
@@ -43,7 +41,10 @@ pub struct WorldRef<'w, 'd> {
 
 impl<'w, 'd> WorldRef<'w, 'd> {
     pub fn new(world: &'w World, data: &'d WorldData) -> Self {
-        WorldRef { world, world_data: data }
+        WorldRef {
+            world,
+            world_data: data,
+        }
     }
 }
 
@@ -82,7 +83,10 @@ pub struct WorldMut<'w, 'd> {
 
 impl<'w, 'd> WorldMut<'w, 'd> {
     pub fn new(world: &'w mut World, data: &'d mut WorldData) -> Self {
-        WorldMut { world, world_data: data }
+        WorldMut {
+            world,
+            world_data: data,
+        }
     }
 }
 
@@ -141,12 +145,12 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd> {
     }
 
     fn insert_component<R: ImplRef<P>>(&mut self, entity: &Entity, component_ref: R) {
-
         // cache type id for later
         // todo: can we initialize this map on startup via Protocol derive?
         let inner_type_id = component_ref.dyn_ref().borrow().get_type_id();
         if !self.world_data.has_type(&inner_type_id) {
-            self.world_data.put_type::<P, R>(&inner_type_id, &TypeId::of::<R>());
+            self.world_data
+                .put_type::<P, R>(&inner_type_id, &TypeId::of::<R>());
         }
 
         self.world

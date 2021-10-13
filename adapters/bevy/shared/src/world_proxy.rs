@@ -147,11 +147,12 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
     }
 
     fn remove_component_by_type(&mut self, entity: &Entity, type_id: &TypeId) {
-        self.world.resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
-            if let Some(accessor) = data.get_component_access(type_id) {
-                accessor.remove_component(world, entity);
-            }
-        });
+        self.world
+            .resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
+                if let Some(accessor) = data.get_component_access(type_id) {
+                    accessor.remove_component(world, entity);
+                }
+            });
     }
 }
 

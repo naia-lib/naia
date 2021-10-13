@@ -2,9 +2,9 @@ use std::net::SocketAddr;
 
 use hecs::World;
 
-use naia_hecs_client::{ClientConfig, SharedConfig, Ref, WorldData};
+use naia_hecs_client::{ClientConfig, Ref, SharedConfig, WorldData};
 
-use naia_hecs_demo_shared::protocol::{Protocol, Auth};
+use naia_hecs_demo_shared::protocol::{Auth, Protocol};
 
 use crate::app::{App, Client};
 

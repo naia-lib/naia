@@ -44,16 +44,15 @@ impl<P: ProtocolType, R: ImplRef<P>> ComponentAccess<P> for ComponentAccessor<P,
 fn get_component_ref<P: ProtocolType, R: ImplRef<P>>(world: &World, entity: &Entity) -> Option<R> {
     return world
         .get::<R>(**entity)
-        .map_or(
-            None,
-            |v| Some(v.deref().clone_ref()));
+        .map_or(None, |v| Some(v.deref().clone_ref()));
 }
 
-fn remove_component_ref<P: ProtocolType, R: ImplRef<P>>(world: &mut World, entity: &Entity) -> Option<R> {
+fn remove_component_ref<P: ProtocolType, R: ImplRef<P>>(
+    world: &mut World,
+    entity: &Entity,
+) -> Option<R> {
     return world
         .entity_mut(**entity)
         .remove::<R>()
-        .map_or(
-            None,
-            |v| Some(v.clone_ref()));
+        .map_or(None, |v| Some(v.clone_ref()));
 }
