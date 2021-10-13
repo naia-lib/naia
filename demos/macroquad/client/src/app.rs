@@ -83,24 +83,24 @@ impl App {
                         }
                     }
                 }
-                Ok(Event::SpawnEntity(entity_key, _)) => {
-                    if let Some(square_ref) = self.client.entity(&entity_key).component::<Square>()
+                Ok(Event::SpawnEntity(entity, _)) => {
+                    if let Some(square_ref) = self.client.entity(&entity).component::<Square>()
                     {
-                        self.square_map.insert(entity_key, square_ref.clone());
+                        self.square_map.insert(entity, square_ref.clone());
                     }
                 }
-                Ok(Event::DespawnEntity(entity_key)) => {
-                    self.square_map.remove(&entity_key);
+                Ok(Event::DespawnEntity(entity)) => {
+                    self.square_map.remove(&entity);
                 }
-                Ok(Event::OwnEntity(entity_key)) => {
+                Ok(Event::OwnEntity(entity)) => {
                     info!("gave ownership of entity");
                     if let Some(square_ref) = self
                         .client
-                        .entity(&entity_key)
+                        .entity(&entity)
                         .prediction()
                         .component::<Square>()
                     {
-                        self.owned_square = Some((entity_key, square_ref.clone()));
+                        self.owned_square = Some((entity, square_ref.clone()));
                     }
                 }
                 Ok(Event::DisownEntity(_)) => {

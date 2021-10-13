@@ -1,5 +1,5 @@
 [package]
-name = "naia-server-default-world"
+name = "naia-default-world"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 homepage = "https://github.com/naia-rs/naia"
@@ -7,10 +7,7 @@ repository = "https://github.com/naia-rs/naia"
 edition = "2018"
 
 [features]
-use-udp = [ "naia-server/use-udp" ]
-use-webrtc = [ "naia-server/use-webrtc" ]
 
 [dependencies]
-naia-server = { path = "../server" }
 naia-shared = { path = "../shared" }
 slotmap = { version = "0.4" }

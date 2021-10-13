@@ -32,7 +32,7 @@ impl<'w> WorldProxyMut<'w> for &'w mut World {
     }
 }
 
-// Wrapper WorldRef & WorldMut
+// WorldRef //
 
 pub struct WorldRef<'w> {
     world: &'w World,
