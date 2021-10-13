@@ -88,32 +88,32 @@ impl App {
                     };
 
                     let square = Square::new(x as u16, y as u16, square_color);
-                    let entity_key = self
+                    let entity = self
                         .server
                         .spawn_entity(&mut self.world)
                         .insert_component(&square)
                         .set_owner(&user_key)
                         .enter_room(&self.main_room_key)
                         .id();
-                    self.user_to_prediction_map.insert(user_key, entity_key);
+                    self.user_to_prediction_map.insert(user_key, entity);
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
                     info!("Naia Server disconnected from: {:?}", user.address);
                     self.server
                         .user_mut(&user_key)
                         .leave_room(&self.main_room_key);
-                    if let Some(entity_key) = self.user_to_prediction_map.remove(&user_key) {
+                    if let Some(entity) = self.user_to_prediction_map.remove(&user_key) {
                         self.server
-                            .entity_mut(&mut self.world, &entity_key)
+                            .entity_mut(&mut self.world, &entity)
                             .disown()
                             .leave_room(&self.main_room_key)
                             .despawn();
                     }
                 }
-                Ok(Event::Command(_, entity_key, Protocol::KeyCommand(key_command_ref))) => {
+                Ok(Event::Command(_, entity, Protocol::KeyCommand(key_command_ref))) => {
                     if let Some(square_ref) = self
                         .server
-                        .entity(&self.world, &entity_key)
+                        .entity(&self.world, &entity)
                         .component::<Square>()
                     {
                         shared_behavior::process_command(&key_command_ref, &square_ref);
@@ -123,12 +123,12 @@ impl App {
                     // All game logic should happen here, on a tick event
 
                     // Check whether Entities are in/out of all possible Scopes
-                    for (_, user_key, entity_key) in self.server.scope_checks() {
+                    for (_, user_key, entity) in self.server.scope_checks() {
                         // You'd normally do whatever checks you need to in here..
                         // to determine whether each Entity should be in scope or not.
 
                         // This indicates the Entity should be in this scope.
-                        self.server.user_scope(&user_key).include(&entity_key);
+                        self.server.user_scope(&user_key).include(&entity);
 
                         // And call this if Entity should NOT be in this scope.
                         // self.server.user_scope(..).exclude(..);

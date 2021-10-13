@@ -336,52 +336,6 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
         return false;
     }
 
-    //    /// Returns whether or not an Entity has a Component of a given TypeId
-    //    pub(crate) fn entity_contains_type<R: Replicate<P>>(&self, entity_key: &K)
-    // -> bool {        return
-    // self.get_component_by_type::<R>(entity_key).is_some();    }
-
-    //// Components
-
-    //    /// Given an EntityKey & a Component type, get a reference to the
-    //    /// appropriate ComponentRef
-    //    pub(crate) fn component<R: Replicate<P>>(&self, entity_key: &K) ->
-    // Option<&Ref<R>> {        if let Some(protocol) =
-    // self.get_component_by_type::<R>(entity_key) {            return
-    // protocol.as_typed_ref::<R>();        }
-    //        return None;
-    //    }
-
-    //    /// Given an EntityKey & a Component type, get a reference to the
-    //    /// appropriate ComponentRef
-    //    pub(crate) fn component_prediction<R: Replicate<P>>(&self, entity_key: &K)
-    // -> Option<&Ref<R>> {        if let Some(protocol) =
-    // self.get_prediction_component_by_type::<R>(entity_key) {
-    // return protocol.as_typed_ref::<R>();        }
-    //        return None;
-    //    }
-    //
-    //    /// Given an EntityKey & a Component type, get a reference to a registered
-    //    /// Component being tracked by the Server
-    //    pub(crate) fn get_component_by_type<R: Replicate<P>>(&self, entity: &K) ->
-    // Option<&P> {        if let Some(connection) = &self.server_connection {
-    //            return connection.get_component_by_type::<R>(entity);
-    //        }
-    //        return None;
-    //    }
-    //
-    //    /// Given an EntityKey & a Component type, get a reference to a registered
-    //    /// Prediction Component being tracked by the Server
-    //    pub(crate) fn get_prediction_component_by_type<R: Replicate<P>>(
-    //        &self,
-    //        entity: &K,
-    //    ) -> Option<&P> {
-    //        if let Some(connection) = &self.server_connection {
-    //            return connection.get_prediction_component_by_type::<R>(entity);
-    //        }
-    //        return None;
-    //    }
-
     // internal functions
 
     fn send_handshake_packets(&mut self) {

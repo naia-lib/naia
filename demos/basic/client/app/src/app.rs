@@ -1,14 +1,20 @@
 use log::info;
 
-use naia_client::{Client, ClientConfig, Event, ProtocolType};
+use naia_client::{Client as NaiaClient, ClientConfig, Event, ProtocolType};
+
+use naia_default_world::{Entity, World as DefaultWorld};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
     protocol::{Auth, Character, Protocol, StringMessage},
 };
 
+type World = DefaultWorld<Protocol>;
+type Client = NaiaClient<Protocol, Entity>;
+
 pub struct App {
-    client: Client<Protocol>,
+    client: Client,
+    world: World,
     message_count: u32,
 }
 
@@ -24,15 +30,13 @@ impl App {
 
         App {
             client,
+            world: World::new(),
             message_count: 0,
         }
     }
 
-    // Currently, this will call every frame.
-    // On Linux it's called in a loop.
-    // On Web it's called via request_animation_frame()
     pub fn update(&mut self) {
-        for event in self.client.receive() {
+        for event in self.client.receive(&mut self.world.proxy_mut()) {
             match event {
                 Ok(Event::Connection) => {
                     info!("Client connected to: {}", self.client.server_address());
@@ -52,14 +56,16 @@ impl App {
                     self.client.queue_message(&string_message, true);
                     self.message_count += 1;
                 }
-                Ok(Event::SpawnEntity(entity_key, _)) => {
+                Ok(Event::SpawnEntity(entity, _)) => {
                     if let Some(character_ref) =
-                        self.client.entity(&entity_key).component::<Character>()
+                        self
+                            .client
+                            .entity(self.world.proxy(), &entity)
+                            .component::<Character>()
                     {
                         let character = character_ref.borrow();
                         info!(
-                            "creation of Character with key: {}, x: {}, y: {}, name: {} {}",
-                            entity_key,
+                            "creation of Character - x: {}, y: {}, name: {} {}",
                             character.x.get(),
                             character.y.get(),
                             character.fullname.get().first,
@@ -67,14 +73,16 @@ impl App {
                         );
                     }
                 }
-                Ok(Event::UpdateComponent(entity_key, _)) => {
+                Ok(Event::UpdateComponent(entity, _)) => {
                     if let Some(character_ref) =
-                        self.client.entity(&entity_key).component::<Character>()
+                        self
+                            .client
+                            .entity(self.world.proxy(), &entity)
+                            .component::<Character>()
                     {
                         let character = character_ref.borrow();
                         info!(
-                            "update of Character with key: {}, x: {}, y: {}, name: {} {}",
-                            entity_key,
+                            "update of Character - x: {}, y: {}, name: {} {}",
                             character.x.get(),
                             character.y.get(),
                             character.fullname.get().first,
@@ -82,12 +90,11 @@ impl App {
                         );
                     }
                 }
-                Ok(Event::RemoveComponent(entity_key, component_protocol)) => {
+                Ok(Event::RemoveComponent(_, component_protocol)) => {
                     if let Some(character_ref) = component_protocol.to_typed_ref::<Character>() {
                         let character = character_ref.borrow();
                         info!(
-                            "data delete of Character with key: {}, x: {}, y: {}, name: {} {}",
-                            entity_key,
+                            "data delete of Character - x: {}, y: {}, name: {} {}",
                             character.x.get(),
                             character.y.get(),
                             character.fullname.get().first,
@@ -95,8 +102,8 @@ impl App {
                         );
                     }
                 }
-                Ok(Event::DespawnEntity(entity_key)) => {
-                    info!("deletion of Character Entity: {}", entity_key);
+                Ok(Event::DespawnEntity(_)) => {
+                    info!("deletion of Character entity");
                 }
                 Ok(Event::Tick) => {
                     //info!("tick event");

@@ -6,12 +6,12 @@ pub fn tick(mut server: Server<Protocol>) {
     //info!("tick");
 
     // Update scopes of entities
-    for (_, user_key, entity_key) in server.scope_checks() {
+    for (_, user_key, entity) in server.scope_checks() {
         // You'd normally do whatever checks you need to in here..
         // to determine whether each Entity should be in scope or not.
 
         // This indicates the Entity should be in this scope.
-        server.user_scope(&user_key).include(&entity_key);
+        server.user_scope(&user_key).include(&entity);
 
         // And call this if Entity should NOT be in this scope.
         // server.user_scope(..).exclude(..);

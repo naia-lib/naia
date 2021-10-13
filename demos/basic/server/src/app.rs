@@ -1,6 +1,6 @@
-use naia_server::{Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig};
+use naia_server::{Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, ProtocolType};
 
-use naia_server_default_world::{EntityKey, World as DefaultWorld};
+use naia_default_world::{Entity, World as DefaultWorld};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
@@ -8,7 +8,7 @@ use naia_basic_demo_shared::{
 };
 
 type World = DefaultWorld<Protocol>;
-type Server = NaiaServer<Protocol, EntityKey>;
+type Server = NaiaServer<Protocol, Entity>;
 
 pub struct App {
     server: Server,
@@ -18,7 +18,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new<P: ProtocolType>() -> Self {
         info!("Basic Naia Server Demo started");
 
         let server_addresses = ServerAddrs::new(
@@ -58,7 +58,7 @@ impl App {
                 // Create a Character
                 let character = Character::new((count * 4) as u8, 0, first, last);
                 let character_key = server
-                    .spawn_entity(&mut world)
+                    .spawn_entity(&mut world.proxy_mut())
                     .insert_component(&character)
                     .id();
 
@@ -76,7 +76,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        for event in self.server.receive(&self.world) {
+        for event in self.server.receive(self.world.proxy()) {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
                     let auth_message = auth_ref.borrow();
@@ -128,10 +128,10 @@ impl App {
                     }
 
                     // Iterate through Characters, marching them from (0,0) to (20, N)
-                    for entity_key in self.server.entities(&self.world) {
+                    for entity in self.server.entities(&self.world.proxy()) {
                         if let Some(character_ref) = self
                             .server
-                            .entity(&self.world, &entity_key)
+                            .entity(self.world.proxy(), &entity)
                             .component::<Character>()
                         {
                             character_ref.borrow_mut().step();
@@ -139,17 +139,17 @@ impl App {
                     }
 
                     // Update scopes of entities
-                    for (_, user_key, entity_key) in self.server.scope_checks() {
+                    for (_, user_key, entity) in self.server.scope_checks() {
                         if let Some(character_ref) = self
                             .server
-                            .entity(&self.world, &entity_key)
+                            .entity(self.world.proxy(), &entity)
                             .component::<Character>()
                         {
                             let x = *character_ref.borrow().x.get();
                             if x >= 5 && x <= 15 {
-                                self.server.user_scope(&user_key).include(&entity_key);
+                                self.server.user_scope(&user_key).include(&entity);
                             } else {
-                                self.server.user_scope(&user_key).exclude(&entity_key);
+                                self.server.user_scope(&user_key).exclude(&entity);
                             }
                         }
                     }
@@ -157,7 +157,7 @@ impl App {
                     // VERY IMPORTANT! Calling this actually sends all update data
                     // packets to all Clients that require it. If you don't call this
                     // method, the Server will never communicate with it's connected Clients
-                    self.server.send_all_updates(&self.world);
+                    self.server.send_all_updates(self.world.proxy());
 
                     self.tick_count = self.tick_count.wrapping_add(1);
                 }

@@ -12,7 +12,8 @@ mquad = [ "naia-client/mquad", "naia-basic-demo-shared/mquad" ]
 wbindgen = [ "naia-client/wbindgen", "naia-basic-demo-shared/wbindgen" ]
 
 [dependencies]
-cfg-if = "0.1.10"
 naia-client = { path = "../../../../client", features = [ "mquad" ] }
+naia-default-world = { path = "../../../../default_world" }
 naia-basic-demo-shared = { path = "../../shared" }
+cfg-if = "0.1.10"
 log = "0.4"
