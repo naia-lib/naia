@@ -4,7 +4,7 @@ use naia_server::{
     Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
 };
 
-use naia_server_default_world::{EntityKey, World as DefaultWorld};
+use naia_default_world::{Entity, World as DefaultWorld};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
@@ -12,13 +12,13 @@ use naia_macroquad_demo_shared::{
 };
 
 type World = DefaultWorld<Protocol>;
-type Server = NaiaServer<Protocol, EntityKey>;
+type Server = NaiaServer<Protocol, Entity>;
 
 pub struct App {
     server: Server,
     world: World,
     main_room_key: RoomKey,
-    user_to_prediction_map: HashMap<UserKey, EntityKey>,
+    user_to_prediction_map: HashMap<UserKey, Entity>,
 }
 
 impl App {
@@ -50,12 +50,12 @@ impl App {
             server,
             world,
             main_room_key,
-            user_to_prediction_map: HashMap::<UserKey, EntityKey>::new(),
+            user_to_prediction_map: HashMap::<UserKey, Entity>::new(),
         }
     }
 
     pub fn update(&mut self) {
-        for event in self.server.receive(&self.world) {
+        for event in self.server.receive(self.world.proxy()) {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
                     let auth_message = auth_ref.borrow();
@@ -90,7 +90,7 @@ impl App {
                     let square = Square::new(x as u16, y as u16, square_color);
                     let entity = self
                         .server
-                        .spawn_entity(&mut self.world)
+                        .spawn_entity(&mut self.world.proxy_mut())
                         .insert_component(&square)
                         .set_owner(&user_key)
                         .enter_room(&self.main_room_key)
@@ -104,7 +104,7 @@ impl App {
                         .leave_room(&self.main_room_key);
                     if let Some(entity) = self.user_to_prediction_map.remove(&user_key) {
                         self.server
-                            .entity_mut(&mut self.world, &entity)
+                            .entity_mut(&mut self.world.proxy_mut(), &entity)
                             .disown()
                             .leave_room(&self.main_room_key)
                             .despawn();
@@ -113,7 +113,7 @@ impl App {
                 Ok(Event::Command(_, entity, Protocol::KeyCommand(key_command_ref))) => {
                     if let Some(square_ref) = self
                         .server
-                        .entity(&self.world, &entity)
+                        .entity(self.world.proxy(), &entity)
                         .component::<Square>()
                     {
                         shared_behavior::process_command(&key_command_ref, &square_ref);
@@ -137,7 +137,7 @@ impl App {
                     // VERY IMPORTANT! Calling this actually sends all update data
                     // packets to all Clients that require it. If you don't call this
                     // method, the Server will never communicate with it's connected Clients
-                    self.server.send_all_updates(&self.world);
+                    self.server.send_all_updates(self.world.proxy());
                 }
                 Err(error) => {
                     info!("Naia Server error: {}", error);
