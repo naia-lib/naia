@@ -1,21 +1,27 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use macroquad::prelude::*;
 
-use naia_client::{Client, ClientConfig, Event, Ref};
+use naia_client::{Client as NaiaClient, ClientConfig, Event, Ref};
+
+use naia_default_world::{Entity, World as DefaultWorld, WorldRefType};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
 };
 
+type World = DefaultWorld<Protocol>;
+type Client = NaiaClient<Protocol, Entity>;
+
 const SQUARE_SIZE: f32 = 32.0;
 
 pub struct App {
-    client: Client<Protocol>,
-    owned_square: Option<(EntityKey, Ref<Square>)>,
+    client: Client,
+    world: World,
     queued_command: Option<Ref<KeyCommand>>,
-    square_map: HashMap<EntityKey, Ref<Square>>,
+    owned_entity: Option<Entity>,
+    squares: HashSet<Entity>,
 }
 
 impl App {
@@ -30,9 +36,10 @@ impl App {
 
         App {
             client,
-            owned_square: None,
+            world: World::new(),
             queued_command: None,
-            square_map: HashMap::new(),
+            owned_entity: None,
+            squares: HashSet::new(),
         }
     }
 
@@ -68,7 +75,7 @@ impl App {
     }
 
     fn receive_events(&mut self) {
-        for event in self.client.receive() {
+        for event in self.client.receive(&mut self.world.proxy_mut()) {
             match event {
                 Ok(Event::Connection) => {
                     info!("Client connected to: {}", self.client.server_address());
@@ -77,40 +84,32 @@ impl App {
                     info!("Client disconnected from: {}", self.client.server_address());
                 }
                 Ok(Event::Tick) => {
-                    if let Some((square_key, _)) = self.owned_square {
+                    if let Some(entity) = self.owned_entity {
                         if let Some(command) = self.queued_command.take() {
-                            self.client.queue_command(&square_key, &command);
+                            self.client.queue_command(&entity, &command);
                         }
                     }
                 }
                 Ok(Event::SpawnEntity(entity, _)) => {
-                    if let Some(square_ref) = self.client.entity(&entity).component::<Square>()
-                    {
-                        self.square_map.insert(entity, square_ref.clone());
-                    }
+                    self.squares.insert(entity);
                 }
                 Ok(Event::DespawnEntity(entity)) => {
-                    self.square_map.remove(&entity);
+                    self.squares.remove(&entity);
                 }
                 Ok(Event::OwnEntity(entity)) => {
                     info!("gave ownership of entity");
-                    if let Some(square_ref) = self
-                        .client
-                        .entity(&entity)
-                        .prediction()
-                        .component::<Square>()
-                    {
-                        self.owned_square = Some((entity, square_ref.clone()));
-                    }
+                    self.owned_entity = Some(entity.predicted);
                 }
                 Ok(Event::DisownEntity(_)) => {
-                    self.owned_square = None;
                     info!("removed ownership of entity");
+                    self.owned_entity = None;
                 }
                 Ok(Event::NewCommand(_, Protocol::KeyCommand(key_command_ref)))
                 | Ok(Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref))) => {
-                    if let Some((_, square_ref)) = &self.owned_square {
-                        shared_behavior::process_command(&key_command_ref, &square_ref);
+                    if let Some(entity) = &self.owned_entity {
+                        if let Some(square_ref) = self.world.proxy().get_component::<Square>(entity) {
+                            shared_behavior::process_command(&key_command_ref, &square_ref);
+                        }
                     }
                 }
                 Err(err) => {
@@ -126,32 +125,36 @@ impl App {
 
         if self.client.connected() {
             // draw unowned squares
-            for (_, square_ref) in &self.square_map {
-                let square = square_ref.borrow();
-                let color = match square.color.get() {
-                    Color::Red => RED,
-                    Color::Blue => BLUE,
-                    Color::Yellow => YELLOW,
-                };
-                draw_rectangle(
-                    f32::from(*(square.x.get())),
-                    f32::from(*(square.y.get())),
-                    SQUARE_SIZE,
-                    SQUARE_SIZE,
-                    color,
-                );
+            for entity in &self.squares {
+                if let Some(square_ref) = self.world.proxy().get_component::<Square>(entity) {
+                    let square = square_ref.borrow();
+                    let color = match square.color.get() {
+                        Color::Red => RED,
+                        Color::Blue => BLUE,
+                        Color::Yellow => YELLOW,
+                    };
+                    draw_rectangle(
+                        f32::from(*(square.x.get())),
+                        f32::from(*(square.y.get())),
+                        SQUARE_SIZE,
+                        SQUARE_SIZE,
+                        color,
+                    );
+                }
             }
 
             // draw own square
-            if let Some((_, square_ref)) = &self.owned_square {
-                let square = square_ref.borrow();
-                draw_rectangle(
-                    f32::from(*(square.x.get())),
-                    f32::from(*(square.y.get())),
-                    SQUARE_SIZE,
-                    SQUARE_SIZE,
-                    WHITE,
-                );
+            if let Some(entity) = &self.owned_entity {
+                if let Some(square_ref) = self.world.proxy().get_component::<Square>(entity) {
+                    let square = square_ref.borrow();
+                    draw_rectangle(
+                        f32::from(*(square.x.get())),
+                        f32::from(*(square.y.get())),
+                        SQUARE_SIZE,
+                        SQUARE_SIZE,
+                        WHITE,
+                    );
+                }
             }
         }
     }
