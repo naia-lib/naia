@@ -7,6 +7,7 @@ mod entity_mut;
 mod plugin;
 mod server;
 mod state;
+mod tick;
 
 pub use plugin::Plugin;
 pub use server::Server;

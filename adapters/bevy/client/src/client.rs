@@ -1,22 +1,21 @@
-use std::{collections::VecDeque, marker::PhantomData, net::SocketAddr};
+use std::{marker::PhantomData, net::SocketAddr};
 
 use bevy::ecs::{
     system::SystemParam,
     world::{Mut, World},
 };
 
-use naia_client::{Client as NaiaClient, EntityRef, Event, ImplRef, NaiaClientError, ProtocolType};
+use naia_client::{Client as NaiaClient, EntityRef, ImplRef, ProtocolType};
 
 use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
 
-use super::{resource::ClientResource, state::State};
+use super::state::State;
 
 // Client
 
 pub struct Client<'a, P: ProtocolType> {
     world: &'a World,
     client: Mut<'a, NaiaClient<P, Entity>>,
-    resource: Mut<'a, ClientResource<P>>,
     phantom_p: PhantomData<P>,
 }
 
@@ -29,14 +28,9 @@ impl<'a, P: ProtocolType> Client<'a, P> {
                 .get_resource_unchecked_mut::<NaiaClient<P, Entity>>()
                 .expect("Naia Client has not been correctly initialized!");
 
-            let resource = world
-                .get_resource_unchecked_mut::<ClientResource<P>>()
-                .expect("Naia Client has not been correctly initialized!");
-
             Self {
                 world,
                 client,
-                resource,
                 phantom_p: PhantomData,
             }
         }
@@ -58,10 +52,6 @@ impl<'a, P: ProtocolType> Client<'a, P> {
 
     pub fn jitter(&self) -> f32 {
         return self.client.jitter();
-    }
-
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P, Entity>, NaiaClientError>> {
-        return self.resource.take_events();
     }
 
     // Interpolation
