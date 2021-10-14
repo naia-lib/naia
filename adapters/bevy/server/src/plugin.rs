@@ -9,9 +9,10 @@ use bevy::{
 use naia_server::{ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig};
 
 use naia_bevy_shared::{
-    tick::{finish_tick, should_tick, Ticker},
     Entity, PrivateStage, Stage, WorldData,
 };
+
+use super::tick::{finish_tick, should_tick, Ticker};
 
 struct PluginConfig<P: ProtocolType> {
     server_config: ServerConfig,

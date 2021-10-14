@@ -16,9 +16,9 @@ use super::{resource::ClientResource,
             stage::ClientStage,
             systems::{before_receive_events, should_tick, finish_tick, finish_connect, should_connect, finish_disconnect, should_disconnect},
             events::{
-                SpawnEntityEvent, DespawnEntityEvent, OwnEntity, DisownEntity, RewindEntity,
-                InsertComponent, UpdateComponent, RemoveComponent,
-                Message, NewCommand, ReplayCommand,
+                SpawnEntityEvent, DespawnEntityEvent, OwnEntityEvent, DisownEntityEvent, RewindEntityEvent,
+                InsertComponentEvent, UpdateComponentEvent, RemoveComponentEvent,
+                MessageEvent, NewCommandEvent, ReplayCommandEvent,
             }
 };
 
@@ -72,44 +72,44 @@ impl<P: ProtocolType, R: ImplRef<P>> PluginType for Plugin<P, R> {
         app
         // RESOURCES //
             .insert_resource(client)
-            .insert_resource(ClientResource::<P>::new())
+            .insert_resource(ClientResource::new())
             .insert_resource(WorldData::<P>::new())
         // EVENTS //
             .add_event::<SpawnEntityEvent<P>>()
             .add_event::<DespawnEntityEvent>()
-            .add_event::<OwnEntity>()
-            .add_event::<DisownEntity>()
-            .add_event::<RewindEntity>()
-            .add_event::<InsertComponent<P>>()
-            .add_event::<UpdateComponent<P>>()
-            .add_event::<RemoveComponent<P>>()
-            .add_event::<Message<P>>()
-            .add_event::<NewCommand<P>>()
-            .add_event::<ReplayCommand<P>>()
+            .add_event::<OwnEntityEvent>()
+            .add_event::<DisownEntityEvent>()
+            .add_event::<RewindEntityEvent>()
+            .add_event::<InsertComponentEvent<P>>()
+            .add_event::<UpdateComponentEvent<P>>()
+            .add_event::<RemoveComponentEvent<P>>()
+            .add_event::<MessageEvent<P>>()
+            .add_event::<NewCommandEvent<P>>()
+            .add_event::<ReplayCommandEvent<P>>()
         // STAGES //
             // events //
             .add_stage_before(CoreStage::PreUpdate,
                               ClientStage::BeforeReceiveEvents,
-                              SystemStage::parallel())
+                              SystemStage::single_threaded())
             .add_stage_after(ClientStage::BeforeReceiveEvents,
                               Stage::ReceiveEvents,
                               SystemStage::single_threaded())
             .add_stage_after(ClientStage::BeforeReceiveEvents,
                               Stage::Connection,
                               SystemStage::single_threaded()
-                                 .with_run_criteria(should_connect::<P>.system()))
+                                 .with_run_criteria(should_connect.system()))
             .add_stage_after(Stage::Connection,
                               PrivateStage::AfterConnection,
                               SystemStage::parallel()
-                                 .with_run_criteria(should_connect::<P>.system()))
+                                 .with_run_criteria(should_connect.system()))
             .add_stage_after(ClientStage::BeforeReceiveEvents,
                               Stage::Disconnection,
                               SystemStage::single_threaded()
-                                 .with_run_criteria(should_disconnect::<P>.system()))
+                                 .with_run_criteria(should_disconnect.system()))
             .add_stage_after(Stage::Disconnection,
                               PrivateStage::AfterDisconnection,
                               SystemStage::parallel()
-                                 .with_run_criteria(should_disconnect::<P>.system()))
+                                 .with_run_criteria(should_disconnect.system()))
             // frame //
             .add_stage_after(CoreStage::PostUpdate,
                               Stage::PreFrame,
@@ -124,19 +124,19 @@ impl<P: ProtocolType, R: ImplRef<P>> PluginType for Plugin<P, R> {
             .add_stage_after(Stage::PostFrame,
                               Stage::Tick,
                               SystemStage::single_threaded()
-                                 .with_run_criteria(should_tick::<P>.system()))
+                                 .with_run_criteria(should_tick.system()))
             .add_stage_after(Stage::Tick,
                               PrivateStage::AfterTick,
                               SystemStage::parallel()
-                                 .with_run_criteria(should_tick::<P>.system()))
+                                 .with_run_criteria(should_tick.system()))
         // SYSTEMS //
             .add_system_to_stage(ClientStage::BeforeReceiveEvents,
                                  before_receive_events::<P>.exclusive_system())
             .add_system_to_stage(PrivateStage::AfterConnection,
-                                 finish_connect::<P>.system())
+                                 finish_connect.system())
             .add_system_to_stage(PrivateStage::AfterDisconnection,
-                                 finish_disconnect::<P>.system())
+                                 finish_disconnect.system())
             .add_system_to_stage(PrivateStage::AfterTick,
-                                 finish_tick::<P>.system());
+                                 finish_tick.system());
     }
 }

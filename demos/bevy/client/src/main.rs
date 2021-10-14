@@ -7,7 +7,7 @@ use naia_bevy_demo_shared::{get_server_address, get_shared_config, protocol::Aut
 mod resources;
 mod systems;
 
-use systems::{init, input, recv, sync, tick};
+use systems::{init, input, events, sync, tick};
 
 fn main() {
     let mut app = App::build();
@@ -30,8 +30,23 @@ fn main() {
         init.system())
     // Realtime Gameplay Loop
     .add_system_to_stage(
+        Stage::Connection,
+        events::connect_event.system())
+    .add_system_to_stage(
+        Stage::Disconnection,
+        events::disconnect_event.system())
+    .add_system_to_stage(
         Stage::ReceiveEvents,
-        recv.system())
+        events::spawn_entity_event.system())
+    .add_system_to_stage(
+        Stage::ReceiveEvents,
+        events::own_entity_event.system())
+    .add_system_to_stage(
+        Stage::ReceiveEvents,
+        events::new_command_event.system())
+    .add_system_to_stage(
+        Stage::ReceiveEvents,
+        events::replay_command_event.system())
     .add_system_to_stage(
         Stage::Frame,
         input.system())
