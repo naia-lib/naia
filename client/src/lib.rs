@@ -26,6 +26,7 @@ mod ping_manager;
 mod server_connection;
 mod tick_manager;
 mod tick_queue;
+mod owned_entity;
 
 pub use naia_shared::{
     wrapping_diff, Instant, LinkConditionerConfig, ProtocolType, Random, Ref, ReplicateEq,
@@ -36,5 +37,6 @@ pub use client::Client;
 pub use client_config::ClientConfig;
 pub use entity_ref::EntityRef;
 pub use error::NaiaClientError;
-pub use event::{Event, OwnedEntity};
+pub use event::Event;
+pub use owned_entity::OwnedEntity;
 pub use naia_client_socket::Packet;

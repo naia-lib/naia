@@ -48,3 +48,5 @@ pub trait ProtocolType: Clone + Sync + Send + 'static {
 pub trait ProtocolExtractor<P: ProtocolType, K: EntityType> {
     fn extract<R: Replicate<P>>(&mut self, entity: &K, inner: R);
 }
+
+pub trait ProtocolKindType {}
