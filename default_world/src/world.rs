@@ -3,7 +3,7 @@ use std::{any::TypeId, collections::HashMap, ops::Deref};
 use slotmap::DenseSlotMap;
 
 use naia_shared::{
-    EntityType, ImplRef, ProtocolExtractor, ProtocolType, Ref, Replicate, WorldMutType,
+    EntityType, ProtocolExtractor, ProtocolType, Ref, Replicate, WorldMutType,
     WorldRefType,
 };
 
@@ -159,7 +159,7 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
         self.world.entities.remove(*entity);
     }
 
-    fn insert_component<R: ImplRef<P>>(&mut self, entity: &Entity, component_ref: R) {
+    fn insert_component<R: Replicate<P>>(&mut self, entity: &Entity, component_ref: R) {
         if let Some(component_map) = self.world.entities.get_mut(*entity) {
             let protocol = component_ref.protocol();
             let type_id = protocol.get_type_id();
@@ -184,7 +184,7 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
 }
 
 impl<'w, P: ProtocolType> ProtocolExtractor<P, Entity> for WorldMut<'w, P> {
-    fn extract<I: ImplRef<P>>(&mut self, entity: &Entity, impl_ref: I) {
+    fn extract<I: Replicate<P>>(&mut self, entity: &Entity, impl_ref: I) {
         self.insert_component::<I>(entity, impl_ref);
     }
 }

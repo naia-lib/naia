@@ -14,7 +14,7 @@ use naia_server_socket::{
 };
 
 pub use naia_shared::{
-    wrapping_diff, Connection, ConnectionConfig, EntityType, HostTickManager, ImplRef, Instant,
+    wrapping_diff, Connection, ConnectionConfig, EntityType, HostTickManager, Instant,
     KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType,
     PropertyMutate, ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
     WorldMutType, WorldRefType,
@@ -242,7 +242,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn queue_message<R: ImplRef<P>>(
+    pub fn queue_message<R: Replicate<P>>(
         &mut self,
         user_key: &UserKey,
         message_ref: &R,
@@ -607,7 +607,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     //// Components
 
     /// Adds a Component to an Entity
-    pub(crate) fn insert_component<R: ImplRef<P>, W: WorldMutType<P, K>>(
+    pub(crate) fn insert_component<R: Replicate<P>, W: WorldMutType<P, K>>(
         &mut self,
         world: &mut W,
         entity: &K,
@@ -1093,7 +1093,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     // Component Helpers
 
-    fn component_init<R: ImplRef<P>>(&mut self, entity: &K, component_ref: &R) -> ComponentKey {
+    fn component_init<R: Replicate<P>>(&mut self, entity: &K, component_ref: &R) -> ComponentKey {
         let dyn_ref = component_ref.dyn_ref();
         let new_mutator_ref: Ref<PropertyMutator> =
             Ref::new(PropertyMutator::new(&self.mut_handler));

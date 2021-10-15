@@ -64,7 +64,7 @@ pub use property::Property;
 pub use property_mutate::PropertyMutate;
 pub use protocol_type::{ProtocolExtractor, ProtocolType};
 pub use replica_builder::ReplicaBuilder;
-pub use replicate::{ImplRef, ReplicateEq, Replicate};
+pub use replicate::{ReplicateEq, Replicate};
 pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
 pub use shared_config::SharedConfig;
 pub use standard_header::StandardHeader;

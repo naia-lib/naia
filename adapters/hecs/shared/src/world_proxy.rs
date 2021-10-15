@@ -3,7 +3,7 @@ use std::{any::TypeId, ops::Deref};
 use hecs::World;
 
 use naia_shared::{
-    ImplRef, ProtocolExtractor, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType,
+    ProtocolExtractor, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType,
 };
 
 use super::{entity::Entity, world_data::WorldData};
@@ -144,7 +144,7 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd> {
         return protocols;
     }
 
-    fn insert_component<R: ImplRef<P>>(&mut self, entity: &Entity, component_ref: R) {
+    fn insert_component<R: Replicate<P>>(&mut self, entity: &Entity, component_ref: R) {
         // cache type id for later
         // todo: can we initialize this map on startup via Protocol derive?
         let inner_type_id = component_ref.dyn_ref().borrow().get_type_id();
@@ -172,7 +172,7 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd> {
 }
 
 impl<'w, 'd, P: ProtocolType> ProtocolExtractor<P, Entity> for WorldMut<'w, 'd> {
-    fn extract<I: ImplRef<P>>(&mut self, entity: &Entity, impl_ref: I) {
+    fn extract<I: Replicate<P>>(&mut self, entity: &Entity, impl_ref: I) {
         self.insert_component::<I>(entity, impl_ref);
     }
 }

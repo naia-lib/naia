@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
 };
 
-use naia_shared::{ImplRef, ProtocolType};
+use naia_shared::ProtocolType;
 
 use super::component_access::{ComponentAccess, ComponentAccessor};
 
@@ -35,7 +35,7 @@ impl WorldData {
         return self.rep_type_to_accessor_map.contains_key(type_id);
     }
 
-    pub(crate) fn put_type<P: ProtocolType, R: ImplRef<P>>(
+    pub(crate) fn put_type<P: ProtocolType, R: Replicate<P>>(
         &mut self,
         rep_type_id: &TypeId,
         ref_type_id: &TypeId,

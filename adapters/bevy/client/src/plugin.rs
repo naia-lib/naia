@@ -6,7 +6,7 @@ use bevy::{
     prelude::*,
 };
 
-use naia_client::{Client, ClientConfig, ImplRef, ProtocolType, SharedConfig};
+use naia_client::{Client, ClientConfig, ProtocolType, SharedConfig};
 
 use naia_bevy_shared::{
     Entity, PrivateStage, Stage, WorldData,
@@ -22,14 +22,14 @@ use super::{resource::ClientResource,
             }
 };
 
-struct PluginConfig<P: ProtocolType, R: ImplRef<P>> {
+struct PluginConfig<P: ProtocolType, R: Replicate<P>> {
     client_config: ClientConfig,
     shared_config: SharedConfig<P>,
     server_address: SocketAddr,
     auth_ref: Option<R>,
 }
 
-impl<P: ProtocolType, R: ImplRef<P>> PluginConfig<P, R> {
+impl<P: ProtocolType, R: Replicate<P>> PluginConfig<P, R> {
     pub fn new(
         client_config: ClientConfig,
         shared_config: SharedConfig<P>,
@@ -45,11 +45,11 @@ impl<P: ProtocolType, R: ImplRef<P>> PluginConfig<P, R> {
     }
 }
 
-pub struct Plugin<P: ProtocolType, R: ImplRef<P>> {
+pub struct Plugin<P: ProtocolType, R: Replicate<P>> {
     config: Mutex<Option<PluginConfig<P, R>>>,
 }
 
-impl<P: ProtocolType, R: ImplRef<P>> Plugin<P, R> {
+impl<P: ProtocolType, R: Replicate<P>> Plugin<P, R> {
     pub fn new(
         client_config: ClientConfig,
         shared_config: SharedConfig<P>,
@@ -63,7 +63,7 @@ impl<P: ProtocolType, R: ImplRef<P>> Plugin<P, R> {
     }
 }
 
-impl<P: ProtocolType, R: ImplRef<P>> PluginType for Plugin<P, R> {
+impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
     fn build(&self, app: &mut AppBuilder) {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
         let mut client = Client::<P, Entity>::new(config.client_config, config.shared_config);

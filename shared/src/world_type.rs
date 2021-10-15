@@ -5,7 +5,7 @@ use naia_socket_shared::Ref;
 use super::{
     entity_type::EntityType,
     protocol_type::ProtocolType,
-    replicate::{ImplRef, Replicate},
+    replicate::Replicate,
 };
 use crate::ProtocolExtractor;
 
@@ -50,7 +50,7 @@ pub trait WorldMutType<P: ProtocolType, K: EntityType>:
     /// gets all of an entity's components, as a Protocol
     fn get_components(&mut self, entity_key: &K) -> Vec<P>;
     /// insert a component
-    fn insert_component<I: ImplRef<P>>(&mut self, entity_key: &K, component_ref: I);
+    fn insert_component<R: Replicate<P>>(&mut self, entity_key: &K, component_ref: R);
     /// remove a component by type
     fn remove_component<R: Replicate<P>>(&mut self, entity_key: &K);
     /// remove a component by type
