@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use naia_shared::{ProtocolType};
+use naia_shared::{ProtocolType, Replicate};
 
 use super::{
     component_access::{ComponentAccess, ComponentAccessor},

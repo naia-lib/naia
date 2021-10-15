@@ -1,9 +1,11 @@
-use naia_shared::{EntityType, ProtocolType};
+use naia_shared::{EntityType, ProtocolType, ProtocolKindType};
+
+use super::owned_entity::OwnedEntity;
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
 #[derive(Debug)]
-pub enum Event<P: ProtocolType, E: EntityType> {
+pub enum Event<E: EntityType, P: ProtocolType, K: ProtocolKindType> {
     /// Occurs when the Client has successfully established a connection with
     /// the Server
     Connection,
@@ -14,7 +16,7 @@ pub enum Event<P: ProtocolType, E: EntityType> {
     /// passed to the Client on initialization
     Tick,
     /// Occurs when an Entity on the Server has come into scope for the Client
-    SpawnEntity(E, Vec<P>),
+    SpawnEntity(E, Vec<K>),
     /// Occurs when an Entity on the Server has been destroyed, or left the
     /// Client's scope
     DespawnEntity(E),
@@ -30,12 +32,12 @@ pub enum Event<P: ProtocolType, E: EntityType> {
     /// error
     RewindEntity(OwnedEntity<E>),
     /// Occurs when a Component should be added to a given Entity
-    InsertComponent(E, P),
+    InsertComponent(E, K),
     /// Occurs when a Component has had a state change on the Server while
     /// the Entity it is attached to has come into scope for the Client
-    UpdateComponent(E, P),
+    UpdateComponent(E, K),
     /// Occurs when a Component should be removed from the given Entity
-    RemoveComponent(E, P),
+    RemoveComponent(E, K),
     /// An Message emitted to the Client from the Server
     Message(P),
     /// A new Command received immediately to an assigned Entity, used to
@@ -47,17 +49,4 @@ pub enum Event<P: ProtocolType, E: EntityType> {
     ReplayCommand(OwnedEntity<E>, P),
 }
 
-#[derive(Debug, Clone)]
-pub struct OwnedEntity<E: EntityType> {
-    pub confirmed: E,
-    pub predicted: E,
-}
 
-impl<E: EntityType> OwnedEntity<E> {
-    pub fn new(confirmed_entity: &E, predicted_entity: &E) -> Self {
-        return Self {
-            confirmed: *confirmed_entity,
-            predicted: *predicted_entity,
-        };
-    }
-}
