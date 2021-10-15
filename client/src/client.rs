@@ -5,7 +5,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, Socket};
 
 pub use naia_shared::{
-    ConnectionConfig, EntityType, HostTickManager, ImplRef, ManagerType, Manifest, PacketReader,
+    ConnectionConfig, EntityType, HostTickManager, ManagerType, Manifest, PacketReader,
     PacketType, ProtocolType, Ref, Replicate, SequenceIterator, SharedConfig, StandardHeader,
     Timer, Timestamp, WorldMutType, WorldRefType,
 };
@@ -91,7 +91,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     }
 
     /// Connect to the given server address
-    pub fn connect<R: ImplRef<P>>(&mut self, server_address: SocketAddr, auth: Option<R>) {
+    pub fn connect<R: Replicate<P>>(&mut self, server_address: SocketAddr, auth: Option<R>) {
         self.address = Some(server_address);
         self.socket.connect(server_address);
         self.io.load(
@@ -111,7 +111,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn queue_message<R: ImplRef<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
+    pub fn queue_message<R: Replicate<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
             let dyn_ref = message_ref.dyn_ref();
             connection.queue_message(&dyn_ref, guaranteed_delivery);
@@ -119,7 +119,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     }
 
     /// Queues up a Command for an assigned Entity to be sent to the Server
-    pub fn queue_command<R: ImplRef<P>>(&mut self, predicted_entity: &K, command_ref: &R) {
+    pub fn queue_command<R: Replicate<P>>(&mut self, predicted_entity: &K, command_ref: &R) {
         if let Some(connection) = self.server_connection.as_mut() {
             if let Some(confirmed_entity) = connection.get_confirmed_entity(predicted_entity) {
                 let dyn_ref = command_ref.dyn_ref();

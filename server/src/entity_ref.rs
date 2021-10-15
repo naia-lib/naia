@@ -1,4 +1,4 @@
-use naia_shared::{EntityType, ImplRef, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType};
+use naia_shared::{EntityType, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType};
 
 use super::{room::room_key::RoomKey, server::Server, user::user_key::UserKey};
 
@@ -85,14 +85,14 @@ impl<'s, 'w, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s
         return self.world.get_component::<R>(&self.id);
     }
 
-    pub fn insert_component<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
+    pub fn insert_component<R: Replicate<P>>(&mut self, component_ref: &R) -> &mut Self {
         self.server
             .insert_component(self.world, &self.id, component_ref);
 
         self
     }
 
-    pub fn insert_components<R: ImplRef<P>>(&mut self, component_refs: &[R]) -> &mut Self {
+    pub fn insert_components<R: Replicate<P>>(&mut self, component_refs: &[R]) -> &mut Self {
         for component_ref in component_refs {
             self.insert_component(component_ref);
         }

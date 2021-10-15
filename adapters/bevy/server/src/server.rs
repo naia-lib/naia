@@ -6,7 +6,7 @@ use bevy::ecs::{
 };
 
 use naia_server::{
-    EntityRef, Event, ImplRef, NaiaServerError, ProtocolType, RoomKey, RoomMut, RoomRef,
+    EntityRef, Event, NaiaServerError, ProtocolType, RoomKey, RoomMut, RoomRef,
     Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
@@ -62,7 +62,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     }
 
     //// Messages ////
-    pub fn queue_message<R: ImplRef<P>>(
+    pub fn queue_message<R: Replicate<P>>(
         &mut self,
         user_key: &UserKey,
         message_ref: &R,

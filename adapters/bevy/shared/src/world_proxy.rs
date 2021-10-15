@@ -3,7 +3,7 @@ use std::any::TypeId;
 use bevy::ecs::world::{Mut, World};
 
 use naia_shared::{
-    ImplRef, ProtocolExtractor, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType,
+    ProtocolExtractor, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType,
 };
 
 use super::{entity::Entity, world_data::WorldData};
@@ -129,7 +129,7 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
         return get_components(self.world, entity);
     }
 
-    fn insert_component<I: ImplRef<P>>(&mut self, entity: &Entity, component_ref: I) {
+    fn insert_component<I: Replicate<P>>(&mut self, entity: &Entity, component_ref: I) {
         // cache type id for later
         // todo: can we initialize this map on startup via Protocol derive?
         let mut world_data = get_world_data_unchecked_mut(&self.world);
@@ -157,7 +157,7 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
 }
 
 impl<'w, P: ProtocolType> ProtocolExtractor<P, Entity> for WorldMut<'w> {
-    fn extract<I: ImplRef<P>>(&mut self, entity: &Entity, impl_ref: I) {
+    fn extract<I: Replicate<P>>(&mut self, entity: &Entity, impl_ref: I) {
         self.insert_component::<I>(entity, impl_ref);
     }
 }
