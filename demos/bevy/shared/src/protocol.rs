@@ -1,5 +1,5 @@
 use naia_derive::ProtocolType;
-use naia_shared::{Manifest, Ref};
+use naia_shared::Manifest;
 
 mod auth;
 mod color;
@@ -13,8 +13,8 @@ pub use position::Position;
 
 #[derive(ProtocolType, Clone)]
 pub enum Protocol {
-    Auth(Ref<Auth>),
-    KeyCommand(Ref<KeyCommand>),
-    Position(Ref<Position>),
-    Color(Ref<Color>),
+    Auth(Auth),
+    KeyCommand(KeyCommand),
+    Position(Position),
+    Color(Color),
 }

@@ -1,5 +1,5 @@
 use naia_derive::ProtocolType;
-use naia_shared::{Manifest, Ref};
+use naia_shared::Manifest;
 
 mod auth;
 mod marker;
@@ -15,9 +15,9 @@ pub use string_message::StringMessage;
 
 #[derive(ProtocolType, Clone)]
 pub enum Protocol {
-    Position(Ref<Position>),
-    Name(Ref<Name>),
-    Marker(Ref<Marker>),
-    StringMessage(Ref<StringMessage>),
-    Auth(Ref<Auth>),
+    Position(Position),
+    Name(Name),
+    Marker(Marker),
+    StringMessage(StringMessage),
+    Auth(Auth),
 }

@@ -3,7 +3,7 @@ use std::{any::TypeId, ops::Deref};
 use hecs::World;
 
 use naia_shared::{
-    ImplRef, ProtocolRefExtractor, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType,
+    ImplRef, ProtocolExtractor, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType,
 };
 
 use super::{entity::Entity, world_data::WorldData};
@@ -171,7 +171,7 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd> {
     }
 }
 
-impl<'w, 'd, P: ProtocolType> ProtocolRefExtractor<P, Entity> for WorldMut<'w, 'd> {
+impl<'w, 'd, P: ProtocolType> ProtocolExtractor<P, Entity> for WorldMut<'w, 'd> {
     fn extract<I: ImplRef<P>>(&mut self, entity: &Entity, impl_ref: I) {
         self.insert_component::<I>(entity, impl_ref);
     }

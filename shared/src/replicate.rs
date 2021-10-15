@@ -38,28 +38,18 @@ pub trait Replicate<P: ProtocolType>: Any + Sync + Send + 'static {
 //TODO: do we really need another trait here?
 /// Handles equality of Messages/Components.. can't just derive
 /// PartialEq because we want to only compare Properties
-pub trait ReplicaEq<P: ProtocolType, Impl = Self>: Replicate<P> {
+pub trait ReplicateEq<P: ProtocolType>: Replicate<P> {
     /// Compare with properties in another Replica
-    fn equals(&self, other: &Impl) -> bool;
+    fn equals(&self, other: &Self) -> bool;
     /// Sets the current Replica to the state of another Replica of the
     /// same type
-    fn mirror(&mut self, other: &Impl);
+    fn mirror(&mut self, other: &Self);
     /// Gets a copy of the Message/Component
-    fn copy(&self) -> Impl;
+    fn copy(&self) -> Self;
 }
 
 impl<P: ProtocolType> Debug for dyn Replicate<P> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        f.write_str("Replica")
+        f.write_str("Replicate")
     }
-}
-
-/// Represents a Ref of a concrete type that implements Replicate
-pub trait ImplRef<P: ProtocolType>: Any + Send + Sync {
-    /// Converts the Ref to a ProtocolType
-    fn protocol(&self) -> P;
-    /// Converts the Ref to a Trait Object Ref
-    fn dyn_ref(&self) -> Ref<dyn Replicate<P>>;
-    /// Clones the Ref
-    fn clone_ref(&self) -> Self;
 }

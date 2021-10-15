@@ -9,7 +9,7 @@ pub struct Marker {
 }
 
 impl Marker {
-    pub fn new(name: &str) -> Ref<Self> {
+    pub fn new(name: &str) -> Self {
         return Marker::new_complete(name.to_string());
     }
 }
