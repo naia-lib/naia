@@ -7,7 +7,7 @@ use super::{
     protocol_type::ProtocolType,
     replicate::{ImplRef, Replicate},
 };
-use crate::ProtocolRefExtractor;
+use crate::ProtocolExtractor;
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
@@ -36,7 +36,7 @@ pub trait WorldRefType<P: ProtocolType, K: EntityType> {
 /// into the Server at which point the Server will use this interface to keep
 /// the WorldMutType in-sync with it's own Entities/Components
 pub trait WorldMutType<P: ProtocolType, K: EntityType>:
-    WorldRefType<P, K> + ProtocolRefExtractor<P, K>
+    WorldRefType<P, K> + ProtocolExtractor<P, K>
 {
     // Entities
 

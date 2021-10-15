@@ -28,7 +28,7 @@ mod tick_manager;
 mod tick_queue;
 
 pub use naia_shared::{
-    wrapping_diff, ImplRef, Instant, LinkConditionerConfig, ProtocolType, Random, Ref, ReplicaEq,
+    wrapping_diff, ImplRef, Instant, LinkConditionerConfig, ProtocolType, Random, Ref, ReplicateEq,
     Replicate, SharedConfig,
 };
 

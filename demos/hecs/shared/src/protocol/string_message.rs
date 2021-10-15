@@ -9,7 +9,7 @@ pub struct StringMessage {
 }
 
 impl StringMessage {
-    pub fn new(message: String) -> Ref<Self> {
+    pub fn new(message: String) -> Self {
         return StringMessage::new_complete(message);
     }
 }

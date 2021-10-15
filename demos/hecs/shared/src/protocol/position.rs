@@ -10,7 +10,7 @@ pub struct Position {
 }
 
 impl Position {
-    pub fn new(x: u8, y: u8) -> Ref<Self> {
+    pub fn new(x: u8, y: u8) -> Self {
         return Position::new_complete(x, y);
     }
 }

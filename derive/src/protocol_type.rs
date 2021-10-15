@@ -43,7 +43,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
     let gen = quote! {
         use std::any::{Any, TypeId};
-        use naia_shared::{ProtocolType, ProtocolRefExtractor, Replicate, ReplicaEq, ImplRef, DiffMask, PacketReader, EntityType};
+        use naia_shared::{ProtocolType, ProtocolExtractor, Replicate, ReplicateEq, ImplRef, DiffMask, PacketReader, EntityType};
         #ref_imports
         impl #type_name {
             #load_method
@@ -492,7 +492,7 @@ fn get_extract_and_insert_method(type_name: &Ident, data: &Data) -> TokenStream 
     };
 
     return quote! {
-        fn extract_and_insert<K: EntityType, E: ProtocolRefExtractor<#type_name, K>>(&self,
+        fn extract_and_insert<K: EntityType, E: ProtocolExtractor<#type_name, K>>(&self,
                                       key: &K,
                                       extractor: &mut E) {
             match self {

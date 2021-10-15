@@ -24,7 +24,7 @@ pub struct Color {
 }
 
 impl Color {
-    pub fn new(value: ColorValue) -> Ref<Self> {
+    pub fn new(value: ColorValue) -> Self {
         return Color::new_complete(value);
     }
 }

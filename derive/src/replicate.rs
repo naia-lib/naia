@@ -39,7 +39,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicaEq, PacketReader, Ref, Replicate, ImplRef};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateEq, PacketReader, Ref, Replicate, ImplRef};
         #property_enum
         pub struct #replica_builder_name {
             type_id: TypeId,
@@ -88,7 +88,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #read_partial_method
             #copy_to_protocol_method
         }
-        impl ReplicaEq<#type_name> for #replica_name {
+        impl ReplicateEq<#type_name> for #replica_name {
             #equals_method
             #mirror_method
             #copy_method

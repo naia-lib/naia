@@ -20,7 +20,7 @@ pub struct Character {
 }
 
 impl Character {
-    pub fn new(x: u8, y: u8, first: &str, last: &str) -> Ref<Self> {
+    pub fn new(x: u8, y: u8, first: &str, last: &str) -> Self {
         return Character::new_complete(
             x,
             y,
