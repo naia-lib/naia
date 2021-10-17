@@ -33,7 +33,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
     let gen = quote! {
         use std::any::{Any, TypeId};
-        use naia_shared::{ProtocolType, ProtocolExtractor, Replicate, DiffMask, PacketReader, EntityType};
+        use naia_shared::{ProtocolType, ProtocolExtractor, Replicate, ReplicateEq, DiffMask, PacketReader, EntityType};
         impl #type_name {
             #load_method
 //            #conversion_methods
