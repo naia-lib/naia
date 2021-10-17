@@ -1,13 +1,13 @@
 use std::net::SocketAddr;
 
-use naia_socket_shared::{PacketReader, Ref, Timer};
+use naia_socket_shared::{PacketReader, Timer};
 
 use crate::{wrapping_diff, MessageManager};
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
     packet_notifiable::PacketNotifiable, packet_type::PacketType, protocol_type::ProtocolType,
-    replicate::Replicate, sequence_buffer::SequenceNumber, standard_header::StandardHeader,
+    sequence_buffer::SequenceNumber, standard_header::StandardHeader,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -117,7 +117,7 @@ impl<P: ProtocolType> Connection<P> {
     }
 
     /// Queue up a message to be sent to the remote host
-    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<P>>, guaranteed_delivery: bool) {
+    pub fn queue_message(&mut self, message: P, guaranteed_delivery: bool) {
         return self
             .message_manager
             .queue_outgoing_message(message, guaranteed_delivery);
@@ -132,7 +132,7 @@ impl<P: ProtocolType> Connection<P> {
     pub fn pop_outgoing_message(
         &mut self,
         next_packet_index: u16,
-    ) -> Option<Ref<dyn Replicate<P>>> {
+    ) -> Option<P> {
         return self.message_manager.pop_outgoing_message(next_packet_index);
     }
 
@@ -141,7 +141,7 @@ impl<P: ProtocolType> Connection<P> {
     pub fn unpop_outgoing_message(
         &mut self,
         next_packet_index: u16,
-        message: &Ref<dyn Replicate<P>>,
+        message: P,
     ) {
         return self
             .message_manager

@@ -30,11 +30,6 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let equals_method = get_equals_method(replica_name, &properties);
     let mirror_method = get_mirror_method(replica_name, &properties);
 
-    let convert_method_name = Ident::new(
-        (replica_name.to_string() + "Convert").as_str(),
-        Span::call_site(),
-    );
-
     let diff_mask_size: u8 = (((properties.len() - 1) / 8) + 1) as u8;
 
     let gen = quote! {
@@ -64,18 +59,6 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #new_complete_method
             #read_to_type_method
         }
-//        impl ImplRef<#type_name> for Ref<#replica_name> {
-//            fn protocol(&self) -> #type_name {
-//                return #type_name::#replica_name(self.clone());
-//            }
-//            fn dyn_ref(&self) -> Ref<dyn Replicate<#type_name>> {
-//                let upcast_ref: Ref<dyn Replicate<#type_name>> = #type_name::#convert_method_name(self.clone());
-//                return upcast_ref.clone();
-//            }
-//            fn clone_ref(&self) -> Ref<#replica_name> {
-//                return self.clone();
-//            }
-//        }
         impl Replicate<#type_name> for #replica_name {
             fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
             fn get_type_id(&self) -> TypeId {

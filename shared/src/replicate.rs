@@ -1,20 +1,20 @@
-use std::{
-    any::{Any, TypeId},
-    fmt::{Debug, Formatter, Result},
-};
+use std::any::Any;
 
 use naia_socket_shared::{PacketReader, Ref};
 
-use super::{diff_mask::DiffMask, property_mutate::PropertyMutate, protocol_type::ProtocolType};
+use super::{diff_mask::DiffMask, property_mutate::PropertyMutate, protocol_type::{ProtocolType, ProtocolKindType}};
 
 /// A Replica is a Message/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
-pub trait Replicate<P: ProtocolType>: Any + Sync + Send + 'static {
+pub trait Replicate: Any + Sync + Send + 'static {
+    type Protocol: ProtocolType;
+    type Kind: ProtocolKindType;
+
     /// Gets the number of bytes of the Message/Component's DiffMask
     fn get_diff_mask_size(&self) -> u8;
     /// Gets the TypeId of the Message/Component, used to map to a
     /// registered ProtocolType
-    fn get_type_id(&self) -> TypeId;
+    fn get_kind(&self) -> Self::Kind;
     /// Writes data into an outgoing byte stream, sufficient to completely
     /// recreate the Message/Component on the client
     fn write(&self, out_bytes: &mut Vec<u8>);
@@ -32,13 +32,13 @@ pub trait Replicate<P: ProtocolType>: Any + Sync + Send + 'static {
     /// Properties that have changed with the client
     fn set_mutator(&mut self, mutator: &Ref<dyn PropertyMutate>);
     /// Returns self
-    fn as_protocol(&self) -> P;
+    fn as_protocol(&self) -> Self::Protocol;
 }
 
 //TODO: do we really need another trait here?
 /// Handles equality of Messages/Components.. can't just derive
 /// PartialEq because we want to only compare Properties
-pub trait ReplicateEq<P: ProtocolType>: Replicate<P> {
+pub trait ReplicateEq: Replicate {
     /// Compare with properties in another Replica
     fn equals(&self, other: &Self) -> bool;
     /// Sets the current Replica to the state of another Replica of the
@@ -46,10 +46,4 @@ pub trait ReplicateEq<P: ProtocolType>: Replicate<P> {
     fn mirror(&mut self, other: &Self);
     /// Gets a copy of the Message/Component
     fn copy(&self) -> Self;
-}
-
-impl<P: ProtocolType> Debug for dyn Replicate<P> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        f.write_str("Replicate")
-    }
 }

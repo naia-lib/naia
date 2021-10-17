@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashMap};
+use std::collections::HashMap;
 
 use naia_socket_shared::PacketReader;
 
@@ -12,7 +12,7 @@ use super::{protocol_type::ProtocolType, replica_builder::ReplicaBuilder};
 pub struct Manifest<P: ProtocolType> {
     naia_id_count: u16,
     builder_map: HashMap<u16, Box<dyn ReplicaBuilder<P>>>,
-    type_map: HashMap<TypeId, u16>,
+    type_map: HashMap<P::Kind, u16>,
 }
 
 impl<P: ProtocolType> Manifest<P> {
@@ -29,19 +29,19 @@ impl<P: ProtocolType> Manifest<P> {
     /// Message/Component instances
     pub fn register_replica(&mut self, replica_builder: Box<dyn ReplicaBuilder<P>>) {
         let new_naia_id = self.naia_id_count;
-        let type_id = replica_builder.get_type_id();
-        self.type_map.insert(type_id, new_naia_id);
+        let builder_kind = replica_builder.get_kind();
+        self.type_map.insert(builder_kind, new_naia_id);
         self.builder_map.insert(new_naia_id, replica_builder);
         self.naia_id_count += 1;
     }
 
     /// Given a Message/Component's TypeId, get a NaiaId (that can be
     /// written/read from packets)
-    pub fn get_naia_id(&self, type_id: &TypeId) -> u16 {
+    pub fn get_naia_id(&self, kind: &P::Kind) -> u16 {
         let naia_id = self
             .type_map
-            .get(type_id)
-            .expect("hey I should get a TypeId here...");
+            .get(kind)
+            .expect("hey I should get a ProtocolKind here...");
         return *naia_id;
     }
 

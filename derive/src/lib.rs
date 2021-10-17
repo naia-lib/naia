@@ -3,16 +3,11 @@
 //! ProtocolType traits
 
 #![deny(
-    missing_docs,
     trivial_casts,
     trivial_numeric_casts,
-    unsafe_code,
     unstable_features,
     unused_import_braces
 )]
-
-#[macro_use]
-extern crate cfg_if;
 
 mod protocol_type;
 mod replicate;

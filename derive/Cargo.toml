@@ -19,10 +19,8 @@ maintenance = { status = "actively-developed" }
 proc-macro = true
 
 [features]
-multithread = [ ]
 
 [dependencies]
-cfg-if = "0.1.10"
 proc-macro2 = "1.0"
 syn = "1.0"
 quote = "1.0"
