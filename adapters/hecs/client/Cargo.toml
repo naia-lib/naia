@@ -16,7 +16,6 @@ edition = "2018"
 maintenance = { status = "actively-developed" }
 
 [features]
-multithread = [ "naia-client/multithread", "naia-hecs-shared/multithread" ]
 wbindgen = [ "naia-client/wbindgen", "naia-hecs-shared/wbindgen" ]
 mquad = [ "naia-client/mquad", "naia-hecs-shared/mquad" ]
 

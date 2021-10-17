@@ -5,7 +5,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, Socket};
 
 pub use naia_shared::{
-    ConnectionConfig, EntityType, HostTickManager, ManagerType, Manifest, PacketReader,
+    ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader,
     PacketType, ProtocolType, Ref, Replicate, SequenceIterator, SharedConfig, StandardHeader,
     Timer, Timestamp, WorldMutType, WorldRefType,
 };

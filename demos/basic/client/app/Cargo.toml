@@ -7,13 +7,12 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [features]
-multithread = [ "naia-client/multithread" ]
 mquad = [ "naia-client/mquad", "naia-basic-demo-shared/mquad" ]
 wbindgen = [ "naia-client/wbindgen", "naia-basic-demo-shared/wbindgen" ]
 
 [dependencies]
-naia-client = { path = "../../../../client", features = [ "mquad" ] }
+naia-client = { path = "../../../../client" }
 naia-default-world = { path = "../../../../default_world" }
-naia-basic-demo-shared = { path = "../../shared" }
+naia-basic-demo-shared = { path = "../../shared", features = ["client"] }
 cfg-if = "0.1.10"
 log = "0.4"

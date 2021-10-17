@@ -16,9 +16,10 @@ edition = "2018"
 maintenance = { status = "actively-developed" }
 
 [features]
-multithread = [ "naia-socket-shared/multithread" ]
 wbindgen = [ "naia-socket-shared/wbindgen" ]
 mquad = [ "naia-socket-shared/mquad" ]
+client = []
+server = []
 
 [dependencies]
 naia-socket-shared = { path = "../../naia-socket/shared" } #{ version = "0.4.1" }

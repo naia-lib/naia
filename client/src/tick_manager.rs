@@ -17,7 +17,7 @@ pub struct TickManager {
 }
 
 impl TickManager {
-    /// Create a new HostTickManager with a given tick interval duration
+    /// Create a new TickManager with a given tick interval duration
     pub fn new(tick_interval: Duration) -> Self {
         TickManager {
             tick_interval,

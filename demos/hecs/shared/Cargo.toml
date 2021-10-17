@@ -8,6 +8,8 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [features]
+client = [ "naia-shared/client" ]
+server = [ "naia-shared/server" ]
 
 [dependencies]
 naia-shared = { path = "../../../shared" }

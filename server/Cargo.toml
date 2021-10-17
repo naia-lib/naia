@@ -21,11 +21,10 @@ features = [ "use-webrtc" ]
 [features]
 use-udp = [ "naia-server-socket/use-udp" ]
 use-webrtc = [ "naia-server-socket/use-webrtc" ]
-multithread = [ "naia-shared/multithread" ]
 
 [dependencies]
 naia-server-socket = { path = "../../naia-socket/server" } #{ version = "0.5.0" }
-naia-shared = { version = "0.4.1", path = "../shared" }
+naia-shared = { version = "0.4.1", path = "../shared", features = ["server"] }
 log = "0.4"
 slotmap = { version = "0.4" }
 byteorder = "1.3"

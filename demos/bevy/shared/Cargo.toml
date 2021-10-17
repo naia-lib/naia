@@ -7,9 +7,13 @@ publish = false
 edition = "2018"
 license = "MIT OR Apache-2.0"
 
+[features]
+client = [ "naia-shared/client" ]
+server = [ "naia-shared/server" ]
+
 [dependencies]
-naia-shared = { path = "../../../shared" } # version = "0.4.1" }
-naia-derive = { path = "../../../derive" } # version = "0.3.0" }
+naia-shared = { path = "../../../shared" }
+naia-derive = { path = "../../../derive" }
 cfg-if = "0.1.10"
 log = "0.4"
 nanoserde = "0.1.17"
