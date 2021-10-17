@@ -2,7 +2,6 @@
 //! Common functionality shared between naia-server & naia-client crates.
 
 #![deny(
-    trivial_casts,
     trivial_numeric_casts,
     unsafe_code,
     unstable_features,
@@ -39,16 +38,15 @@ mod message_manager;
 mod message_packet_writer;
 mod packet_notifiable;
 mod packet_type;
-mod property;
+mod impls;
 mod property_mutate;
 mod protocol_type;
-mod replica_builder;
-mod replicate;
 mod sequence_buffer;
 mod shared_config;
 mod standard_header;
 mod world_type;
 mod wrapping_number;
+mod replica_builder;
 
 /// Commonly used utility methods to be used by naia-server & naia-client
 pub mod utils;
@@ -57,7 +55,9 @@ pub use naia_socket_shared::{
     Instant, LinkConditionerConfig, PacketReader, Random, SocketConfig, Timer, Timestamp,
 };
 
+pub use impls::{Property, Replicate, ReplicateEq};
 pub use ack_manager::AckManager;
+pub use replica_builder::ReplicaBuilder;
 pub use connection::Connection;
 pub use connection_config::ConnectionConfig;
 pub use diff_mask::DiffMask;
@@ -71,11 +71,8 @@ pub use message_manager::MessageManager;
 pub use message_packet_writer::{MessagePacketWriter, MTU_SIZE};
 pub use packet_notifiable::PacketNotifiable;
 pub use packet_type::PacketType;
-pub use property::Property;
 pub use property_mutate::{PropertyMutate, PropertyMutator};
 pub use protocol_type::{ProtocolType, ProtocolKindType, DynRef, DynMut};
-pub use replica_builder::ReplicaBuilder;
-pub use replicate::{ReplicateEq, Replicate};
 pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
 pub use shared_config::SharedConfig;
 pub use standard_header::StandardHeader;

@@ -1,6 +1,6 @@
 use std::{ops::{DerefMut, Deref}, hash::Hash};
 
-use super::replicate::Replicate;
+use super::impls::Replicate;
 
 /// An Enum with a variant for every Component/Message that can be sent
 /// between Client/Host

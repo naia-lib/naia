@@ -1,7 +1,3 @@
-use proc_macro2::{Punct, Spacing, Span, TokenStream};
-use quote::{format_ident, quote};
-use syn::{parse_macro_input, DeriveInput, Ident, Type};
-
 pub mod shared;
 
 cfg_if! {

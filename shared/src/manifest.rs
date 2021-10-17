@@ -8,7 +8,6 @@ use super::{protocol_type::ProtocolType, replica_builder::ReplicaBuilder};
 /// able to map Message/Component TypeIds to their representation within
 /// specified enums. Also is able to create new Messages/Components
 /// using registered Builders, given a specific TypeId.
-#[derive(Debug)]
 pub struct Manifest<P: ProtocolType> {
     naia_id_count: u16,
     builder_map: HashMap<u16, Box<dyn ReplicaBuilder<P>>>,
@@ -47,9 +46,9 @@ impl<P: ProtocolType> Manifest<P> {
 
     /// Creates a Message/Component instance, given a NaiaId and a
     /// payload, typically from an incoming packet
-    pub fn create_replica(&self, naia_id: u16, reader: &mut PacketReader) -> P {
+    pub fn create_replica(&self, naia_id: u16, reader: &mut PacketReader, packet_index: u16) -> P {
         if let Some(replica_builder) = self.builder_map.get(&naia_id) {
-            return replica_builder.as_ref().build(reader);
+            return replica_builder.as_ref().build(reader, packet_index);
         }
 
         // TODO: this shouldn't panic .. could crash the server

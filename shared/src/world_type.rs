@@ -3,7 +3,7 @@ use std::any::TypeId;
 use super::{
     entity_type::EntityType,
     protocol_type::ProtocolType,
-    replicate::Replicate,
+    impls::Replicate,
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded

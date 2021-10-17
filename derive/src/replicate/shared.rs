@@ -1,7 +1,7 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
-use quote::{format_ident, quote};
-use syn::{parse_macro_input, DeriveInput, Ident, Type};
-use syn::{Data, Fields, GenericArgument, Lit, LitStr, Meta, PathArguments, Path, Result, Token, token::Colon2};
+use quote::quote;
+use syn::{DeriveInput, Ident, Type};
+use syn::{Data, Fields, GenericArgument, Lit, Meta, PathArguments, Path, Result};
 
 pub fn get_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
     let mut fields = Vec::new();
@@ -97,91 +97,82 @@ pub fn get_property_enum(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> 
     };
 }
 
-pub fn get_new_complete_method(
-    replica_name: &Ident,
-    enum_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
-) -> TokenStream {
-    let mut args = quote! {};
-    for (field_name, field_type) in properties.iter() {
-        let new_output_right = quote! {
-            #field_name: #field_type
-        };
-        let new_output_result = quote! {
-            #args#new_output_right,
-        };
-        args = new_output_result;
-    }
-
-    let mut fields = quote! {};
-    for (field_name, field_type) in properties.iter() {
-        let uppercase_variant_name = Ident::new(
-            field_name.to_string().to_uppercase().as_str(),
-            Span::call_site(),
-        );
-
-        let new_output_right = quote! {
-            #field_name: Property::<#field_type>::new(#field_name, #enum_name::#uppercase_variant_name as u8)
-        };
-        let new_output_result = quote! {
-            #fields
-            #new_output_right,
-        };
-        fields = new_output_result;
-    }
-
+pub fn get_copy_method(replica_name: &Ident) -> TokenStream {
     return quote! {
-        pub fn new_complete(#args) -> #replica_name {
-            #replica_name {
-                #fields
-            }
+        fn copy(&self) -> #replica_name {
+            return self.clone();
         }
     };
 }
 
-pub fn get_read_to_type_method(
-    protocol_name: &Ident,
-    replica_name: &Ident,
-    enum_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
-) -> TokenStream {
-    let mut prop_names = quote! {};
+pub fn get_to_protocol_method(protocol_name: &Ident, replica_name: &Ident) -> TokenStream {
+    return quote! {
+        fn to_protocol(self) -> #protocol_name {
+            return #protocol_name::#replica_name(self);
+        }
+    };
+}
+
+pub fn get_equals_method(replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+    let mut output = quote! {};
+
     for (field_name, _) in properties.iter() {
         let new_output_right = quote! {
-            #field_name
+            if !Property::equals(&self.#field_name, &other.#field_name) { return false; }
         };
         let new_output_result = quote! {
-            #prop_names
-            #new_output_right,
-        };
-        prop_names = new_output_result;
-    }
-
-    let mut prop_reads = quote! {};
-    for (field_name, field_type) in properties.iter() {
-        let uppercase_variant_name = Ident::new(
-            field_name.to_string().to_uppercase().as_str(),
-            Span::call_site(),
-        );
-
-        let new_output_right = quote! {
-            let mut #field_name = Property::<#field_type>::new(Default::default(), #enum_name::#uppercase_variant_name as u8);
-            #field_name.read(reader, 1);
-        };
-        let new_output_result = quote! {
-            #prop_reads
+            #output
             #new_output_right
         };
-        prop_reads = new_output_result;
+        output = new_output_result;
     }
 
     return quote! {
-        fn read_to_type(reader: &mut PacketReader) -> #protocol_name {
-            #prop_reads
+        fn equals(&self, other: &#replica_name) -> bool {
+            #output
+            return true;
+        }
+    };
+}
 
-            return #protocol_name::#replica_name(#replica_name {
-                #prop_names
-            });
+pub fn get_mirror_method(replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+    let mut output = quote! {};
+
+    for (field_name, _) in properties.iter() {
+        let new_output_right = quote! {
+            self.#field_name.mirror(&other.#field_name);
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    return quote! {
+        fn mirror(&mut self, other: &#replica_name) {
+            #output
+        }
+    };
+}
+
+pub fn get_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
+    let mut output = quote! {};
+
+    for (field_name, _) in properties.iter() {
+        let new_output_right = quote! {
+            Property::write(&self.#field_name, buffer);
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    return quote! {
+        fn write(&self, buffer: &mut Vec<u8>) {
+            #output
         }
     };
 }
