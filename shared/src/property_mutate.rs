@@ -7,3 +7,15 @@ pub trait PropertyMutate: Send + Sync + 'static {
     fn mutate(&mut self, property_index: u8);
 }
 
+pub struct PropertyMutator {
+    inner: Box<dyn PropertyMutate>,
+}
+
+impl PropertyMutator {
+    pub fn new<M: PropertyMutate>(mutator: M) -> Self {
+        let inner = Box::new(mutator);
+        return Self {
+            inner
+        }
+    }
+}

@@ -12,6 +12,19 @@
 #[macro_use]
 extern crate cfg_if;
 
+cfg_if! {
+    if #[cfg(all(feature = "client", feature = "server"))]
+    {
+        // Use both protocols...
+        compile_error!("naia-shared requires either the 'client' OR 'server' feature to be enabled, you must pick one.");
+    }
+    else if #[cfg(all(not(feature = "client"), not(feature = "server")))]
+    {
+        // Use no protocols...
+        compile_error!("naia-shared requires either the 'client' OR 'server' feature to be enabled, you must pick one.");
+    }
+}
+
 mod ack_manager;
 mod connection;
 mod connection_config;
@@ -59,8 +72,8 @@ pub use message_packet_writer::{MessagePacketWriter, MTU_SIZE};
 pub use packet_notifiable::PacketNotifiable;
 pub use packet_type::PacketType;
 pub use property::Property;
-pub use property_mutate::PropertyMutate;
-pub use protocol_type::{ProtocolType, ProtocolKindType};
+pub use property_mutate::{PropertyMutate, PropertyMutator};
+pub use protocol_type::{ProtocolType, ProtocolKindType, DynRef, DynMut};
 pub use replica_builder::ReplicaBuilder;
 pub use replicate::{ReplicateEq, Replicate};
 pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
