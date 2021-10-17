@@ -24,7 +24,7 @@ pub trait WorldRefType<P: ProtocolType, K: EntityType> {
     /// check whether entity contains component, dynamically
     fn has_component_of_type(&self, entity_key: &K, type_id: &TypeId) -> bool;
     /// gets an entity's component
-    fn get_component<R: Replicate>(&self, entity_key: &K) -> Option<Ref<R>>;
+    fn get_component<R: Replicate>(&self, entity_key: &K) -> Option<R>;
     /// gets an entity's component, dynamically
     fn get_component_from_type(&self, entity_key: &K, type_id: &TypeId) -> Option<P>;
 }

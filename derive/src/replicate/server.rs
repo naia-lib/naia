@@ -2,6 +2,8 @@ use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, DeriveInput, Ident, Type};
 
+use super::shared::{get_properties, get_protocol_path, get_property_enum, get_new_complete_method, get_read_to_type_method};
+
 pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -10,22 +12,22 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         (replica_name.to_string() + "Builder").as_str(),
         Span::call_site(),
     );
-    let type_name = get_type_name(&input);
+    let protocol_name = get_protocol_name(&input);
 
     let properties = get_properties(&input);
 
-    let enum_name = format_ident!("{}Prop", replica_name);
+    let enum_name = format_ident!("{}Property", replica_name);
     let property_enum = get_property_enum(&enum_name, &properties);
 
     let new_complete_method = get_new_complete_method(replica_name, &enum_name, &properties);
     let read_to_type_method =
-        get_read_to_type_method(&type_name, replica_name, &enum_name, &properties);
+        get_read_to_type_method(&protocol_name, replica_name, &enum_name, &properties);
     let write_method = get_write_method(&properties);
     let write_partial_method = get_write_partial_method(&enum_name, &properties);
     let read_full_method = get_read_full_method(&properties);
     let read_partial_method = get_read_partial_method(&enum_name, &properties);
     let set_mutator_method = get_set_mutator_method(&properties);
-    let to_protocol_method = get_to_protocol_method(&type_name, replica_name);
+    let to_protocol_method = get_to_protocol_method(&protocol_name, replica_name);
     let copy_method = get_copy_method(replica_name);
     let equals_method = get_equals_method(replica_name, &properties);
     let mirror_method = get_mirror_method(replica_name, &properties);
@@ -34,32 +36,29 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{any::{TypeId}, rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateEq, PacketReader, Ref, Replicate};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateEq, PacketReader, Replicate};
         #property_enum
         pub struct #replica_builder_name {
             type_id: TypeId,
         }
-        impl ReplicaBuilder<#type_name> for #replica_builder_name {
+        impl ReplicaBuilder<#protocol_name> for #replica_builder_name {
             fn get_kind(&self) -> TypeId {
                 return self.type_id;
             }
-            fn build(&self, reader: &mut PacketReader) -> #type_name {
+            fn build(&self, reader: &mut PacketReader) -> #protocol_name {
                 return #replica_name::read_to_type(reader);
             }
         }
         impl #replica_name {
-            pub fn get_builder() -> Box<dyn ReplicaBuilder<#type_name>> {
+            pub fn get_builder() -> Box<dyn ReplicaBuilder<#protocol_name>> {
                 return Box::new(#replica_builder_name {
                     type_id: TypeId::of::<#replica_name>(),
                 });
             }
-            pub fn to_ref(self) -> Ref<#replica_name> {
-                return Ref::new(self);
-            }
             #new_complete_method
             #read_to_type_method
         }
-        impl Replicate<#type_name> for #replica_name {
+        impl Replicate<#protocol_name> for #replica_name {
             fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
             fn get_kind(&self) -> TypeId {
                 return TypeId::of::<#replica_name>();
@@ -71,7 +70,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #read_partial_method
             #to_protocol_method
         }
-        impl ReplicateEq<#type_name> for #replica_name {
+        impl ReplicateEq<#protocol_name> for #replica_name {
             #equals_method
             #mirror_method
             #copy_method
@@ -133,95 +132,6 @@ fn get_set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     };
 }
 
-fn get_new_complete_method(
-    replica_name: &Ident,
-    enum_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
-) -> TokenStream {
-    let mut args = quote! {};
-    for (field_name, field_type) in properties.iter() {
-        let new_output_right = quote! {
-            #field_name: #field_type
-        };
-        let new_output_result = quote! {
-            #args#new_output_right,
-        };
-        args = new_output_result;
-    }
-
-    let mut fields = quote! {};
-    for (field_name, field_type) in properties.iter() {
-        let uppercase_variant_name = Ident::new(
-            field_name.to_string().to_uppercase().as_str(),
-            Span::call_site(),
-        );
-
-        let new_output_right = quote! {
-            #field_name: Property::<#field_type>::new(#field_name, #enum_name::#uppercase_variant_name as u8)
-        };
-        let new_output_result = quote! {
-            #fields
-            #new_output_right,
-        };
-        fields = new_output_result;
-    }
-
-    return quote! {
-        pub fn new_complete(#args) -> Ref<#replica_name> {
-            Ref::new(#replica_name {
-                #fields
-            })
-        }
-    };
-}
-
-fn get_read_to_type_method(
-    type_name: &Ident,
-    replica_name: &Ident,
-    enum_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
-) -> TokenStream {
-    let mut prop_names = quote! {};
-    for (field_name, _) in properties.iter() {
-        let new_output_right = quote! {
-            #field_name
-        };
-        let new_output_result = quote! {
-            #prop_names
-            #new_output_right,
-        };
-        prop_names = new_output_result;
-    }
-
-    let mut prop_reads = quote! {};
-    for (field_name, field_type) in properties.iter() {
-        let uppercase_variant_name = Ident::new(
-            field_name.to_string().to_uppercase().as_str(),
-            Span::call_site(),
-        );
-
-        let new_output_right = quote! {
-            let mut #field_name = Property::<#field_type>::new(Default::default(), #enum_name::#uppercase_variant_name as u8);
-            #field_name.read(reader, 1);
-        };
-        let new_output_result = quote! {
-            #prop_reads
-            #new_output_right
-        };
-        prop_reads = new_output_result;
-    }
-
-    return quote! {
-        fn read_to_type(reader: &mut PacketReader) -> #type_name {
-            #prop_reads
-
-            return #type_name::#replica_name(Ref::new(#replica_name {
-                #prop_names
-            }));
-        }
-    };
-}
-
 fn get_copy_method(replica_name: &Ident) -> TokenStream {
     return quote! {
         fn copy(&self) -> #replica_name {
@@ -230,11 +140,11 @@ fn get_copy_method(replica_name: &Ident) -> TokenStream {
     };
 }
 
-fn get_to_protocol_method(type_name: &Ident, replica_name: &Ident) -> TokenStream {
+fn get_to_protocol_method(protocol_name: &Ident, replica_name: &Ident) -> TokenStream {
     return quote! {
-        fn to_protocol(&self) -> #type_name {
+        fn to_protocol(&self) -> #protocol_name {
             let copied_replica = self.clone().to_ref();
-            return #type_name::#replica_name(copied_replica);
+            return #protocol_name::#replica_name(copied_replica);
         }
     };
 }
@@ -388,8 +298,8 @@ fn get_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
     fields
 }
 
-fn get_type_name(input: &DeriveInput) -> Ident {
-    let mut type_name_option: Option<Ident> = None;
+fn get_protocol_name(input: &DeriveInput) -> Ident {
+    let mut protocol_name_option: Option<Ident> = None;
 
     let attrs = &input.attrs;
     for option in attrs.into_iter() {
@@ -399,10 +309,10 @@ fn get_type_name(input: &DeriveInput) -> Ident {
                 let path = meta_name_value.path;
                 let lit = meta_name_value.lit;
                 if let Some(ident) = path.get_ident() {
-                    if ident == "type_name" {
+                    if ident == "protocol_name" {
                         if let Lit::Str(lit) = lit {
                             let ident = Ident::new(lit.value().as_str(), Span::call_site());
-                            type_name_option = Some(ident);
+                            protocol_name_option = Some(ident);
                         }
                     }
                 }
@@ -411,10 +321,10 @@ fn get_type_name(input: &DeriveInput) -> Ident {
         }
     }
 
-    if type_name_option.is_none() {
+    if protocol_name_option.is_none() {
         return Ident::new("Protocol", Span::call_site());
     } else {
-        return type_name_option.unwrap();
+        return protocol_name_option.unwrap();
     }
 }
 
