@@ -102,12 +102,12 @@ impl<P: ProtocolType> MessageManager<P> {
 
     /// Given incoming packet data, read transmitted Messages and store them to
     /// be returned to the application
-    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>) {
+    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>, packet_index: u16) {
         let message_count = reader.read_u8();
         for _x in 0..message_count {
             let naia_id: u16 = reader.read_u16();
 
-            let new_message = manifest.create_replica(naia_id, reader);
+            let new_message = manifest.create_replica(naia_id, reader, packet_index);
             self.queued_incoming_messages.push_back(new_message);
         }
     }

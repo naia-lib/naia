@@ -149,8 +149,8 @@ impl<P: ProtocolType> Connection<P> {
 
     /// Given an incoming packet which has been identified as an message, send
     /// the data to the MessageManager for processing
-    pub fn process_message_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>) {
-        return self.message_manager.process_data(reader, manifest);
+    pub fn process_message_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>, packet_index: u16) {
+        return self.message_manager.process_data(reader, manifest, packet_index);
     }
 
     /// Get the most recent message that has been received from a remote host

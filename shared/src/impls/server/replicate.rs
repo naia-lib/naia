@@ -1,6 +1,4 @@
-use naia_socket_shared::PacketReader;
-
-use super::{diff_mask::DiffMask, property_mutate::{PropertyMutate, PropertyMutator}, protocol_type::{ProtocolType, ProtocolKindType}};
+use crate::{diff_mask::DiffMask, property_mutate::PropertyMutator, protocol_type::{ProtocolType, ProtocolKindType}};
 
 /// A Replica is a Message/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
@@ -19,13 +17,10 @@ pub trait Replicate: Sync + Send + 'static {
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Message/Component on the client
     fn write_partial(&self, diff_mask: &DiffMask, out_bytes: &mut Vec<u8>);
-    /// Reads data from an incoming packet, sufficient to sync the in-memory
-    /// Message/Component with it's replica on the Server
-    fn read_full(&mut self, reader: &mut PacketReader, packet_index: u16);
     /// Set the Message/Component's PropertyMutator, which keeps track
     /// of which Properties have been mutated, necessary to sync only the
     /// Properties that have changed with the client
-    fn set_mutator(&mut self, mutator: PropertyMutator);
+    fn set_mutator(&mut self, mutator: &PropertyMutator);
     /// Returns self
     fn to_protocol(self) -> Self::Protocol;
 }

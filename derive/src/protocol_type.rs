@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream, Punct, Spacing};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Data, DeriveInput, Ident, Type, Fields, GenericArgument, Lit, Meta, PathArguments};
+use syn::{parse_macro_input, Data, DeriveInput, Ident};
 
 pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
