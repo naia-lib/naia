@@ -33,6 +33,12 @@ pub trait Replicate<P: ProtocolType>: Any + Sync + Send + 'static {
     fn set_mutator(&mut self, mutator: &Ref<dyn PropertyMutate>);
     /// Returns self
     fn as_protocol(&self) -> P;
+}
+
+//TODO: do we really need another trait here?
+/// Handles equality of Messages/Components.. can't just derive
+/// PartialEq because we want to only compare Properties
+pub trait ReplicateEq<P: ProtocolType>: Replicate<P> {
     /// Compare with properties in another Replica
     fn equals(&self, other: &Self) -> bool;
     /// Sets the current Replica to the state of another Replica of the
