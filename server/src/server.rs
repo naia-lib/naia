@@ -611,7 +611,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         &mut self,
         world: &mut W,
         entity: &K,
-        component_ref: &R,
+        component_ref: R,
     ) {
         if !world.has_entity(entity) {
             panic!("attempted to add component to non-existent entity");
@@ -627,11 +627,11 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
             )
         }
 
-        // actually insert component into world
-        world.insert_component(entity, component_ref.clone_ref());
-
         // generate unique component key
-        let component_key: ComponentKey = self.component_init(entity, component_ref);
+        let component_key: ComponentKey = self.component_init(entity, &component_ref);
+
+        // actually insert component into world
+        world.insert_component(entity, component_ref);
 
         // add component to connections already tracking entity
         for (user_key, _) in self.users.iter() {
