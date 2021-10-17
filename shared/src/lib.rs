@@ -62,7 +62,7 @@ pub use packet_notifiable::PacketNotifiable;
 pub use packet_type::PacketType;
 pub use property::Property;
 pub use property_mutate::PropertyMutate;
-pub use protocol_type::{ProtocolExtractor, ProtocolType, ProtocolKindType};
+pub use protocol_type::{ProtocolType, ProtocolKindType};
 pub use replica_builder::ReplicaBuilder;
 pub use replicate::{ReplicateEq, Replicate};
 pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
