@@ -61,7 +61,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
                     &popped_entity_action,
                 ) {
                     self.entity_manager
-                        .unpop_outgoing_action(next_packet_index, &popped_entity_action);
+                        .unpop_outgoing_action(next_packet_index, popped_entity_action);
                     break;
                 }
             }
