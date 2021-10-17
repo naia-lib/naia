@@ -1,12 +1,10 @@
-use std::any::Any;
-
-use naia_socket_shared::{PacketReader, Ref};
+use naia_socket_shared::PacketReader;
 
 use super::{diff_mask::DiffMask, property_mutate::PropertyMutate, protocol_type::{ProtocolType, ProtocolKindType}};
 
 /// A Replica is a Message/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
-pub trait Replicate: Any + Sync + Send + 'static {
+pub trait Replicate: Sync + Send + 'static {
     type Protocol: ProtocolType;
     type Kind: ProtocolKindType;
 
@@ -32,7 +30,7 @@ pub trait Replicate: Any + Sync + Send + 'static {
     /// Properties that have changed with the client
     fn set_mutator(&mut self, mutator: &Ref<dyn PropertyMutate>);
     /// Returns self
-    fn as_protocol(&self) -> Self::Protocol;
+    fn to_protocol(self) -> Self::Protocol;
 }
 
 //TODO: do we really need another trait here?

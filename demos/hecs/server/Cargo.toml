@@ -13,7 +13,7 @@ use-webrtc = [ "naia-hecs-server/use-webrtc" ]
 
 [dependencies]
 naia-hecs-server = { path = "../../../adapters/hecs/server" }
-naia-hecs-demo-shared = { path = "../shared" }
+naia-hecs-demo-shared = { path = "../shared", features = ["server"] }
 log = "0.4"
 simple_logger = { version = "1.4" }
 smol = { version = "1.2.4" }

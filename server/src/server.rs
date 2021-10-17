@@ -3,6 +3,7 @@ use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
     panic,
+    sync::{Arc, Mutex},
 };
 
 use byteorder::{BigEndian, WriteBytesExt};
@@ -14,7 +15,7 @@ use naia_server_socket::{
 };
 
 pub use naia_shared::{
-    wrapping_diff, Connection, ConnectionConfig, EntityType, HostTickManager, Instant,
+    wrapping_diff, Connection, ConnectionConfig, EntityType, Instant,
     KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType,
     PropertyMutate, ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
     WorldMutType, WorldRefType,
@@ -1163,18 +1164,8 @@ impl Io {
     }
 }
 
-cfg_if! {
-    if #[cfg(feature = "multithread")] {
-        use std::sync::{Arc, Mutex};
-        fn to_property_mutator_raw(eref: Arc<Mutex<PropertyMutator>>) -> Arc<Mutex<dyn PropertyMutate>> {
-            eref.clone()
-        }
-    } else {
-        use std::{cell::RefCell, rc::Rc};
-        fn to_property_mutator_raw(eref: Rc<RefCell<PropertyMutator>>) -> Rc<RefCell<dyn PropertyMutate>> {
-            eref.clone()
-        }
-    }
+fn to_property_mutator_raw(eref: Arc<Mutex<PropertyMutator>>) -> Arc<Mutex<dyn PropertyMutate>> {
+    eref.clone()
 }
 
 fn to_property_mutator(eref: Ref<PropertyMutator>) -> Ref<dyn PropertyMutate> {

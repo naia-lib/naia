@@ -1,7 +1,5 @@
 use std::any::TypeId;
 
-use naia_socket_shared::Ref;
-
 use super::{
     entity_type::EntityType,
     protocol_type::ProtocolType,

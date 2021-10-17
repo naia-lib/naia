@@ -18,7 +18,6 @@ mod connection_config;
 mod diff_mask;
 mod entity_action_type;
 mod entity_type;
-mod host_tick_manager;
 mod key_store;
 mod keys;
 mod manager_type;
@@ -42,7 +41,7 @@ mod wrapping_number;
 pub mod utils;
 
 pub use naia_socket_shared::{
-    Instant, LinkConditionerConfig, PacketReader, Random, Ref, SocketConfig, Timer, Timestamp,
+    Instant, LinkConditionerConfig, PacketReader, Random, SocketConfig, Timer, Timestamp,
 };
 
 pub use ack_manager::AckManager;
@@ -51,7 +50,6 @@ pub use connection_config::ConnectionConfig;
 pub use diff_mask::DiffMask;
 pub use entity_action_type::EntityActionType;
 pub use entity_type::EntityType;
-pub use host_tick_manager::HostTickManager;
 pub use key_store::KeyGenerator;
 pub use keys::{LocalComponentKey, LocalEntity, NaiaKey};
 pub use manager_type::ManagerType;

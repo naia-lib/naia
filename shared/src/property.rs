@@ -1,6 +1,6 @@
 use nanoserde::{DeBin, SerBin};
 
-use naia_socket_shared::{PacketReader, Ref};
+use naia_socket_shared::PacketReader;
 
 use super::{property_mutate::PropertyMutate, wrapping_number::sequence_greater_than};
 
@@ -10,8 +10,8 @@ use super::{property_mutate::PropertyMutate, wrapping_number::sequence_greater_t
 pub struct Property<T: Clone + DeBin + SerBin + PartialEq> {
     mutator: Option<Ref<dyn PropertyMutate>>,
     mutator_index: u8,
-    pub(crate) inner: T,
-    pub(crate) last_recv_index: u16,
+    inner: T,
+    last_recv_index: u16,
 }
 
 impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {

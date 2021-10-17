@@ -10,12 +10,11 @@ license = "MIT OR Apache-2.0"
 [features]
 use-udp = [ "naia-server/use-udp" ]
 use-webrtc = [ "naia-server/use-webrtc" ]
-multithread = [ "naia-server/multithread", "naia-basic-demo-shared/multithread" ]
 
 [dependencies]
 naia-server = { path = "../../../server" }
 naia-default-world = { path = "../../../default_world" }
-naia-basic-demo-shared = { path = "../shared" }
+naia-basic-demo-shared = { path = "../shared", features = ["server"] }
 log = "0.4"
 simple_logger = { version = "1.4" }
 smol = { version = "1.2.4" }
