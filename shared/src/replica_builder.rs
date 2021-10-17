@@ -1,7 +1,4 @@
-use std::{
-    any::TypeId,
-    fmt::{Debug, Formatter, Result},
-};
+use std::fmt::{Debug, Formatter, Result};
 
 use naia_socket_shared::PacketReader;
 
@@ -11,8 +8,8 @@ use super::protocol_type::ProtocolType;
 pub trait ReplicaBuilder<P: ProtocolType>: Send + Sync {
     /// Create a new Replica instance
     fn build(&self, reader: &mut PacketReader) -> P;
-    /// Gets the TypeId of the Replica the builder is able to build
-    fn get_type_id(&self) -> TypeId;
+    /// Gets the ProtocolKind of the Replica the builder is able to build
+    fn get_kind(&self) -> P::Kind;
 }
 
 impl<P: ProtocolType> Debug for Box<dyn ReplicaBuilder<P>> {

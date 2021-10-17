@@ -1,10 +1,8 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
-use naia_socket_shared::Ref;
-
 use super::{
     manager_type::ManagerType, manifest::Manifest, protocol_type::ProtocolType,
-    replicate::Replicate, standard_header::StandardHeader,
+    standard_header::StandardHeader,
 };
 
 /// The maximum of bytes that can be used for the payload of a given packet. (See #38 of http://ithare.com/64-network-dos-and-donts-for-game-engines-part-v-udp/)
@@ -53,17 +51,19 @@ impl MessagePacketWriter {
     pub fn write_message<P: ProtocolType>(
         &mut self,
         manifest: &Manifest<P>,
-        message: &Ref<dyn Replicate<P>>,
+        message: P,
     ) -> bool {
+        let message_ref = message.dyn_ref();
+
         //Write message payload
         let mut message_payload_bytes = Vec::<u8>::new();
-        message.borrow().write(&mut message_payload_bytes);
+        message_ref.write(&mut message_payload_bytes);
 
         //Write message "header"
         let mut message_total_bytes = Vec::<u8>::new();
 
-        let type_id = message.borrow().get_type_id();
-        let naia_id = manifest.get_naia_id(&type_id); // get naia id
+        let message_kind = message_ref.get_kind();
+        let naia_id = manifest.get_naia_id(&message_kind); // get naia id
         message_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
         message_total_bytes.append(&mut message_payload_bytes); // write payload
 
