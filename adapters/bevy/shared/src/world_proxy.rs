@@ -3,7 +3,7 @@ use std::any::TypeId;
 use bevy::ecs::world::{Mut, World};
 
 use naia_shared::{
-    ProtocolExtractor, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType,
+    ProtocolType, Ref, Replicate, WorldMutType, WorldRefType,
 };
 
 use super::{entity::Entity, world_data::WorldData};
@@ -156,11 +156,11 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
     }
 }
 
-impl<'w, P: ProtocolType> ProtocolExtractor<P, Entity> for WorldMut<'w> {
-    fn extract<I: Replicate<P>>(&mut self, entity: &Entity, impl_ref: I) {
-        self.insert_component::<I>(entity, impl_ref);
-    }
-}
+//impl<'w, P: ProtocolType> ProtocolExtractor<P, Entity> for WorldMut<'w> {
+//    fn extract<I: Replicate<P>>(&mut self, entity: &Entity, impl_ref: I) {
+//        self.insert_component::<I>(entity, impl_ref);
+//    }
+//}
 
 // private static methods
 
