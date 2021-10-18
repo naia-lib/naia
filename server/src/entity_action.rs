@@ -15,12 +15,14 @@ pub enum EntityAction<P: ProtocolType, K: EntityType> {
     OwnEntity(K, LocalEntity),
     DisownEntity(K, LocalEntity),
     InsertComponent(
+        K,
         LocalEntity,
         ComponentKey,
         LocalComponentKey,
         P::Kind
     ),
     UpdateComponent(
+        K,
         ComponentKey,
         LocalComponentKey,
         DiffMask,
@@ -36,8 +38,8 @@ impl<P: ProtocolType, K: EntityType> EntityAction<P, K> {
             EntityAction::DespawnEntity(_, _) => EntityActionType::DespawnEntity,
             EntityAction::OwnEntity(_, _) => EntityActionType::OwnEntity,
             EntityAction::DisownEntity(_, _) => EntityActionType::DisownEntity,
-            EntityAction::InsertComponent(_, _, _, _) => EntityActionType::InsertComponent,
-            EntityAction::UpdateComponent(_, _, _, _) => EntityActionType::UpdateComponent,
+            EntityAction::InsertComponent(_, _, _, _, _) => EntityActionType::InsertComponent,
+            EntityAction::UpdateComponent(_, _, _, _, _) => EntityActionType::UpdateComponent,
             EntityAction::RemoveComponent(_, _) => EntityActionType::RemoveComponent,
         }
     }

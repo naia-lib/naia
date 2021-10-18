@@ -1,24 +1,22 @@
 use naia_shared::PropertyMutate;
 
-use super::{global_diff_handler::DiffSender, keys::ComponentKey};
+use super::mutcaster::MutSender;
 
 #[derive(Clone)]
 pub struct ComponentDiffHandler {
-    component_key: ComponentKey,
-    diff_sender: DiffSender,
+    mut_sender: MutSender,
 }
 
 impl ComponentDiffHandler {
-    pub fn new(component_key: ComponentKey, diff_sender: DiffSender) -> Self {
+    pub fn new(mut_sender: &MutSender) -> Self {
         ComponentDiffHandler {
-            component_key,
-            diff_sender,
+            mut_sender: mut_sender.clone(),
         }
     }
 }
 
 impl PropertyMutate for ComponentDiffHandler {
     fn mutate(&mut self, property_index: u8) {
-        self.diff_sender.send((self.component_key, property_index));
+        self.mut_sender.send(property_index);
     }
 }

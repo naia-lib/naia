@@ -1,13 +1,14 @@
-use std::net::SocketAddr;
+use std::{sync::{Arc, RwLock}, net::SocketAddr};
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, Replicate, ReplicateEq, SequenceNumber, StandardHeader, WorldMutType, WorldRefType,
+    ProtocolType, ReplicateEq, SequenceNumber, StandardHeader, WorldMutType, WorldRefType,
 };
 
 use super::{
     command_receiver::CommandReceiver, entity_manager::EntityManager, keys::ComponentKey,
     packet_writer::PacketWriter, ping_manager::PingManager, world_record::WorldRecord,
+    global_diff_handler::GlobalDiffHandler,
 };
 
 pub struct ClientConnection<P: ProtocolType, K: EntityType> {
@@ -21,10 +22,11 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
+        diff_handler: &Arc<RwLock<GlobalDiffHandler>>
     ) -> Self {
         ClientConnection {
             connection: Connection::new(address, connection_config),
-            entity_manager: EntityManager::new(address),
+            entity_manager: EntityManager::new(address, diff_handler),
             ping_manager: PingManager::new(),
             command_receiver: CommandReceiver::new(),
         }
@@ -35,7 +37,6 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         world: &W,
         world_record: &WorldRecord<K, P::Kind>,
         host_tick: u16,
-        manifest: &Manifest<P>,
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_messages() || self.entity_manager.has_outgoing_actions() {
             let mut writer = PacketWriter::new();
@@ -43,7 +44,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
             let next_packet_index: u16 = self.get_next_packet_index();
             while let Some(popped_message) = self.connection.pop_outgoing_message(next_packet_index)
             {
-                if !writer.write_message(manifest, &popped_message) {
+                if !writer.write_message(&popped_message) {
                     self.connection
                         .unpop_outgoing_message(next_packet_index, popped_message);
                     break;
@@ -51,11 +52,11 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
             }
             while let Some(popped_entity_action) =
                 self.entity_manager
-                    .pop_outgoing_action(world, world_record, next_packet_index)
+                    .pop_outgoing_action::<W>(world_record, next_packet_index)
             {
                 if !self.entity_manager.write_entity_action(
+                    world,
                     &mut writer,
-                    manifest,
                     &popped_entity_action,
                 ) {
                     self.entity_manager

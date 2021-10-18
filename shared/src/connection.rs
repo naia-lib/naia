@@ -7,7 +7,7 @@ use crate::{wrapping_number::wrapping_diff, message_manager::MessageManager};
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
     packet_notifiable::PacketNotifiable, packet_type::PacketType, protocol_type::ProtocolType,
-    sequence_buffer::SequenceNumber, standard_header::StandardHeader, impls::{Replicate, ReplicateEq}
+    sequence_buffer::SequenceNumber, standard_header::StandardHeader, impls::ReplicateEq
 };
 
 /// Represents a connection to a remote host, and provides functionality to

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    sequence_greater_than, LocalEntity, Manifest, NaiaKey, PacketReader, ProtocolType,
+    sequence_greater_than, LocalEntity, Manifest, NaiaKey, PacketReader, ProtocolType, ProtocolKindType,
     SequenceBuffer,
 };
 
@@ -50,10 +50,10 @@ impl<P: ProtocolType> CommandReceiver<P> {
         for _x in 0..command_count {
             let local_key = reader.read_u16();
             let prediction_key = LocalEntity::from_u16(local_key);
-            let naia_id: u16 = reader.read_u16();
+            let replica_kind: P::Kind = P::Kind::from_u16(reader.read_u16());
             let past_commands_number: u8 = reader.read_u8();
 
-            let new_command = manifest.create_replica(naia_id, reader, 0);
+            let new_command = manifest.create_replica(replica_kind, reader, 0);
             if !self.queued_incoming_commands.exists(client_tick) {
                 self.queued_incoming_commands
                     .insert(client_tick, HashMap::new());
@@ -66,7 +66,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
                 let tick_diff = reader.read_u8();
                 let past_tick = client_tick.wrapping_sub(tick_diff.into());
 
-                let new_command = manifest.create_replica(naia_id, reader, 0);
+                let new_command = manifest.create_replica(replica_kind, reader, 0);
                 if sequence_greater_than(past_tick, server_tick) {
                     if !self.queued_incoming_commands.exists(past_tick) {
                         self.queued_incoming_commands

@@ -66,6 +66,9 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             type Protocol = #protocol_name;
             type Kind = #protocol_kind_name;
 
+            fn kind() -> #protocol_kind_name {
+                return #protocol_kind_name::#replica_name;
+            }
             fn get_kind(&self) -> #protocol_kind_name {
                 return #replica_name::kind();
             }
