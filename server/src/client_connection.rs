@@ -148,17 +148,16 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         return self.entity_manager.has_entity(key);
     }
 
-    pub fn spawn_entity<W: WorldRefType<P, K>>(
+    pub fn spawn_entity(
         &mut self,
-        world: &W,
         world_record: &WorldRecord<K, P::Kind>,
         key: &K,
     ) {
-        self.entity_manager.add_entity(world, world_record, key);
+        self.entity_manager.spawn_entity(world_record, key);
     }
 
     pub fn despawn_entity(&mut self, world_record: &WorldRecord<K, P::Kind>, key: &K) {
-        self.entity_manager.remove_entity(world_record, key);
+        self.entity_manager.despawn_entity(world_record, key);
     }
 
     pub fn has_prediction_entity(&self, key: &K) -> bool {

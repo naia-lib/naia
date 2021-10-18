@@ -27,7 +27,6 @@ use super::{
     event::Event,
     keys::ComponentKey,
     global_diff_handler::GlobalDiffHandler,
-    component_diff_handler::ComponentDiffHandler,
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},
     server_config::ServerConfig,
     tick_manager::TickManager,
@@ -542,9 +541,8 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     /// Set the 'owner' of an Entity to a User associated with a given UserKey.
     /// Users are only able to issue Commands to Entities of which they are the
     /// owner
-    pub(crate) fn entity_set_owner<W: WorldRefType<P, K>>(
+    pub(crate) fn entity_set_owner(
         &mut self,
-        world: &W,
         entity: &K,
         user_key: &UserKey,
     ) {
@@ -562,7 +560,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         // add Entity to User's connection if it's not already in-scope
         if !client_connection.has_entity(entity) {
             //add entity to user connection
-            client_connection.spawn_entity(world, &self.world_record, entity);
+            client_connection.spawn_entity(&self.world_record, entity);
         }
 
         // assign Entity to User as a Prediction
@@ -1073,7 +1071,6 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                                 if !currently_in_scope {
                                     // add entity to the connections local scope
                                     client_connection.spawn_entity(
-                                        world,
                                         &self.world_record,
                                         entity,
                                     );
@@ -1099,11 +1096,17 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
             .world_record
             .add_component(entity, &component_ref.get_kind());
 
-        let mut_sender = self.diff_handler.as_ref().write().expect("DiffHandler should be initialized").register_component(&component_key);
+        let diff_mask_length: u8 = component_ref.get_diff_mask_size();
 
-        let component_diff_handler = PropertyMutator::new(ComponentDiffHandler::new(&mut_sender));
+        let mut_sender = self.diff_handler
+            .as_ref()
+            .write()
+            .expect("DiffHandler should be initialized")
+            .register_component(&component_key, diff_mask_length);
 
-        component_ref.set_mutator(component_diff_handler);
+        let prop_mutator = PropertyMutator::new(mut_sender);
+
+        component_ref.set_mutator(prop_mutator);
 
         return component_key;
     }

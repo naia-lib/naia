@@ -31,7 +31,7 @@ pub use naia_shared::{
     SocketConfig, WorldMutType, WorldRefType,
 };
 
-mod mutcaster;
+mod mut_channel;
 mod client_connection;
 mod command_receiver;
 mod entity_action;
@@ -46,7 +46,6 @@ mod locality_status;
 mod global_diff_handler;
 mod packet_writer;
 mod ping_manager;
-mod component_diff_handler;
 mod user_diff_handler;
 mod room;
 mod server;

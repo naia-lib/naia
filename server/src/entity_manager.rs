@@ -126,7 +126,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                         diff_mask,
                     ));
 
-                    self.diff_handler.clear_component(&global_component_key);
+                    self.diff_handler.clear_diff_mask(&global_component_key);
                 }
 
                 self.last_popped_diff_mask_list = Some(diff_mask_list);
@@ -186,7 +186,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                 if let Some(last_popped_diff_mask_list) = &self.last_popped_diff_mask_list {
                     for (global_component_key, last_popped_diff_mask) in last_popped_diff_mask_list
                     {
-                        self.diff_handler.set_component(
+                        self.diff_handler.set_diff_mask(
                             global_component_key,
                             &last_popped_diff_mask,
                         );
@@ -223,9 +223,8 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
     // Entities
 
-    pub fn add_entity<W: WorldRefType<P, K>>(
+    pub fn spawn_entity(
         &mut self,
-        world: &W,
         world_record: &WorldRecord<K, P::Kind>,
         global_entity_key: &K,
     ) {
@@ -236,19 +235,8 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                 panic!("entity nonexistant!");
             }
             for global_component_key in world_record.get_component_keys(global_entity_key) {
-                let (_, component_kind) = world_record
-                    .get_component_record(&global_component_key)
-                    .expect("component does not exist!");
-                let component_protocol = world
-                    .get_component_of_kind(global_entity_key, &component_kind)
-                    .expect("component does not exist!");
-
-                //TODO: I bet we can pre-compute diff mask size based on Kind rather than having to dig into the World for that
-                let diff_mask_size = component_protocol.dyn_ref().get_diff_mask_size();
-
                 self.component_init(
                     &global_component_key,
-                    diff_mask_size,
                     LocalityStatus::Creating,
                 );
             }
@@ -270,7 +258,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         }
     }
 
-    pub fn remove_entity(&mut self, world_record: &WorldRecord<K, P::Kind>, global_entity_key: &K) {
+    pub fn despawn_entity(&mut self, world_record: &WorldRecord<K, P::Kind>, global_entity_key: &K) {
         if self.has_entity_prediction(global_entity_key) {
             self.remove_prediction_entity(global_entity_key);
         }
@@ -374,7 +362,6 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
             let local_component_key = self.component_init(
                 component_key,
-                component_ref.get_diff_mask_size(),
                 LocalityStatus::Creating,
             );
 
@@ -435,7 +422,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
     ) {
         for (component_key, record) in self.component_records.iter() {
             if record.status == LocalityStatus::Created
-                && self.diff_handler.has_diff(component_key)
+                && self.diff_handler.has_diff_mask(component_key)
             {
                 let (entity_key, component_type) = world_record
                     .get_component_record(component_key)
@@ -591,7 +578,6 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
     fn component_init(
         &mut self,
         component_key: &ComponentKey,
-        diff_mask_size: u8,
         status: LocalityStatus,
     ) -> LocalComponentKey {
         if self.component_records.contains_key(component_key) {
@@ -601,7 +587,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
         // create DiffMask
         self.diff_handler
-            .register_component(&self.address, &component_key, diff_mask_size);
+            .register_component(&self.address, &component_key);
 
         // register Component with various indexes
         let local_key: LocalComponentKey = self.component_key_generator.generate();
@@ -639,12 +625,12 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
             .clone();
         self.last_popped_diff_mask = Some(new_diff_mask);
         self.diff_handler
-            .clear_component(global_component_key);
+            .clear_diff_mask(global_component_key);
     }
 
     fn unpop_insert_component_diff_mask(&mut self, global_component_key: &ComponentKey) {
         if let Some(last_popped_diff_mask) = &self.last_popped_diff_mask {
-            self.diff_handler.set_component(
+            self.diff_handler.set_diff_mask(
                 global_component_key,
                 &last_popped_diff_mask,
             );
@@ -717,7 +703,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         // having copied the diff mask for this update, clear the component
         self.last_popped_diff_mask = Some(diff_mask.borrow().clone());
         self.diff_handler
-            .clear_component(global_component_key);
+            .clear_diff_mask(global_component_key);
 
         locked_diff_mask
     }
@@ -736,7 +722,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
         self.last_update_packet_index = self.last_last_update_packet_index;
         if let Some(last_popped_diff_mask) = &self.last_popped_diff_mask {
-            self.diff_handler.set_component(
+            self.diff_handler.set_diff_mask(
                 global_component_key,
                 &last_popped_diff_mask,
             );
@@ -916,7 +902,7 @@ impl<P: ProtocolType, K: EntityType> PacketNotifiable for EntityManager<P, K> {
                                     }
                                 }
 
-                                self.diff_handler.diff_mask_or(global_component_key, &new_diff_mask);
+                                self.diff_handler.or_diff_mask(global_component_key, &new_diff_mask);
                             }
                         }
                     }
