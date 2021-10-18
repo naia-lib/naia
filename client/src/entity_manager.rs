@@ -234,7 +234,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                         if let Some(entity_record) = self.entity_records.get(world_entity) {
                             let type_id = entity_record.get_type_from_key(&component_key).unwrap();
                             if let Some(component_protocol) =
-                                world.get_component_from_type(world_entity, &type_id)
+                                world.get_component_of_kind(world_entity, &type_id)
                             {
                                 // read incoming delta
                                 let diff_mask: DiffMask = DiffMask::read(reader);
@@ -292,7 +292,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
                         // Get component for last change
                         let component = world
-                            .get_component_from_type(&world_entity, &component_type)
+                            .get_component_of_kind(&world_entity, &component_type)
                             .expect(
                                 "component should still exist in the World, was it tampered with?",
                             );
@@ -349,7 +349,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
             // go through all components to make prediction components = world components
             for confirmed_protocol in world.get_components(world_entity) {
                 let type_id = confirmed_protocol.get_type_id();
-                let mut predicted_protocol = world.get_component_from_type(&predicted_entity, &type_id)
+                let mut predicted_protocol = world.get_component_of_kind(&predicted_entity, &type_id)
                     .expect("Predicted and Confirmed entities must always contain the same types of components!");
                 predicted_protocol.mirror(&confirmed_protocol);
             }

@@ -98,7 +98,7 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, P> {
         return has_component::<P, R>(self.world, entity);
     }
 
-    fn has_component_of_type(&self, entity: &Entity, component_type: &TypeId) -> bool {
+    fn has_component_of_kind(&self, entity: &Entity, component_type: &TypeId) -> bool {
         return has_component_of_type(self.world, entity, component_type);
     }
 
@@ -106,7 +106,7 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, P> {
         return get_component(self.world, entity);
     }
 
-    fn get_component_from_type(&self, entity: &Entity, component_type: &TypeId) -> Option<P> {
+    fn get_component_of_kind(&self, entity: &Entity, component_type: &TypeId) -> Option<P> {
         return get_component_from_type(self.world, entity, component_type);
     }
 }
@@ -124,7 +124,7 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, P> {
         return has_component::<P, R>(self.world, entity);
     }
 
-    fn has_component_of_type(&self, entity: &Entity, component_type: &TypeId) -> bool {
+    fn has_component_of_kind(&self, entity: &Entity, component_type: &TypeId) -> bool {
         return has_component_of_type(self.world, entity, component_type);
     }
 
@@ -132,7 +132,7 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, P> {
         return get_component(self.world, entity);
     }
 
-    fn get_component_from_type(&self, entity: &Entity, component_type: &TypeId) -> Option<P> {
+    fn get_component_of_kind(&self, entity: &Entity, component_type: &TypeId) -> Option<P> {
         return get_component_from_type(self.world, entity, component_type);
     }
 }

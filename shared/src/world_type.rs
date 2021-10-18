@@ -20,13 +20,13 @@ pub trait WorldRefType<P: ProtocolType, K: EntityType> {
     // Components
 
     /// check whether entity contains component
-    fn has_component<R: Replicate>(&self, entity_key: &K) -> bool;
+    fn has_component<R: Replicate<P>>(&self, entity_key: &K) -> bool;
     /// check whether entity contains component, dynamically
-    fn has_component_of_type(&self, entity_key: &K, type_id: &TypeId) -> bool;
+    fn has_component_of_kind(&self, entity_key: &K, component_kind: &P::Kind) -> bool;
     /// gets an entity's component
-    fn get_component<R: Replicate>(&self, entity_key: &K) -> Option<R>;
+    fn get_component<R: Replicate<P>>(&self, entity_key: &K) -> Option<R>;
     /// gets an entity's component, dynamically
-    fn get_component_from_type(&self, entity_key: &K, type_id: &TypeId) -> Option<P>;
+    fn get_component_of_kind(&self, entity_key: &K, component_kind: &P::Kind) -> Option<P>;
 }
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -47,9 +47,9 @@ pub trait WorldMutType<P: ProtocolType, K: EntityType>:
     /// gets all of an entity's components, as a Protocol
     fn get_components(&mut self, entity_key: &K) -> Vec<P>;
     /// insert a component
-    fn insert_component<R: Replicate>(&mut self, entity_key: &K, component_ref: R);
+    fn insert_component<R: Replicate<P>>(&mut self, entity_key: &K, component_ref: R);
     /// remove a component by type
-    fn remove_component<R: Replicate>(&mut self, entity_key: &K);
+    fn remove_component<R: Replicate<P>>(&mut self, entity_key: &K);
     /// remove a component by type
     fn remove_component_by_type(&mut self, entity_key: &K, type_id: &TypeId);
 }

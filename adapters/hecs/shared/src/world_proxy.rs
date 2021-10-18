@@ -61,7 +61,7 @@ impl<'w, 'd, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldRef<'w,
         return has_component::<P, R>(self.world, entity);
     }
 
-    fn has_component_of_type(&self, entity: &Entity, type_id: &TypeId) -> bool {
+    fn has_component_of_kind(&self, entity: &Entity, type_id: &TypeId) -> bool {
         return has_component_of_type::<P>(self.world, self.world_data, entity, type_id);
     }
 
@@ -69,7 +69,7 @@ impl<'w, 'd, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldRef<'w,
         return get_component(self.world, entity);
     }
 
-    fn get_component_from_type(&self, entity: &Entity, type_id: &TypeId) -> Option<P> {
+    fn get_component_of_kind(&self, entity: &Entity, type_id: &TypeId) -> Option<P> {
         return get_component_from_type(self.world, self.world_data, entity, type_id);
     }
 }
@@ -103,7 +103,7 @@ impl<'w, 'd, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldMut<'w,
         return has_component::<P, R>(self.world, entity);
     }
 
-    fn has_component_of_type(&self, entity: &Entity, type_id: &TypeId) -> bool {
+    fn has_component_of_kind(&self, entity: &Entity, type_id: &TypeId) -> bool {
         return has_component_of_type::<P>(self.world, self.world_data, entity, type_id);
     }
 
@@ -111,7 +111,7 @@ impl<'w, 'd, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldMut<'w,
         return get_component(self.world, entity);
     }
 
-    fn get_component_from_type(&self, entity: &Entity, type_id: &TypeId) -> Option<P> {
+    fn get_component_of_kind(&self, entity: &Entity, type_id: &TypeId) -> Option<P> {
         return get_component_from_type(self.world, self.world_data, entity, type_id);
     }
 }
@@ -134,7 +134,7 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd> {
         if let Ok(entity_ref) = self.world.entity(**entity) {
             for ref_type in entity_ref.component_types() {
                 if let Some(rep_type) = self.world_data.type_convert_ref_to_rep(&ref_type) {
-                    if let Some(component) = self.get_component_from_type(entity, &rep_type) {
+                    if let Some(component) = self.get_component_of_kind(entity, &rep_type) {
                         protocols.push(component);
                     }
                 }

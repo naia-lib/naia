@@ -1,5 +1,5 @@
 use naia_shared::{
-    DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity, ProtocolType, Ref,
+    DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity, ProtocolType,
 };
 
 use super::keys::ComponentKey;
@@ -9,7 +9,7 @@ pub enum EntityAction<P: ProtocolType, K: EntityType> {
     SpawnEntity(
         K,
         LocalEntity,
-        Vec<(ComponentKey, LocalComponentKey, P)>,
+        Vec<(ComponentKey, LocalComponentKey, P::Kind)>,
     ),
     DespawnEntity(K, LocalEntity),
     OwnEntity(K, LocalEntity),
@@ -18,13 +18,13 @@ pub enum EntityAction<P: ProtocolType, K: EntityType> {
         LocalEntity,
         ComponentKey,
         LocalComponentKey,
-        P,
+        P::Kind
     ),
     UpdateComponent(
         ComponentKey,
         LocalComponentKey,
-        Ref<DiffMask>,
-        P,
+        DiffMask,
+        P::Kind,
     ),
     RemoveComponent(ComponentKey, LocalComponentKey),
 }

@@ -1,17 +1,17 @@
-use std::{any::TypeId, collections::HashMap};
+use std::collections::HashMap;
 
 use slotmap::DenseSlotMap;
 
-use naia_shared::EntityType;
+use naia_shared::{EntityType, ProtocolKindType};
 
 use super::keys::ComponentKey;
 
-pub struct WorldRecord<K: EntityType> {
-    entities: HashMap<K, HashMap<TypeId, ComponentKey>>,
-    components: DenseSlotMap<ComponentKey, (K, TypeId)>,
+pub struct WorldRecord<E: EntityType, K: ProtocolKindType> {
+    entities: HashMap<E, HashMap<K, ComponentKey>>,
+    components: DenseSlotMap<ComponentKey, (E, K)>,
 }
 
-impl<K: EntityType> WorldRecord<K> {
+impl<E: EntityType, K: ProtocolKindType> WorldRecord<E, K> {
     pub fn new() -> Self {
         WorldRecord {
             entities: HashMap::new(),
@@ -21,14 +21,14 @@ impl<K: EntityType> WorldRecord<K> {
 
     // Sync w/ World & Server
 
-    pub fn spawn_entity(&mut self, entity_key: &K) {
+    pub fn spawn_entity(&mut self, entity_key: &E) {
         if self.entities.contains_key(entity_key) {
             panic!("entity already initialized!");
         }
         self.entities.insert(*entity_key, HashMap::new());
     }
 
-    pub fn despawn_entity(&mut self, entity_key: &K) {
+    pub fn despawn_entity(&mut self, entity_key: &E) {
         if !self.entities.contains_key(entity_key) {
             panic!("entity does not exist!");
         }
@@ -41,7 +41,7 @@ impl<K: EntityType> WorldRecord<K> {
         self.entities.remove(entity_key);
     }
 
-    pub fn add_component(&mut self, entity_key: &K, component_type: &TypeId) -> ComponentKey {
+    pub fn add_component(&mut self, entity_key: &E, component_type: &K) -> ComponentKey {
         if !self.entities.contains_key(entity_key) {
             panic!("entity does not exist!");
         }
@@ -56,21 +56,21 @@ impl<K: EntityType> WorldRecord<K> {
             panic!("component does not exist!");
         }
 
-        let (entity_key, type_id) = self.components.remove(*component_key).unwrap();
+        let (entity_key, component_kind) = self.components.remove(*component_key).unwrap();
         if let Some(component_map) = self.entities.get_mut(&entity_key) {
             component_map
-                .remove(&type_id)
+                .remove(&component_kind)
                 .expect("type ids don't match?");
         }
     }
 
     // Access
 
-    pub fn has_entity(&self, entity_key: &K) -> bool {
+    pub fn has_entity(&self, entity_key: &E) -> bool {
         return self.entities.contains_key(entity_key);
     }
 
-    pub fn get_component_keys(&self, entity_key: &K) -> Vec<ComponentKey> {
+    pub fn get_component_keys(&self, entity_key: &E) -> Vec<ComponentKey> {
         let mut output = Vec::new();
 
         if let Some(component_key_map) = self.entities.get(entity_key) {
@@ -84,16 +84,16 @@ impl<K: EntityType> WorldRecord<K> {
         output
     }
 
-    pub fn get_key_from_type(&self, entity_key: &K, type_id: &TypeId) -> Option<ComponentKey> {
+    pub fn get_key_from_type(&self, entity_key: &E, component_kind: &K) -> Option<ComponentKey> {
         if let Some(component_key_map) = self.entities.get(entity_key) {
-            if let Some(component_key) = component_key_map.get(type_id) {
+            if let Some(component_key) = component_key_map.get(component_kind) {
                 return Some(*component_key);
             }
         }
         return None;
     }
 
-    pub fn get_component_record(&self, component_key: &ComponentKey) -> Option<(K, TypeId)> {
+    pub fn get_component_record(&self, component_key: &ComponentKey) -> Option<(E, K)> {
         if let Some(record) = self.components.get(*component_key) {
             return Some(*record);
         }

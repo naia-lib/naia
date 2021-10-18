@@ -53,7 +53,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
             let naia_id: u16 = reader.read_u16();
             let past_commands_number: u8 = reader.read_u8();
 
-            let new_command = manifest.create_replica(naia_id, reader);
+            let new_command = manifest.create_replica(naia_id, reader, 0);
             if !self.queued_incoming_commands.exists(client_tick) {
                 self.queued_incoming_commands
                     .insert(client_tick, HashMap::new());
@@ -66,7 +66,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
                 let tick_diff = reader.read_u8();
                 let past_tick = client_tick.wrapping_sub(tick_diff.into());
 
-                let new_command = manifest.create_replica(naia_id, reader);
+                let new_command = manifest.create_replica(naia_id, reader, 0);
                 if sequence_greater_than(past_tick, server_tick) {
                     if !self.queued_incoming_commands.exists(past_tick) {
                         self.queued_incoming_commands

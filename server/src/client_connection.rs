@@ -2,13 +2,12 @@ use std::net::SocketAddr;
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader, WorldMutType, WorldRefType,
+    ProtocolType, Replicate, ReplicateEq, SequenceNumber, StandardHeader, WorldMutType, WorldRefType,
 };
 
 use super::{
     command_receiver::CommandReceiver, entity_manager::EntityManager, keys::ComponentKey,
-    mut_handler::MutHandler, packet_writer::PacketWriter, ping_manager::PingManager,
-    world_record::WorldRecord,
+    packet_writer::PacketWriter, ping_manager::PingManager, world_record::WorldRecord,
 };
 
 pub struct ClientConnection<P: ProtocolType, K: EntityType> {
@@ -21,12 +20,11 @@ pub struct ClientConnection<P: ProtocolType, K: EntityType> {
 impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
     pub fn new(
         address: SocketAddr,
-        mut_handler: Option<&Ref<MutHandler>>,
         connection_config: &ConnectionConfig,
     ) -> Self {
         ClientConnection {
             connection: Connection::new(address, connection_config),
-            entity_manager: EntityManager::new(address, mut_handler.unwrap()),
+            entity_manager: EntityManager::new(address),
             ping_manager: PingManager::new(),
             command_receiver: CommandReceiver::new(),
         }
@@ -35,7 +33,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
     pub fn get_outgoing_packet<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
-        world_record: &WorldRecord<K>,
+        world_record: &WorldRecord<K, P::Kind>,
         host_tick: u16,
         manifest: &Manifest<P>,
     ) -> Option<Box<[u8]>> {
@@ -47,7 +45,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
             {
                 if !writer.write_message(manifest, &popped_message) {
                     self.connection
-                        .unpop_outgoing_message(next_packet_index, &popped_message);
+                        .unpop_outgoing_message(next_packet_index, popped_message);
                     break;
                 }
             }
@@ -104,7 +102,8 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
                     );
                 }
                 ManagerType::Message => {
-                    self.connection.process_message_data(&mut reader, manifest);
+                    // packet index shouldn't matter here because the server's impl of Property doesn't use it
+                    self.connection.process_message_data(&mut reader, manifest, 0);
                 }
                 _ => {}
             }
@@ -114,7 +113,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
     pub fn collect_component_updates<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
-        world_record: &WorldRecord<K>,
+        world_record: &WorldRecord<K, P::Kind>,
     ) {
         self.entity_manager
             .collect_component_updates(world, world_record);
@@ -151,13 +150,13 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
     pub fn spawn_entity<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
-        world_record: &WorldRecord<K>,
+        world_record: &WorldRecord<K, P::Kind>,
         key: &K,
     ) {
         self.entity_manager.add_entity(world, world_record, key);
     }
 
-    pub fn despawn_entity(&mut self, world_record: &WorldRecord<K>, key: &K) {
+    pub fn despawn_entity(&mut self, world_record: &WorldRecord<K, P::Kind>, key: &K) {
         self.entity_manager.remove_entity(world_record, key);
     }
 
@@ -176,7 +175,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
     pub fn insert_component<W: WorldMutType<P, K>>(
         &mut self,
         world: &W,
-        world_record: &WorldRecord<K>,
+        world_record: &WorldRecord<K, P::Kind>,
         component_key: &ComponentKey,
     ) {
         self.entity_manager
@@ -208,7 +207,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
     pub fn process_incoming_header<W: WorldRefType<P, K>>(
         &mut self,
         world: &W,
-        world_record: &WorldRecord<K>,
+        world_record: &WorldRecord<K, P::Kind>,
         header: &StandardHeader,
     ) {
         self.connection
@@ -236,7 +235,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<P>>, guaranteed_delivery: bool) {
+    pub fn queue_message<R: ReplicateEq<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         return self.connection.queue_message(message, guaranteed_delivery);
     }
 
