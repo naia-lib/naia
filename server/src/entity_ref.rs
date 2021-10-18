@@ -1,4 +1,4 @@
-use naia_shared::{EntityType, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType};
+use naia_shared::{EntityType, ProtocolType, Replicate, WorldMutType, WorldRefType};
 
 use super::{room::room_key::RoomKey, server::Server, user::user_key::UserKey};
 
@@ -34,7 +34,7 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P,
     }
 
     /// Gets a Ref to a Component associated with the Entity
-    pub fn component<R: Replicate<P>>(&self) -> Option<Ref<R>> {
+    pub fn component<R: Replicate<P>>(&self) -> Option<R> {
         return self.world.get_component::<R>(&self.id);
     }
 
@@ -81,7 +81,7 @@ impl<'s, 'w, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s
         return self.world.has_component::<R>(&self.id);
     }
 
-    pub fn component<R: Replicate<P>>(&self) -> Option<Ref<R>> {
+    pub fn component<R: Replicate<P>>(&self) -> Option<R> {
         return self.world.get_component::<R>(&self.id);
     }
 
@@ -100,7 +100,7 @@ impl<'s, 'w, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s
         self
     }
 
-    pub fn remove_component<R: Replicate<P>>(&mut self) -> Option<Ref<R>> {
+    pub fn remove_component<R: Replicate<P>>(&mut self) -> Option<R> {
         return self
             .server
             .remove_component::<R, W>(&mut self.world, &self.id);

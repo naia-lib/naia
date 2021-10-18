@@ -17,7 +17,7 @@ use naia_server_socket::{
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, EntityType, Instant,
     KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType,
-    PropertyMutate, ProtocolType, Ref, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
+    PropertyMutate, ProtocolType, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };
 
@@ -27,8 +27,8 @@ use super::{
     error::NaiaServerError,
     event::Event,
     keys::ComponentKey,
-    mut_handler::MutHandler,
-    property_mutator::PropertyMutator,
+    global_diff_handler::GlobalDiffHandler,
+    component_diff_handler::ComponentDiffHandler,
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},
     server_config::ServerConfig,
     tick_manager::TickManager,
@@ -56,12 +56,12 @@ pub struct Server<P: ProtocolType, K: EntityType> {
     // Rooms
     rooms: DenseSlotMap<RoomKey, Room<K>>,
     // Entities
-    world_record: WorldRecord<K>,
+    world_record: WorldRecord<K, P::Kind>,
     entity_owner_map: HashMap<K, UserKey>,
     entity_room_map: HashMap<K, RoomKey>,
     entity_scope_map: HashMap<(UserKey, K), bool>,
     // Components
-    mut_handler: Ref<MutHandler>,
+    diff_handler: GlobalDiffHandler,
     // Events
     outstanding_connects: VecDeque<UserKey>,
     outstanding_disconnects: VecDeque<UserKey>,
@@ -113,7 +113,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
             entity_room_map: HashMap::new(),
             entity_scope_map: HashMap::new(),
             // Components
-            mut_handler: MutHandler::new(),
+            diff_handler: GlobalDiffHandler::new(),
             // Events
             outstanding_auths: VecDeque::new(),
             outstanding_connects: VecDeque::new(),
@@ -618,10 +618,11 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
             panic!("attempted to add component to non-existent entity");
         }
 
-        let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
-        let type_id = &dyn_ref.borrow().get_type_id();
+        //let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
+        //let type_id = &dyn_ref.borrow().get_type_id();
+        let component_kind = component_ref.get_kind();
 
-        if world.has_component_of_type(entity, &type_id) {
+        if world.has_component_of_kind(entity, &component_kind) {
             panic!(
                 "attempted to add component to entity which already has one of that type! \
                    an entity is not allowed to have more than 1 type of component at a time."
@@ -650,7 +651,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         &mut self,
         world: &mut W,
         entity: &K,
-    ) -> Option<Ref<R>> {
+    ) -> Option<R> {
         // get at record
         if let Some(component_ref) = world.get_component::<R>(entity) {
             // get component key from type
@@ -1095,19 +1096,21 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     // Component Helpers
 
     fn component_init<R: Replicate<P>>(&mut self, entity: &K, component_ref: &R) -> ComponentKey {
-        let dyn_ref = component_ref.dyn_ref();
-        let new_mutator_ref: Ref<PropertyMutator> =
-            Ref::new(PropertyMutator::new(&self.mut_handler));
-
-        dyn_ref
-            .borrow_mut()
-            .set_mutator(&to_property_mutator(new_mutator_ref.clone()));
 
         let component_key = self
             .world_record
-            .add_component(entity, &dyn_ref.borrow().get_type_id());
+            .add_component(entity, &component_ref.get_kind());
 
-        new_mutator_ref
+        let diff_sender = self.diff_handler.register_component(&component_key);
+
+        let component_diff_handler: Arc<Mutex<ComponentDiffHandler>> =
+            Arc::new(Mutex::new(ComponentDiffHandler::new(diff_sender)));
+
+        component_ref.set_mutator(&component_diff_handler);
+
+
+
+        component_diff_handler
             .borrow_mut()
             .set_component_key(component_key);
         self.mut_handler
@@ -1162,13 +1165,4 @@ impl Io {
             .expect("Cannot call Server.receive_packet() until you call Server.listen()!")
             .receive();
     }
-}
-
-fn to_property_mutator_raw(eref: Arc<Mutex<PropertyMutator>>) -> Arc<Mutex<dyn PropertyMutate>> {
-    eref.clone()
-}
-
-fn to_property_mutator(eref: Ref<PropertyMutator>) -> Ref<dyn PropertyMutate> {
-    let upcast_ref = to_property_mutator_raw(eref.inner());
-    Ref::new_raw(upcast_ref)
 }

@@ -4,7 +4,7 @@ use crate::{diff_mask::DiffMask, protocol_type::{ProtocolType, ProtocolKindType}
 
 /// A Replica is a Message/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
-pub trait Replicate: Sync + Send + 'static {
+pub trait Replicate: Clone + Sync + Send + 'static {
     type Protocol: ProtocolType;
     type Kind: ProtocolKindType;
 

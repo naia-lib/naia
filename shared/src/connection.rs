@@ -2,12 +2,12 @@ use std::net::SocketAddr;
 
 use naia_socket_shared::{PacketReader, Timer};
 
-use crate::{wrapping_diff, MessageManager};
+use crate::{wrapping_number::wrapping_diff, message_manager::MessageManager};
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
     packet_notifiable::PacketNotifiable, packet_type::PacketType, protocol_type::ProtocolType,
-    sequence_buffer::SequenceNumber, standard_header::StandardHeader,
+    sequence_buffer::SequenceNumber, standard_header::StandardHeader, impls::{Replicate, ReplicateEq}
 };
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -116,7 +116,7 @@ impl<P: ProtocolType> Connection<P> {
     }
 
     /// Queue up a message to be sent to the remote host
-    pub fn queue_message(&mut self, message: P, guaranteed_delivery: bool) {
+    pub fn queue_message<R: ReplicateEq<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         return self
             .message_manager
             .queue_outgoing_message(message, guaranteed_delivery);
