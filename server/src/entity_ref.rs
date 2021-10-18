@@ -118,7 +118,7 @@ impl<'s, 'w, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s
 
     pub fn set_owner(&mut self, user_key: &UserKey) -> &mut Self {
         // user_own?
-        self.server.entity_set_owner(self.world, &self.id, user_key);
+        self.server.entity_set_owner(&self.id, user_key);
 
         self
     }

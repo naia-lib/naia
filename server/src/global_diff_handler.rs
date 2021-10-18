@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::SocketAddr};
 
-use super::{keys::ComponentKey, mutcaster::{Mutcaster, MutSender, MutReceiver, MutReceiverBuilder}};
+use super::{keys::ComponentKey, mut_channel::{MutChannel, MutSender, MutReceiver, MutReceiverBuilder}};
 
 pub struct GlobalDiffHandler {
     mut_receiver_builders: HashMap<ComponentKey, MutReceiverBuilder>,
@@ -14,7 +14,7 @@ impl GlobalDiffHandler {
     }
 
     // For Server
-    pub fn register_component(&mut self, component_key: &ComponentKey) -> MutSender {
+    pub fn register_component(&mut self, component_key: &ComponentKey, diff_mask_length: u8) -> MutSender {
         if self
             .mut_receiver_builders
             .contains_key(component_key)
@@ -22,7 +22,7 @@ impl GlobalDiffHandler {
             panic!("Component cannot register with Server more than once!");
         }
 
-        let (sender, builder) = Mutcaster::new_channel();
+        let (sender, builder) = MutChannel::new_channel(diff_mask_length);
 
         self.mut_receiver_builders.insert(*component_key, builder);
 
