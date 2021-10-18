@@ -7,6 +7,8 @@ use super::impls::Replicate;
 pub trait ProtocolType: Sized + Sync + Send + Clone + 'static {
     type Kind: ProtocolKindType;
 
+    /// Get kind of Replicate type
+    fn kind_of<R: Replicate<Self>>() -> Self::Kind;
     /// Get an immutable reference to the inner Component/Message as a Replicate trait object
     fn dyn_ref(&self) -> DynRef<'_, Self>;
     /// Get an mutable reference to the inner Component/Message as a Replicate trait object
@@ -17,7 +19,10 @@ pub trait ProtocolType: Sized + Sync + Send + Clone + 'static {
     fn cast_mut<R: Replicate<Self>>(&mut self) -> Option<&mut R>;
 }
 
-pub trait ProtocolKindType: Eq + Hash + Copy {}
+pub trait ProtocolKindType: Eq + Hash + Copy {
+    fn to_u16(&self) -> u16;
+    fn from_u16(val: u16) -> Self;
+}
 
 // DynRef
 

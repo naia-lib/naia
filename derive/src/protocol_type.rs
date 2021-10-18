@@ -53,34 +53,69 @@ pub fn get_variants(data: &Data) -> Vec<Ident> {
 pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
     let hashtag = Punct::new('#', Spacing::Alone);
 
-    let mut variant_index: u8 = 0;
     let mut variant_list = quote! {};
-    for variant in properties {
-        let uppercase_variant_name = Ident::new(
-            &variant.to_string(),
-            Span::call_site(),
-        );
 
-        let new_output_right = quote! {
+    {
+        let mut variant_index: u16 = 0;
+        for variant in properties {
+            let uppercase_variant_name = Ident::new(
+                &variant.to_string(),
+                Span::call_site(),
+            );
+
+            let new_output_right = quote! {
             #uppercase_variant_name = #variant_index,
         };
-        let new_output_result = quote! {
+            let new_output_result = quote! {
             #variant_list
             #new_output_right
         };
-        variant_list = new_output_result;
+            variant_list = new_output_result;
 
-        variant_index += 1;
+            variant_index += 1;
+        }
+    }
+
+    let mut variant_match = quote! {};
+    {
+        let mut variant_index: u16 = 0;
+
+        for variant in properties {
+            let uppercase_variant_name = Ident::new(
+                &variant.to_string(),
+                Span::call_site(),
+            );
+
+            let new_output_right = quote! {
+                #variant_index => #enum_name::#uppercase_variant_name,
+            };
+            let new_output_result = quote! {
+                #variant_match
+                #new_output_right
+            };
+            variant_match = new_output_result;
+
+            variant_index += 1;
+        }
     }
 
     return quote! {
-        #hashtag[repr(u8)]
+        #hashtag[repr(u16)]
         #hashtag[derive(Hash, Eq, PartialEq, Copy, Clone)]
         pub enum #enum_name {
             #variant_list
         }
 
-        impl ProtocolKindType for #enum_name {}
+        impl ProtocolKindType for #enum_name {
+            fn to_u16(&self) -> u16 {
+                return *self;
+            }
+            fn from_u16(val: u16) -> Self {
+                match val {
+                    #variant_match
+                }
+            }
+        }
     };
 }
 

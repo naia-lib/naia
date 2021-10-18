@@ -3,7 +3,7 @@ use std::{default::Default, time::Duration};
 use naia_shared::SocketConfig;
 
 /// Contains Config properties which will be used by a Server or Client
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ServerConfig {
     /// Used to configure the Server's underlying socket
     pub socket_config: SocketConfig,

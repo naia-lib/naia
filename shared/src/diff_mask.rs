@@ -101,7 +101,7 @@ impl DiffMask {
     }
 
     /// Writes the DiffMask into an outgoing byte stream
-    pub fn write(&mut self, out_bytes: &mut Vec<u8>) {
+    pub fn write(&self, out_bytes: &mut Vec<u8>) {
         out_bytes.write_u8(self.bytes).unwrap();
         for x in 0..self.bytes {
             out_bytes.write_u8(self.mask[x as usize]).unwrap();

@@ -1,9 +1,8 @@
 use std::{
-    any::TypeId,
     collections::{HashMap, VecDeque},
     net::SocketAddr,
     panic,
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 
 use byteorder::{BigEndian, WriteBytesExt};
@@ -17,8 +16,8 @@ use naia_server_socket::{
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, EntityType, Instant,
     KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType,
-    PropertyMutate, ProtocolType, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
-    WorldMutType, WorldRefType,
+    PropertyMutate, PropertyMutator, ProtocolType, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
+    WorldMutType, WorldRefType, ReplicateEq, ProtocolKindType
 };
 
 use super::{
@@ -61,7 +60,7 @@ pub struct Server<P: ProtocolType, K: EntityType> {
     entity_room_map: HashMap<K, RoomKey>,
     entity_scope_map: HashMap<(UserKey, K), bool>,
     // Components
-    diff_handler: GlobalDiffHandler,
+    diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     // Events
     outstanding_connects: VecDeque<UserKey>,
     outstanding_disconnects: VecDeque<UserKey>,
@@ -113,7 +112,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
             entity_room_map: HashMap::new(),
             entity_scope_map: HashMap::new(),
             // Components
-            diff_handler: GlobalDiffHandler::new(),
+            diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
             // Events
             outstanding_auths: VecDeque::new(),
             outstanding_connects: VecDeque::new(),
@@ -157,8 +156,8 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
                 let mut new_connection = ClientConnection::new(
                     user.address,
-                    Some(&self.mut_handler),
                     &self.connection_config,
+                    &self.diff_handler,
                 );
                 //new_connection.process_incoming_header(&header);// not sure if I should
                 // uncomment this...
@@ -243,15 +242,14 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn queue_message<R: Replicate<P>>(
+    pub fn queue_message<R: ReplicateEq<P>>(
         &mut self,
         user_key: &UserKey,
         message_ref: &R,
         guaranteed_delivery: bool,
     ) {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
-            let dyn_ref = message_ref.dyn_ref();
-            connection.queue_message(&dyn_ref, guaranteed_delivery);
+            connection.queue_message(message_ref, guaranteed_delivery);
         }
     }
 
@@ -297,7 +295,6 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                     &world,
                     &self.world_record,
                     self.tick_manager.get_tick(),
-                    &self.manifest,
                 ) {
                     self.io.send_packet(Packet::new_raw(user.address, payload));
                     connection.mark_sent();
@@ -612,7 +609,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         &mut self,
         world: &mut W,
         entity: &K,
-        component_ref: R,
+        mut component_ref: R,
     ) {
         if !world.has_entity(entity) {
             panic!("attempted to add component to non-existent entity");
@@ -630,7 +627,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         }
 
         // generate unique component key
-        let component_key: ComponentKey = self.component_init(entity, &component_ref);
+        let component_key: ComponentKey = self.component_init(entity, &mut component_ref);
 
         // actually insert component into world
         world.insert_component(entity, component_ref);
@@ -655,9 +652,10 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         // get at record
         if let Some(component_ref) = world.get_component::<R>(entity) {
             // get component key from type
+            let component_kind = P::kind_of::<R>();
             let component_key = self
                 .world_record
-                .get_key_from_type(entity, &TypeId::of::<R>())
+                .get_key_from_type(entity, &component_kind)
                 .expect("component does not exist!");
 
             // clean up component on all connections
@@ -932,11 +930,11 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                                     let user = User::new(address, timestamp);
                                     let user_key = self.users.insert(user);
 
-                                    // Return authorization event
-                                    let naia_id = reader.read_u16();
+                                    // Return authorization eventP
+                                    let replica_kind = P::Kind::from_u16(reader.read_u16());
 
                                     let auth_message =
-                                        self.manifest.create_replica(naia_id, &mut reader);
+                                        self.manifest.create_replica(replica_kind, &mut reader, 0);
 
                                     self.outstanding_auths.push_back((user_key, auth_message));
                                 }
@@ -1095,35 +1093,24 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     // Component Helpers
 
-    fn component_init<R: Replicate<P>>(&mut self, entity: &K, component_ref: &R) -> ComponentKey {
+    fn component_init<R: Replicate<P>>(&mut self, entity: &K, component_ref: &mut R) -> ComponentKey {
 
         let component_key = self
             .world_record
             .add_component(entity, &component_ref.get_kind());
 
-        let diff_sender = self.diff_handler.register_component(&component_key);
+        let mut_sender = self.diff_handler.as_ref().write().expect("DiffHandler should be initialized").register_component(&component_key);
 
-        let component_diff_handler: Arc<Mutex<ComponentDiffHandler>> =
-            Arc::new(Mutex::new(ComponentDiffHandler::new(diff_sender)));
+        let component_diff_handler = PropertyMutator::new(ComponentDiffHandler::new(&mut_sender));
 
-        component_ref.set_mutator(&component_diff_handler);
-
-
-
-        component_diff_handler
-            .borrow_mut()
-            .set_component_key(component_key);
-        self.mut_handler
-            .borrow_mut()
-            .register_component(&component_key);
+        component_ref.set_mutator(component_diff_handler);
 
         return component_key;
     }
 
     fn component_cleanup(&mut self, component_key: &ComponentKey) {
         self.world_record.remove_component(component_key);
-        self.mut_handler
-            .borrow_mut()
+        self.diff_handler.as_ref().write().expect("Haven't initialized DiffHandler")
             .deregister_component(component_key);
     }
 }

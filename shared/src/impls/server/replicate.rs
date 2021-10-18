@@ -1,4 +1,4 @@
-use crate::{diff_mask::DiffMask, property_mutate::PropertyMutator, protocol_type::{ProtocolType, ProtocolKindType}};
+use crate::{diff_mask::DiffMask, property_mutate::PropertyMutator, protocol_type::ProtocolType};
 
 /// A Replica is a Message/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
@@ -18,7 +18,7 @@ pub trait Replicate<P: ProtocolType>: Sync + Send + 'static {
     /// Set the Message/Component's PropertyMutator, which keeps track
     /// of which Properties have been mutated, necessary to sync only the
     /// Properties that have changed with the client
-    fn set_mutator(&mut self, mutator: &PropertyMutator);
+    fn set_mutator(&mut self, mutator: PropertyMutator);
     /// Returns self
     fn to_protocol(self) -> P;
 }

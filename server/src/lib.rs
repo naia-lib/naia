@@ -10,7 +10,6 @@
     unused_import_braces
 )]
 
-#[macro_use]
 extern crate cfg_if;
 
 #[macro_use]
@@ -32,6 +31,7 @@ pub use naia_shared::{
     SocketConfig, WorldMutType, WorldRefType,
 };
 
+mod mutcaster;
 mod client_connection;
 mod command_receiver;
 mod entity_action;
@@ -47,6 +47,7 @@ mod global_diff_handler;
 mod packet_writer;
 mod ping_manager;
 mod component_diff_handler;
+mod user_diff_handler;
 mod room;
 mod server;
 mod server_config;

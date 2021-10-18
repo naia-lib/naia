@@ -3,9 +3,7 @@ use std::time::Duration;
 use naia_shared::Timer;
 
 /// Manages the current tick for the host
-#[derive(Debug)]
 pub struct TickManager {
-    tick_interval: Duration,
     current_tick: u16,
     timer: Timer,
 }
@@ -14,7 +12,6 @@ impl TickManager {
     /// Create a new TickManager with a given tick interval duration
     pub fn new(tick_interval: Duration) -> Self {
         TickManager {
-            tick_interval,
             current_tick: 0,
             timer: Timer::new(tick_interval),
         }
