@@ -2,7 +2,7 @@ use nanoserde::{DeBin, SerBin};
 
 use naia_socket_shared::PacketReader;
 
-use crate::property_mutate::PropertyMutator;
+use crate::{property_mutate::PropertyMutator, wrapping_number::sequence_greater_than};
 
 /// A Property of an Component/Message, that contains data
 /// which must be tracked for updates
@@ -11,22 +11,46 @@ pub struct Property<T: Clone + DeBin + SerBin + PartialEq> {
     inner: T,
     mutator: Option<PropertyMutator>,
     mutator_index: u8,
+    last_recv_index: u16,
 }
 
 // should be shared
 impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
     /// Create a new Property
-    pub fn new(value: T, mutator_index: u8) -> Property<T> {
+    pub fn new(value: T, mutator_index: u8, packet_index: u16) -> Property<T> {
         return Property::<T> {
             inner: value,
-            mutator_index,
             mutator: None,
+            mutator_index,
+            last_recv_index: packet_index,
         };
     }
 
     /// Given a cursor into incoming packet data, initializes the Property with
     /// the synced value
-    pub fn new_read(reader: &mut PacketReader, mutator_index: u8) -> Self {
+    pub fn new_read(reader: &mut PacketReader, mutator_index: u8, packet_index: u16) -> Self {
+        let inner = Self::read_inner(reader);
+
+        return Property::<T> {
+            inner,
+            mutator: None,
+            mutator_index,
+            last_recv_index: packet_index,
+        };
+    }
+
+    /// Given a cursor into incoming packet data, updates the Property with the
+    /// synced value, but only if data is newer than the last data received
+    pub fn read(&mut self, reader: &mut PacketReader, packet_index: u16) {
+        let inner = Self::read_inner(reader);
+
+        if sequence_greater_than(packet_index, self.last_recv_index) {
+            self.last_recv_index = packet_index;
+            self.inner = inner;
+        }
+    }
+
+    fn read_inner(reader: &mut PacketReader) -> T {
         let length = reader.read_u8();
 
         let buffer = reader.get_buffer();
@@ -40,11 +64,7 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
 
         cursor.set_position(end as u64);
 
-        return Property::<T> {
-            inner,
-            mutator_index,
-            mutator: None,
-        };
+        return inner;
     }
 
     /// Gets a mutable reference to the value contained by the Property, queue
@@ -62,11 +82,6 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
             mutator.mutate(self.mutator_index);
         }
         self.inner = value;
-    }
-
-    /// Set an PropertyMutator to track changes to the Property
-    pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
-        self.mutator = Some(mutator.clone_new());
     }
 
     /// Gets a reference to the value contained by the Property
@@ -89,5 +104,10 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
         let encoded = &mut SerBin::serialize_bin(&self.inner);
         buffer.push(encoded.len() as u8);
         buffer.append(encoded);
+    }
+
+    /// Set an PropertyMutator to track changes to the Property
+    pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
+        self.mutator = Some(mutator.clone_new());
     }
 }

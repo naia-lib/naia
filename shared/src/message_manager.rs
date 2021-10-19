@@ -6,7 +6,7 @@ use std::{
 use naia_socket_shared::PacketReader;
 
 use super::{
-    impls::{ProtocolType, ReplicateEq},
+    protocol_type::ProtocolType, replicate::ReplicateEq,
     manifest::Manifest,
     packet_notifiable::PacketNotifiable,
     protocol_type::ProtocolKindType,

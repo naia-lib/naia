@@ -138,9 +138,7 @@ impl<P: ProtocolType, E: EntityType> Client<P, E> {
         world: W,
         entity: &E,
     ) -> EntityRef<'s, P, E, W> {
-        //        if world.has_entity(entity) {
         return EntityRef::new(self, world, &entity);
-        //        }
     }
 
     /// Return a list of all Entities

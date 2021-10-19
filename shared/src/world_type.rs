@@ -1,7 +1,7 @@
 use super::{
     entity_type::EntityType,
-    impls::{ProtocolType, Replicate, ReplicateEq},
-    protocol_type::ProtocolExtractor,
+    replicate::{Replicate, ReplicateEq},
+    protocol_type::{ProtocolType, ProtocolExtractor},
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded

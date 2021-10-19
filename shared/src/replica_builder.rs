@@ -1,6 +1,6 @@
 use naia_socket_shared::PacketReader;
 
-use super::impls::ProtocolType;
+use super::protocol_type::ProtocolType;
 
 /// Handles the creation of new Replica (Message/Component) instances
 pub trait ReplicaBuilder<P: ProtocolType>: Send + Sync {

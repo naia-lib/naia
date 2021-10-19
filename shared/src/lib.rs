@@ -8,29 +8,13 @@
     unused_import_braces
 )]
 
-#[macro_use]
-extern crate cfg_if;
-
-cfg_if! {
-    if #[cfg(all(feature = "client", feature = "server"))]
-    {
-        // Use both protocols...
-        compile_error!("naia-shared requires either the 'client' OR 'server' feature to be enabled, you must pick one.");
-    }
-    else if #[cfg(all(not(feature = "client"), not(feature = "server")))]
-    {
-        // Use no protocols...
-        compile_error!("naia-shared requires either the 'client' OR 'server' feature to be enabled, you must pick one.");
-    }
-}
-
 mod ack_manager;
 mod connection;
 mod connection_config;
 mod diff_mask;
 mod entity_action_type;
 mod entity_type;
-mod impls;
+mod replicate;
 mod key_store;
 mod keys;
 mod manager_type;
@@ -47,6 +31,7 @@ mod shared_config;
 mod standard_header;
 mod world_type;
 mod wrapping_number;
+mod property;
 
 /// Commonly used utility methods to be used by naia-server & naia-client
 pub mod utils;
@@ -61,7 +46,9 @@ pub use connection_config::ConnectionConfig;
 pub use diff_mask::DiffMask;
 pub use entity_action_type::EntityActionType;
 pub use entity_type::EntityType;
-pub use impls::{Property, ProtocolType, Replicate, ReplicateEq};
+pub use property::Property;
+pub use replicate::{ReplicateEq, Replicate};
+pub use protocol_type::ProtocolType;
 pub use key_store::KeyGenerator;
 pub use keys::{LocalComponentKey, LocalEntity, NaiaKey};
 pub use manager_type::ManagerType;
