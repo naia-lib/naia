@@ -3,8 +3,6 @@ use nanoserde::{DeBin, SerBin};
 use naia_derive::Replicate;
 use naia_shared::Property;
 
-use super::Protocol;
-
 // Here's an example of a Custom Property
 #[derive(Default, PartialEq, Clone, DeBin, SerBin)]
 pub struct Fullname {
@@ -13,6 +11,7 @@ pub struct Fullname {
 }
 
 #[derive(Replicate, Clone)]
+#[protocol_path = "crate::protocol::Protocol"]
 pub struct Name {
     pub full: Property<Fullname>,
 }

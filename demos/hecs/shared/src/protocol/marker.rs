@@ -1,9 +1,8 @@
 use naia_derive::Replicate;
 use naia_shared::Property;
 
-use super::Protocol;
-
 #[derive(Replicate, Clone)]
+#[protocol_path = "crate::protocol::Protocol"]
 pub struct Marker {
     pub name: Property<String>,
 }

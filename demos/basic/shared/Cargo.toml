@@ -10,8 +10,6 @@ license = "MIT OR Apache-2.0"
 [features]
 wbindgen = [ "naia-shared/wbindgen" ]
 mquad = [ "naia-shared/mquad" ]
-client = [ "naia-derive/client" ]
-server = [ "naia-derive/server" ]
 
 [dependencies]
 naia-shared = { path = "../../../shared" }

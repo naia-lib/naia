@@ -1,4 +1,5 @@
 use std::{
+    any::TypeId,
     hash::Hash,
     ops::{Deref, DerefMut},
 };
@@ -15,6 +16,8 @@ pub trait ProtocolType: Sized + Sync + Send + Clone + 'static {
 
     /// Get kind of Replicate type
     fn kind_of<R: Replicate<Self>>() -> Self::Kind;
+    /// Get kind from a type_id
+    fn type_to_kind(type_id: TypeId) -> Self::Kind;
     /// Get an immutable reference to the inner Component/Message as a Replicate
     /// trait object
     fn dyn_ref(&self) -> DynRef<'_, Self>;

@@ -42,7 +42,7 @@ pub trait WorldMutType<P: ProtocolType, E: EntityType>:
 
     // Components
     /// gets all of an Entity's Components as a list of Kinds
-    fn get_components(&mut self, entity: &E) -> Vec<P>;
+    fn copy_components(&mut self, entity: &E) -> Vec<P>;
     /// gets an entity's component
     fn get_component_mut<R: Replicate<P>>(&mut self, entity: &E) -> Option<&mut R>;
     /// gets a mutable component by type
