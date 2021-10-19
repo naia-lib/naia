@@ -297,7 +297,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                                 "component should still exist in the World, was it tampered with?",
                             );
 
-                        world.remove_component_by_type(&world_entity, &component_type);
+                        world.remove_component_of_kind(&world_entity, &component_type);
 
                         // Generate event
                         self.queued_incoming_messages

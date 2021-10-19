@@ -1,6 +1,6 @@
 use std::{ops::{DerefMut, Deref}, hash::Hash};
 
-use super::impls::Replicate;
+use super::impls::{Replicate, ReplicateEq};
 
 /// An Enum with a variant for every Component/Message that can be sent
 /// between Client/Host
@@ -13,6 +13,8 @@ pub trait ProtocolType: Sized + Sync + Send + Clone + 'static {
     fn dyn_ref(&self) -> DynRef<'_, Self>;
     /// Get an mutable reference to the inner Component/Message as a Replicate trait object
     fn dyn_mut(&mut self) -> DynMut<'_, Self>;
+    /// Cast to a ReplicateEq impl
+    fn cast<R: ReplicateEq<Self>>(self) -> Option<R>;
     /// Cast to a typed immutable reference to the inner Component/Message
     fn cast_ref<R: Replicate<Self>>(&self) -> Option<&R>;
     /// Cast to a typed mutable reference to the inner Component/Message

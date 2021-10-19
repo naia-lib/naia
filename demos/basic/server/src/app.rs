@@ -59,7 +59,7 @@ impl App {
                 let character = Character::new((count * 4) as u8, 0, first, last);
                 let character_key = server
                     .spawn_entity(&mut world.proxy_mut())
-                    .insert_component(&character)
+                    .insert_component(character)
                     .id();
 
                 // Add the Character Entity to the main Room
@@ -78,10 +78,9 @@ impl App {
     pub fn update(&mut self) {
         for event in self.server.receive(self.world.proxy()) {
             match event {
-                Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
-                    let auth_message = auth_ref.borrow();
-                    let username = auth_message.username.get();
-                    let password = auth_message.password.get();
+                Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {
+                    let username = auth.username.get();
+                    let password = auth.password.get();
                     if username == "charlie" && password == "12345" {
                         // Accept incoming connection
                         self.server.accept_connection(&user_key);
@@ -102,8 +101,7 @@ impl App {
                 Ok(Event::Disconnection(_, user)) => {
                     info!("Naia Server disconnected from: {:?}", user.address);
                 }
-                Ok(Event::Message(user_key, Protocol::StringMessage(message_ref))) => {
-                    let message = message_ref.borrow();
+                Ok(Event::Message(user_key, Protocol::StringMessage(message))) => {
                     let message_contents = message.contents.get();
                     info!(
                         "Server recv from ({}) <- {}",
@@ -129,23 +127,23 @@ impl App {
 
                     // Iterate through Characters, marching them from (0,0) to (20, N)
                     for entity in self.server.entities(&self.world.proxy()) {
-                        if let Some(character_ref) = self
+                        if let Some(character) = self
                             .server
-                            .entity(self.world.proxy(), &entity)
+                            .entity_mut(&mut self.world.proxy_mut(), &entity)
                             .component::<Character>()
                         {
-                            character_ref.borrow_mut().step();
+                            character.step();
                         }
                     }
 
                     // Update scopes of entities
                     for (_, user_key, entity) in self.server.scope_checks() {
-                        if let Some(character_ref) = self
+                        if let Some(character) = self
                             .server
-                            .entity(self.world.proxy(), &entity)
+                            .entity_mut(&mut self.world.proxy_mut(), &entity)
                             .component::<Character>()
                         {
-                            let x = *character_ref.borrow().x.get();
+                            let x = *character.x.get();
                             if x >= 5 && x <= 15 {
                                 self.server.user_scope(&user_key).include(&entity);
                             } else {

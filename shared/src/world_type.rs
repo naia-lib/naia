@@ -1,9 +1,7 @@
-use std::any::TypeId;
-
 use super::{
     entity_type::EntityType,
     protocol_type::ProtocolType,
-    impls::Replicate,
+    impls::{Replicate, ReplicateEq},
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -24,7 +22,7 @@ pub trait WorldRefType<P: ProtocolType, K: EntityType> {
     /// check whether entity contains component, dynamically
     fn has_component_of_kind(&self, entity_key: &K, component_kind: &P::Kind) -> bool;
     /// gets an entity's component
-    fn get_component<R: Replicate<P>>(&self, entity_key: &K) -> Option<R>;
+    fn get_component<R: Replicate<P>>(&self, entity_key: &K) -> Option<&R>;
     /// gets an entity's component, dynamically
     fn get_component_of_kind(&self, entity_key: &K, component_kind: &P::Kind) -> Option<P>;
 }
@@ -32,8 +30,7 @@ pub trait WorldRefType<P: ProtocolType, K: EntityType> {
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
 /// the WorldMutType in-sync with it's own Entities/Components
-pub trait WorldMutType<P: ProtocolType, K: EntityType>:
-    WorldRefType<P, K>
+pub trait WorldMutType<P: ProtocolType, K: EntityType>: WorldRefType<P, K>
 {
     // Entities
 
@@ -43,13 +40,14 @@ pub trait WorldMutType<P: ProtocolType, K: EntityType>:
     fn despawn_entity(&mut self, entity_key: &K);
 
     // Components
-
+    /// gets an entity's component
+    fn get_component_mut<R: Replicate<P>>(&mut self, entity_key: &K) -> Option<&mut R>;
     /// gets all of an entity's components, as a Protocol
     fn get_components(&mut self, entity_key: &K) -> Vec<P>;
     /// insert a component
     fn insert_component<R: Replicate<P>>(&mut self, entity_key: &K, component_ref: R);
-    /// remove a component by type
-    fn remove_component<R: Replicate<P>>(&mut self, entity_key: &K);
-    /// remove a component by type
-    fn remove_component_by_type(&mut self, entity_key: &K, type_id: &TypeId);
+    /// remove a component
+    fn remove_component<R: ReplicateEq<P>>(&mut self, entity_key: &K) -> Option<R>;
+    /// remove a component by kind
+    fn remove_component_of_kind(&mut self, entity_key: &K, component_kind: &P::Kind) -> Option<P>;
 }

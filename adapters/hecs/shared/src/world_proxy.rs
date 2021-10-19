@@ -164,7 +164,7 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd> {
             .expect("error removing Component");
     }
 
-    fn remove_component_by_type(&mut self, entity: &Entity, type_id: &TypeId) {
+    fn remove_component_of_kind(&mut self, entity: &Entity, type_id: &TypeId) {
         if let Some(accessor) = self.world_data.get_component_access::<P>(type_id) {
             accessor.remove_component(self.world, entity);
         }

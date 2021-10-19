@@ -642,39 +642,33 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     }
 
     /// Removes a Component from an Entity
-    pub(crate) fn remove_component<R: Replicate<P>, W: WorldMutType<P, K>>(
+    pub(crate) fn remove_component<R: ReplicateEq<P>, W: WorldMutType<P, K>>(
         &mut self,
         world: &mut W,
         entity: &K,
     ) -> Option<R> {
-        // get at record
-        if let Some(component_ref) = world.get_component::<R>(entity) {
-            // get component key from type
-            let component_kind = P::kind_of::<R>();
-            let component_key = self
-                .world_record
-                .get_key_from_type(entity, &component_kind)
-                .expect("component does not exist!");
+        // get component key from type
+        let component_kind = P::kind_of::<R>();
+        let component_key = self
+            .world_record
+            .get_key_from_type(entity, &component_kind)
+            .expect("component does not exist!");
 
-            // clean up component on all connections
-            // TODO: should be able to make this more efficient by caching for every Entity
-            // which scopes they are part of
-            for (user_key, _) in self.users.iter() {
-                if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                    //remove component from user connection
-                    client_connection.remove_component(&component_key);
-                }
+        // clean up component on all connections
+        // TODO: should be able to make this more efficient by caching for every Entity
+        // which scopes they are part of
+        for (user_key, _) in self.users.iter() {
+            if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
+                //remove component from user connection
+                client_connection.remove_component(&component_key);
             }
-
-            // cleanup all other loose ends
-            self.component_cleanup(&component_key);
-
-            // remove from world
-            world.remove_component::<R>(entity);
-
-            return Some(component_ref);
         }
-        return None;
+
+        // cleanup all other loose ends
+        self.component_cleanup(&component_key);
+
+        // remove from world
+        return world.remove_component::<R>(entity);
     }
 
     //// Users
@@ -1106,7 +1100,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
         let prop_mutator = PropertyMutator::new(mut_sender);
 
-        component_ref.set_mutator(prop_mutator);
+        component_ref.set_mutator(&prop_mutator);
 
         return component_key;
     }
