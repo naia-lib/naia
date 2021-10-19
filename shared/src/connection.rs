@@ -6,7 +6,7 @@ use crate::{wrapping_number::wrapping_diff, message_manager::MessageManager};
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
-    packet_notifiable::PacketNotifiable, packet_type::PacketType, protocol_type::ProtocolType,
+    packet_notifiable::PacketNotifiable, packet_type::PacketType, impls::ProtocolType,
     sequence_buffer::SequenceNumber, standard_header::StandardHeader, impls::ReplicateEq
 };
 

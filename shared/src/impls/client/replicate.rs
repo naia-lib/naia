@@ -1,6 +1,6 @@
 use naia_socket_shared::PacketReader;
 
-use crate::{diff_mask::DiffMask, protocol_type::ProtocolType};
+use crate::{diff_mask::DiffMask, impls::ProtocolType};
 
 /// A Replica is a Message/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
