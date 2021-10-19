@@ -27,7 +27,7 @@ impl UserDiffHandler {
     {
         if let Ok(global_handler) = self.global_diff_handler.as_ref().read() {
             let receiver = global_handler
-                .get_receiver(component_key, addr)
+                .get_receiver(addr, component_key)
                 .expect("GlobalDiffHandler has not yet registered this Component");
             self.receivers.insert(*component_key, receiver);
         }
