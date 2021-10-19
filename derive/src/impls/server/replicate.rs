@@ -10,12 +10,15 @@ pub fn get_builder_impl_methods(replica_name: &Ident, protocol_name: &Ident) -> 
     };
 }
 
-pub fn get_replica_impl_methods(protocol_name: &Ident,
-                                replica_name: &Ident,
-                                enum_name: &Ident,
-                                properties: &Vec<(Ident, Type)>) -> TokenStream {
+pub fn get_replica_impl_methods(
+    protocol_name: &Ident,
+    replica_name: &Ident,
+    enum_name: &Ident,
+    properties: &Vec<(Ident, Type)>,
+) -> TokenStream {
     let new_complete_method = get_new_complete_method(replica_name, enum_name, properties);
-    let read_to_type_method = get_read_to_type_method(protocol_name, replica_name, enum_name, properties);
+    let read_to_type_method =
+        get_read_to_type_method(protocol_name, replica_name, enum_name, properties);
 
     return quote! {
         #new_complete_method
@@ -23,7 +26,10 @@ pub fn get_replica_impl_methods(protocol_name: &Ident,
     };
 }
 
-pub fn get_replicate_derive_methods(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+pub fn get_replicate_derive_methods(
+    enum_name: &Ident,
+    properties: &Vec<(Ident, Type)>,
+) -> TokenStream {
     let write_partial_method = get_write_partial_method(enum_name, properties);
     let set_mutator_method = get_set_mutator_method(properties);
     let diff_mask_size = (((properties.len() - 1) / 8) + 1) as u8;

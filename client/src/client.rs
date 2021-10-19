@@ -5,9 +5,9 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, Socket};
 
 pub use naia_shared::{
-    ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader,
-    PacketType, ProtocolType, Replicate, SequenceIterator, SharedConfig, StandardHeader,
-    Timer, Timestamp, WorldMutType, WorldRefType, ProtocolKindType, ReplicateEq,
+    ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
+    ProtocolKindType, ProtocolType, Replicate, ReplicateEq, SequenceIterator, SharedConfig,
+    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -138,9 +138,9 @@ impl<P: ProtocolType, E: EntityType> Client<P, E> {
         world: W,
         entity: &E,
     ) -> EntityRef<'s, P, E, W> {
-//        if world.has_entity(entity) {
-            return EntityRef::new(self, world, &entity);
-//        }
+        //        if world.has_entity(entity) {
+        return EntityRef::new(self, world, &entity);
+        //        }
     }
 
     /// Return a list of all Entities
@@ -263,17 +263,11 @@ impl<P: ProtocolType, E: EntityType> Client<P, E> {
                 }
                 // receive replay command
                 while let Some((owned_entity, command)) = connection.get_incoming_replay() {
-                    events.push_back(Ok(Event::ReplayCommand(
-                        owned_entity,
-                        command,
-                    )));
+                    events.push_back(Ok(Event::ReplayCommand(owned_entity, command)));
                 }
                 // receive command
                 while let Some((owned_entity, command)) = connection.get_incoming_command() {
-                    events.push_back(Ok(Event::NewCommand(
-                        owned_entity,
-                        command,
-                    )));
+                    events.push_back(Ok(Event::NewCommand(owned_entity, command)));
                 }
                 // send heartbeats
                 if connection.should_send_heartbeat() {
@@ -297,8 +291,8 @@ impl<P: ProtocolType, E: EntityType> Client<P, E> {
                     );
                 }
                 // send a packet
-                while let Some(payload) = connection
-                    .get_outgoing_packet(self.tick_manager.get_client_tick())
+                while let Some(payload) =
+                    connection.get_outgoing_packet(self.tick_manager.get_client_tick())
                 {
                     self.io.send_packet(Packet::new_raw(payload));
                     connection.mark_sent();
@@ -370,7 +364,9 @@ impl<P: ProtocolType, E: EntityType> Client<P, E> {
                 if let Some(auth_message) = &mut self.auth_message {
                     let auth_dyn = auth_message.dyn_ref();
                     let auth_kind = auth_dyn.get_kind();
-                    payload_bytes.write_u16::<BigEndian>(auth_kind.to_u16()).unwrap(); // write kind
+                    payload_bytes
+                        .write_u16::<BigEndian>(auth_kind.to_u16())
+                        .unwrap(); // write kind
                     auth_dyn.write(&mut payload_bytes);
                 }
                 Client::<P, E>::internal_send_connectionless(

@@ -33,8 +33,14 @@ impl<E: EntityType> EntityScopeMap<E> {
             self.users_of_entity.insert(entity, HashSet::new());
         }
 
-        self.entities_of_user.get_mut(&user_key).unwrap().insert(entity);
-        self.users_of_entity.get_mut(&entity).unwrap().insert(user_key);
+        self.entities_of_user
+            .get_mut(&user_key)
+            .unwrap()
+            .insert(entity);
+        self.users_of_entity
+            .get_mut(&entity)
+            .unwrap()
+            .insert(user_key);
 
         self.main_map.insert((user_key, entity), in_scope);
     }

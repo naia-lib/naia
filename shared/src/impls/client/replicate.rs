@@ -5,7 +5,6 @@ use crate::{diff_mask::DiffMask, impls::ProtocolType};
 /// A Replica is a Message/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
 pub trait Replicate<P: ProtocolType>: Sync + Send + 'static {
-
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
     fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16);

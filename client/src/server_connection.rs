@@ -4,7 +4,7 @@ use naia_client_socket::Packet;
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, SequenceNumber, StandardHeader, WorldMutType, ReplicateEq,
+    ProtocolType, ReplicateEq, SequenceNumber, StandardHeader, WorldMutType,
 };
 
 use super::{
@@ -37,10 +37,7 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
         };
     }
 
-    pub fn get_outgoing_packet(
-        &mut self,
-        host_tick: u16
-    ) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(&mut self, host_tick: u16) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_messages() || !self.command_sender.is_empty() {
             let mut writer = PacketWriter::new();
 
@@ -104,7 +101,8 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
             let manager_type: ManagerType = reader.read_u8().into();
             match manager_type {
                 ManagerType::Message => {
-                    self.connection.process_message_data(&mut reader, manifest, packet_index);
+                    self.connection
+                        .process_message_data(&mut reader, manifest, packet_index);
                 }
                 ManagerType::Entity => {
                     self.entity_manager.process_data(

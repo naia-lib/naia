@@ -44,7 +44,10 @@ impl<P: ProtocolType, R: Replicate<P>> ComponentAccess<P> for ComponentAccessor<
     }
 }
 
-fn get_component_ref<P: ProtocolType, R: Replicate<P>>(world: &World, entity: &Entity) -> Option<R> {
+fn get_component_ref<P: ProtocolType, R: Replicate<P>>(
+    world: &World,
+    entity: &Entity,
+) -> Option<R> {
     return world
         .get::<R>(**entity)
         .map_or(None, |v| Some(v.deref().clone_ref()));

@@ -1,7 +1,7 @@
 use crate::{
     entity_type::EntityType,
     impls::{Replicate, ReplicateEq},
-    protocol_type::{ProtocolKindType, ProtocolExtractor, DynRef, DynMut}
+    protocol_type::{DynMut, DynRef, ProtocolExtractor, ProtocolKindType},
 };
 
 /// An Enum with a variant for every Component/Message that can be sent
@@ -11,9 +11,11 @@ pub trait ProtocolType: Sized + Sync + Send + Clone + 'static {
 
     /// Get kind of Replicate type
     fn kind_of<R: Replicate<Self>>() -> Self::Kind;
-    /// Get an immutable reference to the inner Component/Message as a Replicate trait object
+    /// Get an immutable reference to the inner Component/Message as a Replicate
+    /// trait object
     fn dyn_ref(&self) -> DynRef<'_, Self>;
-    /// Get an mutable reference to the inner Component/Message as a Replicate trait object
+    /// Get an mutable reference to the inner Component/Message as a Replicate
+    /// trait object
     fn dyn_mut(&mut self) -> DynMut<'_, Self>;
     /// Cast to a ReplicateEq impl
     fn cast<R: ReplicateEq<Self>>(self) -> Option<R>;

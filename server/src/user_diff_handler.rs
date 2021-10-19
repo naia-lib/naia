@@ -1,14 +1,17 @@
-use std::{net::SocketAddr, collections::HashMap, sync::{Arc, RwLock, RwLockReadGuard}};
-
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{Arc, RwLock, RwLockReadGuard},
+};
 
 use naia_shared::DiffMask;
 
-use super::{global_diff_handler::GlobalDiffHandler, mut_channel::MutReceiver, keys::ComponentKey};
+use super::{global_diff_handler::GlobalDiffHandler, keys::ComponentKey, mut_channel::MutReceiver};
 
 #[derive(Clone)]
 pub struct UserDiffHandler {
     receivers: HashMap<ComponentKey, MutReceiver>,
-    global_diff_handler: Arc<RwLock<GlobalDiffHandler>>
+    global_diff_handler: Arc<RwLock<GlobalDiffHandler>>,
 }
 
 impl UserDiffHandler {
@@ -20,11 +23,7 @@ impl UserDiffHandler {
     }
 
     // Component Registration
-    pub fn register_component(
-        &mut self,
-        addr: &SocketAddr,
-        component_key: &ComponentKey)
-    {
+    pub fn register_component(&mut self, addr: &SocketAddr, component_key: &ComponentKey) {
         if let Ok(global_handler) = self.global_diff_handler.as_ref().read() {
             let receiver = global_handler
                 .get_receiver(addr, component_key)
@@ -50,7 +49,8 @@ impl UserDiffHandler {
     }
 
     pub fn or_diff_mask(&mut self, component_key: &ComponentKey, other_mask: &DiffMask) {
-        let current_diff_mask = self.receivers
+        let current_diff_mask = self
+            .receivers
             .get_mut(component_key)
             .expect("DiffHandler doesn't have Component registered");
         current_diff_mask.or_mask(other_mask);
@@ -62,11 +62,7 @@ impl UserDiffHandler {
         }
     }
 
-    pub fn set_diff_mask(
-        &mut self,
-        component_key: &ComponentKey,
-        other_mask: &DiffMask,
-    ) {
+    pub fn set_diff_mask(&mut self, component_key: &ComponentKey, other_mask: &DiffMask) {
         if let Some(receiver) = self.receivers.get_mut(component_key) {
             receiver.set_mask(other_mask);
         }

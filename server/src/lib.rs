@@ -27,32 +27,32 @@ compile_error!("Naia Server requires either the 'use-udp' or 'use-webrtc' featur
 pub use naia_server_socket::ServerAddrs;
 
 pub use naia_shared::{
-    EntityType, LinkConditionerConfig, ProtocolType, Random, Replicate, SharedConfig,
-    SocketConfig, WorldMutType, WorldRefType,
+    EntityType, LinkConditionerConfig, ProtocolType, Random, Replicate, SharedConfig, SocketConfig,
+    WorldMutType, WorldRefType,
 };
 
-mod entity_scope_map;
-mod mut_channel;
 mod client_connection;
 mod command_receiver;
 mod entity_action;
 mod entity_manager;
 mod entity_ref;
+mod entity_scope_map;
 mod error;
 mod event;
+mod global_diff_handler;
 mod keys;
 mod local_component_record;
 mod local_entity_record;
 mod locality_status;
-mod global_diff_handler;
+mod mut_channel;
 mod packet_writer;
 mod ping_manager;
-mod user_diff_handler;
 mod room;
 mod server;
 mod server_config;
 mod tick_manager;
 mod user;
+mod user_diff_handler;
 mod user_scope;
 mod world_record;
 

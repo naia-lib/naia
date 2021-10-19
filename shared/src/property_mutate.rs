@@ -6,7 +6,6 @@ pub trait PropertyMutate: PropertyMutateClone + Send + Sync + 'static {
     /// Given the index of the Property whose value has changed, queue that
     /// Property for transmission to the Client
     fn mutate(&mut self, property_index: u8);
-
 }
 
 pub trait PropertyMutateClone {
@@ -34,18 +33,15 @@ pub struct PropertyMutator {
 impl PropertyMutator {
     pub fn new<M: PropertyMutate>(mutator: M) -> Self {
         let inner = Box::new(mutator);
-        return Self {
-            inner
-        }
+        return Self { inner };
     }
 
     pub fn clone_new(&self) -> Self {
-        //let current_inner: &dyn PropertyMutateClone = self.inner.as_ref() as &dyn PropertyMutateClone;
+        //let current_inner: &dyn PropertyMutateClone = self.inner.as_ref() as &dyn
+        // PropertyMutateClone;
         let new_inner = self.inner.as_ref().clone_box();
 
-        return Self {
-            inner: new_inner,
-        }
+        return Self { inner: new_inner };
     }
 }
 

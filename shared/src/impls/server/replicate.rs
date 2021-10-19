@@ -1,9 +1,8 @@
-use crate::{diff_mask::DiffMask, property_mutate::PropertyMutator, impls::ProtocolType};
+use crate::{diff_mask::DiffMask, impls::ProtocolType, property_mutate::PropertyMutator};
 
 /// A Replica is a Message/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
 pub trait Replicate<P: ProtocolType>: Sync + Send + 'static {
-
     /// Gets the number of bytes of the Message/Component's DiffMask
     fn get_diff_mask_size(&self) -> u8;
     /// Write data into an outgoing byte stream, sufficient only to update the

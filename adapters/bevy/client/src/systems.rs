@@ -1,9 +1,12 @@
-use bevy::{app::Events, ecs::{
-    world::{Mut, World},
-    schedule::ShouldRun,
-    system::{Res, ResMut},
-    entity::Entity as BevyEntity,
-}};
+use bevy::{
+    app::Events,
+    ecs::{
+        entity::Entity as BevyEntity,
+        schedule::ShouldRun,
+        system::{Res, ResMut},
+        world::{Mut, World},
+    },
+};
 
 use naia_client::{Client, Event, ProtocolType};
 
@@ -13,9 +16,11 @@ use super::{
     components::{Confirmed, Predicted},
     resource::ClientResource,
 };
-use crate::events::{SpawnEntityEvent, DespawnEntityEvent, OwnEntityEvent, DisownEntityEvent, RewindEntityEvent,
-                InsertComponentEvent, UpdateComponentEvent, RemoveComponentEvent,
-                MessageEvent, NewCommandEvent, ReplayCommandEvent};
+use crate::events::{
+    DespawnEntityEvent, DisownEntityEvent, InsertComponentEvent, MessageEvent, NewCommandEvent,
+    OwnEntityEvent, RemoveComponentEvent, ReplayCommandEvent, RewindEntityEvent, SpawnEntityEvent,
+    UpdateComponentEvent,
+};
 
 pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<Client<P, Entity>>| {
@@ -26,17 +31,39 @@ pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
             let mut entities_to_own: Vec<BevyEntity> = Vec::new();
 
             unsafe {
-                let mut spawn_entity_event_writer = world.get_resource_unchecked_mut::<Events<SpawnEntityEvent<P>>>().unwrap();
-                let mut despawn_entity_event_writer = world.get_resource_unchecked_mut::<Events<DespawnEntityEvent>>().unwrap();
-                let mut own_entity_event_writer = world.get_resource_unchecked_mut::<Events<OwnEntityEvent>>().unwrap();
-                let mut disown_entity_event_writer = world.get_resource_unchecked_mut::<Events<DisownEntityEvent>>().unwrap();
-                let mut rewind_entity_event_writer = world.get_resource_unchecked_mut::<Events<RewindEntityEvent>>().unwrap();
-                let mut insert_component_event_writer = world.get_resource_unchecked_mut::<Events<InsertComponentEvent<P>>>().unwrap();
-                let mut update_component_event_writer = world.get_resource_unchecked_mut::<Events<UpdateComponentEvent<P>>>().unwrap();
-                let mut remove_component_event_writer = world.get_resource_unchecked_mut::<Events<RemoveComponentEvent<P>>>().unwrap();
-                let mut message_event_writer = world.get_resource_unchecked_mut::<Events<MessageEvent<P>>>().unwrap();
-                let mut new_command_event_writer = world.get_resource_unchecked_mut::<Events<NewCommandEvent<P>>>().unwrap();
-                let mut replay_command_event_writer = world.get_resource_unchecked_mut::<Events<ReplayCommandEvent<P>>>().unwrap();
+                let mut spawn_entity_event_writer = world
+                    .get_resource_unchecked_mut::<Events<SpawnEntityEvent<P>>>()
+                    .unwrap();
+                let mut despawn_entity_event_writer = world
+                    .get_resource_unchecked_mut::<Events<DespawnEntityEvent>>()
+                    .unwrap();
+                let mut own_entity_event_writer = world
+                    .get_resource_unchecked_mut::<Events<OwnEntityEvent>>()
+                    .unwrap();
+                let mut disown_entity_event_writer = world
+                    .get_resource_unchecked_mut::<Events<DisownEntityEvent>>()
+                    .unwrap();
+                let mut rewind_entity_event_writer = world
+                    .get_resource_unchecked_mut::<Events<RewindEntityEvent>>()
+                    .unwrap();
+                let mut insert_component_event_writer = world
+                    .get_resource_unchecked_mut::<Events<InsertComponentEvent<P>>>()
+                    .unwrap();
+                let mut update_component_event_writer = world
+                    .get_resource_unchecked_mut::<Events<UpdateComponentEvent<P>>>()
+                    .unwrap();
+                let mut remove_component_event_writer = world
+                    .get_resource_unchecked_mut::<Events<RemoveComponentEvent<P>>>()
+                    .unwrap();
+                let mut message_event_writer = world
+                    .get_resource_unchecked_mut::<Events<MessageEvent<P>>>()
+                    .unwrap();
+                let mut new_command_event_writer = world
+                    .get_resource_unchecked_mut::<Events<NewCommandEvent<P>>>()
+                    .unwrap();
+                let mut replay_command_event_writer = world
+                    .get_resource_unchecked_mut::<Events<ReplayCommandEvent<P>>>()
+                    .unwrap();
 
                 for event_result in event_results {
                     match event_result {
@@ -54,7 +81,8 @@ pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
                         }
                         Ok(Event::SpawnEntity(entity, components)) => {
                             entities_to_spawn.push(*entity);
-                            spawn_entity_event_writer.send(SpawnEntityEvent::<P>(entity, components));
+                            spawn_entity_event_writer
+                                .send(SpawnEntityEvent::<P>(entity, components));
                         }
                         Ok(Event::OwnEntity(ref owned_entity)) => {
                             let predicted_entity = owned_entity.predicted;
@@ -71,13 +99,16 @@ pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
                             rewind_entity_event_writer.send(RewindEntityEvent(entity));
                         }
                         Ok(Event::InsertComponent(entity, component)) => {
-                            insert_component_event_writer.send(InsertComponentEvent(entity, component));
+                            insert_component_event_writer
+                                .send(InsertComponentEvent(entity, component));
                         }
                         Ok(Event::RemoveComponent(entity, component)) => {
-                            remove_component_event_writer.send(RemoveComponentEvent(entity, component));
+                            remove_component_event_writer
+                                .send(RemoveComponentEvent(entity, component));
                         }
                         Ok(Event::UpdateComponent(entity, component)) => {
-                            update_component_event_writer.send(UpdateComponentEvent(entity, component));
+                            update_component_event_writer
+                                .send(UpdateComponentEvent(entity, component));
                         }
                         Ok(Event::Message(message)) => {
                             message_event_writer.send(MessageEvent(message));

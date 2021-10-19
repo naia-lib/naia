@@ -4,7 +4,7 @@ use log::warn;
 
 use naia_shared::{
     DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity, Manifest, NaiaKey,
-    PacketReader, ProtocolType, WorldMutType, ProtocolKindType,
+    PacketReader, ProtocolKindType, ProtocolType, WorldMutType,
 };
 
 use super::{
@@ -74,7 +74,8 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                             let component_kind = P::Kind::from_u16(reader.read_u16());
                             let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                            let new_component = manifest.create_replica(component_kind, reader, packet_index);
+                            let new_component =
+                                manifest.create_replica(component_kind, reader, packet_index);
                             if self.component_to_entity_map.contains_key(&component_key) {
                                 panic!("attempted to insert duplicate component");
                             } else {
@@ -187,7 +188,8 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                     let component_kind = P::Kind::from_u16(reader.read_u16());
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                    let new_component = manifest.create_replica(component_kind, reader, packet_index);
+                    let new_component =
+                        manifest.create_replica(component_kind, reader, packet_index);
                     if self.component_to_entity_map.contains_key(&component_key) {
                         // its possible we received a very late duplicate message
                         warn!(
@@ -215,7 +217,8 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
 
                             new_component.extract_and_insert(world_entity, world);
 
-                            //TODO: handle inserting Component into an Entity that has a Prediction... !!!
+                            //TODO: handle inserting Component into an Entity that has a
+                            // Prediction... !!!
 
                             self.queued_incoming_messages
                                 .push_back(EntityAction::InsertComponent(
@@ -232,7 +235,8 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                     if let Some(world_entity) = self.component_to_entity_map.get_mut(&component_key)
                     {
                         if let Some(entity_record) = self.entity_records.get(world_entity) {
-                            let component_kind = entity_record.get_kind_from_key(&component_key).unwrap();
+                            let component_kind =
+                                entity_record.get_kind_from_key(&component_key).unwrap();
                             if let Some(component_protocol) =
                                 world.get_component_mut_of_kind(world_entity, component_kind)
                             {
@@ -256,10 +260,7 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                                 }
 
                                 self.queued_incoming_messages.push_back(
-                                    EntityAction::UpdateComponent(
-                                        *world_entity,
-                                        *component_kind,
-                                    )
+                                    EntityAction::UpdateComponent(*world_entity, *component_kind),
                                 );
                             }
                         }

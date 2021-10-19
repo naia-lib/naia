@@ -22,10 +22,9 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
         };
     }
 
-    /// Given a cursor into incoming packet data, initializes the Property with the
-    /// synced value
+    /// Given a cursor into incoming packet data, initializes the Property with
+    /// the synced value
     pub fn new_read(reader: &mut PacketReader, packet_index: u16) -> Self {
-
         let inner = Self::read_inner(reader);
 
         return Property::<T> {

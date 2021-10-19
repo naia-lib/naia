@@ -2,11 +2,7 @@
 //! Procedural macros to simplify implementation of Naia Replicate &
 //! ProtocolType traits
 
-#![deny(
-    trivial_casts,
-    trivial_numeric_casts,
-    unstable_features,
-)]
+#![deny(trivial_casts, trivial_numeric_casts, unstable_features)]
 
 #[macro_use]
 extern crate cfg_if;

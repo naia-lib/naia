@@ -1,6 +1,6 @@
 //use std::collections::VecDeque;
 
-use naia_client::{ProtocolType, OwnedEntity as NaiaOwnedEntity};
+use naia_client::{OwnedEntity as NaiaOwnedEntity, ProtocolType};
 
 use naia_bevy_shared::Entity;
 

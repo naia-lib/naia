@@ -1,7 +1,7 @@
 use super::{
-    entity_type::EntityType, impls::ProtocolType,
+    entity_type::EntityType,
+    impls::{ProtocolType, Replicate, ReplicateEq},
     protocol_type::ProtocolExtractor,
-    impls::{Replicate, ReplicateEq},
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -30,7 +30,8 @@ pub trait WorldRefType<P: ProtocolType, E: EntityType> {
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
 /// the WorldMutType in-sync with it's own Entities/Components
-pub trait WorldMutType<P: ProtocolType, E: EntityType>: WorldRefType<P, E> + ProtocolExtractor<P, E>
+pub trait WorldMutType<P: ProtocolType, E: EntityType>:
+    WorldRefType<P, E> + ProtocolExtractor<P, E>
 {
     // Entities
 
@@ -45,7 +46,8 @@ pub trait WorldMutType<P: ProtocolType, E: EntityType>: WorldRefType<P, E> + Pro
     /// gets an entity's component
     fn get_component_mut<R: Replicate<P>>(&mut self, entity: &E) -> Option<&mut R>;
     /// gets a mutable component by type
-    fn get_component_mut_of_kind(&mut self, entity: &E, component_kind: &P::Kind) -> Option<&mut P>;
+    fn get_component_mut_of_kind(&mut self, entity: &E, component_kind: &P::Kind)
+        -> Option<&mut P>;
     /// insert a component
     fn insert_component<R: Replicate<P>>(&mut self, entity: &E, component_ref: R);
     /// remove a component

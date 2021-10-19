@@ -1,11 +1,13 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, EntityType, ManagerType, MessagePacketWriter, NaiaKey, ProtocolType,
-    MTU_SIZE, ProtocolKindType
+    wrapping_diff, EntityType, ManagerType, MessagePacketWriter, NaiaKey, ProtocolKindType,
+    ProtocolType, MTU_SIZE,
 };
 
-use super::{command_receiver::CommandReceiver, entity_manager::EntityManager, owned_entity::OwnedEntity};
+use super::{
+    command_receiver::CommandReceiver, entity_manager::EntityManager, owned_entity::OwnedEntity,
+};
 
 const MAX_PAST_COMMANDS: u8 = 3;
 
@@ -105,7 +107,9 @@ impl PacketWriter {
                 .unwrap(); // write local entity
 
             let command_kind = command.dyn_ref().get_kind();
-            command_total_bytes.write_u16::<BigEndian>(command_kind.to_u16()).unwrap(); // write command kind
+            command_total_bytes
+                .write_u16::<BigEndian>(command_kind.to_u16())
+                .unwrap(); // write command kind
             command_total_bytes.write_u8(past_command_index).unwrap(); // write past command number
             command_total_bytes.append(&mut command_payload_bytes); // write payload
 
@@ -127,10 +131,7 @@ impl PacketWriter {
 
     /// Writes a Message into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_message<P: ProtocolType>(
-        &mut self,
-        message: &P,
-    ) -> bool {
+    pub fn write_message<P: ProtocolType>(&mut self, message: &P) -> bool {
         return self.message_writer.write_message(message);
     }
 }

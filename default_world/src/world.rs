@@ -3,8 +3,7 @@ use std::{collections::HashMap, ops::Deref};
 use slotmap::DenseSlotMap;
 
 use naia_shared::{
-    EntityType, ProtocolType, Replicate, WorldMutType,
-    WorldRefType, ReplicateEq, ProtocolExtractor
+    EntityType, ProtocolExtractor, ProtocolType, Replicate, ReplicateEq, WorldMutType, WorldRefType,
 };
 
 // Entity
@@ -148,7 +147,11 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
         return None;
     }
 
-    fn get_component_mut_of_kind(&mut self, entity: &Entity, component_type: &P::Kind) -> Option<&mut P> {
+    fn get_component_mut_of_kind(
+        &mut self,
+        entity: &Entity,
+        component_type: &P::Kind,
+    ) -> Option<&mut P> {
         if let Some(component_map) = self.world.entities.get_mut(*entity) {
             return component_map.get_mut(component_type);
         }

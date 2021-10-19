@@ -14,26 +14,26 @@ use naia_server_socket::{
 };
 
 pub use naia_shared::{
-    wrapping_diff, Connection, ConnectionConfig, EntityType, Instant,
-    KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType,
-    PropertyMutate, PropertyMutator, ProtocolType, Replicate, SharedConfig, StandardHeader, Timer, Timestamp,
-    WorldMutType, WorldRefType, ReplicateEq, ProtocolKindType
+    wrapping_diff, Connection, ConnectionConfig, EntityType, Instant, KeyGenerator,
+    LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
+    PropertyMutator, ProtocolKindType, ProtocolType, Replicate, ReplicateEq, SharedConfig,
+    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{
     client_connection::ClientConnection,
     entity_ref::{EntityMut, EntityRef, WorldlessEntityMut},
+    entity_scope_map::EntityScopeMap,
     error::NaiaServerError,
     event::Event,
-    keys::ComponentKey,
     global_diff_handler::GlobalDiffHandler,
+    keys::ComponentKey,
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},
     server_config::ServerConfig,
     tick_manager::TickManager,
     user::{user_key::UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
-    entity_scope_map::EntityScopeMap,
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -536,11 +536,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     /// Set the 'owner' of an Entity to a User associated with a given UserKey.
     /// Users are only able to issue Commands to Entities of which they are the
     /// owner
-    pub(crate) fn entity_set_owner(
-        &mut self,
-        entity: &K,
-        user_key: &UserKey,
-    ) {
+    pub(crate) fn entity_set_owner(&mut self, entity: &K, user_key: &UserKey) {
         // check that entity is initialized & un-owned
         if self.entity_owner_map.get(entity).is_some() {
             panic!("attempting to take ownership of an Entity that is already owned");
@@ -591,7 +587,8 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         entity: &K,
         is_contained: bool,
     ) {
-        self.entity_scope_map.insert(*user_key, *entity, is_contained);
+        self.entity_scope_map
+            .insert(*user_key, *entity, is_contained);
     }
 
     //// Components
@@ -1065,7 +1062,8 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                             if client_connection.has_prediction_entity(entity) {
                                 should_be_in_scope = true;
                             } else {
-                                if let Some(in_scope) = self.entity_scope_map.get(user_key, entity) {
+                                if let Some(in_scope) = self.entity_scope_map.get(user_key, entity)
+                                {
                                     should_be_in_scope = *in_scope;
                                 } else {
                                     should_be_in_scope = false;
@@ -1075,10 +1073,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                             if should_be_in_scope {
                                 if !currently_in_scope {
                                     // add entity to the connections local scope
-                                    client_connection.spawn_entity(
-                                        &self.world_record,
-                                        entity,
-                                    );
+                                    client_connection.spawn_entity(&self.world_record, entity);
                                 }
                             } else {
                                 if currently_in_scope {
@@ -1095,15 +1090,19 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     // Component Helpers
 
-    fn component_init<R: Replicate<P>>(&mut self, entity: &K, component_ref: &mut R) -> ComponentKey {
-
+    fn component_init<R: Replicate<P>>(
+        &mut self,
+        entity: &K,
+        component_ref: &mut R,
+    ) -> ComponentKey {
         let component_key = self
             .world_record
             .add_component(entity, &component_ref.get_kind());
 
         let diff_mask_length: u8 = component_ref.get_diff_mask_size();
 
-        let mut_sender = self.diff_handler
+        let mut_sender = self
+            .diff_handler
             .as_ref()
             .write()
             .expect("DiffHandler should be initialized")
@@ -1118,7 +1117,10 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     fn component_cleanup(&mut self, component_key: &ComponentKey) {
         self.world_record.remove_component(component_key);
-        self.diff_handler.as_ref().write().expect("Haven't initialized DiffHandler")
+        self.diff_handler
+            .as_ref()
+            .write()
+            .expect("Haven't initialized DiffHandler")
             .deregister_component(component_key);
     }
 }
