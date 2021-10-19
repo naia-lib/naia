@@ -58,7 +58,7 @@ impl App {
                 // Create a Character
                 let character = Character::new((count * 4) as u8, 0, first, last);
                 let character_key = server
-                    .spawn_entity(&mut world.proxy_mut())
+                    .spawn_entity(world.proxy_mut())
                     .insert_component(character)
                     .id();
 
@@ -129,7 +129,7 @@ impl App {
                     for entity in self.server.entities(&self.world.proxy()) {
                         if let Some(character) = self
                             .server
-                            .entity_mut(&mut self.world.proxy_mut(), &entity)
+                            .entity_mut(self.world.proxy_mut(), &entity)
                             .component::<Character>()
                         {
                             character.step();
@@ -140,7 +140,7 @@ impl App {
                     for (_, user_key, entity) in self.server.scope_checks() {
                         if let Some(character) = self
                             .server
-                            .entity_mut(&mut self.world.proxy_mut(), &entity)
+                            .entity_mut(self.world.proxy_mut(), &entity)
                             .component::<Character>()
                         {
                             let x = *character.x.get();

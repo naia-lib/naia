@@ -52,14 +52,14 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P,
 }
 
 // EntityMut
-pub struct EntityMut<'s, 'w, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> {
+pub struct EntityMut<'s, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> {
     server: &'s mut Server<P, K>,
-    world: &'w mut W,
+    world: W,
     id: K,
 }
 
-impl<'s, 'w, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s, 'w, P, K, W> {
-    pub(crate) fn new(server: &'s mut Server<P, K>, world: &'w mut W, key: &K) -> Self {
+impl<'s, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s, P, K, W> {
+    pub(crate) fn new(server: &'s mut Server<P, K>, world: W, key: &K) -> Self {
         EntityMut {
             server,
             world,
@@ -72,7 +72,7 @@ impl<'s, 'w, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s
     }
 
     pub fn despawn(&mut self) {
-        self.server.despawn_entity(self.world, &self.id);
+        self.server.despawn_entity(&mut self.world, &self.id);
     }
 
     // Components
@@ -87,7 +87,7 @@ impl<'s, 'w, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s
 
     pub fn insert_component<R: Replicate<P>>(&mut self, component_ref: R) -> &mut Self {
         self.server
-            .insert_component(self.world, &self.id, component_ref);
+            .insert_component(&mut self.world, &self.id, component_ref);
 
         self
     }
