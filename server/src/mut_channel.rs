@@ -61,14 +61,14 @@ impl MutChannelData {
     }
 
     pub fn new_receiver(&mut self, addr: &SocketAddr) -> Option<MutReceiver> {
-        if self.recv_map.contains_key(addr) {
-            return None;
+        if let Some(recvr) = self.recv_map.get(addr) {
+            return Some(recvr.clone());
+        } else {
+            let q = MutReceiver::new(self.diff_mask_length);
+            self.recv_map.insert(*addr, q.clone());
+
+            return Some(q);
         }
-
-        let q = MutReceiver::new(self.diff_mask_length);
-        self.recv_map.insert(*addr, q.clone());
-
-        return Some(q);
     }
 
     pub fn send(&self, diff: u8) {
