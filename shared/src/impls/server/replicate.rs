@@ -6,12 +6,6 @@ pub trait Replicate<P: ProtocolType>: Sync + Send + 'static {
 
     /// Gets the number of bytes of the Message/Component's DiffMask
     fn get_diff_mask_size(&self) -> u8;
-    /// Gets the TypeId of the Message/Component, used to map to a
-    /// registered ProtocolType
-    fn get_kind(&self) -> P::Kind;
-    /// Writes data into an outgoing byte stream, sufficient to completely
-    /// recreate the Message/Component on the client
-    fn write(&self, out_bytes: &mut Vec<u8>);
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Message/Component on the client
     fn write_partial(&self, diff_mask: &DiffMask, out_bytes: &mut Vec<u8>);
@@ -19,8 +13,15 @@ pub trait Replicate<P: ProtocolType>: Sync + Send + 'static {
     /// of which Properties have been mutated, necessary to sync only the
     /// Properties that have changed with the client
     fn set_mutator(&mut self, mutator: &PropertyMutator);
-    /// Returns self
+
+    /// Returns self as a Protocol
     fn to_protocol(self) -> P;
+    /// Gets the TypeId of the Message/Component, used to map to a
+    /// registered ProtocolType
+    fn get_kind(&self) -> P::Kind;
+    /// Writes data into an outgoing byte stream, sufficient to completely
+    /// recreate the Message/Component on the client
+    fn write(&self, out_bytes: &mut Vec<u8>);
 }
 
 //TODO: do we really need another trait here?

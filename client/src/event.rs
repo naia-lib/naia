@@ -1,11 +1,11 @@
-use naia_shared::{EntityType, ProtocolType, ProtocolKindType};
+use naia_shared::{EntityType, ProtocolType, ProtocolKindType, Replicate};
 
 use super::owned_entity::OwnedEntity;
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
 #[derive(Debug)]
-pub enum Event<E: EntityType, P: ProtocolType, K: ProtocolKindType> {
+pub enum Event<P: ProtocolType, E: EntityType> {
     /// Occurs when the Client has successfully established a connection with
     /// the Server
     Connection,
@@ -16,7 +16,7 @@ pub enum Event<E: EntityType, P: ProtocolType, K: ProtocolKindType> {
     /// passed to the Client on initialization
     Tick,
     /// Occurs when an Entity on the Server has come into scope for the Client
-    SpawnEntity(E, Vec<K>),
+    SpawnEntity(E, Vec<P::Kind>),
     /// Occurs when an Entity on the Server has been destroyed, or left the
     /// Client's scope
     DespawnEntity(E),
@@ -32,12 +32,12 @@ pub enum Event<E: EntityType, P: ProtocolType, K: ProtocolKindType> {
     /// error
     RewindEntity(OwnedEntity<E>),
     /// Occurs when a Component should be added to a given Entity
-    InsertComponent(E, K),
+    InsertComponent(E, P::Kind),
     /// Occurs when a Component has had a state change on the Server while
     /// the Entity it is attached to has come into scope for the Client
-    UpdateComponent(E, K),
+    UpdateComponent(E, P::Kind),
     /// Occurs when a Component should be removed from the given Entity
-    RemoveComponent(E, K),
+    RemoveComponent(E, P::Kind),
     /// An Message emitted to the Client from the Server
     Message(P),
     /// A new Command received immediately to an assigned Entity, used to

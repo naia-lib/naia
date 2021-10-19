@@ -1,21 +1,21 @@
-use std::{any::TypeId, collections::HashMap};
+use std::collections::HashMap;
 
-use naia_shared::{EntityType, LocalComponentKey, LocalEntity};
+use naia_shared::{EntityType, LocalComponentKey, LocalEntity, ProtocolKindType};
 
 #[derive(Debug)]
-pub struct EntityRecord<K: EntityType> {
+pub struct EntityRecord<E: EntityType, K: ProtocolKindType> {
     local_entity: LocalEntity,
-    type_to_key_map: HashMap<TypeId, LocalComponentKey>,
-    key_to_type_map: HashMap<LocalComponentKey, TypeId>,
-    prediction_key: Option<K>,
+    kind_to_key_map: HashMap<K, LocalComponentKey>,
+    key_to_kind_map: HashMap<LocalComponentKey, K>,
+    prediction_key: Option<E>,
 }
 
-impl<K: EntityType> EntityRecord<K> {
+impl<E: EntityType, K: ProtocolKindType> EntityRecord<E, K> {
     pub fn new(local_entity: &LocalEntity) -> Self {
         EntityRecord {
             local_entity: *local_entity,
-            type_to_key_map: HashMap::new(),
-            key_to_type_map: HashMap::new(),
+            kind_to_key_map: HashMap::new(),
+            key_to_kind_map: HashMap::new(),
             prediction_key: None,
         }
     }
@@ -24,32 +24,32 @@ impl<K: EntityType> EntityRecord<K> {
         return self.local_entity;
     }
 
-    // Components / Types //
+    // Components / Kinds //
 
-    //    pub fn get_key_from_type(&self, type_id: &TypeId) ->
+    //    pub fn get_key_from_type(&self, type_id: &K) ->
     // Option<&LocalComponentKey> {        return
     // self.type_to_key_map.get(type_id);    }
 
-    pub fn get_type_from_key(&self, component_key: &LocalComponentKey) -> Option<&TypeId> {
-        return self.key_to_type_map.get(component_key);
+    pub fn get_kind_from_key(&self, component_key: &LocalComponentKey) -> Option<&K> {
+        return self.key_to_kind_map.get(component_key);
     }
 
-    pub fn insert_component(&mut self, key: &LocalComponentKey, type_id: &TypeId) {
-        self.type_to_key_map.insert(*type_id, *key);
-        self.key_to_type_map.insert(*key, *type_id);
+    pub fn insert_component(&mut self, key: &LocalComponentKey, kind: &K) {
+        self.kind_to_key_map.insert(*kind, *key);
+        self.key_to_kind_map.insert(*key, *kind);
     }
 
-    pub fn remove_component(&mut self, key: &LocalComponentKey) -> Option<TypeId> {
-        if let Some(type_id) = self.key_to_type_map.remove(key) {
-            self.type_to_key_map.remove(&type_id);
-            return Some(type_id);
+    pub fn remove_component(&mut self, key: &LocalComponentKey) -> Option<K> {
+        if let Some(kind) = self.key_to_kind_map.remove(key) {
+            self.kind_to_key_map.remove(&kind);
+            return Some(kind);
         }
         return None;
     }
 
     pub fn get_component_keys(&self) -> Vec<LocalComponentKey> {
         let mut output = Vec::<LocalComponentKey>::new();
-        for (key, _) in self.key_to_type_map.iter() {
+        for (key, _) in self.key_to_kind_map.iter() {
             output.push(*key);
         }
         return output;
@@ -61,15 +61,15 @@ impl<K: EntityType> EntityRecord<K> {
         return self.prediction_key.is_some();
     }
 
-    pub fn set_prediction(&mut self, prediction_entity: &K) {
+    pub fn set_prediction(&mut self, prediction_entity: &E) {
         self.prediction_key = Some(*prediction_entity);
     }
 
-    pub fn disown(&mut self) -> Option<K> {
+    pub fn disown(&mut self) -> Option<E> {
         return self.prediction_key.take();
     }
 
-    pub fn get_prediction(&self) -> Option<K> {
+    pub fn get_prediction(&self) -> Option<E> {
         return self.prediction_key;
     }
 }

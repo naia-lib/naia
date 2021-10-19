@@ -6,8 +6,8 @@ use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, So
 
 pub use naia_shared::{
     ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader,
-    PacketType, ProtocolType, Ref, Replicate, SequenceIterator, SharedConfig, StandardHeader,
-    Timer, Timestamp, WorldMutType, WorldRefType,
+    PacketType, ProtocolType, Replicate, SequenceIterator, SharedConfig, StandardHeader,
+    Timer, Timestamp, WorldMutType, WorldRefType, ProtocolKindType,
 };
 
 use super::{
@@ -16,7 +16,8 @@ use super::{
     entity_action::EntityAction,
     entity_ref::EntityRef,
     error::NaiaClientError,
-    event::{Event, OwnedEntity},
+    event::Event,
+    owned_entity::OwnedEntity,
     server_connection::ServerConnection,
     tick_manager::TickManager,
     Packet,
@@ -24,8 +25,7 @@ use super::{
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
-#[derive(Debug)]
-pub struct Client<P: ProtocolType, K: EntityType> {
+pub struct Client<P: ProtocolType, E: EntityType> {
     // Manifest
     manifest: Manifest<P>,
     // Connection
@@ -33,22 +33,22 @@ pub struct Client<P: ProtocolType, K: EntityType> {
     socket: Socket,
     io: Io,
     address: Option<SocketAddr>,
-    server_connection: Option<ServerConnection<P, K>>,
+    server_connection: Option<ServerConnection<P, E>>,
     pre_connection_timestamp: Option<Timestamp>,
     pre_connection_digest: Option<Box<[u8]>>,
     handshake_timer: Timer,
     connection_state: ConnectionState,
-    auth_message: Option<Ref<dyn Replicate<P>>>,
+    auth_message: Option<P>,
     // Events
     outstanding_connect: bool,
     outstanding_errors: VecDeque<NaiaClientError>,
     // Ticks
     tick_manager: TickManager,
     // Phantom
-    phantom_k: PhantomData<K>,
+    phantom_k: PhantomData<E>,
 }
 
-impl<P: ProtocolType, K: EntityType> Client<P, K> {
+impl<P: ProtocolType, E: EntityType> Client<P, E> {
     /// Create a new Client
     pub fn new(mut client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
         client_config.socket_config.link_condition_config =
@@ -103,7 +103,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
             if auth.is_none() {
                 None
             } else {
-                Some(auth.unwrap().dyn_ref())
+                Some(auth.unwrap().to_protocol())
             }
         };
     }
@@ -111,21 +111,21 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn queue_message<R: Replicate<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
+    pub fn queue_message<R: Replicate<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
-            let dyn_ref = message_ref.dyn_ref();
-            connection.queue_message(&dyn_ref, guaranteed_delivery);
+            let protocol = message.to_protocol();
+            connection.queue_message(&protocol, guaranteed_delivery);
         }
     }
 
     /// Queues up a Command for an assigned Entity to be sent to the Server
-    pub fn queue_command<R: Replicate<P>>(&mut self, predicted_entity: &K, command_ref: &R) {
+    pub fn queue_command<R: Replicate<P>>(&mut self, predicted_entity: &E, command_ref: &R) {
         if let Some(connection) = self.server_connection.as_mut() {
             if let Some(confirmed_entity) = connection.get_confirmed_entity(predicted_entity) {
-                let dyn_ref = command_ref.dyn_ref();
-                let entity_pair: OwnedEntity<K> =
+                let protocol = command_ref.to_protocol();
+                let entity_pair: OwnedEntity<E> =
                     OwnedEntity::new(&confirmed_entity, &predicted_entity);
-                connection.queue_command(entity_pair, dyn_ref);
+                connection.queue_command(entity_pair, &protocol);
             }
         }
     }
@@ -135,11 +135,11 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// given Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<'s, W: WorldRefType<P, K>>(
+    pub fn entity<'s, W: WorldRefType<P, E>>(
         &'s self,
         world: W,
-        entity: &K,
-    ) -> EntityRef<'s, P, K, W> {
+        entity: &E,
+    ) -> EntityRef<'s, P, E, W> {
         if world.has_entity(entity) {
             return EntityRef::new(self, world, &entity);
         }
@@ -147,7 +147,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     }
 
     /// Return a list of all Entities
-    pub fn entities<W: WorldRefType<P, K>>(&self, world: &W) -> Vec<K> {
+    pub fn entities<W: WorldRefType<P, E>>(&self, world: &W) -> Vec<E> {
         return world.entities();
     }
 
@@ -203,10 +203,10 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     /// Must call this regularly (preferably at the beginning of every draw
     /// frame), in a loop until it returns None.
     /// Retrieves incoming update data, and maintains the connection.
-    pub fn receive<W: WorldMutType<P, K>>(
+    pub fn receive<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
-    ) -> VecDeque<Result<Event<P, K>, NaiaClientError>> {
+    ) -> VecDeque<Result<Event<P, E>, NaiaClientError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with server, and receive packets
@@ -242,7 +242,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                 }
                 // receive entity actions
                 while let Some(action) = connection.get_incoming_entity_action() {
-                    let event: Event<P, K> = {
+                    let event: Event<P, E> = {
                         match action {
                             EntityAction::SpawnEntity(entity, component_list) => {
                                 Event::SpawnEntity(entity, component_list)
@@ -268,19 +268,19 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                 while let Some((owned_entity, command)) = connection.get_incoming_replay() {
                     events.push_back(Ok(Event::ReplayCommand(
                         owned_entity,
-                        command.borrow().copy_to_protocol(),
+                        command,
                     )));
                 }
                 // receive command
                 while let Some((owned_entity, command)) = connection.get_incoming_command() {
                     events.push_back(Ok(Event::NewCommand(
                         owned_entity,
-                        command.borrow().copy_to_protocol(),
+                        command,
                     )));
                 }
                 // send heartbeats
                 if connection.should_send_heartbeat() {
-                    Client::<P, K>::internal_send_with_connection(
+                    Client::<P, E>::internal_send_with_connection(
                         self.tick_manager.get_client_tick(),
                         &mut self.io,
                         connection,
@@ -291,7 +291,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                 // send pings
                 if connection.should_send_ping() {
                     let ping_payload = connection.get_ping_payload();
-                    Client::<P, K>::internal_send_with_connection(
+                    Client::<P, E>::internal_send_with_connection(
                         self.tick_manager.get_client_tick(),
                         &mut self.io,
                         connection,
@@ -329,7 +329,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
 
     /// Get whether or not the Entity associated with a given EntityKey has
     /// been assigned to the current User
-    pub(crate) fn entity_is_owned(&self, entity: &K) -> bool {
+    pub(crate) fn entity_is_owned(&self, entity: &E) -> bool {
         if let Some(connection) = &self.server_connection {
             return connection.entity_is_owned(entity);
         }
@@ -353,7 +353,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                     .as_mut()
                     .unwrap()
                     .write(&mut timestamp_bytes);
-                Client::<P, K>::internal_send_connectionless(
+                Client::<P, E>::internal_send_connectionless(
                     &mut self.io,
                     PacketType::ClientChallengeRequest,
                     Packet::new(timestamp_bytes),
@@ -371,12 +371,12 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                 }
                 // write auth message if there is one
                 if let Some(auth_message) = &mut self.auth_message {
-                    let type_id = auth_message.borrow().get_type_id();
-                    let naia_id = self.manifest.get_naia_id(&type_id); // get naia id
-                    payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                    auth_message.borrow().write(&mut payload_bytes);
+                    let auth_dyn = auth_message.dyn_ref();
+                    let auth_kind = auth_dyn.get_kind();
+                    payload_bytes.write_u16::<BigEndian>(auth_kind.to_u16()).unwrap(); // write kind
+                    auth_dyn.write(&mut payload_bytes);
                 }
-                Client::<P, K>::internal_send_connectionless(
+                Client::<P, E>::internal_send_connectionless(
                     &mut self.io,
                     PacketType::ClientConnectRequest,
                     Packet::new(payload_bytes),
@@ -473,7 +473,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     fn internal_send_with_connection(
         host_tick: u16,
         io: &mut Io,
-        connection: &mut ServerConnection<P, K>,
+        connection: &mut ServerConnection<P, E>,
         packet_type: PacketType,
         packet: Packet,
     ) {
@@ -495,7 +495,6 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
 }
 
 // IO
-#[derive(Debug)]
 struct Io {
     packet_sender: Option<PacketSender>,
     packet_receiver: Option<PacketReceiver>,

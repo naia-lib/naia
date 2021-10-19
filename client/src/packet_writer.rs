@@ -2,10 +2,10 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
     wrapping_diff, EntityType, ManagerType, Manifest, MessagePacketWriter, NaiaKey, ProtocolType,
-    Ref, Replicate, MTU_SIZE,
+    Replicate, MTU_SIZE,
 };
 
-use super::{command_receiver::CommandReceiver, entity_manager::EntityManager, event::OwnedEntity};
+use super::{command_receiver::CommandReceiver, entity_manager::EntityManager, owned_entity::OwnedEntity};
 
 const MAX_PAST_COMMANDS: u8 = 3;
 
@@ -64,7 +64,7 @@ impl PacketWriter {
         entity_manager: &EntityManager<P, K>,
         command_receiver: &CommandReceiver<P, K>,
         owned_entity: &OwnedEntity<K>,
-        command: &Ref<dyn Replicate<P>>,
+        command: P,
     ) -> bool {
         let world_entity = owned_entity.confirmed;
         if let Some(local_entity) = entity_manager.world_to_local_entity(&world_entity) {
@@ -132,7 +132,7 @@ impl PacketWriter {
     pub fn write_message<P: ProtocolType>(
         &mut self,
         manifest: &Manifest<P>,
-        message: &Ref<dyn Replicate<P>>,
+        message: &P,
     ) -> bool {
         return self.message_writer.write_message(manifest, message);
     }
