@@ -29,7 +29,7 @@ mod protocol_type;
 mod replicate;
 
 use protocol_type::protocol_type_impl;
-use impls::replicate_impl;
+use replicate::replicate_impl;
 
 /// Derives the ProtocolType trait for a given enum
 #[proc_macro_derive(ProtocolType)]
