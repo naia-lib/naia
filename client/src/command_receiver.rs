@@ -1,7 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    wrapping_diff, EntityType, ProtocolType, Replicate, SequenceBuffer, SequenceIterator,
+    wrapping_diff, EntityType, ProtocolType, SequenceBuffer, SequenceIterator,
     WorldMutType,
 };
 

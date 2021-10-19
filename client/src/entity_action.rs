@@ -11,5 +11,5 @@ pub enum EntityAction<P: ProtocolType, E: EntityType> {
     RewindEntity(OwnedEntity<E>),
     InsertComponent(E, P::Kind),
     UpdateComponent(E, P::Kind),
-    RemoveComponent(E, P::Kind),
+    RemoveComponent(E, P),
 }

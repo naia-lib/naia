@@ -143,8 +143,7 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
 
                             // create copies of components //
                             for component in world.get_components(&world_entity) {
-                                let component_copy = component.copy();
-                                component_copy.extract_and_insert(&prediction_entity, world);
+                                component.extract_and_insert(&prediction_entity, world);
                             }
                             /////////////////////////////////
 
@@ -185,10 +184,10 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                 EntityActionType::InsertComponent => {
                     // Add Component to Entity
                     let local_entity = LocalEntity::from_u16(reader.read_u16());
-                    let naia_id: u16 = reader.read_u16();
+                    let component_kind = P::Kind::from_u16(reader.read_u16());
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                    let new_component = manifest.create_replica(naia_id, reader);
+                    let new_component = manifest.create_replica(component_kind, reader, packet_index);
                     if self.component_to_entity_map.contains_key(&component_key) {
                         // its possible we received a very late duplicate message
                         warn!(
@@ -212,17 +211,16 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
 
                             let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
 
-                            entity_record
-                                .insert_component(&component_key, &new_component.get_type_id());
+                            entity_record.insert_component(&component_key, &component_kind);
 
                             new_component.extract_and_insert(world_entity, world);
 
-                            //TODO: handle adding Component to a Prediction... !!!
+                            //TODO: handle inserting Component into an Entity that has a Prediction... !!!
 
                             self.queued_incoming_messages
                                 .push_back(EntityAction::InsertComponent(
                                     *world_entity,
-                                    new_component,
+                                    component_kind,
                                 ));
                         }
                     }
@@ -234,13 +232,13 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                     if let Some(world_entity) = self.component_to_entity_map.get_mut(&component_key)
                     {
                         if let Some(entity_record) = self.entity_records.get(world_entity) {
-                            let type_id = entity_record.get_type_from_key(&component_key).unwrap();
+                            let component_kind = entity_record.get_kind_from_key(&component_key).unwrap();
                             if let Some(component_protocol) =
-                                world.get_component_of_kind(world_entity, &type_id)
+                                world.get_component_mut_of_kind(world_entity, component_kind)
                             {
                                 // read incoming delta
                                 let diff_mask: DiffMask = DiffMask::read(reader);
-                                component_protocol.inner_ref().borrow_mut().read_partial(
+                                component_protocol.dyn_mut().read_partial(
                                     &diff_mask,
                                     reader,
                                     packet_index,
@@ -260,8 +258,8 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                                 self.queued_incoming_messages.push_back(
                                     EntityAction::UpdateComponent(
                                         *world_entity,
-                                        component_protocol.clone(),
-                                    ),
+                                        *component_kind,
+                                    )
                                 );
                             }
                         }
@@ -285,7 +283,7 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                             self.component_to_entity_map.remove(&component_key).unwrap();
 
                         // Get entity record, remove component
-                        let component_type = self
+                        let component_kind = self
                             .entity_records
                             .get_mut(&world_entity)
                             .expect("entity not instantiated properly? no such entity")
@@ -294,12 +292,12 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
 
                         // Get component for last change
                         let component = world
-                            .get_component_of_kind(&world_entity, &component_type)
+                            .get_component_of_kind(&world_entity, &component_kind)
                             .expect(
                                 "component should still exist in the World, was it tampered with?",
                             );
 
-                        world.remove_component_of_kind(&world_entity, &component_type);
+                        world.remove_component_of_kind(&world_entity, &component_kind);
 
                         // Generate event
                         self.queued_incoming_messages
@@ -350,8 +348,8 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
         if let Some(predicted_entity) = self.get_predicted_entity(&world_entity) {
             // go through all components to make prediction components = world components
             for confirmed_protocol in world.get_components(world_entity) {
-                let type_id = confirmed_protocol.get_type_id();
-                let mut predicted_protocol = world.get_component_of_kind(&predicted_entity, &type_id)
+                let confirmed_kind = confirmed_protocol.dyn_ref().get_kind();
+                let mut predicted_protocol = world.get_component_of_kind(&predicted_entity, &confirmed_kind)
                     .expect("Predicted and Confirmed entities must always contain the same types of components!");
                 predicted_protocol.mirror(&confirmed_protocol);
             }

@@ -244,11 +244,11 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     pub fn queue_message<R: ReplicateEq<P>>(
         &mut self,
         user_key: &UserKey,
-        message_ref: &R,
+        message: &R,
         guaranteed_delivery: bool,
     ) {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
-            connection.queue_message(message_ref, guaranteed_delivery);
+            connection.queue_message(message, guaranteed_delivery);
         }
     }
 

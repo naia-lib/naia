@@ -4,7 +4,7 @@ use naia_client_socket::Packet;
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, Replicate, SequenceNumber, StandardHeader, WorldMutType,
+    ProtocolType, SequenceNumber, StandardHeader, WorldMutType, ReplicateEq,
 };
 
 use super::{
@@ -13,7 +13,6 @@ use super::{
     tick_manager::TickManager, tick_queue::TickQueue,
 };
 
-#[derive(Debug)]
 pub struct ServerConnection<P: ProtocolType, K: EntityType> {
     connection: Connection<P>,
     entity_manager: EntityManager<P, K>,
@@ -40,8 +39,7 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
 
     pub fn get_outgoing_packet(
         &mut self,
-        host_tick: u16,
-        manifest: &Manifest<P>,
+        host_tick: u16
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_messages() || !self.command_sender.is_empty() {
             let mut writer = PacketWriter::new();
@@ -50,7 +48,6 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
             while let Some((owned_entity, command)) = self.command_sender.pop_front() {
                 if writer.write_command(
                     host_tick,
-                    manifest,
                     &self.entity_manager,
                     &self.command_receiver,
                     &owned_entity,
@@ -68,9 +65,9 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
             let next_packet_index: u16 = self.get_next_packet_index();
             while let Some(popped_message) = self.connection.pop_outgoing_message(next_packet_index)
             {
-                if !writer.write_message(manifest, &popped_message) {
+                if !writer.write_message(&popped_message) {
                     self.connection
-                        .unpop_outgoing_message(next_packet_index, &popped_message);
+                        .unpop_outgoing_message(next_packet_index, popped_message);
                     break;
                 }
             }
@@ -107,7 +104,7 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
             let manager_type: ManagerType = reader.read_u8().into();
             match manager_type {
                 ManagerType::Message => {
-                    self.connection.process_message_data(&mut reader, manifest);
+                    self.connection.process_message_data(&mut reader, manifest, packet_index);
                 }
                 ManagerType::Entity => {
                     self.entity_manager.process_data(
@@ -228,7 +225,7 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message(&mut self, message: &P, guaranteed_delivery: bool) {
+    pub fn queue_message<R: ReplicateEq<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         return self.connection.queue_message(message, guaranteed_delivery);
     }
 
@@ -241,8 +238,9 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
     }
 
     // Commands
-    pub fn queue_command(&mut self, entity: OwnedEntity<K>, command: &P) {
-        return self.command_sender.push_back((entity, command));
+    pub fn queue_command<R: ReplicateEq<P>>(&mut self, entity: OwnedEntity<K>, command: R) {
+        let command_protocol = command.to_protocol();
+        return self.command_sender.push_back((entity, command_protocol));
     }
 
     pub fn process_replays<W: WorldMutType<P, K>>(&mut self, world: &mut W) {

@@ -1,9 +1,10 @@
+use std::marker::PhantomData;
+
 use naia_shared::{EntityType, ProtocolType, Replicate, WorldRefType};
 
 use super::client::Client;
 
 // EntityRef
-#[derive(Debug)]
 pub struct EntityRef<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> {
     client: &'s Client<P, K>,
     world: W,
@@ -35,28 +36,27 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P,
         return self.client.entity_is_owned(&self.id);
     }
 
-    pub fn prediction(self) -> PredictedEntityRef<'s, P, K, W> {
+    pub fn prediction(self) -> PredictedEntityRef<P, K, W> {
         if !self.is_owned() {
             panic!("Attempted to call .prediction() on an un-owned Entity!");
         }
-        return PredictedEntityRef::new(self.client, self.world, &self.id);
+        return PredictedEntityRef::new(self.world, &self.id);
     }
 }
 
 // PredictedEntityRef
-#[derive(Debug)]
-pub struct PredictedEntityRef<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> {
-    client: &'s Client<P, K>,
+pub struct PredictedEntityRef<P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> {
     world: W,
     id: K,
+    phantom: PhantomData<P>,
 }
 
-impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> PredictedEntityRef<'s, P, K, W> {
-    pub fn new(client: &'s Client<P, K>, world: W, key: &K) -> Self {
+impl<P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> PredictedEntityRef<P, K, W> {
+    pub fn new(world: W, key: &K) -> Self {
         PredictedEntityRef {
-            client,
             world,
             id: *key,
+            phantom: PhantomData,
         }
     }
 
