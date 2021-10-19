@@ -6,10 +6,10 @@ use std::{
 use naia_socket_shared::PacketReader;
 
 use super::{
-    protocol_type::ProtocolType, replicate::ReplicateEq,
     manifest::Manifest,
     packet_notifiable::PacketNotifiable,
-    protocol_type::ProtocolKindType,
+    protocol_type::{ProtocolKindType, ProtocolType},
+    replicate::ReplicateEq,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages

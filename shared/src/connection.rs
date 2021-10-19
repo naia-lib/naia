@@ -5,15 +5,9 @@ use naia_socket_shared::{PacketReader, Timer};
 use crate::{message_manager::MessageManager, wrapping_number::wrapping_diff};
 
 use super::{
-    ack_manager::AckManager,
-    connection_config::ConnectionConfig,
-    protocol_type::ProtocolType,
-    replicate::ReplicateEq,
-    manifest::Manifest,
-    packet_notifiable::PacketNotifiable,
-    packet_type::PacketType,
-    sequence_buffer::SequenceNumber,
-    standard_header::StandardHeader,
+    ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
+    packet_notifiable::PacketNotifiable, packet_type::PacketType, protocol_type::ProtocolType,
+    replicate::ReplicateEq, sequence_buffer::SequenceNumber, standard_header::StandardHeader,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
