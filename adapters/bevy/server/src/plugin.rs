@@ -8,9 +8,7 @@ use bevy::{
 
 use naia_server::{ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig};
 
-use naia_bevy_shared::{
-    Entity, PrivateStage, Stage, WorldData,
-};
+use naia_bevy_shared::{Entity, PrivateStage, Stage, WorldData};
 
 use super::tick::{finish_tick, should_tick, Ticker};
 

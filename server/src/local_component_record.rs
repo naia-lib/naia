@@ -9,13 +9,7 @@ pub struct LocalComponentRecord {
 }
 
 impl LocalComponentRecord {
-    pub fn new(
-        local_key: LocalComponentKey,
-        status: LocalityStatus,
-    ) -> LocalComponentRecord {
-        LocalComponentRecord {
-            local_key,
-            status,
-        }
+    pub fn new(local_key: LocalComponentKey, status: LocalityStatus) -> LocalComponentRecord {
+        LocalComponentRecord { local_key, status }
     }
 }

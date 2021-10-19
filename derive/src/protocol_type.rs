@@ -1,6 +1,6 @@
-use proc_macro2::{Span, TokenStream, Punct, Spacing};
+use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{Data, Ident, parse_macro_input, DeriveInput};
+use syn::{parse_macro_input, Data, DeriveInput, Ident};
 
 use crate::impls::protocol_type::*;
 
@@ -67,12 +67,8 @@ pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream 
     let mut variant_index: u16 = 0;
 
     {
-
         for variant in properties {
-            let variant_name = Ident::new(
-                &variant.to_string(),
-                Span::call_site(),
-            );
+            let variant_name = Ident::new(&variant.to_string(), Span::call_site());
 
             let new_output_right = quote! {
                 #variant_name = #variant_index,
@@ -92,10 +88,7 @@ pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream 
         let mut variant_match_index: u16 = 0;
 
         for variant in properties {
-            let variant_name = Ident::new(
-                &variant.to_string(),
-                Span::call_site(),
-            );
+            let variant_name = Ident::new(&variant.to_string(), Span::call_site());
 
             let new_output_right = quote! {
                 #variant_match_index => #enum_name::#variant_name,
@@ -133,22 +126,16 @@ pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream 
 }
 
 pub fn get_kind_of_method(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
-
     let mut const_list = quote! {};
 
     {
         for variant in properties {
             let variant_name_string = variant.to_string();
-            let variant_name_ident = Ident::new(
-                &variant_name_string,
-                Span::call_site(),
-            );
+            let variant_name_ident = Ident::new(&variant_name_string, Span::call_site());
 
-            let id_const_name = format_ident!("{}_TYPE_ID", variant_name_string.to_uppercase().as_str());
-            let id_const_ident = Ident::new(
-                &id_const_name.to_string(),
-                Span::call_site(),
-            );
+            let id_const_name =
+                format_ident!("{}_TYPE_ID", variant_name_string.to_uppercase().as_str());
+            let id_const_ident = Ident::new(&id_const_name.to_string(), Span::call_site());
             let new_output_right = quote! {
                 const #id_const_ident: TypeId = TypeId::of::<#variant_name_ident>();
             };
@@ -165,16 +152,11 @@ pub fn get_kind_of_method(enum_name: &Ident, properties: &Vec<Ident>) -> TokenSt
     {
         for variant in properties {
             let variant_name_string = variant.to_string();
-            let variant_name_ident = Ident::new(
-                &variant_name_string,
-                Span::call_site(),
-            );
+            let variant_name_ident = Ident::new(&variant_name_string, Span::call_site());
 
-            let id_const_name = format_ident!("{}_TYPE_ID", variant_name_string.to_uppercase().as_str());
-            let id_const_ident = Ident::new(
-                &id_const_name.to_string(),
-                Span::call_site(),
-            );
+            let id_const_name =
+                format_ident!("{}_TYPE_ID", variant_name_string.to_uppercase().as_str());
+            let id_const_ident = Ident::new(&id_const_name.to_string(), Span::call_site());
             let new_output_right = quote! {
                 #id_const_ident => #enum_name::#variant_name_ident,
             };

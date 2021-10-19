@@ -24,8 +24,8 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
         };
     }
 
-    /// Given a cursor into incoming packet data, initializes the Property with the
-    /// synced value
+    /// Given a cursor into incoming packet data, initializes the Property with
+    /// the synced value
     pub fn new_read(reader: &mut PacketReader, mutator_index: u8) -> Self {
         let length = reader.read_u8();
 
@@ -35,7 +35,8 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
         let start: usize = cursor.position() as usize;
         let end: usize = start + (length as usize);
 
-        let inner = DeBin::deserialize_bin(&buffer[start..end]).expect("error deserializing property");
+        let inner =
+            DeBin::deserialize_bin(&buffer[start..end]).expect("error deserializing property");
 
         cursor.set_position(end as u64);
 

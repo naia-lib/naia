@@ -8,18 +8,20 @@ use bevy::{
 
 use naia_client::{Client, ClientConfig, ProtocolType, SharedConfig};
 
-use naia_bevy_shared::{
-    Entity, PrivateStage, Stage, WorldData,
-};
+use naia_bevy_shared::{Entity, PrivateStage, Stage, WorldData};
 
-use super::{resource::ClientResource,
-            stage::ClientStage,
-            systems::{before_receive_events, should_tick, finish_tick, finish_connect, should_connect, finish_disconnect, should_disconnect},
-            events::{
-                SpawnEntityEvent, DespawnEntityEvent, OwnEntityEvent, DisownEntityEvent, RewindEntityEvent,
-                InsertComponentEvent, UpdateComponentEvent, RemoveComponentEvent,
-                MessageEvent, NewCommandEvent, ReplayCommandEvent,
-            }
+use super::{
+    events::{
+        DespawnEntityEvent, DisownEntityEvent, InsertComponentEvent, MessageEvent, NewCommandEvent,
+        OwnEntityEvent, RemoveComponentEvent, ReplayCommandEvent, RewindEntityEvent,
+        SpawnEntityEvent, UpdateComponentEvent,
+    },
+    resource::ClientResource,
+    stage::ClientStage,
+    systems::{
+        before_receive_events, finish_connect, finish_disconnect, finish_tick, should_connect,
+        should_disconnect, should_tick,
+    },
 };
 
 struct PluginConfig<P: ProtocolType, R: Replicate<P>> {

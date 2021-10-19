@@ -1,16 +1,16 @@
-pub use naia_client::{ClientConfig, Random, Ref, OwnedEntity};
+pub use naia_client::{ClientConfig, OwnedEntity, Random, Ref};
 
 pub use naia_bevy_shared::{Entity, Stage};
 
 mod client;
 pub mod components;
+pub mod events;
+mod flag;
 mod plugin;
 mod resource;
 mod stage;
 mod state;
 mod systems;
-pub mod events;
-mod flag;
 
 pub use client::Client;
 pub use plugin::Plugin;

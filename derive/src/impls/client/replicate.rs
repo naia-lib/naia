@@ -10,10 +10,12 @@ pub fn get_builder_impl_methods(replica_name: &Ident, protocol_name: &Ident) -> 
     };
 }
 
-pub fn get_replica_impl_methods(protocol_name: &Ident,
-                                replica_name: &Ident,
-                                _enum_name: &Ident,
-                                properties: &Vec<(Ident, Type)>) -> TokenStream {
+pub fn get_replica_impl_methods(
+    protocol_name: &Ident,
+    replica_name: &Ident,
+    _enum_name: &Ident,
+    properties: &Vec<(Ident, Type)>,
+) -> TokenStream {
     let new_complete_method = get_new_complete_method(replica_name, properties);
     let read_to_type_method = get_read_to_type_method(protocol_name, replica_name, properties);
 
@@ -23,7 +25,10 @@ pub fn get_replica_impl_methods(protocol_name: &Ident,
     };
 }
 
-pub fn get_replicate_derive_methods(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+pub fn get_replicate_derive_methods(
+    enum_name: &Ident,
+    properties: &Vec<(Ident, Type)>,
+) -> TokenStream {
     let read_partial_method = get_read_partial_method(enum_name, properties);
 
     return quote! {
@@ -59,10 +64,7 @@ fn get_read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -
     };
 }
 
-fn get_new_complete_method(
-    replica_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
-) -> TokenStream {
+fn get_new_complete_method(replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut args = quote! {};
     for (field_name, field_type) in properties.iter() {
         let new_output_right = quote! {

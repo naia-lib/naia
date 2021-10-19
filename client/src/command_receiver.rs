@@ -1,8 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    wrapping_diff, EntityType, ProtocolType, SequenceBuffer, SequenceIterator,
-    WorldMutType,
+    wrapping_diff, EntityType, ProtocolType, SequenceBuffer, SequenceIterator, WorldMutType,
 };
 
 use super::{entity_manager::EntityManager, owned_entity::OwnedEntity};
@@ -76,12 +75,7 @@ impl<P: ProtocolType, K: EntityType> CommandReceiver<P, K> {
     }
 
     /// Queues an Command to be ran locally on the Client
-    pub fn queue_command(
-        &mut self,
-        host_tick: u16,
-        owned_entity: OwnedEntity<K>,
-        command: P,
-    ) {
+    pub fn queue_command(&mut self, host_tick: u16, owned_entity: OwnedEntity<K>, command: P) {
         let world_entity = owned_entity.confirmed;
         self.queued_incoming_commands
             .push_back((host_tick, owned_entity, command.clone()));

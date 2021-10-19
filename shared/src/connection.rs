@@ -2,12 +2,17 @@ use std::net::SocketAddr;
 
 use naia_socket_shared::{PacketReader, Timer};
 
-use crate::{wrapping_number::wrapping_diff, message_manager::MessageManager};
+use crate::{message_manager::MessageManager, wrapping_number::wrapping_diff};
 
 use super::{
-    ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
-    packet_notifiable::PacketNotifiable, packet_type::PacketType, impls::ProtocolType,
-    sequence_buffer::SequenceNumber, standard_header::StandardHeader, impls::ReplicateEq
+    ack_manager::AckManager,
+    connection_config::ConnectionConfig,
+    impls::{ProtocolType, ReplicateEq},
+    manifest::Manifest,
+    packet_notifiable::PacketNotifiable,
+    packet_type::PacketType,
+    sequence_buffer::SequenceNumber,
+    standard_header::StandardHeader,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -128,20 +133,13 @@ impl<P: ProtocolType> Connection<P> {
     }
 
     /// Pop the next outgoing message from the queue
-    pub fn pop_outgoing_message(
-        &mut self,
-        next_packet_index: u16,
-    ) -> Option<P> {
+    pub fn pop_outgoing_message(&mut self, next_packet_index: u16) -> Option<P> {
         return self.message_manager.pop_outgoing_message(next_packet_index);
     }
 
     /// If for some reason the next outgoing message could not be written into a
     /// message and sent, place it back into the front of the queue
-    pub fn unpop_outgoing_message(
-        &mut self,
-        next_packet_index: u16,
-        message: P,
-    ) {
+    pub fn unpop_outgoing_message(&mut self, next_packet_index: u16, message: P) {
         return self
             .message_manager
             .unpop_outgoing_message(next_packet_index, message);
@@ -149,8 +147,15 @@ impl<P: ProtocolType> Connection<P> {
 
     /// Given an incoming packet which has been identified as an message, send
     /// the data to the MessageManager for processing
-    pub fn process_message_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>, packet_index: u16) {
-        return self.message_manager.process_data(reader, manifest, packet_index);
+    pub fn process_message_data(
+        &mut self,
+        reader: &mut PacketReader,
+        manifest: &Manifest<P>,
+        packet_index: u16,
+    ) {
+        return self
+            .message_manager
+            .process_data(reader, manifest, packet_index);
     }
 
     /// Get the most recent message that has been received from a remote host

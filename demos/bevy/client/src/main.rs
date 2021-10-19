@@ -7,7 +7,7 @@ use naia_bevy_demo_shared::{get_server_address, get_shared_config, protocol::Aut
 mod resources;
 mod systems;
 
-use systems::{init, input, events, sync, tick};
+use systems::{events, init, input, sync, tick};
 
 fn main() {
     let mut app = App::build();

@@ -48,5 +48,3 @@ pub enum Event<P: ProtocolType, E: EntityType> {
     /// to extrapolate back to the "present"
     ReplayCommand(OwnedEntity<E>, P),
 }
-
-

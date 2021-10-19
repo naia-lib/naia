@@ -7,8 +7,11 @@ use bevy::{
     prelude::*,
 };
 
-use naia_bevy_client::{components::Predicted, Client, Ref, events::{SpawnEntityEvent, OwnEntityEvent,
-                NewCommandEvent, ReplayCommandEvent}};
+use naia_bevy_client::{
+    components::Predicted,
+    events::{NewCommandEvent, OwnEntityEvent, ReplayCommandEvent, SpawnEntityEvent},
+    Client, Ref,
+};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
@@ -30,8 +33,8 @@ pub fn disconnect_event(client: Client<Protocol>) {
 pub fn spawn_entity_event(
     mut local: Commands,
     global: ResMut<Global>,
-    mut event_reader: EventReader<SpawnEntityEvent<Protocol>>)
-{
+    mut event_reader: EventReader<SpawnEntityEvent<Protocol>>,
+) {
     for SpawnEntityEvent(entity, component_list) in event_reader.iter() {
         info!("create entity");
 
@@ -62,8 +65,8 @@ pub fn spawn_entity_event(
 pub fn own_entity_event(
     mut local: Commands,
     global: ResMut<Global>,
-    mut event_reader: EventReader<OwnEntityEvent>)
-{
+    mut event_reader: EventReader<OwnEntityEvent>,
+) {
     for OwnEntityEvent(owned_entity) in event_reader.iter() {
         info!("gave ownership of entity");
 
@@ -80,8 +83,8 @@ pub fn own_entity_event(
 
 pub fn new_command_event(
     mut event_reader: EventReader<NewCommandEvent<Protocol>>,
-    mut q_player_position: Query<&Ref<Position>, With<Predicted>>)
-{
+    mut q_player_position: Query<&Ref<Position>, With<Predicted>>,
+) {
     for event in event_reader.iter() {
         if let NewCommandEvent(owned_entity, Protocol::KeyCommand(command)) = event {
             let predicted_entity = owned_entity.predicted;
@@ -94,8 +97,8 @@ pub fn new_command_event(
 
 pub fn replay_command_event(
     mut event_reader: EventReader<ReplayCommandEvent<Protocol>>,
-    mut q_player_position: Query<&Ref<Position>, With<Predicted>>,)
-{
+    mut q_player_position: Query<&Ref<Position>, With<Predicted>>,
+) {
     for event in event_reader.iter() {
         if let ReplayCommandEvent(owned_entity, Protocol::KeyCommand(command)) = event {
             let predicted_entity = owned_entity.predicted;

@@ -1,6 +1,12 @@
-use std::{ops::{DerefMut, Deref}, hash::Hash};
+use std::{
+    hash::Hash,
+    ops::{Deref, DerefMut},
+};
 
-use super::{entity_type::EntityType, impls::{Replicate, ProtocolType}};
+use super::{
+    entity_type::EntityType,
+    impls::{ProtocolType, Replicate},
+};
 
 pub trait ProtocolKindType: Eq + Hash + Copy {
     fn to_u16(&self) -> u16;
@@ -19,9 +25,7 @@ pub struct DynRef<'b, P: ProtocolType> {
 
 impl<'b, P: ProtocolType> DynRef<'b, P> {
     pub fn new(inner: &'b dyn Replicate<P>) -> Self {
-        return Self {
-            inner
-        };
+        return Self { inner };
     }
 }
 
@@ -42,9 +46,7 @@ pub struct DynMut<'b, P: ProtocolType> {
 
 impl<'b, P: ProtocolType> DynMut<'b, P> {
     pub fn new(inner: &'b mut dyn Replicate<P>) -> Self {
-        return Self {
-            inner
-        };
+        return Self { inner };
     }
 }
 

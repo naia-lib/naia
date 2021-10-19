@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use super::{
-    manager_type::ManagerType, impls::ProtocolType, protocol_type::ProtocolKindType,
+    impls::ProtocolType, manager_type::ManagerType, protocol_type::ProtocolKindType,
     standard_header::StandardHeader,
 };
 
@@ -48,10 +48,7 @@ impl MessagePacketWriter {
 
     /// Writes an Message into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_message<P: ProtocolType>(
-        &mut self,
-        message: &P,
-    ) -> bool {
+    pub fn write_message<P: ProtocolType>(&mut self, message: &P) -> bool {
         let message_ref = message.dyn_ref();
 
         //Write message payload
@@ -62,7 +59,9 @@ impl MessagePacketWriter {
         let mut message_total_bytes = Vec::<u8>::new();
 
         let message_kind = message_ref.get_kind();
-        message_total_bytes.write_u16::<BigEndian>(message_kind.to_u16()).unwrap(); // write naia id
+        message_total_bytes
+            .write_u16::<BigEndian>(message_kind.to_u16())
+            .unwrap(); // write naia id
         message_total_bytes.append(&mut message_payload_bytes); // write payload
 
         let mut hypothetical_next_payload_size = self.bytes_number() + message_total_bytes.len();

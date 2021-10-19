@@ -1,22 +1,23 @@
 use std::{
-    sync::{Arc, RwLock},
     borrow::Borrow,
     clone::Clone,
     collections::{HashMap, HashSet, VecDeque},
     net::SocketAddr,
+    sync::{Arc, RwLock},
 };
 
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    DiffMask, EntityType, KeyGenerator, LocalComponentKey, LocalEntity, NaiaKey,
-    PacketNotifiable, ProtocolType, ProtocolKindType, WorldMutType, WorldRefType, MTU_SIZE,
+    DiffMask, EntityType, KeyGenerator, LocalComponentKey, LocalEntity, NaiaKey, PacketNotifiable,
+    ProtocolKindType, ProtocolType, WorldMutType, WorldRefType, MTU_SIZE,
 };
 
 use super::{
-    entity_action::EntityAction, keys::ComponentKey, local_component_record::LocalComponentRecord, user_diff_handler::UserDiffHandler,
-    local_entity_record::LocalEntityRecord, locality_status::LocalityStatus, packet_writer::PacketWriter, world_record::WorldRecord,
-    global_diff_handler::GlobalDiffHandler,
+    entity_action::EntityAction, global_diff_handler::GlobalDiffHandler, keys::ComponentKey,
+    local_component_record::LocalComponentRecord, local_entity_record::LocalEntityRecord,
+    locality_status::LocalityStatus, packet_writer::PacketWriter,
+    user_diff_handler::UserDiffHandler, world_record::WorldRecord,
 };
 
 /// Manages Entities for a given Client connection and keeps them in
@@ -116,15 +117,13 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                         component_kind,
                     ));
 
-                    let diff_mask = self.diff_handler
+                    let diff_mask = self
+                        .diff_handler
                         .get_diff_mask(&global_component_key)
                         .expect("DiffHandler does not have registered Component..")
                         .clone();
 
-                    diff_mask_list.push((
-                        global_component_key,
-                        diff_mask,
-                    ));
+                    diff_mask_list.push((global_component_key, diff_mask));
 
                     self.diff_handler.clear_diff_mask(&global_component_key);
                 }
@@ -186,10 +185,8 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                 if let Some(last_popped_diff_mask_list) = &self.last_popped_diff_mask_list {
                     for (global_component_key, last_popped_diff_mask) in last_popped_diff_mask_list
                     {
-                        self.diff_handler.set_diff_mask(
-                            global_component_key,
-                            &last_popped_diff_mask,
-                        );
+                        self.diff_handler
+                            .set_diff_mask(global_component_key, &last_popped_diff_mask);
                     }
                 }
                 self.queued_actions.push_front(action);
@@ -223,11 +220,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
     // Entities
 
-    pub fn spawn_entity(
-        &mut self,
-        world_record: &WorldRecord<K, P::Kind>,
-        global_entity_key: &K,
-    ) {
+    pub fn spawn_entity(&mut self, world_record: &WorldRecord<K, P::Kind>, global_entity_key: &K) {
         if !self.entity_records.contains_key(global_entity_key) {
             // first, get a list of components
             // then, add components
@@ -235,10 +228,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                 panic!("entity nonexistant!");
             }
             for global_component_key in world_record.get_component_keys(global_entity_key) {
-                self.component_init(
-                    &global_component_key,
-                    LocalityStatus::Creating,
-                );
+                self.component_init(&global_component_key, LocalityStatus::Creating);
             }
 
             // then, add entity
@@ -258,7 +248,11 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         }
     }
 
-    pub fn despawn_entity(&mut self, world_record: &WorldRecord<K, P::Kind>, global_entity_key: &K) {
+    pub fn despawn_entity(
+        &mut self,
+        world_record: &WorldRecord<K, P::Kind>,
+        global_entity_key: &K,
+    ) {
         if self.has_entity_prediction(global_entity_key) {
             self.remove_prediction_entity(global_entity_key);
         }
@@ -349,8 +343,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
             .get_component_record(component_key)
             .expect("component does not exist!");
 
-        if let Some(component_protocol) =
-            world.get_component_of_kind(&entity_key, &component_type)
+        if let Some(component_protocol) = world.get_component_of_kind(&entity_key, &component_type)
         {
             let component_ref = component_protocol.dyn_ref();
 
@@ -360,10 +353,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                 );
             }
 
-            let local_component_key = self.component_init(
-                component_key,
-                LocalityStatus::Creating,
-            );
+            let local_component_key = self.component_init(component_key, LocalityStatus::Creating);
 
             let entity_record = self.entity_records.get(&entity_key).unwrap(); // checked this above
 
@@ -431,7 +421,8 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                 if let Some(component_protocol) =
                     world.get_component_of_kind(&entity_key, &component_type)
                 {
-                    let new_diff_mask = self.diff_handler
+                    let new_diff_mask = self
+                        .diff_handler
                         .get_diff_mask(component_key)
                         .expect("DiffHandler does not have registered Component!")
                         .clone();
@@ -484,7 +475,9 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
                     //Write component "header"
                     let component_kind = component_ref.get_kind();
-                    action_total_bytes.write_u16::<BigEndian>(component_kind.to_u16()).unwrap(); // write naia id
+                    action_total_bytes
+                        .write_u16::<BigEndian>(component_kind.to_u16())
+                        .unwrap(); // write naia id
                     action_total_bytes
                         .write_u16::<BigEndian>(local_component_key.to_u16())
                         .unwrap(); //write local key
@@ -507,11 +500,17 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                     .write_u16::<BigEndian>(local_key.to_u16())
                     .unwrap(); //write local key
             }
-            EntityAction::InsertComponent(global_entity_key, local_entity_key, _, local_component_key, component_kind) => {
+            EntityAction::InsertComponent(
+                global_entity_key,
+                local_entity_key,
+                _,
+                local_component_key,
+                component_kind,
+            ) => {
                 //write component payload
                 let component_result = world
-                        .get_component_of_kind(global_entity_key, component_kind)
-                        .expect("Component does not exist in World");
+                    .get_component_of_kind(global_entity_key, component_kind)
+                    .expect("Component does not exist in World");
                 let component_ref = component_result.dyn_ref();
 
                 let mut component_payload_bytes = Vec::<u8>::new();
@@ -522,22 +521,29 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                     .write_u16::<BigEndian>(local_entity_key.to_u16())
                     .unwrap(); //write local entity key
                 let component_kind = component_ref.get_kind();
-                action_total_bytes.write_u16::<BigEndian>(component_kind.to_u16()).unwrap(); // write component kind
+                action_total_bytes
+                    .write_u16::<BigEndian>(component_kind.to_u16())
+                    .unwrap(); // write component kind
                 action_total_bytes
                     .write_u16::<BigEndian>(local_component_key.to_u16())
                     .unwrap(); //write local component key
                 action_total_bytes.append(&mut component_payload_bytes); // write payload
             }
-            EntityAction::UpdateComponent(global_entity_key, _, local_component_key, diff_mask, component_kind) => {
+            EntityAction::UpdateComponent(
+                global_entity_key,
+                _,
+                local_component_key,
+                diff_mask,
+                component_kind,
+            ) => {
                 //write component payload
                 let component_result = world
-                        .get_component_of_kind(global_entity_key, component_kind)
-                        .expect("Component does not exist in World");
+                    .get_component_of_kind(global_entity_key, component_kind)
+                    .expect("Component does not exist in World");
                 let component_ref = component_result.dyn_ref();
 
                 let mut component_payload_bytes = Vec::<u8>::new();
-                component_ref
-                    .write_partial(diff_mask, &mut component_payload_bytes);
+                component_ref.write_partial(diff_mask, &mut component_payload_bytes);
 
                 //Write component "header"
                 action_total_bytes
@@ -602,8 +608,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
     fn component_cleanup(&mut self, global_component_key: &ComponentKey) {
         if let Some(component_record) = self.component_records.remove(global_component_key) {
             // actually delete the component from local records
-            self.diff_handler
-                .deregister_component(global_component_key);
+            self.diff_handler.deregister_component(global_component_key);
 
             let local_component_key = component_record.local_key;
             self.local_to_global_component_key_map
@@ -619,21 +624,19 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
     }
 
     fn pop_insert_component_diff_mask(&mut self, global_component_key: &ComponentKey) {
-        let new_diff_mask = self.diff_handler
+        let new_diff_mask = self
+            .diff_handler
             .get_diff_mask(global_component_key)
             .expect("DiffHandler doesn't have Component registered!")
             .clone();
         self.last_popped_diff_mask = Some(new_diff_mask);
-        self.diff_handler
-            .clear_diff_mask(global_component_key);
+        self.diff_handler.clear_diff_mask(global_component_key);
     }
 
     fn unpop_insert_component_diff_mask(&mut self, global_component_key: &ComponentKey) {
         if let Some(last_popped_diff_mask) = &self.last_popped_diff_mask {
-            self.diff_handler.set_diff_mask(
-                global_component_key,
-                &last_popped_diff_mask,
-            );
+            self.diff_handler
+                .set_diff_mask(global_component_key, &last_popped_diff_mask);
         }
     }
 
@@ -702,8 +705,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
         // having copied the diff mask for this update, clear the component
         self.last_popped_diff_mask = Some(diff_mask.borrow().clone());
-        self.diff_handler
-            .clear_diff_mask(global_component_key);
+        self.diff_handler.clear_diff_mask(global_component_key);
 
         locked_diff_mask
     }
@@ -722,10 +724,8 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
         self.last_update_packet_index = self.last_last_update_packet_index;
         if let Some(last_popped_diff_mask) = &self.last_popped_diff_mask {
-            self.diff_handler.set_diff_mask(
-                global_component_key,
-                &last_popped_diff_mask,
-            );
+            self.diff_handler
+                .set_diff_mask(global_component_key, &last_popped_diff_mask);
         }
 
         self.diff_handler
@@ -902,7 +902,8 @@ impl<P: ProtocolType, K: EntityType> PacketNotifiable for EntityManager<P, K> {
                                     }
                                 }
 
-                                self.diff_handler.or_diff_mask(global_component_key, &new_diff_mask);
+                                self.diff_handler
+                                    .or_diff_mask(global_component_key, &new_diff_mask);
                             }
                         }
                     }

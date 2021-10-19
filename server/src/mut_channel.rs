@@ -1,4 +1,8 @@
-use std::{sync::{Arc, RwLock, RwLockReadGuard}, net::SocketAddr, collections::HashMap};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{Arc, RwLock, RwLockReadGuard},
+};
 
 use naia_shared::{DiffMask, PropertyMutate};
 
@@ -10,7 +14,6 @@ pub struct MutChannel {
 
 impl MutChannel {
     pub fn new_channel(diff_mask_length: u8) -> (MutSender, MutReceiverBuilder) {
-
         let channel = MutChannel::new(diff_mask_length);
 
         let sender = channel.new_sender();
@@ -27,7 +30,6 @@ impl MutChannel {
     }
 
     pub fn new_sender(&self) -> MutSender {
-
         return MutSender::new(self);
     }
 

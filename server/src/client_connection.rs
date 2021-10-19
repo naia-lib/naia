@@ -1,4 +1,7 @@
-use std::{sync::{Arc, RwLock}, net::SocketAddr};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, RwLock},
+};
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
@@ -6,9 +9,9 @@ use naia_shared::{
 };
 
 use super::{
-    command_receiver::CommandReceiver, entity_manager::EntityManager, keys::ComponentKey,
-    packet_writer::PacketWriter, ping_manager::PingManager, world_record::WorldRecord,
-    global_diff_handler::GlobalDiffHandler,
+    command_receiver::CommandReceiver, entity_manager::EntityManager,
+    global_diff_handler::GlobalDiffHandler, keys::ComponentKey, packet_writer::PacketWriter,
+    ping_manager::PingManager, world_record::WorldRecord,
 };
 
 pub struct ClientConnection<P: ProtocolType, K: EntityType> {
@@ -22,7 +25,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler>>
+        diff_handler: &Arc<RwLock<GlobalDiffHandler>>,
     ) -> Self {
         ClientConnection {
             connection: Connection::new(address, connection_config),
@@ -50,9 +53,9 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
                     break;
                 }
             }
-            while let Some(popped_entity_action) =
-                self.entity_manager
-                    .pop_outgoing_action::<W>(world_record, next_packet_index)
+            while let Some(popped_entity_action) = self
+                .entity_manager
+                .pop_outgoing_action::<W>(world_record, next_packet_index)
             {
                 if !self.entity_manager.write_entity_action(
                     world,
@@ -103,8 +106,10 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
                     );
                 }
                 ManagerType::Message => {
-                    // packet index shouldn't matter here because the server's impl of Property doesn't use it
-                    self.connection.process_message_data(&mut reader, manifest, 0);
+                    // packet index shouldn't matter here because the server's impl of Property
+                    // doesn't use it
+                    self.connection
+                        .process_message_data(&mut reader, manifest, 0);
                 }
                 _ => {}
             }
@@ -148,11 +153,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         return self.entity_manager.has_entity(key);
     }
 
-    pub fn spawn_entity(
-        &mut self,
-        world_record: &WorldRecord<K, P::Kind>,
-        key: &K,
-    ) {
+    pub fn spawn_entity(&mut self, world_record: &WorldRecord<K, P::Kind>, key: &K) {
         self.entity_manager.spawn_entity(world_record, key);
     }
 

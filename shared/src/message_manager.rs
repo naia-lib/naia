@@ -6,7 +6,10 @@ use std::{
 use naia_socket_shared::PacketReader;
 
 use super::{
-    manifest::Manifest, packet_notifiable::PacketNotifiable, impls::ProtocolType, protocol_type::ProtocolKindType, impls::ReplicateEq,
+    impls::{ProtocolType, ReplicateEq},
+    manifest::Manifest,
+    packet_notifiable::PacketNotifiable,
+    protocol_type::ProtocolKindType,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -102,7 +105,12 @@ impl<P: ProtocolType> MessageManager<P> {
 
     /// Given incoming packet data, read transmitted Messages and store them to
     /// be returned to the application
-    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>, packet_index: u16) {
+    pub fn process_data(
+        &mut self,
+        reader: &mut PacketReader,
+        manifest: &Manifest<P>,
+        packet_index: u16,
+    ) {
         let message_count = reader.read_u8();
         for _x in 0..message_count {
             let component_kind: P::Kind = P::Kind::from_u16(reader.read_u16());

@@ -1,6 +1,6 @@
+pub mod events;
 mod init;
 mod input;
-pub mod events;
 mod sync;
 mod tick;
 

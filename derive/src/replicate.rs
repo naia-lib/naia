@@ -1,7 +1,9 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, DeriveInput, Ident, Type};
-use syn::{Data, Fields, GenericArgument, Lit, Meta, PathArguments, Path, Result};
+use syn::{
+    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Lit, Meta, Path,
+    PathArguments, Result, Type,
+};
 
 use crate::impls::replicate::*;
 
@@ -28,7 +30,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let mirror_method = get_mirror_method(replica_name, &properties);
 
     let builder_impl_methods = get_builder_impl_methods(replica_name, &protocol_name);
-    let replica_impl_methods = get_replica_impl_methods(&protocol_name, replica_name, &enum_name, &properties);
+    let replica_impl_methods =
+        get_replica_impl_methods(&protocol_name, replica_name, &enum_name, &properties);
     let replicate_derive_methods = get_replicate_derive_methods(&enum_name, &properties);
 
     let gen = quote! {
@@ -130,7 +133,6 @@ pub fn get_protocol_path(input: &DeriveInput) -> (Path, Ident) {
                 return (new_path, name);
             }
         }
-
     }
 
     panic!("When deriving 'Replicate' you MUST specify the path of the accompanying protocol. IE: '#[protocol_path = \"crate::MyProtocol\"]'");
