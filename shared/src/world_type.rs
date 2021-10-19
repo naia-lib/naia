@@ -24,7 +24,7 @@ pub trait WorldRefType<P: ProtocolType, E: EntityType> {
     /// gets an entity's component
     fn get_component<R: Replicate<P>>(&self, entity: &E) -> Option<&R>;
     /// gets an entity's component, dynamically
-    fn get_component_of_kind(&self, entity: &E, component_kind: &P::Kind) -> Option<P>;
+    fn get_component_of_kind(&self, entity: &E, component_kind: &P::Kind) -> Option<&P>;
 }
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
