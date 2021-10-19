@@ -106,8 +106,8 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, P> {
         return get_component(self.world, entity);
     }
 
-    fn get_component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> Option<P> {
-        return get_component_from_type(self.world, entity, component_type);
+    fn get_component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> Option<&P> {
+        return get_component_of_kind(self.world, entity, component_type);
     }
 }
 
@@ -132,8 +132,8 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, P> {
         return get_component(self.world, entity);
     }
 
-    fn get_component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> Option<P> {
-        return get_component_from_type(self.world, entity, component_type);
+    fn get_component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> Option<&P> {
+        return get_component_of_kind(self.world, entity, component_type);
     }
 }
 
@@ -143,6 +143,14 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
             if let Some(component_protocol) = component_map.get_mut(&ProtocolType::kind_of::<R>()) {
                 return component_protocol.cast_mut::<R>();
             }
+        }
+
+        return None;
+    }
+
+    fn get_component_mut_of_kind(&mut self, entity: &Entity, component_type: &P::Kind) -> Option<&mut P> {
+        if let Some(component_map) = self.world.entities.get_mut(*entity) {
+            return component_map.get_mut(component_type);
         }
 
         return None;
@@ -253,15 +261,13 @@ fn get_component<'a, P: ProtocolType, R: Replicate<P>>(
     return None;
 }
 
-fn get_component_from_type<P: ProtocolType>(
-    world: &World<P>,
+fn get_component_of_kind<'a, P: ProtocolType>(
+    world: &'a World<P>,
     entity: &Entity,
     component_type: &P::Kind,
-) -> Option<P> {
+) -> Option<&'a P> {
     if let Some(component_map) = world.entities.get(*entity) {
-        if let Some(protocol) = component_map.get(component_type) {
-            return Some(protocol.clone());
-        }
+        return component_map.get(component_type);
     }
 
     return None;
