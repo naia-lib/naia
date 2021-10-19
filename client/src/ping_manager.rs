@@ -4,12 +4,11 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use naia_shared::{Instant, PacketReader, SequenceBuffer, SequenceNumber, Timer};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct SentPing {
     time_sent: Instant,
 }
 
-#[derive(Debug)]
 pub struct PingManager {
     ping_timer: Timer,
     sent_pings: SequenceBuffer<SentPing>,

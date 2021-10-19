@@ -1,4 +1,4 @@
-use naia_shared::{EntityType, ProtocolType, ProtocolKindType, Replicate};
+use naia_shared::{EntityType, ProtocolType};
 
 use super::owned_entity::OwnedEntity;
 
@@ -37,7 +37,7 @@ pub enum Event<P: ProtocolType, E: EntityType> {
     /// the Entity it is attached to has come into scope for the Client
     UpdateComponent(E, P::Kind),
     /// Occurs when a Component should be removed from the given Entity
-    RemoveComponent(E, P::Kind),
+    RemoveComponent(E, P),
     /// An Message emitted to the Client from the Server
     Message(P),
     /// A new Command received immediately to an assigned Entity, used to

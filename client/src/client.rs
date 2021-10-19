@@ -7,7 +7,7 @@ use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, So
 pub use naia_shared::{
     ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader,
     PacketType, ProtocolType, Replicate, SequenceIterator, SharedConfig, StandardHeader,
-    Timer, Timestamp, WorldMutType, WorldRefType, ProtocolKindType,
+    Timer, Timestamp, WorldMutType, WorldRefType, ProtocolKindType, ReplicateEq,
 };
 
 use super::{
@@ -111,21 +111,19 @@ impl<P: ProtocolType, E: EntityType> Client<P, E> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn queue_message<R: Replicate<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
+    pub fn queue_message<R: ReplicateEq<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
-            let protocol = message.to_protocol();
-            connection.queue_message(&protocol, guaranteed_delivery);
+            connection.queue_message(message, guaranteed_delivery);
         }
     }
 
     /// Queues up a Command for an assigned Entity to be sent to the Server
-    pub fn queue_command<R: Replicate<P>>(&mut self, predicted_entity: &E, command_ref: &R) {
+    pub fn queue_command<R: ReplicateEq<P>>(&mut self, predicted_entity: &E, command: R) {
         if let Some(connection) = self.server_connection.as_mut() {
             if let Some(confirmed_entity) = connection.get_confirmed_entity(predicted_entity) {
-                let protocol = command_ref.to_protocol();
                 let entity_pair: OwnedEntity<E> =
                     OwnedEntity::new(&confirmed_entity, &predicted_entity);
-                connection.queue_command(entity_pair, &protocol);
+                connection.queue_command(entity_pair, command);
             }
         }
     }
@@ -301,7 +299,7 @@ impl<P: ProtocolType, E: EntityType> Client<P, E> {
                 }
                 // send a packet
                 while let Some(payload) = connection
-                    .get_outgoing_packet(self.tick_manager.get_client_tick(), &self.manifest)
+                    .get_outgoing_packet(self.tick_manager.get_client_tick())
                 {
                     self.io.send_packet(Packet::new_raw(payload));
                     connection.mark_sent();
