@@ -292,12 +292,8 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
 
                         // Get component for last change
                         let component = world
-                            .get_component_of_kind(&world_entity, &component_kind)
-                            .expect(
-                                "component should still exist in the World, was it tampered with?",
-                            );
-
-                        world.remove_component_of_kind(&world_entity, &component_kind);
+                            .remove_component_of_kind(&world_entity, &component_kind)
+                            .expect("Component already removed?");
 
                         // Generate event
                         self.queued_incoming_messages
@@ -349,7 +345,7 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
             // go through all components to make prediction components = world components
             for confirmed_protocol in world.get_components(world_entity) {
                 let confirmed_kind = confirmed_protocol.dyn_ref().get_kind();
-                let mut predicted_protocol = world.get_component_of_kind(&predicted_entity, &confirmed_kind)
+                let predicted_protocol = world.get_component_mut_of_kind(&predicted_entity, &confirmed_kind)
                     .expect("Predicted and Confirmed entities must always contain the same types of components!");
                 predicted_protocol.mirror(&confirmed_protocol);
             }
