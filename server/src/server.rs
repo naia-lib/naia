@@ -306,10 +306,10 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
-    pub fn spawn_entity<'s, 'w, W: WorldMutType<P, K>>(
+    pub fn spawn_entity<'s, W: WorldMutType<P, K>>(
         &'s mut self,
-        world: &'w mut W,
-    ) -> EntityMut<'s, 'w, P, K, W> {
+        mut world: W,
+    ) -> EntityMut<'s, P, K, W> {
         let entity = world.spawn_entity();
         self.world_record.spawn_entity(&entity);
         return EntityMut::new(self, world, &entity);
@@ -340,9 +340,9 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     /// Panics if the Entity does not exist.
     pub fn entity_mut<'s, 'w, W: WorldMutType<P, K>>(
         &'s mut self,
-        world: &'w mut W,
+        world: W,
         entity: &K,
-    ) -> EntityMut<'s, 'w, P, K, W> {
+    ) -> EntityMut<'s, P, K, W> {
         if world.has_entity(entity) {
             return EntityMut::new(self, world, &entity);
         }
