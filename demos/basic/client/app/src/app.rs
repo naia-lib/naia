@@ -44,8 +44,7 @@ impl App {
                 Ok(Event::Disconnection) => {
                     info!("Client disconnected from: {}", self.client.server_address());
                 }
-                Ok(Event::Message(Protocol::StringMessage(message_ref))) => {
-                    let message = message_ref.borrow();
+                Ok(Event::Message(Protocol::StringMessage(message))) => {
                     let message_contents = message.contents.get();
                     info!("Client recv <- {}", message_contents);
 
@@ -57,12 +56,11 @@ impl App {
                     self.message_count += 1;
                 }
                 Ok(Event::SpawnEntity(entity, _)) => {
-                    if let Some(character_ref) = self
+                    if let Some(character) = self
                         .client
                         .entity(self.world.proxy(), &entity)
                         .component::<Character>()
                     {
-                        let character = character_ref.borrow();
                         info!(
                             "creation of Character - x: {}, y: {}, name: {} {}",
                             character.x.get(),
@@ -73,12 +71,11 @@ impl App {
                     }
                 }
                 Ok(Event::UpdateComponent(entity, _)) => {
-                    if let Some(character_ref) = self
+                    if let Some(character) = self
                         .client
                         .entity(self.world.proxy(), &entity)
                         .component::<Character>()
                     {
-                        let character = character_ref.borrow();
                         info!(
                             "update of Character - x: {}, y: {}, name: {} {}",
                             character.x.get(),
@@ -89,8 +86,7 @@ impl App {
                     }
                 }
                 Ok(Event::RemoveComponent(_, component_protocol)) => {
-                    if let Some(character_ref) = component_protocol.to_typed_ref::<Character>() {
-                        let character = character_ref.borrow();
+                    if let Some(character) = component_protocol.cast_ref::<Character>() {
                         info!(
                             "data delete of Character - x: {}, y: {}, name: {} {}",
                             character.x.get(),

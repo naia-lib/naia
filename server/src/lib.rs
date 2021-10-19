@@ -31,6 +31,7 @@ pub use naia_shared::{
     SocketConfig, WorldMutType, WorldRefType,
 };
 
+mod entity_scope_map;
 mod mut_channel;
 mod client_connection;
 mod command_receiver;

@@ -1,6 +1,4 @@
-use std::{sync::{Arc, RwLock, RwLockReadGuard}, net::SocketAddr};
-
-use indexmap::IndexMap;
+use std::{sync::{Arc, RwLock, RwLockReadGuard}, net::SocketAddr, collections::HashMap};
 
 use naia_shared::{DiffMask, PropertyMutate};
 
@@ -50,14 +48,14 @@ impl MutChannel {
 }
 
 struct MutChannelData {
-    recv_map: IndexMap<SocketAddr, MutReceiver>,
+    recv_map: HashMap<SocketAddr, MutReceiver>,
     diff_mask_length: u8,
 }
 
 impl MutChannelData {
     pub fn new(diff_mask_length: u8) -> Self {
         Self {
-            recv_map: IndexMap::new(),
+            recv_map: HashMap::new(),
             diff_mask_length,
         }
     }

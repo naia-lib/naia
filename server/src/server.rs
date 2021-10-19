@@ -33,6 +33,7 @@ use super::{
     user::{user_key::UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
+    entity_scope_map::EntityScopeMap,
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -57,7 +58,7 @@ pub struct Server<P: ProtocolType, K: EntityType> {
     world_record: WorldRecord<K, P::Kind>,
     entity_owner_map: HashMap<K, UserKey>,
     entity_room_map: HashMap<K, RoomKey>,
-    entity_scope_map: HashMap<(UserKey, K), bool>,
+    entity_scope_map: EntityScopeMap<K>,
     // Components
     diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     // Events
@@ -109,7 +110,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
             world_record: WorldRecord::new(),
             entity_owner_map: HashMap::new(),
             entity_room_map: HashMap::new(),
-            entity_scope_map: HashMap::new(),
+            entity_scope_map: EntityScopeMap::new(),
             // Components
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
             // Events
@@ -181,17 +182,9 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
         // new disconnections
         while let Some(user_key) = self.outstanding_disconnects.pop_front() {
-            // Clean up all user data
-            for (_, room) in self.rooms.iter_mut() {
-                room.unsubscribe_user(&user_key);
+            if let Some(user) = self.delete_user(&user_key) {
+                events.push_back(Ok(Event::Disconnection(user_key, user)));
             }
-
-            let user_clone = self.users.get(user_key).unwrap().clone();
-            self.address_to_user_key_map.remove(&user_clone.address);
-            self.users.remove(user_key);
-            self.client_connections.remove(&user_key);
-
-            events.push_back(Ok(Event::Disconnection(user_key, user_clone)));
         }
 
         // TODO: have 1 single queue for commands/messages from all users, as it's
@@ -234,7 +227,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     /// Rejects an incoming Client User, terminating their attempt to establish
     /// a connection with the Server
     pub fn reject_connection(&mut self, user_key: &UserKey) {
-        self.users.remove(*user_key);
+        self.delete_user(user_key);
     }
 
     // Messages
@@ -526,6 +519,8 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
         // Delete from world
         world.despawn_entity(entity);
+
+        self.entity_scope_map.remove_entity(entity);
     }
 
     /// Returns whether or not an Entity has an owner
@@ -596,8 +591,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         entity: &K,
         is_contained: bool,
     ) {
-        let key = (*user_key, *entity);
-        self.entity_scope_map.insert(key, is_contained);
+        self.entity_scope_map.insert(*user_key, *entity, is_contained);
     }
 
     //// Components
@@ -683,6 +677,24 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     pub(crate) fn user_force_disconnect(&mut self, user_key: &UserKey) {
         self.outstanding_disconnects.push_back(*user_key);
+    }
+
+    /// All necessary cleanup, when they're actually gone...
+    pub(crate) fn delete_user(&mut self, user_key: &UserKey) -> Option<User> {
+        // TODO: cache this?
+        // Clean up all user data
+        for (_, room) in self.rooms.iter_mut() {
+            room.unsubscribe_user(&user_key);
+        }
+
+        if let Some(user) = self.users.remove(*user_key) {
+            self.address_to_user_key_map.remove(&user.address);
+            self.client_connections.remove(&user_key);
+            self.entity_scope_map.remove_user(user_key);
+            return Some(user);
+        }
+
+        return None;
     }
 
     //// Rooms
@@ -1053,8 +1065,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                             if client_connection.has_prediction_entity(entity) {
                                 should_be_in_scope = true;
                             } else {
-                                let key = (*user_key, *entity);
-                                if let Some(in_scope) = self.entity_scope_map.get(&key) {
+                                if let Some(in_scope) = self.entity_scope_map.get(user_key, entity) {
                                     should_be_in_scope = *in_scope;
                                 } else {
                                     should_be_in_scope = false;
