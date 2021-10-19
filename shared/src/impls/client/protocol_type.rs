@@ -25,7 +25,7 @@ pub trait ProtocolType: Sized + Sync + Send + Clone + 'static {
     /// same type
     fn mirror(&mut self, other: &Self);
     /// Extract an inner Replicate impl from the ProtocolType into a
-    /// ProtocolRefExtractor impl
+    /// ProtocolExtractor impl
     fn extract_and_insert<N: EntityType, X: ProtocolExtractor<Self, N>>(
         &self,
         entity: &N,
