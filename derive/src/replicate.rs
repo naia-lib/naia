@@ -1,7 +1,77 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
-use quote::quote;
-use syn::{DeriveInput, Ident, Type};
+use quote::{format_ident, quote};
+use syn::{parse_macro_input, DeriveInput, Ident, Type};
 use syn::{Data, Fields, GenericArgument, Lit, Meta, PathArguments, Path, Result};
+
+use crate::impls::replicate::*;
+
+pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    let replica_name = &input.ident;
+    let replica_builder_name = Ident::new(
+        (replica_name.to_string() + "Builder").as_str(),
+        Span::call_site(),
+    );
+    let (protocol_path, protocol_name) = get_protocol_path(&input);
+    let protocol_kind_name = format_ident!("{}Kind", protocol_name);
+
+    let properties = get_properties(&input);
+
+    let enum_name = format_ident!("{}Property", replica_name);
+    let property_enum = get_property_enum(&enum_name, &properties);
+
+    let write_method = get_write_method(&properties);
+    let to_protocol_method = get_to_protocol_method(&protocol_name, replica_name);
+    let copy_method = get_copy_method(replica_name);
+    let equals_method = get_equals_method(replica_name, &properties);
+    let mirror_method = get_mirror_method(replica_name, &properties);
+
+    let builder_impl_methods = get_builder_impl_methods(replica_name, &protocol_name);
+    let replica_impl_methods = get_replica_impl_methods(&protocol_name, replica_name, &enum_name, &properties);
+    let replicate_derive_methods = get_replicate_derive_methods(&enum_name, &properties);
+
+    let gen = quote! {
+        use std::{rc::Rc, cell::RefCell, io::Cursor};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateEq, PacketReader, Replicate, PropertyMutator, ProtocolType};
+        use #protocol_path::{#protocol_name, #protocol_kind_name};
+        #property_enum
+        pub struct #replica_builder_name {
+            kind: #protocol_kind_name,
+        }
+        impl ReplicaBuilder<#protocol_name> for #replica_builder_name {
+            fn get_kind(&self) -> #protocol_kind_name {
+                return self.kind;
+            }
+            #builder_impl_methods
+        }
+        impl #replica_name {
+            pub fn get_builder() -> Box<dyn ReplicaBuilder<#protocol_name>> {
+                return Box::new(#replica_builder_name {
+                    kind: ProtocolType::kind_of::<#replica_name>(),
+                });
+            }
+            #replica_impl_methods
+        }
+        impl Replicate<#protocol_name> for #replica_name {
+
+            fn get_kind(&self) -> #protocol_kind_name {
+                return ProtocolType::kind_of::<Self>();
+            }
+            #write_method
+            #to_protocol_method
+
+            #replicate_derive_methods
+        }
+        impl ReplicateEq<#protocol_name> for #replica_name {
+            #equals_method
+            #mirror_method
+            #copy_method
+        }
+    };
+
+    proc_macro::TokenStream::from(gen)
+}
 
 pub fn get_properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
     let mut fields = Vec::new();
