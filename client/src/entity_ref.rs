@@ -1,4 +1,4 @@
-use naia_shared::{EntityType, ProtocolType, Ref, Replicate, WorldRefType};
+use naia_shared::{EntityType, ProtocolType, Replicate, WorldRefType};
 
 use super::client::Client;
 
@@ -27,7 +27,7 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P,
         return self.world.has_component::<R>(&self.id);
     }
 
-    pub fn component<R: Replicate<P>>(&self) -> Option<Ref<R>> {
+    pub fn component<R: Replicate<P>>(&self) -> Option<&R> {
         return self.world.get_component::<R>(&self.id);
     }
 
@@ -68,7 +68,7 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> PredictedEntityR
         return self.world.has_component::<R>(&self.id);
     }
 
-    pub fn component<R: Replicate<P>>(&self) -> Option<Ref<R>> {
+    pub fn component<R: Replicate<P>>(&self) -> Option<&R> {
         return self.world.get_component::<R>(&self.id);
     }
 }

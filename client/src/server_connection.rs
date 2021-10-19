@@ -4,12 +4,12 @@ use naia_client_socket::Packet;
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader, WorldMutType,
+    ProtocolType, Replicate, SequenceNumber, StandardHeader, WorldMutType,
 };
 
 use super::{
     command_receiver::CommandReceiver, entity_action::EntityAction, entity_manager::EntityManager,
-    event::OwnedEntity, packet_writer::PacketWriter, ping_manager::PingManager,
+    owned_entity::OwnedEntity, packet_writer::PacketWriter, ping_manager::PingManager,
     tick_manager::TickManager, tick_queue::TickQueue,
 };
 
@@ -18,7 +18,7 @@ pub struct ServerConnection<P: ProtocolType, K: EntityType> {
     connection: Connection<P>,
     entity_manager: EntityManager<P, K>,
     ping_manager: PingManager,
-    command_sender: VecDeque<(OwnedEntity<K>, Ref<dyn Replicate<P>>)>,
+    command_sender: VecDeque<(OwnedEntity<K>, P)>,
     command_receiver: CommandReceiver<P, K>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
@@ -228,7 +228,7 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<P>>, guaranteed_delivery: bool) {
+    pub fn queue_message(&mut self, message: &P, guaranteed_delivery: bool) {
         return self.connection.queue_message(message, guaranteed_delivery);
     }
 
@@ -241,7 +241,7 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
     }
 
     // Commands
-    pub fn queue_command(&mut self, entity: OwnedEntity<K>, command: Ref<dyn Replicate<P>>) {
+    pub fn queue_command(&mut self, entity: OwnedEntity<K>, command: &P) {
         return self.command_sender.push_back((entity, command));
     }
 
@@ -250,7 +250,7 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
             .process_command_replay(world, &mut self.entity_manager);
     }
 
-    pub fn get_incoming_replay(&mut self) -> Option<(OwnedEntity<K>, Ref<dyn Replicate<P>>)> {
+    pub fn get_incoming_replay(&mut self) -> Option<(OwnedEntity<K>, P)> {
         if let Some((_tick, owned_entity, command)) = self.command_receiver.pop_command_replay() {
             return Some((owned_entity, command));
         }
@@ -258,7 +258,7 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
         return None;
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<(OwnedEntity<K>, Ref<dyn Replicate<P>>)> {
+    pub fn get_incoming_command(&mut self) -> Option<(OwnedEntity<K>, P)> {
         if let Some((_tick, owned_entity, command)) = self.command_receiver.pop_command() {
             return Some((owned_entity, command));
         }

@@ -4,24 +4,23 @@ use log::warn;
 
 use naia_shared::{
     DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity, Manifest, NaiaKey,
-    PacketReader, ProtocolType, WorldMutType,
+    PacketReader, ProtocolType, WorldMutType, ProtocolKindType,
 };
 
 use super::{
     command_receiver::CommandReceiver, entity_action::EntityAction, entity_record::EntityRecord,
-    event::OwnedEntity,
+    owned_entity::OwnedEntity,
 };
 
-#[derive(Debug)]
-pub struct EntityManager<P: ProtocolType, K: EntityType> {
-    entity_records: HashMap<K, EntityRecord<K>>,
-    local_to_world_entity: HashMap<LocalEntity, K>,
-    component_to_entity_map: HashMap<LocalComponentKey, K>,
-    predicted_to_confirmed_entity: HashMap<K, K>,
-    queued_incoming_messages: VecDeque<EntityAction<P, K>>,
+pub struct EntityManager<P: ProtocolType, E: EntityType> {
+    entity_records: HashMap<E, EntityRecord<E, P::Kind>>,
+    local_to_world_entity: HashMap<LocalEntity, E>,
+    component_to_entity_map: HashMap<LocalComponentKey, E>,
+    predicted_to_confirmed_entity: HashMap<E, E>,
+    queued_incoming_messages: VecDeque<EntityAction<P, E>>,
 }
 
-impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
+impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
     pub fn new() -> Self {
         EntityManager {
             local_to_world_entity: HashMap::new(),
@@ -32,11 +31,11 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         }
     }
 
-    pub fn process_data<W: WorldMutType<P, K>>(
+    pub fn process_data<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
-        command_receiver: &mut CommandReceiver<P, K>,
+        command_receiver: &mut CommandReceiver<P, E>,
         packet_tick: u16,
         packet_index: u16,
         reader: &mut PacketReader,
@@ -56,9 +55,9 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                         warn!("attempted to insert duplicate entity");
                         // continue reading, just don't do anything with the data
                         for _ in 0..components_num {
-                            let naia_id: u16 = reader.read_u16();
+                            let component_kind = P::Kind::from_u16(reader.read_u16());
                             let _component_key = reader.read_u16();
-                            manifest.create_replica(naia_id, reader);
+                            manifest.create_replica(component_kind, reader, packet_index);
                         }
                     } else {
                         // set up entity
@@ -69,23 +68,26 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                             .insert(world_entity, EntityRecord::new(&local_entity));
                         let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
 
-                        let mut component_list: Vec<P> = Vec::new();
+                        let mut component_list: Vec<P::Kind> = Vec::new();
                         for _ in 0..components_num {
                             // Component Creation //
-                            let naia_id: u16 = reader.read_u16();
+                            let component_kind = P::Kind::from_u16(reader.read_u16());
                             let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                            let new_component = manifest.create_replica(naia_id, reader);
+                            let new_component = manifest.create_replica(component_kind, reader, packet_index);
                             if self.component_to_entity_map.contains_key(&component_key) {
                                 panic!("attempted to insert duplicate component");
                             } else {
-                                let new_component_type_id = new_component.get_type_id();
+                                {
+                                    let new_component_kind = new_component.dyn_ref().get_kind();
+                                    entity_record
+                                        .insert_component(&component_key, &new_component_kind);
+                                    component_list.push(new_component_kind);
+                                }
+
                                 self.component_to_entity_map
                                     .insert(component_key, world_entity);
                                 new_component.extract_and_insert(&world_entity, world);
-                                component_list.push(new_component);
-                                entity_record
-                                    .insert_component(&component_key, &new_component_type_id);
                             }
                             ////////////////////////
                         }
@@ -311,39 +313,39 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         }
     }
 
-    pub fn world_to_local_entity(&self, world_entity: &K) -> Option<LocalEntity> {
+    pub fn world_to_local_entity(&self, world_entity: &E) -> Option<LocalEntity> {
         if let Some(entity_record) = self.entity_records.get(world_entity) {
             return Some(entity_record.local_entity());
         }
         return None;
     }
 
-    pub fn get_predicted_entity(&self, world_entity: &K) -> Option<K> {
+    pub fn get_predicted_entity(&self, world_entity: &E) -> Option<E> {
         if let Some(entity_record) = self.entity_records.get(world_entity) {
             return entity_record.get_prediction();
         }
         return None;
     }
 
-    pub fn get_confirmed_entity(&self, predicted_entity: &K) -> Option<&K> {
+    pub fn get_confirmed_entity(&self, predicted_entity: &E) -> Option<&E> {
         return self.predicted_to_confirmed_entity.get(predicted_entity);
     }
 
-    pub fn pop_incoming_message(&mut self) -> Option<EntityAction<P, K>> {
+    pub fn pop_incoming_message(&mut self) -> Option<EntityAction<P, E>> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    pub fn entity_is_owned(&self, key: &K) -> bool {
+    pub fn entity_is_owned(&self, key: &E) -> bool {
         if let Some(entity_record) = self.entity_records.get(key) {
             return entity_record.is_owned();
         }
         return false;
     }
 
-    pub fn prediction_reset_entity<W: WorldMutType<P, K>>(
+    pub fn prediction_reset_entity<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
-        world_entity: &K,
+        world_entity: &E,
     ) {
         if let Some(predicted_entity) = self.get_predicted_entity(&world_entity) {
             // go through all components to make prediction components = world components
