@@ -1,10 +1,10 @@
-use std::{any::TypeId, collections::HashMap, ops::Deref};
+use std::{collections::HashMap, ops::Deref};
 
 use slotmap::DenseSlotMap;
 
 use naia_shared::{
-    EntityType, ProtocolType, Ref, Replicate, WorldMutType,
-    WorldRefType,
+    EntityType, ProtocolType, Replicate, WorldMutType,
+    WorldRefType, ReplicateEq,
 };
 
 // Entity
@@ -37,7 +37,7 @@ impl EntityType for Entity {}
 /// It's recommended to use this only when you do not have another ECS library's
 /// own World available.
 pub struct World<P: ProtocolType> {
-    pub entities: DenseSlotMap<entity::Entity, HashMap<TypeId, P>>,
+    pub entities: DenseSlotMap<entity::Entity, HashMap<P::Kind, P>>,
 }
 
 impl<P: ProtocolType> World<P> {
@@ -98,15 +98,15 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, P> {
         return has_component::<P, R>(self.world, entity);
     }
 
-    fn has_component_of_kind(&self, entity: &Entity, component_type: &TypeId) -> bool {
+    fn has_component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> bool {
         return has_component_of_type(self.world, entity, component_type);
     }
 
-    fn get_component<R: Replicate<P>>(&self, entity: &Entity) -> Option<Ref<R>> {
+    fn get_component<R: Replicate<P>>(&self, entity: &Entity) -> Option<&R> {
         return get_component(self.world, entity);
     }
 
-    fn get_component_of_kind(&self, entity: &Entity, component_type: &TypeId) -> Option<P> {
+    fn get_component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> Option<P> {
         return get_component_from_type(self.world, entity, component_type);
     }
 }
@@ -124,20 +124,30 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, P> {
         return has_component::<P, R>(self.world, entity);
     }
 
-    fn has_component_of_kind(&self, entity: &Entity, component_type: &TypeId) -> bool {
+    fn has_component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> bool {
         return has_component_of_type(self.world, entity, component_type);
     }
 
-    fn get_component<R: Replicate<P>>(&self, entity: &Entity) -> Option<Ref<R>> {
+    fn get_component<R: Replicate<P>>(&self, entity: &Entity) -> Option<&R> {
         return get_component(self.world, entity);
     }
 
-    fn get_component_of_kind(&self, entity: &Entity, component_type: &TypeId) -> Option<P> {
+    fn get_component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> Option<P> {
         return get_component_from_type(self.world, entity, component_type);
     }
 }
 
 impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
+    fn get_component_mut<R: Replicate<P>>(&mut self, entity: &Entity) -> Option<&mut R> {
+        if let Some(component_map) = self.world.entities.get_mut(*entity) {
+            if let Some(component_protocol) = component_map.get_mut(&ProtocolType::kind_of::<R>()) {
+                return component_protocol.cast_mut::<R>();
+            }
+        }
+
+        return None;
+    }
+
     fn get_components(&mut self, entity: &Entity) -> Vec<P> {
         let mut output: Vec<P> = Vec::new();
 
@@ -161,25 +171,30 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
 
     fn insert_component<R: Replicate<P>>(&mut self, entity: &Entity, component_ref: R) {
         if let Some(component_map) = self.world.entities.get_mut(*entity) {
-            let protocol = component_ref.protocol();
-            let type_id = protocol.get_type_id();
-            if component_map.contains_key(&type_id) {
+            let protocol = component_ref.to_protocol();
+            let component_kind = ProtocolType::kind_of::<R>();
+            if component_map.contains_key(&component_kind) {
                 panic!("Entity already has a Component of that type!");
             }
-            component_map.insert(type_id, protocol);
+            component_map.insert(component_kind, protocol);
         }
     }
 
-    fn remove_component<R: Replicate<P>>(&mut self, entity: &Entity) {
+    fn remove_component<R: ReplicateEq<P>>(&mut self, entity: &Entity) -> Option<R> {
         if let Some(component_map) = self.world.entities.get_mut(*entity) {
-            component_map.remove(&TypeId::of::<R>());
+            if let Some(protocol) = component_map.remove(&ProtocolType::kind_of::<R>()) {
+                return protocol.cast::<R>();
+            }
         }
+        return None;
     }
 
-    fn remove_component_by_type(&mut self, entity: &Entity, type_id: &TypeId) {
+    fn remove_component_of_kind(&mut self, entity: &Entity, component_kind: &P::Kind) -> Option<P> {
         if let Some(component_map) = self.world.entities.get_mut(*entity) {
-            component_map.remove(type_id);
+            return component_map.remove(component_kind);
         }
+
+        return None;
     }
 }
 
@@ -207,7 +222,7 @@ fn entities<P: ProtocolType>(world: &World<P>) -> Vec<Entity> {
 
 fn has_component<P: ProtocolType, R: Replicate<P>>(world: &World<P>, entity: &Entity) -> bool {
     if let Some(component_map) = world.entities.get(*entity) {
-        return component_map.contains_key(&TypeId::of::<R>());
+        return component_map.contains_key(&ProtocolType::kind_of::<R>());
     }
 
     return false;
@@ -216,7 +231,7 @@ fn has_component<P: ProtocolType, R: Replicate<P>>(world: &World<P>, entity: &En
 fn has_component_of_type<P: ProtocolType>(
     world: &World<P>,
     entity: &Entity,
-    component_type: &TypeId,
+    component_type: &P::Kind,
 ) -> bool {
     if let Some(component_map) = world.entities.get(*entity) {
         return component_map.contains_key(component_type);
@@ -225,13 +240,13 @@ fn has_component_of_type<P: ProtocolType>(
     return false;
 }
 
-fn get_component<P: ProtocolType, R: Replicate<P>>(
-    world: &World<P>,
+fn get_component<'a, P: ProtocolType, R: Replicate<P>>(
+    world: &'a World<P>,
     entity: &Entity,
-) -> Option<Ref<R>> {
+) -> Option<&'a R> {
     if let Some(component_map) = world.entities.get(*entity) {
-        if let Some(component_protocol) = component_map.get(&TypeId::of::<R>()) {
-            return component_protocol.to_typed_ref::<R>();
+        if let Some(component_protocol) = component_map.get(&ProtocolType::kind_of::<R>()) {
+            return component_protocol.cast_ref::<R>();
         }
     }
 
@@ -241,7 +256,7 @@ fn get_component<P: ProtocolType, R: Replicate<P>>(
 fn get_component_from_type<P: ProtocolType>(
     world: &World<P>,
     entity: &Entity,
-    component_type: &TypeId,
+    component_type: &P::Kind,
 ) -> Option<P> {
     if let Some(component_map) = world.entities.get(*entity) {
         if let Some(protocol) = component_map.get(component_type) {

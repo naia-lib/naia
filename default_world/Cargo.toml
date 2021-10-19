@@ -7,7 +7,10 @@ repository = "https://github.com/naia-rs/naia"
 edition = "2018"
 
 [features]
+client = [ "naia-shared/client" ]
+server = [ "naia-shared/server" ]
 
 [dependencies]
 naia-shared = { path = "../shared" }
 slotmap = { version = "0.4" }
+cfg-if = "0.1.10"

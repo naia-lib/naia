@@ -36,7 +36,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateEq, PacketReader, Replicate, PropertyMutator};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateEq, PacketReader, Replicate, PropertyMutator, ProtocolType};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
         #property_enum
         pub struct #replica_builder_name {
@@ -62,15 +62,10 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #new_complete_method
             #read_to_type_method
         }
-        impl Replicate for #replica_name {
-            type Protocol = #protocol_name;
-            type Kind = #protocol_kind_name;
+        impl Replicate<#protocol_name> for #replica_name {
 
-            fn kind() -> #protocol_kind_name {
-                return #protocol_kind_name::#replica_name;
-            }
             fn get_kind(&self) -> #protocol_kind_name {
-                return #replica_name::kind();
+                return ProtocolType::kind_of::<Self>();
             }
             #write_method
             #write_partial_method
@@ -79,7 +74,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #set_mutator_method
             fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
         }
-        impl ReplicateEq for #replica_name {
+        impl ReplicateEq<#protocol_name> for #replica_name {
             #equals_method
             #mirror_method
             #copy_method
