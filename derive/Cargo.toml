@@ -19,11 +19,8 @@ maintenance = { status = "actively-developed" }
 proc-macro = true
 
 [features]
-client = []
-server = []
 
 [dependencies]
 proc-macro2 = "1.0"
 syn = { version = "=1.0.65", features = ["clone-impls"] }
 quote = "1.0"
-cfg-if = "0.1.10"

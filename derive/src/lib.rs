@@ -4,22 +4,6 @@
 
 #![deny(trivial_casts, trivial_numeric_casts, unstable_features)]
 
-#[macro_use]
-extern crate cfg_if;
-
-cfg_if! {
-    if #[cfg(all(feature = "client", feature = "server"))]
-    {
-        // Use both protocols...
-        compile_error!("naia-derive requires either the 'client' OR 'server' feature to be enabled, you must pick one.");
-    }
-    else if #[cfg(all(not(feature = "client"), not(feature = "server")))]
-    {
-        // Use no protocols...
-        compile_error!("naia-derive requires either the 'client' OR 'server' feature to be enabled, you must pick one.");
-    }
-}
-
 mod protocol_type;
 mod replicate;
 

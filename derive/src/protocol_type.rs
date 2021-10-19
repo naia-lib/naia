@@ -11,7 +11,8 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
     let kind_enum_name = format_ident!("{}Kind", protocol_name);
     let kind_enum_def = get_kind_enum(&kind_enum_name, &variants);
-    let kind_of_method = get_kind_of_method(&kind_enum_name, &variants);
+    let kind_of_method = get_kind_of_method();
+    let type_to_kind_method = get_type_to_kind_method(&kind_enum_name, &variants);
 
     let load_method = get_load_method(&protocol_name, &input.data);
     let dyn_ref_method = get_dyn_ref_method(&protocol_name, &input.data);
@@ -23,7 +24,8 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
     let gen = quote! {
         use std::any::{Any, TypeId};
-        use naia_shared::{ProtocolType, ProtocolExtractor, ProtocolKindType, Replicate, ReplicateEq, DiffMask, PacketReader, EntityType, DynRef, DynMut};
+        use naia_shared::{ProtocolType, ProtocolExtractor, ProtocolKindType, Replicate, ReplicateEq,
+            DiffMask, PacketReader, EntityType, DynRef, DynMut};
 
         #kind_enum_def
 
@@ -34,6 +36,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
         impl ProtocolType for #protocol_name {
             type Kind = #kind_enum_name;
             #kind_of_method
+            #type_to_kind_method
 
             #dyn_ref_method
             #dyn_mut_method
@@ -123,7 +126,15 @@ pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream 
     };
 }
 
-pub fn get_kind_of_method(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
+fn get_kind_of_method() -> TokenStream {
+    return quote! {
+        fn kind_of<R: Replicate<Self>>() -> Self::Kind {
+            return ProtocolType::type_to_kind(TypeId::of::<R>());
+        }
+    };
+}
+
+fn get_type_to_kind_method(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
     let mut const_list = quote! {};
 
     {
@@ -167,9 +178,9 @@ pub fn get_kind_of_method(enum_name: &Ident, properties: &Vec<Ident>) -> TokenSt
     }
 
     return quote! {
-        fn kind_of<R: Replicate<Self>>() -> Self::Kind {
+        fn type_to_kind(type_id: TypeId) -> Self::Kind {
             #const_list
-            match TypeId::of::<R>() {
+            match type_id {
                 #match_branches
                 _ => #enum_name::UNKNOWN,
             }

@@ -112,7 +112,7 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
 
                             // Generate event for each component, handing references off just in
                             // case
-                            for component in world.get_components(&world_entity) {
+                            for component in world.copy_components(&world_entity) {
                                 self.queued_incoming_messages.push_back(
                                     EntityAction::RemoveComponent(world_entity, component),
                                 );
@@ -143,7 +143,7 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                                 .insert(prediction_entity, world_entity);
 
                             // create copies of components //
-                            for component in world.get_components(&world_entity) {
+                            for component in world.copy_components(&world_entity) {
                                 component.extract_and_insert(&prediction_entity, world);
                             }
                             /////////////////////////////////
@@ -344,7 +344,7 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
     ) {
         if let Some(predicted_entity) = self.get_predicted_entity(&world_entity) {
             // go through all components to make prediction components = world components
-            for confirmed_protocol in world.get_components(world_entity) {
+            for confirmed_protocol in world.copy_components(world_entity) {
                 let confirmed_kind = confirmed_protocol.dyn_ref().get_kind();
                 let predicted_protocol = world.get_component_mut_of_kind(&predicted_entity, &confirmed_kind)
                     .expect("Predicted and Confirmed entities must always contain the same types of components!");
