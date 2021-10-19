@@ -270,10 +270,7 @@ fn get_replica_impl_methods(
     };
 }
 
-fn get_replicate_derive_methods(
-    enum_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
-) -> TokenStream {
+fn get_replicate_derive_methods(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let read_partial_method = get_read_partial_method(enum_name, properties);
     let write_partial_method = get_write_partial_method(enum_name, properties);
     let set_mutator_method = get_set_mutator_method(properties);

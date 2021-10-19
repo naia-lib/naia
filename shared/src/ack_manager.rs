@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use super::{
-    protocol_type::ProtocolType,
     message_manager::MessageManager,
     packet_notifiable::PacketNotifiable,
     packet_type::PacketType,
+    protocol_type::ProtocolType,
     sequence_buffer::{SequenceBuffer, SequenceNumber},
     standard_header::StandardHeader,
     wrapping_number::sequence_greater_than,
