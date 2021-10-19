@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 
 use super::{
-    impls::ProtocolType, manager_type::ManagerType, protocol_type::ProtocolKindType,
+    manager_type::ManagerType, protocol_type::{ProtocolKindType, ProtocolType},
     standard_header::StandardHeader,
 };
 

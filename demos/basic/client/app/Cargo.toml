@@ -12,7 +12,7 @@ wbindgen = [ "naia-client/wbindgen", "naia-basic-demo-shared/wbindgen" ]
 
 [dependencies]
 naia-client = { path = "../../../../client" }
-naia-default-world = { path = "../../../../default_world", features = ["client"] }
+naia-default-world = { path = "../../../../default_world" }
 naia-basic-demo-shared = { path = "../../shared", features = ["client"] }
 cfg-if = "0.1.10"
 log = "0.4"

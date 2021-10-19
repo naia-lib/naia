@@ -20,7 +20,6 @@ cfg_if! {
     }
 }
 
-mod impls;
 mod protocol_type;
 mod replicate;
 

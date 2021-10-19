@@ -7,7 +7,8 @@ use crate::{message_manager::MessageManager, wrapping_number::wrapping_diff};
 use super::{
     ack_manager::AckManager,
     connection_config::ConnectionConfig,
-    impls::{ProtocolType, ReplicateEq},
+    protocol_type::ProtocolType,
+    replicate::ReplicateEq,
     manifest::Manifest,
     packet_notifiable::PacketNotifiable,
     packet_type::PacketType,
