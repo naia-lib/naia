@@ -1,6 +1,6 @@
 use super::{
-    entity_type::EntityType,
-    protocol_type::{ProtocolType, ProtocolExtractor},
+    entity_type::EntityType, impls::ProtocolType,
+    protocol_type::ProtocolExtractor,
     impls::{Replicate, ReplicateEq},
 };
 

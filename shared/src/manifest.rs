@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use naia_socket_shared::PacketReader;
 
-use super::{protocol_type::{ProtocolType, ProtocolKindType}, replica_builder::ReplicaBuilder};
+use super::{impls::ProtocolType, protocol_type::ProtocolKindType, replica_builder::ReplicaBuilder};
 
 /// Contains the shared protocol between Client & Server, with a data that is
 /// able to map Message/Component TypeIds to their representation within

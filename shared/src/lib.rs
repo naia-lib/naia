@@ -55,7 +55,7 @@ pub use naia_socket_shared::{
     Instant, LinkConditionerConfig, PacketReader, Random, SocketConfig, Timer, Timestamp,
 };
 
-pub use impls::{Property, Replicate, ReplicateEq};
+pub use impls::{Property, Replicate, ReplicateEq, ProtocolType};
 pub use ack_manager::AckManager;
 pub use replica_builder::ReplicaBuilder;
 pub use connection::Connection;
@@ -72,7 +72,7 @@ pub use message_packet_writer::{MessagePacketWriter, MTU_SIZE};
 pub use packet_notifiable::PacketNotifiable;
 pub use packet_type::PacketType;
 pub use property_mutate::{PropertyMutate, PropertyMutator};
-pub use protocol_type::{ProtocolType, ProtocolKindType, DynRef, DynMut};
+pub use protocol_type::{ProtocolKindType, DynRef, DynMut, ProtocolExtractor};
 pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
 pub use shared_config::SharedConfig;
 pub use standard_header::StandardHeader;

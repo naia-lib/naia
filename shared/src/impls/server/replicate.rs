@@ -1,4 +1,4 @@
-use crate::{diff_mask::DiffMask, property_mutate::PropertyMutator, protocol_type::ProtocolType};
+use crate::{diff_mask::DiffMask, property_mutate::PropertyMutator, impls::ProtocolType};
 
 /// A Replica is a Message/Component, or otherwise, a container
 /// of Properties that can be scoped, tracked, and synced, with a remote host
