@@ -2,6 +2,7 @@ use super::{
     entity_type::EntityType,
     protocol_type::{ProtocolExtractor, ProtocolType},
     replicate::{Replicate, ReplicateEq},
+    component_ref::{ComponentMut, ComponentRef, ComponentDynMut, ComponentDynRef},
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -9,22 +10,20 @@ use super::{
 /// the WorldMutType in-sync with it's own Entities/Components
 pub trait WorldRefType<P: ProtocolType, E: EntityType> {
     // Entities
-
     /// check whether entity exists
     fn has_entity(&self, entity: &E) -> bool;
     /// get a list of all entities in the World
     fn entities(&self) -> Vec<E>;
 
     // Components
-
     /// check whether entity contains component
     fn has_component<R: Replicate<P>>(&self, entity: &E) -> bool;
     /// check whether entity contains component, dynamically
     fn has_component_of_kind(&self, entity: &E, component_kind: &P::Kind) -> bool;
     /// gets an entity's component
-    fn get_component<R: Replicate<P>>(&self, entity: &E) -> Option<&R>;
+    fn get_component<'a, R: Replicate<P>>(&'a self, entity: &E) -> Option<ComponentRef<'a, P, R>>;
     /// gets an entity's component, dynamically
-    fn get_component_of_kind(&self, entity: &E, component_kind: &P::Kind) -> Option<&P>;
+    fn get_component_of_kind(&self, entity: &E, component_kind: &P::Kind) -> Option<ComponentDynRef<'_, P>>;
 }
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -34,7 +33,6 @@ pub trait WorldMutType<P: ProtocolType, E: EntityType>:
     WorldRefType<P, E> + ProtocolExtractor<P, E>
 {
     // Entities
-
     /// spawn an entity
     fn spawn_entity(&mut self) -> E;
     /// despawn an entity
@@ -42,12 +40,12 @@ pub trait WorldMutType<P: ProtocolType, E: EntityType>:
 
     // Components
     /// gets all of an Entity's Components as a list of Kinds
-    fn copy_components(&mut self, entity: &E) -> Vec<P>;
+    fn get_component_kinds(&mut self, entity: &E) -> Vec<P::Kind>;
     /// gets an entity's component
-    fn get_component_mut<R: Replicate<P>>(&mut self, entity: &E) -> Option<&mut R>;
+    fn get_component_mut<'a, R: Replicate<P>>(&'a mut self, entity: &E) -> Option<ComponentMut<'a, P, R>>;
     /// gets a mutable component by type
     fn get_component_mut_of_kind(&mut self, entity: &E, component_kind: &P::Kind)
-        -> Option<&mut P>;
+        -> Option<ComponentDynMut<'_, P>>;
     /// insert a component
     fn insert_component<R: Replicate<P>>(&mut self, entity: &E, component_ref: R);
     /// remove a component

@@ -32,6 +32,7 @@ mod shared_config;
 mod standard_header;
 mod world_type;
 mod wrapping_number;
+mod component_ref;
 
 /// Commonly used utility methods to be used by naia-server & naia-client
 pub mod utils;
@@ -56,7 +57,7 @@ pub use packet_notifiable::PacketNotifiable;
 pub use packet_type::PacketType;
 pub use property::Property;
 pub use property_mutate::{PropertyMutate, PropertyMutator};
-pub use protocol_type::{DynMut, DynRef, ProtocolExtractor, ProtocolKindType, ProtocolType};
+pub use protocol_type::{DynMut, DynRef, ProtocolExtractor, ProtocolKindType, ProtocolType, ProtocolRefType, ProtocolMutType};
 pub use replica_builder::ReplicaBuilder;
 pub use replicate::{Replicate, ReplicateEq};
 pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
@@ -64,3 +65,4 @@ pub use shared_config::SharedConfig;
 pub use standard_header::StandardHeader;
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
+pub use component_ref::{ComponentRef, ComponentMut, ComponentRefTrait, ComponentMutTrait, ComponentDynRef, ComponentDynMut, ComponentDynRefTrait, ComponentDynMutTrait};

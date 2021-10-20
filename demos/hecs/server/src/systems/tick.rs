@@ -1,4 +1,4 @@
-use naia_hecs_server::{Entity, Ref, WorldProxy, WorldProxyMut};
+use naia_hecs_server::{Entity, WorldProxy, WorldProxyMut};
 
 use naia_hecs_demo_shared::protocol::{Marker, Position, StringMessage};
 
@@ -9,8 +9,7 @@ pub fn march_and_mark(app: &mut App) {
     let mut entities_to_add: Vec<Entity> = Vec::new();
     let mut entities_to_remove: Vec<Entity> = Vec::new();
 
-    for (entity, position_ref) in app.world.query_mut::<&Ref<Position>>() {
-        let mut position = position_ref.borrow_mut();
+    for (entity, position) in app.world.query_mut::<&mut Position>() {
         let mut x = *position.x.get();
         x += 1;
         if x > 125 {
@@ -36,8 +35,8 @@ pub fn march_and_mark(app: &mut App) {
 
             // Add to Naia Server
             app.server
-                .entity_mut(&mut app.world.proxy_mut(&mut app.world_data), &entity)
-                .insert_component(&marker);
+                .entity_mut(app.world.proxy_mut(&mut app.world_data), &entity)
+                .insert_component(marker);
 
             // Track that this entity has a Marker
             app.has_marker.insert(entity);
@@ -49,7 +48,7 @@ pub fn march_and_mark(app: &mut App) {
         if app.has_marker.remove(&entity) {
             // Remove from Naia Server
             app.server
-                .entity_mut(&mut app.world.proxy_mut(&mut app.world_data), &entity)
+                .entity_mut(app.world.proxy_mut(&mut app.world_data), &entity)
                 .remove_component::<Marker>();
         }
     }
@@ -71,19 +70,24 @@ pub fn send_messages(app: &mut App) {
 
 pub fn check_scopes(app: &mut App) {
     // Update scopes of entities
-    for (_, user_key, entity) in app.server.scope_checks() {
-        if let Some(pos_ref) = app
-            .server
-            .entity(app.world.proxy(&app.world_data), &entity)
-            .component::<Position>()
-        {
-            let x = *pos_ref.borrow().x.get();
-            if x >= 5 && x <= 100 {
-                app.server.user_scope(&user_key).include(&entity);
-            } else {
-                app.server.user_scope(&user_key).exclude(&entity);
+    let server = &mut app.server;
+    let world = &app.world;
+    for (_, user_key, entity) in server.scope_checks() {
+        if let Ok(entity_ref) = world.entity(*entity) {
+            if let Some(position) = entity_ref.get::<Position>() {
+                let x = *position.x.get();
+
+                if x >= 5 && x <= 100
+                {
+                    server.user_scope(&user_key).include(&entity);
+                }
+                else
+                {
+                    server.user_scope(&user_key).exclude(&entity);
+                }
             }
         }
+
     }
 }
 

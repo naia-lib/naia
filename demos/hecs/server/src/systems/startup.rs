@@ -43,10 +43,10 @@ pub fn app_init(
 
             // Create an Entity
             server
-                .spawn_entity(&mut world.proxy_mut(&mut world_data))
+                .spawn_entity(world.proxy_mut(&mut world_data))
                 .enter_room(&main_room_key)
-                .insert_component(&position_ref)
-                .insert_component(&name_ref)
+                .insert_component(position_ref)
+                .insert_component(name_ref)
                 .id();
         }
     }

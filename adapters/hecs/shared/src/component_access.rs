@@ -1,15 +1,15 @@
 use std::{any::Any, marker::PhantomData, ops::{Deref, DerefMut}};
 
-use hecs::World;
+use hecs::{World, Ref as HecsRef, RefMut as HecsMut, Component as HecsComponent};
 
-use naia_shared::{ProtocolType, Replicate};
+use naia_shared::{ProtocolType, Replicate, ComponentDynRef, ComponentDynMut, ComponentDynRefTrait, ComponentDynMutTrait};
 
 use super::entity::Entity;
 
 // ComponentAccess
 pub trait ComponentAccess<P: ProtocolType> {
-    fn get_component(&self, world: &World, entity: &Entity) -> Option<&P>;
-    fn get_component_mut(&self, world: &mut World, entity: &Entity) -> Option<&mut P>;
+    fn get_component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ComponentDynRef<'w, P>>;
+    fn get_component_mut<'w>(&self, world: &'w mut World, entity: &Entity) -> Option<ComponentDynMut<'w, P>>;
     fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P>;
 }
 
@@ -30,21 +30,53 @@ impl<P: ProtocolType, R: Replicate<P>> ComponentAccessor<P, R> {
 }
 
 impl<P: ProtocolType, R: Replicate<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
-    fn get_component(&self, world: &World, entity: &Entity) -> Option<&P> {
-        return world
-            .get::<R>(**entity)
-            .map_or(None, |v| Some(&v.deref().to_protocol()));
+    fn get_component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ComponentDynRef<'w, P>> {
+        if let Ok(hecs_ref) = world.get::<R>(**entity) {
+            let wrapper = RefWrapper(hecs_ref);
+            let component_dyn_ref = ComponentDynRef::new(wrapper);
+            return Some(component_dyn_ref);
+        }
+        return None;
     }
 
-    fn get_component_mut(&self, world: &mut World, entity: &Entity) -> Option<&mut P> {
-        return world
-            .get_mut::<R>(**entity)
-            .map_or(None, |v| Some(&mut v.deref_mut().to_protocol()));
+    fn get_component_mut<'w>(&self, world: &'w mut World, entity: &Entity) -> Option<ComponentDynMut<'w, P>> {
+        if let Ok(hecs_mut) = world.get_mut::<R>(**entity) {
+            let wrapper = MutWrapper(hecs_mut);
+            let component_dyn_mut = ComponentDynMut::new(wrapper);
+            return Some(component_dyn_mut);
+        }
+        return None;
     }
 
     fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P> {
         return world
             .remove_one::<R>(**entity)
             .map_or(None, |v| Some(v.to_protocol()));
+    }
+}
+
+////
+
+// ComponentDynRef
+struct RefWrapper<'a, T: HecsComponent>(HecsRef<'a, T>);
+
+impl<'a, P: ProtocolType, R: Replicate<P>> ComponentDynRefTrait<P> for RefWrapper<'a, R> {
+    fn component_dyn_deref(&self) -> &dyn Replicate<P> {
+        return self.0.deref();
+    }
+}
+
+// ComponentDynMut
+struct MutWrapper<'a, T: HecsComponent>(HecsMut<'a, T>);
+
+impl<'a, P: ProtocolType, R: Replicate<P>> ComponentDynRefTrait<P> for MutWrapper<'a, R> {
+    fn component_dyn_deref(&self) -> &dyn Replicate<P> {
+        return self.0.deref();
+    }
+}
+
+impl<'a, P: ProtocolType, R: Replicate<P>> ComponentDynMutTrait<P> for MutWrapper<'a, R> {
+    fn component_dyn_deref_mut(&mut self) -> &mut dyn Replicate<P> {
+        return self.0.deref_mut();
     }
 }

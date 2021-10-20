@@ -5,7 +5,7 @@ use std::{
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, ReplicateEq, SequenceNumber, StandardHeader, WorldMutType, WorldRefType,
+    ProtocolType, ReplicateEq, SequenceNumber, StandardHeader, WorldRefType,
 };
 
 use super::{
@@ -116,13 +116,12 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         }
     }
 
-    pub fn collect_component_updates<W: WorldRefType<P, K>>(
+    pub fn collect_component_updates(
         &mut self,
-        world: &W,
         world_record: &WorldRecord<K, P::Kind>,
     ) {
         self.entity_manager
-            .collect_component_updates(world, world_record);
+            .collect_component_updates(world_record);
     }
 
     pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(K, P)> {
@@ -173,14 +172,13 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         self.entity_manager.remove_prediction_entity(key);
     }
 
-    pub fn insert_component<W: WorldMutType<P, K>>(
+    pub fn insert_component(
         &mut self,
-        world: &W,
         world_record: &WorldRecord<K, P::Kind>,
         component_key: &ComponentKey,
     ) {
         self.entity_manager
-            .insert_component(world, world_record, component_key);
+            .insert_component(world_record, component_key);
     }
 
     pub fn remove_component(&mut self, component_key: &ComponentKey) {
@@ -205,16 +203,15 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         return self.connection.should_drop();
     }
 
-    pub fn process_incoming_header<W: WorldRefType<P, K>>(
+    pub fn process_incoming_header(
         &mut self,
-        world: &W,
         world_record: &WorldRecord<K, P::Kind>,
         header: &StandardHeader,
     ) {
         self.connection
             .process_incoming_header(header, &mut Some(&mut self.entity_manager));
         self.entity_manager
-            .process_delivered_packets(world, world_record);
+            .process_delivered_packets(world_record);
     }
 
     pub fn process_outgoing_header(

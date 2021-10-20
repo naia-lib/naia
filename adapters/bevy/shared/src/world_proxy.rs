@@ -123,7 +123,7 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
         self.world.despawn(**entity);
     }
 
-    fn copy_components(&mut self, entity: &Entity) -> Vec<P> {
+    fn get_component_kinds(&mut self, entity: &Entity) -> Vec<P> {
         return get_components(self.world, entity);
     }
 
