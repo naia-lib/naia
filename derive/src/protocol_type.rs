@@ -10,9 +10,13 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let variants = get_variants(&input.data);
 
     let kind_enum_name = format_ident!("{}Kind", protocol_name);
+//    let ref_enum_name = format_ident!("{}Ref", protocol_name);
+//    let mut_enum_name = format_ident!("{}Mut", protocol_name);
     let kind_enum_def = get_kind_enum(&kind_enum_name, &variants);
     let kind_of_method = get_kind_of_method();
     let type_to_kind_method = get_type_to_kind_method(&kind_enum_name, &variants);
+//    let protocol_ref_enum_def = get_protocol_ref_enum(&ref_enum_name, &protocol_name, &variants);
+//    let protocol_mut_enum_def = get_protocol_mut_enum(&mut_enum_name, &protocol_name, &variants);
 
     let load_method = get_load_method(&protocol_name, &input.data);
     let dyn_ref_method = get_dyn_ref_method(&protocol_name, &input.data);
@@ -23,11 +27,13 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let trait_impl_methods = get_trait_impl_methods(&protocol_name, &input.data);
 
     let gen = quote! {
-        use std::any::{Any, TypeId};
+        use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}};
         use naia_shared::{ProtocolType, ProtocolExtractor, ProtocolKindType, Replicate, ReplicateEq,
             DiffMask, PacketReader, EntityType, DynRef, DynMut};
 
         #kind_enum_def
+//        #protocol_ref_enum_def
+//        #protocol_mut_enum_def
 
         impl #protocol_name {
             #load_method
@@ -126,10 +132,60 @@ pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream 
     };
 }
 
+//pub fn get_protocol_ref_enum(ref_enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
+//    let mut variant_list = quote! {};
+//
+//    {
+//        for variant in properties {
+//            let variant_name = Ident::new(&variant.to_string(), Span::call_site());
+//
+//            let new_output_right = quote! {
+//                #variant_name(&'a #variant_name),
+//            };
+//            let new_output_result = quote! {
+//                #variant_list
+//                #new_output_right
+//            };
+//            variant_list = new_output_result;
+//        }
+//    }
+//
+//    return quote! {
+//        pub enum #ref_enum_name<'a> {
+//            #variant_list
+//        }
+//    };
+//}
+//
+//pub fn get_protocol_mut_enum(ref_enum_name: &Ident, protocol_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
+//    let mut variant_list = quote! {};
+//
+//    {
+//        for variant in properties {
+//            let variant_name = Ident::new(&variant.to_string(), Span::call_site());
+//
+//            let new_output_right = quote! {
+//                #variant_name(&'a mut #variant_name),
+//            };
+//            let new_output_result = quote! {
+//                #variant_list
+//                #new_output_right
+//            };
+//            variant_list = new_output_result;
+//        }
+//    }
+//
+//    return quote! {
+//        pub enum #ref_enum_name<'a> {
+//            #variant_list
+//        }
+//    };
+//}
+
 fn get_kind_of_method() -> TokenStream {
     return quote! {
         fn kind_of<R: Replicate<Self>>() -> Self::Kind {
-            return ProtocolType::type_to_kind(TypeId::of::<R>());
+            return Self::type_to_kind(TypeId::of::<R>());
         }
     };
 }

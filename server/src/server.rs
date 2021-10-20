@@ -134,15 +134,14 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive<W: WorldRefType<P, K>>(
+    pub fn receive(
         &mut self,
-        world: W,
     ) -> VecDeque<Result<Event<P, K>, NaiaServerError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
-        self.maintain_socket(&world);
+        self.maintain_socket();
 
         // new authorizations
         while let Some((user_key, auth_message)) = self.outstanding_auths.pop_front() {
@@ -282,7 +281,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
         // loop through all connections, send packet
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
-                connection.collect_component_updates(&world, &self.world_record);
+                connection.collect_component_updates(&self.world_record);
                 while let Some(payload) = connection.get_outgoing_packet(
                     &world,
                     &self.world_record,
@@ -626,7 +625,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
             if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
                 if client_connection.has_entity(entity) {
                     // insert component into user's connection
-                    client_connection.insert_component(world, &self.world_record, &component_key);
+                    client_connection.insert_component(&self.world_record, &component_key);
                 }
             }
         }
@@ -795,7 +794,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     // Private methods
 
-    fn maintain_socket<W: WorldRefType<P, K>>(&mut self, world: &W) {
+    fn maintain_socket(&mut self) {
         // heartbeats
         if self.heartbeat_timer.ringing() {
             self.heartbeat_timer.reset();
@@ -888,7 +887,6 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                                         let connection =
                                             self.client_connections.get_mut(user_key).unwrap();
                                         connection.process_incoming_header(
-                                            world,
                                             &self.world_record,
                                             &header,
                                         );
@@ -946,7 +944,6 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                                 match self.client_connections.get_mut(user_key) {
                                     Some(connection) => {
                                         connection.process_incoming_header(
-                                            world,
                                             &self.world_record,
                                             &header,
                                         );
@@ -973,7 +970,6 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                                         // Still need to do this so that proper notify
                                         // events fire based on the heartbeat header
                                         connection.process_incoming_header(
-                                            world,
                                             &self.world_record,
                                             &header,
                                         );
@@ -992,7 +988,6 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                                 match self.client_connections.get_mut(user_key) {
                                     Some(connection) => {
                                         connection.process_incoming_header(
-                                            world,
                                             &self.world_record,
                                             &header,
                                         );

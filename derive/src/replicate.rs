@@ -15,6 +15,10 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     );
     let (protocol_path, protocol_name) = get_protocol_path(&input);
     let protocol_kind_name = format_ident!("{}Kind", protocol_name);
+//    let protocol_ref_name = format_ident!("{}Ref", protocol_name);
+//    let protocol_mut_name = format_ident!("{}Mut", protocol_name);
+    let dyn_ref_method = get_dyn_ref_method(&protocol_name);
+    let dyn_mut_method = get_dyn_mut_method(&protocol_name);
 
     let properties = get_properties(&input);
 
@@ -23,6 +27,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let write_method = get_write_method(&properties);
     let to_protocol_method = get_to_protocol_method(&protocol_name, replica_name);
+//    let as_protocol_ref_method = get_as_protocol_ref_method(&protocol_name, &protocol_ref_name, replica_name);
+//    let as_protocol_mut_method = get_as_protocol_mut_method(&protocol_name, &protocol_mut_name, replica_name);
     let copy_method = get_copy_method(replica_name);
     let equals_method = get_equals_method(replica_name, &properties);
     let mirror_method = get_mirror_method(replica_name, &properties);
@@ -34,8 +40,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateEq, PacketReader, Replicate, PropertyMutator, ProtocolType};
-        use #protocol_path::{#protocol_name, #protocol_kind_name};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateEq, PacketReader, Replicate, PropertyMutator, ProtocolType, DynRef, DynMut};
+        use #protocol_path::{#protocol_name, #protocol_kind_name};//, #protocol_ref_name, #protocol_mut_name};
         #property_enum
         pub struct #replica_builder_name {
             kind: #protocol_kind_name,
@@ -60,6 +66,10 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             }
             #write_method
             #to_protocol_method
+//            #as_protocol_ref_method
+//            #as_protocol_mut_method
+            #dyn_ref_method
+            #dyn_mut_method
 
             #replicate_derive_methods
         }
@@ -178,6 +188,38 @@ fn get_to_protocol_method(protocol_name: &Ident, replica_name: &Ident) -> TokenS
     return quote! {
         fn to_protocol(self) -> #protocol_name {
             return #protocol_name::#replica_name(self);
+        }
+    };
+}
+
+//fn get_as_protocol_ref_method(protocol_name: &Ident, protocol_ref_name: &Ident, replica_name: &Ident) -> TokenStream {
+//    return quote! {
+//        fn as_protocol_ref(&self) -> &#protocol_name {
+//            return #protocol_ref_name::#replica_name(self);
+//        }
+//    };
+//}
+//
+//fn get_as_protocol_mut_method(protocol_name: &Ident, protocol_mut_name: &Ident, replica_name: &Ident) -> TokenStream {
+//    return quote! {
+//        fn as_protocol_mut(&mut self) -> &mut #protocol_name {
+//            return #protocol_mut_name::#replica_name(self);
+//        }
+//    };
+//}
+
+pub fn get_dyn_ref_method(protocol_name: &Ident) -> TokenStream {
+    return quote! {
+        fn dyn_ref(&self) -> DynRef<'_, #protocol_name> {
+            return DynRef::new(self);
+        }
+    };
+}
+
+pub fn get_dyn_mut_method(protocol_name: &Ident) -> TokenStream {
+    return quote! {
+        fn dyn_mut(&mut self) -> DynMut<'_, #protocol_name> {
+            return DynMut::new(self);
         }
     };
 }

@@ -19,7 +19,7 @@ pub type Server = NaiaServer<Protocol, Entity>;
 pub struct App {
     pub server: Server,
     pub world: World,
-    pub world_data: WorldData,
+    pub world_data: WorldData<Protocol>,
     pub main_room_key: RoomKey,
     pub tick_count: u32,
     pub has_marker: HashSet<Entity>,

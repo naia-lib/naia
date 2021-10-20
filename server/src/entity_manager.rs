@@ -10,7 +10,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
     DiffMask, EntityType, KeyGenerator, LocalComponentKey, LocalEntity, NaiaKey, PacketNotifiable,
-    ProtocolKindType, ProtocolType, WorldMutType, WorldRefType, MTU_SIZE,
+    ProtocolKindType, ProtocolType, WorldRefType, MTU_SIZE,
 };
 
 use super::{
@@ -333,48 +333,42 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
     // Components
 
-    pub fn insert_component<W: WorldMutType<P, K>>(
+    pub fn insert_component(
         &mut self,
-        world: &W,
         world_record: &WorldRecord<K, P::Kind>,
         component_key: &ComponentKey,
     ) {
-        let (entity_key, component_type) = world_record
+        let (entity_key, component_kind) = world_record
             .get_component_record(component_key)
             .expect("component does not exist!");
 
-        if let Some(component_protocol) = world.get_component_of_kind(&entity_key, &component_type)
-        {
-            let component_ref = component_protocol.dyn_ref();
+        if !self.entity_records.contains_key(&entity_key) {
+            panic!(
+                "attempting to add Component to Entity that does not yet exist for this connection"
+            );
+        }
 
-            if !self.entity_records.contains_key(&entity_key) {
-                panic!(
-                    "attempting to add Component to Entity that does not yet exist for this connection"
-                );
+        let local_component_key = self.component_init(component_key, LocalityStatus::Creating);
+
+        let entity_record = self.entity_records.get(&entity_key).unwrap(); // checked this above
+
+        match entity_record.status {
+            LocalityStatus::Creating => {
+                // uncreated Components will be created after Entity is
+                // created
             }
-
-            let local_component_key = self.component_init(component_key, LocalityStatus::Creating);
-
-            let entity_record = self.entity_records.get(&entity_key).unwrap(); // checked this above
-
-            match entity_record.status {
-                LocalityStatus::Creating => {
-                    // uncreated Components will be created after Entity is
-                    // created
-                }
-                LocalityStatus::Created => {
-                    // send InsertComponent action
-                    self.queued_actions.push_back(EntityAction::InsertComponent(
-                        entity_key,
-                        entity_record.local_key,
-                        *component_key,
-                        local_component_key,
-                        component_ref.get_kind(),
-                    ));
-                }
-                LocalityStatus::Deleting => {
-                    // deletion in progress, do nothing
-                }
+            LocalityStatus::Created => {
+                // send InsertComponent action
+                self.queued_actions.push_back(EntityAction::InsertComponent(
+                    entity_key,
+                    entity_record.local_key,
+                    *component_key,
+                    local_component_key,
+                    component_kind,
+                ));
+            }
+            LocalityStatus::Deleting => {
+                // deletion in progress, do nothing
             }
         }
     }
@@ -405,35 +399,30 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         return self.local_to_global_entity_key_map.get(&local_key);
     }
 
-    pub fn collect_component_updates<W: WorldRefType<P, K>>(
+    pub fn collect_component_updates(
         &mut self,
-        world: &W,
         world_record: &WorldRecord<K, P::Kind>,
     ) {
         for (component_key, record) in self.component_records.iter() {
             if record.status == LocalityStatus::Created
                 && self.diff_handler.has_diff_mask(component_key)
             {
-                let (entity_key, component_type) = world_record
+                let (entity_key, component_kind) = world_record
                     .get_component_record(component_key)
                     .expect("component does not exist!");
 
-                if let Some(component_protocol) =
-                    world.get_component_of_kind(&entity_key, &component_type)
-                {
-                    let new_diff_mask = self
+                let new_diff_mask = self
                         .diff_handler
                         .get_diff_mask(component_key)
                         .expect("DiffHandler does not have registered Component!")
                         .clone();
-                    self.queued_actions.push_back(EntityAction::UpdateComponent(
-                        entity_key,
-                        *component_key,
-                        record.local_key,
-                        new_diff_mask,
-                        component_protocol.dyn_ref().get_kind(),
-                    ));
-                }
+                self.queued_actions.push_back(EntityAction::UpdateComponent(
+                    entity_key,
+                    *component_key,
+                    record.local_key,
+                    new_diff_mask,
+                    component_kind,
+                ));
             }
         }
     }
@@ -466,15 +455,13 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
 
                 for (_, local_component_key, component_kind) in component_list {
                     //write component payload
-                    let component_result = world
+                    let component_ref = world
                         .get_component_of_kind(global_entity_key, component_kind)
                         .expect("Component does not exist in World");
-                    let component_ref = component_result.dyn_ref();
                     let mut component_payload_bytes = Vec::<u8>::new();
                     component_ref.write(&mut component_payload_bytes);
 
                     //Write component "header"
-                    let component_kind = component_ref.get_kind();
                     action_total_bytes
                         .write_u16::<BigEndian>(component_kind.to_u16())
                         .unwrap(); // write naia id
@@ -508,10 +495,9 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                 component_kind,
             ) => {
                 //write component payload
-                let component_result = world
+                let component_ref = world
                     .get_component_of_kind(global_entity_key, component_kind)
                     .expect("Component does not exist in World");
-                let component_ref = component_result.dyn_ref();
 
                 let mut component_payload_bytes = Vec::<u8>::new();
                 component_ref.write(&mut component_payload_bytes);
@@ -520,7 +506,6 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                 action_total_bytes
                     .write_u16::<BigEndian>(local_entity_key.to_u16())
                     .unwrap(); //write local entity key
-                let component_kind = component_ref.get_kind();
                 action_total_bytes
                     .write_u16::<BigEndian>(component_kind.to_u16())
                     .unwrap(); // write component kind
@@ -537,10 +522,9 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                 component_kind,
             ) => {
                 //write component payload
-                let component_result = world
+                let component_ref = world
                     .get_component_of_kind(global_entity_key, component_kind)
                     .expect("Component does not exist in World");
-                let component_ref = component_result.dyn_ref();
 
                 let mut component_payload_bytes = Vec::<u8>::new();
                 component_ref.write_partial(diff_mask, &mut component_payload_bytes);
@@ -734,9 +718,8 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
             .clone()
     }
 
-    pub fn process_delivered_packets<W: WorldRefType<P, K>>(
+    pub fn process_delivered_packets(
         &mut self,
-        world: &W,
         world_record: &WorldRecord<K, P::Kind>,
     ) {
         while let Some(packet_index) = self.delivered_packets.pop_front() {
@@ -788,14 +771,8 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                                     // check if component has been successfully created
                                     // (perhaps through the previous entity_create operation)
                                     if component_record.status == LocalityStatus::Creating {
-                                        let (_, component_type) = world_record
+                                        let (_, component_kind) = world_record
                                             .get_component_record(&global_component_key)
-                                            .expect("component does not exist!");
-                                        let component_protocol = world
-                                            .get_component_of_kind(
-                                                &global_entity_key,
-                                                &component_type,
-                                            )
                                             .expect("component does not exist!");
 
                                         self.queued_actions.push_back(
@@ -804,7 +781,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                                                 entity_record.local_key,
                                                 global_component_key,
                                                 component_record.local_key,
-                                                component_protocol.dyn_ref().get_kind(),
+                                                component_kind,
                                             ),
                                         );
                                     }

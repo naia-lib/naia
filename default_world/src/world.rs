@@ -159,7 +159,7 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
         return None;
     }
 
-    fn copy_components(&mut self, entity: &Entity) -> Vec<P> {
+    fn get_component_kinds(&mut self, entity: &Entity) -> Vec<P> {
         let mut output: Vec<P> = Vec::new();
 
         if let Some(component_map) = self.world.entities.get(*entity) {

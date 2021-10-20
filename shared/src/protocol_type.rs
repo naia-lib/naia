@@ -42,6 +42,13 @@ pub trait ProtocolType: Sized + Sync + Send + Clone + 'static {
     );
 }
 
+pub trait ProtocolRefType<P: ProtocolType> {
+    fn as_dyn<'a>(&self) -> DynRef<'a, P>;
+}
+pub trait ProtocolMutType<P: ProtocolType> {
+    fn as_dyn<'a>(&mut self) -> DynMut<'a, P>;
+}
+
 pub trait ProtocolKindType: Eq + Hash + Copy {
     fn to_u16(&self) -> u16;
     fn from_u16(val: u16) -> Self;
