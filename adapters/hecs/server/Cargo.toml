@@ -5,7 +5,6 @@ authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Library to faciliate naia_server & Hecs interop"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
-readme = "../README.md"
 keywords = ["wasm", "webrtc", "udp", "networking", "gamedev"]
 license = "MIT OR Apache-2.0"
 categories = ["network-programming", "game-development", "wasm", "web-programming"]
