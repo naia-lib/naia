@@ -19,7 +19,7 @@ path = "src/main.rs"
 [dependencies]
 naia-hecs-client = { path = "../../../adapters/hecs/client", features = [ "wbindgen" ] }
 naia-hecs-demo-shared = { path = "../shared" }
-hecs = { path = "../../../../Forks/hecs" }
+hecs = { version = "=0.5.2" }
 log = "0.4"
 cfg-if = "0.1.10"
 

@@ -1,3 +1,5 @@
+use log::info;
+
 use naia_hecs_client::{Event, WorldProxyMut};
 
 use naia_hecs_demo_shared::protocol::{Protocol, StringMessage};
