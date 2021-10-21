@@ -1,23 +1,24 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    rc::Rc,
+use std::collections::{HashMap, VecDeque};
+
+use naia_shared::{
+    wrapping_diff, EntityType, ProtocolType, Ref, Replicate, SequenceBuffer, SequenceIterator,
+    WorldMutType,
 };
 
-use crate::{client_actor_manager::ClientActorManager, naia_client::LocalActorKey};
-use naia_shared::{wrapping_diff, ActorType, Event, EventType, SequenceBuffer, SequenceIterator};
+use super::{entity_manager::EntityManager, event::OwnedEntity};
 
 const COMMAND_HISTORY_SIZE: u16 = 64;
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
-pub struct CommandReceiver<T: EventType> {
-    queued_incoming_commands: VecDeque<(u16, LocalActorKey, Rc<Box<dyn Event<T>>>)>,
-    command_history: HashMap<LocalActorKey, SequenceBuffer<Rc<Box<dyn Event<T>>>>>,
-    queued_command_replays: VecDeque<(u16, LocalActorKey, Rc<Box<dyn Event<T>>>)>,
-    replay_trigger: HashMap<LocalActorKey, u16>,
+pub struct CommandReceiver<P: ProtocolType, K: EntityType> {
+    queued_incoming_commands: VecDeque<(u16, OwnedEntity<K>, Ref<dyn Replicate<P>>)>,
+    command_history: HashMap<K, SequenceBuffer<Ref<dyn Replicate<P>>>>,
+    queued_command_replays: VecDeque<(u16, OwnedEntity<K>, Ref<dyn Replicate<P>>)>,
+    replay_trigger: HashMap<K, u16>,
 }
 
-impl<T: EventType> CommandReceiver<T> {
+impl<P: ProtocolType, K: EntityType> CommandReceiver<P, K> {
     /// Creates a new CommandSender
     pub fn new() -> Self {
         CommandReceiver {
@@ -29,105 +30,116 @@ impl<T: EventType> CommandReceiver<T> {
     }
 
     /// Gets the next queued Command
-    pub fn pop_command(&mut self) -> Option<(u16, LocalActorKey, Rc<Box<dyn Event<T>>>)> {
+    pub fn pop_command(&mut self) -> Option<(u16, OwnedEntity<K>, Ref<dyn Replicate<P>>)> {
         self.queued_incoming_commands.pop_front()
     }
 
     /// Gets the next queued Replayed Command
-    pub fn pop_command_replay<U: ActorType>(
+    pub fn pop_command_replay(&mut self) -> Option<(u16, OwnedEntity<K>, Ref<dyn Replicate<P>>)> {
+        self.queued_command_replays.pop_front()
+    }
+
+    /// Process any necessary replayed Command
+    pub fn process_command_replay<W: WorldMutType<P, K>>(
         &mut self,
-        actor_manager: &mut ClientActorManager<U>,
-    ) -> Option<(u16, LocalActorKey, Rc<Box<dyn Event<T>>>)> {
-        for (pawn_key, history_tick) in self.replay_trigger.iter() {
-            // set pawn to server authoritative state
-            actor_manager.pawn_reset(pawn_key);
+        world: &mut W,
+        entity_manager: &mut EntityManager<P, K>,
+    ) {
+        for (world_entity, history_tick) in self.replay_trigger.iter() {
+            if let Some(predicted_entity) = entity_manager.get_predicted_entity(world_entity) {
+                // set prediction to server authoritative entity
+                entity_manager.prediction_reset_entity(world, world_entity);
 
-            // clear all
-            actor_manager.pawn_clear_history(pawn_key);
+                // trigger replay of historical commands
+                if let Some(command_buffer) = self.command_history.get_mut(&world_entity) {
+                    // this is suspect .. but I seem to remember it's required to be this
+                    // way because we're handling it elsewhere?
+                    self.queued_incoming_commands.clear();
+                    self.queued_command_replays.clear();
 
-            // trigger replay of historical commands
-            if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
-                self.queued_incoming_commands.clear();
-                self.queued_command_replays.clear();
-
-                let current_tick = command_buffer.sequence_num();
-                for tick in *history_tick..=current_tick {
-                    if let Some(command) = command_buffer.get_mut(tick) {
-                        self.queued_command_replays
-                            .push_back((tick, *pawn_key, command.clone()));
+                    // load up the replays
+                    let current_tick = command_buffer.sequence_num();
+                    for tick in *history_tick..=current_tick {
+                        if let Some(command) = command_buffer.get_mut(tick) {
+                            self.queued_command_replays.push_back((
+                                tick,
+                                OwnedEntity::new(world_entity, &predicted_entity),
+                                command.clone(),
+                            ));
+                        }
                     }
                 }
             }
         }
 
         self.replay_trigger.clear();
-
-        self.queued_command_replays.pop_front()
     }
 
     /// Queues an Command to be ran locally on the Client
     pub fn queue_command(
         &mut self,
         host_tick: u16,
-        pawn_key: LocalActorKey,
-        command: &Rc<Box<dyn Event<T>>>,
+        owned_entity: OwnedEntity<K>,
+        command: Ref<dyn Replicate<P>>,
     ) {
+        let world_entity = owned_entity.confirmed;
         self.queued_incoming_commands
-            .push_back((host_tick, pawn_key, command.clone()));
+            .push_back((host_tick, owned_entity, command.clone()));
 
-        if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
-            command_buffer.insert(host_tick, command.clone());
+        if let Some(command_buffer) = self.command_history.get_mut(&world_entity) {
+            command_buffer.insert(host_tick, command);
         }
     }
 
-    /// Get number of Commands in the command history for a given Pawn
-    pub fn command_history_count(&self, pawn_key: LocalActorKey) -> u8 {
-        if let Some(command_buffer) = self.command_history.get(&pawn_key) {
+    /// Get number of Commands in the command history for a given Prediction
+    pub fn command_history_count(&self, owned_entity: &K) -> u8 {
+        if let Some(command_buffer) = self.command_history.get(owned_entity) {
             return command_buffer.get_entries_count();
         }
         return 0;
     }
 
-    /// Get an iterator of Commands in the command history for a given Pawn
+    /// Get an iterator of Commands in the command history for a given
+    /// Prediction
     pub fn command_history_iter(
         &self,
-        pawn_key: LocalActorKey,
+        owned_entity: &K,
         reverse: bool,
-    ) -> Option<SequenceIterator<Rc<Box<dyn Event<T>>>>> {
-        if let Some(command_buffer) = self.command_history.get(&pawn_key) {
+    ) -> Option<SequenceIterator<Ref<dyn Replicate<P>>>> {
+        if let Some(command_buffer) = self.command_history.get(owned_entity) {
             return Some(command_buffer.iter(reverse));
         }
         return None;
     }
 
-    /// Queues commands to be replayed from a given tick
-    pub fn replay_commands(&mut self, history_tick: u16, pawn_key: LocalActorKey) {
-        if let Some(tick) = self.replay_trigger.get_mut(&pawn_key) {
+    /// Queues Commands to be replayed from a given tick
+    pub fn replay_commands(&mut self, history_tick: u16, owned_entity: &K) {
+        if let Some(tick) = self.replay_trigger.get_mut(owned_entity) {
             if wrapping_diff(*tick, history_tick) > 0 {
                 *tick = history_tick;
             }
         } else {
-            self.replay_trigger.insert(pawn_key, history_tick);
+            self.replay_trigger.insert(*owned_entity, history_tick);
         }
     }
 
-    /// Removes command history for a given pawn until a specific tick
-    pub fn remove_history_until(&mut self, history_tick: u16, pawn_key: LocalActorKey) {
-        if let Some(command_buffer) = self.command_history.get_mut(&pawn_key) {
+    /// Removes command history for a given Prediction until a specific tick
+    pub fn remove_history_until(&mut self, history_tick: u16, owned_entity: &K) {
+        if let Some(command_buffer) = self.command_history.get_mut(owned_entity) {
             command_buffer.remove_until(history_tick);
         }
     }
 
-    /// Perform initialization on pawn creation
-    pub fn pawn_init(&mut self, pawn_key: &LocalActorKey) {
+    /// Perform initialization on Prediction creation
+    pub fn prediction_init(&mut self, owned_entity: &K) {
         self.command_history.insert(
-            *pawn_key,
+            *owned_entity,
             SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE),
         );
     }
 
-    /// Perform cleanup on pawn deletion
-    pub fn pawn_cleanup(&mut self, pawn_key: &LocalActorKey) {
-        self.command_history.remove(pawn_key);
+    /// Perform cleanup on Prediction deletion
+    pub fn prediction_cleanup(&mut self, owned_entity: &K) {
+        self.command_history.remove(owned_entity);
     }
 }

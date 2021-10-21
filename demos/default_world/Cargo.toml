@@ -1,0 +1,13 @@
+[package]
+name = "naia-default-world"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+homepage = "https://github.com/naia-rs/naia"
+repository = "https://github.com/naia-rs/naia"
+edition = "2018"
+
+[features]
+
+[dependencies]
+naia-shared = { path = "../../shared" }
+slotmap = { version = "0.4" }

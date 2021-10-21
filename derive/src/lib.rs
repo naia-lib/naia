@@ -1,5 +1,6 @@
 //! # Naia Derive
-//! Procedural macros to simplify implementation of Naia Event & Actor traits
+//! Procedural macros to simplify implementation of Naia Replicate &
+//! ProtocolType traits
 
 #![deny(
     missing_docs,
@@ -10,37 +11,23 @@
     unused_import_braces
 )]
 
-mod actor;
-mod actor_type;
-mod event;
-mod event_type;
-mod utils;
+#[macro_use]
+extern crate cfg_if;
 
-use actor::actor_impl;
-use actor_type::actor_type_impl;
-use event::event_impl;
-use event_type::event_type_impl;
+mod protocol_type;
+mod replicate;
 
-/// Derives the ActorType trait for a given enum
-#[proc_macro_derive(ActorType)]
-pub fn actor_type_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    actor_type_impl(input)
+use protocol_type::protocol_type_impl;
+use replicate::replicate_impl;
+
+/// Derives the ProtocolType trait for a given enum
+#[proc_macro_derive(ProtocolType)]
+pub fn protocol_type_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    protocol_type_impl(input)
 }
 
-/// Derives the EventType trait for a given enum
-#[proc_macro_derive(EventType)]
-pub fn event_type_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    event_type_impl(input)
-}
-
-/// Derives the Event trait for a given struct
-#[proc_macro_derive(Event, attributes(type_name))]
-pub fn event_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    event_impl(input)
-}
-
-/// Derives the Actor trait for a given struct
-#[proc_macro_derive(Actor, attributes(type_name, interpolate, predict))]
-pub fn actor_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    actor_impl(input)
+/// Derives the Replicate trait for a given struct
+#[proc_macro_derive(Replicate, attributes(type_name))]
+pub fn replicate_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    replicate_impl(input)
 }

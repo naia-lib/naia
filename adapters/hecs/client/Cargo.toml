@@ -1,0 +1,26 @@
+[package]
+name = "naia-hecs-client"
+version = "0.7.0-alpha.1"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+description = ""
+documentation = "https://docs.rs/naia-client"
+homepage = "https://github.com/naia-rs/naia"
+repository = "https://github.com/naia-rs/naia"
+readme = "../README.md"
+keywords = ["wasm", "webrtc", "udp", "networking", "gamedev"]
+license = "MIT OR Apache-2.0"
+categories = ["network-programming", "game-development", "wasm", "web-programming"]
+edition = "2018"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[features]
+multithread = [ "naia-client/multithread", "naia-hecs-shared/multithread" ]
+wbindgen = [ "naia-client/wbindgen", "naia-hecs-shared/wbindgen" ]
+mquad = [ "naia-client/mquad", "naia-hecs-shared/mquad" ]
+
+[dependencies]
+naia-client = { version = "0.7.0-alpha.1", path = "../../../client" }
+naia-hecs-shared = { version = "0.7.0-alpha.1", path = "../shared" }
+hecs = { version = "=0.5.2" }

@@ -1,0 +1,32 @@
+[package]
+name = "naia-hecs-client-demo"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../../../"
+publish = false
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib","rlib"]
+
+[[bin]]
+name = "index" # This is because cargo-web also picks up the static assets folder...
+path = "src/main.rs"
+
+[features]
+
+[dependencies]
+naia-hecs-client = { path = "../../../adapters/hecs/client", features = [ "wbindgen" ] }
+naia-hecs-demo-shared = { path = "../shared" }
+hecs = { version = "=0.5.2" }
+log = "0.4"
+cfg-if = "0.1.10"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+simple_logger = { version = "1.4" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-logger = { version = "0.2.0" }
+wasm-bindgen = { version = "0.2.45", features = [ "serde-serialize" ] }
+web-sys = { version = "0.3.4", features = [ 'Window' ] }

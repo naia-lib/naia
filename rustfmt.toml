@@ -1,7 +1,7 @@
 format_strings = false
 reorder_imports = true
 hard_tabs = false
-merge_imports = true
+imports_granularity='Crate'
 reorder_impl_items = true
 use_field_init_shorthand = true
 use_try_shorthand = true
