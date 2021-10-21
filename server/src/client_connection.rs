@@ -1,67 +1,67 @@
-use std::{cell::RefCell, net::SocketAddr, rc::Rc};
+use std::net::SocketAddr;
 
 use naia_shared::{
-    Actor, ActorType, Connection, ConnectionConfig, Event, EventType, ManagerType, Manifest,
-    PacketReader, PacketType, SequenceNumber, StandardHeader,
+    Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
+    ProtocolType, Ref, Replicate, SequenceNumber, StandardHeader, WorldMutType, WorldRefType,
 };
 
 use super::{
-    actors::{
-        actor_key::actor_key::ActorKey, actor_packet_writer::ActorPacketWriter,
-        mut_handler::MutHandler, server_actor_manager::ServerActorManager,
-    },
-    command_receiver::CommandReceiver,
-    ping_manager::PingManager,
-    server_packet_writer::ServerPacketWriter,
+    command_receiver::CommandReceiver, entity_manager::EntityManager, keys::ComponentKey,
+    mut_handler::MutHandler, packet_writer::PacketWriter, ping_manager::PingManager,
+    world_record::WorldRecord,
 };
 
-pub struct ClientConnection<T: EventType, U: ActorType> {
-    connection: Connection<T>,
-    actor_manager: ServerActorManager<U>,
+pub struct ClientConnection<P: ProtocolType, K: EntityType> {
+    connection: Connection<P>,
+    entity_manager: EntityManager<P, K>,
     ping_manager: PingManager,
-    command_receiver: CommandReceiver<T>,
+    command_receiver: CommandReceiver<P>,
 }
 
-impl<T: EventType, U: ActorType> ClientConnection<T, U> {
+impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
     pub fn new(
         address: SocketAddr,
-        mut_handler: Option<&Rc<RefCell<MutHandler>>>,
+        mut_handler: Option<&Ref<MutHandler>>,
         connection_config: &ConnectionConfig,
     ) -> Self {
         ClientConnection {
             connection: Connection::new(address, connection_config),
-            actor_manager: ServerActorManager::new(address, mut_handler.unwrap()),
+            entity_manager: EntityManager::new(address, mut_handler.unwrap()),
             ping_manager: PingManager::new(),
             command_receiver: CommandReceiver::new(),
         }
     }
 
-    pub fn get_outgoing_packet(
+    pub fn get_outgoing_packet<W: WorldRefType<P, K>>(
         &mut self,
+        world: &W,
+        world_record: &WorldRecord<K>,
         host_tick: u16,
-        manifest: &Manifest<T, U>,
+        manifest: &Manifest<P>,
     ) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_events() || self.actor_manager.has_outgoing_messages() {
-            let mut writer = ServerPacketWriter::new();
+        if self.connection.has_outgoing_messages() || self.entity_manager.has_outgoing_actions() {
+            let mut writer = PacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
-            while let Some(popped_event) = self.connection.pop_outgoing_event(next_packet_index) {
-                if !writer.write_event(manifest, &popped_event) {
+            while let Some(popped_message) = self.connection.pop_outgoing_message(next_packet_index)
+            {
+                if !writer.write_message(manifest, &popped_message) {
                     self.connection
-                        .unpop_outgoing_event(next_packet_index, &popped_event);
+                        .unpop_outgoing_message(next_packet_index, &popped_message);
                     break;
                 }
             }
-            while let Some(popped_actor_message) =
-                self.actor_manager.pop_outgoing_message(next_packet_index)
+            while let Some(popped_entity_action) =
+                self.entity_manager
+                    .pop_outgoing_action(world, world_record, next_packet_index)
             {
-                if !ActorPacketWriter::write_actor_message(
+                if !self.entity_manager.write_entity_action(
                     &mut writer,
                     manifest,
-                    &popped_actor_message,
+                    &popped_entity_action,
                 ) {
-                    self.actor_manager
-                        .unpop_outgoing_message(next_packet_index, &popped_actor_message);
+                    self.entity_manager
+                        .unpop_outgoing_action(next_packet_index, &popped_entity_action);
                     break;
                 }
             }
@@ -88,7 +88,7 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         &mut self,
         server_tick: u16,
         client_tick: u16,
-        manifest: &Manifest<T, U>,
+        manifest: &Manifest<P>,
         data: &[u8],
     ) {
         let mut reader = PacketReader::new(data);
@@ -103,40 +103,88 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
                         manifest,
                     );
                 }
-                ManagerType::Event => {
-                    self.connection.process_event_data(&mut reader, manifest);
+                ManagerType::Message => {
+                    self.connection.process_message_data(&mut reader, manifest);
                 }
                 _ => {}
             }
         }
     }
 
-    pub fn has_actor(&self, key: &ActorKey) -> bool {
-        return self.actor_manager.has_actor(key);
+    pub fn collect_component_updates<W: WorldRefType<P, K>>(
+        &mut self,
+        world: &W,
+        world_record: &WorldRecord<K>,
+    ) {
+        self.entity_manager
+            .collect_component_updates(world, world_record);
     }
 
-    pub fn add_actor(&mut self, key: &ActorKey, actor: &Rc<RefCell<dyn Actor<U>>>) {
-        self.actor_manager.add_actor(key, actor);
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(K, P)> {
+        if let Some((local_entity_key, command)) =
+            self.command_receiver.pop_incoming_command(server_tick)
+        {
+            // get global key from the local one
+            if let Some(global_entity_key) = self
+                .entity_manager
+                .get_global_entity_key_from_local(local_entity_key)
+            {
+                // make sure Command is valid (the entity really is owned by this connection)
+                if self.entity_manager.has_entity_prediction(global_entity_key) {
+                    return Some((*global_entity_key, command));
+                }
+            }
+        }
+        return None;
     }
 
-    pub fn remove_actor(&mut self, key: &ActorKey) {
-        self.actor_manager.remove_actor(key);
+    pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
+        return self.ping_manager.process_ping(ping_payload);
     }
 
-    pub fn collect_actor_updates(&mut self) {
-        self.actor_manager.collect_actor_updates();
+    // Entity management
+
+    pub fn has_entity(&self, key: &K) -> bool {
+        return self.entity_manager.has_entity(key);
     }
 
-    pub fn has_pawn(&self, key: &ActorKey) -> bool {
-        return self.actor_manager.has_pawn(key);
+    pub fn spawn_entity<W: WorldRefType<P, K>>(
+        &mut self,
+        world: &W,
+        world_record: &WorldRecord<K>,
+        key: &K,
+    ) {
+        self.entity_manager.add_entity(world, world_record, key);
     }
 
-    pub fn add_pawn(&mut self, key: &ActorKey) {
-        self.actor_manager.add_pawn(key);
+    pub fn despawn_entity(&mut self, world_record: &WorldRecord<K>, key: &K) {
+        self.entity_manager.remove_entity(world_record, key);
     }
 
-    pub fn remove_pawn(&mut self, key: &ActorKey) {
-        self.actor_manager.remove_pawn(key);
+    pub fn has_prediction_entity(&self, key: &K) -> bool {
+        return self.entity_manager.has_entity_prediction(key);
+    }
+
+    pub fn add_prediction_entity(&mut self, key: &K) {
+        self.entity_manager.add_prediction_entity(key);
+    }
+
+    pub fn remove_prediction_entity(&mut self, key: &K) {
+        self.entity_manager.remove_prediction_entity(key);
+    }
+
+    pub fn insert_component<W: WorldMutType<P, K>>(
+        &mut self,
+        world: &W,
+        world_record: &WorldRecord<K>,
+        component_key: &ComponentKey,
+    ) {
+        self.entity_manager
+            .insert_component(world, world_record, component_key);
+    }
+
+    pub fn remove_component(&mut self, component_key: &ComponentKey) {
+        self.entity_manager.remove_component(component_key);
     }
 
     // Pass-through methods to underlying common connection
@@ -157,9 +205,16 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         return self.connection.should_drop();
     }
 
-    pub fn process_incoming_header(&mut self, header: &StandardHeader) {
+    pub fn process_incoming_header<W: WorldRefType<P, K>>(
+        &mut self,
+        world: &W,
+        world_record: &WorldRecord<K>,
+        header: &StandardHeader,
+    ) {
         self.connection
-            .process_incoming_header(header, &mut Some(&mut self.actor_manager));
+            .process_incoming_header(header, &mut Some(&mut self.entity_manager));
+        self.entity_manager
+            .process_delivered_packets(world, world_record);
     }
 
     pub fn process_outgoing_header(
@@ -181,33 +236,16 @@ impl<T: EventType, U: ActorType> ClientConnection<T, U> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_event(&mut self, event: &impl Event<T>) {
-        return self.connection.queue_event(event);
+    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<P>>, guaranteed_delivery: bool) {
+        return self.connection.queue_message(message, guaranteed_delivery);
     }
 
-    pub fn get_incoming_event(&mut self) -> Option<T> {
-        return self.connection.get_incoming_event();
-    }
-
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(ActorKey, T)> {
-        if let Some((local_pawn_key, command)) =
-            self.command_receiver.pop_incoming_command(server_tick)
-        {
-            if let Some(global_pawn_key) =
-                self.actor_manager.get_global_key_from_local(local_pawn_key)
-            {
-                return Some((*global_pawn_key, command));
-            }
-        }
-        return None;
+    pub fn get_incoming_message(&mut self) -> Option<P> {
+        return self.connection.get_incoming_message();
     }
 
     pub fn get_address(&self) -> SocketAddr {
         return self.connection.get_address();
-    }
-
-    pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
-        return self.ping_manager.process_ping(ping_payload);
     }
 
     pub fn get_last_received_tick(&self) -> u16 {

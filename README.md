@@ -13,11 +13,9 @@ a *n*etworking *a*rchitecture for *i*nteractive *a*pplications
 
 A cross-platform (including Wasm!) networking engine that intends to make multiplayer game development in Rust dead simple and lightning fast.
 
-Check out the [macroquad](https://github.com/naia-rs/naia-macroquad-example) demo.
+naia helps you to easily define a common, shared Protocol that allows Server & Client to exchange information. Then, naia facilitates sending/receiving parts of that Protocol as reliable/unreliable Messages between Server & Client, and also keeps a pool of tracked Entities synced with each Client for whom they are "in-scope". Entities are "scoped" to Clients with whom they share the same Room, as well as being sufficiently customizable to, for example, only keep Entities persisted & synced while within a Client's viewport or according to some other criteria.
 
-At the highest level, you register Event and Actor implementations in a module shared by Client & Server. Then, naia will facilitate sending/receiving those Events between Client & Server, and also keep a pool of tracked Actors synced with each Client for whom they are "in-scope". Actors are "scoped" to Clients with whom they share the same Room, as well as being sufficiently customizable to, for example, only keep Actors persisted & synced while within a Client's viewport or according to some other criteria.
-
-It is built on top of [naia-socket](https://github.com/naia-rs/naia-socket), which provides cross-platform unreliable & unordered messaging.
+It is built on top of [naia-socket](https://github.com/naia-rs/naia-socket), which provides a cross-platform unreliable & unordered transport layer.
 
 The API is heavily inspired by the [Nengi.js](https://github.com/timetocode/nengi) & [Colyseus](https://github.com/colyseus/colyseus) Javascript multiplayer networking libraries. The internals follow the [Tribes 2 Networking model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf) fairly closely.
 
@@ -25,36 +23,36 @@ Thank very much to Kyren for support & [webrtc-unreliable](https://github.com/ky
 
 Any help is very welcome, please get in touch! I'm still very new to Rust and this project is overly ambitious, and so I intend to be very open to any criticism / feedback in order to better this project.
 
-Currently guaranteed to work WebAssembly & Linux, although Windows & MacOS have been reported working as well. Please file issues if you find inconsistencies and I'll do what I can.
+Currently guaranteed to work on Web & Linux, although Windows & MacOS have been reported working as well. Please file issues if you find inconsistencies and I'll do what I can.
 
-## Examples
+## Demos
 
-More comprehensive documentation / tutorials are on their way, but for now, the best way to get started with naia is to go through the single example, which demonstrates most of the functionality.
+More comprehensive documentation / tutorials are on their way, but for now, the best way to get started with naia is to go through the basic demo, which demonstrates most of the functionality.
 
 ### Server:
 
-To run the UDP server example on Linux: (that will be able to communicate with Linux clients)
+To run the UDP server demo on Linux: (that will be able to communicate with Linux clients)
 
-    1. cd demo/server
+    1. cd /naia/demos/basic/server
     2. cargo run --features "use-udp"
 
-To run the WebRTC server example on Linux: (that will be able to communicate with Web clients)
+To run the WebRTC server demo on Linux: (that will be able to communicate with Web clients)
 
-    1. cd demo/server
+    1. cd /naia/demos/basic/server
     2. cargo run --features "use-webrtc"
 
 ### Client:
 
-To run the UDP client example on Linux: (that will be able to communicate with a UDP server)
+To run the UDP client demo on Linux: (that will be able to communicate with a UDP server)
 
-    1. cd demo/client/miniquad
+    1. cd /naia/demos/basic/client/wasm_bindgen
     2. cargo run
 
-To run the WebRTC client example on Web: (that will be able to communicate with a WebRTC server)
+To run the WebRTC client demo on Web: (that will be able to communicate with a WebRTC server)
 
     1. cargo install cargo-web  // should only need to do this once if you haven't already
-    2. Enter in your IP Address at the appropriate spot in examples/client/src/app.rs
-    3. cd demo/client/wasm_bindgen // consult NOTES.md
+    2. Enter in your IP Address at the appropriate spot in /demos/basic/shared/src/lib.rs
+    3. cd /naia/demos/basic/client/wasm_bindgen
     4. npm install              // should only need to do this once to install dependencies
     5. npm run start            // this will open a web browser, and hot reload
-    6. Web page will be blank - check debug console to see communications from the server.
+    6. Web page will be blank - check debug console to see communications from the server

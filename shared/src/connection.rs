@@ -1,32 +1,28 @@
-use std::{net::SocketAddr, rc::Rc};
+use std::net::SocketAddr;
 
-use crate::{wrapping_diff, Timer};
+use naia_socket_shared::{PacketReader, Ref, Timer};
+
+use crate::{wrapping_diff, MessageManager};
 
 use super::{
-    ack_manager::AckManager,
-    actors::{actor_notifiable::ActorNotifiable, actor_type::ActorType},
-    connection_config::ConnectionConfig,
-    events::{event::Event, event_manager::EventManager, event_type::EventType},
-    manifest::Manifest,
-    packet_type::PacketType,
-    sequence_buffer::SequenceNumber,
-    standard_header::StandardHeader,
-    PacketReader,
+    ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
+    packet_notifiable::PacketNotifiable, packet_type::PacketType, protocol_type::ProtocolType,
+    replicate::Replicate, sequence_buffer::SequenceNumber, standard_header::StandardHeader,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
 #[derive(Debug)]
-pub struct Connection<T: EventType> {
+pub struct Connection<P: ProtocolType> {
     address: SocketAddr,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
     ack_manager: AckManager,
-    event_manager: EventManager<T>,
+    message_manager: MessageManager<P>,
     last_received_tick: u16,
 }
 
-impl<T: EventType> Connection<T> {
+impl<P: ProtocolType> Connection<P> {
     /// Create a new Connection, given the appropriate underlying managers
     pub fn new(address: SocketAddr, config: &ConnectionConfig) -> Self {
         return Connection {
@@ -34,7 +30,7 @@ impl<T: EventType> Connection<T> {
             heartbeat_timer: Timer::new(config.heartbeat_interval),
             timeout_timer: Timer::new(config.disconnection_timeout_duration),
             ack_manager: AckManager::new(),
-            event_manager: EventManager::new(),
+            message_manager: MessageManager::new(),
             last_received_tick: 0,
         };
     }
@@ -68,13 +64,13 @@ impl<T: EventType> Connection<T> {
     pub fn process_incoming_header(
         &mut self,
         header: &StandardHeader,
-        actor_notifiable: &mut Option<&mut dyn ActorNotifiable>,
+        packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         if wrapping_diff(self.last_received_tick, header.host_tick()) > 0 {
             self.last_received_tick = header.host_tick();
         }
         self.ack_manager
-            .process_incoming(&header, &mut self.event_manager, actor_notifiable);
+            .process_incoming(&header, &mut self.message_manager, packet_notifiable);
     }
 
     /// Given a packet payload, start tracking the packet via it's index, attach
@@ -120,42 +116,47 @@ impl<T: EventType> Connection<T> {
         return self.ack_manager.get_local_packet_index();
     }
 
-    /// Queue up an event to be sent to the remote host
-    pub fn queue_event(&mut self, event: &impl Event<T>) {
-        return self.event_manager.queue_outgoing_event(event);
-    }
-
-    /// Returns whether there are events to be sent to the remote host
-    pub fn has_outgoing_events(&self) -> bool {
-        return self.event_manager.has_outgoing_events();
-    }
-
-    /// Pop the next outgoing event from the queue
-    pub fn pop_outgoing_event(&mut self, next_packet_index: u16) -> Option<Rc<Box<dyn Event<T>>>> {
-        return self.event_manager.pop_outgoing_event(next_packet_index);
-    }
-
-    /// If for some reason the next outgoing event could not be written into a
-    /// message and sent, place it back into the front of the queue
-    pub fn unpop_outgoing_event(&mut self, next_packet_index: u16, event: &Rc<Box<dyn Event<T>>>) {
+    /// Queue up a message to be sent to the remote host
+    pub fn queue_message(&mut self, message: &Ref<dyn Replicate<P>>, guaranteed_delivery: bool) {
         return self
-            .event_manager
-            .unpop_outgoing_event(next_packet_index, event);
+            .message_manager
+            .queue_outgoing_message(message, guaranteed_delivery);
     }
 
-    /// Given an incoming packet which has been identified as an event, send the
-    /// data to the EventManager for processing
-    pub fn process_event_data<U: ActorType>(
+    /// Returns whether there are messages to be sent to the remote host
+    pub fn has_outgoing_messages(&self) -> bool {
+        return self.message_manager.has_outgoing_messages();
+    }
+
+    /// Pop the next outgoing message from the queue
+    pub fn pop_outgoing_message(
         &mut self,
-        reader: &mut PacketReader,
-        manifest: &Manifest<T, U>,
-    ) {
-        return self.event_manager.process_data(reader, manifest);
+        next_packet_index: u16,
+    ) -> Option<Ref<dyn Replicate<P>>> {
+        return self.message_manager.pop_outgoing_message(next_packet_index);
     }
 
-    /// Get the most recent event that has been received from a remote host
-    pub fn get_incoming_event(&mut self) -> Option<T> {
-        return self.event_manager.pop_incoming_event();
+    /// If for some reason the next outgoing message could not be written into a
+    /// message and sent, place it back into the front of the queue
+    pub fn unpop_outgoing_message(
+        &mut self,
+        next_packet_index: u16,
+        message: &Ref<dyn Replicate<P>>,
+    ) {
+        return self
+            .message_manager
+            .unpop_outgoing_message(next_packet_index, message);
+    }
+
+    /// Given an incoming packet which has been identified as an message, send
+    /// the data to the MessageManager for processing
+    pub fn process_message_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>) {
+        return self.message_manager.process_data(reader, manifest);
+    }
+
+    /// Get the most recent message that has been received from a remote host
+    pub fn get_incoming_message(&mut self) -> Option<P> {
+        return self.message_manager.pop_incoming_message();
     }
 
     /// Get the address of the remote host

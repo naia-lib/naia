@@ -1,0 +1,17 @@
+[package]
+name = "naia-hecs-demo-shared"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../../../"
+publish = false
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[features]
+
+[dependencies]
+naia-shared = { path = "../../../shared" }
+naia-derive = { path = "../../../derive" }
+cfg-if = "0.1.10"
+log = "0.4"
+nanoserde = "0.1.29"
