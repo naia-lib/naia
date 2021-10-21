@@ -15,6 +15,6 @@ use-udp = [ "naia-server/use-udp" ]
 use-webrtc = [ "naia-server/use-webrtc" ]
 
 [dependencies]
-naia-server = { path = "../../../server" }
+naia-server = { path = "../../../server", features = ["multithread"] }
 naia-bevy-shared = { path = "../shared" }
 bevy = { version="0.5.0", default-features=false }

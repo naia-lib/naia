@@ -22,3 +22,6 @@ impl Deref for Entity {
         return &self.0;
     }
 }
+
+unsafe impl Send for Entity {}
+unsafe impl Sync for Entity {}

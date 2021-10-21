@@ -13,6 +13,6 @@ maintenance = { status = "actively-developed" }
 [features]
 
 [dependencies]
-naia-client = { path = "../../../client" }
+naia-client = { path = "../../../client", features = ["wbindgen", "multithread"] }
 naia-bevy-shared = { path = "../shared" }
 bevy = { version="0.5.0", default-features=false }
