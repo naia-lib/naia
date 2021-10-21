@@ -2,8 +2,8 @@
 name = "naia-bevy-server"
 version = "0.7.0-alpha.1"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+description = "Library to faciliate naia_server & Bevy interop"
 homepage = "https://github.com/naia-rs/naia"
-description = ""
 repository = "https://github.com/naia-rs/naia"
 license = "MIT OR Apache-2.0"
 edition = "2018"
