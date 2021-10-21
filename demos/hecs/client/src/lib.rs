@@ -8,7 +8,7 @@ cfg_if! {
 
         mod app;
         mod loop_wasm;
-        mod systems
+        mod systems;
 
         use wasm_bindgen::prelude::*;
 

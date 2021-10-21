@@ -9,5 +9,5 @@ edition = "2018"
 [features]
 
 [dependencies]
-naia-shared = { path = "../shared" }
+naia-shared = { path = "../../shared" }
 slotmap = { version = "0.4" }
