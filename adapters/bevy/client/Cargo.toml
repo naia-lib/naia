@@ -4,6 +4,7 @@ version = "0.7.0-alpha.1"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
+description = ""
 license = "MIT OR Apache-2.0"
 edition = "2018"
 
