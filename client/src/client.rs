@@ -140,10 +140,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
         world: W,
         entity: &K,
     ) -> EntityRef<'s, P, K, W> {
-        if world.has_entity(entity) {
-            return EntityRef::new(self, world, &entity);
-        }
-        panic!("No Entity exists for given Key!");
+        return EntityRef::new(self, world, &entity);
     }
 
     /// Return a list of all Entities
