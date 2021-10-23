@@ -61,7 +61,11 @@ impl<'a, P: ProtocolType> Client<'a, P> {
     }
 
     //// Messages ////
-    pub fn queue_message<R: ReplicateSafe<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
+    pub fn queue_message<R: ReplicateSafe<P>>(
+        &mut self,
+        message_ref: &R,
+        guaranteed_delivery: bool,
+    ) {
         return self.client.queue_message(message_ref, guaranteed_delivery);
     }
 

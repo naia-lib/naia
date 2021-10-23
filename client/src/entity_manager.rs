@@ -1,10 +1,13 @@
-use std::{ops::{Deref, DerefMut}, collections::{HashMap, VecDeque}};
+use std::{
+    collections::{HashMap, VecDeque},
+    ops::Deref,
+};
 
 use log::warn;
 
 use naia_shared::{
-    DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity, Manifest, NaiaKey,
-    PacketReader, ProtocolKindType, ProtocolType, WorldMutType, ComponentDynRefTrait, ReplicateSafe, ComponentDynMut
+    ComponentDynMut, DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity,
+    Manifest, NaiaKey, PacketReader, ProtocolKindType, ProtocolType, WorldMutType,
 };
 
 use super::{
@@ -113,7 +116,9 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                             // Generate event for each component, handing references off just in
                             // case
                             for component_kind in world.get_component_kinds(&world_entity) {
-                                if let Some(component) = world.remove_component_of_kind(&world_entity, &component_kind) {
+                                if let Some(component) =
+                                    world.remove_component_of_kind(&world_entity, &component_kind)
+                                {
                                     self.queued_incoming_messages.push_back(
                                         EntityAction::RemoveComponent(world_entity, component),
                                     );
@@ -147,8 +152,11 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                             // create copies of components //
                             for component_kind in world.get_component_kinds(&world_entity) {
                                 let mut component_copy_opt: Option<P> = None;
-                                if let Some(component) = world.get_component_mut_of_kind(&world_entity, &component_kind) {
-                                    component_copy_opt = Some(component.deref().deref().protocol_copy());
+                                if let Some(component) =
+                                    world.get_component_mut_of_kind(&world_entity, &component_kind)
+                                {
+                                    component_copy_opt =
+                                        Some(component.deref().deref().protocol_copy());
                                 }
                                 if let Some(component_copy) = component_copy_opt {
                                     component_copy.extract_and_insert(&prediction_entity, world);

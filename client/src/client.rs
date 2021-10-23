@@ -6,8 +6,8 @@ use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, So
 
 pub use naia_shared::{
     ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolKindType, ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig,
-    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    ProtocolKindType, ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader,
+    Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{

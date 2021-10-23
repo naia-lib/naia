@@ -1,8 +1,8 @@
 use super::{
+    component_ref::{ComponentDynMut, ComponentDynRef, ComponentMut, ComponentRef},
     entity_type::EntityType,
     protocol_type::{ProtocolInserter, ProtocolType},
     replicate::{Replicate, ReplicateSafe},
-    component_ref::{ComponentMut, ComponentRef, ComponentDynMut, ComponentDynRef},
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -21,9 +21,16 @@ pub trait WorldRefType<P: ProtocolType, E: EntityType> {
     /// check whether entity contains component, dynamically
     fn has_component_of_kind(&self, entity: &E, component_kind: &P::Kind) -> bool;
     /// gets an entity's component
-    fn get_component<'a, R: ReplicateSafe<P>>(&'a self, entity: &E) -> Option<ComponentRef<'a, P, R>>;
+    fn get_component<'a, R: ReplicateSafe<P>>(
+        &'a self,
+        entity: &E,
+    ) -> Option<ComponentRef<'a, P, R>>;
     /// gets an entity's component, dynamically
-    fn get_component_of_kind(&self, entity: &E, component_kind: &P::Kind) -> Option<ComponentDynRef<'_, P>>;
+    fn get_component_of_kind(
+        &self,
+        entity: &E,
+        component_kind: &P::Kind,
+    ) -> Option<ComponentDynRef<'_, P>>;
 }
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -42,10 +49,16 @@ pub trait WorldMutType<P: ProtocolType, E: EntityType>:
     /// gets all of an Entity's Components as a list of Kinds
     fn get_component_kinds(&mut self, entity: &E) -> Vec<P::Kind>;
     /// gets an entity's component
-    fn get_component_mut<'a, R: ReplicateSafe<P>>(&'a mut self, entity: &E) -> Option<ComponentMut<'a, P, R>>;
+    fn get_component_mut<'a, R: ReplicateSafe<P>>(
+        &'a mut self,
+        entity: &E,
+    ) -> Option<ComponentMut<'a, P, R>>;
     /// gets a mutable component by type
-    fn get_component_mut_of_kind(&mut self, entity: &E, component_kind: &P::Kind)
-        -> Option<ComponentDynMut<'_, P>>;
+    fn get_component_mut_of_kind(
+        &mut self,
+        entity: &E,
+        component_kind: &P::Kind,
+    ) -> Option<ComponentDynMut<'_, P>>;
     /// insert a component
     fn insert_component<R: ReplicateSafe<P>>(&mut self, entity: &E, component_ref: R);
     /// remove a component

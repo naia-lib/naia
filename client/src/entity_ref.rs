@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use naia_shared::{EntityType, ProtocolType, ReplicateSafe, WorldRefType, ComponentRef};
+use naia_shared::{ComponentRef, EntityType, ProtocolType, ReplicateSafe, WorldRefType};
 
 use super::client::Client;
 

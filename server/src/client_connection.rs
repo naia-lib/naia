@@ -116,12 +116,8 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         }
     }
 
-    pub fn collect_component_updates(
-        &mut self,
-        world_record: &WorldRecord<K, P::Kind>,
-    ) {
-        self.entity_manager
-            .collect_component_updates(world_record);
+    pub fn collect_component_updates(&mut self, world_record: &WorldRecord<K, P::Kind>) {
+        self.entity_manager.collect_component_updates(world_record);
     }
 
     pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(K, P)> {
@@ -210,8 +206,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
     ) {
         self.connection
             .process_incoming_header(header, &mut Some(&mut self.entity_manager));
-        self.entity_manager
-            .process_delivered_packets(world_record);
+        self.entity_manager.process_delivered_packets(world_record);
     }
 
     pub fn process_outgoing_header(

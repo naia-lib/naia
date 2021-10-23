@@ -77,17 +77,13 @@ pub fn check_scopes(app: &mut App) {
             if let Some(position) = entity_ref.get::<Position>() {
                 let x = *position.x.get();
 
-                if x >= 5 && x <= 100
-                {
+                if x >= 5 && x <= 100 {
                     server.user_scope(&user_key).include(&entity);
-                }
-                else
-                {
+                } else {
                     server.user_scope(&user_key).exclude(&entity);
                 }
             }
         }
-
     }
 }
 

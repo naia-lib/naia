@@ -1,9 +1,14 @@
 use naia_socket_shared::PacketReader;
 
-use crate::{diff_mask::DiffMask, property_mutate::PropertyMutator, protocol_type::{ProtocolType, DynRef, DynMut}};
+use crate::{
+    diff_mask::DiffMask,
+    property_mutate::PropertyMutator,
+    protocol_type::{DynMut, DynRef, ProtocolType},
+};
 
-/// A struct that implements ReplicateSafe is a Message/Component, or otherwise, a container
-/// of Properties that can be scoped, tracked, and synced, with a remote host
+/// A struct that implements ReplicateSafe is a Message/Component, or otherwise,
+/// a container of Properties that can be scoped, tracked, and synced, with a
+/// remote host
 pub trait Replicate<P: ProtocolType>: ReplicateSafe<P> + Clone {}
 
 /// The part of ReplicateSafe which is object-safe
@@ -13,11 +18,11 @@ pub trait ReplicateSafe<P: ProtocolType>: Sync + Send + 'static {
     fn get_kind(&self) -> P::Kind;
     /// Gets the number of bytes of the Message/Component's DiffMask
     fn get_diff_mask_size(&self) -> u8;
-    /// Get an immutable reference to the inner Component/Message as a ReplicateSafe
-    /// trait object
+    /// Get an immutable reference to the inner Component/Message as a
+    /// ReplicateSafe trait object
     fn dyn_ref(&self) -> DynRef<'_, P>;
-    /// Get an mutable reference to the inner Component/Message as a ReplicateSafe
-    /// trait object
+    /// Get an mutable reference to the inner Component/Message as a
+    /// ReplicateSafe trait object
     fn dyn_mut(&mut self) -> DynMut<'_, P>;
     /// Returns self as a Protocol
     fn into_protocol(self) -> P;

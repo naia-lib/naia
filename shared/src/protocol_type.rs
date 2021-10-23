@@ -18,11 +18,11 @@ pub trait ProtocolType: Sized + Sync + Send + Clone + 'static {
     fn kind_of<R: ReplicateSafe<Self>>() -> Self::Kind;
     /// Get kind from a type_id
     fn type_to_kind(type_id: TypeId) -> Self::Kind;
-    /// Get an immutable reference to the inner Component/Message as a ReplicateSafe
-    /// trait object
+    /// Get an immutable reference to the inner Component/Message as a
+    /// ReplicateSafe trait object
     fn dyn_ref(&self) -> DynRef<'_, Self>;
-    /// Get an mutable reference to the inner Component/Message as a ReplicateSafe
-    /// trait object
+    /// Get an mutable reference to the inner Component/Message as a
+    /// ReplicateSafe trait object
     fn dyn_mut(&mut self) -> DynMut<'_, Self>;
     /// Cast to a ReplicateSafe impl
     fn cast<R: Replicate<Self>>(self) -> Option<R>;
