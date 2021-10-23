@@ -1,7 +1,7 @@
 use super::{
     entity_type::EntityType,
     protocol_type::{ProtocolInserter, ProtocolType},
-    replicate::ReplicateSafe,
+    replicate::{Replicate, ReplicateSafe},
     component_ref::{ComponentMut, ComponentRef, ComponentDynMut, ComponentDynRef},
 };
 
@@ -49,7 +49,7 @@ pub trait WorldMutType<P: ProtocolType, E: EntityType>:
     /// insert a component
     fn insert_component<R: ReplicateSafe<P>>(&mut self, entity: &E, component_ref: R);
     /// remove a component
-    fn remove_component<R: ReplicateSafe<P>>(&mut self, entity: &E) -> Option<R>;
+    fn remove_component<R: Replicate<P>>(&mut self, entity: &E) -> Option<R>;
     /// remove a component by kind
     fn remove_component_of_kind(&mut self, entity: &E, component_kind: &P::Kind) -> Option<P>;
 }

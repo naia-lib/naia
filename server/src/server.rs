@@ -630,7 +630,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     }
 
     /// Removes a Component from an Entity
-    pub(crate) fn remove_component<R: ReplicateSafe<P>, W: WorldMutType<P, K>>(
+    pub(crate) fn remove_component<R: Replicate<P>, W: WorldMutType<P, K>>(
         &mut self,
         world: &mut W,
         entity: &K,

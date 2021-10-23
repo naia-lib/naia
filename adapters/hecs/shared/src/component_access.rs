@@ -32,7 +32,7 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccessor<P, R> {
 impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
     fn get_component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ComponentDynRef<'w, P>> {
         if let Ok(hecs_ref) = world.get::<R>(**entity) {
-            let wrapper = RefWrapper(hecs_ref);
+            let wrapper = DynRefWrapper(hecs_ref);
             let component_dyn_ref = ComponentDynRef::new(wrapper);
             return Some(component_dyn_ref);
         }
@@ -41,7 +41,7 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
 
     fn get_component_mut<'w>(&self, world: &'w mut World, entity: &Entity) -> Option<ComponentDynMut<'w, P>> {
         if let Ok(hecs_mut) = world.get_mut::<R>(**entity) {
-            let wrapper = MutWrapper(hecs_mut);
+            let wrapper = DynMutWrapper(hecs_mut);
             let component_dyn_mut = ComponentDynMut::new(wrapper);
             return Some(component_dyn_mut);
         }
@@ -58,24 +58,24 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
 ////
 
 // ComponentDynRef
-struct RefWrapper<'a, T: HecsComponent>(HecsRef<'a, T>);
+struct DynRefWrapper<'a, T: HecsComponent>(HecsRef<'a, T>);
 
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentDynRefTrait<P> for RefWrapper<'a, R> {
+impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentDynRefTrait<P> for DynRefWrapper<'a, R> {
     fn component_dyn_deref(&self) -> &dyn ReplicateSafe<P> {
         return self.0.deref();
     }
 }
 
 // ComponentDynMut
-struct MutWrapper<'a, T: HecsComponent>(HecsMut<'a, T>);
+struct DynMutWrapper<'a, T: HecsComponent>(HecsMut<'a, T>);
 
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentDynRefTrait<P> for MutWrapper<'a, R> {
+impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentDynRefTrait<P> for DynMutWrapper<'a, R> {
     fn component_dyn_deref(&self) -> &dyn ReplicateSafe<P> {
         return self.0.deref();
     }
 }
 
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentDynMutTrait<P> for MutWrapper<'a, R> {
+impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentDynMutTrait<P> for DynMutWrapper<'a, R> {
     fn component_dyn_deref_mut(&mut self) -> &mut dyn ReplicateSafe<P> {
         return self.0.deref_mut();
     }

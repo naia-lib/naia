@@ -195,7 +195,7 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
             .expect("error inserting Component");
     }
 
-    fn remove_component<R: ReplicateSafe<P>>(&mut self, entity: &Entity) -> Option<R> {
+    fn remove_component<R: Replicate<P>>(&mut self, entity: &Entity) -> Option<R> {
         return self.world
             .remove_one::<R>(**entity).ok();
     }
