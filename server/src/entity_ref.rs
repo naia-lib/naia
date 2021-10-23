@@ -1,4 +1,4 @@
-use naia_shared::{EntityType, ProtocolType, ReplicateSafe, WorldMutType, WorldRefType, ComponentRef, ComponentMut};
+use naia_shared::{EntityType, ProtocolType, ReplicateSafe, WorldMutType, WorldRefType, ComponentRef, ComponentMut, Replicate};
 
 use super::{room::room_key::RoomKey, server::Server, user::user_key::UserKey};
 
@@ -100,7 +100,7 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s, P,
         self
     }
 
-    pub fn remove_component<R: ReplicateSafe<P>>(&mut self) -> Option<R> {
+    pub fn remove_component<R: Replicate<P>>(&mut self) -> Option<R> {
         return self
             .server
             .remove_component::<R, W>(&mut self.world, &self.id);
