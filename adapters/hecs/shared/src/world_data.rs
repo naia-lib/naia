@@ -1,7 +1,4 @@
-use std::{
-    any::Any,
-    collections::HashMap,
-};
+use std::{any::Any, collections::HashMap};
 
 use naia_shared::{ProtocolType, ReplicateSafe};
 
@@ -33,10 +30,7 @@ impl<P: ProtocolType> WorldData<P> {
         return self.kind_to_accessor_map.contains_key(component_kind);
     }
 
-    pub(crate) fn put_kind<R: ReplicateSafe<P>>(
-        &mut self,
-        component_kind: &P::Kind,
-    ) {
+    pub(crate) fn put_kind<R: ReplicateSafe<P>>(&mut self, component_kind: &P::Kind) {
         self.kind_to_accessor_map
             .insert(*component_kind, ComponentAccessor::<P, R>::new());
     }

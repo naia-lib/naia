@@ -16,8 +16,8 @@ use naia_server_socket::{
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, EntityType, Instant, KeyGenerator,
     LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
-    PropertyMutator, ProtocolKindType, ProtocolType, ReplicateSafe, SharedConfig,
-    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType, Replicate,
+    PropertyMutator, ProtocolKindType, ProtocolType, Replicate, ReplicateSafe, SharedConfig,
+    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -134,9 +134,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive(
-        &mut self,
-    ) -> VecDeque<Result<Event<P, K>, NaiaServerError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P, K>, NaiaServerError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with all clients, and receive packets
@@ -884,10 +882,8 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                                     if user.timestamp == timestamp {
                                         let connection =
                                             self.client_connections.get_mut(user_key).unwrap();
-                                        connection.process_incoming_header(
-                                            &self.world_record,
-                                            &header,
-                                        );
+                                        connection
+                                            .process_incoming_header(&self.world_record, &header);
 
                                         // send connect accept message //
                                         let payload = connection.process_outgoing_header(
@@ -941,10 +937,8 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
                                 match self.client_connections.get_mut(user_key) {
                                     Some(connection) => {
-                                        connection.process_incoming_header(
-                                            &self.world_record,
-                                            &header,
-                                        );
+                                        connection
+                                            .process_incoming_header(&self.world_record, &header);
                                         connection.process_incoming_data(
                                             self.tick_manager.get_tick(),
                                             header.host_tick(),
@@ -967,10 +961,8 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                                     Some(connection) => {
                                         // Still need to do this so that proper notify
                                         // events fire based on the heartbeat header
-                                        connection.process_incoming_header(
-                                            &self.world_record,
-                                            &header,
-                                        );
+                                        connection
+                                            .process_incoming_header(&self.world_record, &header);
                                     }
                                     None => {
                                         warn!(
@@ -985,10 +977,8 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
                                 match self.client_connections.get_mut(user_key) {
                                     Some(connection) => {
-                                        connection.process_incoming_header(
-                                            &self.world_record,
-                                            &header,
-                                        );
+                                        connection
+                                            .process_incoming_header(&self.world_record, &header);
                                         let ping_payload = connection.process_ping(&payload);
                                         let payload_with_header = connection
                                             .process_outgoing_header(

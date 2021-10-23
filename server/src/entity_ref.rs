@@ -1,4 +1,7 @@
-use naia_shared::{EntityType, ProtocolType, ReplicateSafe, WorldMutType, WorldRefType, ComponentRef, ComponentMut, Replicate};
+use naia_shared::{
+    ComponentMut, ComponentRef, EntityType, ProtocolType, Replicate, ReplicateSafe, WorldMutType,
+    WorldRefType,
+};
 
 use super::{room::room_key::RoomKey, server::Server, user::user_key::UserKey};
 
@@ -92,7 +95,10 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s, P,
         self
     }
 
-    pub fn insert_components<R: ReplicateSafe<P>>(&mut self, mut component_refs: Vec<R>) -> &mut Self {
+    pub fn insert_components<R: ReplicateSafe<P>>(
+        &mut self,
+        mut component_refs: Vec<R>,
+    ) -> &mut Self {
         while let Some(component_ref) = component_refs.pop() {
             self.insert_component(component_ref);
         }

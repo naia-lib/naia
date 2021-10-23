@@ -1,10 +1,15 @@
-use std::{collections::HashMap, ops::{Deref, DerefMut}, marker::PhantomData};
+use std::{
+    collections::HashMap,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 use slotmap::DenseSlotMap;
 
 use naia_shared::{
-    EntityType, ProtocolInserter, ProtocolType, ReplicateSafe, WorldMutType, WorldRefType, ComponentRef, ComponentMut,
-    ComponentRefTrait, ComponentMutTrait, ComponentDynRefTrait, ComponentDynRef, ComponentDynMutTrait, ComponentDynMut, Replicate
+    ComponentDynMut, ComponentDynMutTrait, ComponentDynRef, ComponentDynRefTrait, ComponentMut,
+    ComponentMutTrait, ComponentRef, ComponentRefTrait, EntityType, ProtocolInserter, ProtocolType,
+    Replicate, ReplicateSafe, WorldMutType, WorldRefType,
 };
 
 // Entity
@@ -70,17 +75,13 @@ impl<'a, P: ProtocolType, R: ReplicateSafe<P>> MutWrapper<'a, P, R> {
 
 impl<'a, P: ProtocolType> DynRefWrapper<'a, P> {
     pub fn new(inner: &'a dyn ReplicateSafe<P>) -> Self {
-        Self {
-            inner,
-        }
+        Self { inner }
     }
 }
 
 impl<'a, P: ProtocolType> DynMutWrapper<'a, P> {
     pub fn new(inner: &'a mut dyn ReplicateSafe<P>) -> Self {
-        Self {
-            inner,
-        }
+        Self { inner }
     }
 }
 
@@ -196,7 +197,11 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, P> {
         return get_component(self.world, entity);
     }
 
-    fn get_component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> Option<ComponentDynRef<'_, P>> {
+    fn get_component_of_kind(
+        &self,
+        entity: &Entity,
+        component_type: &P::Kind,
+    ) -> Option<ComponentDynRef<'_, P>> {
         return get_component_of_kind(self.world, entity, component_type);
     }
 }
@@ -222,13 +227,20 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, P> {
         return get_component(self.world, entity);
     }
 
-    fn get_component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> Option<ComponentDynRef<'_, P>> {
+    fn get_component_of_kind(
+        &self,
+        entity: &Entity,
+        component_type: &P::Kind,
+    ) -> Option<ComponentDynRef<'_, P>> {
         return get_component_of_kind(self.world, entity, component_type);
     }
 }
 
 impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
-    fn get_component_mut<R: ReplicateSafe<P>>(&mut self, entity: &Entity) -> Option<ComponentMut<P, R>> {
+    fn get_component_mut<R: ReplicateSafe<P>>(
+        &mut self,
+        entity: &Entity,
+    ) -> Option<ComponentMut<P, R>> {
         if let Some(component_map) = self.world.entities.get_mut(*entity) {
             if let Some(component_protocol) = component_map.get_mut(&ProtocolType::kind_of::<R>()) {
                 if let Some(raw_ref) = component_protocol.cast_mut::<R>() {

@@ -15,12 +15,13 @@ impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentRef<'a, P, R> {
     pub fn new<I: ComponentRefTrait<P, R> + 'a>(inner: I) -> Self {
         return Self {
             inner: Box::new(inner),
-        }
+        };
     }
 }
 
 impl<'a, P: ProtocolType, R: ReplicateSafe<P>> Deref for ComponentRef<'a, P, R> {
     type Target = R;
+
     fn deref(&self) -> &R {
         self.inner.component_deref()
     }
@@ -39,12 +40,13 @@ impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentMut<'a, P, R> {
     pub fn new<I: ComponentMutTrait<P, R> + 'a>(inner: I) -> Self {
         return Self {
             inner: Box::new(inner),
-        }
+        };
     }
 }
 
 impl<'a, P: ProtocolType, R: ReplicateSafe<P>> Deref for ComponentMut<'a, P, R> {
     type Target = R;
+
     fn deref(&self) -> &R {
         self.inner.component_deref()
     }
@@ -69,12 +71,13 @@ impl<'a, P: ProtocolType> ComponentDynRef<'a, P> {
     pub fn new<I: ComponentDynRefTrait<P> + 'a>(inner: I) -> Self {
         return Self {
             inner: Box::new(inner),
-        }
+        };
     }
 }
 
 impl<'a, P: ProtocolType> Deref for ComponentDynRef<'a, P> {
     type Target = dyn ReplicateSafe<P>;
+
     fn deref(&self) -> &dyn ReplicateSafe<P> {
         self.inner.component_dyn_deref()
     }
@@ -93,12 +96,13 @@ impl<'a, P: ProtocolType> ComponentDynMut<'a, P> {
     pub fn new<I: ComponentDynMutTrait<P> + 'a>(inner: I) -> Self {
         return Self {
             inner: Box::new(inner),
-        }
+        };
     }
 }
 
 impl<'a, P: ProtocolType> Deref for ComponentDynMut<'a, P> {
     type Target = dyn ReplicateSafe<P>;
+
     fn deref(&self) -> &dyn ReplicateSafe<P> {
         self.inner.component_dyn_deref()
     }

@@ -28,7 +28,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     // Replica Methods
     let new_complete_method = get_new_complete_method(&replica_name, &enum_name, &properties);
-    let read_to_type_method = get_read_to_type_method(&protocol_name, &replica_name, &enum_name, &properties);
+    let read_to_type_method =
+        get_read_to_type_method(&protocol_name, &replica_name, &enum_name, &properties);
 
     // ReplicateSafe Derive Methods
     let diff_mask_size = (((properties.len() - 1) / 8) + 1) as u8;
@@ -82,6 +83,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #write_method
             #write_partial_method
         }
+        impl Replicate<#protocol_name> for #replica_name {}
     };
 
     proc_macro::TokenStream::from(gen)
@@ -212,7 +214,11 @@ pub fn get_dyn_mut_method(protocol_name: &Ident) -> TokenStream {
     };
 }
 
-fn get_mirror_method(protocol_name: &Ident, replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn get_mirror_method(
+    protocol_name: &Ident,
+    replica_name: &Ident,
+    properties: &Vec<(Ident, Type)>,
+) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {

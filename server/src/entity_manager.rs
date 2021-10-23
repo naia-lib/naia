@@ -399,10 +399,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
         return self.local_to_global_entity_key_map.get(&local_key);
     }
 
-    pub fn collect_component_updates(
-        &mut self,
-        world_record: &WorldRecord<K, P::Kind>,
-    ) {
+    pub fn collect_component_updates(&mut self, world_record: &WorldRecord<K, P::Kind>) {
         for (component_key, record) in self.component_records.iter() {
             if record.status == LocalityStatus::Created
                 && self.diff_handler.has_diff_mask(component_key)
@@ -412,10 +409,10 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
                     .expect("component does not exist!");
 
                 let new_diff_mask = self
-                        .diff_handler
-                        .get_diff_mask(component_key)
-                        .expect("DiffHandler does not have registered Component!")
-                        .clone();
+                    .diff_handler
+                    .get_diff_mask(component_key)
+                    .expect("DiffHandler does not have registered Component!")
+                    .clone();
                 self.queued_actions.push_back(EntityAction::UpdateComponent(
                     entity_key,
                     *component_key,
@@ -718,10 +715,7 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
             .clone()
     }
 
-    pub fn process_delivered_packets(
-        &mut self,
-        world_record: &WorldRecord<K, P::Kind>,
-    ) {
+    pub fn process_delivered_packets(&mut self, world_record: &WorldRecord<K, P::Kind>) {
         while let Some(packet_index) = self.delivered_packets.pop_front() {
             let mut deleted_components: Vec<ComponentKey> = Vec::new();
 
