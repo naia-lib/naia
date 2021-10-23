@@ -2,7 +2,7 @@ use std::{any::Any, marker::PhantomData, ops::{Deref, DerefMut}};
 
 use hecs::{World, Ref as HecsRef, RefMut as HecsMut, Component as HecsComponent};
 
-use naia_shared::{ProtocolType, Replicate, ComponentDynRef, ComponentDynMut, ComponentDynRefTrait, ComponentDynMutTrait};
+use naia_shared::{ProtocolType, ReplicateSafe, ComponentDynRef, ComponentDynMut, ComponentDynRefTrait, ComponentDynMutTrait};
 
 use super::entity::Entity;
 
@@ -14,12 +14,12 @@ pub trait ComponentAccess<P: ProtocolType> {
 }
 
 // ComponentAccessor
-pub struct ComponentAccessor<P: ProtocolType, R: Replicate<P>> {
+pub struct ComponentAccessor<P: ProtocolType, R: ReplicateSafe<P>> {
     phantom_p: PhantomData<P>,
     phantom_r: PhantomData<R>,
 }
 
-impl<P: ProtocolType, R: Replicate<P>> ComponentAccessor<P, R> {
+impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccessor<P, R> {
     pub fn new() -> Box<dyn Any> {
         let inner_box: Box<dyn ComponentAccess<P>> = Box::new(ComponentAccessor {
             phantom_p: PhantomData::<P>,
@@ -29,7 +29,7 @@ impl<P: ProtocolType, R: Replicate<P>> ComponentAccessor<P, R> {
     }
 }
 
-impl<P: ProtocolType, R: Replicate<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
+impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
     fn get_component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ComponentDynRef<'w, P>> {
         if let Ok(hecs_ref) = world.get::<R>(**entity) {
             let wrapper = RefWrapper(hecs_ref);
@@ -51,7 +51,7 @@ impl<P: ProtocolType, R: Replicate<P>> ComponentAccess<P> for ComponentAccessor<
     fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P> {
         return world
             .remove_one::<R>(**entity)
-            .map_or(None, |v| Some(v.to_protocol()));
+            .map_or(None, |v| Some(v.into_protocol()));
     }
 }
 
@@ -60,8 +60,8 @@ impl<P: ProtocolType, R: Replicate<P>> ComponentAccess<P> for ComponentAccessor<
 // ComponentDynRef
 struct RefWrapper<'a, T: HecsComponent>(HecsRef<'a, T>);
 
-impl<'a, P: ProtocolType, R: Replicate<P>> ComponentDynRefTrait<P> for RefWrapper<'a, R> {
-    fn component_dyn_deref(&self) -> &dyn Replicate<P> {
+impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentDynRefTrait<P> for RefWrapper<'a, R> {
+    fn component_dyn_deref(&self) -> &dyn ReplicateSafe<P> {
         return self.0.deref();
     }
 }
@@ -69,14 +69,14 @@ impl<'a, P: ProtocolType, R: Replicate<P>> ComponentDynRefTrait<P> for RefWrappe
 // ComponentDynMut
 struct MutWrapper<'a, T: HecsComponent>(HecsMut<'a, T>);
 
-impl<'a, P: ProtocolType, R: Replicate<P>> ComponentDynRefTrait<P> for MutWrapper<'a, R> {
-    fn component_dyn_deref(&self) -> &dyn Replicate<P> {
+impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentDynRefTrait<P> for MutWrapper<'a, R> {
+    fn component_dyn_deref(&self) -> &dyn ReplicateSafe<P> {
         return self.0.deref();
     }
 }
 
-impl<'a, P: ProtocolType, R: Replicate<P>> ComponentDynMutTrait<P> for MutWrapper<'a, R> {
-    fn component_dyn_deref_mut(&mut self) -> &mut dyn Replicate<P> {
+impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentDynMutTrait<P> for MutWrapper<'a, R> {
+    fn component_dyn_deref_mut(&mut self) -> &mut dyn ReplicateSafe<P> {
         return self.0.deref_mut();
     }
 }

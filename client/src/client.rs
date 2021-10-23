@@ -6,7 +6,7 @@ use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, So
 
 pub use naia_shared::{
     ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolKindType, ProtocolType, Replicate, ReplicateEq, SequenceIterator, SharedConfig,
+    ProtocolKindType, ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig,
     StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
@@ -91,7 +91,7 @@ impl<P: ProtocolType, E: EntityType> Client<P, E> {
     }
 
     /// Connect to the given server address
-    pub fn connect<R: Replicate<P>>(&mut self, server_address: SocketAddr, auth: Option<R>) {
+    pub fn connect<R: ReplicateSafe<P>>(&mut self, server_address: SocketAddr, auth: Option<R>) {
         self.address = Some(server_address);
         self.socket.connect(server_address);
         self.io.load(
@@ -103,7 +103,7 @@ impl<P: ProtocolType, E: EntityType> Client<P, E> {
             if auth.is_none() {
                 None
             } else {
-                Some(auth.unwrap().to_protocol())
+                Some(auth.unwrap().into_protocol())
             }
         };
     }
@@ -111,14 +111,14 @@ impl<P: ProtocolType, E: EntityType> Client<P, E> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn queue_message<R: ReplicateEq<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
+    pub fn queue_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
             connection.queue_message(message, guaranteed_delivery);
         }
     }
 
     /// Queues up a Command for an assigned Entity to be sent to the Server
-    pub fn queue_command<R: ReplicateEq<P>>(&mut self, predicted_entity: &E, command: R) {
+    pub fn queue_command<R: ReplicateSafe<P>>(&mut self, predicted_entity: &E, command: R) {
         if let Some(connection) = self.server_connection.as_mut() {
             if let Some(confirmed_entity) = connection.get_confirmed_entity(predicted_entity) {
                 let entity_pair: OwnedEntity<E> =

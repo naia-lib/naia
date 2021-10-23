@@ -17,7 +17,7 @@ pub struct App {
     pub client: Client,
     pub world: World,
     pub message_count: u32,
-    pub world_data: WorldData,
+    pub world_data: WorldData<Protocol>,
 }
 
 impl App {

@@ -10,30 +10,23 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let variants = get_variants(&input.data);
 
     let kind_enum_name = format_ident!("{}Kind", protocol_name);
-//    let ref_enum_name = format_ident!("{}Ref", protocol_name);
-//    let mut_enum_name = format_ident!("{}Mut", protocol_name);
     let kind_enum_def = get_kind_enum(&kind_enum_name, &variants);
     let kind_of_method = get_kind_of_method();
     let type_to_kind_method = get_type_to_kind_method(&kind_enum_name, &variants);
-//    let protocol_ref_enum_def = get_protocol_ref_enum(&ref_enum_name, &protocol_name, &variants);
-//    let protocol_mut_enum_def = get_protocol_mut_enum(&mut_enum_name, &protocol_name, &variants);
-
     let load_method = get_load_method(&protocol_name, &input.data);
     let dyn_ref_method = get_dyn_ref_method(&protocol_name, &input.data);
     let dyn_mut_method = get_dyn_mut_method(&protocol_name, &input.data);
     let cast_method = get_cast_method(&protocol_name, &input.data);
     let cast_ref_method = get_cast_ref_method(&protocol_name, &input.data);
     let cast_mut_method = get_cast_mut_method(&protocol_name, &input.data);
-    let trait_impl_methods = get_trait_impl_methods(&protocol_name, &input.data);
+    let extract_and_insert_method = get_extract_and_insert_method(&protocol_name, &input.data);
 
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}};
-        use naia_shared::{ProtocolType, ProtocolExtractor, ProtocolKindType, Replicate, ReplicateEq,
-            DiffMask, PacketReader, EntityType, DynRef, DynMut};
+        use naia_shared::{ProtocolType, ProtocolInserter, ProtocolKindType, ReplicateSafe,
+            DiffMask, PacketReader, EntityType, DynRef, DynMut, Replicate};
 
         #kind_enum_def
-//        #protocol_ref_enum_def
-//        #protocol_mut_enum_def
 
         impl #protocol_name {
             #load_method
@@ -43,14 +36,12 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
             type Kind = #kind_enum_name;
             #kind_of_method
             #type_to_kind_method
-
             #dyn_ref_method
             #dyn_mut_method
             #cast_method
             #cast_ref_method
             #cast_mut_method
-
-            #trait_impl_methods
+            #extract_and_insert_method
         }
     };
 
@@ -132,59 +123,9 @@ pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream 
     };
 }
 
-//pub fn get_protocol_ref_enum(ref_enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
-//    let mut variant_list = quote! {};
-//
-//    {
-//        for variant in properties {
-//            let variant_name = Ident::new(&variant.to_string(), Span::call_site());
-//
-//            let new_output_right = quote! {
-//                #variant_name(&'a #variant_name),
-//            };
-//            let new_output_result = quote! {
-//                #variant_list
-//                #new_output_right
-//            };
-//            variant_list = new_output_result;
-//        }
-//    }
-//
-//    return quote! {
-//        pub enum #ref_enum_name<'a> {
-//            #variant_list
-//        }
-//    };
-//}
-//
-//pub fn get_protocol_mut_enum(ref_enum_name: &Ident, protocol_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
-//    let mut variant_list = quote! {};
-//
-//    {
-//        for variant in properties {
-//            let variant_name = Ident::new(&variant.to_string(), Span::call_site());
-//
-//            let new_output_right = quote! {
-//                #variant_name(&'a mut #variant_name),
-//            };
-//            let new_output_result = quote! {
-//                #variant_list
-//                #new_output_right
-//            };
-//            variant_list = new_output_result;
-//        }
-//    }
-//
-//    return quote! {
-//        pub enum #ref_enum_name<'a> {
-//            #variant_list
-//        }
-//    };
-//}
-
 fn get_kind_of_method() -> TokenStream {
     return quote! {
-        fn kind_of<R: Replicate<Self>>() -> Self::Kind {
+        fn kind_of<R: ReplicateSafe<Self>>() -> Self::Kind {
             return Self::type_to_kind(TypeId::of::<R>());
         }
     };
@@ -333,7 +274,7 @@ pub fn get_cast_ref_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn cast_ref<R: Replicate<Self>>(&self) -> Option<&R> {
+        fn cast_ref<R: ReplicateSafe<Self>>(&self) -> Option<&R> {
             match self {
                 #variants
             }
@@ -366,7 +307,7 @@ pub fn get_cast_mut_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn cast_mut<R: Replicate<Self>>(&mut self) -> Option<&mut R> {
+        fn cast_mut<R: ReplicateSafe<Self>>(&mut self) -> Option<&mut R> {
             match self {
                 #variants
             }
@@ -384,7 +325,7 @@ pub fn get_cast_method(protocol_name: &Ident, data: &Data) -> TokenStream {
                 let new_output_right = quote! {
                     #protocol_name::#variant_name(replica) => {
                         if let Some(any_ref) = Any::downcast_ref::<R>(&replica) {
-                            return Some(R::copy(any_ref));
+                            return Some(Clone::clone(any_ref));
                         }
                     }
                 };
@@ -400,7 +341,7 @@ pub fn get_cast_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn cast<R: ReplicateEq<Self>>(self) -> Option<R> {
+        fn cast<R: Replicate<Self>>(self) -> Option<R> {
             match self {
                 #variants
             }
@@ -441,52 +382,6 @@ pub fn get_load_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 }
 
-pub fn get_trait_impl_methods(protocol_name: &Ident, data: &Data) -> TokenStream {
-    let mirror_method = get_mirror_method(protocol_name, data);
-    let extract_and_insert_method = get_extract_and_insert_method(protocol_name, data);
-
-    return quote! {
-        #mirror_method
-        #extract_and_insert_method
-    };
-}
-
-fn get_mirror_method(type_name: &Ident, data: &Data) -> TokenStream {
-    let variants = match *data {
-        Data::Enum(ref data) => {
-            let mut output = quote! {};
-            for variant in data.variants.iter() {
-                let variant_name = &variant.ident;
-                let new_output_right = quote! {
-                    #type_name::#variant_name(replica_ref) => {
-                        match other {
-                            #type_name::#variant_name(other_ref) => {
-                                        return replica_ref.mirror(&other_ref);
-                                    }
-                            _ => {}
-                        }
-                    }
-                };
-                let new_output_result = quote! {
-                    #output
-                    #new_output_right
-                };
-                output = new_output_result;
-            }
-            output
-        }
-        _ => unimplemented!(),
-    };
-
-    return quote! {
-        fn mirror(&mut self, other: &#type_name) {
-            match self {
-                #variants
-            }
-        }
-    };
-}
-
 fn get_extract_and_insert_method(type_name: &Ident, data: &Data) -> TokenStream {
     let variants = match *data {
         Data::Enum(ref data) => {
@@ -495,7 +390,7 @@ fn get_extract_and_insert_method(type_name: &Ident, data: &Data) -> TokenStream 
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
                     #type_name::#variant_name(replica_ref) => {
-                        extractor.extract(key, replica_ref.clone());
+                        inserter.insert(key, replica_ref.clone());
                     }
                 };
                 let new_output_result = quote! {
@@ -510,9 +405,9 @@ fn get_extract_and_insert_method(type_name: &Ident, data: &Data) -> TokenStream 
     };
 
     return quote! {
-        fn extract_and_insert<K: EntityType, E: ProtocolExtractor<#type_name, K>>(&self,
+        fn extract_and_insert<K: EntityType, E: ProtocolInserter<#type_name, K>>(&self,
                                       key: &K,
-                                      extractor: &mut E) {
+                                      inserter: &mut E) {
             match self {
                 #variants
             }

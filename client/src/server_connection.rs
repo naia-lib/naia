@@ -4,7 +4,7 @@ use naia_client_socket::Packet;
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, ReplicateEq, SequenceNumber, StandardHeader, WorldMutType,
+    ProtocolType, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType,
 };
 
 use super::{
@@ -140,19 +140,6 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
         return self.entity_manager.entity_is_owned(key);
     }
 
-    //    pub fn get_component_by_type<R: Replicate<P>>(&self, key: &K) ->
-    // Option<&P> {        return
-    // self.entity_manager.get_component_by_type::<R>(key);    }
-    //
-    //    pub fn get_prediction_component_by_type<R: Replicate<P>>(
-    //        &self,
-    //        key: &K,
-    //    ) -> Option<&P> {
-    //        return self
-    //            .entity_manager
-    //            .get_prediction_component_by_type::<R>(key);
-    //    }
-
     /// Reads buffered incoming data on the appropriate tick boundary
     pub fn frame_begin<W: WorldMutType<P, K>>(
         &mut self,
@@ -223,7 +210,7 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message<R: ReplicateEq<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
+    pub fn queue_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         return self.connection.queue_message(message, guaranteed_delivery);
     }
 
@@ -236,8 +223,8 @@ impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
     }
 
     // Commands
-    pub fn queue_command<R: ReplicateEq<P>>(&mut self, entity: OwnedEntity<K>, command: R) {
-        let command_protocol = command.to_protocol();
+    pub fn queue_command<R: ReplicateSafe<P>>(&mut self, entity: OwnedEntity<K>, command: R) {
+        let command_protocol = command.into_protocol();
         return self.command_sender.push_back((entity, command_protocol));
     }
 

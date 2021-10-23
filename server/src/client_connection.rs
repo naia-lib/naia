@@ -5,7 +5,7 @@ use std::{
 
 use naia_shared::{
     Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, ReplicateEq, SequenceNumber, StandardHeader, WorldRefType,
+    ProtocolType, ReplicateSafe, SequenceNumber, StandardHeader, WorldRefType,
 };
 
 use super::{
@@ -233,7 +233,7 @@ impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message<R: ReplicateEq<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
+    pub fn queue_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         return self.connection.queue_message(message, guaranteed_delivery);
     }
 
