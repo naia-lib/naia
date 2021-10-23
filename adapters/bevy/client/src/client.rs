@@ -61,11 +61,11 @@ impl<'a, P: ProtocolType> Client<'a, P> {
     }
 
     //// Messages ////
-    pub fn queue_message<R: Replicate<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
+    pub fn queue_message<R: ReplicateSafe<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
         return self.client.queue_message(message_ref, guaranteed_delivery);
     }
 
-    pub fn queue_command<R: Replicate<P>>(&mut self, entity: &Entity, command_ref: &R) {
+    pub fn queue_command<R: ReplicateSafe<P>>(&mut self, entity: &Entity, command_ref: &R) {
         return self.client.queue_command(entity, command_ref);
     }
 

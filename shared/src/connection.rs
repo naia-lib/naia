@@ -7,7 +7,7 @@ use crate::{message_manager::MessageManager, wrapping_number::wrapping_diff};
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
     packet_notifiable::PacketNotifiable, packet_type::PacketType, protocol_type::ProtocolType,
-    replicate::ReplicateEq, sequence_buffer::SequenceNumber, standard_header::StandardHeader,
+    replicate::ReplicateSafe, sequence_buffer::SequenceNumber, standard_header::StandardHeader,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -116,7 +116,7 @@ impl<P: ProtocolType> Connection<P> {
     }
 
     /// Queue up a message to be sent to the remote host
-    pub fn queue_message<R: ReplicateEq<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
+    pub fn queue_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         return self
             .message_manager
             .queue_outgoing_message(message, guaranteed_delivery);

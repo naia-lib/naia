@@ -8,41 +8,45 @@ use syn::{
 pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    let replica_name = &input.ident;
+    // Helper Properties
+    let properties = get_properties(&input);
+
+    // Paths
+    let (protocol_path, protocol_name) = get_protocol_path(&input);
+
+    // Names
+    let replica_name = input.ident;
     let replica_builder_name = Ident::new(
         (replica_name.to_string() + "Builder").as_str(),
         Span::call_site(),
     );
-    let (protocol_path, protocol_name) = get_protocol_path(&input);
     let protocol_kind_name = format_ident!("{}Kind", protocol_name);
-//    let protocol_ref_name = format_ident!("{}Ref", protocol_name);
-//    let protocol_mut_name = format_ident!("{}Mut", protocol_name);
+    let enum_name = format_ident!("{}Property", replica_name);
+
+    // Definitions
+    let property_enum_definition = get_property_enum(&enum_name, &properties);
+
+    // Replica Methods
+    let new_complete_method = get_new_complete_method(&replica_name, &enum_name, &properties);
+    let read_to_type_method = get_read_to_type_method(&protocol_name, &replica_name, &enum_name, &properties);
+
+    // ReplicateSafe Derive Methods
+    let diff_mask_size = (((properties.len() - 1) / 8) + 1) as u8;
     let dyn_ref_method = get_dyn_ref_method(&protocol_name);
     let dyn_mut_method = get_dyn_mut_method(&protocol_name);
-
-    let properties = get_properties(&input);
-
-    let enum_name = format_ident!("{}Property", replica_name);
-    let property_enum = get_property_enum(&enum_name, &properties);
-
+    let to_protocol_method = get_into_protocol_method(&protocol_name, &replica_name);
+    let protocol_copy_method = get_protocol_copy_method(&protocol_name, &replica_name);
+    let mirror_method = get_mirror_method(&protocol_name, &replica_name, &properties);
+    let set_mutator_method = get_set_mutator_method(&properties);
+    let read_partial_method = get_read_partial_method(&enum_name, &properties);
     let write_method = get_write_method(&properties);
-    let to_protocol_method = get_to_protocol_method(&protocol_name, replica_name);
-//    let as_protocol_ref_method = get_as_protocol_ref_method(&protocol_name, &protocol_ref_name, replica_name);
-//    let as_protocol_mut_method = get_as_protocol_mut_method(&protocol_name, &protocol_mut_name, replica_name);
-    let copy_method = get_copy_method(replica_name);
-    let equals_method = get_equals_method(replica_name, &properties);
-    let mirror_method = get_mirror_method(replica_name, &properties);
-
-    let builder_impl_methods = get_builder_impl_methods(replica_name, &protocol_name);
-    let replica_impl_methods =
-        get_replica_impl_methods(&protocol_name, replica_name, &enum_name, &properties);
-    let replicate_derive_methods = get_replicate_derive_methods(&enum_name, &properties);
+    let write_partial_method = get_write_partial_method(&enum_name, &properties);
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateEq, PacketReader, Replicate, PropertyMutator, ProtocolType, DynRef, DynMut};
-        use #protocol_path::{#protocol_name, #protocol_kind_name};//, #protocol_ref_name, #protocol_mut_name};
-        #property_enum
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, PacketReader, Replicate, ReplicateSafe, PropertyMutator, ProtocolType, DynRef, DynMut};
+        use #protocol_path::{#protocol_name, #protocol_kind_name};
+        #property_enum_definition
         pub struct #replica_builder_name {
             kind: #protocol_kind_name,
         }
@@ -50,7 +54,9 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             fn get_kind(&self) -> #protocol_kind_name {
                 return self.kind;
             }
-            #builder_impl_methods
+            fn build(&self, reader: &mut PacketReader, packet_index: u16) -> #protocol_name {
+                return #replica_name::read_to_type(reader, packet_index);
+            }
         }
         impl #replica_name {
             pub fn get_builder() -> Box<dyn ReplicaBuilder<#protocol_name>> {
@@ -58,25 +64,23 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                     kind: ProtocolType::kind_of::<#replica_name>(),
                 });
             }
-            #replica_impl_methods
+            #new_complete_method
+            #read_to_type_method
         }
-        impl Replicate<#protocol_name> for #replica_name {
+        impl ReplicateSafe<#protocol_name> for #replica_name {
+            fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
             fn get_kind(&self) -> #protocol_kind_name {
                 return ProtocolType::kind_of::<Self>();
             }
-            #write_method
-            #to_protocol_method
-//            #as_protocol_ref_method
-//            #as_protocol_mut_method
             #dyn_ref_method
             #dyn_mut_method
-
-            #replicate_derive_methods
-        }
-        impl ReplicateEq<#protocol_name> for #replica_name {
-            #equals_method
+            #to_protocol_method
+            #protocol_copy_method
             #mirror_method
-            #copy_method
+            #set_mutator_method
+            #read_partial_method
+            #write_method
+            #write_partial_method
         }
     };
 
@@ -142,7 +146,7 @@ fn get_protocol_path(input: &DeriveInput) -> (Path, Ident) {
         }
     }
 
-    panic!("When deriving 'Replicate' you MUST specify the path of the accompanying protocol. IE: '#[protocol_path = \"crate::MyProtocol\"]'");
+    panic!("When deriving 'ReplicateSafe' you MUST specify the path of the accompanying protocol. IE: '#[protocol_path = \"crate::MyProtocol\"]'");
 }
 
 fn get_property_enum(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
@@ -176,37 +180,21 @@ fn get_property_enum(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> Toke
     };
 }
 
-fn get_copy_method(replica_name: &Ident) -> TokenStream {
+fn get_protocol_copy_method(protocol_name: &Ident, replica_name: &Ident) -> TokenStream {
     return quote! {
-        fn copy(&self) -> #replica_name {
-            return self.clone();
+        fn protocol_copy(&self) -> #protocol_name {
+            return #protocol_name::#replica_name(self.clone());
         }
     };
 }
 
-fn get_to_protocol_method(protocol_name: &Ident, replica_name: &Ident) -> TokenStream {
+fn get_into_protocol_method(protocol_name: &Ident, replica_name: &Ident) -> TokenStream {
     return quote! {
-        fn to_protocol(self) -> #protocol_name {
+        fn into_protocol(self) -> #protocol_name {
             return #protocol_name::#replica_name(self);
         }
     };
 }
-
-//fn get_as_protocol_ref_method(protocol_name: &Ident, protocol_ref_name: &Ident, replica_name: &Ident) -> TokenStream {
-//    return quote! {
-//        fn as_protocol_ref(&self) -> &#protocol_name {
-//            return #protocol_ref_name::#replica_name(self);
-//        }
-//    };
-//}
-//
-//fn get_as_protocol_mut_method(protocol_name: &Ident, protocol_mut_name: &Ident, replica_name: &Ident) -> TokenStream {
-//    return quote! {
-//        fn as_protocol_mut(&mut self) -> &mut #protocol_name {
-//            return #protocol_mut_name::#replica_name(self);
-//        }
-//    };
-//}
 
 pub fn get_dyn_ref_method(protocol_name: &Ident) -> TokenStream {
     return quote! {
@@ -224,12 +212,12 @@ pub fn get_dyn_mut_method(protocol_name: &Ident) -> TokenStream {
     };
 }
 
-fn get_equals_method(replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn get_mirror_method(protocol_name: &Ident, replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
         let new_output_right = quote! {
-            if !Property::equals(&self.#field_name, &other.#field_name) { return false; }
+            self.#field_name.mirror(&replica.#field_name);
         };
         let new_output_result = quote! {
             #output
@@ -239,30 +227,10 @@ fn get_equals_method(replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> T
     }
 
     return quote! {
-        fn equals(&self, other: &#replica_name) -> bool {
-            #output
-            return true;
-        }
-    };
-}
-
-fn get_mirror_method(replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
-    let mut output = quote! {};
-
-    for (field_name, _) in properties.iter() {
-        let new_output_right = quote! {
-            self.#field_name.mirror(&other.#field_name);
-        };
-        let new_output_result = quote! {
-            #output
-            #new_output_right
-        };
-        output = new_output_result;
-    }
-
-    return quote! {
-        fn mirror(&mut self, other: &#replica_name) {
-            #output
+        fn mirror(&mut self, other: &#protocol_name) {
+            if let #protocol_name::#replica_name(replica) = other {
+                #output
+            }
         }
     };
 }
@@ -285,44 +253,6 @@ fn get_write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
         fn write(&self, buffer: &mut Vec<u8>) {
             #output
         }
-    };
-}
-
-fn get_builder_impl_methods(replica_name: &Ident, protocol_name: &Ident) -> TokenStream {
-    return quote! {
-        fn build(&self, reader: &mut PacketReader, packet_index: u16) -> #protocol_name {
-            return #replica_name::read_to_type(reader, packet_index);
-        }
-    };
-}
-
-fn get_replica_impl_methods(
-    protocol_name: &Ident,
-    replica_name: &Ident,
-    enum_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
-) -> TokenStream {
-    let new_complete_method = get_new_complete_method(replica_name, enum_name, properties);
-    let read_to_type_method =
-        get_read_to_type_method(protocol_name, replica_name, enum_name, properties);
-
-    return quote! {
-        #new_complete_method
-        #read_to_type_method
-    };
-}
-
-fn get_replicate_derive_methods(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
-    let read_partial_method = get_read_partial_method(enum_name, properties);
-    let write_partial_method = get_write_partial_method(enum_name, properties);
-    let set_mutator_method = get_set_mutator_method(properties);
-    let diff_mask_size = (((properties.len() - 1) / 8) + 1) as u8;
-
-    return quote! {
-        fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
-        #read_partial_method
-        #write_partial_method
-        #set_mutator_method
     };
 }
 

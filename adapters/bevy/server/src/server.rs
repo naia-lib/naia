@@ -62,7 +62,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     }
 
     //// Messages ////
-    pub fn queue_message<R: Replicate<P>>(
+    pub fn queue_message<R: ReplicateSafe<P>>(
         &mut self,
         user_key: &UserKey,
         message_ref: &R,

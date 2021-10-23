@@ -1,4 +1,4 @@
-use naia_shared::{EntityType, ProtocolType, Replicate, ReplicateEq, WorldMutType, WorldRefType, ComponentRef, ComponentMut};
+use naia_shared::{EntityType, ProtocolType, ReplicateSafe, WorldMutType, WorldRefType, ComponentRef, ComponentMut};
 
 use super::{room::room_key::RoomKey, server::Server, user::user_key::UserKey};
 
@@ -29,12 +29,12 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P,
     // Components
 
     /// Returns whether or not the Entity has an associated Component
-    pub fn has_component<R: Replicate<P>>(&self) -> bool {
+    pub fn has_component<R: ReplicateSafe<P>>(&self) -> bool {
         return self.world.has_component::<R>(&self.id);
     }
 
     /// Gets a Ref to a Component associated with the Entity
-    pub fn component<R: Replicate<P>>(&self) -> Option<ComponentRef<P, R>> {
+    pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ComponentRef<P, R>> {
         return self.world.get_component::<R>(&self.id);
     }
 
@@ -77,22 +77,22 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s, P,
 
     // Components
 
-    pub fn has_component<R: Replicate<P>>(&self) -> bool {
+    pub fn has_component<R: ReplicateSafe<P>>(&self) -> bool {
         return self.world.has_component::<R>(&self.id);
     }
 
-    pub fn component<R: Replicate<P>>(&mut self) -> Option<ComponentMut<P, R>> {
+    pub fn component<R: ReplicateSafe<P>>(&mut self) -> Option<ComponentMut<P, R>> {
         return self.world.get_component_mut::<R>(&self.id);
     }
 
-    pub fn insert_component<R: Replicate<P>>(&mut self, component_ref: R) -> &mut Self {
+    pub fn insert_component<R: ReplicateSafe<P>>(&mut self, component_ref: R) -> &mut Self {
         self.server
             .insert_component(&mut self.world, &self.id, component_ref);
 
         self
     }
 
-    pub fn insert_components<R: Replicate<P>>(&mut self, mut component_refs: Vec<R>) -> &mut Self {
+    pub fn insert_components<R: ReplicateSafe<P>>(&mut self, mut component_refs: Vec<R>) -> &mut Self {
         while let Some(component_ref) = component_refs.pop() {
             self.insert_component(component_ref);
         }
@@ -100,7 +100,7 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldMutType<P, K>> EntityMut<'s, P,
         self
     }
 
-    pub fn remove_component<R: ReplicateEq<P>>(&mut self) -> Option<R> {
+    pub fn remove_component<R: ReplicateSafe<P>>(&mut self) -> Option<R> {
         return self
             .server
             .remove_component::<R, W>(&mut self.world, &self.id);

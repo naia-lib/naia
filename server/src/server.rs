@@ -16,8 +16,8 @@ use naia_server_socket::{
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, EntityType, Instant, KeyGenerator,
     LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
-    PropertyMutator, ProtocolKindType, ProtocolType, Replicate, ReplicateEq, SharedConfig,
-    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    PropertyMutator, ProtocolKindType, ProtocolType, ReplicateSafe, SharedConfig,
+    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType, Replicate,
 };
 
 use super::{
@@ -233,7 +233,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn queue_message<R: ReplicateEq<P>>(
+    pub fn queue_message<R: ReplicateSafe<P>>(
         &mut self,
         user_key: &UserKey,
         message: &R,
@@ -593,7 +593,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     //// Components
 
     /// Adds a Component to an Entity
-    pub(crate) fn insert_component<R: Replicate<P>, W: WorldMutType<P, K>>(
+    pub(crate) fn insert_component<R: ReplicateSafe<P>, W: WorldMutType<P, K>>(
         &mut self,
         world: &mut W,
         entity: &K,
@@ -603,8 +603,6 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
             panic!("attempted to add component to non-existent entity");
         }
 
-        //let dyn_ref: Ref<dyn Replicate<P>> = component_ref.dyn_ref();
-        //let type_id = &dyn_ref.borrow().get_type_id();
         let component_kind = component_ref.get_kind();
 
         if world.has_component_of_kind(entity, &component_kind) {
@@ -632,7 +630,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
     }
 
     /// Removes a Component from an Entity
-    pub(crate) fn remove_component<R: ReplicateEq<P>, W: WorldMutType<P, K>>(
+    pub(crate) fn remove_component<R: ReplicateSafe<P>, W: WorldMutType<P, K>>(
         &mut self,
         world: &mut W,
         entity: &K,
@@ -1085,7 +1083,7 @@ impl<P: ProtocolType, K: EntityType> Server<P, K> {
 
     // Component Helpers
 
-    fn component_init<R: Replicate<P>>(
+    fn component_init<R: ReplicateSafe<P>>(
         &mut self,
         entity: &K,
         component_ref: &mut R,

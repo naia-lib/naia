@@ -9,7 +9,7 @@ use super::{
     manifest::Manifest,
     packet_notifiable::PacketNotifiable,
     protocol_type::{ProtocolKindType, ProtocolType},
-    replicate::ReplicateEq,
+    replicate::ReplicateSafe,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -83,13 +83,13 @@ impl<P: ProtocolType> MessageManager<P> {
     }
 
     /// Queues an Message to be transmitted to the remote host
-    pub fn queue_outgoing_message<R: ReplicateEq<P>>(
+    pub fn queue_outgoing_message<R: ReplicateSafe<P>>(
         &mut self,
         message: &R,
         guaranteed_delivery: bool,
     ) {
         self.queued_outgoing_messages
-            .push_back((guaranteed_delivery, message.copy().to_protocol()));
+            .push_back((guaranteed_delivery, message.protocol_copy()));
     }
 
     /// Returns whether any Messages have been received that must be handed to

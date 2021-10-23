@@ -1,10 +1,10 @@
-use std::collections::{HashMap, VecDeque};
+use std::{ops::{Deref, DerefMut}, collections::{HashMap, VecDeque}};
 
 use log::warn;
 
 use naia_shared::{
     DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity, Manifest, NaiaKey,
-    PacketReader, ProtocolKindType, ProtocolType, WorldMutType,
+    PacketReader, ProtocolKindType, ProtocolType, WorldMutType, ComponentDynRefTrait, ReplicateSafe, ComponentDynMut
 };
 
 use super::{
@@ -112,10 +112,12 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
 
                             // Generate event for each component, handing references off just in
                             // case
-                            for component in world.get_component_kinds(&world_entity) {
-                                self.queued_incoming_messages.push_back(
-                                    EntityAction::RemoveComponent(world_entity, component),
-                                );
+                            for component_kind in world.get_component_kinds(&world_entity) {
+                                if let Some(component) = world.remove_component_of_kind(&world_entity, &component_kind) {
+                                    self.queued_incoming_messages.push_back(
+                                        EntityAction::RemoveComponent(world_entity, component),
+                                    );
+                                }
                             }
 
                             for component_key in entity_record.get_component_keys() {
@@ -143,8 +145,14 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                                 .insert(prediction_entity, world_entity);
 
                             // create copies of components //
-                            for component in world.get_component_kinds(&world_entity) {
-                                component.extract_and_insert(&prediction_entity, world);
+                            for component_kind in world.get_component_kinds(&world_entity) {
+                                let mut component_copy_opt: Option<P> = None;
+                                if let Some(component) = world.get_component_mut_of_kind(&world_entity, &component_kind) {
+                                    component_copy_opt = Some(component.deref().deref().protocol_copy());
+                                }
+                                if let Some(component_copy) = component_copy_opt {
+                                    component_copy.extract_and_insert(&prediction_entity, world);
+                                }
                             }
                             /////////////////////////////////
 
@@ -237,7 +245,7 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                         if let Some(entity_record) = self.entity_records.get(world_entity) {
                             let component_kind =
                                 entity_record.get_kind_from_key(&component_key).unwrap();
-                            if let Some(component_protocol) =
+                            if let Some(mut component_protocol) =
                                 world.get_component_mut_of_kind(world_entity, component_kind)
                             {
                                 // read incoming delta
@@ -344,10 +352,13 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
     ) {
         if let Some(predicted_entity) = self.get_predicted_entity(&world_entity) {
             // go through all components to make prediction components = world components
-            for confirmed_protocol in world.get_component_kinds(world_entity) {
-                let confirmed_kind = confirmed_protocol.dyn_ref().get_kind();
-                let predicted_protocol = world.get_component_mut_of_kind(&predicted_entity, &confirmed_kind)
+            for component_kind in world.get_component_kinds(world_entity) {
+                let confirmed_protocol = world.get_component_of_kind(&world_entity, &component_kind)
+                    .expect("Predicted and Confirmed entities must always contain the same types of components!")
+                    .protocol_copy();
+                let mut predicted_protocol: ComponentDynMut<P> = world.get_component_mut_of_kind(&predicted_entity, &component_kind)
                     .expect("Predicted and Confirmed entities must always contain the same types of components!");
+
                 predicted_protocol.mirror(&confirmed_protocol);
             }
 

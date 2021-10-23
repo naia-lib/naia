@@ -1,7 +1,7 @@
-use naia_derive::Replicate;
+use naia_derive::ReplicateSafe;
 use naia_shared::Property;
 
-#[derive(Replicate, Clone)]
+#[derive(ReplicateSafe, Clone)]
 #[protocol_path = "crate::protocol::Protocol"]
 pub struct Auth {
     pub username: Property<String>,
