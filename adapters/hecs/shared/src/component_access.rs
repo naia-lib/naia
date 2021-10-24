@@ -6,7 +6,7 @@ use naia_shared::{ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Repl
 
 use super::{
     entity::Entity,
-    ref_impls::{ComponentDynMut, ComponentDynRef},
+    component_ref::{ComponentDynMut, ComponentDynRef},
 };
 
 // ComponentAccess
