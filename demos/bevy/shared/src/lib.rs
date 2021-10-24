@@ -1,3 +1,5 @@
+#![feature(const_type_id)]
+
 extern crate log;
 extern crate naia_derive;
 

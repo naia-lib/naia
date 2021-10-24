@@ -1,9 +1,8 @@
 use naia_derive::Replicate;
 use naia_shared::Property;
 
-use super::Protocol;
-
 #[derive(Replicate, Clone)]
+#[protocol_path = "crate::protocol::Protocol"]
 pub struct Position {
     pub x: Property<i16>,
     pub y: Property<i16>,

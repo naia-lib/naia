@@ -3,8 +3,6 @@ use nanoserde::{DeBin, SerBin};
 use naia_derive::Replicate;
 use naia_shared::Property;
 
-use super::Protocol;
-
 #[derive(Clone, PartialEq, DeBin, SerBin)]
 pub enum ColorValue {
     Red,
@@ -19,6 +17,7 @@ impl Default for ColorValue {
 }
 
 #[derive(Replicate, Clone)]
+#[protocol_path = "crate::protocol::Protocol"]
 pub struct Color {
     pub value: Property<ColorValue>,
 }
