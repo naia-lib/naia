@@ -2,9 +2,9 @@ use std::collections::HashSet;
 
 use macroquad::prelude::*;
 
-use naia_client::{Client as NaiaClient, ClientConfig, Event, Ref};
+use naia_client::{Client as NaiaClient, ClientConfig, Event};
 
-use naia_default_world::{Entity, World as DefaultWorld, WorldRefType};
+use naia_default_world::{Entity, World as DefaultWorld, WorldMutType, WorldRefType};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
@@ -19,7 +19,7 @@ const SQUARE_SIZE: f32 = 32.0;
 pub struct App {
     client: Client,
     world: World,
-    queued_command: Option<Ref<KeyCommand>>,
+    queued_command: Option<KeyCommand>,
     owned_entity: Option<Entity>,
     squares: HashSet<Entity>,
 }
@@ -55,8 +55,7 @@ impl App {
         let a = is_key_down(KeyCode::A);
         let d = is_key_down(KeyCode::D);
 
-        if let Some(command_ref) = &mut self.queued_command {
-            let mut command = command_ref.borrow_mut();
+        if let Some(command) = &mut self.queued_command {
             if w {
                 command.w.set(true);
             }
@@ -86,7 +85,7 @@ impl App {
                 Ok(Event::Tick) => {
                     if let Some(entity) = self.owned_entity {
                         if let Some(command) = self.queued_command.take() {
-                            self.client.queue_command(&entity, &command);
+                            self.client.queue_command(&entity, command);
                         }
                     }
                 }
@@ -107,9 +106,10 @@ impl App {
                 Ok(Event::NewCommand(_, Protocol::KeyCommand(key_command_ref)))
                 | Ok(Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref))) => {
                     if let Some(entity) = &self.owned_entity {
-                        if let Some(square_ref) = self.world.proxy().get_component::<Square>(entity)
+                        if let Some(mut square_ref) =
+                            self.world.proxy_mut().get_component_mut::<Square>(entity)
                         {
-                            shared_behavior::process_command(&key_command_ref, &square_ref);
+                            shared_behavior::process_command(&key_command_ref, &mut square_ref);
                         }
                     }
                 }
@@ -127,8 +127,7 @@ impl App {
         if self.client.connected() {
             // draw unowned squares
             for entity in &self.squares {
-                if let Some(square_ref) = self.world.proxy().get_component::<Square>(entity) {
-                    let square = square_ref.borrow();
+                if let Some(square) = self.world.proxy().get_component::<Square>(entity) {
                     let color = match square.color.get() {
                         Color::Red => RED,
                         Color::Blue => BLUE,
@@ -146,8 +145,7 @@ impl App {
 
             // draw own square
             if let Some(entity) = &self.owned_entity {
-                if let Some(square_ref) = self.world.proxy().get_component::<Square>(entity) {
-                    let square = square_ref.borrow();
+                if let Some(square) = self.world.proxy().get_component::<Square>(entity) {
                     draw_rectangle(
                         f32::from(*(square.x.get())),
                         f32::from(*(square.y.get())),
