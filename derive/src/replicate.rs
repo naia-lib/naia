@@ -45,7 +45,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, PacketReader, Replicate, ReplicateSafe, PropertyMutator, ProtocolType, DynRef, DynMut};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, PacketReader, Replicate, ReplicateSafe, PropertyMutator, ProtocolType, ReplicaDynRef, ReplicaDynMut};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
         #property_enum_definition
         pub struct #replica_builder_name {
@@ -200,16 +200,16 @@ fn get_into_protocol_method(protocol_name: &Ident, replica_name: &Ident) -> Toke
 
 pub fn get_dyn_ref_method(protocol_name: &Ident) -> TokenStream {
     return quote! {
-        fn dyn_ref(&self) -> DynRef<'_, #protocol_name> {
-            return DynRef::new(self);
+        fn dyn_ref(&self) -> ReplicaDynRef<'_, #protocol_name> {
+            return ReplicaDynRef::new(self);
         }
     };
 }
 
 pub fn get_dyn_mut_method(protocol_name: &Ident) -> TokenStream {
     return quote! {
-        fn dyn_mut(&mut self) -> DynMut<'_, #protocol_name> {
-            return DynMut::new(self);
+        fn dyn_mut(&mut self) -> ReplicaDynMut<'_, #protocol_name> {
+            return ReplicaDynMut::new(self);
         }
     };
 }

@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use naia_shared::{ComponentRef, EntityType, ProtocolType, ReplicateSafe, WorldRefType};
+use naia_shared::{EntityType, ProtocolType, ReplicaRefWrapper, ReplicateSafe, WorldRefType};
 
 use super::client::Client;
 
@@ -28,7 +28,7 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P,
         return self.world.has_component::<R>(&self.id);
     }
 
-    pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ComponentRef<P, R>> {
+    pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ReplicaRefWrapper<P, R>> {
         return self.world.get_component::<R>(&self.id);
     }
 
@@ -68,7 +68,7 @@ impl<P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> PredictedEntityRef<P
         return self.world.has_component::<R>(&self.id);
     }
 
-    pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ComponentRef<P, R>> {
+    pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ReplicaRefWrapper<P, R>> {
         return self.world.get_component::<R>(&self.id);
     }
 }

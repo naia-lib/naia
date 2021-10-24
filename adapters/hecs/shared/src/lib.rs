@@ -1,5 +1,6 @@
 mod component_access;
 mod entity;
+mod ref_impls;
 mod world_data;
 mod world_proxy;
 

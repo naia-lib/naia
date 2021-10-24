@@ -6,8 +6,8 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    ComponentDynMut, DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity,
-    Manifest, NaiaKey, PacketReader, ProtocolKindType, ProtocolType, WorldMutType,
+    DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity, Manifest, NaiaKey,
+    PacketReader, ProtocolKindType, ProtocolType, ReplicaDynMutWrapper, WorldMutType,
 };
 
 use super::{
@@ -364,7 +364,7 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                 let confirmed_protocol = world.get_component_of_kind(&world_entity, &component_kind)
                     .expect("Predicted and Confirmed entities must always contain the same types of components!")
                     .protocol_copy();
-                let mut predicted_protocol: ComponentDynMut<P> = world.get_component_mut_of_kind(&predicted_entity, &component_kind)
+                let mut predicted_protocol: ReplicaDynMutWrapper<P> = world.get_component_mut_of_kind(&predicted_entity, &component_kind)
                     .expect("Predicted and Confirmed entities must always contain the same types of components!");
 
                 predicted_protocol.mirror(&confirmed_protocol);

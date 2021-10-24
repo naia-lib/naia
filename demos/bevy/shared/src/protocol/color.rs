@@ -1,6 +1,6 @@
 use nanoserde::{DeBin, SerBin};
 
-use naia_derive::ReplicateSafe;
+use naia_derive::Replicate;
 use naia_shared::Property;
 
 use super::Protocol;
@@ -18,7 +18,7 @@ impl Default for ColorValue {
     }
 }
 
-#[derive(ReplicateSafe, Clone)]
+#[derive(Replicate, Clone)]
 pub struct Color {
     pub value: Property<ColorValue>,
 }

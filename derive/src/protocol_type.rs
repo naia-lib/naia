@@ -24,7 +24,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}};
         use naia_shared::{ProtocolType, ProtocolInserter, ProtocolKindType, ReplicateSafe,
-            DiffMask, PacketReader, EntityType, DynRef, DynMut, Replicate};
+            DiffMask, PacketReader, EntityType, ReplicaDynRef, ReplicaDynMut, Replicate};
 
         #kind_enum_def
 
@@ -194,7 +194,7 @@ pub fn get_dyn_ref_method(protocol_name: &Ident, data: &Data) -> TokenStream {
 
                 let new_output_right = quote! {
                     #protocol_name::#variant_name(inner) => {
-                        return DynRef::new(inner);
+                        return ReplicaDynRef::new(inner);
                     }
                 };
                 let new_output_result = quote! {
@@ -209,7 +209,7 @@ pub fn get_dyn_ref_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn dyn_ref(&self) -> DynRef<'_, Self> {
+        fn dyn_ref(&self) -> ReplicaDynRef<'_, Self> {
             match self {
                 #variants
             }
@@ -226,7 +226,7 @@ pub fn get_dyn_mut_method(protocol_name: &Ident, data: &Data) -> TokenStream {
 
                 let new_output_right = quote! {
                     #protocol_name::#variant_name(inner) => {
-                        return DynMut::new(inner);
+                        return ReplicaDynMut::new(inner);
                     }
                 };
                 let new_output_result = quote! {
@@ -241,7 +241,7 @@ pub fn get_dyn_mut_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 
     return quote! {
-        fn dyn_mut(&mut self) -> DynMut<'_, Self> {
+        fn dyn_mut(&mut self) -> ReplicaDynMut<'_, Self> {
             match self {
                 #variants
             }
