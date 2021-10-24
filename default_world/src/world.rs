@@ -8,7 +8,7 @@ use naia_shared::{
 };
 
 use super::{
-    component_ref::{MutWrapper, RefWrapper},
+    component_ref::{ComponentMut, ComponentRef},
     entity::Entity,
 };
 
@@ -141,7 +141,7 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
         if let Some(component_map) = self.world.entities.get_mut(*entity) {
             if let Some(component_protocol) = component_map.get_mut(&ProtocolType::kind_of::<R>()) {
                 if let Some(raw_ref) = component_protocol.cast_mut::<R>() {
-                    let wrapper = MutWrapper::<P, R>::new(raw_ref);
+                    let wrapper = ComponentMut::<P, R>::new(raw_ref);
                     let wrapped_ref = ReplicaMutWrapper::new(wrapper);
                     return Some(wrapped_ref);
                 }
@@ -265,7 +265,7 @@ fn get_component<'a, P: ProtocolType, R: ReplicateSafe<P>>(
     if let Some(component_map) = world.entities.get(*entity) {
         if let Some(component_protocol) = component_map.get(&ProtocolType::kind_of::<R>()) {
             if let Some(raw_ref) = component_protocol.cast_ref::<R>() {
-                let wrapper = RefWrapper::<P, R>::new(raw_ref);
+                let wrapper = ComponentRef::<P, R>::new(raw_ref);
                 let wrapped_ref = ReplicaRefWrapper::new(wrapper);
                 return Some(wrapped_ref);
             }
