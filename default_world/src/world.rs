@@ -1,125 +1,16 @@
-use std::{
-    collections::HashMap,
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-};
+use std::collections::HashMap;
 
 use slotmap::DenseSlotMap;
 
 use naia_shared::{
-    EntityType, ProtocolInserter, ProtocolType, ReplicaDynMutTrait, ReplicaDynMutWrapper,
-    ReplicaDynRefTrait, ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
+    ProtocolInserter, ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper,
     ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
 };
 
-// Entity
-
-#[allow(missing_docs)]
-#[allow(unused_doc_comments)]
-mod entity {
-    // The Key used to reference an Entity
-    new_key_type! { pub struct Entity; }
-}
-
-use entity::Entity as Key;
-
-pub type Entity = Key;
-
-impl Deref for Entity {
-    type Target = Self;
-
-    fn deref(&self) -> &Self {
-        &self
-    }
-}
-
-impl EntityType for Entity {}
-
-// ReplicaRefWrappers
-
-struct RefWrapper<'a, P: ProtocolType, R: ReplicateSafe<P>> {
-    inner: &'a R,
-    phantom: PhantomData<P>,
-}
-
-struct MutWrapper<'a, P: ProtocolType, R: ReplicateSafe<P>> {
-    inner: &'a mut R,
-    phantom: PhantomData<P>,
-}
-
-struct DynRefWrapper<'a, P: ProtocolType> {
-    inner: &'a dyn ReplicateSafe<P>,
-}
-
-struct DynMutWrapper<'a, P: ProtocolType> {
-    inner: &'a mut dyn ReplicateSafe<P>,
-}
-
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> RefWrapper<'a, P, R> {
-    pub fn new(inner: &'a R) -> Self {
-        Self {
-            inner,
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> MutWrapper<'a, P, R> {
-    pub fn new(inner: &'a mut R) -> Self {
-        Self {
-            inner,
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<'a, P: ProtocolType> DynRefWrapper<'a, P> {
-    pub fn new(inner: &'a dyn ReplicateSafe<P>) -> Self {
-        Self { inner }
-    }
-}
-
-impl<'a, P: ProtocolType> DynMutWrapper<'a, P> {
-    pub fn new(inner: &'a mut dyn ReplicateSafe<P>) -> Self {
-        Self { inner }
-    }
-}
-
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for RefWrapper<'a, P, R> {
-    fn to_ref(&self) -> &R {
-        return &self.inner;
-    }
-}
-
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for MutWrapper<'a, P, R> {
-    fn to_ref(&self) -> &R {
-        return &self.inner;
-    }
-}
-
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ReplicaMutTrait<P, R> for MutWrapper<'a, P, R> {
-    fn to_mut(&mut self) -> &mut R {
-        return &mut self.inner;
-    }
-}
-
-impl<'a, P: ProtocolType> ReplicaDynRefTrait<P> for DynRefWrapper<'a, P> {
-    fn component_dyn_deref(&self) -> &dyn ReplicateSafe<P> {
-        return self.inner;
-    }
-}
-
-impl<'a, P: ProtocolType> ReplicaDynRefTrait<P> for DynMutWrapper<'a, P> {
-    fn component_dyn_deref(&self) -> &dyn ReplicateSafe<P> {
-        return self.inner;
-    }
-}
-
-impl<'a, P: ProtocolType> ReplicaDynMutTrait<P> for DynMutWrapper<'a, P> {
-    fn to_dyn_mut(&mut self) -> &mut dyn ReplicateSafe<P> {
-        return self.inner;
-    }
-}
+use super::{
+    component_ref::{MutWrapper, RefWrapper},
+    entity::Entity,
+};
 
 // World //
 
@@ -128,7 +19,7 @@ impl<'a, P: ProtocolType> ReplicaDynMutTrait<P> for DynMutWrapper<'a, P> {
 /// It's recommended to use this only when you do not have another ECS library's
 /// own World available.
 pub struct World<P: ProtocolType> {
-    pub entities: DenseSlotMap<entity::Entity, HashMap<P::Kind, P>>,
+    pub entities: DenseSlotMap<Entity, HashMap<P::Kind, P>>,
 }
 
 impl<P: ProtocolType> World<P> {
@@ -390,7 +281,7 @@ fn get_component_of_kind<'a, P: ProtocolType>(
     component_type: &P::Kind,
 ) -> Option<ReplicaDynRefWrapper<'a, P>> {
     if let Some(component_map) = world.entities.get(*entity) {
-        if let Some(raw_ref) = component_map.get_mut(component_type) {
+        if let Some(raw_ref) = component_map.get(component_type) {
             let wrapped_ref = ReplicaDynRefWrapper::new(raw_ref.dyn_ref());
             return Some(wrapped_ref);
         }

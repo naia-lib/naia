@@ -23,6 +23,12 @@ impl<P: ProtocolType> Deref for ReplicaDynRef<'_, P> {
     }
 }
 
+impl<'a, P: ProtocolType> ReplicaDynRefTrait<P> for ReplicaDynRef<'a, P> {
+    fn to_dyn_ref(&self) -> &dyn ReplicateSafe<P> {
+        return self.inner;
+    }
+}
+
 // ReplicaDynMut
 
 pub struct ReplicaDynMut<'b, P: ProtocolType> {
@@ -51,10 +57,25 @@ impl<P: ProtocolType> DerefMut for ReplicaDynMut<'_, P> {
     }
 }
 
-// ReplicaRefWrapper
+impl<'a, P: ProtocolType> ReplicaDynRefTrait<P> for ReplicaDynMut<'a, P> {
+    fn to_dyn_ref(&self) -> &dyn ReplicateSafe<P> {
+        return self.inner;
+    }
+}
+
+impl<'a, P: ProtocolType> ReplicaDynMutTrait<P> for ReplicaDynMut<'a, P> {
+    fn to_dyn_mut(&mut self) -> &mut dyn ReplicateSafe<P> {
+        return self.inner;
+    }
+}
+
+// ReplicaRefTrait
+
 pub trait ReplicaRefTrait<P: ProtocolType, R: ReplicateSafe<P>> {
     fn to_ref(&self) -> &R;
 }
+
+// ReplicaRefWrapper
 
 pub struct ReplicaRefWrapper<'a, P: ProtocolType, R: ReplicateSafe<P>> {
     inner: Box<dyn ReplicaRefTrait<P, R> + 'a>,
@@ -76,10 +97,13 @@ impl<'a, P: ProtocolType, R: ReplicateSafe<P>> Deref for ReplicaRefWrapper<'a, P
     }
 }
 
-// ReplicaMutWrapper
+// ReplicaMutTrait
+
 pub trait ReplicaMutTrait<P: ProtocolType, R: ReplicateSafe<P>>: ReplicaRefTrait<P, R> {
     fn to_mut(&mut self) -> &mut R;
 }
+
+// ReplicaMutWrapper
 
 pub struct ReplicaMutWrapper<'a, P: ProtocolType, R: ReplicateSafe<P>> {
     inner: Box<dyn ReplicaMutTrait<P, R> + 'a>,
@@ -108,6 +132,7 @@ impl<'a, P: ProtocolType, R: ReplicateSafe<P>> DerefMut for ReplicaMutWrapper<'a
 }
 
 // ReplicaDynRefWrapper
+
 pub trait ReplicaDynRefTrait<P: ProtocolType> {
     fn to_dyn_ref(&self) -> &dyn ReplicateSafe<P>;
 }
@@ -133,6 +158,7 @@ impl<'a, P: ProtocolType> Deref for ReplicaDynRefWrapper<'a, P> {
 }
 
 // ReplicaDynMutWrapper
+
 pub trait ReplicaDynMutTrait<P: ProtocolType>: ReplicaDynRefTrait<P> {
     fn to_dyn_mut(&mut self) -> &mut dyn ReplicateSafe<P>;
 }

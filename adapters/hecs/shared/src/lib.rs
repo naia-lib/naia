@@ -1,6 +1,6 @@
 mod component_access;
-mod entity;
 mod component_ref;
+mod entity;
 mod world_data;
 mod world_proxy;
 

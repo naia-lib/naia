@@ -1,4 +1,6 @@
-use naia_server::{Event, ProtocolType, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig};
+use naia_server::{
+    Event, ProtocolType, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldRefType,
+};
 
 use naia_default_world::{Entity, World as DefaultWorld};
 
@@ -76,7 +78,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        for event in self.server.receive(self.world.proxy()) {
+        for event in self.server.receive() {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {
                     let username = auth.username.get();
@@ -127,7 +129,7 @@ impl App {
 
                     // Iterate through Characters, marching them from (0,0) to (20, N)
                     for entity in self.server.entities(&self.world.proxy()) {
-                        if let Some(character) = self
+                        if let Some(mut character) = self
                             .server
                             .entity_mut(self.world.proxy_mut(), &entity)
                             .component::<Character>()
@@ -137,17 +139,19 @@ impl App {
                     }
 
                     // Update scopes of entities
-                    for (_, user_key, entity) in self.server.scope_checks() {
-                        if let Some(character) = self
-                            .server
-                            .entity_mut(self.world.proxy_mut(), &entity)
-                            .component::<Character>()
-                        {
-                            let x = *character.x.get();
-                            if x >= 5 && x <= 15 {
-                                self.server.user_scope(&user_key).include(&entity);
-                            } else {
-                                self.server.user_scope(&user_key).exclude(&entity);
+                    {
+                        let server = &mut self.server;
+                        let world = &self.world;
+                        for (_, user_key, entity) in server.scope_checks() {
+                            if let Some(character) =
+                                world.proxy().get_component::<Character>(&entity)
+                            {
+                                let x = *character.x.get();
+                                if x >= 5 && x <= 15 {
+                                    server.user_scope(&user_key).include(&entity);
+                                } else {
+                                    server.user_scope(&user_key).exclude(&entity);
+                                }
                             }
                         }
                     }
