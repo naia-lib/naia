@@ -6,8 +6,8 @@ use naia_shared::{
 };
 
 use super::{
-    entity::Entity,
     component_ref::{ComponentMut, ComponentRef},
+    entity::Entity,
     world_data::WorldData,
 };
 

@@ -5,8 +5,8 @@ use hecs::World;
 use naia_shared::{ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
 
 use super::{
-    entity::Entity,
     component_ref::{ComponentDynMut, ComponentDynRef},
+    entity::Entity,
 };
 
 // ComponentAccess
