@@ -148,7 +148,7 @@ fn get_protocol_path(input: &DeriveInput) -> (Path, Ident) {
         }
     }
 
-    panic!("When deriving 'ReplicateSafe' you MUST specify the path of the accompanying protocol. IE: '#[protocol_path = \"crate::MyProtocol\"]'");
+    panic!("When deriving 'Replicate' you MUST specify the path of the accompanying protocol. IE: '#[protocol_path = \"crate::MyProtocol\"]'");
 }
 
 fn get_property_enum(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
