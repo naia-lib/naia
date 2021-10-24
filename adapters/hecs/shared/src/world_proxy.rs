@@ -149,9 +149,9 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
     fn get_component_mut_of_kind(
         &mut self,
         entity: &Entity,
-        component_type: &P::Kind,
+        component_kind: &P::Kind,
     ) -> Option<ReplicaDynMutWrapper<'_, P>> {
-        if let Some(access) = self.world_data.get_component_access(component_type) {
+        if let Some(access) = self.world_data.get_component_access(component_kind) {
             return access.get_component_mut(self.world, entity);
         }
         return None;

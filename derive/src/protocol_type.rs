@@ -101,6 +101,22 @@ pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream 
         }
     }
 
+    let mut variant_types = quote! {};
+    {
+        for variant in properties {
+            let variant_name = Ident::new(&variant.to_string(), Span::call_site());
+
+            let new_output_right = quote! {
+                #variant_name => TypeId::of::<#variant_name>(),
+            };
+            let new_output_result = quote! {
+                #variant_types
+                #new_output_right
+            };
+            variant_types = new_output_result;
+        }
+    }
+
     return quote! {
         #hashtag[repr(u16)]
         #hashtag[derive(Hash, Eq, PartialEq, Copy, Clone)]
@@ -117,6 +133,11 @@ pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream 
                 match val {
                     #variant_match
                     _ => #enum_name::UNKNOWN,
+                }
+            }
+            fn to_type_id(&self) -> TypeId {
+                match self {
+                    #variant_types
                 }
             }
         }

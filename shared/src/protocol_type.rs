@@ -39,6 +39,7 @@ pub trait ProtocolType: Sized + Sync + Send + Clone + 'static {
 pub trait ProtocolKindType: Eq + Hash + Copy {
     fn to_u16(&self) -> u16;
     fn from_u16(val: u16) -> Self;
+    fn to_type_id(&self) -> TypeId;
 }
 
 pub trait ProtocolInserter<P: ProtocolType, N: EntityType> {
