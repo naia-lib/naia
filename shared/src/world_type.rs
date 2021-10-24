@@ -1,7 +1,9 @@
 use super::{
-    component_ref::{ComponentDynMut, ComponentDynRef, ComponentMut, ComponentRef},
     entity_type::EntityType,
     protocol_type::{ProtocolInserter, ProtocolType},
+    replica_ref::{
+        ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
+    },
     replicate::{Replicate, ReplicateSafe},
 };
 
@@ -24,13 +26,13 @@ pub trait WorldRefType<P: ProtocolType, E: EntityType> {
     fn get_component<'a, R: ReplicateSafe<P>>(
         &'a self,
         entity: &E,
-    ) -> Option<ComponentRef<'a, P, R>>;
+    ) -> Option<ReplicaRefWrapper<'a, P, R>>;
     /// gets an entity's component, dynamically
     fn get_component_of_kind(
         &self,
         entity: &E,
         component_kind: &P::Kind,
-    ) -> Option<ComponentDynRef<'_, P>>;
+    ) -> Option<ReplicaDynRefWrapper<'_, P>>;
 }
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -52,13 +54,13 @@ pub trait WorldMutType<P: ProtocolType, E: EntityType>:
     fn get_component_mut<'a, R: ReplicateSafe<P>>(
         &'a mut self,
         entity: &E,
-    ) -> Option<ComponentMut<'a, P, R>>;
+    ) -> Option<ReplicaMutWrapper<'a, P, R>>;
     /// gets a mutable component by type
     fn get_component_mut_of_kind(
         &mut self,
         entity: &E,
         component_kind: &P::Kind,
-    ) -> Option<ComponentDynMut<'_, P>>;
+    ) -> Option<ReplicaDynMutWrapper<'_, P>>;
     /// insert a component
     fn insert_component<R: ReplicateSafe<P>>(&mut self, entity: &E, component_ref: R);
     /// remove a component

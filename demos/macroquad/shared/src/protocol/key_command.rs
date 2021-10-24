@@ -1,9 +1,9 @@
-use naia_derive::ReplicateSafe;
+use naia_derive::Replicate;
 use naia_shared::Property;
 
 use super::Protocol;
 
-#[derive(ReplicateSafe, Clone)]
+#[derive(Replicate, Clone)]
 pub struct KeyCommand {
     pub w: Property<bool>,
     pub s: Property<bool>,

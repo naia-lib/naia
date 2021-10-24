@@ -1,6 +1,6 @@
 use nanoserde::{DeBin, SerBin};
 
-use naia_derive::ReplicateSafe;
+use naia_derive::Replicate;
 use naia_shared::Property;
 
 use super::Protocol;
@@ -18,7 +18,7 @@ impl Default for Color {
     }
 }
 
-#[derive(ReplicateSafe, Clone)]
+#[derive(Replicate, Clone)]
 pub struct Square {
     pub x: Property<u16>,
     pub y: Property<u16>,

@@ -3,7 +3,8 @@ use naia_socket_shared::PacketReader;
 use crate::{
     diff_mask::DiffMask,
     property_mutate::PropertyMutator,
-    protocol_type::{DynMut, DynRef, ProtocolType},
+    protocol_type::ProtocolType,
+    replica_ref::{ReplicaDynMut, ReplicaDynRef},
 };
 
 /// A struct that implements ReplicateSafe is a Message/Component, or otherwise,
@@ -20,10 +21,10 @@ pub trait ReplicateSafe<P: ProtocolType>: Sync + Send + 'static {
     fn get_diff_mask_size(&self) -> u8;
     /// Get an immutable reference to the inner Component/Message as a
     /// ReplicateSafe trait object
-    fn dyn_ref(&self) -> DynRef<'_, P>;
+    fn dyn_ref(&self) -> ReplicaDynRef<'_, P>;
     /// Get an mutable reference to the inner Component/Message as a
     /// ReplicateSafe trait object
-    fn dyn_mut(&mut self) -> DynMut<'_, P>;
+    fn dyn_mut(&mut self) -> ReplicaDynMut<'_, P>;
     /// Returns self as a Protocol
     fn into_protocol(self) -> P;
     /// Returns a copy of self as a Protocol

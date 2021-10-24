@@ -7,9 +7,9 @@ use std::{
 use slotmap::DenseSlotMap;
 
 use naia_shared::{
-    ComponentDynMut, ComponentDynMutTrait, ComponentDynRef, ComponentDynRefTrait, ComponentMut,
-    ComponentMutTrait, ComponentRef, ComponentRefTrait, EntityType, ProtocolInserter, ProtocolType,
-    Replicate, ReplicateSafe, WorldMutType, WorldRefType,
+    EntityType, ProtocolInserter, ProtocolType, ReplicaDynMutTrait, ReplicaDynMutWrapper,
+    ReplicaDynRefTrait, ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
+    ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
 };
 
 // Entity
@@ -35,7 +35,7 @@ impl Deref for Entity {
 
 impl EntityType for Entity {}
 
-// ComponentRefs
+// ReplicaRefWrappers
 
 struct RefWrapper<'a, P: ProtocolType, R: ReplicateSafe<P>> {
     inner: &'a R,
@@ -85,38 +85,38 @@ impl<'a, P: ProtocolType> DynMutWrapper<'a, P> {
     }
 }
 
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentRefTrait<P, R> for RefWrapper<'a, P, R> {
-    fn component_deref(&self) -> &R {
+impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for RefWrapper<'a, P, R> {
+    fn to_ref(&self) -> &R {
         return &self.inner;
     }
 }
 
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentRefTrait<P, R> for MutWrapper<'a, P, R> {
-    fn component_deref(&self) -> &R {
+impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for MutWrapper<'a, P, R> {
+    fn to_ref(&self) -> &R {
         return &self.inner;
     }
 }
 
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentMutTrait<P, R> for MutWrapper<'a, P, R> {
-    fn component_deref_mut(&mut self) -> &mut R {
+impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ReplicaMutTrait<P, R> for MutWrapper<'a, P, R> {
+    fn to_mut(&mut self) -> &mut R {
         return &mut self.inner;
     }
 }
 
-impl<'a, P: ProtocolType> ComponentDynRefTrait<P> for DynRefWrapper<'a, P> {
+impl<'a, P: ProtocolType> ReplicaDynRefTrait<P> for DynRefWrapper<'a, P> {
     fn component_dyn_deref(&self) -> &dyn ReplicateSafe<P> {
         return self.inner;
     }
 }
 
-impl<'a, P: ProtocolType> ComponentDynRefTrait<P> for DynMutWrapper<'a, P> {
+impl<'a, P: ProtocolType> ReplicaDynRefTrait<P> for DynMutWrapper<'a, P> {
     fn component_dyn_deref(&self) -> &dyn ReplicateSafe<P> {
         return self.inner;
     }
 }
 
-impl<'a, P: ProtocolType> ComponentDynMutTrait<P> for DynMutWrapper<'a, P> {
-    fn component_dyn_deref_mut(&mut self) -> &mut dyn ReplicateSafe<P> {
+impl<'a, P: ProtocolType> ReplicaDynMutTrait<P> for DynMutWrapper<'a, P> {
+    fn to_dyn_mut(&mut self) -> &mut dyn ReplicateSafe<P> {
         return self.inner;
     }
 }
@@ -193,7 +193,10 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, P> {
         return has_component_of_type(self.world, entity, component_type);
     }
 
-    fn get_component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> Option<ComponentRef<P, R>> {
+    fn get_component<R: ReplicateSafe<P>>(
+        &self,
+        entity: &Entity,
+    ) -> Option<ReplicaRefWrapper<P, R>> {
         return get_component(self.world, entity);
     }
 
@@ -201,7 +204,7 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, P> {
         &self,
         entity: &Entity,
         component_type: &P::Kind,
-    ) -> Option<ComponentDynRef<'_, P>> {
+    ) -> Option<ReplicaDynRefWrapper<'_, P>> {
         return get_component_of_kind(self.world, entity, component_type);
     }
 }
@@ -223,7 +226,10 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, P> {
         return has_component_of_type(self.world, entity, component_type);
     }
 
-    fn get_component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> Option<ComponentRef<P, R>> {
+    fn get_component<R: ReplicateSafe<P>>(
+        &self,
+        entity: &Entity,
+    ) -> Option<ReplicaRefWrapper<P, R>> {
         return get_component(self.world, entity);
     }
 
@@ -231,7 +237,7 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, P> {
         &self,
         entity: &Entity,
         component_type: &P::Kind,
-    ) -> Option<ComponentDynRef<'_, P>> {
+    ) -> Option<ReplicaDynRefWrapper<'_, P>> {
         return get_component_of_kind(self.world, entity, component_type);
     }
 }
@@ -240,12 +246,12 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
     fn get_component_mut<R: ReplicateSafe<P>>(
         &mut self,
         entity: &Entity,
-    ) -> Option<ComponentMut<P, R>> {
+    ) -> Option<ReplicaMutWrapper<P, R>> {
         if let Some(component_map) = self.world.entities.get_mut(*entity) {
             if let Some(component_protocol) = component_map.get_mut(&ProtocolType::kind_of::<R>()) {
                 if let Some(raw_ref) = component_protocol.cast_mut::<R>() {
                     let wrapper = MutWrapper::<P, R>::new(raw_ref);
-                    let wrapped_ref = ComponentMut::new(wrapper);
+                    let wrapped_ref = ReplicaMutWrapper::new(wrapper);
                     return Some(wrapped_ref);
                 }
             }
@@ -258,10 +264,10 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
         &mut self,
         entity: &Entity,
         component_type: &P::Kind,
-    ) -> Option<ComponentDynMut<'_, P>> {
+    ) -> Option<ReplicaDynMutWrapper<'_, P>> {
         if let Some(component_map) = self.world.entities.get_mut(*entity) {
             if let Some(raw_ref) = component_map.get_mut(component_type) {
-                let wrapped_ref = ComponentDynMut::new(raw_ref.dyn_mut());
+                let wrapped_ref = ReplicaDynMutWrapper::new(raw_ref.dyn_mut());
                 return Some(wrapped_ref);
             }
         }
@@ -364,12 +370,12 @@ fn has_component_of_type<P: ProtocolType>(
 fn get_component<'a, P: ProtocolType, R: ReplicateSafe<P>>(
     world: &'a World<P>,
     entity: &Entity,
-) -> Option<ComponentRef<'a, P, R>> {
+) -> Option<ReplicaRefWrapper<'a, P, R>> {
     if let Some(component_map) = world.entities.get(*entity) {
         if let Some(component_protocol) = component_map.get(&ProtocolType::kind_of::<R>()) {
             if let Some(raw_ref) = component_protocol.cast_ref::<R>() {
                 let wrapper = RefWrapper::<P, R>::new(raw_ref);
-                let wrapped_ref = ComponentRef::new(wrapper);
+                let wrapped_ref = ReplicaRefWrapper::new(wrapper);
                 return Some(wrapped_ref);
             }
         }
@@ -382,10 +388,10 @@ fn get_component_of_kind<'a, P: ProtocolType>(
     world: &'a World<P>,
     entity: &Entity,
     component_type: &P::Kind,
-) -> Option<ComponentDynRef<'a, P>> {
+) -> Option<ReplicaDynRefWrapper<'a, P>> {
     if let Some(component_map) = world.entities.get(*entity) {
         if let Some(raw_ref) = component_map.get_mut(component_type) {
-            let wrapped_ref = ComponentDynRef::new(raw_ref.dyn_ref());
+            let wrapped_ref = ReplicaDynRefWrapper::new(raw_ref.dyn_ref());
             return Some(wrapped_ref);
         }
     }

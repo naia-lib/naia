@@ -1,9 +1,9 @@
-use naia_derive::ReplicateSafe;
+use naia_derive::Replicate;
 use naia_shared::Property;
 
 use super::Protocol;
 
-#[derive(ReplicateSafe, Clone)]
+#[derive(Replicate, Clone)]
 pub struct Auth {
     pub username: Property<String>,
     pub password: Property<String>,

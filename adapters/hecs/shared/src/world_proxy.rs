@@ -1,12 +1,15 @@
-use hecs::{Component as HecsComponent, Ref as HecsRef, RefMut as HecsMut, World};
+use hecs::World;
 
 use naia_shared::{
-    ComponentDynMut, ComponentDynRef, ComponentMut, ComponentMutTrait, ComponentRef,
-    ComponentRefTrait, ProtocolInserter, ProtocolType, Replicate, ReplicateSafe, WorldMutType,
-    WorldRefType,
+    ProtocolInserter, ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper,
+    ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
 };
 
-use super::{entity::Entity, world_data::WorldData};
+use super::{
+    entity::Entity,
+    ref_impls::{ComponentMut, ComponentRef},
+    world_data::WorldData,
+};
 
 // WorldProxy
 
@@ -29,30 +32,6 @@ pub trait WorldProxyMut<'w, 'd, P: ProtocolType> {
 impl<'w, 'd, P: ProtocolType> WorldProxyMut<'w, 'd, P> for &'w mut World {
     fn proxy_mut(self, data: &'d mut WorldData<P>) -> WorldMut<'w, 'd, P> {
         return WorldMut::new(self, data);
-    }
-}
-
-// ComponentRef
-struct RefWrapper<'a, T: HecsComponent>(HecsRef<'a, T>);
-
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentRefTrait<P, R> for RefWrapper<'a, R> {
-    fn component_deref(&self) -> &R {
-        return &self.0;
-    }
-}
-
-// ComponentMut
-struct MutWrapper<'a, T: HecsComponent>(HecsMut<'a, T>);
-
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentRefTrait<P, R> for MutWrapper<'a, R> {
-    fn component_deref(&self) -> &R {
-        return &self.0;
-    }
-}
-
-impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ComponentMutTrait<P, R> for MutWrapper<'a, R> {
-    fn component_deref_mut(&mut self) -> &mut R {
-        return &mut self.0;
     }
 }
 
@@ -92,7 +71,7 @@ impl<'w, 'd, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, 'd, P> {
     fn get_component<'a, R: ReplicateSafe<P>>(
         &'a self,
         entity: &Entity,
-    ) -> Option<ComponentRef<'a, P, R>> {
+    ) -> Option<ReplicaRefWrapper<'a, P, R>> {
         return get_component::<P, R>(self.world, entity);
     }
 
@@ -100,7 +79,7 @@ impl<'w, 'd, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, 'd, P> {
         &self,
         entity: &Entity,
         component_kind: &P::Kind,
-    ) -> Option<ComponentDynRef<'_, P>> {
+    ) -> Option<ReplicaDynRefWrapper<'_, P>> {
         return get_component_of_kind(&self.world, self.world_data, entity, component_kind);
     }
 }
@@ -141,7 +120,7 @@ impl<'w, 'd, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, 'd, P> {
     fn get_component<'a, R: ReplicateSafe<P>>(
         &'a self,
         entity: &Entity,
-    ) -> Option<ComponentRef<'a, P, R>> {
+    ) -> Option<ReplicaRefWrapper<'a, P, R>> {
         return get_component::<P, R>(self.world, entity);
     }
 
@@ -149,7 +128,7 @@ impl<'w, 'd, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, 'd, P> {
         &self,
         entity: &Entity,
         component_kind: &P::Kind,
-    ) -> Option<ComponentDynRef<'_, P>> {
+    ) -> Option<ReplicaDynRefWrapper<'_, P>> {
         return get_component_of_kind(self.world, self.world_data, entity, component_kind);
     }
 }
@@ -158,10 +137,10 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
     fn get_component_mut<'a, R: ReplicateSafe<P>>(
         &'a mut self,
         entity: &Entity,
-    ) -> Option<ComponentMut<'a, P, R>> {
+    ) -> Option<ReplicaMutWrapper<'a, P, R>> {
         if let Ok(hecs_mut) = self.world.get_mut::<R>(**entity) {
-            let wrapper = MutWrapper(hecs_mut);
-            let component_mut = ComponentMut::new(wrapper);
+            let wrapper = ComponentMut(hecs_mut);
+            let component_mut = ReplicaMutWrapper::new(wrapper);
             return Some(component_mut);
         }
         return None;
@@ -171,7 +150,7 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
         &mut self,
         entity: &Entity,
         component_type: &P::Kind,
-    ) -> Option<ComponentDynMut<'_, P>> {
+    ) -> Option<ReplicaDynMutWrapper<'_, P>> {
         if let Some(access) = self.world_data.get_component_access(component_type) {
             return access.get_component_mut(self.world, entity);
         }
@@ -265,10 +244,10 @@ fn has_component_of_kind<P: ProtocolType>(
 fn get_component<'a, P: ProtocolType, R: ReplicateSafe<P>>(
     world: &'a World,
     entity: &Entity,
-) -> Option<ComponentRef<'a, P, R>> {
+) -> Option<ReplicaRefWrapper<'a, P, R>> {
     if let Ok(hecs_ref) = world.get::<R>(**entity) {
-        let wrapper = RefWrapper(hecs_ref);
-        let component_ref = ComponentRef::new(wrapper);
+        let wrapper = ComponentRef(hecs_ref);
+        let component_ref = ReplicaRefWrapper::new(wrapper);
         return Some(component_ref);
     }
     return None;
@@ -279,7 +258,7 @@ fn get_component_of_kind<'a, P: ProtocolType>(
     world_data: &WorldData<P>,
     entity: &Entity,
     component_kind: &P::Kind,
-) -> Option<ComponentDynRef<'a, P>> {
+) -> Option<ReplicaDynRefWrapper<'a, P>> {
     if let Some(access) = world_data.get_component_access(component_kind) {
         return access.get_component(world, entity);
     }
