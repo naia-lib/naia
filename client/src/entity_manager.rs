@@ -153,7 +153,7 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                             for component_kind in world.get_component_kinds(&world_entity) {
                                 let mut component_copy_opt: Option<P> = None;
                                 if let Some(component) =
-                                    world.get_component_mut_of_kind(&world_entity, &component_kind)
+                                    world.get_component_of_kind(&world_entity, &component_kind)
                                 {
                                     component_copy_opt =
                                         Some(component.deref().deref().protocol_copy());
@@ -253,32 +253,26 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                         if let Some(entity_record) = self.entity_records.get(world_entity) {
                             let component_kind =
                                 entity_record.get_kind_from_key(&component_key).unwrap();
-                            if let Some(mut component_protocol) =
-                                world.get_component_mut_of_kind(world_entity, component_kind)
-                            {
-                                // read incoming delta
-                                let diff_mask: DiffMask = DiffMask::read(reader);
-                                component_protocol.dyn_mut().read_partial(
-                                    &diff_mask,
-                                    reader,
-                                    packet_index,
-                                );
 
-                                // check if Entity is Owned
-                                if entity_record.is_owned() {
-                                    // replay commands
-                                    command_receiver.replay_commands(packet_tick, &world_entity);
+                            let diff_mask: DiffMask = DiffMask::read(reader);
 
-                                    // remove command history until the tick that has already been
-                                    // checked
-                                    command_receiver
-                                        .remove_history_until(packet_tick, &world_entity);
-                                }
+                            // read incoming delta
+                            world.component_read_partial(world_entity, component_kind, &diff_mask, reader, packet_index);
 
-                                self.queued_incoming_messages.push_back(
-                                    EntityAction::UpdateComponent(*world_entity, *component_kind),
-                                );
+                            // check if Entity is Owned
+                            if entity_record.is_owned() {
+                                // replay commands
+                                command_receiver.replay_commands(packet_tick, &world_entity);
+
+                                // remove command history until the tick that has already been
+                                // checked
+                                command_receiver
+                                    .remove_history_until(packet_tick, &world_entity);
                             }
+
+                            self.queued_incoming_messages.push_back(
+                                EntityAction::UpdateComponent(*world_entity, *component_kind),
+                            );
                         }
                     }
                 }
@@ -361,13 +355,7 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
         if let Some(predicted_entity) = self.get_predicted_entity(&world_entity) {
             // go through all components to make prediction components = world components
             for component_kind in world.get_component_kinds(world_entity) {
-                let confirmed_protocol = world.get_component_of_kind(&world_entity, &component_kind)
-                    .expect("Predicted and Confirmed entities must always contain the same types of components!")
-                    .protocol_copy();
-                let mut predicted_protocol: ReplicaDynMutWrapper<P> = world.get_component_mut_of_kind(&predicted_entity, &component_kind)
-                    .expect("Predicted and Confirmed entities must always contain the same types of components!");
-
-                predicted_protocol.mirror(&confirmed_protocol);
+                world.mirror_components(&predicted_entity, &world_entity, &component_kind);
             }
 
             self.queued_incoming_messages

@@ -10,12 +10,12 @@ use bevy::{
 use naia_bevy_client::{
     components::Predicted,
     events::{NewCommandEvent, OwnEntityEvent, ReplayCommandEvent, SpawnEntityEvent},
-    Client, Ref,
+    Client
 };
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
-    protocol::{ColorValue, Position, Protocol},
+    protocol::{ColorValue, Color, Position, Protocol, ProtocolKind},
 };
 
 use crate::resources::Global;
@@ -34,29 +34,34 @@ pub fn spawn_entity_event(
     mut local: Commands,
     global: ResMut<Global>,
     mut event_reader: EventReader<SpawnEntityEvent<Protocol>>,
+    q_color: Query<&Color>,
 ) {
-    for SpawnEntityEvent(entity, component_list) in event_reader.iter() {
+    for SpawnEntityEvent(entity, component_kinds) in event_reader.iter() {
         info!("create entity");
 
-        for component_protocol in component_list {
-            if let Protocol::Color(color_ref) = component_protocol {
-                info!("add color to entity");
-                let color = color_ref.borrow();
+        for component_kind in component_kinds {
+            match component_kind {
+                ProtocolKind::Color => {
+                    if let Ok(color) = q_color.get(**entity) {
+                        info!("add color to entity");
 
-                let material = {
-                    match &color.value.get() {
-                        ColorValue::Red => global.materials.red.clone(),
-                        ColorValue::Blue => global.materials.blue.clone(),
-                        ColorValue::Yellow => global.materials.yellow.clone(),
+                        let material = {
+                            match &color.value.get() {
+                                ColorValue::Red => global.materials.red.clone(),
+                                ColorValue::Blue => global.materials.blue.clone(),
+                                ColorValue::Yellow => global.materials.yellow.clone(),
+                            }
+                        };
+
+                        local.entity(**entity).insert_bundle(SpriteBundle {
+                            material: material.clone(),
+                            sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                            ..Default::default()
+                        });
                     }
-                };
-
-                local.entity(**entity).insert_bundle(SpriteBundle {
-                    material: material.clone(),
-                    sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                    transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                    ..Default::default()
-                });
+                }
+                _ => {}
             }
         }
     }
@@ -83,13 +88,13 @@ pub fn own_entity_event(
 
 pub fn new_command_event(
     mut event_reader: EventReader<NewCommandEvent<Protocol>>,
-    mut q_player_position: Query<&Ref<Position>, With<Predicted>>,
+    mut q_player_position: Query<&mut Position, With<Predicted>>,
 ) {
     for event in event_reader.iter() {
         if let NewCommandEvent(owned_entity, Protocol::KeyCommand(command)) = event {
             let predicted_entity = owned_entity.predicted;
-            if let Ok(position) = q_player_position.get_mut(*predicted_entity) {
-                shared_behavior::process_command(command, position);
+            if let Ok(mut position) = q_player_position.get_mut(*predicted_entity) {
+                shared_behavior::process_command(command, &mut position);
             }
         }
     }
@@ -97,13 +102,13 @@ pub fn new_command_event(
 
 pub fn replay_command_event(
     mut event_reader: EventReader<ReplayCommandEvent<Protocol>>,
-    mut q_player_position: Query<&Ref<Position>, With<Predicted>>,
+    mut q_player_position: Query<&mut Position, With<Predicted>>,
 ) {
     for event in event_reader.iter() {
         if let ReplayCommandEvent(owned_entity, Protocol::KeyCommand(command)) = event {
             let predicted_entity = owned_entity.predicted;
-            if let Ok(position) = q_player_position.get_mut(*predicted_entity) {
-                shared_behavior::process_command(command, position);
+            if let Ok(mut position) = q_player_position.get_mut(*predicted_entity) {
+                shared_behavior::process_command(command, &mut position);
             }
         }
     }

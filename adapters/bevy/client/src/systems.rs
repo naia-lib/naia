@@ -148,7 +148,7 @@ pub fn finish_connect(mut resource: ResMut<ClientResource>) {
 }
 
 pub fn should_disconnect(resource: Res<ClientResource>) -> ShouldRun {
-    if resource.connector.is_set() {
+    if resource.disconnector.is_set() {
         return ShouldRun::Yes;
     } else {
         return ShouldRun::No;
@@ -156,7 +156,7 @@ pub fn should_disconnect(resource: Res<ClientResource>) -> ShouldRun {
 }
 
 pub fn finish_disconnect(mut resource: ResMut<ClientResource>) {
-    resource.connector.reset();
+    resource.disconnector.reset();
 }
 
 pub fn should_tick(resource: Res<ClientResource>) -> ShouldRun {

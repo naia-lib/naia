@@ -1,10 +1,13 @@
+use naia_socket_shared::PacketReader;
+
 use super::{
     entity_type::EntityType,
     protocol_type::{ProtocolInserter, ProtocolType},
     replica_ref::{
-        ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
+        ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
     },
     replicate::{Replicate, ReplicateSafe},
+    diff_mask::DiffMask,
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -55,12 +58,23 @@ pub trait WorldMutType<P: ProtocolType, E: EntityType>:
         &'a mut self,
         entity: &E,
     ) -> Option<ReplicaMutWrapper<'a, P, R>>;
-    /// gets a mutable component by type
-    fn get_component_mut_of_kind(
+    /// reads an incoming stream into a component
+    fn component_read_partial(
         &mut self,
         entity: &E,
         component_kind: &P::Kind,
-    ) -> Option<ReplicaDynMutWrapper<'_, P>>;
+        diff_mask: &DiffMask,
+        reader: &mut PacketReader,
+        packet_index: u16,
+    );
+    /// mirrors the state of the same component owned by two different entities
+    /// (setting 1st entity's component to 2nd entity's component's state)
+    fn mirror_components(
+        &mut self,
+        mutable_entity: &E,
+        immutable_entity: &E,
+        component_kind: &P::Kind,
+    );
     /// insert a component
     fn insert_component<R: ReplicateSafe<P>>(&mut self, entity: &E, component_ref: R);
     /// remove a component

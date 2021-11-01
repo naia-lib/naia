@@ -20,7 +20,7 @@ pub fn tick(
 
     if let Ok(entity) = q_player_position.single() {
         if let Some(command) = global.queued_command.take() {
-            client.queue_command(&Entity::new(entity), &command);
+            client.queue_command(&Entity::new(entity), command);
         }
     }
 }

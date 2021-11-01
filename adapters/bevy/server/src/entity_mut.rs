@@ -1,4 +1,6 @@
-use naia_server::{ProtocolType, ReplicateSafe, RoomKey, UserKey};
+use bevy::ecs::world::Mut;
+
+use naia_server::{ProtocolType, Replicate, RoomKey, UserKey, ReplicaMutWrapper};
 
 use naia_bevy_shared::Entity;
 
@@ -32,13 +34,13 @@ impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
 
     // Components
 
-    pub fn insert<R: ReplicateSafe<P>>(&mut self, component_ref: &R) -> &mut Self {
+    pub fn insert<R: Replicate<P>>(&mut self, component: R) -> &mut Self {
         self.server
-            .add(InsertComponent::new(&self.entity, component_ref));
+            .add(InsertComponent::new(&self.entity, component));
         self
     }
 
-    pub fn remove<R: ReplicateSafe<P>>(&mut self) -> &mut Self {
+    pub fn remove<R: Replicate<P>>(&mut self) -> &mut Self {
         self.server.add(RemoveComponent::<P, R>::new(&self.entity));
         self
     }

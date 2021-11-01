@@ -3,7 +3,7 @@ use bevy::{
     log::info,
 };
 
-use naia_bevy_server::{Event, Random, Ref, Server};
+use naia_bevy_server::{Event, Random, Server};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
@@ -15,12 +15,11 @@ use crate::resources::Global;
 pub fn recv(
     mut server: Server<Protocol>,
     mut global: ResMut<Global>,
-    q_position: Query<&Ref<Position>>,
+    mut q_position: Query<&mut Position>,
 ) {
     for event in server.receive() {
         match event {
-            Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
-                let auth_message = auth_ref.borrow();
+            Ok(Event::Authorization(user_key, Protocol::Auth(auth_message))) => {
                 let username = auth_message.username.get();
                 let password = auth_message.password.get();
                 if username == "charlie" && password == "12345" {
@@ -67,9 +66,9 @@ pub fn recv(
                     // Add Entity to main Room
                     .enter_room(&global.main_room_key)
                     // Insert Position component
-                    .insert(&position)
+                    .insert(position)
                     // Insert Color component
-                    .insert(&color)
+                    .insert(color)
                     // Set Entity's owner to user
                     .set_owner(&user_key)
                     // return Entity id
@@ -89,9 +88,9 @@ pub fn recv(
                         .despawn();
                 }
             }
-            Ok(Event::Command(_, entity, Protocol::KeyCommand(key_command_ref))) => {
-                if let Ok(position_ref) = q_position.get(*entity) {
-                    shared_behavior::process_command(&key_command_ref, &position_ref);
+            Ok(Event::Command(_, entity, Protocol::KeyCommand(key_command))) => {
+                if let Ok(mut position) = q_position.get_mut(*entity) {
+                    shared_behavior::process_command(&key_command, &mut position);
                 }
             }
             Ok(Event::Tick) => {
