@@ -26,11 +26,9 @@ impl<P: ProtocolType> State<P> {
         // resource scope
         world.resource_scope(
             |world: &mut World, mut server: Mut<NaiaServer<P, Entity>>| {
-                let world_proxy = &mut world.proxy_mut();
-
                 // Process queued commands
                 for command in self.commands.drain(..) {
-                    command.write(&mut server, world_proxy);
+                    command.write(&mut server, world.proxy_mut());
                 }
             },
         );

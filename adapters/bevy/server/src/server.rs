@@ -7,7 +7,7 @@ use bevy::ecs::{
 
 use naia_server::{
     EntityRef, Event, NaiaServerError, ProtocolType, RoomKey, RoomMut, RoomRef,
-    Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut,
+    Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut, Replicate, ReplicaMutWrapper
 };
 
 use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
@@ -48,7 +48,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     }
 
     pub fn receive(&mut self) -> VecDeque<Result<Event<P, Entity>, NaiaServerError>> {
-        return self.server.receive(self.world.proxy());
+        return self.server.receive();
     }
 
     //// Connections ////
@@ -62,7 +62,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     }
 
     //// Messages ////
-    pub fn queue_message<R: ReplicateSafe<P>>(
+    pub fn queue_message<R: Replicate<P>>(
         &mut self,
         user_key: &UserKey,
         message_ref: &R,
@@ -178,6 +178,10 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     pub(crate) fn add<C: Command<P>>(&mut self, command: C) {
         self.state.push(command);
     }
+
+//    pub(crate) fn entity_get_component<R: Replicate<P>>(&mut self, entity: &Entity) -> Option<Mut<'_, R>> {
+//        return self.world.entity_mut(**entity).get_mut::<R>();
+//    }
 
     // users
 

@@ -18,6 +18,7 @@ pub trait ComponentAccess<P: ProtocolType>: Send + Sync {
         entity: &Entity,
     ) -> Option<ReplicaDynMutWrapper<'w, P>>;
     fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P>;
+    fn mirror_components(&self, world: &mut World, mutable_entity: &Entity, immutable_entity: &Entity);
 }
 
 pub struct ComponentAccessor<P: ProtocolType, R: ReplicateSafe<P>> {
@@ -67,5 +68,16 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
             .entity_mut(**entity)
             .remove::<R>()
             .map_or(None, |v| Some(v.into_protocol()));
+    }
+
+    fn mirror_components(&self, world: &mut World, mutable_entity: &Entity, immutable_entity: &Entity) {
+        let mut query = world.query::<&mut R>();
+        unsafe {
+            if let Ok(immutable_component) = query.get_unchecked(world, **immutable_entity) {
+                if let Ok(mut mutable_component) = query.get_unchecked(world, **mutable_entity) {
+                    mutable_component.mirror(&immutable_component.protocol_copy());
+                }
+            }
+        }
     }
 }

@@ -5,7 +5,7 @@ use bevy::ecs::{
     world::{Mut, World},
 };
 
-use naia_client::{Client as NaiaClient, EntityRef, ProtocolType};
+use naia_client::{Client as NaiaClient, EntityRef, ProtocolType, Replicate};
 
 use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
 
@@ -61,7 +61,7 @@ impl<'a, P: ProtocolType> Client<'a, P> {
     }
 
     //// Messages ////
-    pub fn queue_message<R: ReplicateSafe<P>>(
+    pub fn queue_message<R: Replicate<P>>(
         &mut self,
         message_ref: &R,
         guaranteed_delivery: bool,
@@ -69,8 +69,8 @@ impl<'a, P: ProtocolType> Client<'a, P> {
         return self.client.queue_message(message_ref, guaranteed_delivery);
     }
 
-    pub fn queue_command<R: ReplicateSafe<P>>(&mut self, entity: &Entity, command_ref: &R) {
-        return self.client.queue_command(entity, command_ref);
+    pub fn queue_command<R: Replicate<P>>(&mut self, entity: &Entity, command: R) {
+        return self.client.queue_command(entity, command);
     }
 
     //// Entities ////

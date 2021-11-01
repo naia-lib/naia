@@ -3,7 +3,7 @@ use std::{ops::Deref, any::TypeId};
 use bevy::ecs::world::{Mut, World};
 
 use naia_shared::{ProtocolType, ReplicateSafe, WorldMutType, WorldRefType, ReplicaRefWrapper,
-                  ReplicaMutWrapper, ReplicaDynRefWrapper, ReplicaDynMutWrapper, ProtocolInserter, ProtocolKindType};
+                  ReplicaMutWrapper, ReplicaDynRefWrapper, ReplicaDynMutWrapper, ProtocolInserter, ProtocolKindType, DiffMask, PacketReader};
 
 use super::{entity::Entity, world_data::WorldData, component_ref::{ComponentRef, ComponentMut}};
 
@@ -117,15 +117,27 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
         return None;
     }
 
-    fn get_component_mut_of_kind(&mut self, entity: &Entity, component_kind: &P::Kind) -> Option<ReplicaDynMutWrapper<P>> {
-        if let Some(accessor) = self.world
-            .resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
-                return data.get_component_access(component_kind);
-            }) {
-            return accessor.get_component_mut::<'w>(self.world, entity);
-        } else {
-            return None;
-        }
+    fn component_read_partial(&mut self, entity: &Entity,
+                              component_kind: &P::Kind,
+                              diff_mask: &DiffMask,
+                              reader: &mut PacketReader,
+                              packet_index: u16) {
+
+        self.world.resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
+            if let Some(accessor) = data.get_component_access(component_kind) {
+                if let Some(mut component) = accessor.get_component_mut::<'w>(world, entity) {
+                    component.read_partial(diff_mask, reader, packet_index);
+                }
+            }
+        });
+    }
+
+    fn mirror_components(&mut self, mutable_entity: &Entity, immutable_entity: &Entity, component_kind: &P::Kind) {
+        self.world.resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
+            if let Some(accessor) = data.get_component_access(component_kind) {
+                accessor.mirror_components(world, mutable_entity, immutable_entity);
+            }
+        });
     }
 
     fn spawn_entity(&mut self) -> Entity {

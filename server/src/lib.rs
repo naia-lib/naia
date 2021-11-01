@@ -28,7 +28,7 @@ pub use naia_server_socket::ServerAddrs;
 
 pub use naia_shared::{
     EntityType, LinkConditionerConfig, ProtocolType, Random, Replicate, SharedConfig, SocketConfig,
-    WorldMutType, WorldRefType,
+    WorldMutType, WorldRefType, ReplicaMutWrapper
 };
 
 mod client_connection;
