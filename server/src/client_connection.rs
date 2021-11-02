@@ -125,7 +125,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
         if let Some((local_entity, command)) =
             self.command_receiver.pop_incoming_command(server_tick)
         {
-            // get global key from the local one
+            // get global entity from the local one
             if let Some(global_entity) = self
                 .entity_manager
                 .get_global_entity_from_local(local_entity)
@@ -145,28 +145,28 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
 
     // Entity management
 
-    pub fn has_entity(&self, key: &E) -> bool {
-        return self.entity_manager.has_entity(key);
+    pub fn has_entity(&self, entity: &E) -> bool {
+        return self.entity_manager.has_entity(entity);
     }
 
-    pub fn spawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, key: &E) {
-        self.entity_manager.spawn_entity(world_record, key);
+    pub fn spawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, entity: &E) {
+        self.entity_manager.spawn_entity(world_record, entity);
     }
 
-    pub fn despawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, key: &E) {
-        self.entity_manager.despawn_entity(world_record, key);
+    pub fn despawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, entity: &E) {
+        self.entity_manager.despawn_entity(world_record, entity);
     }
 
-    pub fn has_prediction_entity(&self, key: &E) -> bool {
-        return self.entity_manager.has_entity_prediction(key);
+    pub fn has_prediction_entity(&self, entity: &E) -> bool {
+        return self.entity_manager.has_entity_prediction(entity);
     }
 
-    pub fn add_prediction_entity(&mut self, key: &E) {
-        self.entity_manager.add_prediction_entity(key);
+    pub fn add_prediction_entity(&mut self, entity: &E) {
+        self.entity_manager.add_prediction_entity(entity);
     }
 
-    pub fn remove_prediction_entity(&mut self, key: &E) {
-        self.entity_manager.remove_prediction_entity(key);
+    pub fn remove_prediction_entity(&mut self, entity: &E) {
+        self.entity_manager.remove_prediction_entity(entity);
     }
 
     pub fn insert_component(
