@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 
-use naia_shared::{EntityType, LocalComponentKey, LocalEntity, ProtocolKindType};
+use naia_shared::{LocalComponentKey, LocalEntity, ProtocolKindType};
 
 #[derive(Debug)]
-pub struct EntityRecord<E: EntityType, K: ProtocolKindType> {
+pub struct EntityRecord<E: Copy, K: ProtocolKindType> {
     local_entity: LocalEntity,
     kind_to_key_map: HashMap<K, LocalComponentKey>,
     key_to_kind_map: HashMap<LocalComponentKey, K>,
     prediction_key: Option<E>,
 }
 
-impl<E: EntityType, K: ProtocolKindType> EntityRecord<E, K> {
+impl<E: Copy, K: ProtocolKindType> EntityRecord<E, K> {
     pub fn new(local_entity: &LocalEntity) -> Self {
         EntityRecord {
             local_entity: *local_entity,

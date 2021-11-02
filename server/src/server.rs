@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, VecDeque},
+    hash::Hash,
     net::SocketAddr,
     panic,
     sync::{Arc, RwLock},
@@ -14,10 +15,10 @@ use naia_server_socket::{
 };
 
 pub use naia_shared::{
-    wrapping_diff, Connection, ConnectionConfig, EntityType, Instant, KeyGenerator,
-    LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
-    PropertyMutator, ProtocolKindType, ProtocolType, Replicate, ReplicateSafe, SharedConfig,
-    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    wrapping_diff, Connection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
+    ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
+    ProtocolKindType, ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
+    Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -39,7 +40,7 @@ use super::{
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
-pub struct Server<P: ProtocolType, K: EntityType> {
+pub struct Server<P: ProtocolType, K: Copy + Eq + Hash> {
     // Config
     manifest: Manifest<P>,
     // Connection
@@ -70,7 +71,7 @@ pub struct Server<P: ProtocolType, K: EntityType> {
     tick_manager: TickManager,
 }
 
-impl<P: ProtocolType, K: EntityType> Server<P, K> {
+impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// Create a new Server
     pub fn new(mut server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
         server_config.socket_config.link_condition_config =

@@ -1,7 +1,5 @@
 use std::ops::Deref;
 
-use naia_shared::EntityType;
-
 // Entity
 
 #[allow(missing_docs)]
@@ -22,5 +20,3 @@ impl Deref for Entity {
         &self
     }
 }
-
-impl EntityType for Entity {}

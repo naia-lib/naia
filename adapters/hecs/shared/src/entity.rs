@@ -2,8 +2,6 @@ use std::ops::Deref;
 
 use hecs::Entity as HecsEntity;
 
-use naia_shared::EntityType;
-
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Entity(HecsEntity);
 
@@ -12,8 +10,6 @@ impl Entity {
         return Entity(entity);
     }
 }
-
-impl EntityType for Entity {}
 
 impl Deref for Entity {
     type Target = HecsEntity;

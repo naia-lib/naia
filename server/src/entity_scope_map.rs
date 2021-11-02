@@ -1,16 +1,17 @@
-use std::collections::{HashMap, HashSet};
-
-use naia_shared::EntityType;
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use crate::user::user_key::UserKey;
 
-pub struct EntityScopeMap<E: EntityType> {
+pub struct EntityScopeMap<E: Copy + Eq + Hash> {
     entities_of_user: HashMap<UserKey, HashSet<E>>,
     users_of_entity: HashMap<E, HashSet<UserKey>>,
     main_map: HashMap<(UserKey, E), bool>,
 }
 
-impl<E: EntityType> EntityScopeMap<E> {
+impl<E: Copy + Eq + Hash> EntityScopeMap<E> {
     pub fn new() -> Self {
         Self {
             main_map: HashMap::new(),

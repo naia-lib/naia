@@ -1,11 +1,12 @@
 use std::{
+    hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock},
 };
 
 use naia_shared::{
-    Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, ReplicateSafe, SequenceNumber, StandardHeader, WorldRefType,
+    Connection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolType,
+    ReplicateSafe, SequenceNumber, StandardHeader, WorldRefType,
 };
 
 use super::{
@@ -14,14 +15,14 @@ use super::{
     ping_manager::PingManager, world_record::WorldRecord,
 };
 
-pub struct ClientConnection<P: ProtocolType, K: EntityType> {
+pub struct ClientConnection<P: ProtocolType, K: Copy + Eq + Hash> {
     connection: Connection<P>,
     entity_manager: EntityManager<P, K>,
     ping_manager: PingManager,
     command_receiver: CommandReceiver<P>,
 }
 
-impl<P: ProtocolType, K: EntityType> ClientConnection<P, K> {
+impl<P: ProtocolType, K: Copy + Eq + Hash> ClientConnection<P, K> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,

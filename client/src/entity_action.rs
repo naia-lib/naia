@@ -1,9 +1,9 @@
-use naia_shared::{EntityType, ProtocolType};
+use naia_shared::ProtocolType;
 
 use super::owned_entity::OwnedEntity;
 
 #[derive(Debug, Clone)]
-pub enum EntityAction<P: ProtocolType, E: EntityType> {
+pub enum EntityAction<P: ProtocolType, E: Copy> {
     SpawnEntity(E, Vec<P::Kind>),
     DespawnEntity(E),
     OwnEntity(OwnedEntity<E>),

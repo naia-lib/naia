@@ -1,7 +1,6 @@
 use std::{any::TypeId, hash::Hash};
 
 use super::{
-    entity_type::EntityType,
     replica_ref::{ReplicaDynMut, ReplicaDynRef},
     replicate::{Replicate, ReplicateSafe},
 };
@@ -29,11 +28,7 @@ pub trait ProtocolType: Sized + Sync + Send + Clone + 'static {
     fn cast_mut<R: ReplicateSafe<Self>>(&mut self) -> Option<&mut R>;
     /// Extract an inner ReplicateSafe impl from the ProtocolType into a
     /// ProtocolInserter impl
-    fn extract_and_insert<N: EntityType, X: ProtocolInserter<Self, N>>(
-        &self,
-        entity: &N,
-        inserter: &mut X,
-    );
+    fn extract_and_insert<N, X: ProtocolInserter<Self, N>>(&self, entity: &N, inserter: &mut X);
 }
 
 pub trait ProtocolKindType: Eq + Hash + Copy + Send + Sync {
@@ -42,6 +37,6 @@ pub trait ProtocolKindType: Eq + Hash + Copy + Send + Sync {
     fn to_type_id(&self) -> TypeId;
 }
 
-pub trait ProtocolInserter<P: ProtocolType, N: EntityType> {
+pub trait ProtocolInserter<P: ProtocolType, N> {
     fn insert<R: ReplicateSafe<P>>(&mut self, entity: &N, component: R);
 }

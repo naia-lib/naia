@@ -1,13 +1,14 @@
 use std::{
     collections::{HashMap, VecDeque},
+    hash::Hash,
     ops::Deref,
 };
 
 use log::warn;
 
 use naia_shared::{
-    DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity, Manifest, NaiaKey,
-    PacketReader, ProtocolKindType, ProtocolType, WorldMutType,
+    DiffMask, EntityActionType, LocalComponentKey, LocalEntity, Manifest, NaiaKey, PacketReader,
+    ProtocolKindType, ProtocolType, WorldMutType,
 };
 
 use super::{
@@ -15,7 +16,7 @@ use super::{
     owned_entity::OwnedEntity,
 };
 
-pub struct EntityManager<P: ProtocolType, E: EntityType> {
+pub struct EntityManager<P: ProtocolType, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<E, P::Kind>>,
     local_to_world_entity: HashMap<LocalEntity, E>,
     component_to_entity_map: HashMap<LocalComponentKey, E>,
@@ -23,7 +24,7 @@ pub struct EntityManager<P: ProtocolType, E: EntityType> {
     queued_incoming_messages: VecDeque<EntityAction<P, E>>,
 }
 
-impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
+impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
     pub fn new() -> Self {
         EntityManager {
             local_to_world_entity: HashMap::new(),
