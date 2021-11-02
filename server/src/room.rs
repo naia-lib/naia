@@ -39,9 +39,9 @@ impl<E: Copy + Eq + Hash> Room<E> {
 
     pub(crate) fn unsubscribe_user(&mut self, user_key: &UserKey) {
         self.users.remove(user_key);
-        for entity_key in self.entities.iter() {
+        for entity in self.entities.iter() {
             self.entity_removal_queue
-                .push_back((*user_key, *entity_key));
+                .push_back((*user_key, *entity));
         }
     }
 
@@ -55,15 +55,15 @@ impl<E: Copy + Eq + Hash> Room<E> {
 
     // Entities
 
-    pub(crate) fn add_entity(&mut self, entity_key: &E) {
-        self.entities.insert(*entity_key);
+    pub(crate) fn add_entity(&mut self, entity: &E) {
+        self.entities.insert(*entity);
     }
 
-    pub(crate) fn remove_entity(&mut self, entity_key: &E) -> bool {
-        if self.entities.remove(entity_key) {
+    pub(crate) fn remove_entity(&mut self, entity: &E) -> bool {
+        if self.entities.remove(entity) {
             for user_key in self.users.iter() {
                 self.entity_removal_queue
-                    .push_back((*user_key, *entity_key));
+                    .push_back((*user_key, *entity));
             }
             return true;
         } else {
@@ -120,8 +120,8 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash> RoomRef<'s, P, E> {
 
     // Entities
 
-    pub fn has_entity(&self, entity_key: &E) -> bool {
-        return self.server.room_has_entity(&self.key, entity_key);
+    pub fn has_entity(&self, entity: &E) -> bool {
+        return self.server.room_has_entity(&self.key, entity);
     }
 
     pub fn entities_count(&self) -> usize {
@@ -172,18 +172,18 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash> RoomMut<'s, P, E> {
 
     // Entities
 
-    pub fn has_entity(&self, entity_key: &E) -> bool {
-        return self.server.room_has_entity(&self.key, entity_key);
+    pub fn has_entity(&self, entity: &E) -> bool {
+        return self.server.room_has_entity(&self.key, entity);
     }
 
-    pub fn add_entity(&mut self, entity_key: &E) -> &mut Self {
-        self.server.room_add_entity(&self.key, entity_key);
+    pub fn add_entity(&mut self, entity: &E) -> &mut Self {
+        self.server.room_add_entity(&self.key, entity);
 
         self
     }
 
-    pub fn remove_entity(&mut self, entity_key: &E) -> &mut Self {
-        self.server.room_remove_entity(&self.key, entity_key);
+    pub fn remove_entity(&mut self, entity: &E) -> &mut Self {
+        self.server.room_remove_entity(&self.key, entity);
 
         self
     }
