@@ -5,14 +5,14 @@ use naia_shared::{ProtocolType, ReplicaRefWrapper, ReplicateSafe, WorldRefType};
 use super::client::Client;
 
 // EntityRef
-pub struct EntityRef<'s, P: ProtocolType, K: Copy + Eq + Hash, W: WorldRefType<P, K>> {
-    client: &'s Client<P, K>,
+pub struct EntityRef<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> {
+    client: &'s Client<P, E>,
     world: W,
-    id: K,
+    id: E,
 }
 
-impl<'s, P: ProtocolType, K: Copy + Eq + Hash, W: WorldRefType<P, K>> EntityRef<'s, P, K, W> {
-    pub fn new(client: &'s Client<P, K>, world: W, key: &K) -> Self {
+impl<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<'s, P, E, W> {
+    pub fn new(client: &'s Client<P, E>, world: W, key: &E) -> Self {
         EntityRef {
             client,
             world,
@@ -20,7 +20,7 @@ impl<'s, P: ProtocolType, K: Copy + Eq + Hash, W: WorldRefType<P, K>> EntityRef<
         }
     }
 
-    pub fn id(&self) -> K {
+    pub fn id(&self) -> E {
         self.id
     }
 
@@ -36,7 +36,7 @@ impl<'s, P: ProtocolType, K: Copy + Eq + Hash, W: WorldRefType<P, K>> EntityRef<
         return self.client.entity_is_owned(&self.id);
     }
 
-    pub fn prediction(self) -> PredictedEntityRef<P, K, W> {
+    pub fn prediction(self) -> PredictedEntityRef<P, E, W> {
         if !self.is_owned() {
             panic!("Attempted to call .prediction() on an un-owned Entity!");
         }
@@ -45,14 +45,14 @@ impl<'s, P: ProtocolType, K: Copy + Eq + Hash, W: WorldRefType<P, K>> EntityRef<
 }
 
 // PredictedEntityRef
-pub struct PredictedEntityRef<P: ProtocolType, K: Copy, W: WorldRefType<P, K>> {
+pub struct PredictedEntityRef<P: ProtocolType, E: Copy, W: WorldRefType<P, E>> {
     world: W,
-    id: K,
+    id: E,
     phantom: PhantomData<P>,
 }
 
-impl<P: ProtocolType, K: Copy, W: WorldRefType<P, K>> PredictedEntityRef<P, K, W> {
-    pub fn new(world: W, key: &K) -> Self {
+impl<P: ProtocolType, E: Copy, W: WorldRefType<P, E>> PredictedEntityRef<P, E, W> {
+    pub fn new(world: W, key: &E) -> Self {
         PredictedEntityRef {
             world,
             id: *key,
@@ -60,7 +60,7 @@ impl<P: ProtocolType, K: Copy, W: WorldRefType<P, K>> PredictedEntityRef<P, K, W
         }
     }
 
-    pub fn id(&self) -> K {
+    pub fn id(&self) -> E {
         self.id
     }
 

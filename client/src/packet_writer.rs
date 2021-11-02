@@ -61,12 +61,12 @@ impl PacketWriter {
 
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_command<P: ProtocolType, K: Copy + Eq + Hash>(
+    pub fn write_command<P: ProtocolType, E: Copy + Eq + Hash>(
         &mut self,
         host_tick: u16,
-        entity_manager: &EntityManager<P, K>,
-        command_receiver: &CommandReceiver<P, K>,
-        owned_entity: &OwnedEntity<K>,
+        entity_manager: &EntityManager<P, E>,
+        command_receiver: &CommandReceiver<P, E>,
+        owned_entity: &OwnedEntity<E>,
         command: &P,
     ) -> bool {
         let world_entity = owned_entity.confirmed;

@@ -13,16 +13,16 @@ use super::{
     tick_manager::TickManager, tick_queue::TickQueue,
 };
 
-pub struct ServerConnection<P: ProtocolType, K: Copy + Eq + Hash> {
+pub struct ServerConnection<P: ProtocolType, E: Copy + Eq + Hash> {
     connection: Connection<P>,
-    entity_manager: EntityManager<P, K>,
+    entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
-    command_sender: VecDeque<(OwnedEntity<K>, P)>,
-    command_receiver: CommandReceiver<P, K>,
+    command_sender: VecDeque<(OwnedEntity<E>, P)>,
+    command_receiver: CommandReceiver<P, E>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
-impl<P: ProtocolType, K: Copy + Eq + Hash> ServerConnection<P, K> {
+impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
     pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),
@@ -88,7 +88,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> ServerConnection<P, K> {
         return None;
     }
 
-    pub fn process_incoming_data<W: WorldMutType<P, K>>(
+    pub fn process_incoming_data<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
         packet_tick: u16,
@@ -132,16 +132,16 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> ServerConnection<P, K> {
     }
 
     // Pass-through methods to underlying Entity Manager
-    pub fn get_incoming_entity_action(&mut self) -> Option<EntityAction<P, K>> {
+    pub fn get_incoming_entity_action(&mut self) -> Option<EntityAction<P, E>> {
         return self.entity_manager.pop_incoming_message();
     }
 
-    pub fn entity_is_owned(&self, key: &K) -> bool {
+    pub fn entity_is_owned(&self, key: &E) -> bool {
         return self.entity_manager.entity_is_owned(key);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
-    pub fn frame_begin<W: WorldMutType<P, K>>(
+    pub fn frame_begin<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
@@ -223,17 +223,17 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> ServerConnection<P, K> {
     }
 
     // Commands
-    pub fn queue_command<R: ReplicateSafe<P>>(&mut self, entity: OwnedEntity<K>, command: R) {
+    pub fn queue_command<R: ReplicateSafe<P>>(&mut self, entity: OwnedEntity<E>, command: R) {
         let command_protocol = command.into_protocol();
         return self.command_sender.push_back((entity, command_protocol));
     }
 
-    pub fn process_replays<W: WorldMutType<P, K>>(&mut self, world: &mut W) {
+    pub fn process_replays<W: WorldMutType<P, E>>(&mut self, world: &mut W) {
         self.command_receiver
             .process_command_replay(world, &mut self.entity_manager);
     }
 
-    pub fn get_incoming_replay(&mut self) -> Option<(OwnedEntity<K>, P)> {
+    pub fn get_incoming_replay(&mut self) -> Option<(OwnedEntity<E>, P)> {
         if let Some((_tick, owned_entity, command)) = self.command_receiver.pop_command_replay() {
             return Some((owned_entity, command));
         }
@@ -241,14 +241,14 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> ServerConnection<P, K> {
         return None;
     }
 
-    pub fn get_incoming_command(&mut self) -> Option<(OwnedEntity<K>, P)> {
+    pub fn get_incoming_command(&mut self) -> Option<(OwnedEntity<E>, P)> {
         if let Some((_tick, owned_entity, command)) = self.command_receiver.pop_command() {
             return Some((owned_entity, command));
         }
         return None;
     }
 
-    pub fn get_confirmed_entity(&self, predicted_entity: &K) -> Option<&K> {
+    pub fn get_confirmed_entity(&self, predicted_entity: &E) -> Option<&E> {
         return self.entity_manager.get_confirmed_entity(predicted_entity);
     }
 
