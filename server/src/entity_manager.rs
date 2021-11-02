@@ -90,8 +90,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
         let action = {
             let queued_action = queued_action_opt.unwrap();
-            if let EntityAction::SpawnEntity(global_entity, local_entity, _) = queued_action
-            {
+            if let EntityAction::SpawnEntity(global_entity, local_entity, _) = queued_action {
                 // get the most recent list of components in here ...
                 if !world_record.has_entity(&global_entity) {
                     panic!("entity does not exist!")
@@ -249,11 +248,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
-    pub fn despawn_entity(
-        &mut self,
-        world_record: &WorldRecord<E, P::Kind>,
-        global_entity: &E,
-    ) {
+    pub fn despawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, global_entity: &E) {
         if self.has_entity_prediction(global_entity) {
             self.remove_prediction_entity(global_entity);
         }
@@ -266,11 +261,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
                 LocalityStatus::Created => {
                     // send deletion action
-                    entity_delete::<P, E>(
-                        &mut self.queued_actions,
-                        entity_record,
-                        global_entity,
-                    );
+                    entity_delete::<P, E>(&mut self.queued_actions, entity_record, global_entity);
 
                     // Entity deletion IS Component deletion, so update those component records
                     // accordingly
@@ -786,8 +777,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
                         EntityAction::DespawnEntity(global_entity, local_entity) => {
                             // actually delete the entity from local records
                             self.entity_records.remove(&global_entity);
-                            self.local_to_global_entity_map
-                                .remove(&local_entity);
+                            self.local_to_global_entity_map.remove(&local_entity);
                             self.entity_generator.recycle_key(&local_entity);
 
                             // delete all components associated with entity

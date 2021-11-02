@@ -17,15 +17,13 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserScopeMut<'s, P, E> {
     }
 
     pub fn include(&mut self, entity: &E) -> &mut Self {
-        self.server
-            .user_scope_set_entity(&self.key, entity, true);
+        self.server.user_scope_set_entity(&self.key, entity, true);
 
         self
     }
 
     pub fn exclude(&mut self, entity: &E) -> &mut Self {
-        self.server
-            .user_scope_set_entity(&self.key, entity, false);
+        self.server.user_scope_set_entity(&self.key, entity, false);
 
         self
     }
