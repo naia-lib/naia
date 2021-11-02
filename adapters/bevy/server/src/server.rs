@@ -6,8 +6,8 @@ use bevy::ecs::{
 };
 
 use naia_server::{
-    EntityRef, Event, NaiaServerError, ProtocolType, RoomKey, RoomMut, RoomRef,
-    Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut, Replicate
+    EntityRef, Event, NaiaServerError, ProtocolType, Replicate, RoomKey, RoomMut, RoomRef,
+    Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
 use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
@@ -178,10 +178,6 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     pub(crate) fn add<C: Command<P>>(&mut self, command: C) {
         self.state.push(command);
     }
-
-//    pub(crate) fn entity_get_component<R: Replicate<P>>(&mut self, entity: &Entity) -> Option<Mut<'_, R>> {
-//        return self.world.entity_mut(**entity).get_mut::<R>();
-//    }
 
     // users
 

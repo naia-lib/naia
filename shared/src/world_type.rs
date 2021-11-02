@@ -1,13 +1,11 @@
 use naia_socket_shared::PacketReader;
 
 use super::{
+    diff_mask::DiffMask,
     entity_type::EntityType,
     protocol_type::{ProtocolInserter, ProtocolType},
-    replica_ref::{
-        ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
-    },
+    replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
     replicate::{Replicate, ReplicateSafe},
-    diff_mask::DiffMask,
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded

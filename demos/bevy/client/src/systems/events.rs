@@ -10,12 +10,12 @@ use bevy::{
 use naia_bevy_client::{
     components::Predicted,
     events::{NewCommandEvent, OwnEntityEvent, ReplayCommandEvent, SpawnEntityEvent},
-    Client
+    Client,
 };
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
-    protocol::{ColorValue, Color, Position, Protocol, ProtocolKind},
+    protocol::{Color, ColorValue, Position, Protocol, ProtocolKind},
 };
 
 use crate::resources::Global;
