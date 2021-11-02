@@ -426,9 +426,9 @@ fn get_extract_and_insert_method(type_name: &Ident, data: &Data) -> TokenStream 
     };
 
     return quote! {
-        fn extract_and_insert<K, E: ProtocolInserter<#type_name, K>>(&self,
-                                      key: &K,
-                                      inserter: &mut E) {
+        fn extract_and_insert<E, I: ProtocolInserter<#type_name, E>>(&self,
+                                      key: &E,
+                                      inserter: &mut I) {
             match self {
                 #variants
             }

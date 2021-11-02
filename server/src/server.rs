@@ -40,7 +40,7 @@ use super::{
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
-pub struct Server<P: ProtocolType, K: Copy + Eq + Hash> {
+pub struct Server<P: ProtocolType, E: Copy + Eq + Hash> {
     // Config
     manifest: Manifest<P>,
     // Connection
@@ -52,14 +52,14 @@ pub struct Server<P: ProtocolType, K: Copy + Eq + Hash> {
     // Users
     users: DenseSlotMap<UserKey, User>,
     address_to_user_key_map: HashMap<SocketAddr, UserKey>,
-    client_connections: HashMap<UserKey, ClientConnection<P, K>>,
+    client_connections: HashMap<UserKey, ClientConnection<P, E>>,
     // Rooms
-    rooms: DenseSlotMap<RoomKey, Room<K>>,
+    rooms: DenseSlotMap<RoomKey, Room<E>>,
     // Entities
-    world_record: WorldRecord<K, P::Kind>,
-    entity_owner_map: HashMap<K, UserKey>,
-    entity_room_map: HashMap<K, RoomKey>,
-    entity_scope_map: EntityScopeMap<K>,
+    world_record: WorldRecord<E, P::Kind>,
+    entity_owner_map: HashMap<E, UserKey>,
+    entity_room_map: HashMap<E, RoomKey>,
+    entity_scope_map: EntityScopeMap<E>,
     // Components
     diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     // Events
@@ -71,7 +71,7 @@ pub struct Server<P: ProtocolType, K: Copy + Eq + Hash> {
     tick_manager: TickManager,
 }
 
-impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
+impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     /// Create a new Server
     pub fn new(mut server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
         server_config.socket_config.link_condition_config =
@@ -135,7 +135,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P, K>, NaiaServerError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P, E>, NaiaServerError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with all clients, and receive packets
@@ -254,8 +254,8 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// Return a collection of Entity Scope Sets, being a unique combination of
     /// a related Room, User, and Entity, used to determine which Entities to
     /// replicate to which Users
-    pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, K)> {
-        let mut list: Vec<(RoomKey, UserKey, K)> = Vec::new();
+    pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, E)> {
+        let mut list: Vec<(RoomKey, UserKey, E)> = Vec::new();
 
         // TODO: precache this, instead of generating a new list every call
         // likely this is called A LOT
@@ -273,7 +273,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
-    pub fn send_all_updates<W: WorldRefType<P, K>>(&mut self, world: W) {
+    pub fn send_all_updates<W: WorldRefType<P, E>>(&mut self, world: W) {
         // update entity scopes
         self.update_entity_scopes(&world);
 
@@ -297,17 +297,17 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
 
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
-    pub fn spawn_entity<'s, W: WorldMutType<P, K>>(
+    pub fn spawn_entity<'s, W: WorldMutType<P, E>>(
         &'s mut self,
         mut world: W,
-    ) -> EntityMut<'s, P, K, W> {
+    ) -> EntityMut<'s, P, E, W> {
         let entity = world.spawn_entity();
         self.world_record.spawn_entity(&entity);
         return EntityMut::new(self, world, &entity);
     }
 
     /// Creates a new Entity with a specific id
-    pub fn spawn_entity_at<'s>(&'s mut self, entity: &K) -> WorldlessEntityMut<'s, P, K> {
+    pub fn spawn_entity_at<'s>(&'s mut self, entity: &E) -> WorldlessEntityMut<'s, P, E> {
         self.world_record.spawn_entity(entity);
         return WorldlessEntityMut::new(self, entity);
     }
@@ -315,11 +315,11 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<'s, W: WorldRefType<P, K>>(
+    pub fn entity<'s, W: WorldRefType<P, E>>(
         &'s self,
         world: W,
-        entity: &K,
-    ) -> EntityRef<'s, P, K, W> {
+        entity: &E,
+    ) -> EntityRef<'s, P, E, W> {
         if world.has_entity(entity) {
             return EntityRef::new(self, world, &entity);
         }
@@ -329,11 +329,11 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity_mut<'s, 'w, W: WorldMutType<P, K>>(
+    pub fn entity_mut<'s, 'w, W: WorldMutType<P, E>>(
         &'s mut self,
         world: W,
-        entity: &K,
-    ) -> EntityMut<'s, P, K, W> {
+        entity: &E,
+    ) -> EntityMut<'s, P, E, W> {
         if world.has_entity(entity) {
             return EntityMut::new(self, world, &entity);
         }
@@ -344,12 +344,12 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// on the Entity, but with no references allowed to the World.
     /// This is a very niche use case.
     /// Panics if the Entity does not exist.
-    pub fn worldless_entity_mut<'s>(&'s mut self, entity: &K) -> WorldlessEntityMut<'s, P, K> {
+    pub fn worldless_entity_mut<'s>(&'s mut self, entity: &E) -> WorldlessEntityMut<'s, P, E> {
         return WorldlessEntityMut::new(self, &entity);
     }
 
     /// Gets a Vec of all Entities in the given World
-    pub fn entities<W: WorldRefType<P, K>>(&self, world: &W) -> Vec<K> {
+    pub fn entities<W: WorldRefType<P, E>>(&self, world: &W) -> Vec<E> {
         return world.entities();
     }
 
@@ -363,7 +363,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Panics if the user does not exist.
-    pub fn user(&self, user_key: &UserKey) -> UserRef<P, K> {
+    pub fn user(&self, user_key: &UserKey) -> UserRef<P, E> {
         if self.users.contains_key(*user_key) {
             return UserRef::new(self, &user_key);
         }
@@ -373,7 +373,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// Retrieves an UserMut that exposes read and write operations for the User
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
-    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, K> {
+    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, E> {
         if self.users.contains_key(*user_key) {
             return UserMut::new(self, &user_key);
         }
@@ -398,7 +398,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
 
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
-    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, K> {
+    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, E> {
         if self.users.contains_key(*user_key) {
             return UserScopeMut::new(self, &user_key);
         }
@@ -406,7 +406,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     }
 
     /// Returns whether a given User has a particular Entity in-scope currently
-    pub fn user_scope_has_entity(&self, user_key: &UserKey, entity: &K) -> bool {
+    pub fn user_scope_has_entity(&self, user_key: &UserKey, entity: &E) -> bool {
         if let Some(client_connection) = self.client_connections.get(user_key) {
             return client_connection.has_entity(entity);
         }
@@ -419,7 +419,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// Creates a new Room on the Server and returns a corresponding RoomMut,
     /// which can be used to add users/entities to the room or retrieve its
     /// key
-    pub fn make_room(&mut self) -> RoomMut<P, K> {
+    pub fn make_room(&mut self) -> RoomMut<P, E> {
         let new_room = Room::new();
         let room_key = self.rooms.insert(new_room);
         return RoomMut::new(self, &room_key);
@@ -433,7 +433,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, K> {
+    pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, E> {
         if self.rooms.contains_key(*room_key) {
             return RoomRef::new(self, room_key);
         }
@@ -443,7 +443,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, K> {
+    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, E> {
         if self.rooms.contains_key(*room_key) {
             return RoomMut::new(self, room_key);
         }
@@ -489,7 +489,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// This will also remove all of the Entity’s Components.
     /// Returns true if the Entity is successfully despawned and false if the
     /// Entity does not exist.
-    pub(crate) fn despawn_entity<W: WorldMutType<P, K>>(&mut self, world: &mut W, entity: &K) {
+    pub(crate) fn despawn_entity<W: WorldMutType<P, E>>(&mut self, world: &mut W, entity: &E) {
         if !world.has_entity(entity) {
             panic!("attempted to de-spawn nonexistent entity");
         }
@@ -522,19 +522,19 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     }
 
     /// Returns whether or not an Entity has an owner
-    pub(crate) fn entity_has_owner(&self, entity: &K) -> bool {
+    pub(crate) fn entity_has_owner(&self, entity: &E) -> bool {
         return self.entity_owner_map.contains_key(entity);
     }
 
     /// Gets the UserKey of the User that currently owns an Entity, if it exists
-    pub(crate) fn entity_get_owner(&self, entity: &K) -> Option<&UserKey> {
+    pub(crate) fn entity_get_owner(&self, entity: &E) -> Option<&UserKey> {
         return self.entity_owner_map.get(entity);
     }
 
     /// Set the 'owner' of an Entity to a User associated with a given UserKey.
     /// Users are only able to issue Commands to Entities of which they are the
     /// owner
-    pub(crate) fn entity_set_owner(&mut self, entity: &K, user_key: &UserKey) {
+    pub(crate) fn entity_set_owner(&mut self, entity: &E, user_key: &UserKey) {
         // check that entity is initialized & un-owned
         if self.entity_owner_map.get(entity).is_some() {
             panic!("attempting to take ownership of an Entity that is already owned");
@@ -561,7 +561,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
 
     /// Removes ownership of an Entity from their current owner User.
     /// No User is able to issue Commands to an un-owned Entity.
-    pub(crate) fn entity_disown(&mut self, entity: &K) {
+    pub(crate) fn entity_disown(&mut self, entity: &E) {
         // a couple sanity checks ..
         let current_owner_key: UserKey = *self
             .entity_owner_map
@@ -582,7 +582,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     pub(crate) fn user_scope_set_entity(
         &mut self,
         user_key: &UserKey,
-        entity: &K,
+        entity: &E,
         is_contained: bool,
     ) {
         self.entity_scope_map
@@ -592,10 +592,10 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     //// Components
 
     /// Adds a Component to an Entity
-    pub(crate) fn insert_component<R: ReplicateSafe<P>, W: WorldMutType<P, K>>(
+    pub(crate) fn insert_component<R: ReplicateSafe<P>, W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
-        entity: &K,
+        entity: &E,
         mut component_ref: R,
     ) {
         if !world.has_entity(entity) {
@@ -629,10 +629,10 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     }
 
     /// Removes a Component from an Entity
-    pub(crate) fn remove_component<R: Replicate<P>, W: WorldMutType<P, K>>(
+    pub(crate) fn remove_component<R: Replicate<P>, W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
-        entity: &K,
+        entity: &E,
     ) -> Option<R> {
         // get component key from type
         let component_kind = P::kind_of::<R>();
@@ -751,7 +751,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
 
     /// Returns whether or not an Entity is currently in a specific Room, given
     /// their keys.
-    pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity: &K) -> bool {
+    pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity: &E) -> bool {
         if let Some(actual_room_key) = self.entity_room_map.get(entity) {
             return room_key == actual_room_key;
         }
@@ -761,7 +761,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     /// Add an Entity to a Room associated with the given RoomKey.
     /// Entities will only ever be in-scope for Users which are in a Room with
     /// them.
-    pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, entity: &K) {
+    pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, entity: &E) {
         if self.entity_room_map.contains_key(entity) {
             panic!("Entity already belongs to a Room! Remove the Entity from the Room before adding it to a new Room.");
         }
@@ -773,7 +773,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
     }
 
     /// Remove an Entity from a Room, associated with the given RoomKey
-    pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &K) {
+    pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &E) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
             if room.remove_entity(entity) {
                 self.entity_room_map.remove(entity);
@@ -1025,7 +1025,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
 
     // Entity Scopes
 
-    fn update_entity_scopes<W: WorldRefType<P, K>>(&mut self, world: &W) {
+    fn update_entity_scopes<W: WorldRefType<P, E>>(&mut self, world: &W) {
         for (_, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
                 if let Some(client_connection) = self.client_connections.get_mut(&removed_user) {
@@ -1076,7 +1076,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> Server<P, K> {
 
     fn component_init<R: ReplicateSafe<P>>(
         &mut self,
-        entity: &K,
+        entity: &E,
         component_ref: &mut R,
     ) -> ComponentKey {
         let component_key = self

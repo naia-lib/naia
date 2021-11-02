@@ -11,14 +11,14 @@ const COMMAND_HISTORY_SIZE: u16 = 64;
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
-pub struct CommandReceiver<P: ProtocolType, K: Copy + Eq + Hash> {
-    queued_incoming_commands: VecDeque<(u16, OwnedEntity<K>, P)>,
-    command_history: HashMap<K, SequenceBuffer<P>>,
-    queued_command_replays: VecDeque<(u16, OwnedEntity<K>, P)>,
-    replay_trigger: HashMap<K, u16>,
+pub struct CommandReceiver<P: ProtocolType, E: Copy + Eq + Hash> {
+    queued_incoming_commands: VecDeque<(u16, OwnedEntity<E>, P)>,
+    command_history: HashMap<E, SequenceBuffer<P>>,
+    queued_command_replays: VecDeque<(u16, OwnedEntity<E>, P)>,
+    replay_trigger: HashMap<E, u16>,
 }
 
-impl<P: ProtocolType, K: Copy + Eq + Hash> CommandReceiver<P, K> {
+impl<P: ProtocolType, E: Copy + Eq + Hash> CommandReceiver<P, E> {
     /// Creates a new CommandSender
     pub fn new() -> Self {
         CommandReceiver {
@@ -30,20 +30,20 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> CommandReceiver<P, K> {
     }
 
     /// Gets the next queued Command
-    pub fn pop_command(&mut self) -> Option<(u16, OwnedEntity<K>, P)> {
+    pub fn pop_command(&mut self) -> Option<(u16, OwnedEntity<E>, P)> {
         self.queued_incoming_commands.pop_front()
     }
 
     /// Gets the next queued Replayed Command
-    pub fn pop_command_replay(&mut self) -> Option<(u16, OwnedEntity<K>, P)> {
+    pub fn pop_command_replay(&mut self) -> Option<(u16, OwnedEntity<E>, P)> {
         self.queued_command_replays.pop_front()
     }
 
     /// Process any necessary replayed Command
-    pub fn process_command_replay<W: WorldMutType<P, K>>(
+    pub fn process_command_replay<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
-        entity_manager: &mut EntityManager<P, K>,
+        entity_manager: &mut EntityManager<P, E>,
     ) {
         for (world_entity, history_tick) in self.replay_trigger.iter() {
             if let Some(predicted_entity) = entity_manager.get_predicted_entity(world_entity) {
@@ -76,7 +76,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> CommandReceiver<P, K> {
     }
 
     /// Queues an Command to be ran locally on the Client
-    pub fn queue_command(&mut self, host_tick: u16, owned_entity: OwnedEntity<K>, command: P) {
+    pub fn queue_command(&mut self, host_tick: u16, owned_entity: OwnedEntity<E>, command: P) {
         let world_entity = owned_entity.confirmed;
         self.queued_incoming_commands
             .push_back((host_tick, owned_entity, command.clone()));
@@ -87,7 +87,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> CommandReceiver<P, K> {
     }
 
     /// Get number of Commands in the command history for a given Prediction
-    pub fn command_history_count(&self, owned_entity: &K) -> u8 {
+    pub fn command_history_count(&self, owned_entity: &E) -> u8 {
         if let Some(command_buffer) = self.command_history.get(owned_entity) {
             return command_buffer.get_entries_count();
         }
@@ -98,7 +98,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> CommandReceiver<P, K> {
     /// Prediction
     pub fn command_history_iter(
         &self,
-        owned_entity: &K,
+        owned_entity: &E,
         reverse: bool,
     ) -> Option<SequenceIterator<P>> {
         if let Some(command_buffer) = self.command_history.get(owned_entity) {
@@ -108,7 +108,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> CommandReceiver<P, K> {
     }
 
     /// Queues Commands to be replayed from a given tick
-    pub fn replay_commands(&mut self, history_tick: u16, owned_entity: &K) {
+    pub fn replay_commands(&mut self, history_tick: u16, owned_entity: &E) {
         if let Some(tick) = self.replay_trigger.get_mut(owned_entity) {
             if wrapping_diff(*tick, history_tick) > 0 {
                 *tick = history_tick;
@@ -119,14 +119,14 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> CommandReceiver<P, K> {
     }
 
     /// Removes command history for a given Prediction until a specific tick
-    pub fn remove_history_until(&mut self, history_tick: u16, owned_entity: &K) {
+    pub fn remove_history_until(&mut self, history_tick: u16, owned_entity: &E) {
         if let Some(command_buffer) = self.command_history.get_mut(owned_entity) {
             command_buffer.remove_until(history_tick);
         }
     }
 
     /// Perform initialization on Prediction creation
-    pub fn prediction_init(&mut self, owned_entity: &K) {
+    pub fn prediction_init(&mut self, owned_entity: &E) {
         self.command_history.insert(
             *owned_entity,
             SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE),
@@ -134,7 +134,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> CommandReceiver<P, K> {
     }
 
     /// Perform cleanup on Prediction deletion
-    pub fn prediction_cleanup(&mut self, owned_entity: &K) {
+    pub fn prediction_cleanup(&mut self, owned_entity: &E) {
         self.command_history.remove(owned_entity);
     }
 }

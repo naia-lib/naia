@@ -29,13 +29,13 @@ use crate::{RoomKey, Server, UserKey};
 
 // UserRef
 
-pub struct UserRef<'s, P: ProtocolType, K: Copy + Eq + Hash> {
-    server: &'s Server<P, K>,
+pub struct UserRef<'s, P: ProtocolType, E: Copy + Eq + Hash> {
+    server: &'s Server<P, E>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, K: Copy + Eq + Hash> UserRef<'s, P, K> {
-    pub fn new(server: &'s Server<P, K>, key: &UserKey) -> Self {
+impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserRef<'s, P, E> {
+    pub fn new(server: &'s Server<P, E>, key: &UserKey) -> Self {
         UserRef { server, key: *key }
     }
 
@@ -49,13 +49,13 @@ impl<'s, P: ProtocolType, K: Copy + Eq + Hash> UserRef<'s, P, K> {
 }
 
 // UserMut
-pub struct UserMut<'s, P: ProtocolType, K: Copy + Eq + Hash> {
-    server: &'s mut Server<P, K>,
+pub struct UserMut<'s, P: ProtocolType, E: Copy + Eq + Hash> {
+    server: &'s mut Server<P, E>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, K: Copy + Eq + Hash> UserMut<'s, P, K> {
-    pub fn new(server: &'s mut Server<P, K>, key: &UserKey) -> Self {
+impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserMut<'s, P, E> {
+    pub fn new(server: &'s mut Server<P, E>, key: &UserKey) -> Self {
         UserMut { server, key: *key }
     }
 

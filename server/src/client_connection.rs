@@ -15,14 +15,14 @@ use super::{
     ping_manager::PingManager, world_record::WorldRecord,
 };
 
-pub struct ClientConnection<P: ProtocolType, K: Copy + Eq + Hash> {
+pub struct ClientConnection<P: ProtocolType, E: Copy + Eq + Hash> {
     connection: Connection<P>,
-    entity_manager: EntityManager<P, K>,
+    entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
     command_receiver: CommandReceiver<P>,
 }
 
-impl<P: ProtocolType, K: Copy + Eq + Hash> ClientConnection<P, K> {
+impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
@@ -36,10 +36,10 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> ClientConnection<P, K> {
         }
     }
 
-    pub fn get_outgoing_packet<W: WorldRefType<P, K>>(
+    pub fn get_outgoing_packet<W: WorldRefType<P, E>>(
         &mut self,
         world: &W,
-        world_record: &WorldRecord<K, P::Kind>,
+        world_record: &WorldRecord<E, P::Kind>,
         host_tick: u16,
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_messages() || self.entity_manager.has_outgoing_actions() {
@@ -117,11 +117,11 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> ClientConnection<P, K> {
         }
     }
 
-    pub fn collect_component_updates(&mut self, world_record: &WorldRecord<K, P::Kind>) {
+    pub fn collect_component_updates(&mut self, world_record: &WorldRecord<E, P::Kind>) {
         self.entity_manager.collect_component_updates(world_record);
     }
 
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(K, P)> {
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(E, P)> {
         if let Some((local_entity_key, command)) =
             self.command_receiver.pop_incoming_command(server_tick)
         {
@@ -145,33 +145,33 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> ClientConnection<P, K> {
 
     // Entity management
 
-    pub fn has_entity(&self, key: &K) -> bool {
+    pub fn has_entity(&self, key: &E) -> bool {
         return self.entity_manager.has_entity(key);
     }
 
-    pub fn spawn_entity(&mut self, world_record: &WorldRecord<K, P::Kind>, key: &K) {
+    pub fn spawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, key: &E) {
         self.entity_manager.spawn_entity(world_record, key);
     }
 
-    pub fn despawn_entity(&mut self, world_record: &WorldRecord<K, P::Kind>, key: &K) {
+    pub fn despawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, key: &E) {
         self.entity_manager.despawn_entity(world_record, key);
     }
 
-    pub fn has_prediction_entity(&self, key: &K) -> bool {
+    pub fn has_prediction_entity(&self, key: &E) -> bool {
         return self.entity_manager.has_entity_prediction(key);
     }
 
-    pub fn add_prediction_entity(&mut self, key: &K) {
+    pub fn add_prediction_entity(&mut self, key: &E) {
         self.entity_manager.add_prediction_entity(key);
     }
 
-    pub fn remove_prediction_entity(&mut self, key: &K) {
+    pub fn remove_prediction_entity(&mut self, key: &E) {
         self.entity_manager.remove_prediction_entity(key);
     }
 
     pub fn insert_component(
         &mut self,
-        world_record: &WorldRecord<K, P::Kind>,
+        world_record: &WorldRecord<E, P::Kind>,
         component_key: &ComponentKey,
     ) {
         self.entity_manager
@@ -202,7 +202,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> ClientConnection<P, K> {
 
     pub fn process_incoming_header(
         &mut self,
-        world_record: &WorldRecord<K, P::Kind>,
+        world_record: &WorldRecord<E, P::Kind>,
         header: &StandardHeader,
     ) {
         self.connection

@@ -23,13 +23,13 @@ use super::{
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
-pub struct EntityManager<P: ProtocolType, K: Copy + Eq + Hash> {
+pub struct EntityManager<P: ProtocolType, E: Copy + Eq + Hash> {
     address: SocketAddr,
     // Entities
     entity_key_generator: KeyGenerator<LocalEntity>,
-    entity_records: HashMap<K, LocalEntityRecord>,
-    local_to_global_entity_key_map: HashMap<LocalEntity, K>,
-    delayed_entity_deletions: HashSet<K>,
+    entity_records: HashMap<E, LocalEntityRecord>,
+    local_to_global_entity_key_map: HashMap<LocalEntity, E>,
+    delayed_entity_deletions: HashSet<E>,
     // Components
     diff_handler: UserDiffHandler,
     component_key_generator: KeyGenerator<LocalComponentKey>,
@@ -37,8 +37,8 @@ pub struct EntityManager<P: ProtocolType, K: Copy + Eq + Hash> {
     component_records: HashMap<ComponentKey, LocalComponentRecord>,
     delayed_component_deletions: HashSet<ComponentKey>,
     // Actions / updates / ect
-    queued_actions: VecDeque<EntityAction<P, K>>,
-    sent_actions: HashMap<u16, Vec<EntityAction<P, K>>>,
+    queued_actions: VecDeque<EntityAction<P, E>>,
+    sent_actions: HashMap<u16, Vec<EntityAction<P, E>>>,
     sent_updates: HashMap<u16, HashMap<ComponentKey, DiffMask>>,
     last_update_packet_index: u16,
     last_last_update_packet_index: u16,
@@ -47,7 +47,7 @@ pub struct EntityManager<P: ProtocolType, K: Copy + Eq + Hash> {
     delivered_packets: VecDeque<u16>,
 }
 
-impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
+impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
     /// Create a new EntityManager, given the client's address
     pub fn new(address: SocketAddr, diff_handler: &Arc<RwLock<GlobalDiffHandler>>) -> Self {
         EntityManager {
@@ -79,11 +79,11 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
         return self.queued_actions.len() != 0;
     }
 
-    pub fn pop_outgoing_action<W: WorldRefType<P, K>>(
+    pub fn pop_outgoing_action<W: WorldRefType<P, E>>(
         &mut self,
-        world_record: &WorldRecord<K, P::Kind>,
+        world_record: &WorldRecord<E, P::Kind>,
         packet_index: u16,
-    ) -> Option<EntityAction<P, K>> {
+    ) -> Option<EntityAction<P, E>> {
         let queued_action_opt = self.queued_actions.pop_front();
         if queued_action_opt.is_none() {
             return None;
@@ -172,7 +172,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
         return Some(action);
     }
 
-    pub fn unpop_outgoing_action(&mut self, packet_index: u16, action: EntityAction<P, K>) {
+    pub fn unpop_outgoing_action(&mut self, packet_index: u16, action: EntityAction<P, E>) {
         info!("unpopping");
         if let Some(sent_actions_list) = self.sent_actions.get_mut(&packet_index) {
             sent_actions_list.pop();
@@ -221,7 +221,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
 
     // Entities
 
-    pub fn spawn_entity(&mut self, world_record: &WorldRecord<K, P::Kind>, global_entity_key: &K) {
+    pub fn spawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, global_entity_key: &E) {
         if !self.entity_records.contains_key(global_entity_key) {
             // first, get a list of components
             // then, add components
@@ -251,8 +251,8 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
 
     pub fn despawn_entity(
         &mut self,
-        world_record: &WorldRecord<K, P::Kind>,
-        global_entity_key: &K,
+        world_record: &WorldRecord<E, P::Kind>,
+        global_entity_key: &E,
     ) {
         if self.has_entity_prediction(global_entity_key) {
             self.remove_prediction_entity(global_entity_key);
@@ -266,7 +266,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
                 }
                 LocalityStatus::Created => {
                     // send deletion action
-                    entity_delete::<P, K>(
+                    entity_delete::<P, E>(
                         &mut self.queued_actions,
                         entity_record,
                         global_entity_key,
@@ -289,13 +289,13 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
         }
     }
 
-    pub fn has_entity(&self, key: &K) -> bool {
+    pub fn has_entity(&self, key: &E) -> bool {
         return self.entity_records.contains_key(key);
     }
 
     // Prediction Entities
 
-    pub fn add_prediction_entity(&mut self, key: &K) {
+    pub fn add_prediction_entity(&mut self, key: &E) {
         let entity_record = self
             .entity_records
             .get_mut(key)
@@ -310,7 +310,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
             .push_back(EntityAction::OwnEntity(*key, entity_record.local_key));
     }
 
-    pub fn remove_prediction_entity(&mut self, key: &K) {
+    pub fn remove_prediction_entity(&mut self, key: &E) {
         let entity_record = self
             .entity_records
             .get_mut(key)
@@ -325,7 +325,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
             .push_back(EntityAction::DisownEntity(*key, entity_record.local_key));
     }
 
-    pub fn has_entity_prediction(&self, key: &K) -> bool {
+    pub fn has_entity_prediction(&self, key: &E) -> bool {
         if let Some(entity_record) = self.entity_records.get(key) {
             return entity_record.is_prediction;
         }
@@ -336,7 +336,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
 
     pub fn insert_component(
         &mut self,
-        world_record: &WorldRecord<K, P::Kind>,
+        world_record: &WorldRecord<E, P::Kind>,
         component_key: &ComponentKey,
     ) {
         let (entity_key, component_kind) = world_record
@@ -386,7 +386,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
             }
             LocalityStatus::Created => {
                 // send deletion action
-                component_delete::<P, K>(&mut self.queued_actions, component_record, component_key);
+                component_delete::<P, E>(&mut self.queued_actions, component_record, component_key);
             }
             LocalityStatus::Deleting => {
                 // deletion in progress, do nothing
@@ -396,11 +396,11 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
 
     // Ect..
 
-    pub fn get_global_entity_key_from_local(&self, local_key: LocalEntity) -> Option<&K> {
+    pub fn get_global_entity_key_from_local(&self, local_key: LocalEntity) -> Option<&E> {
         return self.local_to_global_entity_key_map.get(&local_key);
     }
 
-    pub fn collect_component_updates(&mut self, world_record: &WorldRecord<K, P::Kind>) {
+    pub fn collect_component_updates(&mut self, world_record: &WorldRecord<E, P::Kind>) {
         for (component_key, record) in self.component_records.iter() {
             if record.status == LocalityStatus::Created
                 && self.diff_handler.has_diff_mask(component_key)
@@ -425,11 +425,11 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
         }
     }
 
-    pub fn write_entity_action<W: WorldRefType<P, K>>(
+    pub fn write_entity_action<W: WorldRefType<P, E>>(
         &self,
         world: &W,
         packet_writer: &mut PacketWriter,
-        action: &EntityAction<P, K>,
+        action: &EntityAction<P, E>,
     ) -> bool {
         let mut action_total_bytes = Vec::<u8>::new();
 
@@ -625,12 +625,12 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
     fn pop_update_component_diff_mask(
         &mut self,
         packet_index: u16,
-        global_entity_key: K,
+        global_entity_key: E,
         global_component_key: &ComponentKey,
         local_key: &LocalComponentKey,
         diff_mask: &DiffMask,
         component_kind: P::Kind,
-    ) -> EntityAction<P, K> {
+    ) -> EntityAction<P, E> {
         let locked_diff_mask =
             self.process_component_update(packet_index, global_component_key, diff_mask);
         // return new Update action to be written
@@ -646,11 +646,11 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
     fn unpop_update_component_diff_mask(
         &mut self,
         packet_index: u16,
-        global_entity_key: K,
+        global_entity_key: E,
         global_component_key: &ComponentKey,
         local_key: &LocalComponentKey,
         component_kind: P::Kind,
-    ) -> EntityAction<P, K> {
+    ) -> EntityAction<P, E> {
         let original_diff_mask = self.undo_component_update(&packet_index, &global_component_key);
 
         return EntityAction::UpdateComponent(
@@ -716,7 +716,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
             .clone()
     }
 
-    pub fn process_delivered_packets(&mut self, world_record: &WorldRecord<K, P::Kind>) {
+    pub fn process_delivered_packets(&mut self, world_record: &WorldRecord<E, P::Kind>) {
         while let Some(packet_index) = self.delivered_packets.pop_front() {
             let mut deleted_components: Vec<ComponentKey> = Vec::new();
 
@@ -735,7 +735,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
 
                             // do we need to delete this now?
                             if self.delayed_entity_deletions.remove(&global_entity_key) {
-                                entity_delete::<P, K>(
+                                entity_delete::<P, E>(
                                     &mut self.queued_actions,
                                     entity_record,
                                     &global_entity_key,
@@ -811,7 +811,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
                                 .delayed_component_deletions
                                 .remove(&global_component_key)
                             {
-                                component_delete::<P, K>(
+                                component_delete::<P, E>(
                                     &mut self.queued_actions,
                                     component_record,
                                     &global_component_key,
@@ -832,7 +832,7 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
     }
 }
 
-impl<P: ProtocolType, K: Copy + Eq + Hash> PacketNotifiable for EntityManager<P, K> {
+impl<P: ProtocolType, E: Copy + Eq + Hash> PacketNotifiable for EntityManager<P, E> {
     fn notify_packet_delivered(&mut self, packet_index: u16) {
         self.delivered_packets.push_back(packet_index);
     }
@@ -888,8 +888,8 @@ impl<P: ProtocolType, K: Copy + Eq + Hash> PacketNotifiable for EntityManager<P,
     }
 }
 
-fn component_delete<P: ProtocolType, K: Copy>(
-    queued_actions: &mut VecDeque<EntityAction<P, K>>,
+fn component_delete<P: ProtocolType, E: Copy>(
+    queued_actions: &mut VecDeque<EntityAction<P, E>>,
     record: &mut LocalComponentRecord,
     component_key: &ComponentKey,
 ) {
@@ -901,10 +901,10 @@ fn component_delete<P: ProtocolType, K: Copy>(
     ));
 }
 
-fn entity_delete<P: ProtocolType, K: Copy>(
-    queued_actions: &mut VecDeque<EntityAction<P, K>>,
+fn entity_delete<P: ProtocolType, E: Copy>(
+    queued_actions: &mut VecDeque<EntityAction<P, E>>,
     entity_record: &mut LocalEntityRecord,
-    entity_key: &K,
+    entity_key: &E,
 ) {
     entity_record.status = LocalityStatus::Deleting;
 
