@@ -1,4 +1,7 @@
-use bevy::ecs::{entity::Entity, world::{Mut, World}};
+use bevy::ecs::{
+    entity::Entity,
+    world::{Mut, World},
+};
 
 use naia_shared::{
     DiffMask, PacketReader, ProtocolInserter, ProtocolKindType, ProtocolType, ReplicaDynRefWrapper,

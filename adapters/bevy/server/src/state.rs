@@ -8,7 +8,7 @@ use bevy::ecs::{
 
 use naia_server::{ProtocolType, Server as NaiaServer};
 
-use naia_bevy_shared::{WorldProxyMut};
+use naia_bevy_shared::WorldProxyMut;
 
 use super::{commands::Command, server::Server};
 
