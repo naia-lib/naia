@@ -257,7 +257,13 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
                             let diff_mask: DiffMask = DiffMask::read(reader);
 
                             // read incoming delta
-                            world.component_read_partial(world_entity, component_kind, &diff_mask, reader, packet_index);
+                            world.component_read_partial(
+                                world_entity,
+                                component_kind,
+                                &diff_mask,
+                                reader,
+                                packet_index,
+                            );
 
                             // check if Entity is Owned
                             if entity_record.is_owned() {
@@ -266,13 +272,14 @@ impl<P: ProtocolType, E: EntityType> EntityManager<P, E> {
 
                                 // remove command history until the tick that has already been
                                 // checked
-                                command_receiver
-                                    .remove_history_until(packet_tick, &world_entity);
+                                command_receiver.remove_history_until(packet_tick, &world_entity);
                             }
 
-                            self.queued_incoming_messages.push_back(
-                                EntityAction::UpdateComponent(*world_entity, *component_kind),
-                            );
+                            self.queued_incoming_messages
+                                .push_back(EntityAction::UpdateComponent(
+                                    *world_entity,
+                                    *component_kind,
+                                ));
                         }
                     }
                 }

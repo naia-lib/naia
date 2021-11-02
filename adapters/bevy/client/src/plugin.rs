@@ -6,7 +6,7 @@ use bevy::{
     prelude::*,
 };
 
-use naia_client::{Client, ClientConfig, ProtocolType, SharedConfig, Replicate};
+use naia_client::{Client, ClientConfig, ProtocolType, Replicate, SharedConfig};
 
 use naia_bevy_shared::{Entity, PrivateStage, Stage, WorldData};
 

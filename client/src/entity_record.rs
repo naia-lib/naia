@@ -26,10 +26,6 @@ impl<E: EntityType, K: ProtocolKindType> EntityRecord<E, K> {
 
     // Components / Kinds //
 
-    //    pub fn get_key_from_type(&self, type_id: &K) ->
-    // Option<&LocalComponentKey> {        return
-    // self.type_to_key_map.get(type_id);    }
-
     pub fn get_kind_from_key(&self, component_key: &LocalComponentKey) -> Option<&K> {
         return self.key_to_kind_map.get(component_key);
     }

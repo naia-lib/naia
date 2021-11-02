@@ -2,9 +2,12 @@ use std::{any::Any, marker::PhantomData};
 
 use bevy::ecs::world::World;
 
-use naia_shared::{ProtocolType, ReplicateSafe, ReplicaDynRefWrapper, ReplicaDynMutWrapper};
+use naia_shared::{ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
 
-use super::{component_ref::{ComponentDynRef, ComponentDynMut}, entity::Entity};
+use super::{
+    component_ref::{ComponentDynMut, ComponentDynRef},
+    entity::Entity,
+};
 
 pub trait ComponentAccess<P: ProtocolType>: Send + Sync {
     fn get_component<'w>(
@@ -18,7 +21,12 @@ pub trait ComponentAccess<P: ProtocolType>: Send + Sync {
         entity: &Entity,
     ) -> Option<ReplicaDynMutWrapper<'w, P>>;
     fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P>;
-    fn mirror_components(&self, world: &mut World, mutable_entity: &Entity, immutable_entity: &Entity);
+    fn mirror_components(
+        &self,
+        world: &mut World,
+        mutable_entity: &Entity,
+        immutable_entity: &Entity,
+    );
 }
 
 pub struct ComponentAccessor<P: ProtocolType, R: ReplicateSafe<P>> {
@@ -70,7 +78,12 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
             .map_or(None, |v| Some(v.into_protocol()));
     }
 
-    fn mirror_components(&self, world: &mut World, mutable_entity: &Entity, immutable_entity: &Entity) {
+    fn mirror_components(
+        &self,
+        world: &mut World,
+        mutable_entity: &Entity,
+        immutable_entity: &Entity,
+    ) {
         let mut query = world.query::<&mut R>();
         unsafe {
             if let Ok(immutable_component) = query.get_unchecked(world, **immutable_entity) {
