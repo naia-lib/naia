@@ -1,9 +1,7 @@
-use std::{ops::Deref, any::TypeId};
-
 use bevy::ecs::world::{Mut, World};
 
 use naia_shared::{ProtocolType, ReplicateSafe, WorldMutType, WorldRefType, ReplicaRefWrapper,
-                  ReplicaMutWrapper, ReplicaDynRefWrapper, ReplicaDynMutWrapper, ProtocolInserter, ProtocolKindType, DiffMask, PacketReader};
+                  ReplicaMutWrapper, ReplicaDynRefWrapper, ProtocolInserter, ProtocolKindType, DiffMask, PacketReader};
 
 use super::{entity::Entity, world_data::WorldData, component_ref::{ComponentRef, ComponentMut}};
 
@@ -125,7 +123,7 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
 
         self.world.resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
             if let Some(accessor) = data.get_component_access(component_kind) {
-                if let Some(mut component) = accessor.get_component_mut::<'w>(world, entity) {
+                if let Some(mut component) = accessor.get_component_mut(world, entity) {
                     component.read_partial(diff_mask, reader, packet_index);
                 }
             }

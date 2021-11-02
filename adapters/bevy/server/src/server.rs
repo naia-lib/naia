@@ -7,7 +7,7 @@ use bevy::ecs::{
 
 use naia_server::{
     EntityRef, Event, NaiaServerError, ProtocolType, RoomKey, RoomMut, RoomRef,
-    Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut, Replicate, ReplicaMutWrapper
+    Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut, Replicate
 };
 
 use naia_bevy_shared::{Entity, WorldProxy, WorldRef};

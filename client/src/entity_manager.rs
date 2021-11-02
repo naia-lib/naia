@@ -7,7 +7,7 @@ use log::warn;
 
 use naia_shared::{
     DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity, Manifest, NaiaKey,
-    PacketReader, ProtocolKindType, ProtocolType, ReplicaDynMutWrapper, WorldMutType,
+    PacketReader, ProtocolKindType, ProtocolType, WorldMutType,
 };
 
 use super::{
