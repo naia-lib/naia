@@ -40,8 +40,7 @@ impl<E: Copy + Eq + Hash> Room<E> {
     pub(crate) fn unsubscribe_user(&mut self, user_key: &UserKey) {
         self.users.remove(user_key);
         for entity in self.entities.iter() {
-            self.entity_removal_queue
-                .push_back((*user_key, *entity));
+            self.entity_removal_queue.push_back((*user_key, *entity));
         }
     }
 
@@ -62,8 +61,7 @@ impl<E: Copy + Eq + Hash> Room<E> {
     pub(crate) fn remove_entity(&mut self, entity: &E) -> bool {
         if self.entities.remove(entity) {
             for user_key in self.users.iter() {
-                self.entity_removal_queue
-                    .push_back((*user_key, *entity));
+                self.entity_removal_queue.push_back((*user_key, *entity));
             }
             return true;
         } else {
