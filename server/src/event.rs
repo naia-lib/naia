@@ -1,10 +1,10 @@
-use naia_shared::{EntityType, ProtocolType};
+use naia_shared::ProtocolType;
 
 use super::user::{user_key::UserKey, User};
 
 /// An Event that is emitted as a result of some communication with a Client, or
 /// a Tick event
-pub enum Event<P: ProtocolType, K: EntityType> {
+pub enum Event<P: ProtocolType, K> {
     /// Occurs when a Client attempts to establish a connection with the Server.
     /// Used accept or reject incoming Clients
     Authorization(UserKey, P),

@@ -24,7 +24,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}};
         use naia_shared::{ProtocolType, ProtocolInserter, ProtocolKindType, ReplicateSafe,
-            DiffMask, PacketReader, EntityType, ReplicaDynRef, ReplicaDynMut, Replicate};
+            DiffMask, PacketReader, ReplicaDynRef, ReplicaDynMut, Replicate};
 
         #kind_enum_def
 
@@ -426,7 +426,7 @@ fn get_extract_and_insert_method(type_name: &Ident, data: &Data) -> TokenStream 
     };
 
     return quote! {
-        fn extract_and_insert<K: EntityType, E: ProtocolInserter<#type_name, K>>(&self,
+        fn extract_and_insert<K, E: ProtocolInserter<#type_name, K>>(&self,
                                       key: &K,
                                       inserter: &mut E) {
             match self {

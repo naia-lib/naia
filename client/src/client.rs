@@ -1,13 +1,13 @@
-use std::{collections::VecDeque, marker::PhantomData, net::SocketAddr};
+use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, Socket};
 
 pub use naia_shared::{
-    ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolKindType, ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader,
-    Timer, Timestamp, WorldMutType, WorldRefType,
+    ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
+    ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
+    WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -25,7 +25,7 @@ use super::{
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
-pub struct Client<P: ProtocolType, E: EntityType> {
+pub struct Client<P: ProtocolType, E: Copy + Eq + Hash> {
     // Manifest
     manifest: Manifest<P>,
     // Connection
@@ -48,7 +48,7 @@ pub struct Client<P: ProtocolType, E: EntityType> {
     phantom_k: PhantomData<E>,
 }
 
-impl<P: ProtocolType, E: EntityType> Client<P, E> {
+impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
     /// Create a new Client
     pub fn new(mut client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
         client_config.socket_config.link_condition_config =

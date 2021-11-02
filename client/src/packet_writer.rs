@@ -1,8 +1,10 @@
+use std::hash::Hash;
+
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, EntityType, ManagerType, MessagePacketWriter, NaiaKey, ProtocolKindType,
-    ProtocolType, MTU_SIZE,
+    wrapping_diff, ManagerType, MessagePacketWriter, NaiaKey, ProtocolKindType, ProtocolType,
+    MTU_SIZE,
 };
 
 use super::{
@@ -59,7 +61,7 @@ impl PacketWriter {
 
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_command<P: ProtocolType, K: EntityType>(
+    pub fn write_command<P: ProtocolType, K: Copy + Eq + Hash>(
         &mut self,
         host_tick: u16,
         entity_manager: &EntityManager<P, K>,

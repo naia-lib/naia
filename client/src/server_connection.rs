@@ -1,10 +1,10 @@
-use std::{collections::VecDeque, net::SocketAddr};
+use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_client_socket::Packet;
 
 use naia_shared::{
-    Connection, ConnectionConfig, EntityType, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType,
+    Connection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolType,
+    ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType,
 };
 
 use super::{
@@ -13,7 +13,7 @@ use super::{
     tick_manager::TickManager, tick_queue::TickQueue,
 };
 
-pub struct ServerConnection<P: ProtocolType, K: EntityType> {
+pub struct ServerConnection<P: ProtocolType, K: Copy + Eq + Hash> {
     connection: Connection<P>,
     entity_manager: EntityManager<P, K>,
     ping_manager: PingManager,
@@ -22,7 +22,7 @@ pub struct ServerConnection<P: ProtocolType, K: EntityType> {
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
-impl<P: ProtocolType, K: EntityType> ServerConnection<P, K> {
+impl<P: ProtocolType, K: Copy + Eq + Hash> ServerConnection<P, K> {
     pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
         return ServerConnection {
             connection: Connection::new(address, connection_config),

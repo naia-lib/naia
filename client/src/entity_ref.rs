@@ -1,17 +1,17 @@
-use std::marker::PhantomData;
+use std::{hash::Hash, marker::PhantomData};
 
-use naia_shared::{EntityType, ProtocolType, ReplicaRefWrapper, ReplicateSafe, WorldRefType};
+use naia_shared::{ProtocolType, ReplicaRefWrapper, ReplicateSafe, WorldRefType};
 
 use super::client::Client;
 
 // EntityRef
-pub struct EntityRef<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> {
+pub struct EntityRef<'s, P: ProtocolType, K: Copy + Eq + Hash, W: WorldRefType<P, K>> {
     client: &'s Client<P, K>,
     world: W,
     id: K,
 }
 
-impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P, K, W> {
+impl<'s, P: ProtocolType, K: Copy + Eq + Hash, W: WorldRefType<P, K>> EntityRef<'s, P, K, W> {
     pub fn new(client: &'s Client<P, K>, world: W, key: &K) -> Self {
         EntityRef {
             client,
@@ -45,13 +45,13 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P,
 }
 
 // PredictedEntityRef
-pub struct PredictedEntityRef<P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> {
+pub struct PredictedEntityRef<P: ProtocolType, K: Copy, W: WorldRefType<P, K>> {
     world: W,
     id: K,
     phantom: PhantomData<P>,
 }
 
-impl<P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> PredictedEntityRef<P, K, W> {
+impl<P: ProtocolType, K: Copy, W: WorldRefType<P, K>> PredictedEntityRef<P, K, W> {
     pub fn new(world: W, key: &K) -> Self {
         PredictedEntityRef {
             world,

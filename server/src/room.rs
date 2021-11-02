@@ -1,6 +1,7 @@
-use std::collections::{hash_set::Iter, HashSet, VecDeque};
-
-use naia_shared::EntityType;
+use std::{
+    collections::{hash_set::Iter, HashSet, VecDeque},
+    hash::Hash,
+};
 
 use super::user::user_key::UserKey;
 
@@ -11,13 +12,13 @@ pub mod room_key {
     new_key_type! { pub struct RoomKey; }
 }
 
-pub struct Room<K: EntityType> {
+pub struct Room<K: Copy + Eq + Hash> {
     users: HashSet<UserKey>,
     entities: HashSet<K>,
     entity_removal_queue: VecDeque<(UserKey, K)>,
 }
 
-impl<K: EntityType> Room<K> {
+impl<K: Copy + Eq + Hash> Room<K> {
     pub(crate) fn new() -> Room<K> {
         Room {
             users: HashSet::new(),
@@ -93,12 +94,12 @@ use room_key::RoomKey;
 
 // RoomRef
 
-pub struct RoomRef<'s, P: ProtocolType, K: EntityType> {
+pub struct RoomRef<'s, P: ProtocolType, K: Copy + Eq + Hash> {
     server: &'s Server<P, K>,
     key: RoomKey,
 }
 
-impl<'s, P: ProtocolType, K: EntityType> RoomRef<'s, P, K> {
+impl<'s, P: ProtocolType, K: Copy + Eq + Hash> RoomRef<'s, P, K> {
     pub fn new(server: &'s Server<P, K>, key: &RoomKey) -> Self {
         RoomRef { server, key: *key }
     }
@@ -129,12 +130,12 @@ impl<'s, P: ProtocolType, K: EntityType> RoomRef<'s, P, K> {
 }
 
 // RoomMut
-pub struct RoomMut<'s, P: ProtocolType, K: EntityType> {
+pub struct RoomMut<'s, P: ProtocolType, K: Copy + Eq + Hash> {
     server: &'s mut Server<P, K>,
     key: RoomKey,
 }
 
-impl<'s, P: ProtocolType, K: EntityType> RoomMut<'s, P, K> {
+impl<'s, P: ProtocolType, K: Copy + Eq + Hash> RoomMut<'s, P, K> {
     pub fn new(server: &'s mut Server<P, K>, key: &RoomKey) -> Self {
         RoomMut { server, key: *key }
     }

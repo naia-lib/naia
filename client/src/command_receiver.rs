@@ -1,8 +1,9 @@
-use std::collections::{HashMap, VecDeque};
-
-use naia_shared::{
-    wrapping_diff, EntityType, ProtocolType, SequenceBuffer, SequenceIterator, WorldMutType,
+use std::{
+    collections::{HashMap, VecDeque},
+    hash::Hash,
 };
+
+use naia_shared::{wrapping_diff, ProtocolType, SequenceBuffer, SequenceIterator, WorldMutType};
 
 use super::{entity_manager::EntityManager, owned_entity::OwnedEntity};
 
@@ -10,14 +11,14 @@ const COMMAND_HISTORY_SIZE: u16 = 64;
 
 /// Handles incoming, local, predicted Commands
 #[derive(Debug)]
-pub struct CommandReceiver<P: ProtocolType, K: EntityType> {
+pub struct CommandReceiver<P: ProtocolType, K: Copy + Eq + Hash> {
     queued_incoming_commands: VecDeque<(u16, OwnedEntity<K>, P)>,
     command_history: HashMap<K, SequenceBuffer<P>>,
     queued_command_replays: VecDeque<(u16, OwnedEntity<K>, P)>,
     replay_trigger: HashMap<K, u16>,
 }
 
-impl<P: ProtocolType, K: EntityType> CommandReceiver<P, K> {
+impl<P: ProtocolType, K: Copy + Eq + Hash> CommandReceiver<P, K> {
     /// Creates a new CommandSender
     pub fn new() -> Self {
         CommandReceiver {

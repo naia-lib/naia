@@ -1,17 +1,17 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 use slotmap::DenseSlotMap;
 
-use naia_shared::{EntityType, ProtocolKindType};
+use naia_shared::ProtocolKindType;
 
 use super::keys::ComponentKey;
 
-pub struct WorldRecord<E: EntityType, K: ProtocolKindType> {
+pub struct WorldRecord<E: Copy + Eq + Hash, K: ProtocolKindType> {
     entities: HashMap<E, HashMap<K, ComponentKey>>,
     components: DenseSlotMap<ComponentKey, (E, K)>,
 }
 
-impl<E: EntityType, K: ProtocolKindType> WorldRecord<E, K> {
+impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
     pub fn new() -> Self {
         WorldRecord {
             entities: HashMap::new(),

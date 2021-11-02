@@ -2,6 +2,7 @@ use std::{
     borrow::Borrow,
     clone::Clone,
     collections::{HashMap, HashSet, VecDeque},
+    hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock},
 };
@@ -9,7 +10,7 @@ use std::{
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    DiffMask, EntityType, KeyGenerator, LocalComponentKey, LocalEntity, NaiaKey, PacketNotifiable,
+    DiffMask, KeyGenerator, LocalComponentKey, LocalEntity, NaiaKey, PacketNotifiable,
     ProtocolKindType, ProtocolType, WorldRefType, MTU_SIZE,
 };
 
@@ -22,7 +23,7 @@ use super::{
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
-pub struct EntityManager<P: ProtocolType, K: EntityType> {
+pub struct EntityManager<P: ProtocolType, K: Copy + Eq + Hash> {
     address: SocketAddr,
     // Entities
     entity_key_generator: KeyGenerator<LocalEntity>,
@@ -46,7 +47,7 @@ pub struct EntityManager<P: ProtocolType, K: EntityType> {
     delivered_packets: VecDeque<u16>,
 }
 
-impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
+impl<P: ProtocolType, K: Copy + Eq + Hash> EntityManager<P, K> {
     /// Create a new EntityManager, given the client's address
     pub fn new(address: SocketAddr, diff_handler: &Arc<RwLock<GlobalDiffHandler>>) -> Self {
         EntityManager {
@@ -831,14 +832,14 @@ impl<P: ProtocolType, K: EntityType> EntityManager<P, K> {
     }
 }
 
-impl<P: ProtocolType, K: EntityType> PacketNotifiable for EntityManager<P, K> {
+impl<P: ProtocolType, K: Copy + Eq + Hash> PacketNotifiable for EntityManager<P, K> {
     fn notify_packet_delivered(&mut self, packet_index: u16) {
         self.delivered_packets.push_back(packet_index);
     }
 
     fn notify_packet_dropped(&mut self, dropped_packet_index: u16) {
-        if let Some(dropped_actions_list) = self.sent_actions.get(&dropped_packet_index) {
-            for dropped_action in dropped_actions_list.into_iter() {
+        if let Some(dropped_actions_list) = self.sent_actions.get_mut(&dropped_packet_index) {
+            for dropped_action in dropped_actions_list.drain(..) {
                 match dropped_action {
                     // guaranteed delivery actions
                     EntityAction::RemoveComponent(_, _)
@@ -847,12 +848,12 @@ impl<P: ProtocolType, K: EntityType> PacketNotifiable for EntityManager<P, K> {
                     | EntityAction::OwnEntity(_, _)
                     | EntityAction::DisownEntity(_, _)
                     | EntityAction::InsertComponent(_, _, _, _, _) => {
-                        self.queued_actions.push_back(dropped_action.clone());
+                        self.queued_actions.push_back(dropped_action);
                     }
                     // non-guaranteed delivery actions
                     EntityAction::UpdateComponent(_, global_component_key, _, _, _) => {
                         if let Some(diff_mask_map) = self.sent_updates.get(&dropped_packet_index) {
-                            if let Some(diff_mask) = diff_mask_map.get(global_component_key) {
+                            if let Some(diff_mask) = diff_mask_map.get(&global_component_key) {
                                 let mut new_diff_mask = diff_mask.borrow().clone();
 
                                 // walk from dropped packet up to most recently sent packet
@@ -863,7 +864,7 @@ impl<P: ProtocolType, K: EntityType> PacketNotifiable for EntityManager<P, K> {
                                             self.sent_updates.get(&packet_index)
                                         {
                                             if let Some(diff_mask) =
-                                                diff_mask_map.get(global_component_key)
+                                                diff_mask_map.get(&global_component_key)
                                             {
                                                 new_diff_mask.nand(diff_mask.borrow().borrow());
                                             }
@@ -874,7 +875,7 @@ impl<P: ProtocolType, K: EntityType> PacketNotifiable for EntityManager<P, K> {
                                 }
 
                                 self.diff_handler
-                                    .or_diff_mask(global_component_key, &new_diff_mask);
+                                    .or_diff_mask(&global_component_key, &new_diff_mask);
                             }
                         }
                     }
@@ -887,7 +888,7 @@ impl<P: ProtocolType, K: EntityType> PacketNotifiable for EntityManager<P, K> {
     }
 }
 
-fn component_delete<P: ProtocolType, K: EntityType>(
+fn component_delete<P: ProtocolType, K: Copy>(
     queued_actions: &mut VecDeque<EntityAction<P, K>>,
     record: &mut LocalComponentRecord,
     component_key: &ComponentKey,
@@ -900,7 +901,7 @@ fn component_delete<P: ProtocolType, K: EntityType>(
     ));
 }
 
-fn entity_delete<P: ProtocolType, K: EntityType>(
+fn entity_delete<P: ProtocolType, K: Copy>(
     queued_actions: &mut VecDeque<EntityAction<P, K>>,
     entity_record: &mut LocalEntityRecord,
     entity_key: &K,
