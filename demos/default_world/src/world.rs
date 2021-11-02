@@ -4,7 +4,7 @@ use slotmap::DenseSlotMap;
 
 use naia_shared::{
     ProtocolInserter, ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper,
-    ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
+    ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType, DiffMask, PacketReader,
 };
 
 use super::{
@@ -151,19 +151,45 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
         return None;
     }
 
-    fn get_component_mut_of_kind(
+    fn component_read_partial(
         &mut self,
         entity: &Entity,
-        component_type: &P::Kind,
-    ) -> Option<ReplicaDynMutWrapper<'_, P>> {
-        if let Some(component_map) = self.world.entities.get_mut(*entity) {
-            if let Some(raw_ref) = component_map.get_mut(component_type) {
-                let wrapped_ref = ReplicaDynMutWrapper::new(raw_ref.dyn_mut());
-                return Some(wrapped_ref);
+        component_kind: &P::Kind,
+        diff_mask: &DiffMask,
+        reader: &mut PacketReader,
+        packet_index: u16,
+    ) {
+        if let Some(mut component) = get_component_mut_of_kind(self.world, entity, component_kind) {
+            component.read_partial(diff_mask, reader, packet_index);
+        }
+    }
+
+    fn mirror_components(
+        &mut self,
+        mutable_entity: &Entity,
+        immutable_entity: &Entity,
+        component_kind: &P::Kind,
+    ) {
+        let immutable_component_opt: Option<P> = {
+            if let Some(immutable_component_map) = self.world.entities.get(*immutable_entity) {
+                if let Some(immutable_component) = immutable_component_map.get(component_kind) {
+                    let immutable_copy = immutable_component.dyn_ref().protocol_copy();
+                    Some(immutable_copy)
+                }
+                else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+        if let Some(immutable_component) = immutable_component_opt {
+            if let Some(mutable_component_map) = self.world.entities.get_mut(*mutable_entity) {
+                if let Some(mutable_component) = mutable_component_map.get_mut(component_kind) {
+                    mutable_component.dyn_mut().mirror(&immutable_component);
+                }
             }
         }
-
-        return None;
     }
 
     fn get_component_kinds(&mut self, entity: &Entity) -> Vec<P::Kind> {
@@ -283,6 +309,21 @@ fn get_component_of_kind<'a, P: ProtocolType>(
     if let Some(component_map) = world.entities.get(*entity) {
         if let Some(raw_ref) = component_map.get(component_type) {
             let wrapped_ref = ReplicaDynRefWrapper::new(raw_ref.dyn_ref());
+            return Some(wrapped_ref);
+        }
+    }
+
+    return None;
+}
+
+fn get_component_mut_of_kind<'a, P: ProtocolType>(
+        world: &'a mut World<P>,
+        entity: &Entity,
+        component_type: &P::Kind,
+    ) -> Option<ReplicaDynMutWrapper<'a, P>> {
+    if let Some(component_map) = world.entities.get_mut(*entity) {
+        if let Some(raw_ref) = component_map.get_mut(component_type) {
+            let wrapped_ref = ReplicaDynMutWrapper::new(raw_ref.dyn_mut());
             return Some(wrapped_ref);
         }
     }
