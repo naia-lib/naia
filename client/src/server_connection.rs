@@ -136,8 +136,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
         return self.entity_manager.pop_incoming_message();
     }
 
-    pub fn entity_is_owned(&self, key: &E) -> bool {
-        return self.entity_manager.entity_is_owned(key);
+    pub fn entity_is_owned(&self, entity: &E) -> bool {
+        return self.entity_manager.entity_is_owned(entity);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary

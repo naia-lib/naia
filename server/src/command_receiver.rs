@@ -24,13 +24,13 @@ impl<P: ProtocolType> CommandReceiver<P> {
     /// Get the most recently received Command
     pub fn pop_incoming_command(&mut self, server_tick: u16) -> Option<(LocalEntity, P)> {
         if let Some(map) = self.queued_incoming_commands.get_mut(server_tick) {
-            let mut any_key: Option<LocalEntity> = None;
-            if let Some(any_key_ref) = map.keys().next() {
-                any_key = Some(*any_key_ref);
+            let mut any_entity: Option<LocalEntity> = None;
+            if let Some(any_entity_ref) = map.keys().next() {
+                any_entity = Some(*any_entity_ref);
             }
-            if let Some(any_key) = any_key {
-                if let Some(command) = map.remove(&any_key) {
-                    return Some((any_key, command));
+            if let Some(any_entity) = any_entity {
+                if let Some(command) = map.remove(&any_entity) {
+                    return Some((any_entity, command));
                 }
             }
         }
@@ -48,8 +48,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
     ) {
         let command_count = reader.read_u8();
         for _x in 0..command_count {
-            let local_key = reader.read_u16();
-            let prediction_key = LocalEntity::from_u16(local_key);
+            let owned_entity = LocalEntity::from_u16(reader.read_u16());
             let replica_kind: P::Kind = P::Kind::from_u16(reader.read_u16());
             let past_commands_number: u8 = reader.read_u8();
 
@@ -59,7 +58,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
                     .insert(client_tick, HashMap::new());
             }
             if let Some(map) = self.queued_incoming_commands.get_mut(client_tick) {
-                map.insert(prediction_key, new_command);
+                map.insert(owned_entity, new_command);
             }
 
             for _y in 0..past_commands_number {
@@ -73,8 +72,8 @@ impl<P: ProtocolType> CommandReceiver<P> {
                             .insert(past_tick, HashMap::new());
                     }
                     if let Some(map) = self.queued_incoming_commands.get_mut(past_tick) {
-                        if !map.contains_key(&prediction_key) {
-                            map.insert(prediction_key, new_command);
+                        if !map.contains_key(&owned_entity) {
+                            map.insert(owned_entity, new_command);
                         }
                     }
                 }
