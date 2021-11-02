@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use slotmap::DenseSlotMap;
 
 use naia_shared::{
-    ProtocolInserter, ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper,
-    ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType, DiffMask, PacketReader,
+    DiffMask, PacketReader, ProtocolInserter, ProtocolType, ReplicaDynMutWrapper,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+    WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -175,8 +176,7 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
                 if let Some(immutable_component) = immutable_component_map.get(component_kind) {
                     let immutable_copy = immutable_component.dyn_ref().protocol_copy();
                     Some(immutable_copy)
-                }
-                else {
+                } else {
                     None
                 }
             } else {
@@ -317,10 +317,10 @@ fn get_component_of_kind<'a, P: ProtocolType>(
 }
 
 fn get_component_mut_of_kind<'a, P: ProtocolType>(
-        world: &'a mut World<P>,
-        entity: &Entity,
-        component_type: &P::Kind,
-    ) -> Option<ReplicaDynMutWrapper<'a, P>> {
+    world: &'a mut World<P>,
+    entity: &Entity,
+    component_type: &P::Kind,
+) -> Option<ReplicaDynMutWrapper<'a, P>> {
     if let Some(component_map) = world.entities.get_mut(*entity) {
         if let Some(raw_ref) = component_map.get_mut(component_type) {
             let wrapped_ref = ReplicaDynMutWrapper::new(raw_ref.dyn_mut());
