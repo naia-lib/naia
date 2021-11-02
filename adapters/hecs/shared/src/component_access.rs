@@ -1,13 +1,10 @@
 use std::{any::Any, marker::PhantomData};
 
-use hecs::World;
+use hecs::{Entity, World};
 
 use naia_shared::{ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
 
-use super::{
-    component_ref::{ComponentDynMut, ComponentDynRef},
-    entity::Entity,
-};
+use super::component_ref::{ComponentDynMut, ComponentDynRef};
 
 // ComponentAccess
 pub trait ComponentAccess<P: ProtocolType> {
@@ -52,7 +49,7 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
         world: &'w World,
         entity: &Entity,
     ) -> Option<ReplicaDynRefWrapper<'w, P>> {
-        if let Ok(hecs_ref) = world.get::<R>(**entity) {
+        if let Ok(hecs_ref) = world.get::<R>(*entity) {
             let wrapper = ComponentDynRef(hecs_ref);
             let component_dyn_ref = ReplicaDynRefWrapper::new(wrapper);
             return Some(component_dyn_ref);
@@ -65,7 +62,7 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
         world: &'w mut World,
         entity: &Entity,
     ) -> Option<ReplicaDynMutWrapper<'w, P>> {
-        if let Ok(hecs_mut) = world.get_mut::<R>(**entity) {
+        if let Ok(hecs_mut) = world.get_mut::<R>(*entity) {
             let wrapper = ComponentDynMut(hecs_mut);
             let component_dyn_mut = ReplicaDynMutWrapper::new(wrapper);
             return Some(component_dyn_mut);
@@ -75,7 +72,7 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
 
     fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P> {
         return world
-            .remove_one::<R>(**entity)
+            .remove_one::<R>(*entity)
             .map_or(None, |v| Some(v.into_protocol()));
     }
 
@@ -86,8 +83,8 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
         immutable_entity: &Entity,
     ) {
         unsafe {
-            if let Ok(immutable_component) = world.get_unchecked::<R>(**immutable_entity) {
-                if let Ok(mutable_component) = world.get_unchecked_mut::<R>(**mutable_entity) {
+            if let Ok(immutable_component) = world.get_unchecked::<R>(*immutable_entity) {
+                if let Ok(mutable_component) = world.get_unchecked_mut::<R>(*mutable_entity) {
                     mutable_component.mirror(&immutable_component.protocol_copy());
                 }
             }

@@ -1,4 +1,6 @@
-use naia_hecs_server::{Entity, WorldProxy, WorldProxyMut};
+use hecs::Entity;
+
+use naia_hecs_server::{WorldProxy, WorldProxyMut};
 
 use naia_hecs_demo_shared::protocol::{Marker, Position, StringMessage};
 
@@ -19,10 +21,10 @@ pub fn march_and_mark(app: &mut App) {
             position.y.set(y);
         }
         if x == 40 {
-            entities_to_add.push(Entity::new(entity));
+            entities_to_add.push(entity);
         }
         if x == 75 {
-            entities_to_remove.push(Entity::new(entity));
+            entities_to_remove.push(entity);
         }
         position.x.set(x);
     }
@@ -73,7 +75,7 @@ pub fn check_scopes(app: &mut App) {
     let server = &mut app.server;
     let world = &app.world;
     for (_, user_key, entity) in server.scope_checks() {
-        if let Ok(entity_ref) = world.entity(*entity) {
+        if let Ok(entity_ref) = world.entity(entity) {
             if let Some(position) = entity_ref.get::<Position>() {
                 let x = *position.x.get();
 

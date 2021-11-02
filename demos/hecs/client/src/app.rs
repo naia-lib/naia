@@ -1,8 +1,8 @@
 use log::info;
 
-use hecs::World;
+use hecs::{Entity, World};
 
-use naia_hecs_client::{Client as NaiaClient, ClientConfig, Entity, WorldData};
+use naia_hecs_client::{Client as NaiaClient, ClientConfig, WorldData};
 
 use naia_hecs_demo_shared::{
     get_server_address, get_shared_config,
