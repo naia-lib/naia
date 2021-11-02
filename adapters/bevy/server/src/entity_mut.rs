@@ -1,6 +1,4 @@
-use bevy::ecs::world::Mut;
-
-use naia_server::{ProtocolType, Replicate, RoomKey, UserKey, ReplicaMutWrapper};
+use naia_server::{ProtocolType, Replicate, RoomKey, UserKey};
 
 use naia_bevy_shared::Entity;
 

@@ -1,4 +1,4 @@
-use std::{any::Any, marker::PhantomData, ops::Deref};
+use std::{any::Any, marker::PhantomData};
 
 use bevy::ecs::world::World;
 
