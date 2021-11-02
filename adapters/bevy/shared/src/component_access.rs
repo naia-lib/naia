@@ -1,12 +1,10 @@
 use std::{any::Any, marker::PhantomData};
 
-use bevy::ecs::{world::World, entity::Entity};
+use bevy::ecs::{entity::Entity, world::World};
 
 use naia_shared::{ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
 
-use super::{
-    component_ref::{ComponentDynMut, ComponentDynRef},
-};
+use super::component_ref::{ComponentDynMut, ComponentDynRef};
 
 pub trait ComponentAccess<P: ProtocolType>: Send + Sync {
     fn get_component<'w>(

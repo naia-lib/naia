@@ -7,9 +7,7 @@ use bevy::ecs::entity::Entity;
 
 use naia_shared::{ProtocolType, ReplicateSafe};
 
-use super::{
-    component_access::{ComponentAccess, ComponentAccessor}
-};
+use super::component_access::{ComponentAccess, ComponentAccessor};
 
 #[derive(Debug)]
 pub struct WorldData<P: ProtocolType> {
