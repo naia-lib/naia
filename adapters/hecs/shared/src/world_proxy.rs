@@ -1,8 +1,8 @@
 use hecs::World;
 
 use naia_shared::{
-    ProtocolInserter, ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper,
-    ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
+    ProtocolInserter, ProtocolType, ReplicaDynRefWrapper, ReplicaMutWrapper,
+    ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType, DiffMask, PacketReader,
 };
 
 use super::{
@@ -146,15 +146,30 @@ impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
         return None;
     }
 
-    fn get_component_mut_of_kind(
+    fn component_read_partial(
         &mut self,
         entity: &Entity,
         component_kind: &P::Kind,
-    ) -> Option<ReplicaDynMutWrapper<'_, P>> {
+        diff_mask: &DiffMask,
+        reader: &mut PacketReader,
+        packet_index: u16,
+    ) {
         if let Some(access) = self.world_data.get_component_access(component_kind) {
-            return access.get_component_mut(self.world, entity);
+            if let Some(mut component) = access.get_component_mut(self.world, entity) {
+                component.read_partial(diff_mask, reader, packet_index);
+            }
         }
-        return None;
+    }
+
+    fn mirror_components(
+        &mut self,
+        mutable_entity: &Entity,
+        immutable_entity: &Entity,
+        component_kind: &P::Kind,
+    ) {
+        if let Some(accessor) = self.world_data.get_component_access(component_kind) {
+            accessor.mirror_components(self.world, mutable_entity, immutable_entity);
+        }
     }
 
     fn get_component_kinds(&mut self, entity: &Entity) -> Vec<P::Kind> {

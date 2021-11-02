@@ -22,6 +22,12 @@ pub trait ComponentAccess<P: ProtocolType> {
         entity: &Entity,
     ) -> Option<ReplicaDynMutWrapper<'w, P>>;
     fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P>;
+    fn mirror_components(
+        &self,
+        world: &mut World,
+        mutable_entity: &Entity,
+        immutable_entity: &Entity,
+    );
 }
 
 // ComponentAccessor
@@ -71,5 +77,20 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
         return world
             .remove_one::<R>(**entity)
             .map_or(None, |v| Some(v.into_protocol()));
+    }
+
+    fn mirror_components(
+        &self,
+        world: &mut World,
+        mutable_entity: &Entity,
+        immutable_entity: &Entity,
+    ) {
+        unsafe {
+            if let Ok(immutable_component) = world.get_unchecked::<R>(**immutable_entity) {
+                if let Ok(mutable_component) = world.get_unchecked_mut::<R>(**mutable_entity) {
+                    mutable_component.mirror(&immutable_component.protocol_copy());
+                }
+            }
+        }
     }
 }
