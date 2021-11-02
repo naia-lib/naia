@@ -89,7 +89,7 @@ pub fn recv(
                 }
             }
             Ok(Event::Command(_, entity, Protocol::KeyCommand(key_command))) => {
-                if let Ok(mut position) = q_position.get_mut(*entity) {
+                if let Ok(mut position) = q_position.get_mut(entity) {
                     shared_behavior::process_command(&key_command, &mut position);
                 }
             }

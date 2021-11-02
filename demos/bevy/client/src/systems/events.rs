@@ -42,7 +42,7 @@ pub fn spawn_entity_event(
         for component_kind in component_kinds {
             match component_kind {
                 ProtocolKind::Color => {
-                    if let Ok(color) = q_color.get(**entity) {
+                    if let Ok(color) = q_color.get(*entity) {
                         info!("add color to entity");
 
                         let material = {
@@ -53,7 +53,7 @@ pub fn spawn_entity_event(
                             }
                         };
 
-                        local.entity(**entity).insert_bundle(SpriteBundle {
+                        local.entity(*entity).insert_bundle(SpriteBundle {
                             material: material.clone(),
                             sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
                             transform: Transform::from_xyz(0.0, 0.0, 0.0),
@@ -77,7 +77,7 @@ pub fn own_entity_event(
 
         let predicted_entity = owned_entity.predicted;
 
-        local.entity(*predicted_entity).insert_bundle(SpriteBundle {
+        local.entity(predicted_entity).insert_bundle(SpriteBundle {
             material: global.materials.white.clone(),
             sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
@@ -93,7 +93,7 @@ pub fn new_command_event(
     for event in event_reader.iter() {
         if let NewCommandEvent(owned_entity, Protocol::KeyCommand(command)) = event {
             let predicted_entity = owned_entity.predicted;
-            if let Ok(mut position) = q_player_position.get_mut(*predicted_entity) {
+            if let Ok(mut position) = q_player_position.get_mut(predicted_entity) {
                 shared_behavior::process_command(command, &mut position);
             }
         }
@@ -107,7 +107,7 @@ pub fn replay_command_event(
     for event in event_reader.iter() {
         if let ReplayCommandEvent(owned_entity, Protocol::KeyCommand(command)) = event {
             let predicted_entity = owned_entity.predicted;
-            if let Ok(mut position) = q_player_position.get_mut(*predicted_entity) {
+            if let Ok(mut position) = q_player_position.get_mut(predicted_entity) {
                 shared_behavior::process_command(command, &mut position);
             }
         }

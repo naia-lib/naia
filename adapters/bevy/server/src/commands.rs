@@ -1,8 +1,10 @@
 use std::marker::PhantomData;
 
+use bevy::ecs::entity::Entity;
+
 use naia_server::{ProtocolType, Replicate, Server, UserKey};
 
-use naia_bevy_shared::{Entity, WorldMut};
+use naia_bevy_shared::WorldMut;
 
 // Command Trait
 

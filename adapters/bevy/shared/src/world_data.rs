@@ -3,11 +3,12 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
+use bevy::ecs::entity::Entity;
+
 use naia_shared::{ProtocolType, ReplicateSafe};
 
 use super::{
-    component_access::{ComponentAccess, ComponentAccessor},
-    entity::Entity,
+    component_access::{ComponentAccess, ComponentAccessor}
 };
 
 #[derive(Debug)]
