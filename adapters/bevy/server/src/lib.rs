@@ -1,4 +1,4 @@
-pub use naia_bevy_shared::{Entity, Stage};
+pub use naia_bevy_shared::Stage;
 
 pub use naia_server::{Event, Random, RoomKey, ServerAddrs, ServerConfig, UserKey};
 

@@ -1,6 +1,7 @@
 use std::{collections::VecDeque, marker::PhantomData};
 
 use bevy::ecs::{
+    entity::Entity,
     system::SystemParam,
     world::{Mut, World},
 };
@@ -10,7 +11,7 @@ use naia_server::{
     Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
-use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
+use naia_bevy_shared::{WorldProxy, WorldRef};
 
 use super::{commands::Command, entity_mut::EntityMut, state::State, tick::Ticker};
 
@@ -86,7 +87,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     //// Entities ////
 
     pub fn spawn(&mut self) -> EntityMut<'a, '_, P> {
-        let entity = Entity::new(self.world.entities().reserve_entity());
+        let entity = self.world.entities().reserve_entity();
         self.server.spawn_entity_at(&entity);
         EntityMut::new(entity, self)
     }

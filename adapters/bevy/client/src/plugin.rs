@@ -8,7 +8,7 @@ use bevy::{
 
 use naia_client::{Client, ClientConfig, ProtocolType, Replicate, SharedConfig};
 
-use naia_bevy_shared::{Entity, PrivateStage, Stage, WorldData};
+use naia_bevy_shared::{PrivateStage, Stage, WorldData};
 
 use super::{
     events::{

@@ -1,13 +1,14 @@
 use std::{marker::PhantomData, net::SocketAddr};
 
 use bevy::ecs::{
+    entity::Entity,
     system::SystemParam,
     world::{Mut, World},
 };
 
 use naia_client::{Client as NaiaClient, EntityRef, ProtocolType, Replicate};
 
-use naia_bevy_shared::{Entity, WorldProxy, WorldRef};
+use naia_bevy_shared::{WorldProxy, WorldRef};
 
 use super::state::State;
 

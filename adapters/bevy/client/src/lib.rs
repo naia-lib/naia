@@ -1,6 +1,6 @@
 pub use naia_client::{ClientConfig, OwnedEntity, Random};
 
-pub use naia_bevy_shared::{Entity, Stage};
+pub use naia_bevy_shared::Stage;
 
 mod client;
 pub mod components;

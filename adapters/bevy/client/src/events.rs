@@ -1,6 +1,6 @@
-use naia_client::{OwnedEntity as NaiaOwnedEntity, ProtocolType};
+use bevy::ecs::entity::Entity;
 
-use naia_bevy_shared::Entity;
+use naia_client::{OwnedEntity as NaiaOwnedEntity, ProtocolType};
 
 pub type OwnedEntity = NaiaOwnedEntity<Entity>;
 

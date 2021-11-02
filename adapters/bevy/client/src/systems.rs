@@ -1,7 +1,7 @@
 use bevy::{
     app::Events,
     ecs::{
-        entity::Entity as BevyEntity,
+        entity::Entity,
         schedule::ShouldRun,
         system::{Res, ResMut},
         world::{Mut, World},
@@ -10,7 +10,7 @@ use bevy::{
 
 use naia_client::{Client, Event, ProtocolType};
 
-use naia_bevy_shared::{Entity, WorldProxyMut};
+use naia_bevy_shared::WorldProxyMut;
 
 use super::{
     components::{Confirmed, Predicted},
@@ -27,8 +27,8 @@ pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
         world.resource_scope(|world, mut client_resource: Mut<ClientResource>| {
             let event_results = client.receive(&mut world.proxy_mut());
 
-            let mut entities_to_spawn: Vec<BevyEntity> = Vec::new();
-            let mut entities_to_own: Vec<BevyEntity> = Vec::new();
+            let mut entities_to_spawn: Vec<Entity> = Vec::new();
+            let mut entities_to_own: Vec<Entity> = Vec::new();
 
             unsafe {
                 let mut spawn_entity_event_writer = world
@@ -80,13 +80,13 @@ pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
                             continue;
                         }
                         Ok(Event::SpawnEntity(entity, components)) => {
-                            entities_to_spawn.push(*entity);
+                            entities_to_spawn.push(entity);
                             spawn_entity_event_writer
                                 .send(SpawnEntityEvent::<P>(entity, components));
                         }
                         Ok(Event::OwnEntity(ref owned_entity)) => {
                             let predicted_entity = owned_entity.predicted;
-                            entities_to_own.push(*predicted_entity);
+                            entities_to_own.push(predicted_entity);
                             own_entity_event_writer.send(OwnEntityEvent(owned_entity.clone()));
                         }
                         Ok(Event::DespawnEntity(entity)) => {
