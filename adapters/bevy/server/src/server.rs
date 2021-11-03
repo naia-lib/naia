@@ -13,7 +13,7 @@ use naia_server::{
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
 
-use super::{commands::Command, entity_mut::EntityMut, state::State, tick::Ticker};
+use super::{commands::Command, entity_mut::EntityMut, state::State};
 
 // Server
 
@@ -21,7 +21,6 @@ pub struct Server<'a, P: ProtocolType> {
     state: &'a mut State<P>,
     world: &'a World,
     server: Mut<'a, NaiaServer<P, Entity>>,
-    ticker: Mut<'a, Ticker>,
     phantom_p: PhantomData<P>,
 }
 
@@ -34,15 +33,10 @@ impl<'a, P: ProtocolType> Server<'a, P> {
                 .get_resource_unchecked_mut::<NaiaServer<P, Entity>>()
                 .expect("Naia Server has not been correctly initialized!");
 
-            let ticker = world
-                .get_resource_unchecked_mut::<Ticker>()
-                .expect("Naia Server has not been correctly initialized!");
-
             Self {
                 state,
                 world,
                 server,
-                ticker,
                 phantom_p: PhantomData,
             }
         }
@@ -168,10 +162,6 @@ impl<'a, P: ProtocolType> Server<'a, P> {
 
     pub fn server_tick(&self) -> u16 {
         return self.server.server_tick();
-    }
-
-    pub fn tick_start(&mut self) {
-        self.ticker.tick_start();
     }
 
     // Crate-public methods

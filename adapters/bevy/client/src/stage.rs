@@ -1,6 +1,20 @@
 use bevy::ecs::schedule::StageLabel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, StageLabel)]
-pub enum ClientStage {
+pub enum Stage {
+    Connection,
+    Disconnection,
+    ReceiveEvents,
+    Tick,
+    PreFrame,
+    Frame,
+    PostFrame,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, StageLabel)]
+pub enum PrivateStage {
     BeforeReceiveEvents,
+    AfterTick,
+    AfterConnection,
+    AfterDisconnection,
 }

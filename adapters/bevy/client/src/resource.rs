@@ -1,4 +1,4 @@
-use super::flag::Flag;
+use naia_bevy_shared::Flag;
 
 pub struct ClientResource {
     pub ticker: Flag,

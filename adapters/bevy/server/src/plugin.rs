@@ -8,9 +8,14 @@ use bevy::{
 
 use naia_server::{ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig};
 
-use naia_bevy_shared::{PrivateStage, Stage, WorldData};
+use naia_bevy_shared::WorldData;
 
-use super::tick::{finish_tick, should_tick, Ticker};
+use super::{
+    events::{AuthorizationEvent, CommandEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
+    resource::ServerResource,
+    stage::{PrivateStage, Stage},
+    systems::{before_receive_events, finish_tick, should_tick},
+};
 
 struct PluginConfig<P: ProtocolType> {
     server_config: ServerConfig,
@@ -58,10 +63,19 @@ impl<P: ProtocolType> PluginType for Plugin<P> {
         app
         // RESOURCES //
             .insert_resource(server)
-            .insert_resource(Ticker::new())
+            .insert_resource(ServerResource::new())
             .insert_resource(WorldData::<P>::new())
+        // EVENTS //
+            .add_event::<AuthorizationEvent<P>>()
+            .add_event::<ConnectionEvent>()
+            .add_event::<DisconnectionEvent>()
+            .add_event::<MessageEvent<P>>()
+            .add_event::<CommandEvent<P>>()
         // STAGES //
             .add_stage_before(CoreStage::PreUpdate,
+                              PrivateStage::BeforeReceiveEvents,
+                              SystemStage::single_threaded())
+            .add_stage_after(PrivateStage::BeforeReceiveEvents,
                               Stage::ReceiveEvents,
                               SystemStage::single_threaded())
             .add_stage_after(CoreStage::PostUpdate,
@@ -72,6 +86,9 @@ impl<P: ProtocolType> PluginType for Plugin<P> {
                               PrivateStage::AfterTick,
                               SystemStage::parallel()
                                  .with_run_criteria(should_tick.system()))
+        // SYSTEMS //
+            .add_system_to_stage(PrivateStage::BeforeReceiveEvents,
+                                 before_receive_events::<P>.exclusive_system())
             .add_system_to_stage(PrivateStage::AfterTick,
                                  finish_tick.system());
     }
