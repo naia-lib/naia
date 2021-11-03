@@ -1,0 +1,18 @@
+[package]
+name = "naia-tickless-server-demo"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+publish = false
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[features]
+use-udp = [ "naia-server/use-udp" ]
+use-webrtc = [ "naia-server/use-webrtc" ]
+
+[dependencies]
+naia-server = { path = "../../../server" }
+naia-default-world = { path = "../../default_world" }
+naia-tickless-demo-shared = { path = "../shared" }
+log = "0.4"
+simple_logger = { version = "1.4" }

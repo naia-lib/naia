@@ -23,4 +23,7 @@ members = [
     "demos/bevy/server",
     "demos/bevy/shared",
     "demos/bevy/client",
+    "demos/tickless/server",
+    "demos/tickless/shared",
+    "demos/tickless/client",
     ]
