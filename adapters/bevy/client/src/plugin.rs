@@ -8,7 +8,7 @@ use bevy::{
 
 use naia_client::{Client, ClientConfig, ProtocolType, Replicate, SharedConfig};
 
-use naia_bevy_shared::{PrivateStage, Stage, WorldData};
+use naia_bevy_shared::WorldData;
 
 use super::{
     events::{
@@ -17,7 +17,7 @@ use super::{
         SpawnEntityEvent, UpdateComponentEvent,
     },
     resource::ClientResource,
-    stage::ClientStage,
+    stage::{PrivateStage, Stage},
     systems::{
         before_receive_events, finish_connect, finish_disconnect, finish_tick, should_connect,
         should_disconnect, should_tick,
@@ -91,12 +91,12 @@ impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
         // STAGES //
             // events //
             .add_stage_before(CoreStage::PreUpdate,
-                              ClientStage::BeforeReceiveEvents,
+                              PrivateStage::BeforeReceiveEvents,
                               SystemStage::single_threaded())
-            .add_stage_after(ClientStage::BeforeReceiveEvents,
+            .add_stage_after(PrivateStage::BeforeReceiveEvents,
                               Stage::ReceiveEvents,
                               SystemStage::single_threaded())
-            .add_stage_after(ClientStage::BeforeReceiveEvents,
+            .add_stage_after(PrivateStage::BeforeReceiveEvents,
                               Stage::Connection,
                               SystemStage::single_threaded()
                                  .with_run_criteria(should_connect.system()))
@@ -104,7 +104,7 @@ impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
                               PrivateStage::AfterConnection,
                               SystemStage::parallel()
                                  .with_run_criteria(should_connect.system()))
-            .add_stage_after(ClientStage::BeforeReceiveEvents,
+            .add_stage_after(PrivateStage::BeforeReceiveEvents,
                               Stage::Disconnection,
                               SystemStage::single_threaded()
                                  .with_run_criteria(should_disconnect.system()))
@@ -132,7 +132,7 @@ impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
                               SystemStage::parallel()
                                  .with_run_criteria(should_tick.system()))
         // SYSTEMS //
-            .add_system_to_stage(ClientStage::BeforeReceiveEvents,
+            .add_system_to_stage(PrivateStage::BeforeReceiveEvents,
                                  before_receive_events::<P>.exclusive_system())
             .add_system_to_stage(PrivateStage::AfterConnection,
                                  finish_connect.system())

@@ -1,4 +1,5 @@
 pub mod events;
+
 mod init;
 mod input;
 mod sync;

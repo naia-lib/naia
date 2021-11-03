@@ -7,7 +7,7 @@ use naia_bevy_demo_shared::{get_server_address, get_shared_config};
 mod resources;
 mod systems;
 
-use systems::{init, recv, tick};
+use systems::{events, init, tick};
 
 fn main() {
     info!("Naia Bevy Server Demo starting up");
@@ -39,8 +39,17 @@ fn main() {
         init.system())
     // Receive Server Events
     .add_system_to_stage(
+    Stage::ReceiveEvents,
+    events::authorization_event.system())
+    .add_system_to_stage(
+    Stage::ReceiveEvents,
+    events::connection_event.system())
+    .add_system_to_stage(
+    Stage::ReceiveEvents,
+    events::disconnection_event.system())
+    .add_system_to_stage(
         Stage::ReceiveEvents,
-        recv.system())
+        events::command_event.system())
     // Gameplay Loop on Tick
     .add_system_to_stage(
         Stage::Tick,
