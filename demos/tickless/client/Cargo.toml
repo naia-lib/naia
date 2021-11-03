@@ -1,0 +1,18 @@
+[package]
+name = "naia-tickless-client-demo"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+version = "0.1.0"
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "naia-tickless-client-demo"
+path = "src/main.rs"
+
+[features]
+
+[dependencies]
+naia-client = { path = "../../../client", features = [ "mquad" ] }
+naia-default-world = { path = "../../default_world" }
+naia-tickless-demo-shared = { path = "../shared" }
+cfg-if = "0.1.10"
