@@ -6,7 +6,7 @@ use naia_default_world::{Entity, World as DefaultWorld, WorldMutType, WorldRefTy
 
 use naia_macroquad_demo_shared::{
     get_server_address, get_shared_config,
-    protocol::{Text, Protocol},
+    protocol::{Protocol, Text},
 };
 
 type World = DefaultWorld<Protocol>;

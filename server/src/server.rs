@@ -28,6 +28,7 @@ use super::{
     error::NaiaServerError,
     event::Event,
     global_diff_handler::GlobalDiffHandler,
+    global_entity_record::GlobalEntityRecord,
     keys::ComponentKey,
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},
     server_config::ServerConfig,
@@ -35,7 +36,6 @@ use super::{
     user::{user_key::UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
-    global_entity_record::GlobalEntityRecord,
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -199,7 +199,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         for (user_key, connection) in self.client_connections.iter_mut() {
             //receive commands from anyone
             if let Some(server_tick) = server_tick_opt {
-                while let Some((prediction_key, command)) = connection.get_incoming_command(server_tick) {
+                while let Some((prediction_key, command)) =
+                    connection.get_incoming_command(server_tick)
+                {
                     events.push_back(Ok(Event::Command(*user_key, prediction_key, command)));
                 }
             }
@@ -292,11 +294,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
                 connection.collect_component_updates(&self.world_record);
-                while let Some(payload) = connection.get_outgoing_packet(
-                    &world,
-                    &self.world_record,
-                    server_tick_opt,
-                ) {
+                while let Some(payload) =
+                    connection.get_outgoing_packet(&world, &self.world_record, server_tick_opt)
+                {
                     self.io.send_packet(Packet::new_raw(user.address, payload));
                     connection.mark_sent();
                 }
@@ -566,9 +566,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             };
 
             // get at the User's connection
-            if let Some(client_connection) = self
-                .client_connections
-                .get_mut(user_key) {
+            if let Some(client_connection) = self.client_connections.get_mut(user_key) {
                 // add Entity to User's connection if it's not already in-scope
                 if !client_connection.has_entity(entity) {
                     //add entity to user connection
@@ -596,9 +594,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                 .owner_key
                 .expect("attempting to disown entity that does not have an owner..");
 
-            if let Some(client_connection) = self
-                .client_connections
-                .get_mut(&current_owner_key) {
+            if let Some(client_connection) = self.client_connections.get_mut(&current_owner_key) {
                 client_connection.remove_prediction_entity(entity);
             }
 
@@ -1075,7 +1071,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
     fn spawn_entity_init(&mut self, entity: &E) {
         self.world_record.spawn_entity(entity);
-        self.entity_records.insert(*entity, GlobalEntityRecord::new());
+        self.entity_records
+            .insert(*entity, GlobalEntityRecord::new());
     }
 
     // Entity Scopes

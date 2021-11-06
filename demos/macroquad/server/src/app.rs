@@ -110,7 +110,8 @@ impl App {
                     if let Some(mut square) = self
                         .server
                         .entity_mut(self.world.proxy_mut(), &entity)
-                        .component::<Square>() {
+                        .component::<Square>()
+                    {
                         shared_behavior::process_command(&key_command_ref, &mut square);
                     }
                 }

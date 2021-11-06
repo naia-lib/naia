@@ -1,4 +1,4 @@
-use std::{time::Duration, collections::HashSet};
+use std::{collections::HashSet, time::Duration};
 
 use macroquad::prelude::*;
 

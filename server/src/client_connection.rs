@@ -122,11 +122,14 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
     }
 
     pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(E, P)> {
-        if let Some((local_entity, command)) = self.command_receiver.pop_incoming_command(server_tick) {
+        if let Some((local_entity, command)) =
+            self.command_receiver.pop_incoming_command(server_tick)
+        {
             // get global entity from the local one
             if let Some(global_entity) = self
                 .entity_manager
-                .get_global_entity_from_local(local_entity) {
+                .get_global_entity_from_local(local_entity)
+            {
                 // make sure Command is valid (the entity really is owned by this connection)
                 if self.entity_manager.has_entity_prediction(global_entity) {
                     return Some((*global_entity, command));

@@ -1,4 +1,4 @@
-use std::{hash::Hash, net::SocketAddr, collections::HashSet};
+use std::{collections::HashSet, hash::Hash, net::SocketAddr};
 
 use naia_shared::Timestamp;
 
@@ -18,7 +18,11 @@ pub struct User<E: Copy + Eq + Hash> {
 
 impl<E: Copy + Eq + Hash> User<E> {
     pub fn new(address: SocketAddr, timestamp: Timestamp) -> User<E> {
-        User { address, timestamp, owned_entities: HashSet::new() }
+        User {
+            address,
+            timestamp,
+            owned_entities: HashSet::new(),
+        }
     }
 }
 

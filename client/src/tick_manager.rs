@@ -21,7 +21,6 @@ pub struct TickManager {
 impl TickManager {
     /// Create a new TickManager with a given tick interval duration
     pub fn new(tick_interval: Duration, minimum_latency_duration: Option<Duration>) -> Self {
-
         let minimum_latency = {
             if let Some(min_latency) = minimum_latency_duration {
                 min_latency.as_millis() as f32
@@ -42,7 +41,7 @@ impl TickManager {
             last_tick_instant: Instant::now(),
             accumulator: 0.0,
             fraction: 0.0,
-            minimum_latency
+            minimum_latency,
         }
     }
 
@@ -99,14 +98,12 @@ impl TickManager {
 
         // Calculate incoming & outgoing jitter buffer tick offsets
         let jitter_based_offset = jitter_deviation * 3.0;
-        self.server_tick_adjust = ((jitter_based_offset
-            / self.tick_interval_millis)
-            + 1.0)
-            .ceil() as u16;
+        self.server_tick_adjust =
+            ((jitter_based_offset / self.tick_interval_millis) + 1.0).ceil() as u16;
 
-        let target_client_adjust_millis = self.minimum_latency.max(ping_average + jitter_based_offset);
-        self.client_tick_adjust = ((target_client_adjust_millis
-            / self.tick_interval_millis)
+        let target_client_adjust_millis =
+            self.minimum_latency.max(ping_average + jitter_based_offset);
+        self.client_tick_adjust = ((target_client_adjust_millis / self.tick_interval_millis)
             + CLIENT_ADJUST_BUFFER)
             .ceil() as u16;
     }

@@ -31,7 +31,6 @@ pub use naia_shared::{
     SocketConfig, WorldMutType, WorldRefType,
 };
 
-mod global_entity_record;
 mod client_connection;
 mod command_receiver;
 mod entity_action;
@@ -41,6 +40,7 @@ mod entity_scope_map;
 mod error;
 mod event;
 mod global_diff_handler;
+mod global_entity_record;
 mod keys;
 mod local_component_record;
 mod local_entity_record;
