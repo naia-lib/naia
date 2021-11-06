@@ -53,7 +53,14 @@ impl<P: ProtocolType> CommandReceiver<P> {
             let past_commands_number: u8 = reader.read_u8();
 
             // process most recent sent command
-            let success = self.process_command(server_tick_opt, client_tick, reader, manifest, owned_entity, replica_kind);
+            let success = self.process_command(
+                server_tick_opt,
+                client_tick,
+                reader,
+                manifest,
+                owned_entity,
+                replica_kind,
+            );
             if !success {
                 info!("got a late new command");
             }
@@ -62,19 +69,27 @@ impl<P: ProtocolType> CommandReceiver<P> {
             for _y in 0..past_commands_number {
                 let tick_diff = reader.read_u8();
                 let past_client_tick = client_tick.wrapping_sub(tick_diff.into());
-                self.process_command(server_tick_opt, past_client_tick, reader, manifest, owned_entity, replica_kind);
+                self.process_command(
+                    server_tick_opt,
+                    past_client_tick,
+                    reader,
+                    manifest,
+                    owned_entity,
+                    replica_kind,
+                );
             }
         }
     }
 
-    fn process_command(&mut self,
-                       server_tick_opt: Option<u16>,
-                       client_tick: u16,
-                       reader: &mut PacketReader,
-                       manifest: &Manifest<P>,
-                       owned_entity: LocalEntity,
-                       replica_kind: P::Kind) -> bool {
-
+    fn process_command(
+        &mut self,
+        server_tick_opt: Option<u16>,
+        client_tick: u16,
+        reader: &mut PacketReader,
+        manifest: &Manifest<P>,
+        owned_entity: LocalEntity,
+        replica_kind: P::Kind,
+    ) -> bool {
         let new_command = manifest.create_replica(replica_kind, reader, 0);
 
         if let Some(server_tick) = server_tick_opt {

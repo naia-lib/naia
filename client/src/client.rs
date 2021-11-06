@@ -68,7 +68,10 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
 
         let tick_manager = {
             if let Some(duration) = shared_config.tick_interval {
-                Some(TickManager::new(duration, client_config.minimum_command_latency))
+                Some(TickManager::new(
+                    duration,
+                    client_config.minimum_command_latency,
+                ))
             } else {
                 None
             }
@@ -193,8 +196,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
     pub fn server_tick(&self) -> Option<u16> {
         if let Some(server_connection) = &self.server_connection {
             Some(server_connection.get_last_received_tick())
-        }
-        else {
+        } else {
             None
         }
     }
@@ -309,9 +311,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                     );
                 }
                 // send a packet
-                while let Some(payload) =
-                    connection.get_outgoing_packet(client_tick_opt)
-                {
+                while let Some(payload) = connection.get_outgoing_packet(client_tick_opt) {
                     self.io.send_packet(Packet::new_raw(payload));
                     connection.mark_sent();
                 }
@@ -418,8 +418,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                                     None
                                 }
                             };
-                            server_connection
-                                .process_incoming_header(&header, tick_manager);
+                            server_connection.process_incoming_header(&header, tick_manager);
 
                             match header.packet_type() {
                                 PacketType::Data => {
@@ -495,11 +494,12 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
 }
 
 fn internal_send_with_connection<P: ProtocolType, E: Copy + Eq + Hash>(
-        host_tick: Option<u16>,
-        io: &mut Io,
-        connection: &mut ServerConnection<P, E>,
-        packet_type: PacketType,
-        packet: Packet) {
+    host_tick: Option<u16>,
+    io: &mut Io,
+    connection: &mut ServerConnection<P, E>,
+    packet_type: PacketType,
+    packet: Packet,
+) {
     let new_payload = connection.process_outgoing_header(
         host_tick,
         connection.get_last_received_tick(),

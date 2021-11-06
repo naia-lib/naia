@@ -167,9 +167,15 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
         self.process_buffered_packet(world, manifest, 0);
     }
 
-    fn process_buffered_packet<W: WorldMutType<P, E>>(&mut self, world: &mut W,
-        manifest: &Manifest<P>, target_tick: u16) {
-        while let Some((tick, packet_index, data_packet)) = self.get_buffered_data_packet(target_tick){
+    fn process_buffered_packet<W: WorldMutType<P, E>>(
+        &mut self,
+        world: &mut W,
+        manifest: &Manifest<P>,
+        target_tick: u16,
+    ) {
+        while let Some((tick, packet_index, data_packet)) =
+            self.get_buffered_data_packet(target_tick)
+        {
             self.process_incoming_data(world, tick, packet_index, manifest, &data_packet);
         }
     }

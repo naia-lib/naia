@@ -1,12 +1,6 @@
+use naia_server::{Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig};
 
-use naia_server::{
-    Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
-};
-
-use naia_tickless_demo_shared::{
-    get_server_address, get_shared_config,
-    Protocol,
-};
+use naia_tickless_demo_shared::{get_server_address, get_shared_config, Protocol};
 
 type Server = NaiaServer<Protocol, u8>;
 
@@ -64,24 +58,34 @@ impl App {
                 }
                 Ok(Event::Tick) => {
                     info!("TICK SHOULD NOT HAPPEN!");
-//                    // All game logic should happen here, on a tick event
-//
-//                    // Check whether Entities are in/out of all possible Scopes
-//                    for (_, user_key, entity) in self.server.scope_checks() {
-//                        // You'd normally do whatever checks you need to in here..
-//                        // to determine whether each Entity should be in scope or not.
-//
-//                        // This indicates the Entity should be in this scope.
-//                        self.server.user_scope(&user_key).include(&entity);
-//
-//                        // And call this if Entity should NOT be in this scope.
-//                        // self.server.user_scope(..).exclude(..);
-//                    }
-//
-//                    // VERY IMPORTANT! Calling this actually sends all update data
-//                    // packets to all Clients that require it. If you don't call this
-//                    // method, the Server will never communicate with it's connected Clients
-//                    self.server.send_all_updates(self.world.proxy());
+                    //                    // All game logic should happen here,
+                    // on a tick event
+                    //
+                    //                    // Check whether Entities are in/out
+                    // of all possible Scopes               
+                    // for (_, user_key, entity) in self.server.scope_checks() {
+                    //                        // You'd normally do whatever
+                    // checks you need to in here..
+                    //                        // to determine whether each
+                    // Entity should be in scope or not.
+                    //
+                    //                        // This indicates the Entity
+                    // should be in this scope.             
+                    // self.server.user_scope(&user_key).include(&entity);
+                    //
+                    //                        // And call this if Entity should
+                    // NOT be in this scope.                
+                    // // self.server.user_scope(..).exclude(..);
+                    //                    }
+                    //
+                    //                    // VERY IMPORTANT! Calling this
+                    // actually sends all update data
+                    //                    // packets to all Clients that require
+                    // it. If you don't call this
+                    //                    // method, the Server will never
+                    // communicate with it's connected Clients
+                    //                    
+                    // self.server.send_all_updates(self.world.proxy());
                 }
                 Err(error) => {
                     info!("Naia Server error: {}", error);

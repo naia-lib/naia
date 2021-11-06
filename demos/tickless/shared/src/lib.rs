@@ -4,9 +4,9 @@ extern crate log;
 extern crate naia_derive;
 
 mod protocol;
-mod text;
 mod shared;
+mod text;
 
-pub use shared::{get_server_address, get_shared_config};
 pub use protocol::Protocol;
+pub use shared::{get_server_address, get_shared_config};
 pub use text::Text;

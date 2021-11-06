@@ -1,4 +1,4 @@
-use super::{user::user_key::UserKey, room::room_key::RoomKey};
+use super::{room::room_key::RoomKey, user::user_key::UserKey};
 
 pub struct GlobalEntityRecord {
     pub owner_key: Option<UserKey>,
@@ -9,7 +9,7 @@ impl GlobalEntityRecord {
     pub fn new() -> Self {
         Self {
             owner_key: None,
-            room_key: None
+            room_key: None,
         }
     }
 }

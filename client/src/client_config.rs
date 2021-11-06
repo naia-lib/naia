@@ -25,11 +25,13 @@ pub struct ClientConfig {
     /// Number of samples to measure RTT & Jitter by. A higher number will
     /// smooth out RTT measurements, but at the cost of responsiveness.
     pub rtt_sample_size: u16,
-    /// The minimum of measured latency to the Server that the Client use to ensure Command packets arrive in time.
-    /// Should be fine if this is 0, but you'll increase the chance that packets always arrive to be processed by
-    /// the Server with a higher number. This is especially helpful early on in the connection, when estimates of
-    /// latency are less accurate.
-    pub minimum_command_latency: Option<Duration>
+    /// The minimum of measured latency to the Server that the Client use to
+    /// ensure Command packets arrive in time. Should be fine if this is 0,
+    /// but you'll increase the chance that packets always arrive to be
+    /// processed by the Server with a higher number. This is especially
+    /// helpful early on in the connection, when estimates of latency are
+    /// less accurate.
+    pub minimum_command_latency: Option<Duration>,
 }
 
 impl Default for ClientConfig {
