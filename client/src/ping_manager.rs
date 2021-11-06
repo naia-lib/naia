@@ -99,9 +99,15 @@ impl PingManager {
         return self.rtt_average;
     }
 
+    /// Gets the current calculated average Round Trip Time to the remote host,
+    /// in milliseconds
+    pub fn get_ping(&self) -> f32 {
+        return self.rtt_average / 2.0;
+    }
+
     /// Gets the current calculated standard deviation of Jitter to the remote
     /// host, in milliseconds
     pub fn get_jitter(&self) -> f32 {
-        return self.rtt_deviation;
+        return self.rtt_deviation / 2.0;
     }
 }

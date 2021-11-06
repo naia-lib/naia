@@ -99,7 +99,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
             let manager_type: ManagerType = reader.read_u8().into();
             match manager_type {
                 ManagerType::Command => {
-                    self.command_receiver.process_data(
+                    self.command_receiver.process_incoming_commands(
                         server_tick,
                         client_tick,
                         &mut reader,

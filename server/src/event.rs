@@ -1,6 +1,6 @@
 use naia_shared::ProtocolType;
 
-use super::user::{user_key::UserKey, User};
+use super::user::user_key::UserKey;
 
 /// An Event that is emitted as a result of some communication with a Client, or
 /// a Tick event
@@ -13,7 +13,7 @@ pub enum Event<P: ProtocolType, E> {
     Connection(UserKey),
     /// Occurs when the Server has lost connection to a Client, usually as the
     /// result of a timeout
-    Disconnection(UserKey, User),
+    Disconnection(UserKey),
     /// A Tick Event.
     /// The duration between Tick events is defined in the Config passed to the
     /// Server on initialization

@@ -96,15 +96,12 @@ impl App {
                         .id();
                     self.user_to_prediction_map.insert(user_key, entity);
                 }
-                Ok(Event::Disconnection(user_key, user)) => {
-                    info!("Naia Server disconnected from: {:?}", user.address);
-                    self.server
-                        .user_mut(&user_key)
-                        .leave_room(&self.main_room_key);
+                Ok(Event::Disconnection(user_key)) => {
+                    //let user_address = self.server.user(&user_key).address();
+                    info!("Naia Server disconnected from user");
                     if let Some(entity) = self.user_to_prediction_map.remove(&user_key) {
                         self.server
                             .entity_mut(self.world.proxy_mut(), &entity)
-                            .disown()
                             .leave_room(&self.main_room_key)
                             .despawn();
                     }
@@ -113,8 +110,7 @@ impl App {
                     if let Some(mut square) = self
                         .server
                         .entity_mut(self.world.proxy_mut(), &entity)
-                        .component::<Square>()
-                    {
+                        .component::<Square>() {
                         shared_behavior::process_command(&key_command_ref, &mut square);
                     }
                 }
