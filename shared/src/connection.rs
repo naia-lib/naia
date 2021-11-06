@@ -77,7 +77,7 @@ impl<P: ProtocolType> Connection<P> {
     /// bytes
     pub fn process_outgoing_header(
         &mut self,
-        host_tick: u16,
+        host_tick: Option<u16>,
         last_received_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
@@ -94,7 +94,7 @@ impl<P: ProtocolType> Connection<P> {
             local_packet_index,
             last_remote_packet_index,
             bit_field,
-            host_tick,
+            host_tick.unwrap_or(0),
             last_received_tick,
         );
         header.write(&mut header_bytes);

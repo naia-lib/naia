@@ -1,5 +1,4 @@
 use naia_derive::ProtocolType;
-use naia_shared::Manifest;
 
 mod auth;
 mod color;

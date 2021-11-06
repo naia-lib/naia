@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, time::Duration};
+use std::net::SocketAddr;
 
 use naia_shared::{LinkConditionerConfig, SharedConfig};
 

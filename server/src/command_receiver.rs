@@ -41,7 +41,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
     /// be returned to the application
     pub fn process_data(
         &mut self,
-        server_tick: u16,
+        server_tick_opt: Option<u16>,
         client_tick: u16,
         reader: &mut PacketReader,
         manifest: &Manifest<P>,
@@ -66,14 +66,16 @@ impl<P: ProtocolType> CommandReceiver<P> {
                 let past_tick = client_tick.wrapping_sub(tick_diff.into());
 
                 let new_command = manifest.create_replica(replica_kind, reader, 0);
-                if sequence_greater_than(past_tick, server_tick) {
-                    if !self.queued_incoming_commands.exists(past_tick) {
-                        self.queued_incoming_commands
-                            .insert(past_tick, HashMap::new());
-                    }
-                    if let Some(map) = self.queued_incoming_commands.get_mut(past_tick) {
-                        if !map.contains_key(&owned_entity) {
-                            map.insert(owned_entity, new_command);
+                if let Some(server_tick) = server_tick_opt {
+                    if sequence_greater_than(past_tick, server_tick) {
+                        if !self.queued_incoming_commands.exists(past_tick) {
+                            self.queued_incoming_commands
+                                .insert(past_tick, HashMap::new());
+                        }
+                        if let Some(map) = self.queued_incoming_commands.get_mut(past_tick) {
+                            if !map.contains_key(&owned_entity) {
+                                map.insert(owned_entity, new_command);
+                            }
                         }
                     }
                 }
