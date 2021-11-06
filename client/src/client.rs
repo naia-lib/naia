@@ -43,7 +43,7 @@ pub struct Client<P: ProtocolType, E: Copy + Eq + Hash> {
     outstanding_connect: bool,
     outstanding_errors: VecDeque<NaiaClientError>,
     // Ticks
-    tick_manager: TickManager,
+    tick_manager: Option<TickManager>,
     // Phantom
     phantom_k: PhantomData<E>,
 }
@@ -66,6 +66,14 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
         let mut handshake_timer = Timer::new(client_config.send_handshake_interval);
         handshake_timer.ring_manual();
 
+        let tick_manager = {
+            if let Some(duration) = shared_config.tick_interval {
+                Some(TickManager::new(duration, client_config.minimum_command_latency))
+            } else {
+                None
+            }
+        };
+
         Client {
             // Manifest
             manifest: shared_config.manifest,
@@ -84,7 +92,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
             outstanding_connect: false,
             outstanding_errors: VecDeque::new(),
             // Ticks
-            tick_manager: TickManager::new(shared_config.tick_interval),
+            tick_manager,
             // Phantom
             phantom_k: PhantomData,
         }
@@ -173,24 +181,33 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
     // Ticks
 
     /// Gets the current tick of the Client
-    pub fn client_tick(&self) -> u16 {
-        return self.tick_manager.get_client_tick();
+    pub fn client_tick(&self) -> Option<u16> {
+        if let Some(tick_manager) = &self.tick_manager {
+            Some(tick_manager.get_client_tick())
+        } else {
+            None
+        }
     }
 
     /// Gets the last received tick from the Server
-    pub fn server_tick(&self) -> u16 {
-        return self
-            .server_connection
-            .as_ref()
-            .unwrap()
-            .get_last_received_tick();
+    pub fn server_tick(&self) -> Option<u16> {
+        if let Some(server_connection) = &self.server_connection {
+            Some(server_connection.get_last_received_tick())
+        }
+        else {
+            None
+        }
     }
 
     // Interpolation
 
     /// Gets the interpolation tween amount for the current frame
-    pub fn interpolation(&self) -> f32 {
-        self.tick_manager.fraction
+    pub fn interpolation(&self) -> Option<f32> {
+        if let Some(tick_manager) = &self.tick_manager {
+            Some(tick_manager.fraction)
+        } else {
+            None
+        }
     }
 
     // Receive Data from Server! Very important!
@@ -207,6 +224,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
         // Need to run this to maintain connection with server, and receive packets
         // until none left
         self.maintain_socket();
+
+        // get current tick
+        let client_tick_opt = self.client_tick();
 
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
@@ -269,8 +289,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                 }
                 // send heartbeats
                 if connection.should_send_heartbeat() {
-                    Client::<P, E>::internal_send_with_connection(
-                        self.tick_manager.get_client_tick(),
+                    internal_send_with_connection::<P, E>(
+                        client_tick_opt,
                         &mut self.io,
                         connection,
                         PacketType::Heartbeat,
@@ -280,8 +300,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                 // send pings
                 if connection.should_send_ping() {
                     let ping_payload = connection.get_ping_payload();
-                    Client::<P, E>::internal_send_with_connection(
-                        self.tick_manager.get_client_tick(),
+                    internal_send_with_connection::<P, E>(
+                        client_tick_opt,
                         &mut self.io,
                         connection,
                         PacketType::Ping,
@@ -290,15 +310,18 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                 }
                 // send a packet
                 while let Some(payload) =
-                    connection.get_outgoing_packet(self.tick_manager.get_client_tick())
+                    connection.get_outgoing_packet(client_tick_opt)
                 {
                     self.io.send_packet(Packet::new_raw(payload));
                     connection.mark_sent();
                 }
-                // update current tick
-                // apply updates on tick boundary
-                if connection.frame_begin(world, &self.manifest, &mut self.tick_manager) {
-                    events.push_back(Ok(Event::Tick));
+                // update current tick & apply updates on tick boundary
+                if let Some(tick_manager) = &mut self.tick_manager {
+                    if connection.frame_begin(world, &self.manifest, tick_manager) {
+                        events.push_back(Ok(Event::Tick));
+                    }
+                } else {
+                    connection.tickless_read_incoming(world, &self.manifest);
                 }
             }
             None => {
@@ -342,7 +365,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                     .as_mut()
                     .unwrap()
                     .write(&mut timestamp_bytes);
-                Client::<P, E>::internal_send_connectionless(
+                internal_send_connectionless(
                     &mut self.io,
                     PacketType::ClientChallengeRequest,
                     Packet::new(timestamp_bytes),
@@ -367,7 +390,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                         .unwrap(); // write kind
                     auth_dyn.write(&mut payload_bytes);
                 }
-                Client::<P, E>::internal_send_connectionless(
+                internal_send_connectionless(
                     &mut self.io,
                     PacketType::ClientConnectRequest,
                     Packet::new(payload_bytes),
@@ -388,8 +411,15 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                             server_connection.mark_heard();
 
                             let (header, payload) = StandardHeader::read(packet.payload());
+                            let tick_manager: Option<&mut TickManager> = {
+                                if let Some(tick_manager) = &mut self.tick_manager {
+                                    Some(tick_manager)
+                                } else {
+                                    None
+                                }
+                            };
                             server_connection
-                                .process_incoming_header(&header, &mut self.tick_manager);
+                                .process_incoming_header(&header, tick_manager);
 
                             match header.packet_type() {
                                 PacketType::Data => {
@@ -428,7 +458,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                                                 self.pre_connection_digest =
                                                     Some(digest_bytes.into_boxed_slice());
 
-                                                self.tick_manager.set_initial_tick(server_tick);
+                                                if let Some(tick_manager) = &mut self.tick_manager {
+                                                    tick_manager.set_initial_tick(server_tick);
+                                                }
 
                                                 self.connection_state =
                                                     ConnectionState::AwaitingConnectResponse;
@@ -460,29 +492,28 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
             }
         }
     }
+}
 
-    fn internal_send_with_connection(
-        host_tick: u16,
+fn internal_send_with_connection<P: ProtocolType, E: Copy + Eq + Hash>(
+        host_tick: Option<u16>,
         io: &mut Io,
         connection: &mut ServerConnection<P, E>,
         packet_type: PacketType,
-        packet: Packet,
-    ) {
-        let new_payload = connection.process_outgoing_header(
-            host_tick,
-            connection.get_last_received_tick(),
-            packet_type,
-            packet.payload(),
-        );
-        io.send_packet(Packet::new_raw(new_payload));
-        connection.mark_sent();
-    }
+        packet: Packet) {
+    let new_payload = connection.process_outgoing_header(
+        host_tick,
+        connection.get_last_received_tick(),
+        packet_type,
+        packet.payload(),
+    );
+    io.send_packet(Packet::new_raw(new_payload));
+    connection.mark_sent();
+}
 
-    fn internal_send_connectionless(io: &mut Io, packet_type: PacketType, packet: Packet) {
-        let new_payload =
-            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
-        io.send_packet(Packet::new_raw(new_payload));
-    }
+fn internal_send_connectionless(io: &mut Io, packet_type: PacketType, packet: Packet) {
+    let new_payload =
+        naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
+    io.send_packet(Packet::new_raw(new_payload));
 }
 
 // IO

@@ -51,7 +51,7 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<
     }
 
     /// Returns the UserKey associated with the Entity's owner/controller
-    pub fn get_owner(&self) -> Option<&UserKey> {
+    pub fn get_owner(&self) -> Option<UserKey> {
         return self.server.entity_get_owner(&self.id);
     }
 }
@@ -120,7 +120,7 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<
         return self.server.entity_has_owner(&self.id);
     }
 
-    pub fn get_owner(&self) -> Option<&UserKey> {
+    pub fn get_owner(&self) -> Option<UserKey> {
         return self.server.entity_get_owner(&self.id);
     }
 
@@ -173,7 +173,7 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash> WorldlessEntityMut<'s, P, E> {
         return self.server.entity_has_owner(&self.id);
     }
 
-    pub fn get_owner(&self) -> Option<&UserKey> {
+    pub fn get_owner(&self) -> Option<UserKey> {
         return self.server.entity_get_owner(&self.id);
     }
 

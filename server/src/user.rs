@@ -1,4 +1,4 @@
-use std::{hash::Hash, net::SocketAddr};
+use std::{hash::Hash, net::SocketAddr, collections::HashSet};
 
 use naia_shared::Timestamp;
 
@@ -10,14 +10,15 @@ pub mod user_key {
 }
 
 #[derive(Clone)]
-pub struct User {
+pub struct User<E: Copy + Eq + Hash> {
     pub address: SocketAddr,
     pub timestamp: Timestamp,
+    pub owned_entities: HashSet<E>,
 }
 
-impl User {
-    pub fn new(address: SocketAddr, timestamp: Timestamp) -> User {
-        User { address, timestamp }
+impl<E: Copy + Eq + Hash> User<E> {
+    pub fn new(address: SocketAddr, timestamp: Timestamp) -> User<E> {
+        User { address, timestamp, owned_entities: HashSet::new() }
     }
 }
 

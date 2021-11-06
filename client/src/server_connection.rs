@@ -37,24 +37,26 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
         };
     }
 
-    pub fn get_outgoing_packet(&mut self, host_tick: u16) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(&mut self, host_tick_opt: Option<u16>) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_messages() || !self.command_sender.is_empty() {
             let mut writer = PacketWriter::new();
 
             // Commands
-            while let Some((owned_entity, command)) = self.command_sender.pop_front() {
-                if writer.write_command(
-                    host_tick,
-                    &self.entity_manager,
-                    &self.command_receiver,
-                    &owned_entity,
-                    &command,
-                ) {
-                    self.command_receiver
-                        .queue_command(host_tick, owned_entity, command);
-                } else {
-                    self.command_sender.push_front((owned_entity, command));
-                    break;
+            if let Some(host_tick) = host_tick_opt {
+                while let Some((owned_entity, command)) = self.command_sender.pop_front() {
+                    if writer.write_command(
+                        host_tick,
+                        &self.entity_manager,
+                        &self.command_receiver,
+                        &owned_entity,
+                        &command,
+                    ) {
+                        self.command_receiver
+                            .queue_command(host_tick, owned_entity, command);
+                    } else {
+                        self.command_sender.push_front((owned_entity, command));
+                        break;
+                    }
                 }
             }
 
@@ -76,7 +78,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
 
                 // Add header to it
                 let payload = self.process_outgoing_header(
-                    host_tick,
+                    host_tick_opt,
                     self.connection.get_last_received_tick(),
                     PacketType::Data,
                     &out_bytes,
@@ -150,14 +152,26 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
         if tick_manager.mark_frame() {
             // then we apply all received updates to components at once
             let target_tick = tick_manager.get_server_tick();
-            while let Some((tick, packet_index, data_packet)) =
-                self.get_buffered_data_packet(target_tick)
-            {
-                self.process_incoming_data(world, tick, packet_index, manifest, &data_packet);
-            }
+            self.process_buffered_packet(world, manifest, target_tick);
             return true;
         }
         return false;
+    }
+
+    /// Reads buffered incoming data, regardless of any ticks
+    pub fn tickless_read_incoming<W: WorldMutType<P, E>>(
+        &mut self,
+        world: &mut W,
+        manifest: &Manifest<P>,
+    ) {
+        self.process_buffered_packet(world, manifest, 0);
+    }
+
+    fn process_buffered_packet<W: WorldMutType<P, E>>(&mut self, world: &mut W,
+        manifest: &Manifest<P>, target_tick: u16) {
+        while let Some((tick, packet_index, data_packet)) = self.get_buffered_data_packet(target_tick){
+            self.process_incoming_data(world, tick, packet_index, manifest, &data_packet);
+        }
     }
 
     // Pass-through methods to underlying Connection
@@ -181,19 +195,21 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
     pub fn process_incoming_header(
         &mut self,
         header: &StandardHeader,
-        tick_manager: &mut TickManager,
+        tick_manager_opt: Option<&mut TickManager>,
     ) {
-        tick_manager.record_server_tick(
-            header.host_tick(),
-            self.ping_manager.get_rtt(),
-            self.ping_manager.get_jitter(),
-        );
+        if let Some(tick_manager) = tick_manager_opt {
+            tick_manager.record_server_tick(
+                header.host_tick(),
+                self.ping_manager.get_ping(),
+                self.ping_manager.get_jitter(),
+            );
+        }
         self.connection.process_incoming_header(header, &mut None);
     }
 
     pub fn process_outgoing_header(
         &mut self,
-        host_tick: u16,
+        host_tick: Option<u16>,
         last_received_tick: u16,
         packet_type: PacketType,
         payload: &[u8],

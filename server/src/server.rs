@@ -35,6 +35,7 @@ use super::{
     user::{user_key::UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
+    global_entity_record::GlobalEntityRecord,
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -50,15 +51,14 @@ pub struct Server<P: ProtocolType, E: Copy + Eq + Hash> {
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
     // Users
-    users: DenseSlotMap<UserKey, User>,
+    users: DenseSlotMap<UserKey, User<E>>,
     address_to_user_key_map: HashMap<SocketAddr, UserKey>,
     client_connections: HashMap<UserKey, ClientConnection<P, E>>,
     // Rooms
     rooms: DenseSlotMap<RoomKey, Room<E>>,
     // Entities
     world_record: WorldRecord<E, P::Kind>,
-    entity_owner_map: HashMap<E, UserKey>,
-    entity_room_map: HashMap<E, RoomKey>,
+    entity_records: HashMap<E, GlobalEntityRecord>,
     entity_scope_map: EntityScopeMap<E>,
     // Components
     diff_handler: Arc<RwLock<GlobalDiffHandler>>,
@@ -117,8 +117,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             rooms: DenseSlotMap::with_key(),
             // Entities
             world_record: WorldRecord::new(),
-            entity_owner_map: HashMap::new(),
-            entity_room_map: HashMap::new(),
+            entity_records: HashMap::new(),
             entity_scope_map: EntityScopeMap::new(),
             // Components
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
@@ -165,8 +164,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                     &self.connection_config,
                     &self.diff_handler,
                 );
-                //new_connection.process_incoming_header(&header);// not sure if I should
-                // uncomment this...
+
+                // not sure if I should uncomment this...
+                //new_connection.process_incoming_header(&header);
 
                 // send connect accept message //
                 let payload = new_connection.process_outgoing_header(
@@ -188,9 +188,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
         // new disconnections
         while let Some(user_key) = self.outstanding_disconnects.pop_front() {
-            if let Some(user) = self.delete_user(&user_key) {
-                events.push_back(Ok(Event::Disconnection(user_key, user)));
-            }
+            self.delete_user(&user_key);
+            events.push_back(Ok(Event::Disconnection(user_key)));
         }
 
         // TODO: have 1 single queue for commands/messages from all users, as it's
@@ -314,13 +313,15 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         mut world: W,
     ) -> EntityMut<'s, P, E, W> {
         let entity = world.spawn_entity();
-        self.world_record.spawn_entity(&entity);
+        self.spawn_entity_init(&entity);
+
         return EntityMut::new(self, world, &entity);
     }
 
     /// Creates a new Entity with a specific id
     pub fn spawn_entity_at<'s>(&'s mut self, entity: &E) -> WorldlessEntityMut<'s, P, E> {
-        self.world_record.spawn_entity(entity);
+        self.spawn_entity_init(&entity);
+
         return WorldlessEntityMut::new(self, entity);
     }
 
@@ -535,16 +536,23 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         world.despawn_entity(entity);
 
         self.entity_scope_map.remove_entity(entity);
+        self.entity_records.remove(entity);
     }
 
     /// Returns whether or not an Entity has an owner
     pub(crate) fn entity_has_owner(&self, entity: &E) -> bool {
-        return self.entity_owner_map.contains_key(entity);
+        if let Some(record) = self.entity_records.get(entity) {
+            return record.owner_key.is_some();
+        }
+        return false;
     }
 
     /// Gets the UserKey of the User that currently owns an Entity, if it exists
-    pub(crate) fn entity_get_owner(&self, entity: &E) -> Option<&UserKey> {
-        return self.entity_owner_map.get(entity);
+    pub(crate) fn entity_get_owner(&self, entity: &E) -> Option<UserKey> {
+        if let Some(record) = self.entity_records.get(entity) {
+            return record.owner_key;
+        }
+        return None;
     }
 
     /// Set the 'owner' of an Entity to a User associated with a given UserKey.
@@ -552,45 +560,54 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     /// owner
     pub(crate) fn entity_set_owner(&mut self, entity: &E, user_key: &UserKey) {
         // check that entity is initialized & un-owned
-        if self.entity_owner_map.get(entity).is_some() {
-            panic!("attempting to take ownership of an Entity that is already owned");
-        };
+        if let Some(entity_record) = self.entity_records.get_mut(entity) {
+            if entity_record.owner_key.is_some() {
+                panic!("attempting to take ownership of an Entity that is already owned");
+            };
 
-        // get at the User's connection
-        let client_connection = self
-            .client_connections
-            .get_mut(user_key)
-            .expect("User associated with given UserKey does not exist!");
+            // get at the User's connection
+            if let Some(client_connection) = self
+                .client_connections
+                .get_mut(user_key) {
+                // add Entity to User's connection if it's not already in-scope
+                if !client_connection.has_entity(entity) {
+                    //add entity to user connection
+                    client_connection.spawn_entity(&self.world_record, entity);
+                }
 
-        // add Entity to User's connection if it's not already in-scope
-        if !client_connection.has_entity(entity) {
-            //add entity to user connection
-            client_connection.spawn_entity(&self.world_record, entity);
+                // assign Entity to User as a Prediction
+                client_connection.add_prediction_entity(entity);
+            }
+
+            // put in ownership map
+            entity_record.owner_key = Some(*user_key);
+            if let Some(user) = self.users.get_mut(*user_key) {
+                user.owned_entities.insert(*entity);
+            }
         }
-
-        // assign Entity to User as a Prediction
-        client_connection.add_prediction_entity(entity);
-
-        // put in ownership map
-        self.entity_owner_map.insert(*entity, *user_key);
     }
 
     /// Removes ownership of an Entity from their current owner User.
     /// No User is able to issue Commands to an un-owned Entity.
     pub(crate) fn entity_disown(&mut self, entity: &E) {
         // a couple sanity checks ..
-        let current_owner_key: UserKey = *self
-            .entity_owner_map
-            .get(entity)
-            .expect("attempting to disown entity that does not have an owner..");
+        if let Some(entity_record) = self.entity_records.get_mut(entity) {
+            let current_owner_key: UserKey = entity_record
+                .owner_key
+                .expect("attempting to disown entity that does not have an owner..");
 
-        let client_connection = self
-            .client_connections
-            .get_mut(&current_owner_key)
-            .expect("user which owns entity does not seem to have a connection still..");
+            if let Some(client_connection) = self
+                .client_connections
+                .get_mut(&current_owner_key) {
+                client_connection.remove_prediction_entity(entity);
+            }
 
-        client_connection.remove_prediction_entity(entity);
-        self.entity_owner_map.remove(entity);
+            // remove from ownership map
+            entity_record.owner_key = None;
+            if let Some(user) = self.users.get_mut(current_owner_key) {
+                user.owned_entities.remove(entity);
+            }
+        }
     }
 
     //// Entity Scopes
@@ -689,7 +706,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     }
 
     /// All necessary cleanup, when they're actually gone...
-    pub(crate) fn delete_user(&mut self, user_key: &UserKey) -> Option<User> {
+    pub(crate) fn delete_user(&mut self, user_key: &UserKey) {
         // TODO: cache this?
         // Clean up all user data
         for (_, room) in self.rooms.iter_mut() {
@@ -700,10 +717,13 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             self.address_to_user_key_map.remove(&user.address);
             self.client_connections.remove(&user_key);
             self.entity_scope_map.remove_user(user_key);
-            return Some(user);
-        }
 
-        return None;
+            for owned_entity in user.owned_entities {
+                if let Some(entity_record) = self.entity_records.get_mut(&owned_entity) {
+                    entity_record.owner_key = None;
+                }
+            }
+        }
     }
 
     //// Rooms
@@ -714,7 +734,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         if self.rooms.contains_key(*room_key) {
             // remove all entities from the entity_room_map
             for entity in self.rooms.get(*room_key).unwrap().entities() {
-                self.entity_room_map.remove(entity);
+                if let Some(record) = self.entity_records.get_mut(entity) {
+                    record.room_key = None;
+                }
             }
 
             // TODO: what else kind of cleanup do we need to do here? Scopes?
@@ -768,8 +790,10 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     /// Returns whether or not an Entity is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity: &E) -> bool {
-        if let Some(actual_room_key) = self.entity_room_map.get(entity) {
-            return room_key == actual_room_key;
+        if let Some(entity_record) = self.entity_records.get(entity) {
+            if let Some(actual_room_key) = entity_record.room_key {
+                return *room_key == actual_room_key;
+            }
         }
         return false;
     }
@@ -778,13 +802,15 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     /// Entities will only ever be in-scope for Users which are in a Room with
     /// them.
     pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, entity: &E) {
-        if self.entity_room_map.contains_key(entity) {
-            panic!("Entity already belongs to a Room! Remove the Entity from the Room before adding it to a new Room.");
-        }
+        if let Some(entity_record) = self.entity_records.get_mut(entity) {
+            if entity_record.room_key.is_some() {
+                panic!("Entity already belongs to a Room! Remove the Entity from the Room before adding it to a new Room.");
+            }
 
-        if let Some(room) = self.rooms.get_mut(*room_key) {
-            room.add_entity(entity);
-            self.entity_room_map.insert(*entity, *room_key);
+            if let Some(room) = self.rooms.get_mut(*room_key) {
+                room.add_entity(entity);
+                entity_record.room_key = Some(*room_key);
+            }
         }
     }
 
@@ -792,7 +818,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &E) {
         if let Some(room) = self.rooms.get_mut(*room_key) {
             if room.remove_entity(entity) {
-                self.entity_room_map.remove(entity);
+                if let Some(entity_record) = self.entity_records.get_mut(entity) {
+                    entity_record.room_key = None;
+                }
             }
         }
     }
@@ -1041,6 +1069,13 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                 }
             }
         }
+    }
+
+    // Entity Helpers
+
+    fn spawn_entity_init(&mut self, entity: &E) {
+        self.world_record.spawn_entity(entity);
+        self.entity_records.insert(*entity, GlobalEntityRecord::new());
     }
 
     // Entity Scopes
