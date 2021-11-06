@@ -1,22 +1,17 @@
-use std::collections::HashMap;
 
 use naia_server::{
-    Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
+    Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
 };
 
-use naia_default_world::{Entity, World as DefaultWorld};
-
-use naia_macroquad_demo_shared::{
-    behavior as shared_behavior, get_server_address, get_shared_config,
-    protocol::{Color, Protocol, Square},
+use naia_tickless_demo_shared::{
+    get_server_address, get_shared_config,
+    Protocol,
 };
 
-type World = DefaultWorld<Protocol>;
-type Server = NaiaServer<Protocol, Entity>;
+type Server = NaiaServer<Protocol, u8>;
 
 pub struct App {
     server: Server,
-    world: World,
     main_room_key: RoomKey,
 }
 
@@ -39,15 +34,12 @@ impl App {
         let mut server = Server::new(ServerConfig::default(), get_shared_config());
         server.listen(server_addresses);
 
-        let world = World::new();
-
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
         let main_room_key = server.make_room().key();
 
         App {
             server,
-            world,
             main_room_key,
         }
     }
@@ -64,10 +56,10 @@ impl App {
 
                     info!("Naia Server connected to: {}", user_address);
                 }
-                Ok(Event::Disconnection(user_key, user)) => {
+                Ok(Event::Disconnection(_, user)) => {
                     info!("Naia Server disconnected from: {:?}", user.address);
                 }
-                Ok(Event::Message(_, entity, Protocol::Text(text))) => {
+                Ok(Event::Message(_, Protocol::Text(text))) => {
                     info!("message: {}", text.value.get());
                 }
                 Ok(Event::Tick) => {

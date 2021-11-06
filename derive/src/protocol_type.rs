@@ -24,7 +24,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}};
         use naia_shared::{ProtocolType, ProtocolInserter, ProtocolKindType, ReplicateSafe,
-            DiffMask, PacketReader, ReplicaDynRef, ReplicaDynMut, Replicate};
+            DiffMask, PacketReader, ReplicaDynRef, ReplicaDynMut, Replicate, Manifest};
 
         #kind_enum_def
 

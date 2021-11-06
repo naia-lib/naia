@@ -68,7 +68,7 @@ pub struct Server<P: ProtocolType, E: Copy + Eq + Hash> {
     outstanding_auths: VecDeque<(UserKey, P)>,
     outstanding_errors: VecDeque<NaiaServerError>,
     // Ticks
-    tick_manager: TickManager,
+    tick_manager: Option<TickManager>,
 }
 
 impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
@@ -91,6 +91,14 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
         let connection_hash_key =
             hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
+
+        let tick_manager = {
+            if let Some(duration) = shared_config.tick_interval {
+                Some(TickManager::new(duration))
+            } else {
+                None
+            }
+        };
 
         Server {
             // Config
@@ -120,7 +128,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             outstanding_disconnects: VecDeque::new(),
             outstanding_errors: VecDeque::new(),
             // Ticks
-            tick_manager: TickManager::new(shared_config.tick_interval),
+            tick_manager,
         }
     }
 
@@ -162,7 +170,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
                 // send connect accept message //
                 let payload = new_connection.process_outgoing_header(
-                    0,
+                    None,
                     0,
                     PacketType::ServerConnectResponse,
                     &[],
@@ -188,12 +196,13 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         // TODO: have 1 single queue for commands/messages from all users, as it's
         // possible this current technique unfairly favors the 1st users in
         // self.client_connections
+        let server_tick_opt = self.server_tick();
         for (user_key, connection) in self.client_connections.iter_mut() {
             //receive commands from anyone
-            while let Some((prediction_key, command)) =
-                connection.get_incoming_command(self.tick_manager.get_tick())
-            {
-                events.push_back(Ok(Event::Command(*user_key, prediction_key, command)));
+            if let Some(server_tick) = server_tick_opt {
+                while let Some((prediction_key, command)) = connection.get_incoming_command(server_tick) {
+                    events.push_back(Ok(Event::Command(*user_key, prediction_key, command)));
+                }
             }
             //receive messages from anyone
             while let Some(message) = connection.get_incoming_message() {
@@ -207,8 +216,10 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         }
 
         // tick event
-        if self.tick_manager.should_tick() {
-            events.push_back(Ok(Event::Tick));
+        if let Some(tick_manager) = &mut self.tick_manager {
+            if tick_manager.should_tick() {
+                events.push_back(Ok(Event::Tick));
+            }
         }
 
         events
@@ -278,13 +289,14 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         self.update_entity_scopes(&world);
 
         // loop through all connections, send packet
+        let server_tick_opt = self.server_tick();
         for (user_key, connection) in self.client_connections.iter_mut() {
             if let Some(user) = self.users.get(*user_key) {
                 connection.collect_component_updates(&self.world_record);
                 while let Some(payload) = connection.get_outgoing_packet(
                     &world,
                     &self.world_record,
-                    self.tick_manager.get_tick(),
+                    server_tick_opt,
                 ) {
                     self.io.send_packet(Packet::new_raw(user.address, payload));
                     connection.mark_sent();
@@ -477,8 +489,12 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     }
 
     /// Gets the current tick of the Server
-    pub fn server_tick(&self) -> u16 {
-        self.tick_manager.get_tick()
+    pub fn server_tick(&self) -> Option<u16> {
+        if let Some(tick_manager) = &self.tick_manager {
+            return Some(tick_manager.get_tick());
+        } else {
+            None
+        }
     }
 
     // Crate-Public methods
@@ -796,6 +812,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         if self.heartbeat_timer.ringing() {
             self.heartbeat_timer.reset();
 
+            let server_tick_opt = self.server_tick();
+
             for (user_key, connection) in self.client_connections.iter_mut() {
                 if let Some(user) = self.users.get(*user_key) {
                     if connection.should_drop() {
@@ -805,7 +823,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                             // Don't try to refactor this to self.internal_send, doesn't seem to
                             // work cause of iter_mut()
                             let payload = connection.process_outgoing_header(
-                                self.tick_manager.get_tick(),
+                                server_tick_opt,
                                 connection.get_last_received_tick(),
                                 PacketType::Heartbeat,
                                 &[],
@@ -847,7 +865,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                             let mut payload_bytes = Vec::new();
                             // write current tick
                             payload_bytes
-                                .write_u16::<BigEndian>(self.tick_manager.get_tick())
+                                .write_u16::<BigEndian>(self.server_tick().unwrap_or(0))
                                 .unwrap();
 
                             //write timestamp
@@ -888,7 +906,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
                                         // send connect accept message //
                                         let payload = connection.process_outgoing_header(
-                                            0,
+                                            None,
                                             0,
                                             PacketType::ServerConnectResponse,
                                             &[],
@@ -936,12 +954,13 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                         }
                         PacketType::Data => {
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
+                                let server_tick_opt = self.server_tick();
                                 match self.client_connections.get_mut(user_key) {
                                     Some(connection) => {
                                         connection
                                             .process_incoming_header(&self.world_record, &header);
                                         connection.process_incoming_data(
-                                            self.tick_manager.get_tick(),
+                                            server_tick_opt,
                                             header.host_tick(),
                                             &self.manifest,
                                             &payload,
@@ -976,6 +995,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                         }
                         PacketType::Ping => {
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
+                                let server_tick_opt = self.server_tick();
                                 match self.client_connections.get_mut(user_key) {
                                     Some(connection) => {
                                         connection
@@ -983,7 +1003,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                                         let ping_payload = connection.process_ping(&payload);
                                         let payload_with_header = connection
                                             .process_outgoing_header(
-                                                self.tick_manager.get_tick(),
+                                                server_tick_opt,
                                                 connection.get_last_received_tick(),
                                                 PacketType::Pong,
                                                 &ping_payload,

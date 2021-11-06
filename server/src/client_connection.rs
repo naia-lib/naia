@@ -40,7 +40,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
         &mut self,
         world: &W,
         world_record: &WorldRecord<E, P::Kind>,
-        host_tick: u16,
+        host_tick: Option<u16>,
     ) -> Option<Box<[u8]>> {
         if self.connection.has_outgoing_messages() || self.entity_manager.has_outgoing_actions() {
             let mut writer = PacketWriter::new();
@@ -89,7 +89,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
 
     pub fn process_incoming_data(
         &mut self,
-        server_tick: u16,
+        server_tick: Option<u16>,
         client_tick: u16,
         manifest: &Manifest<P>,
         data: &[u8],
@@ -122,14 +122,11 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
     }
 
     pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(E, P)> {
-        if let Some((local_entity, command)) =
-            self.command_receiver.pop_incoming_command(server_tick)
-        {
+        if let Some((local_entity, command)) = self.command_receiver.pop_incoming_command(server_tick) {
             // get global entity from the local one
             if let Some(global_entity) = self
                 .entity_manager
-                .get_global_entity_from_local(local_entity)
-            {
+                .get_global_entity_from_local(local_entity) {
                 // make sure Command is valid (the entity really is owned by this connection)
                 if self.entity_manager.has_entity_prediction(global_entity) {
                     return Some((*global_entity, command));
@@ -212,7 +209,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
 
     pub fn process_outgoing_header(
         &mut self,
-        host_tick: u16,
+        host_tick: Option<u16>,
         last_received_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
