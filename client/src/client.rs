@@ -102,7 +102,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
     }
 
     /// Connect to the given server address
-    pub fn connect<R: ReplicateSafe<P>>(&mut self, server_address: SocketAddr, auth: Option<R>) {
+    pub fn connect(&mut self, server_address: SocketAddr) {
         self.address = Some(server_address);
         self.socket.connect(server_address);
         self.io.load(
@@ -110,13 +110,19 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
             self.socket.get_packet_receiver(),
         );
 
-        self.auth_message = {
-            if auth.is_none() {
-                None
-            } else {
-                Some(auth.unwrap().into_protocol())
-            }
-        };
+        self.auth_message = None;
+    }
+
+    /// Connect to the given server address, passing in some defined auth struct
+    pub fn connect_with_auth<R: ReplicateSafe<P>>(&mut self, server_address: SocketAddr, auth: R) {
+        self.address = Some(server_address);
+        self.socket.connect(server_address);
+        self.io.load(
+            self.socket.get_packet_sender(),
+            self.socket.get_packet_receiver(),
+        );
+
+        self.auth_message = Some(auth.into_protocol());
     }
 
     // Messages
@@ -385,10 +391,21 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                 if let Some(auth_message) = &mut self.auth_message {
                     let auth_dyn = auth_message.dyn_ref();
                     let auth_kind = auth_dyn.get_kind();
+                    // write that we have auth
+                    payload_bytes
+                        .write_u8(1)
+                        .unwrap();
+                    // write auth kind
                     payload_bytes
                         .write_u16::<BigEndian>(auth_kind.to_u16())
-                        .unwrap(); // write kind
+                        .unwrap();
+                    // write payload
                     auth_dyn.write(&mut payload_bytes);
+                } else {
+                    // write that we do not have auth
+                    payload_bytes
+                        .write_u8(0)
+                        .unwrap();
                 }
                 internal_send_connectionless(
                     &mut self.io,

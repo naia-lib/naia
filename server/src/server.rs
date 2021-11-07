@@ -50,6 +50,7 @@ pub struct Server<P: ProtocolType, E: Copy + Eq + Hash> {
     io: Io,
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
+    require_auth: bool,
     // Users
     users: DenseSlotMap<UserKey, User<E>>,
     address_to_user_key_map: HashMap<SocketAddr, UserKey>,
@@ -100,6 +101,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             }
         };
 
+        let require_auth = server_config.require_auth;
+
         Server {
             // Config
             manifest: shared_config.manifest,
@@ -109,6 +112,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             io: Io::new(),
             heartbeat_timer,
             connection_hash_key,
+            require_auth,
             // Users
             users: DenseSlotMap::with_key(),
             address_to_user_key_map: HashMap::new(),
@@ -917,9 +921,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
                                 // At this point, we have already sent the ServerConnectResponse
-                                // message, but we continue to send
-                                // the message till the Client stops sending
-                                // the ClientConnectRequest
+                                // message, but we continue to send the message till the Client
+                                // stops sending the ClientConnectRequest
                                 if self.client_connections.contains_key(user_key) {
                                     let user = self.users.get(*user_key).unwrap();
                                     if user.timestamp == timestamp {
@@ -948,7 +951,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                                     error!("if there's a user key associated with the address, should also have a client connection initiated");
                                 }
                             } else {
-                                //Verify that timestamp hash has been written by this
+                                // Verify that timestamp hash has been written by this
                                 // server instance
                                 let mut timestamp_bytes: Vec<u8> = Vec::new();
                                 timestamp.write(&mut timestamp_bytes);
@@ -956,23 +959,32 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                                 for _ in 0..32 {
                                     digest_bytes.push(reader.read_u8());
                                 }
-                                if hmac::verify(
-                                    &self.connection_hash_key,
-                                    &timestamp_bytes,
-                                    &digest_bytes,
-                                )
-                                .is_ok()
-                                {
-                                    let user = User::new(address, timestamp);
-                                    let user_key = self.users.insert(user);
+                                let validation_result = hmac::verify(&self.connection_hash_key,
+                                                                     &timestamp_bytes,
+                                                                     &digest_bytes);
+                                if validation_result.is_err() {
+                                    continue;
+                                }
 
-                                    // Return authorization eventP
-                                    let replica_kind = P::Kind::from_u16(reader.read_u16());
+                                // Timestamp hash is validated, now start configured auth process
+                                let user = User::new(address, timestamp);
+                                let user_key = self.users.insert(user);
 
-                                    let auth_message =
-                                        self.manifest.create_replica(replica_kind, &mut reader, 0);
+                                let has_auth = reader.read_u8() == 1;
 
+                                if has_auth != self.require_auth {
+                                    self.reject_connection(&user_key);
+                                    continue;
+                                }
+
+                                if has_auth {
+                                    let auth_kind = P::Kind::from_u16(reader.read_u16());
+                                    let auth_message = self.manifest.create_replica(auth_kind,
+                                                                                    &mut reader,
+                                                                                    0);
                                     self.outstanding_auths.push_back((user_key, auth_message));
+                                } else {
+                                    self.accept_connection(&user_key);
                                 }
                             }
                         }
