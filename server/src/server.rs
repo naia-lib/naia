@@ -33,7 +33,7 @@ use super::{
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},
     server_config::ServerConfig,
     tick_manager::TickManager,
-    user::{user_key::UserKey, User, UserMut, UserRef},
+    user::{user_key::UserKey, UserRecord, UserMut, UserRef, User},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
 };
@@ -52,7 +52,7 @@ pub struct Server<P: ProtocolType, E: Copy + Eq + Hash> {
     connection_hash_key: hmac::Key,
     require_auth: bool,
     // Users
-    users: DenseSlotMap<UserKey, User<E>>,
+    user_records: DenseSlotMap<UserKey, UserRecord<E>>,
     address_to_user_key_map: HashMap<SocketAddr, UserKey>,
     client_connections: HashMap<UserKey, ClientConnection<P, E>>,
     // Rooms
@@ -114,7 +114,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             connection_hash_key,
             require_auth,
             // Users
-            users: DenseSlotMap::with_key(),
+            user_records: DenseSlotMap::with_key(),
             address_to_user_key_map: HashMap::new(),
             client_connections: clients_map,
             // Rooms
@@ -160,11 +160,14 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
         // new connections
         while let Some(user_key) = self.outstanding_connects.pop_front() {
-            if let Some(user) = self.users.get(user_key) {
-                self.address_to_user_key_map.insert(user.address, user_key);
+            if let Some(user_record) = self.user_records.get(user_key) {
+
+                let user_address = user_record.user.address;
+
+                self.address_to_user_key_map.insert(user_address, user_key);
 
                 let mut new_connection = ClientConnection::new(
-                    user.address,
+                    user_address,
                     &self.connection_config,
                     &self.diff_handler,
                 );
@@ -192,8 +195,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
         // new disconnections
         while let Some(user_key) = self.outstanding_disconnects.pop_front() {
-            self.delete_user(&user_key);
-            events.push_back(Ok(Event::Disconnection(user_key)));
+            if let Some(user) = self.delete_user(&user_key) {
+                events.push_back(Ok(Event::Disconnection(user_key, user)));
+            }
         }
 
         // TODO: have 1 single queue for commands/messages from all users, as it's
@@ -296,12 +300,12 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         // loop through all connections, send packet
         let server_tick_opt = self.server_tick();
         for (user_key, connection) in self.client_connections.iter_mut() {
-            if let Some(user) = self.users.get(*user_key) {
+            if let Some(user_record) = self.user_records.get(*user_key) {
                 connection.collect_component_updates(&self.world_record);
                 while let Some(payload) =
                     connection.get_outgoing_packet(&world, &self.world_record, server_tick_opt)
                 {
-                    self.io.send_packet(Packet::new_raw(user.address, payload));
+                    self.io.send_packet(Packet::new_raw(user_record.user.address, payload));
                     connection.mark_sent();
                 }
             }
@@ -374,14 +378,14 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Returns whether or not a User exists for the given RoomKey
     pub fn user_exists(&self, user_key: &UserKey) -> bool {
-        return self.users.contains_key(*user_key);
+        return self.user_records.contains_key(*user_key);
     }
 
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Panics if the user does not exist.
     pub fn user(&self, user_key: &UserKey) -> UserRef<P, E> {
-        if self.users.contains_key(*user_key) {
+        if self.user_records.contains_key(*user_key) {
             return UserRef::new(self, &user_key);
         }
         panic!("No User exists for given Key!");
@@ -391,7 +395,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
     pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, E> {
-        if self.users.contains_key(*user_key) {
+        if self.user_records.contains_key(*user_key) {
             return UserMut::new(self, &user_key);
         }
         panic!("No User exists for given Key!");
@@ -401,7 +405,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     pub fn user_keys(&self) -> Vec<UserKey> {
         let mut output = Vec::new();
 
-        for (user_key, _) in self.users.iter() {
+        for (user_key, _) in self.user_records.iter() {
             output.push(user_key);
         }
 
@@ -410,13 +414,13 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Get the number of Users currently connected
     pub fn users_count(&self) -> usize {
-        return self.users.len();
+        return self.user_records.len();
     }
 
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
     pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, E> {
-        if self.users.contains_key(*user_key) {
+        if self.user_records.contains_key(*user_key) {
             return UserScopeMut::new(self, &user_key);
         }
         panic!("No User exists for given Key!");
@@ -521,7 +525,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
-        for (user_key, _) in self.users.iter() {
+        for (user_key, _) in self.user_records.iter() {
             if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
                 //remove entity from user connection
                 client_connection.despawn_entity(&self.world_record, entity);
@@ -583,7 +587,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
             // put in ownership map
             entity_record.owner_key = Some(*user_key);
-            if let Some(user) = self.users.get_mut(*user_key) {
+            if let Some(user) = self.user_records.get_mut(*user_key) {
                 user.owned_entities.insert(*entity);
             }
         }
@@ -604,7 +608,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
             // remove from ownership map
             entity_record.owner_key = None;
-            if let Some(user) = self.users.get_mut(current_owner_key) {
+            if let Some(user) = self.user_records.get_mut(current_owner_key) {
                 user.owned_entities.remove(entity);
             }
         }
@@ -651,7 +655,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         world.insert_component(entity, component_ref);
 
         // add component to connections already tracking entity
-        for (user_key, _) in self.users.iter() {
+        for (user_key, _) in self.user_records.iter() {
             if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
                 if client_connection.has_entity(entity) {
                     // insert component into user's connection
@@ -677,7 +681,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         // clean up component on all connections
         // TODO: should be able to make this more efficient by caching for every Entity
         // which scopes they are part of
-        for (user_key, _) in self.users.iter() {
+        for (user_key, _) in self.user_records.iter() {
             if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
                 //remove component from user connection
                 client_connection.remove_component(&component_key);
@@ -695,8 +699,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Get a User's Socket Address, given the associated UserKey
     pub(crate) fn get_user_address(&self, user_key: &UserKey) -> Option<SocketAddr> {
-        if let Some(user) = self.users.get(*user_key) {
-            return Some(user.address);
+        if let Some(user_record) = self.user_records.get(*user_key) {
+            return Some(user_record.user.address);
         }
         return None;
     }
@@ -706,24 +710,28 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     }
 
     /// All necessary cleanup, when they're actually gone...
-    pub(crate) fn delete_user(&mut self, user_key: &UserKey) {
+    pub(crate) fn delete_user(&mut self, user_key: &UserKey) -> Option<User> {
         // TODO: cache this?
         // Clean up all user data
         for (_, room) in self.rooms.iter_mut() {
             room.unsubscribe_user(&user_key);
         }
 
-        if let Some(user) = self.users.remove(*user_key) {
-            self.address_to_user_key_map.remove(&user.address);
+        if let Some(user_record) = self.user_records.remove(*user_key) {
+            self.address_to_user_key_map.remove(&user_record.user.address);
             self.client_connections.remove(&user_key);
             self.entity_scope_map.remove_user(user_key);
 
-            for owned_entity in user.owned_entities {
+            for owned_entity in user_record.owned_entities {
                 if let Some(entity_record) = self.entity_records.get_mut(&owned_entity) {
                     entity_record.owner_key = None;
                 }
             }
+
+            return Some(user_record.user);
         }
+
+        return None;
     }
 
     //// Rooms
@@ -843,7 +851,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             let server_tick_opt = self.server_tick();
 
             for (user_key, connection) in self.client_connections.iter_mut() {
-                if let Some(user) = self.users.get(*user_key) {
+                if let Some(user_record) = self.user_records.get(*user_key) {
                     if connection.should_drop() {
                         self.outstanding_disconnects.push_back(*user_key);
                     } else {
@@ -856,7 +864,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                                 PacketType::Heartbeat,
                                 &[],
                             );
-                            self.io.send_packet(Packet::new_raw(user.address, payload));
+                            self.io.send_packet(Packet::new_raw(user_record.user.address, payload));
                             connection.mark_sent();
                         }
                     }
@@ -924,7 +932,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                                 // message, but we continue to send the message till the Client
                                 // stops sending the ClientConnectRequest
                                 if self.client_connections.contains_key(user_key) {
-                                    let user = self.users.get(*user_key).unwrap();
+                                    let user = self.user_records.get(*user_key).unwrap();
                                     if user.timestamp == timestamp {
                                         let connection =
                                             self.client_connections.get_mut(user_key).unwrap();
@@ -969,8 +977,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                                 }
 
                                 // Timestamp hash is validated, now start configured auth process
-                                let user = User::new(address, timestamp);
-                                let user_key = self.users.insert(user);
+                                let user = UserRecord::new(address, timestamp);
+                                let user_key = self.user_records.insert(user);
 
                                 let has_auth = reader.read_u8() == 1;
 
