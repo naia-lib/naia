@@ -1,6 +1,6 @@
 use std::{collections::HashSet, hash::Hash, net::SocketAddr};
 
-use naia_shared::{Timestamp, ProtocolType};
+use naia_shared::ProtocolType;
 
 use crate::{RoomKey, Server, UserKey};
 
@@ -33,15 +33,13 @@ impl User {
 #[derive(Clone)]
 pub struct UserRecord<E: Copy + Eq + Hash> {
     pub user: User,
-    pub timestamp: Timestamp,
     pub owned_entities: HashSet<E>,
 }
 
 impl<E: Copy + Eq + Hash> UserRecord<E> {
-    pub fn new(address: SocketAddr, timestamp: Timestamp) -> UserRecord<E> {
+    pub fn new(address: SocketAddr) -> UserRecord<E> {
         UserRecord {
             user: User::new(address),
-            timestamp,
             owned_entities: HashSet::new(),
         }
     }
