@@ -66,5 +66,5 @@ pub use keys::ComponentKey;
 pub use room::{room_key::RoomKey, RoomMut, RoomRef};
 pub use server::Server;
 pub use server_config::ServerConfig;
-pub use user::{user_key::UserKey, UserMut, UserRecord, UserRef};
+pub use user::{user_key::UserKey, User, UserMut, UserRef};
 pub use user_scope::UserScopeMut;

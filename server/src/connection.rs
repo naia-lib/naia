@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock},
@@ -12,10 +13,12 @@ use naia_shared::{
 use super::{
     command_receiver::CommandReceiver, entity_manager::EntityManager,
     global_diff_handler::GlobalDiffHandler, keys::ComponentKey, packet_writer::PacketWriter,
-    ping_manager::PingManager, world_record::WorldRecord,
+    ping_manager::PingManager, user::user_key::UserKey, world_record::WorldRecord,
 };
 
 pub struct Connection<P: ProtocolType, E: Copy + Eq + Hash> {
+    pub user_key: UserKey,
+    owned_entities: HashSet<E>,
     base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
@@ -24,13 +27,16 @@ pub struct Connection<P: ProtocolType, E: Copy + Eq + Hash> {
 
 impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
     pub fn new(
-        address: SocketAddr,
         connection_config: &ConnectionConfig,
+        user_address: SocketAddr,
+        user_key: &UserKey,
         diff_handler: &Arc<RwLock<GlobalDiffHandler>>,
     ) -> Self {
         Connection {
-            base_connection: BaseConnection::new(address, connection_config),
-            entity_manager: EntityManager::new(address, diff_handler),
+            user_key: *user_key,
+            owned_entities: HashSet::new(),
+            base_connection: BaseConnection::new(user_address, connection_config),
+            entity_manager: EntityManager::new(user_address, diff_handler),
             ping_manager: PingManager::new(),
             command_receiver: CommandReceiver::new(),
         }
@@ -242,11 +248,29 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
         return self.base_connection.get_incoming_message();
     }
 
-    pub fn get_address(&self) -> SocketAddr {
+    pub fn address(&self) -> SocketAddr {
         return self.base_connection.get_address();
     }
 
     pub fn get_last_received_tick(&self) -> u16 {
         return self.base_connection.get_last_received_tick();
+    }
+
+    pub fn own_entity(&mut self, entity: &E) {
+        self.owned_entities.insert(*entity);
+    }
+
+    pub fn disown_entity(&mut self, entity: &E) {
+        self.owned_entities.remove(&entity);
+    }
+
+    pub fn owned_entities(&self) -> Vec<E> {
+        let mut output = Vec::new();
+
+        for owned_entity in &self.owned_entities {
+            output.push(*owned_entity);
+        }
+
+        return output;
     }
 }

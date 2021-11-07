@@ -135,7 +135,7 @@ impl<P: ProtocolType> HandshakeManager<P> {
         let mut reader = PacketReader::new(incoming_payload);
         let new_timestamp = Timestamp::read(&mut reader);
 
-        if let Some(prev_timestamp) = self.address_to_timestamp_map.get(&connection.get_address()) {
+        if let Some(prev_timestamp) = self.address_to_timestamp_map.get(&connection.address()) {
             if *prev_timestamp == new_timestamp {
                 connection.process_incoming_header(world_record, &incoming_header);
 
@@ -159,7 +159,7 @@ impl<P: ProtocolType> HandshakeManager<P> {
     ) {
         let payload =
             connection.process_outgoing_header(None, 0, PacketType::ServerConnectResponse, &[]);
-        io.send_packet(Packet::new_raw(connection.get_address(), payload));
+        io.send_packet(Packet::new_raw(connection.address(), payload));
         connection.mark_sent();
     }
 }
