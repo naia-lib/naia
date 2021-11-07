@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
-use naia_client_socket::{Socket, Packet};
+use naia_client_socket::{Packet, Socket};
 
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
@@ -14,11 +14,11 @@ use super::{
     entity_ref::EntityRef,
     error::NaiaClientError,
     event::Event,
+    handshake_manager::{HandshakeManager, HandshakeResult},
+    io::Io,
     owned_entity::OwnedEntity,
     server_connection::ServerConnection,
     tick_manager::TickManager,
-    handshake_manager::{HandshakeManager, HandshakeResult},
-    io::Io,
 };
 
 /// Client can send/receive messages to/from a server, and has a pool of
@@ -102,7 +102,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
 
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
-        self.handshake_manager.set_auth_message(auth.into_protocol());
+        self.handshake_manager
+            .set_auth_message(auth.into_protocol());
     }
 
     // Messages
@@ -367,7 +368,11 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                                 _ => {} // TODO: explicitly cover these cases
                             }
                         } else {
-                            if self.handshake_manager.receive_packet(&mut self.tick_manager, packet) == HandshakeResult::Connected {
+                            if self
+                                .handshake_manager
+                                .receive_packet(&mut self.tick_manager, packet)
+                                == HandshakeResult::Connected
+                            {
                                 let server_connection = ServerConnection::new(
                                     self.server_address(),
                                     &self.connection_config,

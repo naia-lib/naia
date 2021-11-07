@@ -1,4 +1,4 @@
-use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, Packet};
+use naia_client_socket::{NaiaClientSocketError, Packet, PacketReceiver, PacketSender};
 
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,

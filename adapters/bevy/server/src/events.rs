@@ -1,6 +1,6 @@
 use bevy::ecs::entity::Entity;
 
-use naia_server::{ProtocolType, UserRecord, UserKey};
+use naia_server::{ProtocolType, UserKey, UserRecord};
 
 pub struct AuthorizationEvent<P: ProtocolType>(pub UserKey, pub P);
 pub struct ConnectionEvent(pub UserKey);

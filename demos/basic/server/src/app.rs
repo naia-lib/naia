@@ -4,7 +4,6 @@ use naia_server::{
 
 use naia_demo_world::{Entity, World as DemoWorld};
 
-
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
     protocol::{Character, Protocol, StringMessage},
