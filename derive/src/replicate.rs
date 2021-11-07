@@ -217,10 +217,7 @@ pub fn get_dyn_mut_method(protocol_name: &Ident) -> TokenStream {
     };
 }
 
-fn get_clone_method(
-    replica_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
-) -> TokenStream {
+fn get_clone_method(replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {

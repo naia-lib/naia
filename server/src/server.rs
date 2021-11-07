@@ -8,9 +8,7 @@ use std::{
 
 use slotmap::DenseSlotMap;
 
-use naia_server_socket::{
-    Packet, ServerAddrs, Socket,
-};
+use naia_server_socket::{Packet, ServerAddrs, Socket};
 
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
@@ -27,15 +25,15 @@ use super::{
     event::Event,
     global_diff_handler::GlobalDiffHandler,
     global_entity_record::GlobalEntityRecord,
+    handshake_manager::{HandshakeManager, HandshakeResult},
+    io::Io,
     keys::ComponentKey,
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},
     server_config::ServerConfig,
     tick_manager::TickManager,
-    user::{user_key::UserKey, UserRecord, UserMut, UserRef, User},
+    user::{user_key::UserKey, User, UserMut, UserRecord, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
-    handshake_manager::{HandshakeManager, HandshakeResult},
-    io::Io,
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -153,7 +151,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         // new connections
         while let Some(user_key) = self.outstanding_connects.pop_front() {
             if let Some(user_record) = self.user_records.get(user_key) {
-
                 let user_address = user_record.user.address;
 
                 self.address_to_user_key_map.insert(user_address, user_key);
@@ -297,7 +294,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                 while let Some(payload) =
                     connection.get_outgoing_packet(&world, &self.world_record, server_tick_opt)
                 {
-                    self.io.send_packet(Packet::new_raw(user_record.user.address, payload));
+                    self.io
+                        .send_packet(Packet::new_raw(user_record.user.address, payload));
                     connection.mark_sent();
                 }
             }
@@ -710,7 +708,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         }
 
         if let Some(user_record) = self.user_records.remove(*user_key) {
-            self.address_to_user_key_map.remove(&user_record.user.address);
+            self.address_to_user_key_map
+                .remove(&user_record.user.address);
             self.client_connections.remove(&user_key);
             self.entity_scope_map.remove_user(user_key);
 
@@ -720,7 +719,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                 }
             }
 
-            self.handshake_manager.delete_user(&user_record.user.address);
+            self.handshake_manager
+                .delete_user(&user_record.user.address);
 
             return Some(user_record.user);
         }
@@ -858,7 +858,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                                 PacketType::Heartbeat,
                                 &[],
                             );
-                            self.io.send_packet(Packet::new_raw(user_record.user.address, payload));
+                            self.io
+                                .send_packet(Packet::new_raw(user_record.user.address, payload));
                             connection.mark_sent();
                         }
                     }
@@ -889,37 +890,45 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                                 &mut self.io,
                                 server_tick,
                                 &address,
-                                &payload)
-                        },
+                                &payload,
+                            )
+                        }
                         PacketType::ClientConnectRequest => {
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
-                                if let Some(mut connection) = self.client_connections.get_mut(user_key) {
-                                    if let HandshakeResult::DisconnectUser = self.handshake_manager.receive_old_connect_request(
-                                        &mut self.io,
-                                        &self.world_record,
-                                        &mut connection,
-                                        &header,
-                                        &payload) {
+                                if let Some(mut connection) =
+                                    self.client_connections.get_mut(user_key)
+                                {
+                                    if let HandshakeResult::DisconnectUser =
+                                        self.handshake_manager.receive_old_connect_request(
+                                            &mut self.io,
+                                            &self.world_record,
+                                            &mut connection,
+                                            &header,
+                                            &payload,
+                                        )
+                                    {
                                         self.outstanding_disconnects.push_back(*user_key);
                                     }
                                 }
                             } else {
-                                match self.handshake_manager.receive_new_connect_request(&self.manifest,
-                                                                                         &payload) {
+                                match self
+                                    .handshake_manager
+                                    .receive_new_connect_request(&self.manifest, &payload)
+                                {
                                     HandshakeResult::AuthUser(auth_message) => {
                                         let user_record = UserRecord::new(address);
                                         let user_key = self.user_records.insert(user_record);
                                         self.outstanding_auths.push_back((user_key, auth_message));
-                                    },
+                                    }
                                     HandshakeResult::ConnectUser => {
                                         let user_record = UserRecord::new(address);
                                         let user_key = self.user_records.insert(user_record);
                                         self.accept_connection(&user_key);
-                                    },
-                                    _ => {},
+                                    }
+                                    _ => {}
                                 }
                             }
-                        },
+                        }
                         PacketType::Data => {
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
                                 let server_tick_opt = self.server_tick();

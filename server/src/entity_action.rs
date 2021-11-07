@@ -35,7 +35,9 @@ impl<P: ProtocolType, E: Copy> Clone for EntityAction<P, E> {
             EntityAction::OwnEntity(a) => EntityAction::OwnEntity(*a),
             EntityAction::DisownEntity(a) => EntityAction::DisownEntity(*a),
             EntityAction::InsertComponent(a, b, c) => EntityAction::InsertComponent(*a, *b, *c),
-            EntityAction::UpdateComponent(a, b, c, d) => EntityAction::UpdateComponent(*a, *b, c.clone(), *d),
+            EntityAction::UpdateComponent(a, b, c, d) => {
+                EntityAction::UpdateComponent(*a, *b, c.clone(), *d)
+            }
             EntityAction::RemoveComponent(a) => EntityAction::RemoveComponent(*a),
         }
     }

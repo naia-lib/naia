@@ -22,9 +22,7 @@ pub struct User {
 
 impl User {
     pub fn new(address: SocketAddr) -> Self {
-        Self {
-            address,
-        }
+        Self { address }
     }
 }
 

@@ -5,10 +5,7 @@ use naia_hecs_demo_shared::protocol::{Protocol, StringMessage};
 use crate::app::App;
 
 pub fn process_events(app: &mut App) {
-    for event in app
-        .client
-        .receive(app.world.proxy_mut(&mut app.world_data))
-    {
+    for event in app.client.receive(app.world.proxy_mut(&mut app.world_data)) {
         match event {
             Ok(Event::Connection) => {
                 info!("Client connected to: {}", app.client.server_address());

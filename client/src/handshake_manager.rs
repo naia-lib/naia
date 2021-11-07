@@ -11,8 +11,8 @@ pub use naia_shared::{
 };
 
 use super::{
-    io::Io,
     connection_state::{ConnectionState, ConnectionState::AwaitingChallengeResponse},
+    io::Io,
     tick_manager::TickManager,
 };
 
@@ -32,7 +32,6 @@ pub struct HandshakeManager<P: ProtocolType> {
 
 impl<P: ProtocolType> HandshakeManager<P> {
     pub fn new(send_interval: Duration) -> Self {
-
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
 
@@ -117,19 +116,18 @@ impl<P: ProtocolType> HandshakeManager<P> {
         self.connection_state = AwaitingChallengeResponse;
     }
 
-    pub fn receive_packet(&mut self, tick_manager: &mut Option<TickManager>, packet: Packet) -> HandshakeResult {
+    pub fn receive_packet(
+        &mut self,
+        tick_manager: &mut Option<TickManager>,
+        packet: Packet,
+    ) -> HandshakeResult {
         let (header, payload) = StandardHeader::read(packet.payload());
         match header.packet_type() {
             PacketType::ServerChallengeResponse => {
-                if self.connection_state
-                    == ConnectionState::AwaitingChallengeResponse
-                {
+                if self.connection_state == ConnectionState::AwaitingChallengeResponse {
                     if let Some(my_timestamp) = self.pre_connection_timestamp {
                         let mut reader = PacketReader::new(&payload);
-                        let server_tick = reader
-                            .get_cursor()
-                            .read_u16::<BigEndian>()
-                            .unwrap();
+                        let server_tick = reader.get_cursor().read_u16::<BigEndian>().unwrap();
                         let payload_timestamp = Timestamp::read(&mut reader);
 
                         if my_timestamp == payload_timestamp {
@@ -137,15 +135,13 @@ impl<P: ProtocolType> HandshakeManager<P> {
                             for _ in 0..32 {
                                 digest_bytes.push(reader.read_u8());
                             }
-                            self.pre_connection_digest =
-                                Some(digest_bytes.into_boxed_slice());
+                            self.pre_connection_digest = Some(digest_bytes.into_boxed_slice());
 
                             if let Some(tick_manager) = tick_manager {
                                 tick_manager.set_initial_tick(server_tick);
                             }
 
-                            self.connection_state =
-                                ConnectionState::AwaitingConnectResponse;
+                            self.connection_state = ConnectionState::AwaitingConnectResponse;
                         }
                     }
                 }

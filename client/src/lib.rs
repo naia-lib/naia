@@ -20,14 +20,14 @@ mod entity_record;
 mod entity_ref;
 mod error;
 mod event;
+mod handshake_manager;
+mod io;
 mod owned_entity;
 mod packet_writer;
 mod ping_manager;
 mod server_connection;
 mod tick_manager;
 mod tick_queue;
-mod handshake_manager;
-mod io;
 
 pub use naia_shared::{
     wrapping_diff, Instant, LinkConditionerConfig, ProtocolType, Random, Replicate, SharedConfig,

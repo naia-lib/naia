@@ -1,10 +1,4 @@
-
-use std::{
-    collections::HashMap,
-    hash::Hash,
-    net::SocketAddr,
-    marker::PhantomData,
-};
+use std::{collections::HashMap, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use byteorder::{BigEndian, WriteBytesExt};
 use ring::{hmac, rand};
@@ -18,11 +12,7 @@ pub use naia_shared::{
     Timestamp, WorldMutType, WorldRefType,
 };
 
-use super::{
-    client_connection::ClientConnection,
-    world_record::WorldRecord,
-    io::Io,
-};
+use super::{client_connection::ClientConnection, io::Io, world_record::WorldRecord};
 
 pub enum HandshakeResult<P: ProtocolType> {
     None,
@@ -51,20 +41,23 @@ impl<P: ProtocolType> HandshakeManager<P> {
         }
     }
 
-    pub fn receive_challenge_request(&mut self, io: &mut Io, server_tick: u16, address: &SocketAddr, incoming_bytes: &Box<[u8]>) {
+    pub fn receive_challenge_request(
+        &mut self,
+        io: &mut Io,
+        server_tick: u16,
+        address: &SocketAddr,
+        incoming_bytes: &Box<[u8]>,
+    ) {
         let mut reader = PacketReader::new(incoming_bytes);
         let timestamp = Timestamp::read(&mut reader);
 
         let mut timestamp_bytes = Vec::new();
         timestamp.write(&mut timestamp_bytes);
-        let timestamp_hash: hmac::Tag =
-            hmac::sign(&self.connection_hash_key, &timestamp_bytes);
+        let timestamp_hash: hmac::Tag = hmac::sign(&self.connection_hash_key, &timestamp_bytes);
 
         let mut outgoing_bytes = Vec::new();
         // write current tick
-        outgoing_bytes
-            .write_u16::<BigEndian>(server_tick)
-            .unwrap();
+        outgoing_bytes.write_u16::<BigEndian>(server_tick).unwrap();
 
         //write timestamp
         outgoing_bytes.append(&mut timestamp_bytes);
@@ -85,8 +78,11 @@ impl<P: ProtocolType> HandshakeManager<P> {
         /////////////////////////
     }
 
-    pub fn receive_new_connect_request(&mut self, manifest: &Manifest<P>, incoming_bytes: &Box<[u8]>) -> HandshakeResult<P> {
-
+    pub fn receive_new_connect_request(
+        &mut self,
+        manifest: &Manifest<P>,
+        incoming_bytes: &Box<[u8]>,
+    ) -> HandshakeResult<P> {
         let mut reader = PacketReader::new(incoming_bytes);
         let timestamp = Timestamp::read(&mut reader);
 
@@ -98,11 +94,8 @@ impl<P: ProtocolType> HandshakeManager<P> {
         for _ in 0..32 {
             digest_bytes.push(reader.read_u8());
         }
-        let validation_result = hmac::verify(
-            &self.connection_hash_key,
-            &timestamp_bytes,
-            &digest_bytes,
-        );
+        let validation_result =
+            hmac::verify(&self.connection_hash_key, &timestamp_bytes, &digest_bytes);
         if validation_result.is_err() {
             return HandshakeResult::None;
         }
@@ -117,21 +110,21 @@ impl<P: ProtocolType> HandshakeManager<P> {
 
         if has_auth {
             let auth_kind = P::Kind::from_u16(reader.read_u16());
-            let auth_message =
-                manifest.create_replica(auth_kind, &mut reader, 0);
+            let auth_message = manifest.create_replica(auth_kind, &mut reader, 0);
             return HandshakeResult::AuthUser(auth_message);
         } else {
             return HandshakeResult::ConnectUser;
         }
     }
 
-    pub fn receive_old_connect_request<E: Copy + Eq + Hash>(&mut self,
-                                       io: &mut Io,
-                                       world_record: &WorldRecord<E, P::Kind>,
-                                       connection: &mut ClientConnection<P, E>,
-                                       incoming_header: &StandardHeader,
-                                       incoming_payload: &Box<[u8]>) -> HandshakeResult<P> {
-
+    pub fn receive_old_connect_request<E: Copy + Eq + Hash>(
+        &mut self,
+        io: &mut Io,
+        world_record: &WorldRecord<E, P::Kind>,
+        connection: &mut ClientConnection<P, E>,
+        incoming_header: &StandardHeader,
+        incoming_payload: &Box<[u8]>,
+    ) -> HandshakeResult<P> {
         // At this point, we have already sent the ServerConnectResponse
         // message, but we continue to send the message till the Client
         // stops sending the ClientConnectRequest
@@ -141,9 +134,7 @@ impl<P: ProtocolType> HandshakeManager<P> {
 
         if let Some(prev_timestamp) = self.address_to_timestamp_map.get(&connection.get_address()) {
             if *prev_timestamp == new_timestamp {
-
-                connection
-                    .process_incoming_header(world_record, &incoming_header);
+                connection.process_incoming_header(world_record, &incoming_header);
 
                 // send connect accept message //
                 let outgoing_packet = connection.process_outgoing_header(
@@ -152,10 +143,7 @@ impl<P: ProtocolType> HandshakeManager<P> {
                     PacketType::ServerConnectResponse,
                     &[],
                 );
-                io.send_packet(Packet::new_raw(
-                    connection.get_address(),
-                    outgoing_packet,
-                ));
+                io.send_packet(Packet::new_raw(connection.get_address(), outgoing_packet));
                 connection.mark_sent();
                 /////////////////////////////////
             } else {

@@ -1,9 +1,6 @@
-
 use std::panic;
 
-use naia_server_socket::{
-    NaiaServerSocketError, Packet, PacketReceiver, PacketSender,
-};
+use naia_server_socket::{NaiaServerSocketError, Packet, PacketReceiver, PacketSender};
 
 pub use naia_shared::{
     wrapping_diff, Connection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
