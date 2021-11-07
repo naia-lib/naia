@@ -57,7 +57,7 @@ impl App {
                     info!("Server echo -> {}", new_message_contents);
 
                     let message = Text::new(&new_message_contents);
-                    self.server.queue_message(&user_key, &message, true);
+                    self.server.send_message(&user_key, &message, true);
 
                     // Sleep the thread to keep the demo from being unintellibly fast
                     let sleep_time = Duration::from_millis(500);

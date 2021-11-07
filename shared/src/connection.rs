@@ -116,7 +116,7 @@ impl<P: ProtocolType> Connection<P> {
     }
 
     /// Queue up a message to be sent to the remote host
-    pub fn queue_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         return self
             .message_manager
             .queue_outgoing_message(message, guaranteed_delivery);

@@ -57,7 +57,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     }
 
     //// Messages ////
-    pub fn queue_message<R: Replicate<P>>(
+    pub fn send_message<R: Replicate<P>>(
         &mut self,
         user_key: &UserKey,
         message_ref: &R,
@@ -65,7 +65,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     ) {
         return self
             .server
-            .queue_message(user_key, message_ref, guaranteed_delivery);
+            .send_message(user_key, message_ref, guaranteed_delivery);
     }
 
     //// Updates ////

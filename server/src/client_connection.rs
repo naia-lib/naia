@@ -229,8 +229,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
-        return self.connection.queue_message(message, guaranteed_delivery);
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
+        return self.connection.send_message(message, guaranteed_delivery);
     }
 
     pub fn get_incoming_message(&mut self) -> Option<P> {

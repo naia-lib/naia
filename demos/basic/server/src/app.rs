@@ -125,7 +125,7 @@ impl App {
                         );
 
                         let new_message = StringMessage::new(new_message_contents);
-                        self.server.queue_message(&user_key, &new_message, true);
+                        self.server.send_message(&user_key, &new_message, true);
                     }
 
                     // Iterate through Characters, marching them from (0,0) to (20, N)

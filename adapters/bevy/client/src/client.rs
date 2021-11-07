@@ -62,12 +62,12 @@ impl<'a, P: ProtocolType> Client<'a, P> {
     }
 
     //// Messages ////
-    pub fn queue_message<R: Replicate<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
-        return self.client.queue_message(message_ref, guaranteed_delivery);
+    pub fn send_message<R: Replicate<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
+        return self.client.send_message(message_ref, guaranteed_delivery);
     }
 
-    pub fn queue_command<R: Replicate<P>>(&mut self, entity: &Entity, command: R) {
-        return self.client.queue_command(entity, command);
+    pub fn send_command<R: Replicate<P>>(&mut self, entity: &Entity, command: R) {
+        return self.client.send_command(entity, command);
     }
 
     //// Entities ////

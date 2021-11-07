@@ -85,7 +85,7 @@ impl App {
                 Ok(Event::Tick) => {
                     if let Some(entity) = self.owned_entity {
                         if let Some(command) = self.queued_command.take() {
-                            self.client.queue_command(&entity, command);
+                            self.client.send_command(&entity, command);
                         }
                     }
                 }
