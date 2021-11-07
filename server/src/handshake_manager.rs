@@ -6,13 +6,13 @@ use ring::{hmac, rand};
 use naia_server_socket::Packet;
 
 pub use naia_shared::{
-    wrapping_diff, Connection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
+    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
     ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
     ProtocolKindType, ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
     Timestamp, WorldMutType, WorldRefType,
 };
 
-use super::{client_connection::ClientConnection, io::Io, world_record::WorldRecord};
+use super::{connection::Connection, io::Io, world_record::WorldRecord};
 
 pub enum HandshakeResult<P: ProtocolType> {
     None,
@@ -124,7 +124,7 @@ impl<P: ProtocolType> HandshakeManager<P> {
         &mut self,
         io: &mut Io,
         world_record: &WorldRecord<E, P::Kind>,
-        connection: &mut ClientConnection<P, E>,
+        connection: &mut Connection<P, E>,
         incoming_header: &StandardHeader,
         incoming_payload: &Box<[u8]>,
     ) -> HandshakeResult<P> {
@@ -155,7 +155,7 @@ impl<P: ProtocolType> HandshakeManager<P> {
     pub fn send_connect_accept_response<E: Copy + Eq + Hash>(
         &mut self,
         io: &mut Io,
-        connection: &mut ClientConnection<P, E>,
+        connection: &mut Connection<P, E>,
     ) {
         let payload =
             connection.process_outgoing_header(None, 0, PacketType::ServerConnectResponse, &[]);

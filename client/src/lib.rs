@@ -13,6 +13,7 @@
 mod client;
 mod client_config;
 mod command_receiver;
+mod connection;
 mod connection_state;
 mod entity_action;
 mod entity_manager;
@@ -25,7 +26,6 @@ mod io;
 mod owned_entity;
 mod packet_writer;
 mod ping_manager;
-mod server_connection;
 mod tick_manager;
 mod tick_queue;
 

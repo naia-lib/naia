@@ -3,8 +3,8 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 use naia_client_socket::Packet;
 
 use naia_shared::{
-    Connection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolType,
-    ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType,
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
+    ProtocolType, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType,
 };
 
 use super::{
@@ -13,8 +13,8 @@ use super::{
     tick_manager::TickManager, tick_queue::TickQueue,
 };
 
-pub struct ServerConnection<P: ProtocolType, E: Copy + Eq + Hash> {
-    connection: Connection<P>,
+pub struct Connection<P: ProtocolType, E: Copy + Eq + Hash> {
+    base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
     command_sender: VecDeque<(OwnedEntity<E>, P)>,
@@ -22,10 +22,10 @@ pub struct ServerConnection<P: ProtocolType, E: Copy + Eq + Hash> {
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
-impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
+impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
     pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
-        return ServerConnection {
-            connection: Connection::new(address, connection_config),
+        return Connection {
+            base_connection: BaseConnection::new(address, connection_config),
             entity_manager: EntityManager::new(),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
@@ -38,7 +38,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
     }
 
     pub fn get_outgoing_packet(&mut self, host_tick_opt: Option<u16>) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_messages() || !self.command_sender.is_empty() {
+        if self.base_connection.has_outgoing_messages() || !self.command_sender.is_empty() {
             let mut writer = PacketWriter::new();
 
             // Commands
@@ -62,10 +62,11 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
 
             // Messages
             let next_packet_index: u16 = self.get_next_packet_index();
-            while let Some(popped_message) = self.connection.pop_outgoing_message(next_packet_index)
+            while let Some(popped_message) =
+                self.base_connection.pop_outgoing_message(next_packet_index)
             {
                 if !writer.write_message(&popped_message) {
-                    self.connection
+                    self.base_connection
                         .unpop_outgoing_message(next_packet_index, popped_message);
                     break;
                 }
@@ -79,7 +80,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
                 // Add header to it
                 let payload = self.process_outgoing_header(
                     host_tick_opt,
-                    self.connection.get_last_received_tick(),
+                    self.base_connection.get_last_received_tick(),
                     PacketType::Data,
                     &out_bytes,
                 );
@@ -103,7 +104,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
             let manager_type: ManagerType = reader.read_u8().into();
             match manager_type {
                 ManagerType::Message => {
-                    self.connection
+                    self.base_connection
                         .process_message_data(&mut reader, manifest, packet_index);
                 }
                 ManagerType::Entity => {
@@ -183,19 +184,19 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
     // Pass-through methods to underlying Connection
 
     pub fn mark_sent(&mut self) {
-        return self.connection.mark_sent();
+        return self.base_connection.mark_sent();
     }
 
     pub fn should_send_heartbeat(&self) -> bool {
-        return self.connection.should_send_heartbeat();
+        return self.base_connection.should_send_heartbeat();
     }
 
     pub fn mark_heard(&mut self) {
-        return self.connection.mark_heard();
+        return self.base_connection.mark_heard();
     }
 
     pub fn should_drop(&self) -> bool {
-        return self.connection.should_drop();
+        return self.base_connection.should_drop();
     }
 
     pub fn process_incoming_header(
@@ -210,7 +211,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
                 self.ping_manager.get_jitter(),
             );
         }
-        self.connection.process_incoming_header(header, &mut None);
+        self.base_connection
+            .process_incoming_header(header, &mut None);
     }
 
     pub fn process_outgoing_header(
@@ -220,7 +222,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
-        return self.connection.process_outgoing_header(
+        return self.base_connection.process_outgoing_header(
             host_tick,
             last_received_tick,
             packet_type,
@@ -229,19 +231,21 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
     }
 
     pub fn get_next_packet_index(&self) -> SequenceNumber {
-        return self.connection.get_next_packet_index();
+        return self.base_connection.get_next_packet_index();
     }
 
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
-        return self.connection.send_message(message, guaranteed_delivery);
+        return self
+            .base_connection
+            .send_message(message, guaranteed_delivery);
     }
 
     pub fn get_incoming_message(&mut self) -> Option<P> {
-        return self.connection.get_incoming_message();
+        return self.base_connection.get_incoming_message();
     }
 
     pub fn get_last_received_tick(&self) -> u16 {
-        self.connection.get_last_received_tick()
+        self.base_connection.get_last_received_tick()
     }
 
     // Commands

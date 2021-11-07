@@ -11,14 +11,14 @@ use slotmap::DenseSlotMap;
 use naia_server_socket::{Packet, ServerAddrs, Socket};
 
 pub use naia_shared::{
-    wrapping_diff, Connection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
+    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
     ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
     ProtocolKindType, ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
     Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{
-    client_connection::ClientConnection,
+    connection::Connection,
     entity_ref::{EntityMut, EntityRef, WorldlessEntityMut},
     entity_scope_map::EntityScopeMap,
     error::NaiaServerError,
@@ -51,7 +51,7 @@ pub struct Server<P: ProtocolType, E: Copy + Eq + Hash> {
     // Users
     user_records: DenseSlotMap<UserKey, UserRecord<E>>,
     address_to_user_key_map: HashMap<SocketAddr, UserKey>,
-    client_connections: HashMap<UserKey, ClientConnection<P, E>>,
+    client_connections: HashMap<UserKey, Connection<P, E>>,
     // Rooms
     rooms: DenseSlotMap<RoomKey, Room<E>>,
     // Entities
@@ -151,7 +151,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         // new connections
         while let Some(user_key) = self.outstanding_connects.pop_front() {
             if let Some(user_record) = self.user_records.get(user_key) {
-                let mut new_connection = ClientConnection::new(
+                let mut new_connection = Connection::new(
                     user_record.user.address,
                     &self.connection_config,
                     &self.diff_handler,

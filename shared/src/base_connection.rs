@@ -12,7 +12,7 @@ use super::{
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
-pub struct Connection<P: ProtocolType> {
+pub struct BaseConnection<P: ProtocolType> {
     address: SocketAddr,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
@@ -21,10 +21,10 @@ pub struct Connection<P: ProtocolType> {
     last_received_tick: u16,
 }
 
-impl<P: ProtocolType> Connection<P> {
-    /// Create a new Connection, given the appropriate underlying managers
+impl<P: ProtocolType> BaseConnection<P> {
+    /// Create a new BaseConnection, given the appropriate underlying managers
     pub fn new(address: SocketAddr, config: &ConnectionConfig) -> Self {
-        return Connection {
+        return BaseConnection {
             address,
             heartbeat_timer: Timer::new(config.heartbeat_interval),
             timeout_timer: Timer::new(config.disconnection_timeout_duration),

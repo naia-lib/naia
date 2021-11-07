@@ -9,7 +9,7 @@
 )]
 
 mod ack_manager;
-mod connection;
+mod base_connection;
 mod connection_config;
 mod diff_mask;
 mod entity_action_type;
@@ -41,7 +41,7 @@ pub use naia_socket_shared::{
 };
 
 pub use ack_manager::AckManager;
-pub use connection::Connection;
+pub use base_connection::BaseConnection;
 pub use connection_config::ConnectionConfig;
 pub use diff_mask::DiffMask;
 pub use entity_action_type::EntityActionType;

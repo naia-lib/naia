@@ -10,6 +10,7 @@ pub use naia_shared::{
 
 use super::{
     client_config::ClientConfig,
+    connection::Connection,
     entity_action::EntityAction,
     entity_ref::EntityRef,
     error::NaiaClientError,
@@ -17,7 +18,6 @@ use super::{
     handshake_manager::{HandshakeManager, HandshakeResult},
     io::Io,
     owned_entity::OwnedEntity,
-    server_connection::ServerConnection,
     tick_manager::TickManager,
 };
 
@@ -31,7 +31,7 @@ pub struct Client<P: ProtocolType, E: Copy + Eq + Hash> {
     socket: Socket,
     io: Io,
     address: Option<SocketAddr>,
-    server_connection: Option<ServerConnection<P, E>>,
+    server_connection: Option<Connection<P, E>>,
     handshake_manager: HandshakeManager<P>,
     // Events
     outstanding_connect: bool,
@@ -373,10 +373,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                                 .receive_packet(&mut self.tick_manager, packet)
                                 == HandshakeResult::Connected
                             {
-                                let server_connection = ServerConnection::new(
-                                    self.server_address(),
-                                    &self.connection_config,
-                                );
+                                let server_connection =
+                                    Connection::new(self.server_address(), &self.connection_config);
 
                                 self.server_connection = Some(server_connection);
                                 self.outstanding_connect = true;
@@ -398,7 +396,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
 fn internal_send_with_connection<P: ProtocolType, E: Copy + Eq + Hash>(
     host_tick: Option<u16>,
     io: &mut Io,
-    connection: &mut ServerConnection<P, E>,
+    connection: &mut Connection<P, E>,
     packet_type: PacketType,
     packet: Packet,
 ) {

@@ -5,8 +5,8 @@ use std::{
 };
 
 use naia_shared::{
-    Connection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolType,
-    ReplicateSafe, SequenceNumber, StandardHeader, WorldRefType,
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
+    ProtocolType, ReplicateSafe, SequenceNumber, StandardHeader, WorldRefType,
 };
 
 use super::{
@@ -15,21 +15,21 @@ use super::{
     ping_manager::PingManager, world_record::WorldRecord,
 };
 
-pub struct ClientConnection<P: ProtocolType, E: Copy + Eq + Hash> {
-    connection: Connection<P>,
+pub struct Connection<P: ProtocolType, E: Copy + Eq + Hash> {
+    base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
     command_receiver: CommandReceiver<P>,
 }
 
-impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
+impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
         diff_handler: &Arc<RwLock<GlobalDiffHandler>>,
     ) -> Self {
-        ClientConnection {
-            connection: Connection::new(address, connection_config),
+        Connection {
+            base_connection: BaseConnection::new(address, connection_config),
             entity_manager: EntityManager::new(address, diff_handler),
             ping_manager: PingManager::new(),
             command_receiver: CommandReceiver::new(),
@@ -42,14 +42,17 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
         world_record: &WorldRecord<E, P::Kind>,
         host_tick: Option<u16>,
     ) -> Option<Box<[u8]>> {
-        if self.connection.has_outgoing_messages() || self.entity_manager.has_outgoing_actions() {
+        if self.base_connection.has_outgoing_messages()
+            || self.entity_manager.has_outgoing_actions()
+        {
             let mut writer = PacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
-            while let Some(popped_message) = self.connection.pop_outgoing_message(next_packet_index)
+            while let Some(popped_message) =
+                self.base_connection.pop_outgoing_message(next_packet_index)
             {
                 if !writer.write_message(&popped_message) {
-                    self.connection
+                    self.base_connection
                         .unpop_outgoing_message(next_packet_index, popped_message);
                     break;
                 }
@@ -76,7 +79,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
                 // Add header to it
                 let payload = self.process_outgoing_header(
                     host_tick,
-                    self.connection.get_last_received_tick(),
+                    self.base_connection.get_last_received_tick(),
                     PacketType::Data,
                     &out_bytes,
                 );
@@ -109,7 +112,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
                 ManagerType::Message => {
                     // packet index shouldn't matter here because the server's impl of Property
                     // doesn't use it
-                    self.connection
+                    self.base_connection
                         .process_message_data(&mut reader, manifest, 0);
                 }
                 _ => {}
@@ -185,19 +188,19 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
     // Pass-through methods to underlying common connection
 
     pub fn mark_sent(&mut self) {
-        return self.connection.mark_sent();
+        return self.base_connection.mark_sent();
     }
 
     pub fn should_send_heartbeat(&self) -> bool {
-        return self.connection.should_send_heartbeat();
+        return self.base_connection.should_send_heartbeat();
     }
 
     pub fn mark_heard(&mut self) {
-        return self.connection.mark_heard();
+        return self.base_connection.mark_heard();
     }
 
     pub fn should_drop(&self) -> bool {
-        return self.connection.should_drop();
+        return self.base_connection.should_drop();
     }
 
     pub fn process_incoming_header(
@@ -205,7 +208,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
         world_record: &WorldRecord<E, P::Kind>,
         header: &StandardHeader,
     ) {
-        self.connection
+        self.base_connection
             .process_incoming_header(header, &mut Some(&mut self.entity_manager));
         self.entity_manager.process_delivered_packets(world_record);
     }
@@ -217,7 +220,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
-        return self.connection.process_outgoing_header(
+        return self.base_connection.process_outgoing_header(
             host_tick,
             last_received_tick,
             packet_type,
@@ -226,22 +229,24 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ClientConnection<P, E> {
     }
 
     pub fn get_next_packet_index(&self) -> SequenceNumber {
-        return self.connection.get_next_packet_index();
+        return self.base_connection.get_next_packet_index();
     }
 
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
-        return self.connection.send_message(message, guaranteed_delivery);
+        return self
+            .base_connection
+            .send_message(message, guaranteed_delivery);
     }
 
     pub fn get_incoming_message(&mut self) -> Option<P> {
-        return self.connection.get_incoming_message();
+        return self.base_connection.get_incoming_message();
     }
 
     pub fn get_address(&self) -> SocketAddr {
-        return self.connection.get_address();
+        return self.base_connection.get_address();
     }
 
     pub fn get_last_received_tick(&self) -> u16 {
-        return self.connection.get_last_received_tick();
+        return self.base_connection.get_last_received_tick();
     }
 }
