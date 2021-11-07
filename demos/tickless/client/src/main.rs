@@ -1,17 +1,21 @@
 extern crate cfg_if;
 
-use macroquad::prelude::*;
+#[macro_use]
+extern crate log;
+
+use log::LevelFilter;
+use simple_logger::SimpleLogger;
 
 mod app;
-use app::App;
+mod loop_native;
 
-#[macroquad::main("NaiaTicklessDemo")]
-async fn main() {
-    let mut app = App::new();
+fn main() {
+    // Uncomment the line below to enable logging. You don't need it if something
+    // else (e.g. quicksilver) is logging for you
+    SimpleLogger::new()
+        .with_level(LevelFilter::Info)
+        .init()
+        .expect("A logger was already initialized");
 
-    loop {
-        app.update();
-
-        next_frame().await
-    }
+    loop_native::start_loop(&mut app::App::new());
 }

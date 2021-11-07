@@ -12,7 +12,7 @@ use-webrtc = [ "naia-server/use-webrtc" ]
 
 [dependencies]
 naia-server = { path = "../../../server" }
-naia-default-world = { path = "../../default_world" }
 naia-tickless-demo-shared = { path = "../shared" }
+naia-empty-world = { path = "../../demo_utils/empty_world" }
 log = "0.4"
 simple_logger = { version = "1.4" }

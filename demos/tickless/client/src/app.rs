@@ -1,20 +1,19 @@
-use std::collections::HashSet;
-
 use naia_client::{Client as NaiaClient, ClientConfig, Event};
 
-use naia_default_world::{Entity, World as DefaultWorld, WorldMutType, WorldRefType};
-
-use naia_macroquad_demo_shared::{
+use naia_tickless_demo_shared::{
     get_server_address, get_shared_config,
-    protocol::{Protocol, Text},
+    Protocol, Text,
 };
 
-type World = DefaultWorld<Protocol>;
-type Client = NaiaClient<Protocol, Entity>;
+use naia_empty_world::{
+    EmptyWorldMut, EmptyEntity,
+};
+
+type Client = NaiaClient<Protocol, EmptyEntity>;
 
 pub struct App {
     client: Client,
-    world: World,
+    message_count: u16,
 }
 
 impl App {
@@ -24,19 +23,21 @@ impl App {
         let server_address = get_server_address();
 
         let mut client = Client::new(ClientConfig::default(), get_shared_config());
-        client.connect(server_address, None);
+        client.connect(server_address);
 
         App {
             client,
-            world: World::new(),
+            message_count: 0,
         }
     }
 
     pub fn update(&mut self) {
-        for event in self.client.receive(&mut self.world.proxy_mut()) {
+        for event in self.client.receive(&mut EmptyWorldMut::new()) {
             match event {
                 Ok(Event::Connection) => {
                     info!("Client connected to: {}", self.client.server_address());
+
+                    self.send_simple_message();
                 }
                 Ok(Event::Disconnection) => {
                     info!("Client disconnected from: {}", self.client.server_address());
@@ -44,8 +45,10 @@ impl App {
                 Ok(Event::Tick) => {
                     info!("TICK SHOULD NOT HAPPEN!");
                 }
-                Ok(Event::Message(_, Protocol::Text(text))) => {
-                    info!("message: {}", text.value.get());
+                Ok(Event::Message(Protocol::Text(text))) => {
+                    info!("Client recv <- {}", text.value.get());
+
+                    self.send_simple_message();
                 }
                 Err(err) => {
                     info!("Client Error: {}", err);
@@ -53,5 +56,14 @@ impl App {
                 _ => {}
             }
         }
+    }
+
+    fn send_simple_message(&mut self) {
+        let message_contents = format!("Client Message ({})", self.message_count);
+        info!("Client send -> {}", message_contents);
+
+        let message = Text::new(&message_contents);
+        self.client.queue_message(&message, true);
+        self.message_count = self.message_count.wrapping_add(1);
     }
 }

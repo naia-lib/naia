@@ -1,12 +1,15 @@
-use naia_server::{Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig};
+use std::{time::Duration, thread};
 
-use naia_tickless_demo_shared::{get_server_address, get_shared_config, Protocol};
+use naia_server::{Event, Server as NaiaServer, ServerAddrs, ServerConfig};
 
-type Server = NaiaServer<Protocol, u8>;
+use naia_tickless_demo_shared::{get_server_address, get_shared_config, Protocol, Text};
+
+use naia_empty_world::{EmptyWorldRef, EmptyEntity};
+
+type Server = NaiaServer<Protocol, EmptyEntity>;
 
 pub struct App {
     server: Server,
-    main_room_key: RoomKey,
 }
 
 impl App {
@@ -25,16 +28,15 @@ impl App {
                 .expect("could not parse advertised public WebRTC data address/port"),
         );
 
-        let mut server = Server::new(ServerConfig::default(), get_shared_config());
-        server.listen(server_addresses);
+        let mut server_config = ServerConfig::default();
+        server_config.require_auth = false;
+        server_config.disconnection_timeout_duration = Duration::from_secs(30);
 
-        // Create a new, singular room, which will contain Users and Entities that they
-        // can receive updates from
-        let main_room_key = server.make_room().key();
+        let mut server = Server::new(server_config, get_shared_config());
+        server.listen(server_addresses);
 
         App {
             server,
-            main_room_key,
         }
     }
 
@@ -44,48 +46,30 @@ impl App {
                 Ok(Event::Connection(user_key)) => {
                     let user_address = self
                         .server
-                        .user_mut(&user_key)
-                        .enter_room(&self.main_room_key)
+                        .user(&user_key)
                         .address();
 
                     info!("Naia Server connected to: {}", user_address);
                 }
-                Ok(Event::Disconnection(_, user)) => {
-                    info!("Naia Server disconnected from: {:?}", user.address);
+                Ok(Event::Disconnection(_)) => {
+                    info!("Naia Server disconnected from user");
                 }
-                Ok(Event::Message(_, Protocol::Text(text))) => {
-                    info!("message: {}", text.value.get());
+                Ok(Event::Message(user_key, Protocol::Text(text))) => {
+                    let client_message = text.value.get();
+                    info!("Server recv <- {}", client_message);
+
+                    let new_message_contents = format!("Server Message ({})", client_message);
+                    info!("Server echo -> {}", new_message_contents);
+
+                    let message = Text::new(&new_message_contents);
+                    self.server.queue_message(&user_key, &message, true);
+
+                    // Sleep the thread to keep the demo from being unintellibly fast
+                    let sleep_time = Duration::from_millis(500);
+                    thread::sleep(sleep_time);
                 }
                 Ok(Event::Tick) => {
                     info!("TICK SHOULD NOT HAPPEN!");
-                    //                    // All game logic should happen here,
-                    // on a tick event
-                    //
-                    //                    // Check whether Entities are in/out
-                    // of all possible Scopes               
-                    // for (_, user_key, entity) in self.server.scope_checks() {
-                    //                        // You'd normally do whatever
-                    // checks you need to in here..
-                    //                        // to determine whether each
-                    // Entity should be in scope or not.
-                    //
-                    //                        // This indicates the Entity
-                    // should be in this scope.             
-                    // self.server.user_scope(&user_key).include(&entity);
-                    //
-                    //                        // And call this if Entity should
-                    // NOT be in this scope.                
-                    // // self.server.user_scope(..).exclude(..);
-                    //                    }
-                    //
-                    //                    // VERY IMPORTANT! Calling this
-                    // actually sends all update data
-                    //                    // packets to all Clients that require
-                    // it. If you don't call this
-                    //                    // method, the Server will never
-                    // communicate with it's connected Clients
-                    //                    
-                    // self.server.send_all_updates(self.world.proxy());
                 }
                 Err(error) => {
                     info!("Naia Server error: {}", error);
@@ -93,5 +77,7 @@ impl App {
                 _ => {}
             }
         }
+
+        self.server.send_all_updates(EmptyWorldRef::new());
     }
 }
