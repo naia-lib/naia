@@ -16,7 +16,7 @@ impl Default for ColorValue {
     }
 }
 
-#[derive(Replicate, Clone)]
+#[derive(Replicate)]
 #[protocol_path = "crate::protocol::Protocol"]
 pub struct Color {
     pub value: Property<ColorValue>,

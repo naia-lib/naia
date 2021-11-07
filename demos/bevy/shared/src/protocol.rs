@@ -10,7 +10,7 @@ pub use color::{Color, ColorValue};
 pub use key_command::KeyCommand;
 pub use position::Position;
 
-#[derive(ProtocolType, Clone)]
+#[derive(ProtocolType)]
 pub enum Protocol {
     Auth(Auth),
     KeyCommand(KeyCommand),

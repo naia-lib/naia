@@ -10,7 +10,10 @@ use crate::{
 /// A struct that implements ReplicateSafe is a Message/Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a
 /// remote host
-pub trait Replicate<P: ProtocolType>: ReplicateSafe<P> + Clone {}
+pub trait Replicate<P: ProtocolType>: ReplicateSafe<P> {
+    /// Returns a clone of self
+    fn clone(&self) -> Self;
+}
 
 /// The part of ReplicateSafe which is object-safe
 pub trait ReplicateSafe<P: ProtocolType>: Sync + Send + 'static {

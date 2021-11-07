@@ -16,7 +16,7 @@ impl Default for Color {
     }
 }
 
-#[derive(Replicate, Clone)]
+#[derive(Replicate)]
 #[protocol_path = "crate::protocol::Protocol"]
 pub struct Square {
     pub x: Property<u16>,

@@ -2,7 +2,7 @@ use naia_derive::ProtocolType;
 
 use crate::text::Text;
 
-#[derive(ProtocolType, Clone)]
+#[derive(ProtocolType)]
 pub enum Protocol {
     Text(Text),
 }
