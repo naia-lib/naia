@@ -1,4 +1,4 @@
-use std::{collections::HashSet, time::Duration};
+use std::collections::HashSet;
 
 use macroquad::prelude::*;
 
@@ -31,10 +31,7 @@ impl App {
         let server_address = get_server_address();
         let auth = Some(Auth::new("charlie", "12345"));
 
-        let mut client_config = ClientConfig::default();
-        //client_config.minimum_command_latency = Some(Duration::from_millis(200));
-
-        let mut client = Client::new(client_config, get_shared_config());
+        let mut client = Client::new(ClientConfig::default(), get_shared_config());
         client.connect(server_address, auth);
 
         App {
