@@ -36,7 +36,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        for event in self.client.receive(&mut self.world.proxy_mut()) {
+        for event in self.client.receive(self.world.proxy_mut()) {
             match event {
                 Ok(Event::Connection) => {
                     info!("Client connected to: {}", self.client.server_address());

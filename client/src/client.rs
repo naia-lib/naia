@@ -225,7 +225,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
     /// Retrieves incoming update data, and maintains the connection.
     pub fn receive<W: WorldMutType<P, E>>(
         &mut self,
-        world: &mut W,
+        mut world: W,
     ) -> VecDeque<Result<Event<P, E>, NaiaClientError>> {
         let mut events = VecDeque::new();
 
@@ -258,7 +258,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                     return events; // exit early, we're disconnected, who cares?
                 }
                 // process replays
-                connection.process_replays(world);
+                connection.process_replays(&mut world);
                 // receive messages
                 while let Some(message) = connection.get_incoming_message() {
                     events.push_back(Ok(Event::Message(message)));
@@ -323,11 +323,11 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                 }
                 // update current tick & apply updates on tick boundary
                 if let Some(tick_manager) = &mut self.tick_manager {
-                    if connection.frame_begin(world, &self.manifest, tick_manager) {
+                    if connection.frame_begin(&mut world, &self.manifest, tick_manager) {
                         events.push_back(Ok(Event::Tick));
                     }
                 } else {
-                    connection.tickless_read_incoming(world, &self.manifest);
+                    connection.tickless_read_incoming(&mut world, &self.manifest);
                 }
             }
             None => {

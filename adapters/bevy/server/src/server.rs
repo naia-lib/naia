@@ -95,7 +95,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     }
 
     pub fn entities(&self) -> Vec<Entity> {
-        return self.server.entities(&self.world.proxy());
+        return self.server.entities(self.world.proxy());
     }
 
     //// Users ////

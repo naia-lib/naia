@@ -27,7 +27,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        for event in self.client.receive(&mut EmptyWorldMut::new()) {
+        for event in self.client.receive(EmptyWorldMut::new()) {
             match event {
                 Ok(Event::Connection) => {
                     info!("Client connected to: {}", self.client.server_address());

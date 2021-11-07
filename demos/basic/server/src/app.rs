@@ -129,7 +129,7 @@ impl App {
                     }
 
                     // Iterate through Characters, marching them from (0,0) to (20, N)
-                    for entity in self.server.entities(&self.world.proxy()) {
+                    for entity in self.server.entities(self.world.proxy()) {
                         if let Some(mut character) = self
                             .server
                             .entity_mut(self.world.proxy_mut(), &entity)

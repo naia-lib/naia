@@ -25,7 +25,7 @@ use crate::events::{
 pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<Client<P, Entity>>| {
         world.resource_scope(|world, mut client_resource: Mut<ClientResource>| {
-            let event_results = client.receive(&mut world.proxy_mut());
+            let event_results = client.receive(world.proxy_mut());
 
             let mut entities_to_spawn: Vec<Entity> = Vec::new();
             let mut entities_to_own: Vec<Entity> = Vec::new();
