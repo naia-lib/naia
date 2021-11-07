@@ -52,7 +52,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
                         &command,
                     ) {
                         self.command_receiver
-                            .queue_command(host_tick, owned_entity, command);
+                            .send_command(host_tick, owned_entity, command);
                     } else {
                         self.command_sender.push_front((owned_entity, command));
                         break;
@@ -232,8 +232,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
         return self.connection.get_next_packet_index();
     }
 
-    pub fn queue_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
-        return self.connection.queue_message(message, guaranteed_delivery);
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
+        return self.connection.send_message(message, guaranteed_delivery);
     }
 
     pub fn get_incoming_message(&mut self) -> Option<P> {
@@ -245,7 +245,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> ServerConnection<P, E> {
     }
 
     // Commands
-    pub fn queue_command<R: ReplicateSafe<P>>(&mut self, entity: OwnedEntity<E>, command: R) {
+    pub fn send_command<R: ReplicateSafe<P>>(&mut self, entity: OwnedEntity<E>, command: R) {
         let command_protocol = command.into_protocol();
         return self.command_sender.push_back((entity, command_protocol));
     }

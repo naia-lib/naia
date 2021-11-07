@@ -76,7 +76,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> CommandReceiver<P, E> {
     }
 
     /// Queues an Command to be ran locally on the Client
-    pub fn queue_command(&mut self, host_tick: u16, owned_entity: OwnedEntity<E>, command: P) {
+    pub fn send_command(&mut self, host_tick: u16, owned_entity: OwnedEntity<E>, command: P) {
         let world_entity = owned_entity.confirmed;
         self.queued_incoming_commands
             .push_back((host_tick, owned_entity, command.clone()));

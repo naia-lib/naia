@@ -252,14 +252,14 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn queue_message<R: ReplicateSafe<P>>(
+    pub fn send_message<R: ReplicateSafe<P>>(
         &mut self,
         user_key: &UserKey,
         message: &R,
         guaranteed_delivery: bool,
     ) {
         if let Some(connection) = self.client_connections.get_mut(user_key) {
-            connection.queue_message(message, guaranteed_delivery);
+            connection.send_message(message, guaranteed_delivery);
         }
     }
 

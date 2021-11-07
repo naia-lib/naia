@@ -128,19 +128,19 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn queue_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
-            connection.queue_message(message, guaranteed_delivery);
+            connection.send_message(message, guaranteed_delivery);
         }
     }
 
     /// Queues up a Command for an assigned Entity to be sent to the Server
-    pub fn queue_command<R: ReplicateSafe<P>>(&mut self, predicted_entity: &E, command: R) {
+    pub fn send_command<R: ReplicateSafe<P>>(&mut self, predicted_entity: &E, command: R) {
         if let Some(connection) = self.server_connection.as_mut() {
             if let Some(confirmed_entity) = connection.get_confirmed_entity(predicted_entity) {
                 let entity_pair: OwnedEntity<E> =
                     OwnedEntity::new(&confirmed_entity, &predicted_entity);
-                connection.queue_command(entity_pair, command);
+                connection.send_command(entity_pair, command);
             }
         }
     }

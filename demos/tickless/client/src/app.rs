@@ -58,7 +58,7 @@ impl App {
         info!("Client send -> {}", message_contents);
 
         let message = Text::new(&message_contents);
-        self.client.queue_message(&message, true);
+        self.client.send_message(&message, true);
         self.message_count = self.message_count.wrapping_add(1);
     }
 }

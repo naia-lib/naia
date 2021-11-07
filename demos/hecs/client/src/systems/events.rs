@@ -20,7 +20,7 @@ pub fn process_events(app: &mut App) {
                 let send_message_contents =
                     format!("Client Packet (message {})", app.message_count);
                 let send_message = StringMessage::new(send_message_contents);
-                app.client.queue_message(&send_message, true);
+                app.client.send_message(&send_message, true);
                 app.message_count += 1;
             }
             Ok(Event::SpawnEntity(_, _)) => {

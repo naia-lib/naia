@@ -64,7 +64,7 @@ pub fn send_messages(app: &mut App) {
         info!("Naia Server send -> {}: {}", address, message_contents);
 
         let message = StringMessage::new(message_contents);
-        app.server.queue_message(&user_key, &message, true);
+        app.server.send_message(&user_key, &message, true);
     }
 
     app.tick_count = app.tick_count.wrapping_add(1);
