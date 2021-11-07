@@ -8,7 +8,7 @@ pub use auth::Auth;
 pub use key_command::KeyCommand;
 pub use square::{Color, Square};
 
-#[derive(ProtocolType, Clone)]
+#[derive(ProtocolType)]
 pub enum Protocol {
     Auth(Auth),
     KeyCommand(KeyCommand),

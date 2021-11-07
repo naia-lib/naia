@@ -8,7 +8,7 @@ pub use auth::Auth;
 pub use character::Character;
 pub use string_message::StringMessage;
 
-#[derive(Clone, ProtocolType)]
+#[derive(ProtocolType)]
 pub enum Protocol {
     Character(Character),
     StringMessage(StringMessage),

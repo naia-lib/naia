@@ -12,7 +12,7 @@ pub use name::Name;
 pub use position::Position;
 pub use string_message::StringMessage;
 
-#[derive(ProtocolType, Clone)]
+#[derive(ProtocolType)]
 pub enum Protocol {
     Position(Position),
     Name(Name),

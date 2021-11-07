@@ -37,6 +37,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let dyn_mut_method = get_dyn_mut_method(&protocol_name);
     let to_protocol_method = get_into_protocol_method(&protocol_name, &replica_name);
     let protocol_copy_method = get_protocol_copy_method(&protocol_name, &replica_name);
+    let clone_method = get_clone_method(&replica_name, &properties);
     let mirror_method = get_mirror_method(&protocol_name, &replica_name, &properties);
     let set_mutator_method = get_set_mutator_method(&properties);
     let read_partial_method = get_read_partial_method(&enum_name, &properties);
@@ -83,7 +84,9 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #write_method
             #write_partial_method
         }
-        impl Replicate<#protocol_name> for #replica_name {}
+        impl Replicate<#protocol_name> for #replica_name {
+            #clone_method
+        }
     };
 
     proc_macro::TokenStream::from(gen)
@@ -210,6 +213,30 @@ pub fn get_dyn_mut_method(protocol_name: &Ident) -> TokenStream {
     return quote! {
         fn dyn_mut(&mut self) -> ReplicaDynMut<'_, #protocol_name> {
             return ReplicaDynMut::new(self);
+        }
+    };
+}
+
+fn get_clone_method(
+    replica_name: &Ident,
+    properties: &Vec<(Ident, Type)>,
+) -> TokenStream {
+    let mut output = quote! {};
+
+    for (field_name, _) in properties.iter() {
+        let new_output_right = quote! {
+            self.#field_name.get().clone(),
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    return quote! {
+        fn clone(&self) -> #replica_name {
+            return #replica_name::new_complete(#output);
         }
     };
 }

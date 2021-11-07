@@ -1,7 +1,7 @@
 use naia_derive::Replicate;
 use naia_shared::Property;
 
-#[derive(Replicate, Clone)]
+#[derive(Replicate)]
 #[protocol_path = "crate::protocol::Protocol"]
 pub struct StringMessage {
     pub message: Property<String>,

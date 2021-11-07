@@ -2,7 +2,7 @@ use naia_shared::{DiffMask, EntityActionType, ProtocolType};
 
 use super::keys::ComponentKey;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum EntityAction<P: ProtocolType, E: Copy> {
     SpawnEntity(E, Vec<(ComponentKey, P::Kind)>),
     DespawnEntity(E),
@@ -23,6 +23,20 @@ impl<P: ProtocolType, E: Copy> EntityAction<P, E> {
             EntityAction::InsertComponent(_, _, _) => EntityActionType::InsertComponent,
             EntityAction::UpdateComponent(_, _, _, _) => EntityActionType::UpdateComponent,
             EntityAction::RemoveComponent(_) => EntityActionType::RemoveComponent,
+        }
+    }
+}
+
+impl<P: ProtocolType, E: Copy> Clone for EntityAction<P, E> {
+    fn clone(&self) -> Self {
+        match self {
+            EntityAction::SpawnEntity(a, b) => EntityAction::SpawnEntity(*a, b.clone()),
+            EntityAction::DespawnEntity(a) => EntityAction::DespawnEntity(*a),
+            EntityAction::OwnEntity(a) => EntityAction::OwnEntity(*a),
+            EntityAction::DisownEntity(a) => EntityAction::DisownEntity(*a),
+            EntityAction::InsertComponent(a, b, c) => EntityAction::InsertComponent(*a, *b, *c),
+            EntityAction::UpdateComponent(a, b, c, d) => EntityAction::UpdateComponent(*a, *b, c.clone(), *d),
+            EntityAction::RemoveComponent(a) => EntityAction::RemoveComponent(*a),
         }
     }
 }

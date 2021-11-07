@@ -17,6 +17,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let dyn_ref_method = get_dyn_ref_method(&protocol_name, &input.data);
     let dyn_mut_method = get_dyn_mut_method(&protocol_name, &input.data);
     let cast_method = get_cast_method(&protocol_name, &input.data);
+    let clone_method = get_clone_method(&protocol_name, &input.data);
     let cast_ref_method = get_cast_ref_method(&protocol_name, &input.data);
     let cast_mut_method = get_cast_mut_method(&protocol_name, &input.data);
     let extract_and_insert_method = get_extract_and_insert_method(&protocol_name, &input.data);
@@ -42,6 +43,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
             #cast_ref_method
             #cast_mut_method
             #extract_and_insert_method
+            #clone_method
         }
     };
 
@@ -346,7 +348,7 @@ pub fn get_cast_method(protocol_name: &Ident, data: &Data) -> TokenStream {
                 let new_output_right = quote! {
                     #protocol_name::#variant_name(replica) => {
                         if let Some(any_ref) = Any::downcast_ref::<R>(&replica) {
-                            return Some(Clone::clone(any_ref));
+                            return Some(any_ref.clone());
                         }
                     }
                 };
@@ -368,6 +370,38 @@ pub fn get_cast_method(protocol_name: &Ident, data: &Data) -> TokenStream {
             }
 
             return None;
+        }
+    };
+}
+
+pub fn get_clone_method(protocol_name: &Ident, data: &Data) -> TokenStream {
+    let variants = match *data {
+        Data::Enum(ref data) => {
+            let mut output = quote! {};
+            for variant in data.variants.iter() {
+                let variant_name = &variant.ident;
+
+                let new_output_right = quote! {
+                    #protocol_name::#variant_name(replica) => {
+                        return #protocol_name::#variant_name(replica.clone());
+                    }
+                };
+                let new_output_result = quote! {
+                    #output
+                    #new_output_right
+                };
+                output = new_output_result;
+            }
+            output
+        }
+        _ => unimplemented!(),
+    };
+
+    return quote! {
+        fn clone(&self) -> Self {
+            match self {
+                #variants
+            }
         }
     };
 }

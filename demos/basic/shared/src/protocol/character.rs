@@ -10,7 +10,7 @@ pub struct FullName {
     pub last: String,
 }
 
-#[derive(Replicate, Clone)]
+#[derive(Replicate)]
 #[protocol_path = "crate::protocol::Protocol"]
 pub struct Character {
     pub x: Property<u8>,
