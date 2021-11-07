@@ -1,10 +1,10 @@
-use std::{time::Duration, thread};
+use std::{thread, time::Duration};
 
 use naia_server::{Event, Server as NaiaServer, ServerAddrs, ServerConfig};
 
 use naia_tickless_demo_shared::{get_server_address, get_shared_config, Protocol, Text};
 
-use naia_empty_world::{EmptyWorldRef, EmptyEntity};
+use naia_empty_world::{EmptyEntity, EmptyWorldRef};
 
 type Server = NaiaServer<Protocol, EmptyEntity>;
 
@@ -35,19 +35,14 @@ impl App {
         let mut server = Server::new(server_config, get_shared_config());
         server.listen(server_addresses);
 
-        App {
-            server,
-        }
+        App { server }
     }
 
     pub fn update(&mut self) {
         for event in self.server.receive() {
             match event {
                 Ok(Event::Connection(user_key)) => {
-                    let user_address = self
-                        .server
-                        .user(&user_key)
-                        .address();
+                    let user_address = self.server.user(&user_key).address();
 
                     info!("Naia Server connected to: {}", user_address);
                 }

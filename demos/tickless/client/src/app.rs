@@ -1,13 +1,8 @@
 use naia_client::{Client as NaiaClient, ClientConfig, Event};
 
-use naia_tickless_demo_shared::{
-    get_server_address, get_shared_config,
-    Protocol, Text,
-};
+use naia_tickless_demo_shared::{get_server_address, get_shared_config, Protocol, Text};
 
-use naia_empty_world::{
-    EmptyWorldMut, EmptyEntity,
-};
+use naia_empty_world::{EmptyEntity, EmptyWorldMut};
 
 type Client = NaiaClient<Protocol, EmptyEntity>;
 

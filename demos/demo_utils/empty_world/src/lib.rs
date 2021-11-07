@@ -1,13 +1,11 @@
-
-pub use inner::{EmptyEntity, EmptyWorldRef, EmptyWorldMut};
+pub use inner::{EmptyEntity, EmptyWorldMut, EmptyWorldRef};
 
 mod inner {
     use std::marker::PhantomData;
 
     use naia_shared::{
-        DiffMask, PacketReader, ProtocolInserter, ProtocolType,
-        ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
-        WorldMutType, WorldRefType,
+        DiffMask, PacketReader, ProtocolInserter, ProtocolType, ReplicaDynRefWrapper,
+        ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
     };
 
     pub type EmptyEntity = u8;
@@ -15,7 +13,7 @@ mod inner {
     // EmptyWorldRef //
 
     pub struct EmptyWorldRef<P: ProtocolType> {
-        phantom: PhantomData<P>
+        phantom: PhantomData<P>,
     }
 
     impl<P: ProtocolType> EmptyWorldRef<P> {
@@ -29,7 +27,7 @@ mod inner {
     // EmptyWorldMut //
 
     pub struct EmptyWorldMut<P: ProtocolType> {
-        phantom: PhantomData<P>
+        phantom: PhantomData<P>,
     }
 
     impl<P: ProtocolType> EmptyWorldMut<P> {
@@ -111,7 +109,8 @@ mod inner {
     impl<P: ProtocolType> WorldMutType<P, EmptyEntity> for EmptyWorldMut<P> {
         fn get_component_mut<R: ReplicateSafe<P>>(
             &mut self,
-            _: &EmptyEntity) -> Option<ReplicaMutWrapper<P, R>> {
+            _: &EmptyEntity,
+        ) -> Option<ReplicaMutWrapper<P, R>> {
             unimplemented!()
         }
 
@@ -121,15 +120,12 @@ mod inner {
             _: &P::Kind,
             _: &DiffMask,
             _: &mut PacketReader,
-            _: u16) {
+            _: u16,
+        ) {
             unimplemented!()
         }
 
-        fn mirror_components(
-            &mut self,
-            _: &EmptyEntity,
-            _: &EmptyEntity,
-            _: &P::Kind) {
+        fn mirror_components(&mut self, _: &EmptyEntity, _: &EmptyEntity, _: &P::Kind) {
             unimplemented!()
         }
 
