@@ -81,6 +81,7 @@ impl<P: ProtocolType> HandshakeManager<P> {
     pub fn receive_new_connect_request(
         &mut self,
         manifest: &Manifest<P>,
+        address: &SocketAddr,
         incoming_bytes: &Box<[u8]>,
     ) -> HandshakeResult<P> {
         let mut reader = PacketReader::new(incoming_bytes);
@@ -107,6 +108,8 @@ impl<P: ProtocolType> HandshakeManager<P> {
         if has_auth != self.require_auth {
             return HandshakeResult::None;
         }
+
+        self.address_to_timestamp_map.insert(*address, timestamp);
 
         if has_auth {
             let auth_kind = P::Kind::from_u16(reader.read_u16());
@@ -136,16 +139,7 @@ impl<P: ProtocolType> HandshakeManager<P> {
             if *prev_timestamp == new_timestamp {
                 connection.process_incoming_header(world_record, &incoming_header);
 
-                // send connect accept message //
-                let outgoing_packet = connection.process_outgoing_header(
-                    None,
-                    0,
-                    PacketType::ServerConnectResponse,
-                    &[],
-                );
-                io.send_packet(Packet::new_raw(connection.get_address(), outgoing_packet));
-                connection.mark_sent();
-                /////////////////////////////////
+                self.send_connect_accept_response(io, connection);
             } else {
                 return HandshakeResult::DisconnectUser;
             }
@@ -156,5 +150,16 @@ impl<P: ProtocolType> HandshakeManager<P> {
 
     pub fn delete_user(&mut self, address: &SocketAddr) {
         self.address_to_timestamp_map.remove(address);
+    }
+
+    pub fn send_connect_accept_response<E: Copy + Eq + Hash>(
+        &mut self,
+        io: &mut Io,
+        connection: &mut ClientConnection<P, E>,
+    ) {
+        let payload =
+            connection.process_outgoing_header(None, 0, PacketType::ServerConnectResponse, &[]);
+        io.send_packet(Packet::new_raw(connection.get_address(), payload));
+        connection.mark_sent();
     }
 }

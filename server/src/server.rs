@@ -151,33 +151,16 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         // new connections
         while let Some(user_key) = self.outstanding_connects.pop_front() {
             if let Some(user_record) = self.user_records.get(user_key) {
-                let user_address = user_record.user.address;
-
-                self.address_to_user_key_map.insert(user_address, user_key);
-
                 let mut new_connection = ClientConnection::new(
-                    user_address,
+                    user_record.user.address,
                     &self.connection_config,
                     &self.diff_handler,
                 );
-
-                // not sure if I should uncomment this...
-                //new_connection.process_incoming_header(&header);
-
-                // send connect accept message //
-                let payload = new_connection.process_outgoing_header(
-                    None,
-                    0,
-                    PacketType::ServerConnectResponse,
-                    &[],
-                );
-                self.io
-                    .send_packet(Packet::new_raw(new_connection.get_address(), payload));
-                new_connection.mark_sent();
-                /////////////////////////////////
-
+                self.address_to_user_key_map
+                    .insert(user_record.user.address, user_key);
+                self.handshake_manager
+                    .send_connect_accept_response(&mut self.io, &mut new_connection);
                 self.client_connections.insert(user_key, new_connection);
-
                 events.push_back(Ok(Event::Connection(user_key)));
             }
         }
@@ -911,10 +894,11 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                                     }
                                 }
                             } else {
-                                match self
-                                    .handshake_manager
-                                    .receive_new_connect_request(&self.manifest, &payload)
-                                {
+                                match self.handshake_manager.receive_new_connect_request(
+                                    &self.manifest,
+                                    &address,
+                                    &payload,
+                                ) {
                                     HandshakeResult::AuthUser(auth_message) => {
                                         let user_record = UserRecord::new(address);
                                         let user_key = self.user_records.insert(user_record);
