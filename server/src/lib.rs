@@ -56,6 +56,7 @@ mod user;
 mod user_diff_handler;
 mod user_scope;
 mod world_record;
+mod handshake_manager;
 
 pub use entity_ref::{EntityMut, EntityRef};
 pub use error::NaiaServerError;

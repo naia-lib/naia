@@ -1,8 +1,6 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
-use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, Socket};
+use naia_client_socket::{Socket, Packet};
 
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
@@ -12,7 +10,6 @@ pub use naia_shared::{
 
 use super::{
     client_config::ClientConfig,
-    connection_state::{ConnectionState, ConnectionState::AwaitingChallengeResponse},
     entity_action::EntityAction,
     entity_ref::EntityRef,
     error::NaiaClientError,
@@ -20,7 +17,8 @@ use super::{
     owned_entity::OwnedEntity,
     server_connection::ServerConnection,
     tick_manager::TickManager,
-    Packet,
+    handshake_manager::{HandshakeManager, HandshakeResult},
+    io::Io,
 };
 
 /// Client can send/receive messages to/from a server, and has a pool of
@@ -34,11 +32,7 @@ pub struct Client<P: ProtocolType, E: Copy + Eq + Hash> {
     io: Io,
     address: Option<SocketAddr>,
     server_connection: Option<ServerConnection<P, E>>,
-    pre_connection_timestamp: Option<Timestamp>,
-    pre_connection_digest: Option<Box<[u8]>>,
-    handshake_timer: Timer,
-    connection_state: ConnectionState,
-    auth_message: Option<P>,
+    handshake_manager: HandshakeManager<P>,
     // Events
     outstanding_connect: bool,
     outstanding_errors: VecDeque<NaiaClientError>,
@@ -63,8 +57,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
 
         let socket = Socket::new(client_config.socket_config);
 
-        let mut handshake_timer = Timer::new(client_config.send_handshake_interval);
-        handshake_timer.ring_manual();
+        let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
 
         let tick_manager = {
             if let Some(duration) = shared_config.tick_interval {
@@ -85,12 +78,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
             socket,
             connection_config,
             address: None,
-            handshake_timer,
             server_connection: None,
-            pre_connection_timestamp: None,
-            pre_connection_digest: None,
-            connection_state: AwaitingChallengeResponse,
-            auth_message: None,
+            handshake_manager,
             // Events
             outstanding_connect: false,
             outstanding_errors: VecDeque::new(),
@@ -109,20 +98,11 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
             self.socket.get_packet_sender(),
             self.socket.get_packet_receiver(),
         );
-
-        self.auth_message = None;
     }
 
-    /// Connect to the given server address, passing in some defined auth struct
-    pub fn connect_with_auth<R: ReplicateSafe<P>>(&mut self, server_address: SocketAddr, auth: R) {
-        self.address = Some(server_address);
-        self.socket.connect(server_address);
-        self.io.load(
-            self.socket.get_packet_sender(),
-            self.socket.get_packet_receiver(),
-        );
-
-        self.auth_message = Some(auth.into_protocol());
+    /// Set the auth object to use when setting up a connection with the Server
+    pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
+        self.handshake_manager.set_auth_message(auth.into_protocol());
     }
 
     // Messages
@@ -251,9 +231,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                 // drop connection if necessary
                 if connection.should_drop() {
                     self.server_connection = None;
-                    self.pre_connection_timestamp = None;
-                    self.pre_connection_digest = None;
-                    self.connection_state = AwaitingChallengeResponse;
+                    self.handshake_manager.disconnect();
                     events.push_back(Ok(Event::Disconnection));
                     return events; // exit early, we're disconnected, who cares?
                 }
@@ -316,7 +294,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                         ping_payload,
                     );
                 }
-                // send a packet
+                // send packets
                 while let Some(payload) = connection.get_outgoing_packet(client_tick_opt) {
                     self.io.send_packet(Packet::new_raw(payload));
                     connection.mark_sent();
@@ -331,10 +309,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                 }
             }
             None => {
-                if self.handshake_timer.ringing() {
-                    self.handshake_timer.reset();
-                    self.send_handshake_packets();
-                }
+                self.handshake_manager.send_packet(&mut self.io);
             }
         }
 
@@ -355,62 +330,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
     }
 
     // internal functions
-
-    fn send_handshake_packets(&mut self) {
-        match self.connection_state {
-            ConnectionState::Connected => {
-                // do nothing, not necessary
-            }
-            ConnectionState::AwaitingChallengeResponse => {
-                if self.pre_connection_timestamp.is_none() {
-                    self.pre_connection_timestamp = Some(Timestamp::now());
-                }
-
-                let mut timestamp_bytes = Vec::new();
-                self.pre_connection_timestamp
-                    .as_mut()
-                    .unwrap()
-                    .write(&mut timestamp_bytes);
-                internal_send_connectionless(
-                    &mut self.io,
-                    PacketType::ClientChallengeRequest,
-                    Packet::new(timestamp_bytes),
-                );
-            }
-            ConnectionState::AwaitingConnectResponse => {
-                // write timestamp & digest into payload
-                let mut payload_bytes = Vec::new();
-                self.pre_connection_timestamp
-                    .as_mut()
-                    .unwrap()
-                    .write(&mut payload_bytes);
-                for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref() {
-                    payload_bytes.push(*digest_byte);
-                }
-                // write auth message if there is one
-                if let Some(auth_message) = &mut self.auth_message {
-                    let auth_dyn = auth_message.dyn_ref();
-                    let auth_kind = auth_dyn.get_kind();
-                    // write that we have auth
-                    payload_bytes.write_u8(1).unwrap();
-                    // write auth kind
-                    payload_bytes
-                        .write_u16::<BigEndian>(auth_kind.to_u16())
-                        .unwrap();
-                    // write payload
-                    auth_dyn.write(&mut payload_bytes);
-                } else {
-                    // write that we do not have auth
-                    payload_bytes.write_u8(0).unwrap();
-                }
-                internal_send_connectionless(
-                    &mut self.io,
-                    PacketType::ClientConnectRequest,
-                    Packet::new(payload_bytes),
-                );
-            }
-        }
-    }
 
     fn maintain_socket(&mut self) {
         // receive from socket
@@ -448,49 +367,14 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                                 _ => {} // TODO: explicitly cover these cases
                             }
                         } else {
-                            let (header, payload) = StandardHeader::read(packet.payload());
-                            match header.packet_type() {
-                                PacketType::ServerChallengeResponse => {
-                                    if self.connection_state
-                                        == ConnectionState::AwaitingChallengeResponse
-                                    {
-                                        if let Some(my_timestamp) = self.pre_connection_timestamp {
-                                            let mut reader = PacketReader::new(&payload);
-                                            let server_tick = reader
-                                                .get_cursor()
-                                                .read_u16::<BigEndian>()
-                                                .unwrap();
-                                            let payload_timestamp = Timestamp::read(&mut reader);
+                            if self.handshake_manager.receive_packet(&mut self.tick_manager, packet) == HandshakeResult::Connected {
+                                let server_connection = ServerConnection::new(
+                                    self.server_address(),
+                                    &self.connection_config,
+                                );
 
-                                            if my_timestamp == payload_timestamp {
-                                                let mut digest_bytes: Vec<u8> = Vec::new();
-                                                for _ in 0..32 {
-                                                    digest_bytes.push(reader.read_u8());
-                                                }
-                                                self.pre_connection_digest =
-                                                    Some(digest_bytes.into_boxed_slice());
-
-                                                if let Some(tick_manager) = &mut self.tick_manager {
-                                                    tick_manager.set_initial_tick(server_tick);
-                                                }
-
-                                                self.connection_state =
-                                                    ConnectionState::AwaitingConnectResponse;
-                                            }
-                                        }
-                                    }
-                                }
-                                PacketType::ServerConnectResponse => {
-                                    let server_connection = ServerConnection::new(
-                                        self.server_address(),
-                                        &self.connection_config,
-                                    );
-
-                                    self.server_connection = Some(server_connection);
-                                    self.connection_state = ConnectionState::Connected;
-                                    self.outstanding_connect = true;
-                                }
-                                _ => {}
+                                self.server_connection = Some(server_connection);
+                                self.outstanding_connect = true;
                             }
                         }
                     } else {
@@ -521,49 +405,4 @@ fn internal_send_with_connection<P: ProtocolType, E: Copy + Eq + Hash>(
     );
     io.send_packet(Packet::new_raw(new_payload));
     connection.mark_sent();
-}
-
-fn internal_send_connectionless(io: &mut Io, packet_type: PacketType, packet: Packet) {
-    let new_payload =
-        naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
-    io.send_packet(Packet::new_raw(new_payload));
-}
-
-// IO
-struct Io {
-    packet_sender: Option<PacketSender>,
-    packet_receiver: Option<PacketReceiver>,
-}
-
-impl Io {
-    pub fn new() -> Self {
-        Io {
-            packet_sender: None,
-            packet_receiver: None,
-        }
-    }
-
-    pub fn load(&mut self, packet_sender: PacketSender, packet_receiver: PacketReceiver) {
-        if self.packet_sender.is_some() {
-            panic!("Packet sender/receiver already loaded! Cannot do this twice!");
-        }
-
-        self.packet_sender = Some(packet_sender);
-        self.packet_receiver = Some(packet_receiver);
-    }
-
-    pub fn send_packet(&mut self, packet: Packet) {
-        self.packet_sender
-            .as_mut()
-            .expect("Cannot call Client.send_packet() until you call Client.connect()!")
-            .send(packet);
-    }
-
-    pub fn receive_packet(&mut self) -> Result<Option<Packet>, NaiaClientSocketError> {
-        return self
-            .packet_receiver
-            .as_mut()
-            .expect("Cannot call Client.receive_packet() until you call Client.connect()!")
-            .receive();
-    }
 }
