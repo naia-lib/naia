@@ -26,7 +26,8 @@ impl App {
         let auth = Auth::new("charlie", "12345");
 
         let mut client = Client::new(ClientConfig::default(), get_shared_config());
-        client.connect_with_auth(server_address, auth);
+        client.auth(auth);
+        client.connect(server_address);
 
         App {
             client,

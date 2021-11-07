@@ -36,6 +36,7 @@ use super::{
     user::{user_key::UserKey, UserRecord, UserMut, UserRef, User},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
+    handshake_manager::HandshakeManager,
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -51,6 +52,7 @@ pub struct Server<P: ProtocolType, E: Copy + Eq + Hash> {
     heartbeat_timer: Timer,
     connection_hash_key: hmac::Key,
     require_auth: bool,
+    handshake_manager: HandshakeManager,
     // Users
     user_records: DenseSlotMap<UserKey, UserRecord<E>>,
     address_to_user_key_map: HashMap<SocketAddr, UserKey>,
@@ -113,6 +115,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             heartbeat_timer,
             connection_hash_key,
             require_auth,
+            handshake_manager: HandshakeManager::new(),
             // Users
             user_records: DenseSlotMap::with_key(),
             address_to_user_key_map: HashMap::new(),
