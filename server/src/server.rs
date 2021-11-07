@@ -6,12 +6,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use byteorder::{BigEndian, WriteBytesExt};
-use ring::{hmac, rand};
 use slotmap::DenseSlotMap;
 
 use naia_server_socket::{
-    NaiaServerSocketError, Packet, PacketReceiver, PacketSender, ServerAddrs, Socket,
+    Packet, ServerAddrs, Socket,
 };
 
 pub use naia_shared::{
@@ -36,7 +34,8 @@ use super::{
     user::{user_key::UserKey, UserRecord, UserMut, UserRef, User},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
-    handshake_manager::HandshakeManager,
+    handshake_manager::{HandshakeManager, HandshakeResult},
+    io::Io,
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -50,9 +49,7 @@ pub struct Server<P: ProtocolType, E: Copy + Eq + Hash> {
     socket: Socket,
     io: Io,
     heartbeat_timer: Timer,
-    connection_hash_key: hmac::Key,
-    require_auth: bool,
-    handshake_manager: HandshakeManager,
+    handshake_manager: HandshakeManager<P>,
     // Users
     user_records: DenseSlotMap<UserKey, UserRecord<E>>,
     address_to_user_key_map: HashMap<SocketAddr, UserKey>,
@@ -89,11 +86,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
         let socket = Socket::new(server_config.socket_config);
 
-        let clients_map = HashMap::new();
         let heartbeat_timer = Timer::new(connection_config.heartbeat_interval);
-
-        let connection_hash_key =
-            hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
 
         let tick_manager = {
             if let Some(duration) = shared_config.tick_interval {
@@ -103,8 +96,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             }
         };
 
-        let require_auth = server_config.require_auth;
-
         Server {
             // Config
             manifest: shared_config.manifest,
@@ -113,13 +104,11 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             socket,
             io: Io::new(),
             heartbeat_timer,
-            connection_hash_key,
-            require_auth,
-            handshake_manager: HandshakeManager::new(),
+            handshake_manager: HandshakeManager::new(server_config.require_auth),
             // Users
             user_records: DenseSlotMap::with_key(),
             address_to_user_key_map: HashMap::new(),
-            client_connections: clients_map,
+            client_connections: HashMap::new(),
             // Rooms
             rooms: DenseSlotMap::with_key(),
             // Entities
@@ -731,6 +720,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                 }
             }
 
+            self.handshake_manager.delete_user(&user_record.user.address);
+
             return Some(user_record.user);
         }
 
@@ -893,113 +884,42 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
                     match header.packet_type() {
                         PacketType::ClientChallengeRequest => {
-                            let mut reader = PacketReader::new(&payload);
-                            let timestamp = Timestamp::read(&mut reader);
-
-                            let mut timestamp_bytes = Vec::new();
-                            timestamp.write(&mut timestamp_bytes);
-                            let timestamp_hash: hmac::Tag =
-                                hmac::sign(&self.connection_hash_key, &timestamp_bytes);
-
-                            let mut payload_bytes = Vec::new();
-                            // write current tick
-                            payload_bytes
-                                .write_u16::<BigEndian>(self.server_tick().unwrap_or(0))
-                                .unwrap();
-
-                            //write timestamp
-                            payload_bytes.append(&mut timestamp_bytes);
-
-                            //write timestamp digest
-                            let hash_bytes: &[u8] = timestamp_hash.as_ref();
-                            for hash_byte in hash_bytes {
-                                payload_bytes.push(*hash_byte);
-                            }
-
-                            // Send connectionless //
-                            let packet = Packet::new(address, payload_bytes);
-                            let new_payload = naia_shared::utils::write_connectionless_payload(
-                                PacketType::ServerChallengeResponse,
-                                packet.payload(),
-                            );
-                            self.io
-                                .send_packet(Packet::new_raw(packet.address(), new_payload));
-                            /////////////////////////
-                        }
+                            let server_tick = self.server_tick().unwrap_or(0);
+                            self.handshake_manager.receive_challenge_request(
+                                &mut self.io,
+                                server_tick,
+                                &address,
+                                &payload)
+                        },
                         PacketType::ClientConnectRequest => {
-                            let mut reader = PacketReader::new(&payload);
-                            let timestamp = Timestamp::read(&mut reader);
-
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
-                                // At this point, we have already sent the ServerConnectResponse
-                                // message, but we continue to send the message till the Client
-                                // stops sending the ClientConnectRequest
-                                if self.client_connections.contains_key(user_key) {
-                                    let user = self.user_records.get(*user_key).unwrap();
-                                    if user.timestamp == timestamp {
-                                        let connection =
-                                            self.client_connections.get_mut(user_key).unwrap();
-                                        connection
-                                            .process_incoming_header(&self.world_record, &header);
-
-                                        // send connect accept message //
-                                        let payload = connection.process_outgoing_header(
-                                            None,
-                                            0,
-                                            PacketType::ServerConnectResponse,
-                                            &[],
-                                        );
-                                        self.io.send_packet(Packet::new_raw(
-                                            connection.get_address(),
-                                            payload,
-                                        ));
-                                        connection.mark_sent();
-                                        /////////////////////////////////
-                                    } else {
+                                if let Some(mut connection) = self.client_connections.get_mut(user_key) {
+                                    if let HandshakeResult::DisconnectUser = self.handshake_manager.receive_old_connect_request(
+                                        &mut self.io,
+                                        &self.world_record,
+                                        &mut connection,
+                                        &header,
+                                        &payload) {
                                         self.outstanding_disconnects.push_back(*user_key);
                                     }
-                                } else {
-                                    error!("if there's a user key associated with the address, should also have a client connection initiated");
                                 }
                             } else {
-                                // Verify that timestamp hash has been written by this
-                                // server instance
-                                let mut timestamp_bytes: Vec<u8> = Vec::new();
-                                timestamp.write(&mut timestamp_bytes);
-                                let mut digest_bytes: Vec<u8> = Vec::new();
-                                for _ in 0..32 {
-                                    digest_bytes.push(reader.read_u8());
-                                }
-                                let validation_result = hmac::verify(
-                                    &self.connection_hash_key,
-                                    &timestamp_bytes,
-                                    &digest_bytes,
-                                );
-                                if validation_result.is_err() {
-                                    continue;
-                                }
-
-                                // Timestamp hash is validated, now start configured auth process
-                                let user = UserRecord::new(address, timestamp);
-                                let user_key = self.user_records.insert(user);
-
-                                let has_auth = reader.read_u8() == 1;
-
-                                if has_auth != self.require_auth {
-                                    self.reject_connection(&user_key);
-                                    continue;
-                                }
-
-                                if has_auth {
-                                    let auth_kind = P::Kind::from_u16(reader.read_u16());
-                                    let auth_message =
-                                        self.manifest.create_replica(auth_kind, &mut reader, 0);
-                                    self.outstanding_auths.push_back((user_key, auth_message));
-                                } else {
-                                    self.accept_connection(&user_key);
+                                match self.handshake_manager.receive_new_connect_request(&self.manifest,
+                                                                                         &payload) {
+                                    HandshakeResult::AuthUser(auth_message) => {
+                                        let user_record = UserRecord::new(address);
+                                        let user_key = self.user_records.insert(user_record);
+                                        self.outstanding_auths.push_back((user_key, auth_message));
+                                    },
+                                    HandshakeResult::ConnectUser => {
+                                        let user_record = UserRecord::new(address);
+                                        let user_key = self.user_records.insert(user_record);
+                                        self.accept_connection(&user_key);
+                                    },
+                                    _ => {},
                                 }
                             }
-                        }
+                        },
                         PacketType::Data => {
                             if let Some(user_key) = self.address_to_user_key_map.get(&address) {
                                 let server_tick_opt = self.server_tick();
@@ -1182,44 +1102,5 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             .write()
             .expect("Haven't initialized DiffHandler")
             .deregister_component(component_key);
-    }
-}
-
-// IO
-struct Io {
-    packet_sender: Option<PacketSender>,
-    packet_receiver: Option<PacketReceiver>,
-}
-
-impl Io {
-    pub fn new() -> Self {
-        Io {
-            packet_sender: None,
-            packet_receiver: None,
-        }
-    }
-
-    pub fn load(&mut self, packet_sender: PacketSender, packet_receiver: PacketReceiver) {
-        if self.packet_sender.is_some() {
-            panic!("Packet sender/receiver already loaded! Cannot do this twice!");
-        }
-
-        self.packet_sender = Some(packet_sender);
-        self.packet_receiver = Some(packet_receiver);
-    }
-
-    pub fn send_packet(&self, packet: Packet) {
-        self.packet_sender
-            .as_ref()
-            .expect("Cannot call Server.send_packet() until you call Server.listen()!")
-            .send(packet);
-    }
-
-    pub fn receive_packet(&mut self) -> Result<Option<Packet>, NaiaServerSocketError> {
-        return self
-            .packet_receiver
-            .as_mut()
-            .expect("Cannot call Server.receive_packet() until you call Server.listen()!")
-            .receive();
     }
 }
