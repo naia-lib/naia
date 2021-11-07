@@ -4,7 +4,7 @@ members = [
     "server",
     "shared",
     "derive",
-    "demos/demo_utils/default_world",
+    "demos/demo_utils/demo_world",
     "demos/demo_utils/dev_http_server",
     "demos/demo_utils/empty_world",
     "adapters/hecs/client",

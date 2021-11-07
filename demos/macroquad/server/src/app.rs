@@ -4,14 +4,14 @@ use naia_server::{
     Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
 };
 
-use naia_default_world::{Entity, World as DefaultWorld};
+use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
     protocol::{Color, Protocol, Square},
 };
 
-type World = DefaultWorld<Protocol>;
+type World = DemoWorld<Protocol>;
 type Server = NaiaServer<Protocol, Entity>;
 
 pub struct App {

@@ -2,14 +2,15 @@ use naia_server::{
     Event, ProtocolType, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldRefType,
 };
 
-use naia_default_world::{Entity, World as DefaultWorld};
+use naia_demo_world::{Entity, World as DemoWorld};
+
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
     protocol::{Character, Protocol, StringMessage},
 };
 
-type World = DefaultWorld<Protocol>;
+type World = DemoWorld<Protocol>;
 type Server = NaiaServer<Protocol, Entity>;
 
 pub struct App {
