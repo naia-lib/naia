@@ -7,7 +7,7 @@ use crate::app::App;
 pub fn process_events(app: &mut App) {
     for event in app
         .client
-        .receive(&mut app.world.proxy_mut(&mut app.world_data))
+        .receive(app.world.proxy_mut(&mut app.world_data))
     {
         match event {
             Ok(Event::Connection) => {

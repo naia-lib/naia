@@ -370,7 +370,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     }
 
     /// Gets a Vec of all Entities in the given World
-    pub fn entities<W: WorldRefType<P, E>>(&self, world: &W) -> Vec<E> {
+    pub fn entities<W: WorldRefType<P, E>>(&self, world: W) -> Vec<E> {
         return world.entities();
     }
 
