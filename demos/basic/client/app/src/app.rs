@@ -2,14 +2,14 @@ use log::info;
 
 use naia_client::{Client as NaiaClient, ClientConfig, Event, ProtocolType};
 
-use naia_default_world::{Entity, World as DefaultWorld};
+use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
     protocol::{Auth, Character, Protocol, StringMessage},
 };
 
-type World = DefaultWorld<Protocol>;
+type World = DemoWorld<Protocol>;
 type Client = NaiaClient<Protocol, Entity>;
 
 pub struct App {
@@ -23,10 +23,10 @@ impl App {
         info!("Basic Naia Client Demo started");
 
         let server_address = get_server_address();
-        let auth = Some(Auth::new("charlie", "12345"));
+        let auth = Auth::new("charlie", "12345");
 
         let mut client = Client::new(ClientConfig::default(), get_shared_config());
-        client.connect(server_address, auth);
+        client.connect_with_auth(server_address, auth);
 
         App {
             client,

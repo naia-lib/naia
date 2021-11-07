@@ -4,14 +4,14 @@ use macroquad::prelude::*;
 
 use naia_client::{Client as NaiaClient, ClientConfig, Event};
 
-use naia_default_world::{Entity, World as DefaultWorld, WorldMutType, WorldRefType};
+use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
 };
 
-type World = DefaultWorld<Protocol>;
+type World = DemoWorld<Protocol>;
 type Client = NaiaClient<Protocol, Entity>;
 
 const SQUARE_SIZE: f32 = 32.0;

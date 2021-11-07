@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 naia-client = { path = "../../../client", features = [ "mquad" ] }
-naia-default-world = { path = "../../demo_utils/default_world" }
+naia-demo-world = { path = "../../demo_utils/demo_world" }
 naia-macroquad-demo-shared = { path = "../shared" }
 cfg-if = "0.1.10"
 macroquad = { version = "=0.3.0-alpha.12", features = [ "log-impl" ] }
