@@ -31,7 +31,7 @@ use super::{
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},
     server_config::ServerConfig,
     tick_manager::TickManager,
-    user::{user_key::UserKey, User, UserMut, UserRecord, UserRef},
+    user::{user_key::UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
 };
@@ -49,9 +49,8 @@ pub struct Server<P: ProtocolType, E: Copy + Eq + Hash> {
     heartbeat_timer: Timer,
     handshake_manager: HandshakeManager<P>,
     // Users
-    user_records: DenseSlotMap<UserKey, UserRecord<E>>,
-    address_to_user_key_map: HashMap<SocketAddr, UserKey>,
-    client_connections: HashMap<UserKey, Connection<P, E>>,
+    users: DenseSlotMap<UserKey, User>,
+    user_connections: HashMap<SocketAddr, Connection<P, E>>,
     // Rooms
     rooms: DenseSlotMap<RoomKey, Room<E>>,
     // Entities
@@ -61,7 +60,7 @@ pub struct Server<P: ProtocolType, E: Copy + Eq + Hash> {
     // Components
     diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     // Events
-    outstanding_connects: VecDeque<UserKey>,
+    outstanding_connects: VecDeque<(SocketAddr, UserKey)>,
     outstanding_disconnects: VecDeque<UserKey>,
     outstanding_auths: VecDeque<(UserKey, P)>,
     outstanding_errors: VecDeque<NaiaServerError>,
@@ -104,9 +103,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             heartbeat_timer,
             handshake_manager: HandshakeManager::new(server_config.require_auth),
             // Users
-            user_records: DenseSlotMap::with_key(),
-            address_to_user_key_map: HashMap::new(),
-            client_connections: HashMap::new(),
+            users: DenseSlotMap::with_key(),
+            user_connections: HashMap::new(),
             // Rooms
             rooms: DenseSlotMap::with_key(),
             // Entities
@@ -149,20 +147,17 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         }
 
         // new connections
-        while let Some(user_key) = self.outstanding_connects.pop_front() {
-            if let Some(user_record) = self.user_records.get(user_key) {
-                let mut new_connection = Connection::new(
-                    user_record.user.address,
-                    &self.connection_config,
-                    &self.diff_handler,
-                );
-                self.address_to_user_key_map
-                    .insert(user_record.user.address, user_key);
-                self.handshake_manager
-                    .send_connect_accept_response(&mut self.io, &mut new_connection);
-                self.client_connections.insert(user_key, new_connection);
-                events.push_back(Ok(Event::Connection(user_key)));
-            }
+        while let Some((user_address, user_key)) = self.outstanding_connects.pop_front() {
+            let mut new_connection = Connection::new(
+                &self.connection_config,
+                user_address,
+                &user_key,
+                &self.diff_handler,
+            );
+            self.handshake_manager
+                .send_connect_accept_response(&mut self.io, &mut new_connection);
+            self.user_connections.insert(user_address, new_connection);
+            events.push_back(Ok(Event::Connection(user_key)));
         }
 
         // new disconnections
@@ -174,20 +169,24 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
         // TODO: have 1 single queue for commands/messages from all users, as it's
         // possible this current technique unfairly favors the 1st users in
-        // self.client_connections
+        // self.user_connections
         let server_tick_opt = self.server_tick();
-        for (user_key, connection) in self.client_connections.iter_mut() {
+        for (_, connection) in self.user_connections.iter_mut() {
             //receive commands from anyone
             if let Some(server_tick) = server_tick_opt {
                 while let Some((prediction_key, command)) =
                     connection.get_incoming_command(server_tick)
                 {
-                    events.push_back(Ok(Event::Command(*user_key, prediction_key, command)));
+                    events.push_back(Ok(Event::Command(
+                        connection.user_key,
+                        prediction_key,
+                        command,
+                    )));
                 }
             }
             //receive messages from anyone
             while let Some(message) = connection.get_incoming_message() {
-                events.push_back(Ok(Event::Message(*user_key, message)));
+                events.push_back(Ok(Event::Message(connection.user_key, message)));
             }
         }
 
@@ -211,7 +210,10 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     /// Accepts an incoming Client User, allowing them to establish a connection
     /// with the Server
     pub fn accept_connection(&mut self, user_key: &UserKey) {
-        self.outstanding_connects.push_back(*user_key);
+        if let Some(user) = self.users.get(*user_key) {
+            self.outstanding_connects
+                .push_back((user.address, *user_key));
+        }
     }
 
     /// Rejects an incoming Client User, terminating their attempt to establish
@@ -230,8 +232,10 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         message: &R,
         guaranteed_delivery: bool,
     ) {
-        if let Some(connection) = self.client_connections.get_mut(user_key) {
-            connection.send_message(message, guaranteed_delivery);
+        if let Some(user) = self.users.get(*user_key) {
+            if let Some(connection) = self.user_connections.get_mut(&user.address) {
+                connection.send_message(message, guaranteed_delivery);
+            }
         }
     }
 
@@ -271,16 +275,13 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
         // loop through all connections, send packet
         let server_tick_opt = self.server_tick();
-        for (user_key, connection) in self.client_connections.iter_mut() {
-            if let Some(user_record) = self.user_records.get(*user_key) {
-                connection.collect_component_updates(&self.world_record);
-                while let Some(payload) =
-                    connection.get_outgoing_packet(&world, &self.world_record, server_tick_opt)
-                {
-                    self.io
-                        .send_packet(Packet::new_raw(user_record.user.address, payload));
-                    connection.mark_sent();
-                }
+        for (address, connection) in self.user_connections.iter_mut() {
+            connection.collect_component_updates(&self.world_record);
+            while let Some(payload) =
+                connection.get_outgoing_packet(&world, &self.world_record, server_tick_opt)
+            {
+                self.io.send_packet(Packet::new_raw(*address, payload));
+                connection.mark_sent();
             }
         }
     }
@@ -351,14 +352,14 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Returns whether or not a User exists for the given RoomKey
     pub fn user_exists(&self, user_key: &UserKey) -> bool {
-        return self.user_records.contains_key(*user_key);
+        return self.users.contains_key(*user_key);
     }
 
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Panics if the user does not exist.
     pub fn user(&self, user_key: &UserKey) -> UserRef<P, E> {
-        if self.user_records.contains_key(*user_key) {
+        if self.users.contains_key(*user_key) {
             return UserRef::new(self, &user_key);
         }
         panic!("No User exists for given Key!");
@@ -368,7 +369,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
     pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, E> {
-        if self.user_records.contains_key(*user_key) {
+        if self.users.contains_key(*user_key) {
             return UserMut::new(self, &user_key);
         }
         panic!("No User exists for given Key!");
@@ -378,7 +379,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     pub fn user_keys(&self) -> Vec<UserKey> {
         let mut output = Vec::new();
 
-        for (user_key, _) in self.user_records.iter() {
+        for (user_key, _) in self.users.iter() {
             output.push(user_key);
         }
 
@@ -387,13 +388,13 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Get the number of Users currently connected
     pub fn users_count(&self) -> usize {
-        return self.user_records.len();
+        return self.users.len();
     }
 
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
     pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, E> {
-        if self.user_records.contains_key(*user_key) {
+        if self.users.contains_key(*user_key) {
             return UserScopeMut::new(self, &user_key);
         }
         panic!("No User exists for given Key!");
@@ -401,8 +402,10 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Returns whether a given User has a particular Entity in-scope currently
     pub fn user_scope_has_entity(&self, user_key: &UserKey, entity: &E) -> bool {
-        if let Some(client_connection) = self.client_connections.get(user_key) {
-            return client_connection.has_entity(entity);
+        if let Some(user) = self.users.get(*user_key) {
+            if let Some(user_connection) = self.user_connections.get(&user.address) {
+                return user_connection.has_entity(entity);
+            }
         }
 
         return false;
@@ -464,8 +467,10 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Gets the last received tick from the Client
     pub fn client_tick(&self, user_key: &UserKey) -> Option<u16> {
-        if let Some(client_connection) = self.client_connections.get(user_key) {
-            return Some(client_connection.get_last_received_tick());
+        if let Some(user) = self.users.get(*user_key) {
+            if let Some(user_connection) = self.user_connections.get(&user.address) {
+                return Some(user_connection.get_last_received_tick());
+            }
         }
         return None;
     }
@@ -498,11 +503,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
-        for (user_key, _) in self.user_records.iter() {
-            if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                //remove entity from user connection
-                client_connection.despawn_entity(&self.world_record, entity);
-            }
+        for (_, user_connection) in self.user_connections.iter_mut() {
+            //remove entity from user connection
+            user_connection.despawn_entity(&self.world_record, entity);
         }
 
         // Clean up associated components
@@ -547,21 +550,21 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             };
 
             // get at the User's connection
-            if let Some(client_connection) = self.client_connections.get_mut(user_key) {
-                // add Entity to User's connection if it's not already in-scope
-                if !client_connection.has_entity(entity) {
-                    //add entity to user connection
-                    client_connection.spawn_entity(&self.world_record, entity);
+            if let Some(user) = self.users.get(*user_key) {
+                if let Some(user_connection) = self.user_connections.get_mut(&user.address) {
+                    // add Entity to User's connection if it's not already in-scope
+                    if !user_connection.has_entity(entity) {
+                        //add entity to user connection
+                        user_connection.spawn_entity(&self.world_record, entity);
+                    }
+
+                    // assign Entity to User as a Prediction
+                    user_connection.add_prediction_entity(entity);
+
+                    // put in ownership map
+                    entity_record.owner_key = Some(*user_key);
+                    user_connection.own_entity(entity);
                 }
-
-                // assign Entity to User as a Prediction
-                client_connection.add_prediction_entity(entity);
-            }
-
-            // put in ownership map
-            entity_record.owner_key = Some(*user_key);
-            if let Some(user) = self.user_records.get_mut(*user_key) {
-                user.owned_entities.insert(*entity);
             }
         }
     }
@@ -575,14 +578,15 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                 .owner_key
                 .expect("attempting to disown entity that does not have an owner..");
 
-            if let Some(client_connection) = self.client_connections.get_mut(&current_owner_key) {
-                client_connection.remove_prediction_entity(entity);
-            }
+            if let Some(user) = self.users.get(current_owner_key) {
+                if let Some(user_connection) = self.user_connections.get_mut(&user.address) {
+                    user_connection.remove_prediction_entity(entity);
 
-            // remove from ownership map
-            entity_record.owner_key = None;
-            if let Some(user) = self.user_records.get_mut(current_owner_key) {
-                user.owned_entities.remove(entity);
+                    // remove from ownership map
+                    entity_record.owner_key = None;
+
+                    user_connection.disown_entity(entity);
+                }
             }
         }
     }
@@ -628,12 +632,10 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         world.insert_component(entity, component_ref);
 
         // add component to connections already tracking entity
-        for (user_key, _) in self.user_records.iter() {
-            if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                if client_connection.has_entity(entity) {
-                    // insert component into user's connection
-                    client_connection.insert_component(&self.world_record, &component_key);
-                }
+        for (_, user_connection) in self.user_connections.iter_mut() {
+            if user_connection.has_entity(entity) {
+                // insert component into user's connection
+                user_connection.insert_component(&self.world_record, &component_key);
             }
         }
     }
@@ -654,11 +656,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         // clean up component on all connections
         // TODO: should be able to make this more efficient by caching for every Entity
         // which scopes they are part of
-        for (user_key, _) in self.user_records.iter() {
-            if let Some(client_connection) = self.client_connections.get_mut(&user_key) {
-                //remove component from user connection
-                client_connection.remove_component(&component_key);
-            }
+        for (_, user_connection) in self.user_connections.iter_mut() {
+            //remove component from user connection
+            user_connection.remove_component(&component_key);
         }
 
         // cleanup all other loose ends
@@ -672,8 +672,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Get a User's Socket Address, given the associated UserKey
     pub(crate) fn get_user_address(&self, user_key: &UserKey) -> Option<SocketAddr> {
-        if let Some(user_record) = self.user_records.get(*user_key) {
-            return Some(user_record.user.address);
+        if let Some(user) = self.users.get(*user_key) {
+            return Some(user.address);
         }
         return None;
     }
@@ -690,22 +690,19 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             room.unsubscribe_user(&user_key);
         }
 
-        if let Some(user_record) = self.user_records.remove(*user_key) {
-            self.address_to_user_key_map
-                .remove(&user_record.user.address);
-            self.client_connections.remove(&user_key);
-            self.entity_scope_map.remove_user(user_key);
-
-            for owned_entity in user_record.owned_entities {
-                if let Some(entity_record) = self.entity_records.get_mut(&owned_entity) {
-                    entity_record.owner_key = None;
+        if let Some(user) = self.users.remove(*user_key) {
+            if let Some(user_connection) = self.user_connections.remove(&user.address) {
+                for owned_entity in user_connection.owned_entities() {
+                    if let Some(entity_record) = self.entity_records.get_mut(&owned_entity) {
+                        entity_record.owner_key = None;
+                    }
                 }
             }
 
-            self.handshake_manager
-                .delete_user(&user_record.user.address);
+            self.entity_scope_map.remove_user(user_key);
+            self.handshake_manager.delete_user(&user.address);
 
-            return Some(user_record.user);
+            return Some(user);
         }
 
         return None;
@@ -827,25 +824,23 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
             let server_tick_opt = self.server_tick();
 
-            for (user_key, connection) in self.client_connections.iter_mut() {
-                if let Some(user_record) = self.user_records.get(*user_key) {
-                    if connection.should_drop() {
-                        self.outstanding_disconnects.push_back(*user_key);
-                    } else {
-                        if connection.should_send_heartbeat() {
-                            // Don't try to refactor this to self.internal_send, doesn't seem to
-                            // work cause of iter_mut()
-                            let payload = connection.process_outgoing_header(
-                                server_tick_opt,
-                                connection.get_last_received_tick(),
-                                PacketType::Heartbeat,
-                                &[],
-                            );
-                            self.io
-                                .send_packet(Packet::new_raw(user_record.user.address, payload));
-                            connection.mark_sent();
-                        }
-                    }
+            for (user_address, connection) in self.user_connections.iter_mut() {
+                if connection.should_drop() {
+                    self.outstanding_disconnects.push_back(connection.user_key);
+                    continue;
+                }
+
+                if connection.should_send_heartbeat() {
+                    // Don't try to refactor this to self.internal_send, doesn't seem to
+                    // work cause of iter_mut()
+                    let payload = connection.process_outgoing_header(
+                        server_tick_opt,
+                        connection.get_last_received_tick(),
+                        PacketType::Heartbeat,
+                        &[],
+                    );
+                    self.io.send_packet(Packet::new_raw(*user_address, payload));
+                    connection.mark_sent();
                 }
             }
         }
@@ -855,13 +850,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             match self.io.receive_packet() {
                 Ok(Some(packet)) => {
                     let address = packet.address();
-                    if let Some(user_key) = self.address_to_user_key_map.get(&address) {
-                        match self.client_connections.get_mut(&user_key) {
-                            Some(connection) => {
-                                connection.mark_heard();
-                            }
-                            None => {} //not yet established connection
-                        }
+
+                    if let Some(user_connection) = self.user_connections.get_mut(&address) {
+                        user_connection.mark_heard();
                     }
 
                     let (header, payload) = StandardHeader::read(packet.payload());
@@ -877,21 +868,17 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                             )
                         }
                         PacketType::ClientConnectRequest => {
-                            if let Some(user_key) = self.address_to_user_key_map.get(&address) {
-                                if let Some(mut connection) =
-                                    self.client_connections.get_mut(user_key)
+                            if let Some(mut connection) = self.user_connections.get_mut(&address) {
+                                if let HandshakeResult::DisconnectUser =
+                                    self.handshake_manager.receive_old_connect_request(
+                                        &mut self.io,
+                                        &self.world_record,
+                                        &mut connection,
+                                        &header,
+                                        &payload,
+                                    )
                                 {
-                                    if let HandshakeResult::DisconnectUser =
-                                        self.handshake_manager.receive_old_connect_request(
-                                            &mut self.io,
-                                            &self.world_record,
-                                            &mut connection,
-                                            &header,
-                                            &payload,
-                                        )
-                                    {
-                                        self.outstanding_disconnects.push_back(*user_key);
-                                    }
+                                    self.outstanding_disconnects.push_back(connection.user_key);
                                 }
                             } else {
                                 match self.handshake_manager.receive_new_connect_request(
@@ -900,13 +887,13 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                                     &payload,
                                 ) {
                                     HandshakeResult::AuthUser(auth_message) => {
-                                        let user_record = UserRecord::new(address);
-                                        let user_key = self.user_records.insert(user_record);
+                                        let user = User::new(address);
+                                        let user_key = self.users.insert(user);
                                         self.outstanding_auths.push_back((user_key, auth_message));
                                     }
                                     HandshakeResult::ConnectUser => {
-                                        let user_record = UserRecord::new(address);
-                                        let user_key = self.user_records.insert(user_record);
+                                        let user = User::new(address);
+                                        let user_key = self.users.insert(user);
                                         self.accept_connection(&user_key);
                                     }
                                     _ => {}
@@ -914,73 +901,57 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                             }
                         }
                         PacketType::Data => {
-                            if let Some(user_key) = self.address_to_user_key_map.get(&address) {
-                                let server_tick_opt = self.server_tick();
-                                match self.client_connections.get_mut(user_key) {
-                                    Some(connection) => {
-                                        connection
-                                            .process_incoming_header(&self.world_record, &header);
-                                        connection.process_incoming_data(
-                                            server_tick_opt,
-                                            header.host_tick(),
-                                            &self.manifest,
-                                            &payload,
-                                        );
-                                    }
-                                    None => {
-                                        warn!(
-                                            "received data from unauthenticated client: {}",
-                                            address
-                                        );
-                                    }
+                            let server_tick_opt = self.server_tick();
+                            match self.user_connections.get_mut(&address) {
+                                Some(connection) => {
+                                    connection.process_incoming_header(&self.world_record, &header);
+                                    connection.process_incoming_data(
+                                        server_tick_opt,
+                                        header.host_tick(),
+                                        &self.manifest,
+                                        &payload,
+                                    );
+                                }
+                                None => {
+                                    warn!("received data from unauthenticated client: {}", address);
                                 }
                             }
                         }
                         PacketType::Heartbeat => {
-                            if let Some(user_key) = self.address_to_user_key_map.get(&address) {
-                                match self.client_connections.get_mut(user_key) {
-                                    Some(connection) => {
-                                        // Still need to do this so that proper notify
-                                        // events fire based on the heartbeat header
-                                        connection
-                                            .process_incoming_header(&self.world_record, &header);
-                                    }
-                                    None => {
-                                        warn!(
-                                            "received heartbeat from unauthenticated client: {}",
-                                            address
-                                        );
-                                    }
+                            match self.user_connections.get_mut(&address) {
+                                Some(connection) => {
+                                    // Still need to do this so that proper notify
+                                    // events fire based on the heartbeat header
+                                    connection.process_incoming_header(&self.world_record, &header);
+                                }
+                                None => {
+                                    warn!(
+                                        "received heartbeat from unauthenticated client: {}",
+                                        address
+                                    );
                                 }
                             }
                         }
                         PacketType::Ping => {
-                            if let Some(user_key) = self.address_to_user_key_map.get(&address) {
-                                let server_tick_opt = self.server_tick();
-                                match self.client_connections.get_mut(user_key) {
-                                    Some(connection) => {
-                                        connection
-                                            .process_incoming_header(&self.world_record, &header);
-                                        let ping_payload = connection.process_ping(&payload);
-                                        let payload_with_header = connection
-                                            .process_outgoing_header(
-                                                server_tick_opt,
-                                                connection.get_last_received_tick(),
-                                                PacketType::Pong,
-                                                &ping_payload,
-                                            );
-                                        self.io.send_packet(Packet::new_raw(
-                                            connection.get_address(),
-                                            payload_with_header,
-                                        ));
-                                        connection.mark_sent();
-                                    }
-                                    None => {
-                                        warn!(
-                                            "received ping from unauthenticated client: {}",
-                                            address
-                                        );
-                                    }
+                            let server_tick_opt = self.server_tick();
+                            match self.user_connections.get_mut(&address) {
+                                Some(connection) => {
+                                    connection.process_incoming_header(&self.world_record, &header);
+                                    let ping_payload = connection.process_ping(&payload);
+                                    let payload_with_header = connection.process_outgoing_header(
+                                        server_tick_opt,
+                                        connection.get_last_received_tick(),
+                                        PacketType::Pong,
+                                        &ping_payload,
+                                    );
+                                    self.io.send_packet(Packet::new_raw(
+                                        connection.address(),
+                                        payload_with_header,
+                                    ));
+                                    connection.mark_sent();
+                                }
+                                None => {
+                                    warn!("received ping from unauthenticated client: {}", address);
                                 }
                             }
                         }
@@ -1017,9 +988,11 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     fn update_entity_scopes<W: WorldRefType<P, E>>(&mut self, world: &W) {
         for (_, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
-                if let Some(client_connection) = self.client_connections.get_mut(&removed_user) {
-                    //remove entity from user connection
-                    client_connection.despawn_entity(&self.world_record, &removed_entity);
+                if let Some(user) = self.users.get(removed_user) {
+                    if let Some(user_connection) = self.user_connections.get_mut(&user.address) {
+                        //remove entity from user connection
+                        user_connection.despawn_entity(&self.world_record, &removed_entity);
+                    }
                 }
             }
 
@@ -1028,30 +1001,35 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             for user_key in room.user_keys() {
                 for entity in room.entities() {
                     if world.has_entity(entity) {
-                        if let Some(client_connection) = self.client_connections.get_mut(user_key) {
-                            let currently_in_scope = client_connection.has_entity(entity);
+                        if let Some(user) = self.users.get(*user_key) {
+                            if let Some(user_connection) =
+                                self.user_connections.get_mut(&user.address)
+                            {
+                                let currently_in_scope = user_connection.has_entity(entity);
 
-                            let should_be_in_scope: bool;
-                            if client_connection.has_prediction_entity(entity) {
-                                should_be_in_scope = true;
-                            } else {
-                                if let Some(in_scope) = self.entity_scope_map.get(user_key, entity)
-                                {
-                                    should_be_in_scope = *in_scope;
+                                let should_be_in_scope: bool;
+                                if user_connection.has_prediction_entity(entity) {
+                                    should_be_in_scope = true;
                                 } else {
-                                    should_be_in_scope = false;
+                                    if let Some(in_scope) =
+                                        self.entity_scope_map.get(user_key, entity)
+                                    {
+                                        should_be_in_scope = *in_scope;
+                                    } else {
+                                        should_be_in_scope = false;
+                                    }
                                 }
-                            }
 
-                            if should_be_in_scope {
-                                if !currently_in_scope {
-                                    // add entity to the connections local scope
-                                    client_connection.spawn_entity(&self.world_record, entity);
-                                }
-                            } else {
-                                if currently_in_scope {
-                                    // remove entity from the connections local scope
-                                    client_connection.despawn_entity(&self.world_record, entity);
+                                if should_be_in_scope {
+                                    if !currently_in_scope {
+                                        // add entity to the connections local scope
+                                        user_connection.spawn_entity(&self.world_record, entity);
+                                    }
+                                } else {
+                                    if currently_in_scope {
+                                        // remove entity from the connections local scope
+                                        user_connection.despawn_entity(&self.world_record, entity);
+                                    }
                                 }
                             }
                         }

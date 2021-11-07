@@ -1,4 +1,4 @@
-use std::{collections::HashSet, hash::Hash, net::SocketAddr};
+use std::{hash::Hash, net::SocketAddr};
 
 use naia_shared::ProtocolType;
 
@@ -21,25 +21,8 @@ pub struct User {
 }
 
 impl User {
-    pub fn new(address: SocketAddr) -> Self {
-        Self { address }
-    }
-}
-
-// UserRecord
-
-#[derive(Clone)]
-pub struct UserRecord<E: Copy + Eq + Hash> {
-    pub user: User,
-    pub owned_entities: HashSet<E>,
-}
-
-impl<E: Copy + Eq + Hash> UserRecord<E> {
-    pub fn new(address: SocketAddr) -> UserRecord<E> {
-        UserRecord {
-            user: User::new(address),
-            owned_entities: HashSet::new(),
-        }
+    pub fn new(address: SocketAddr) -> User {
+        User { address }
     }
 }
 
