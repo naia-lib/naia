@@ -959,9 +959,11 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                                 for _ in 0..32 {
                                     digest_bytes.push(reader.read_u8());
                                 }
-                                let validation_result = hmac::verify(&self.connection_hash_key,
-                                                                     &timestamp_bytes,
-                                                                     &digest_bytes);
+                                let validation_result = hmac::verify(
+                                    &self.connection_hash_key,
+                                    &timestamp_bytes,
+                                    &digest_bytes,
+                                );
                                 if validation_result.is_err() {
                                     continue;
                                 }
@@ -979,9 +981,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
                                 if has_auth {
                                     let auth_kind = P::Kind::from_u16(reader.read_u16());
-                                    let auth_message = self.manifest.create_replica(auth_kind,
-                                                                                    &mut reader,
-                                                                                    0);
+                                    let auth_message =
+                                        self.manifest.create_replica(auth_kind, &mut reader, 0);
                                     self.outstanding_auths.push_back((user_key, auth_message));
                                 } else {
                                     self.accept_connection(&user_key);

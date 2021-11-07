@@ -392,9 +392,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                     let auth_dyn = auth_message.dyn_ref();
                     let auth_kind = auth_dyn.get_kind();
                     // write that we have auth
-                    payload_bytes
-                        .write_u8(1)
-                        .unwrap();
+                    payload_bytes.write_u8(1).unwrap();
                     // write auth kind
                     payload_bytes
                         .write_u16::<BigEndian>(auth_kind.to_u16())
@@ -403,9 +401,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                     auth_dyn.write(&mut payload_bytes);
                 } else {
                     // write that we do not have auth
-                    payload_bytes
-                        .write_u8(0)
-                        .unwrap();
+                    payload_bytes.write_u8(0).unwrap();
                 }
                 internal_send_connectionless(
                     &mut self.io,
