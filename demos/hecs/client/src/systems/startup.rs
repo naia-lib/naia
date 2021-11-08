@@ -15,7 +15,8 @@ pub fn app_init(
     auth: Auth,
 ) -> App {
     let mut client = Client::new(client_config, shared_config);
-    client.connect(server_addr, Some(auth));
+    client.auth(auth);
+    client.connect(server_addr);
 
     App {
         client,

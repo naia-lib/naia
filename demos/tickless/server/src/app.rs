@@ -46,8 +46,8 @@ impl App {
 
                     info!("Naia Server connected to: {}", user_address);
                 }
-                Ok(Event::Disconnection(_)) => {
-                    info!("Naia Server disconnected from user");
+                Ok(Event::Disconnection(_, user)) => {
+                    info!("Naia Server disconnected from: {}", user.address);
                 }
                 Ok(Event::Message(user_key, Protocol::Text(text))) => {
                     let client_message = text.value.get();

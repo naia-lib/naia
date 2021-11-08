@@ -29,7 +29,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
             entity_manager: EntityManager::new(),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
-                connection_config.rtt_sample_size,
+                connection_config.ping_sample_size,
             ),
             command_sender: VecDeque::new(),
             command_receiver: CommandReceiver::new(),

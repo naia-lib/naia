@@ -28,7 +28,7 @@ struct PluginConfig<P: ProtocolType, R: Replicate<P>> {
     client_config: ClientConfig,
     shared_config: SharedConfig<P>,
     server_address: SocketAddr,
-    auth_ref: Option<R>,
+    auth: Option<R>,
 }
 
 impl<P: ProtocolType, R: Replicate<P>> PluginConfig<P, R> {
@@ -36,13 +36,13 @@ impl<P: ProtocolType, R: Replicate<P>> PluginConfig<P, R> {
         client_config: ClientConfig,
         shared_config: SharedConfig<P>,
         server_address: SocketAddr,
-        auth_ref: Option<R>,
+        auth: Option<R>,
     ) -> Self {
         PluginConfig {
             client_config,
             shared_config,
             server_address,
-            auth_ref,
+            auth,
         }
     }
 }
@@ -69,7 +69,10 @@ impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
     fn build(&self, app: &mut AppBuilder) {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
         let mut client = Client::<P, Entity>::new(config.client_config, config.shared_config);
-        client.connect(config.server_address, config.auth_ref);
+        if let Some(auth) = config.auth {
+            client.auth(auth);
+        }
+        client.connect(config.server_address);
 
         app
         // RESOURCES //

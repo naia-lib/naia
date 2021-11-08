@@ -29,10 +29,11 @@ impl App {
         info!("Naia Macroquad Client Demo started");
 
         let server_address = get_server_address();
-        let auth = Some(Auth::new("charlie", "12345"));
+        let auth = Auth::new("charlie", "12345");
 
         let mut client = Client::new(ClientConfig::default(), get_shared_config());
-        client.connect(server_address, auth);
+        client.auth(auth);
+        client.connect(server_address);
 
         App {
             client,

@@ -160,7 +160,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
         return self.server.client_tick(user_key);
     }
 
-    pub fn server_tick(&self) -> u16 {
+    pub fn server_tick(&self) -> Option<u16> {
         return self.server.server_tick();
     }
 
