@@ -1,6 +1,6 @@
 [package]
 name = "naia-client"
-version = "0.5.0"
+version = "0.7.0-alpha.1"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Provides a cross-platform client that can send/receive messages to/from a server, and has a pool of in-scope entities/components that is synced with the server."
 documentation = "https://docs.rs/naia-client"
@@ -20,8 +20,8 @@ wbindgen = [ "naia-client-socket/wbindgen", "naia-shared/wbindgen" ]
 mquad = [ "naia-client-socket/mquad", "naia-shared/mquad" ]
 
 [dependencies]
-naia-client-socket = { path = "../../naia-socket/client" } #{ version = "0.6.0" }
-naia-shared = { version = "0.4.1", path = "../shared" }
+naia-client-socket = { version = "=0.7.0-alpha.1" }
+naia-shared = { version = "=0.7.0-alpha.1", path = "../shared" }
 cfg-if = "0.1.10"
 log = "0.4"
 byteorder = "1.3"
