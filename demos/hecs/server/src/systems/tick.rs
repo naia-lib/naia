@@ -2,7 +2,7 @@ use hecs::Entity;
 
 use naia_hecs_server::{WorldProxy, WorldProxyMut};
 
-use naia_hecs_demo_shared::protocol::{Marker, Position, StringMessage};
+use naia_hecs_demo_shared::protocol::{Marker, Position};
 
 use crate::app::App;
 
@@ -54,20 +54,6 @@ pub fn march_and_mark(app: &mut App) {
                 .remove_component::<Marker>();
         }
     }
-}
-
-pub fn send_messages(app: &mut App) {
-    // Message Sending
-    for user_key in app.server.user_keys() {
-        let address = app.server.user(&user_key).address();
-        let message_contents = format!("Server Packet (tick {})", app.tick_count);
-        info!("Naia Server send -> {}: {}", address, message_contents);
-
-        let message = StringMessage::new(message_contents);
-        app.server.send_message(&user_key, &message, true);
-    }
-
-    app.tick_count = app.tick_count.wrapping_add(1);
 }
 
 pub fn check_scopes(app: &mut App) {

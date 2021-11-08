@@ -59,7 +59,7 @@ impl App {
                     let message = Text::new(&new_message_contents);
                     self.server.send_message(&user_key, &message, true);
 
-                    // Sleep the thread to keep the demo from being unintellibly fast
+                    // Sleep the thread to keep the demo from being unintelligibly fast
                     let sleep_time = Duration::from_millis(500);
                     thread::sleep(sleep_time);
                 }

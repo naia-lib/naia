@@ -9,7 +9,7 @@ use naia_hecs_demo_shared::{get_server_address, get_shared_config, protocol::Pro
 use super::systems::{
     events::process_events,
     startup::app_init,
-    tick::{check_scopes, march_and_mark, send_messages, send_updates},
+    tick::{check_scopes, march_and_mark, send_updates},
 };
 
 pub type Server = NaiaServer<Protocol, Entity>;
@@ -52,7 +52,6 @@ impl App {
 
     pub fn tick(&mut self) {
         march_and_mark(self);
-        send_messages(self);
         check_scopes(self);
         send_updates(self);
     }

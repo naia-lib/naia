@@ -107,7 +107,7 @@ impl TickManager {
         // By multiplying the ping average here, we are correcting for our late self.server_tick value
         let target_client_adjust_millis =
             self.minimum_latency.max((ping_average * 2.0) + jitter_based_offset);
-        self.client_tick_adjust = (target_client_adjust_millis / self.tick_interval_millis)
+        self.client_tick_adjust = ((target_client_adjust_millis / self.tick_interval_millis) + 1.0)
             .ceil() as u16;
     }
 
