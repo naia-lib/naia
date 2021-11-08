@@ -10,7 +10,6 @@ name = "naia-basic-client-demo-mq"
 path = "src/main.rs"
 
 [features]
-multithread = [ "naia-basic-client-demo-app/multithread", ]
 
 [dependencies]
 naia-basic-client-demo-app = { path = "../app", features = [ "mquad" ] }

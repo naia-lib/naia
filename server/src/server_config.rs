@@ -2,8 +2,8 @@ use std::{default::Default, time::Duration};
 
 use naia_shared::SocketConfig;
 
-/// Contains Config properties which will be used by a Server or Client
-#[derive(Clone, Debug)]
+/// Contains Config properties which will be used by the Server
+#[derive(Clone)]
 pub struct ServerConfig {
     /// Used to configure the Server's underlying socket
     pub socket_config: SocketConfig,
@@ -25,6 +25,9 @@ pub struct ServerConfig {
     /// Number of samples to measure RTT & Jitter by. A higher number will
     /// smooth out RTT measurements, but at the cost of responsiveness.
     pub rtt_sample_size: u16,
+    /// Determines whether to require that the Client send some auth message
+    /// in order to connect.
+    pub require_auth: bool,
 }
 
 impl Default for ServerConfig {
@@ -36,6 +39,7 @@ impl Default for ServerConfig {
             send_handshake_interval: Duration::from_secs(1),
             ping_interval: Duration::from_secs(1),
             rtt_sample_size: 20,
+            require_auth: true,
         }
     }
 }

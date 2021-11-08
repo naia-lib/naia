@@ -1,12 +1,8 @@
-use naia_shared::Ref;
-
 use crate::protocol::{KeyCommand, Square};
 
 const SQUARE_SPEED: u16 = 8;
 
-pub fn process_command(key_command_ref: &Ref<KeyCommand>, square_ref: &Ref<Square>) {
-    let key_command = key_command_ref.borrow();
-    let mut square = square_ref.borrow_mut();
+pub fn process_command(key_command: &KeyCommand, square: &mut Square) {
     let old_x = *(square.x.get());
     let old_y = *(square.y.get());
     if *key_command.w.get() {

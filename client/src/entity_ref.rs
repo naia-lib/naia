@@ -1,17 +1,18 @@
-use naia_shared::{EntityType, ProtocolType, Ref, Replicate, WorldRefType};
+use std::{hash::Hash, marker::PhantomData};
+
+use naia_shared::{ProtocolType, ReplicaRefWrapper, ReplicateSafe, WorldRefType};
 
 use super::client::Client;
 
 // EntityRef
-#[derive(Debug)]
-pub struct EntityRef<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> {
-    client: &'s Client<P, K>,
+pub struct EntityRef<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> {
+    client: &'s Client<P, E>,
     world: W,
-    id: K,
+    id: E,
 }
 
-impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P, K, W> {
-    pub fn new(client: &'s Client<P, K>, world: W, key: &K) -> Self {
+impl<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<'s, P, E, W> {
+    pub fn new(client: &'s Client<P, E>, world: W, key: &E) -> Self {
         EntityRef {
             client,
             world,
@@ -19,15 +20,15 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P,
         }
     }
 
-    pub fn id(&self) -> K {
+    pub fn id(&self) -> E {
         self.id
     }
 
-    pub fn has_component<R: Replicate<P>>(&self) -> bool {
+    pub fn has_component<R: ReplicateSafe<P>>(&self) -> bool {
         return self.world.has_component::<R>(&self.id);
     }
 
-    pub fn component<R: Replicate<P>>(&self) -> Option<Ref<R>> {
+    pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ReplicaRefWrapper<P, R>> {
         return self.world.get_component::<R>(&self.id);
     }
 
@@ -35,40 +36,39 @@ impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> EntityRef<'s, P,
         return self.client.entity_is_owned(&self.id);
     }
 
-    pub fn prediction(self) -> PredictedEntityRef<'s, P, K, W> {
+    pub fn prediction(self) -> PredictedEntityRef<P, E, W> {
         if !self.is_owned() {
             panic!("Attempted to call .prediction() on an un-owned Entity!");
         }
-        return PredictedEntityRef::new(self.client, self.world, &self.id);
+        return PredictedEntityRef::new(self.world, &self.id);
     }
 }
 
 // PredictedEntityRef
-#[derive(Debug)]
-pub struct PredictedEntityRef<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> {
-    client: &'s Client<P, K>,
+pub struct PredictedEntityRef<P: ProtocolType, E: Copy, W: WorldRefType<P, E>> {
     world: W,
-    id: K,
+    id: E,
+    phantom: PhantomData<P>,
 }
 
-impl<'s, P: ProtocolType, K: EntityType, W: WorldRefType<P, K>> PredictedEntityRef<'s, P, K, W> {
-    pub fn new(client: &'s Client<P, K>, world: W, key: &K) -> Self {
+impl<P: ProtocolType, E: Copy, W: WorldRefType<P, E>> PredictedEntityRef<P, E, W> {
+    pub fn new(world: W, key: &E) -> Self {
         PredictedEntityRef {
-            client,
             world,
             id: *key,
+            phantom: PhantomData,
         }
     }
 
-    pub fn id(&self) -> K {
+    pub fn id(&self) -> E {
         self.id
     }
 
-    pub fn has_component<R: Replicate<P>>(&self) -> bool {
+    pub fn has_component<R: ReplicateSafe<P>>(&self) -> bool {
         return self.world.has_component::<R>(&self.id);
     }
 
-    pub fn component<R: Replicate<P>>(&self) -> Option<Ref<R>> {
+    pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ReplicaRefWrapper<P, R>> {
         return self.world.get_component::<R>(&self.id);
     }
 }

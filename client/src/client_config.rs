@@ -3,7 +3,7 @@ use std::{default::Default, time::Duration};
 use naia_shared::SocketConfig;
 
 /// Contains Config properties which will be used by a Server or Client
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ClientConfig {
     /// Used to configure the Server's underlying socket
     pub socket_config: SocketConfig,
@@ -25,6 +25,13 @@ pub struct ClientConfig {
     /// Number of samples to measure RTT & Jitter by. A higher number will
     /// smooth out RTT measurements, but at the cost of responsiveness.
     pub rtt_sample_size: u16,
+    /// The minimum of measured latency to the Server that the Client use to
+    /// ensure Command packets arrive in time. Should be fine if this is 0,
+    /// but you'll increase the chance that packets always arrive to be
+    /// processed by the Server with a higher number. This is especially
+    /// helpful early on in the connection, when estimates of latency are
+    /// less accurate.
+    pub minimum_command_latency: Option<Duration>,
 }
 
 impl Default for ClientConfig {
@@ -36,6 +43,7 @@ impl Default for ClientConfig {
             send_handshake_interval: Duration::from_secs(1),
             ping_interval: Duration::from_secs(1),
             rtt_sample_size: 20,
+            minimum_command_latency: None,
         }
     }
 }

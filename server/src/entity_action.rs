@@ -1,45 +1,44 @@
-use naia_shared::{
-    DiffMask, EntityActionType, EntityType, LocalComponentKey, LocalEntity, ProtocolType, Ref,
-    Replicate,
-};
+use naia_shared::{DiffMask, EntityActionType, ProtocolType};
 
 use super::keys::ComponentKey;
 
-#[derive(Clone, Debug)]
-pub enum EntityAction<P: ProtocolType, K: EntityType> {
-    SpawnEntity(
-        K,
-        LocalEntity,
-        Vec<(ComponentKey, LocalComponentKey, Ref<dyn Replicate<P>>)>,
-    ),
-    DespawnEntity(K, LocalEntity),
-    OwnEntity(K, LocalEntity),
-    DisownEntity(K, LocalEntity),
-    InsertComponent(
-        LocalEntity,
-        ComponentKey,
-        LocalComponentKey,
-        Ref<dyn Replicate<P>>,
-    ),
-    UpdateComponent(
-        ComponentKey,
-        LocalComponentKey,
-        Ref<DiffMask>,
-        Ref<dyn Replicate<P>>,
-    ),
-    RemoveComponent(ComponentKey, LocalComponentKey),
+#[derive(Debug)]
+pub enum EntityAction<P: ProtocolType, E: Copy> {
+    SpawnEntity(E, Vec<(ComponentKey, P::Kind)>),
+    DespawnEntity(E),
+    OwnEntity(E),
+    DisownEntity(E),
+    InsertComponent(E, ComponentKey, P::Kind),
+    UpdateComponent(E, ComponentKey, DiffMask, P::Kind),
+    RemoveComponent(ComponentKey),
 }
 
-impl<P: ProtocolType, K: EntityType> EntityAction<P, K> {
+impl<P: ProtocolType, E: Copy> EntityAction<P, E> {
     pub fn as_type(&self) -> EntityActionType {
         match self {
-            EntityAction::SpawnEntity(_, _, _) => EntityActionType::SpawnEntity,
-            EntityAction::DespawnEntity(_, _) => EntityActionType::DespawnEntity,
-            EntityAction::OwnEntity(_, _) => EntityActionType::OwnEntity,
-            EntityAction::DisownEntity(_, _) => EntityActionType::DisownEntity,
-            EntityAction::InsertComponent(_, _, _, _) => EntityActionType::InsertComponent,
+            EntityAction::SpawnEntity(_, _) => EntityActionType::SpawnEntity,
+            EntityAction::DespawnEntity(_) => EntityActionType::DespawnEntity,
+            EntityAction::OwnEntity(_) => EntityActionType::OwnEntity,
+            EntityAction::DisownEntity(_) => EntityActionType::DisownEntity,
+            EntityAction::InsertComponent(_, _, _) => EntityActionType::InsertComponent,
             EntityAction::UpdateComponent(_, _, _, _) => EntityActionType::UpdateComponent,
-            EntityAction::RemoveComponent(_, _) => EntityActionType::RemoveComponent,
+            EntityAction::RemoveComponent(_) => EntityActionType::RemoveComponent,
+        }
+    }
+}
+
+impl<P: ProtocolType, E: Copy> Clone for EntityAction<P, E> {
+    fn clone(&self) -> Self {
+        match self {
+            EntityAction::SpawnEntity(a, b) => EntityAction::SpawnEntity(*a, b.clone()),
+            EntityAction::DespawnEntity(a) => EntityAction::DespawnEntity(*a),
+            EntityAction::OwnEntity(a) => EntityAction::OwnEntity(*a),
+            EntityAction::DisownEntity(a) => EntityAction::DisownEntity(*a),
+            EntityAction::InsertComponent(a, b, c) => EntityAction::InsertComponent(*a, *b, *c),
+            EntityAction::UpdateComponent(a, b, c, d) => {
+                EntityAction::UpdateComponent(*a, *b, c.clone(), *d)
+            }
+            EntityAction::RemoveComponent(a) => EntityAction::RemoveComponent(*a),
         }
     }
 }

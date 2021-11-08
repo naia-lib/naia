@@ -1,12 +1,10 @@
 use bevy::{asset::Handle, sprite::ColorMaterial};
 
-use naia_bevy_client::Ref;
-
 use naia_bevy_demo_shared::protocol::KeyCommand;
 
 pub struct Global {
     pub materials: Materials,
-    pub queued_command: Option<Ref<KeyCommand>>,
+    pub queued_command: Option<KeyCommand>,
 }
 
 pub struct Materials {

@@ -1,6 +1,7 @@
-use std::collections::{hash_set::Iter, HashSet, VecDeque};
-
-use naia_shared::EntityType;
+use std::{
+    collections::{hash_set::Iter, HashSet, VecDeque},
+    hash::Hash,
+};
 
 use super::user::user_key::UserKey;
 
@@ -11,14 +12,14 @@ pub mod room_key {
     new_key_type! { pub struct RoomKey; }
 }
 
-pub struct Room<K: EntityType> {
+pub struct Room<E: Copy + Eq + Hash> {
     users: HashSet<UserKey>,
-    entities: HashSet<K>,
-    entity_removal_queue: VecDeque<(UserKey, K)>,
+    entities: HashSet<E>,
+    entity_removal_queue: VecDeque<(UserKey, E)>,
 }
 
-impl<K: EntityType> Room<K> {
-    pub(crate) fn new() -> Room<K> {
+impl<E: Copy + Eq + Hash> Room<E> {
+    pub(crate) fn new() -> Room<E> {
         Room {
             users: HashSet::new(),
             entities: HashSet::new(),
@@ -38,9 +39,8 @@ impl<K: EntityType> Room<K> {
 
     pub(crate) fn unsubscribe_user(&mut self, user_key: &UserKey) {
         self.users.remove(user_key);
-        for entity_key in self.entities.iter() {
-            self.entity_removal_queue
-                .push_back((*user_key, *entity_key));
+        for entity in self.entities.iter() {
+            self.entity_removal_queue.push_back((*user_key, *entity));
         }
     }
 
@@ -54,15 +54,14 @@ impl<K: EntityType> Room<K> {
 
     // Entities
 
-    pub(crate) fn add_entity(&mut self, entity_key: &K) {
-        self.entities.insert(*entity_key);
+    pub(crate) fn add_entity(&mut self, entity: &E) {
+        self.entities.insert(*entity);
     }
 
-    pub(crate) fn remove_entity(&mut self, entity_key: &K) -> bool {
-        if self.entities.remove(entity_key) {
+    pub(crate) fn remove_entity(&mut self, entity: &E) -> bool {
+        if self.entities.remove(entity) {
             for user_key in self.users.iter() {
-                self.entity_removal_queue
-                    .push_back((*user_key, *entity_key));
+                self.entity_removal_queue.push_back((*user_key, *entity));
             }
             return true;
         } else {
@@ -70,11 +69,11 @@ impl<K: EntityType> Room<K> {
         }
     }
 
-    pub(crate) fn entities(&self) -> Iter<K> {
+    pub(crate) fn entities(&self) -> Iter<E> {
         return self.entities.iter();
     }
 
-    pub(crate) fn pop_entity_removal_queue(&mut self) -> Option<(UserKey, K)> {
+    pub(crate) fn pop_entity_removal_queue(&mut self) -> Option<(UserKey, E)> {
         return self.entity_removal_queue.pop_front();
     }
 
@@ -93,13 +92,13 @@ use room_key::RoomKey;
 
 // RoomRef
 
-pub struct RoomRef<'s, P: ProtocolType, K: EntityType> {
-    server: &'s Server<P, K>,
+pub struct RoomRef<'s, P: ProtocolType, E: Copy + Eq + Hash> {
+    server: &'s Server<P, E>,
     key: RoomKey,
 }
 
-impl<'s, P: ProtocolType, K: EntityType> RoomRef<'s, P, K> {
-    pub fn new(server: &'s Server<P, K>, key: &RoomKey) -> Self {
+impl<'s, P: ProtocolType, E: Copy + Eq + Hash> RoomRef<'s, P, E> {
+    pub fn new(server: &'s Server<P, E>, key: &RoomKey) -> Self {
         RoomRef { server, key: *key }
     }
 
@@ -119,8 +118,8 @@ impl<'s, P: ProtocolType, K: EntityType> RoomRef<'s, P, K> {
 
     // Entities
 
-    pub fn has_entity(&self, entity_key: &K) -> bool {
-        return self.server.room_has_entity(&self.key, entity_key);
+    pub fn has_entity(&self, entity: &E) -> bool {
+        return self.server.room_has_entity(&self.key, entity);
     }
 
     pub fn entities_count(&self) -> usize {
@@ -129,13 +128,13 @@ impl<'s, P: ProtocolType, K: EntityType> RoomRef<'s, P, K> {
 }
 
 // RoomMut
-pub struct RoomMut<'s, P: ProtocolType, K: EntityType> {
-    server: &'s mut Server<P, K>,
+pub struct RoomMut<'s, P: ProtocolType, E: Copy + Eq + Hash> {
+    server: &'s mut Server<P, E>,
     key: RoomKey,
 }
 
-impl<'s, P: ProtocolType, K: EntityType> RoomMut<'s, P, K> {
-    pub fn new(server: &'s mut Server<P, K>, key: &RoomKey) -> Self {
+impl<'s, P: ProtocolType, E: Copy + Eq + Hash> RoomMut<'s, P, E> {
+    pub fn new(server: &'s mut Server<P, E>, key: &RoomKey) -> Self {
         RoomMut { server, key: *key }
     }
 
@@ -171,18 +170,18 @@ impl<'s, P: ProtocolType, K: EntityType> RoomMut<'s, P, K> {
 
     // Entities
 
-    pub fn has_entity(&self, entity_key: &K) -> bool {
-        return self.server.room_has_entity(&self.key, entity_key);
+    pub fn has_entity(&self, entity: &E) -> bool {
+        return self.server.room_has_entity(&self.key, entity);
     }
 
-    pub fn add_entity(&mut self, entity_key: &K) -> &mut Self {
-        self.server.room_add_entity(&self.key, entity_key);
+    pub fn add_entity(&mut self, entity: &E) -> &mut Self {
+        self.server.room_add_entity(&self.key, entity);
 
         self
     }
 
-    pub fn remove_entity(&mut self, entity_key: &K) -> &mut Self {
-        self.server.room_remove_entity(&self.key, entity_key);
+    pub fn remove_entity(&mut self, entity: &E) -> &mut Self {
+        self.server.room_remove_entity(&self.key, entity);
 
         self
     }

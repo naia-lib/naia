@@ -1,11 +1,15 @@
+use std::hash::Hash;
+
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, EntityType, ManagerType, Manifest, MessagePacketWriter, NaiaKey, ProtocolType,
-    Ref, Replicate, MTU_SIZE,
+    wrapping_diff, ManagerType, MessagePacketWriter, NaiaKey, ProtocolKindType, ProtocolType,
+    MTU_SIZE,
 };
 
-use super::{command_receiver::CommandReceiver, entity_manager::EntityManager, event::OwnedEntity};
+use super::{
+    command_receiver::CommandReceiver, entity_manager::EntityManager, owned_entity::OwnedEntity,
+};
 
 const MAX_PAST_COMMANDS: u8 = 3;
 
@@ -57,21 +61,20 @@ impl PacketWriter {
 
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_command<P: ProtocolType, K: EntityType>(
+    pub fn write_command<P: ProtocolType, E: Copy + Eq + Hash>(
         &mut self,
         host_tick: u16,
-        manifest: &Manifest<P>,
-        entity_manager: &EntityManager<P, K>,
-        command_receiver: &CommandReceiver<P, K>,
-        owned_entity: &OwnedEntity<K>,
-        command: &Ref<dyn Replicate<P>>,
+        entity_manager: &EntityManager<P, E>,
+        command_receiver: &CommandReceiver<P, E>,
+        owned_entity: &OwnedEntity<E>,
+        command: &P,
     ) -> bool {
         let world_entity = owned_entity.confirmed;
         if let Some(local_entity) = entity_manager.world_to_local_entity(&world_entity) {
             //Write command payload
             let mut command_payload_bytes = Vec::<u8>::new();
 
-            command.borrow().write(&mut command_payload_bytes);
+            command.dyn_ref().write(&mut command_payload_bytes);
 
             // write past commands
             let past_commands_number = command_receiver
@@ -88,7 +91,7 @@ impl PacketWriter {
                             // write the tick diff
                             command_payload_bytes.write_u8(diff_i8 as u8).unwrap();
                             // write the command payload
-                            past_command.borrow().write(&mut command_payload_bytes);
+                            past_command.dyn_ref().write(&mut command_payload_bytes);
 
                             past_command_index += 1;
                         }
@@ -105,9 +108,10 @@ impl PacketWriter {
                 .write_u16::<BigEndian>(local_entity.to_u16())
                 .unwrap(); // write local entity
 
-            let type_id = command.borrow().get_type_id();
-            let naia_id = manifest.get_naia_id(&type_id); // get naia id
-            command_total_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
+            let command_kind = command.dyn_ref().get_kind();
+            command_total_bytes
+                .write_u16::<BigEndian>(command_kind.to_u16())
+                .unwrap(); // write command kind
             command_total_bytes.write_u8(past_command_index).unwrap(); // write past command number
             command_total_bytes.append(&mut command_payload_bytes); // write payload
 
@@ -129,11 +133,7 @@ impl PacketWriter {
 
     /// Writes a Message into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_message<P: ProtocolType>(
-        &mut self,
-        manifest: &Manifest<P>,
-        message: &Ref<dyn Replicate<P>>,
-    ) -> bool {
-        return self.message_writer.write_message(manifest, message);
+    pub fn write_message<P: ProtocolType>(&mut self, message: &P) -> bool {
+        return self.message_writer.write_message(message);
     }
 }

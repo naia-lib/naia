@@ -1,15 +1,21 @@
-use log::info;
+cfg_if! {
+    if #[cfg(feature = "mquad")] {
+        use miniquad::info;
+    } else {
+        use log::info;
+    }
+}
 
 use naia_client::{Client as NaiaClient, ClientConfig, Event, ProtocolType};
 
-use naia_default_world::{Entity, World as DefaultWorld};
+use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
     protocol::{Auth, Character, Protocol, StringMessage},
 };
 
-type World = DefaultWorld<Protocol>;
+type World = DemoWorld<Protocol>;
 type Client = NaiaClient<Protocol, Entity>;
 
 pub struct App {
@@ -23,10 +29,11 @@ impl App {
         info!("Basic Naia Client Demo started");
 
         let server_address = get_server_address();
-        let auth = Some(Auth::new("charlie", "12345"));
+        let auth = Auth::new("charlie", "12345");
 
         let mut client = Client::new(ClientConfig::default(), get_shared_config());
-        client.connect(server_address, auth);
+        client.auth(auth);
+        client.connect(server_address);
 
         App {
             client,
@@ -36,7 +43,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        for event in self.client.receive(&mut self.world.proxy_mut()) {
+        for event in self.client.receive(self.world.proxy_mut()) {
             match event {
                 Ok(Event::Connection) => {
                     info!("Client connected to: {}", self.client.server_address());
@@ -44,8 +51,7 @@ impl App {
                 Ok(Event::Disconnection) => {
                     info!("Client disconnected from: {}", self.client.server_address());
                 }
-                Ok(Event::Message(Protocol::StringMessage(message_ref))) => {
-                    let message = message_ref.borrow();
+                Ok(Event::Message(Protocol::StringMessage(message))) => {
                     let message_contents = message.contents.get();
                     info!("Client recv <- {}", message_contents);
 
@@ -53,16 +59,15 @@ impl App {
                     info!("Client send -> {}", new_message_contents);
 
                     let string_message = StringMessage::new(new_message_contents);
-                    self.client.queue_message(&string_message, true);
+                    self.client.send_message(&string_message, true);
                     self.message_count += 1;
                 }
                 Ok(Event::SpawnEntity(entity, _)) => {
-                    if let Some(character_ref) = self
+                    if let Some(character) = self
                         .client
                         .entity(self.world.proxy(), &entity)
                         .component::<Character>()
                     {
-                        let character = character_ref.borrow();
                         info!(
                             "creation of Character - x: {}, y: {}, name: {} {}",
                             character.x.get(),
@@ -73,12 +78,11 @@ impl App {
                     }
                 }
                 Ok(Event::UpdateComponent(entity, _)) => {
-                    if let Some(character_ref) = self
+                    if let Some(character) = self
                         .client
                         .entity(self.world.proxy(), &entity)
                         .component::<Character>()
                     {
-                        let character = character_ref.borrow();
                         info!(
                             "update of Character - x: {}, y: {}, name: {} {}",
                             character.x.get(),
@@ -89,8 +93,7 @@ impl App {
                     }
                 }
                 Ok(Event::RemoveComponent(_, component_protocol)) => {
-                    if let Some(character_ref) = component_protocol.to_typed_ref::<Character>() {
-                        let character = character_ref.borrow();
+                    if let Some(character) = component_protocol.cast_ref::<Character>() {
                         info!(
                             "data delete of Character - x: {}, y: {}, name: {} {}",
                             character.x.get(),

@@ -4,14 +4,14 @@ use naia_server::{
     Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
 };
 
-use naia_default_world::{Entity, World as DefaultWorld};
+use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
     protocol::{Color, Protocol, Square},
 };
 
-type World = DefaultWorld<Protocol>;
+type World = DemoWorld<Protocol>;
 type Server = NaiaServer<Protocol, Entity>;
 
 pub struct App {
@@ -55,12 +55,11 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        for event in self.server.receive(self.world.proxy()) {
+        for event in self.server.receive() {
             match event {
-                Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
-                    let auth_message = auth_ref.borrow();
-                    let username = auth_message.username.get();
-                    let password = auth_message.password.get();
+                Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {
+                    let username = auth.username.get();
+                    let password = auth.password.get();
                     if username == "charlie" && password == "12345" {
                         // Accept incoming connection
                         self.server.accept_connection(&user_key);
@@ -90,33 +89,29 @@ impl App {
                     let square = Square::new(x as u16, y as u16, square_color);
                     let entity = self
                         .server
-                        .spawn_entity(&mut self.world.proxy_mut())
-                        .insert_component(&square)
+                        .spawn_entity(self.world.proxy_mut())
+                        .insert_component(square)
                         .set_owner(&user_key)
                         .enter_room(&self.main_room_key)
                         .id();
                     self.user_to_prediction_map.insert(user_key, entity);
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
-                    info!("Naia Server disconnected from: {:?}", user.address);
-                    self.server
-                        .user_mut(&user_key)
-                        .leave_room(&self.main_room_key);
+                    info!("Naia Server disconnected from: {}", user.address);
                     if let Some(entity) = self.user_to_prediction_map.remove(&user_key) {
                         self.server
-                            .entity_mut(&mut self.world.proxy_mut(), &entity)
-                            .disown()
+                            .entity_mut(self.world.proxy_mut(), &entity)
                             .leave_room(&self.main_room_key)
                             .despawn();
                     }
                 }
                 Ok(Event::Command(_, entity, Protocol::KeyCommand(key_command_ref))) => {
-                    if let Some(square_ref) = self
+                    if let Some(mut square) = self
                         .server
-                        .entity(self.world.proxy(), &entity)
+                        .entity_mut(self.world.proxy_mut(), &entity)
                         .component::<Square>()
                     {
-                        shared_behavior::process_command(&key_command_ref, &square_ref);
+                        shared_behavior::process_command(&key_command_ref, &mut square);
                     }
                 }
                 Ok(Event::Tick) => {

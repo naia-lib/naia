@@ -1,5 +1,3 @@
-use std::clone::Clone;
-
 use super::wrapping_number::{sequence_greater_than, sequence_less_than};
 
 /// Used to index packets that have been sent & received
@@ -7,19 +5,23 @@ pub type SequenceNumber = u16;
 
 /// Collection to store data of any kind.
 #[derive(Debug)]
-pub struct SequenceBuffer<T: Clone> {
+pub struct SequenceBuffer<T> {
     sequence_num: SequenceNumber,
     entry_sequences: Box<[Option<SequenceNumber>]>,
     entries: Box<[Option<T>]>,
 }
 
-impl<T: Clone> SequenceBuffer<T> {
+impl<T> SequenceBuffer<T> {
     /// Creates a SequenceBuffer with a desired capacity.
     pub fn with_capacity(size: u16) -> Self {
+        let mut entries = Vec::<Option<T>>::new();
+        for _ in 0..size {
+            entries.push(None);
+        }
         Self {
             sequence_num: 0,
             entry_sequences: vec![None; size as usize].into_boxed_slice(),
-            entries: vec![None; size as usize].into_boxed_slice(),
+            entries: entries.into_boxed_slice(),
         }
     }
 
@@ -131,8 +133,10 @@ impl<T: Clone> SequenceBuffer<T> {
     pub fn clear(&mut self) {
         let size = self.entry_sequences.len();
         self.sequence_num = 0;
-        self.entry_sequences = vec![None; size].into_boxed_slice();
-        self.entries = vec![None; size].into_boxed_slice();
+        for i in 0..size {
+            self.entries[i] = None;
+            self.entry_sequences[i] = None;
+        }
     }
 
     /// Remove entries up until a specific sequence number
@@ -175,7 +179,7 @@ impl<T: Clone> SequenceBuffer<T> {
 /// Iterator for a Sequence
 pub struct SequenceIterator<'s, T>
 where
-    T: 's + Clone,
+    T: 's,
 {
     buffer: &'s SequenceBuffer<T>,
     index: u16,
@@ -183,7 +187,7 @@ where
     reverse: bool,
 }
 
-impl<'s, T: Clone> SequenceIterator<'s, T> {
+impl<'s, T> SequenceIterator<'s, T> {
     /// Create a new iterator for a sequence
     pub fn new(
         seq_buf: &'s SequenceBuffer<T>,

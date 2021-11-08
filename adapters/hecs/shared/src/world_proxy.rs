@@ -1,46 +1,48 @@
-use std::{any::TypeId, ops::Deref};
-
-use hecs::World;
+use hecs::{Entity, World};
 
 use naia_shared::{
-    ImplRef, ProtocolRefExtractor, ProtocolType, Ref, Replicate, WorldMutType, WorldRefType,
+    DiffMask, PacketReader, ProtocolInserter, ProtocolType, ReplicaDynRefWrapper,
+    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
 };
 
-use super::{entity::Entity, world_data::WorldData};
+use super::{
+    component_ref::{ComponentMut, ComponentRef},
+    world_data::WorldData,
+};
 
 // WorldProxy
 
-pub trait WorldProxy<'w, 'd> {
-    fn proxy(self, data: &'d WorldData) -> WorldRef<'w, 'd>;
+pub trait WorldProxy<'w, 'd, P: ProtocolType> {
+    fn proxy(self, data: &'d WorldData<P>) -> WorldRef<'w, 'd, P>;
 }
 
-impl<'w, 'd> WorldProxy<'w, 'd> for &'w World {
-    fn proxy(self, data: &'d WorldData) -> WorldRef<'w, 'd> {
+impl<'w, 'd, P: ProtocolType> WorldProxy<'w, 'd, P> for &'w World {
+    fn proxy(self, data: &'d WorldData<P>) -> WorldRef<'w, 'd, P> {
         return WorldRef::new(self, data);
     }
 }
 
 // WorldProxyMut
 
-pub trait WorldProxyMut<'w, 'd> {
-    fn proxy_mut(self, data: &'d mut WorldData) -> WorldMut<'w, 'd>;
+pub trait WorldProxyMut<'w, 'd, P: ProtocolType> {
+    fn proxy_mut(self, data: &'d mut WorldData<P>) -> WorldMut<'w, 'd, P>;
 }
 
-impl<'w, 'd> WorldProxyMut<'w, 'd> for &'w mut World {
-    fn proxy_mut(self, data: &'d mut WorldData) -> WorldMut<'w, 'd> {
+impl<'w, 'd, P: ProtocolType> WorldProxyMut<'w, 'd, P> for &'w mut World {
+    fn proxy_mut(self, data: &'d mut WorldData<P>) -> WorldMut<'w, 'd, P> {
         return WorldMut::new(self, data);
     }
 }
 
 // WorldRef
 
-pub struct WorldRef<'w, 'd> {
+pub struct WorldRef<'w, 'd, P: ProtocolType> {
     world: &'w World,
-    world_data: &'d WorldData,
+    world_data: &'d WorldData<P>,
 }
 
-impl<'w, 'd> WorldRef<'w, 'd> {
-    pub fn new(world: &'w World, data: &'d WorldData) -> Self {
+impl<'w, 'd, P: ProtocolType> WorldRef<'w, 'd, P> {
+    pub fn new(world: &'w World, data: &'d WorldData<P>) -> Self {
         WorldRef {
             world,
             world_data: data,
@@ -48,7 +50,7 @@ impl<'w, 'd> WorldRef<'w, 'd> {
     }
 }
 
-impl<'w, 'd, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, 'd> {
+impl<'w, 'd, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, 'd, P> {
     fn has_entity(&self, entity: &Entity) -> bool {
         return has_entity(self.world, entity);
     }
@@ -57,32 +59,39 @@ impl<'w, 'd, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldRef<'w,
         return entities(self.world);
     }
 
-    fn has_component<R: Replicate<P>>(&self, entity: &Entity) -> bool {
+    fn has_component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> bool {
         return has_component::<P, R>(self.world, entity);
     }
 
-    fn has_component_of_type(&self, entity: &Entity, type_id: &TypeId) -> bool {
-        return has_component_of_type::<P>(self.world, self.world_data, entity, type_id);
+    fn has_component_of_kind(&self, entity: &Entity, component_kind: &P::Kind) -> bool {
+        return has_component_of_kind::<P>(self.world, self.world_data, entity, component_kind);
     }
 
-    fn get_component<R: Replicate<P>>(&self, entity: &Entity) -> Option<Ref<R>> {
-        return get_component(self.world, entity);
+    fn get_component<'a, R: ReplicateSafe<P>>(
+        &'a self,
+        entity: &Entity,
+    ) -> Option<ReplicaRefWrapper<'a, P, R>> {
+        return get_component::<P, R>(self.world, entity);
     }
 
-    fn get_component_from_type(&self, entity: &Entity, type_id: &TypeId) -> Option<P> {
-        return get_component_from_type(self.world, self.world_data, entity, type_id);
+    fn get_component_of_kind(
+        &self,
+        entity: &Entity,
+        component_kind: &P::Kind,
+    ) -> Option<ReplicaDynRefWrapper<'_, P>> {
+        return get_component_of_kind(&self.world, self.world_data, entity, component_kind);
     }
 }
 
 // WorldMut
 
-pub struct WorldMut<'w, 'd> {
+pub struct WorldMut<'w, 'd, P: ProtocolType> {
     world: &'w mut World,
-    world_data: &'d mut WorldData,
+    world_data: &'d mut WorldData<P>,
 }
 
-impl<'w, 'd> WorldMut<'w, 'd> {
-    pub fn new(world: &'w mut World, data: &'d mut WorldData) -> Self {
+impl<'w, 'd, P: ProtocolType> WorldMut<'w, 'd, P> {
+    pub fn new(world: &'w mut World, data: &'d mut WorldData<P>) -> Self {
         WorldMut {
             world,
             world_data: data,
@@ -90,7 +99,7 @@ impl<'w, 'd> WorldMut<'w, 'd> {
     }
 }
 
-impl<'w, 'd, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, 'd> {
+impl<'w, 'd, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, 'd, P> {
     fn has_entity(&self, entity: &Entity) -> bool {
         return has_entity(self.world, entity);
     }
@@ -99,129 +108,171 @@ impl<'w, 'd, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldMut<'w,
         return entities(self.world);
     }
 
-    fn has_component<R: Replicate<P>>(&self, entity: &Entity) -> bool {
+    fn has_component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> bool {
         return has_component::<P, R>(self.world, entity);
     }
 
-    fn has_component_of_type(&self, entity: &Entity, type_id: &TypeId) -> bool {
-        return has_component_of_type::<P>(self.world, self.world_data, entity, type_id);
+    fn has_component_of_kind(&self, entity: &Entity, component_kind: &P::Kind) -> bool {
+        return has_component_of_kind::<P>(self.world, self.world_data, entity, component_kind);
     }
 
-    fn get_component<R: Replicate<P>>(&self, entity: &Entity) -> Option<Ref<R>> {
-        return get_component(self.world, entity);
+    fn get_component<'a, R: ReplicateSafe<P>>(
+        &'a self,
+        entity: &Entity,
+    ) -> Option<ReplicaRefWrapper<'a, P, R>> {
+        return get_component::<P, R>(self.world, entity);
     }
 
-    fn get_component_from_type(&self, entity: &Entity, type_id: &TypeId) -> Option<P> {
-        return get_component_from_type(self.world, self.world_data, entity, type_id);
+    fn get_component_of_kind(
+        &self,
+        entity: &Entity,
+        component_kind: &P::Kind,
+    ) -> Option<ReplicaDynRefWrapper<'_, P>> {
+        return get_component_of_kind(self.world, self.world_data, entity, component_kind);
     }
 }
 
-impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd> {
+impl<'w, 'd, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
+    fn get_component_mut<'a, R: ReplicateSafe<P>>(
+        &'a mut self,
+        entity: &Entity,
+    ) -> Option<ReplicaMutWrapper<'a, P, R>> {
+        if let Ok(hecs_mut) = self.world.get_mut::<R>(*entity) {
+            let wrapper = ComponentMut(hecs_mut);
+            let component_mut = ReplicaMutWrapper::new(wrapper);
+            return Some(component_mut);
+        }
+        return None;
+    }
+
+    fn component_read_partial(
+        &mut self,
+        entity: &Entity,
+        component_kind: &P::Kind,
+        diff_mask: &DiffMask,
+        reader: &mut PacketReader,
+        packet_index: u16,
+    ) {
+        if let Some(access) = self.world_data.get_component_access(component_kind) {
+            if let Some(mut component) = access.get_component_mut(self.world, entity) {
+                component.read_partial(diff_mask, reader, packet_index);
+            }
+        }
+    }
+
+    fn mirror_components(
+        &mut self,
+        mutable_entity: &Entity,
+        immutable_entity: &Entity,
+        component_kind: &P::Kind,
+    ) {
+        if let Some(accessor) = self.world_data.get_component_access(component_kind) {
+            accessor.mirror_components(self.world, mutable_entity, immutable_entity);
+        }
+    }
+
+    fn get_component_kinds(&mut self, entity: &Entity) -> Vec<P::Kind> {
+        let mut kinds = Vec::new();
+
+        if let Ok(entity_ref) = self.world.entity(*entity) {
+            for component_type in entity_ref.component_types() {
+                let component_kind = P::type_to_kind(component_type);
+                kinds.push(component_kind);
+            }
+        }
+
+        return kinds;
+    }
+
     fn spawn_entity(&mut self) -> Entity {
-        let entity = self.world.spawn(());
-        return Entity::new(entity);
+        return self.world.spawn(());
     }
 
     fn despawn_entity(&mut self, entity: &Entity) {
         self.world
-            .despawn(**entity)
+            .despawn(*entity)
             .expect("error despawning Entity");
     }
 
-    fn get_components(&mut self, entity: &Entity) -> Vec<P> {
-        let mut protocols = Vec::new();
-
-        if let Ok(entity_ref) = self.world.entity(**entity) {
-            for ref_type in entity_ref.component_types() {
-                if let Some(rep_type) = self.world_data.type_convert_ref_to_rep(&ref_type) {
-                    if let Some(component) = self.get_component_from_type(entity, &rep_type) {
-                        protocols.push(component);
-                    }
-                }
-            }
-        }
-
-        return protocols;
-    }
-
-    fn insert_component<R: ImplRef<P>>(&mut self, entity: &Entity, component_ref: R) {
+    fn insert_component<R: ReplicateSafe<P>>(&mut self, entity: &Entity, component_ref: R) {
         // cache type id for later
         // todo: can we initialize this map on startup via Protocol derive?
-        let inner_type_id = component_ref.dyn_ref().borrow().get_type_id();
-        if !self.world_data.has_type(&inner_type_id) {
-            self.world_data
-                .put_type::<P, R>(&inner_type_id, &TypeId::of::<R>());
+        let component_kind = component_ref.get_kind();
+        if !self.world_data.has_kind(&component_kind) {
+            self.world_data.put_kind::<R>(&component_kind);
         }
 
         self.world
-            .insert_one(**entity, component_ref)
+            .insert_one(*entity, component_ref)
             .expect("error inserting Component");
     }
 
-    fn remove_component<R: Replicate<P>>(&mut self, entity: &Entity) {
-        self.world
-            .remove_one::<Ref<R>>(**entity)
-            .expect("error removing Component");
+    fn remove_component<R: Replicate<P>>(&mut self, entity: &Entity) -> Option<R> {
+        return self.world.remove_one::<R>(*entity).ok();
     }
 
-    fn remove_component_by_type(&mut self, entity: &Entity, type_id: &TypeId) {
-        if let Some(accessor) = self.world_data.get_component_access::<P>(type_id) {
-            accessor.remove_component(self.world, entity);
+    fn remove_component_of_kind(&mut self, entity: &Entity, component_kind: &P::Kind) -> Option<P> {
+        if let Some(accessor) = self.world_data.get_component_access(component_kind) {
+            return accessor.remove_component(self.world, entity);
         }
+        return None;
     }
 }
 
-impl<'w, 'd, P: ProtocolType> ProtocolRefExtractor<P, Entity> for WorldMut<'w, 'd> {
-    fn extract<I: ImplRef<P>>(&mut self, entity: &Entity, impl_ref: I) {
+impl<'w, 'd, P: ProtocolType> ProtocolInserter<P, Entity> for WorldMut<'w, 'd, P> {
+    fn insert<I: ReplicateSafe<P>>(&mut self, entity: &Entity, impl_ref: I) {
         self.insert_component::<I>(entity, impl_ref);
     }
 }
 
 // private static methods
 fn has_entity(world: &World, entity: &Entity) -> bool {
-    return world.contains(**entity);
+    return world.contains(*entity);
 }
 
 fn entities(world: &World) -> Vec<Entity> {
     let mut output = Vec::new();
 
     for (entity, _) in world.iter() {
-        output.push(Entity::new(entity));
+        output.push(entity);
     }
 
     return output;
 }
 
-fn has_component<P: ProtocolType, R: Replicate<P>>(world: &World, entity: &Entity) -> bool {
-    let result = world.get::<Ref<R>>(**entity);
+fn has_component<P: ProtocolType, R: ReplicateSafe<P>>(world: &World, entity: &Entity) -> bool {
+    let result = world.get::<R>(*entity);
     return result.is_ok();
 }
 
-fn has_component_of_type<P: ProtocolType>(
+fn has_component_of_kind<P: ProtocolType>(
     world: &World,
-    world_data: &WorldData,
+    world_data: &WorldData<P>,
     entity: &Entity,
-    type_id: &TypeId,
+    component_kind: &P::Kind,
 ) -> bool {
-    return get_component_from_type::<P>(world, world_data, entity, type_id).is_some();
+    return get_component_of_kind::<P>(world, world_data, entity, component_kind).is_some();
 }
 
-fn get_component<P: ProtocolType, R: Replicate<P>>(
-    world: &World,
+fn get_component<'a, P: ProtocolType, R: ReplicateSafe<P>>(
+    world: &'a World,
     entity: &Entity,
-) -> Option<Ref<R>> {
-    return world
-        .get::<Ref<R>>(**entity)
-        .map_or(None, |v| Some(v.deref().clone()));
+) -> Option<ReplicaRefWrapper<'a, P, R>> {
+    if let Ok(hecs_ref) = world.get::<R>(*entity) {
+        let wrapper = ComponentRef(hecs_ref);
+        let component_ref = ReplicaRefWrapper::new(wrapper);
+        return Some(component_ref);
+    }
+    return None;
 }
 
-fn get_component_from_type<P: ProtocolType>(
-    world: &World,
-    world_data: &WorldData,
+fn get_component_of_kind<'a, P: ProtocolType>(
+    world: &'a World,
+    world_data: &WorldData<P>,
     entity: &Entity,
-    type_id: &TypeId,
-) -> Option<P> {
-    if let Some(access) = world_data.get_component_access(type_id) {
+    component_kind: &P::Kind,
+) -> Option<ReplicaDynRefWrapper<'a, P>> {
+    if let Some(access) = world_data.get_component_access(component_kind) {
         return access.get_component(world, entity);
     }
     return None;
