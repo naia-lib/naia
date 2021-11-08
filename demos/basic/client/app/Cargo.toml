@@ -7,7 +7,7 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [features]
-mquad = [ "naia-client/mquad", "naia-basic-demo-shared/mquad" ]
+mquad = [ "naia-client/mquad", "naia-basic-demo-shared/mquad", "miniquad" ]
 wbindgen = [ "naia-client/wbindgen", "naia-basic-demo-shared/wbindgen" ]
 
 [dependencies]
@@ -16,3 +16,4 @@ naia-demo-world = { path = "../../../demo_utils/demo_world" }
 naia-basic-demo-shared = { path = "../../shared" }
 cfg-if = "0.1.10"
 log = "0.4"
+miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"], optional = true }

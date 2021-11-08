@@ -1,7 +1,5 @@
 use naia_hecs_server::Event;
 
-use naia_hecs_demo_shared::protocol::Protocol;
-
 use crate::app::App;
 
 pub fn process_events(app: &mut App) {
@@ -28,11 +26,6 @@ pub fn process_events(app: &mut App) {
             }
             Ok(Event::Disconnection(_, user)) => {
                 info!("Naia Server disconnected from: {:?}", user.address);
-            }
-            Ok(Event::Message(user_key, Protocol::StringMessage(message))) => {
-                let address = app.server.user(&user_key).address();
-                let message_inner = message.message.get();
-                info!("Naia Server recv <- {}: {}", address, message_inner);
             }
             Ok(Event::Tick) => app.tick(),
             Err(error) => {

@@ -1,4 +1,10 @@
-use log::info;
+cfg_if! {
+    if #[cfg(feature = "mquad")] {
+        use miniquad::info;
+    } else {
+        use log::info;
+    }
+}
 
 use naia_client::{Client as NaiaClient, ClientConfig, Event, ProtocolType};
 
