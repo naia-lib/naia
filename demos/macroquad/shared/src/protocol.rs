@@ -1,5 +1,4 @@
 use naia_derive::ProtocolType;
-use naia_shared::{Manifest, Ref};
 
 mod auth;
 mod key_command;
@@ -9,9 +8,9 @@ pub use auth::Auth;
 pub use key_command::KeyCommand;
 pub use square::{Color, Square};
 
-#[derive(ProtocolType, Clone)]
+#[derive(ProtocolType)]
 pub enum Protocol {
-    Auth(Ref<Auth>),
-    KeyCommand(Ref<KeyCommand>),
-    Square(Ref<Square>),
+    Auth(Auth),
+    KeyCommand(KeyCommand),
+    Square(Square),
 }

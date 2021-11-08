@@ -10,8 +10,7 @@ pub fn input(keyboard_input: Res<Input<KeyCode>>, mut global: ResMut<Global>) {
     let a = keyboard_input.pressed(KeyCode::A);
     let d = keyboard_input.pressed(KeyCode::D);
 
-    if let Some(command_ref) = &mut global.queued_command {
-        let mut command = command_ref.borrow_mut();
+    if let Some(command) = &mut global.queued_command {
         if w {
             command.w.set(true);
         }

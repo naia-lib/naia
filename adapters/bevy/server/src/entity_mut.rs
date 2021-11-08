@@ -1,6 +1,6 @@
-use naia_server::{ImplRef, ProtocolType, Replicate, RoomKey, UserKey};
+use bevy::ecs::entity::Entity;
 
-use naia_bevy_shared::Entity;
+use naia_server::{ProtocolType, Replicate, RoomKey, UserKey};
 
 use super::{
     commands::{DespawnEntity, InsertComponent, OwnEntity, RemoveComponent},
@@ -32,9 +32,9 @@ impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
 
     // Components
 
-    pub fn insert<R: ImplRef<P>>(&mut self, component_ref: &R) -> &mut Self {
+    pub fn insert<R: Replicate<P>>(&mut self, component: R) -> &mut Self {
         self.server
-            .add(InsertComponent::new(&self.entity, component_ref));
+            .add(InsertComponent::new(&self.entity, component));
         self
     }
 

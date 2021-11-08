@@ -10,7 +10,6 @@
     unused_import_braces
 )]
 
-#[macro_use]
 extern crate cfg_if;
 
 #[macro_use]
@@ -28,30 +27,35 @@ compile_error!("Naia Server requires either the 'use-udp' or 'use-webrtc' featur
 pub use naia_server_socket::ServerAddrs;
 
 pub use naia_shared::{
-    EntityType, ImplRef, LinkConditionerConfig, ProtocolType, Random, Ref, Replicate, SharedConfig,
+    LinkConditionerConfig, ProtocolType, Random, ReplicaMutWrapper, Replicate, SharedConfig,
     SocketConfig, WorldMutType, WorldRefType,
 };
 
-mod client_connection;
 mod command_receiver;
+mod connection;
 mod entity_action;
 mod entity_manager;
 mod entity_ref;
+mod entity_scope_map;
 mod error;
 mod event;
+mod global_diff_handler;
+mod global_entity_record;
+mod handshake_manager;
+mod io;
 mod keys;
 mod local_component_record;
 mod local_entity_record;
 mod locality_status;
-mod mut_handler;
+mod mut_channel;
 mod packet_writer;
 mod ping_manager;
-mod property_mutator;
 mod room;
 mod server;
 mod server_config;
 mod tick_manager;
 mod user;
+mod user_diff_handler;
 mod user_scope;
 mod world_record;
 
@@ -62,5 +66,5 @@ pub use keys::ComponentKey;
 pub use room::{room_key::RoomKey, RoomMut, RoomRef};
 pub use server::Server;
 pub use server_config::ServerConfig;
-pub use user::{user_key::UserKey, UserMut, UserRef};
+pub use user::{user_key::UserKey, User, UserMut, UserRef};
 pub use user_scope::UserScopeMut;

@@ -1,6 +1,10 @@
-use std::net::SocketAddr;
+use std::{hash::Hash, net::SocketAddr};
 
-use naia_shared::{EntityType, Timestamp};
+use naia_shared::ProtocolType;
+
+use crate::{RoomKey, Server, UserKey};
+
+// UserKey
 
 #[allow(missing_docs)]
 #[allow(unused_doc_comments)]
@@ -9,33 +13,28 @@ pub mod user_key {
     new_key_type! { pub struct UserKey; }
 }
 
+// User
+
 #[derive(Clone)]
 pub struct User {
     pub address: SocketAddr,
-    pub timestamp: Timestamp,
 }
 
 impl User {
-    pub fn new(address: SocketAddr, timestamp: Timestamp) -> User {
-        User { address, timestamp }
+    pub fn new(address: SocketAddr) -> User {
+        User { address }
     }
 }
 
-// user references
-
-use naia_shared::ProtocolType;
-
-use crate::{RoomKey, Server, UserKey};
-
 // UserRef
 
-pub struct UserRef<'s, P: ProtocolType, K: EntityType> {
-    server: &'s Server<P, K>,
+pub struct UserRef<'s, P: ProtocolType, E: Copy + Eq + Hash> {
+    server: &'s Server<P, E>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, K: EntityType> UserRef<'s, P, K> {
-    pub fn new(server: &'s Server<P, K>, key: &UserKey) -> Self {
+impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserRef<'s, P, E> {
+    pub fn new(server: &'s Server<P, E>, key: &UserKey) -> Self {
         UserRef { server, key: *key }
     }
 
@@ -49,13 +48,13 @@ impl<'s, P: ProtocolType, K: EntityType> UserRef<'s, P, K> {
 }
 
 // UserMut
-pub struct UserMut<'s, P: ProtocolType, K: EntityType> {
-    server: &'s mut Server<P, K>,
+pub struct UserMut<'s, P: ProtocolType, E: Copy + Eq + Hash> {
+    server: &'s mut Server<P, E>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, K: EntityType> UserMut<'s, P, K> {
-    pub fn new(server: &'s mut Server<P, K>, key: &UserKey) -> Self {
+impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserMut<'s, P, E> {
+    pub fn new(server: &'s mut Server<P, E>, key: &UserKey) -> Self {
         UserMut { server, key: *key }
     }
 

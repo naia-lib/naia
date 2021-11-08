@@ -1,9 +1,8 @@
 use naia_derive::Replicate;
 use naia_shared::Property;
 
-use super::Protocol;
-
-#[derive(Replicate, Clone)]
+#[derive(Replicate)]
+#[protocol_path = "crate::protocol::Protocol"]
 pub struct KeyCommand {
     pub w: Property<bool>,
     pub s: Property<bool>,
@@ -12,7 +11,7 @@ pub struct KeyCommand {
 }
 
 impl KeyCommand {
-    pub fn new(w: bool, s: bool, a: bool, d: bool) -> Ref<KeyCommand> {
+    pub fn new(w: bool, s: bool, a: bool, d: bool) -> Self {
         return KeyCommand::new_complete(w, s, a, d);
     }
 }

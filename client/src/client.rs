@@ -1,31 +1,29 @@
-use std::{collections::VecDeque, marker::PhantomData, net::SocketAddr};
+use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
-use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, Socket};
+use naia_client_socket::{Packet, Socket};
 
 pub use naia_shared::{
-    ConnectionConfig, EntityType, HostTickManager, ImplRef, ManagerType, Manifest, PacketReader,
-    PacketType, ProtocolType, Ref, Replicate, SequenceIterator, SharedConfig, StandardHeader,
-    Timer, Timestamp, WorldMutType, WorldRefType,
+    ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
+    ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
+    WorldMutType, WorldRefType,
 };
 
 use super::{
     client_config::ClientConfig,
-    connection_state::{ConnectionState, ConnectionState::AwaitingChallengeResponse},
+    connection::Connection,
     entity_action::EntityAction,
     entity_ref::EntityRef,
     error::NaiaClientError,
-    event::{Event, OwnedEntity},
-    server_connection::ServerConnection,
+    event::Event,
+    handshake_manager::{HandshakeManager, HandshakeResult},
+    io::Io,
+    owned_entity::OwnedEntity,
     tick_manager::TickManager,
-    Packet,
 };
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
-#[derive(Debug)]
-pub struct Client<P: ProtocolType, K: EntityType> {
+pub struct Client<P: ProtocolType, E: Copy + Eq + Hash> {
     // Manifest
     manifest: Manifest<P>,
     // Connection
@@ -33,22 +31,18 @@ pub struct Client<P: ProtocolType, K: EntityType> {
     socket: Socket,
     io: Io,
     address: Option<SocketAddr>,
-    server_connection: Option<ServerConnection<P, K>>,
-    pre_connection_timestamp: Option<Timestamp>,
-    pre_connection_digest: Option<Box<[u8]>>,
-    handshake_timer: Timer,
-    connection_state: ConnectionState,
-    auth_message: Option<Ref<dyn Replicate<P>>>,
+    server_connection: Option<Connection<P, E>>,
+    handshake_manager: HandshakeManager<P>,
     // Events
     outstanding_connect: bool,
     outstanding_errors: VecDeque<NaiaClientError>,
     // Ticks
-    tick_manager: TickManager,
+    tick_manager: Option<TickManager>,
     // Phantom
-    phantom_k: PhantomData<K>,
+    phantom_k: PhantomData<E>,
 }
 
-impl<P: ProtocolType, K: EntityType> Client<P, K> {
+impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
     /// Create a new Client
     pub fn new(mut client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
         client_config.socket_config.link_condition_config =
@@ -63,8 +57,18 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
 
         let socket = Socket::new(client_config.socket_config);
 
-        let mut handshake_timer = Timer::new(client_config.send_handshake_interval);
-        handshake_timer.ring_manual();
+        let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
+
+        let tick_manager = {
+            if let Some(duration) = shared_config.tick_interval {
+                Some(TickManager::new(
+                    duration,
+                    client_config.minimum_command_latency,
+                ))
+            } else {
+                None
+            }
+        };
 
         Client {
             // Manifest
@@ -74,58 +78,50 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
             socket,
             connection_config,
             address: None,
-            handshake_timer,
             server_connection: None,
-            pre_connection_timestamp: None,
-            pre_connection_digest: None,
-            connection_state: AwaitingChallengeResponse,
-            auth_message: None,
+            handshake_manager,
             // Events
             outstanding_connect: false,
             outstanding_errors: VecDeque::new(),
             // Ticks
-            tick_manager: TickManager::new(shared_config.tick_interval),
+            tick_manager,
             // Phantom
             phantom_k: PhantomData,
         }
     }
 
     /// Connect to the given server address
-    pub fn connect<R: ImplRef<P>>(&mut self, server_address: SocketAddr, auth: Option<R>) {
+    pub fn connect(&mut self, server_address: SocketAddr) {
         self.address = Some(server_address);
         self.socket.connect(server_address);
         self.io.load(
             self.socket.get_packet_sender(),
             self.socket.get_packet_receiver(),
         );
+    }
 
-        self.auth_message = {
-            if auth.is_none() {
-                None
-            } else {
-                Some(auth.unwrap().dyn_ref())
-            }
-        };
+    /// Set the auth object to use when setting up a connection with the Server
+    pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
+        self.handshake_manager
+            .set_auth_message(auth.into_protocol());
     }
 
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn queue_message<R: ImplRef<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
-            let dyn_ref = message_ref.dyn_ref();
-            connection.queue_message(&dyn_ref, guaranteed_delivery);
+            connection.send_message(message, guaranteed_delivery);
         }
     }
 
     /// Queues up a Command for an assigned Entity to be sent to the Server
-    pub fn queue_command<R: ImplRef<P>>(&mut self, predicted_entity: &K, command_ref: &R) {
+    pub fn send_command<R: ReplicateSafe<P>>(&mut self, predicted_entity: &E, command: R) {
         if let Some(connection) = self.server_connection.as_mut() {
             if let Some(confirmed_entity) = connection.get_confirmed_entity(predicted_entity) {
-                let dyn_ref = command_ref.dyn_ref();
-                let entity_pair: OwnedEntity<K> =
+                let entity_pair: OwnedEntity<E> =
                     OwnedEntity::new(&confirmed_entity, &predicted_entity);
-                connection.queue_command(entity_pair, dyn_ref);
+                connection.send_command(entity_pair, command);
             }
         }
     }
@@ -135,16 +131,16 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// given Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<'s, W: WorldRefType<P, K>>(
+    pub fn entity<'s, W: WorldRefType<P, E>>(
         &'s self,
         world: W,
-        entity: &K,
-    ) -> EntityRef<'s, P, K, W> {
+        entity: &E,
+    ) -> EntityRef<'s, P, E, W> {
         return EntityRef::new(self, world, &entity);
     }
 
     /// Return a list of all Entities
-    pub fn entities<W: WorldRefType<P, K>>(&self, world: &W) -> Vec<K> {
+    pub fn entities<W: WorldRefType<P, E>>(&self, world: &W) -> Vec<E> {
         return world.entities();
     }
 
@@ -175,24 +171,32 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     // Ticks
 
     /// Gets the current tick of the Client
-    pub fn client_tick(&self) -> u16 {
-        return self.tick_manager.get_client_tick();
+    pub fn client_tick(&self) -> Option<u16> {
+        if let Some(tick_manager) = &self.tick_manager {
+            Some(tick_manager.get_client_tick())
+        } else {
+            None
+        }
     }
 
     /// Gets the last received tick from the Server
-    pub fn server_tick(&self) -> u16 {
-        return self
-            .server_connection
-            .as_ref()
-            .unwrap()
-            .get_last_received_tick();
+    pub fn server_tick(&self) -> Option<u16> {
+        if let Some(server_connection) = &self.server_connection {
+            Some(server_connection.get_last_received_tick())
+        } else {
+            None
+        }
     }
 
     // Interpolation
 
     /// Gets the interpolation tween amount for the current frame
-    pub fn interpolation(&self) -> f32 {
-        self.tick_manager.fraction
+    pub fn interpolation(&self) -> Option<f32> {
+        if let Some(tick_manager) = &self.tick_manager {
+            Some(tick_manager.fraction)
+        } else {
+            None
+        }
     }
 
     // Receive Data from Server! Very important!
@@ -200,15 +204,18 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     /// Must call this regularly (preferably at the beginning of every draw
     /// frame), in a loop until it returns None.
     /// Retrieves incoming update data, and maintains the connection.
-    pub fn receive<W: WorldMutType<P, K>>(
+    pub fn receive<W: WorldMutType<P, E>>(
         &mut self,
-        world: &mut W,
-    ) -> VecDeque<Result<Event<P, K>, NaiaClientError>> {
+        mut world: W,
+    ) -> VecDeque<Result<Event<P, E>, NaiaClientError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with server, and receive packets
         // until none left
         self.maintain_socket();
+
+        // get current tick
+        let client_tick_opt = self.client_tick();
 
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
@@ -225,21 +232,19 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                 // drop connection if necessary
                 if connection.should_drop() {
                     self.server_connection = None;
-                    self.pre_connection_timestamp = None;
-                    self.pre_connection_digest = None;
-                    self.connection_state = AwaitingChallengeResponse;
+                    self.handshake_manager.disconnect();
                     events.push_back(Ok(Event::Disconnection));
                     return events; // exit early, we're disconnected, who cares?
                 }
                 // process replays
-                connection.process_replays(world);
+                connection.process_replays(&mut world);
                 // receive messages
                 while let Some(message) = connection.get_incoming_message() {
                     events.push_back(Ok(Event::Message(message)));
                 }
                 // receive entity actions
                 while let Some(action) = connection.get_incoming_entity_action() {
-                    let event: Event<P, K> = {
+                    let event: Event<P, E> = {
                         match action {
                             EntityAction::SpawnEntity(entity, component_list) => {
                                 Event::SpawnEntity(entity, component_list)
@@ -263,22 +268,16 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                 }
                 // receive replay command
                 while let Some((owned_entity, command)) = connection.get_incoming_replay() {
-                    events.push_back(Ok(Event::ReplayCommand(
-                        owned_entity,
-                        command.borrow().copy_to_protocol(),
-                    )));
+                    events.push_back(Ok(Event::ReplayCommand(owned_entity, command)));
                 }
                 // receive command
                 while let Some((owned_entity, command)) = connection.get_incoming_command() {
-                    events.push_back(Ok(Event::NewCommand(
-                        owned_entity,
-                        command.borrow().copy_to_protocol(),
-                    )));
+                    events.push_back(Ok(Event::NewCommand(owned_entity, command)));
                 }
                 // send heartbeats
                 if connection.should_send_heartbeat() {
-                    Client::<P, K>::internal_send_with_connection(
-                        self.tick_manager.get_client_tick(),
+                    internal_send_with_connection::<P, E>(
+                        client_tick_opt,
                         &mut self.io,
                         connection,
                         PacketType::Heartbeat,
@@ -288,32 +287,30 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                 // send pings
                 if connection.should_send_ping() {
                     let ping_payload = connection.get_ping_payload();
-                    Client::<P, K>::internal_send_with_connection(
-                        self.tick_manager.get_client_tick(),
+                    internal_send_with_connection::<P, E>(
+                        client_tick_opt,
                         &mut self.io,
                         connection,
                         PacketType::Ping,
                         ping_payload,
                     );
                 }
-                // send a packet
-                while let Some(payload) = connection
-                    .get_outgoing_packet(self.tick_manager.get_client_tick(), &self.manifest)
-                {
+                // send packets
+                while let Some(payload) = connection.get_outgoing_packet(client_tick_opt) {
                     self.io.send_packet(Packet::new_raw(payload));
                     connection.mark_sent();
                 }
-                // update current tick
-                // apply updates on tick boundary
-                if connection.frame_begin(world, &self.manifest, &mut self.tick_manager) {
-                    events.push_back(Ok(Event::Tick));
+                // update current tick & apply updates on tick boundary
+                if let Some(tick_manager) = &mut self.tick_manager {
+                    if connection.frame_begin(&mut world, &self.manifest, tick_manager) {
+                        events.push_back(Ok(Event::Tick));
+                    }
+                } else {
+                    connection.tickless_read_incoming(&mut world, &self.manifest);
                 }
             }
             None => {
-                if self.handshake_timer.ringing() {
-                    self.handshake_timer.reset();
-                    self.send_handshake_packets();
-                }
+                self.handshake_manager.send_packet(&mut self.io);
             }
         }
 
@@ -326,7 +323,7 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
 
     /// Get whether or not the Entity associated with a given EntityKey has
     /// been assigned to the current User
-    pub(crate) fn entity_is_owned(&self, entity: &K) -> bool {
+    pub(crate) fn entity_is_owned(&self, entity: &E) -> bool {
         if let Some(connection) = &self.server_connection {
             return connection.entity_is_owned(entity);
         }
@@ -334,53 +331,6 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
     }
 
     // internal functions
-
-    fn send_handshake_packets(&mut self) {
-        match self.connection_state {
-            ConnectionState::Connected => {
-                // do nothing, not necessary
-            }
-            ConnectionState::AwaitingChallengeResponse => {
-                if self.pre_connection_timestamp.is_none() {
-                    self.pre_connection_timestamp = Some(Timestamp::now());
-                }
-
-                let mut timestamp_bytes = Vec::new();
-                self.pre_connection_timestamp
-                    .as_mut()
-                    .unwrap()
-                    .write(&mut timestamp_bytes);
-                Client::<P, K>::internal_send_connectionless(
-                    &mut self.io,
-                    PacketType::ClientChallengeRequest,
-                    Packet::new(timestamp_bytes),
-                );
-            }
-            ConnectionState::AwaitingConnectResponse => {
-                // write timestamp & digest into payload
-                let mut payload_bytes = Vec::new();
-                self.pre_connection_timestamp
-                    .as_mut()
-                    .unwrap()
-                    .write(&mut payload_bytes);
-                for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref() {
-                    payload_bytes.push(*digest_byte);
-                }
-                // write auth message if there is one
-                if let Some(auth_message) = &mut self.auth_message {
-                    let type_id = auth_message.borrow().get_type_id();
-                    let naia_id = self.manifest.get_naia_id(&type_id); // get naia id
-                    payload_bytes.write_u16::<BigEndian>(naia_id).unwrap(); // write naia id
-                    auth_message.borrow().write(&mut payload_bytes);
-                }
-                Client::<P, K>::internal_send_connectionless(
-                    &mut self.io,
-                    PacketType::ClientConnectRequest,
-                    Packet::new(payload_bytes),
-                );
-            }
-        }
-    }
 
     fn maintain_socket(&mut self) {
         // receive from socket
@@ -394,8 +344,14 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                             server_connection.mark_heard();
 
                             let (header, payload) = StandardHeader::read(packet.payload());
-                            server_connection
-                                .process_incoming_header(&header, &mut self.tick_manager);
+                            let tick_manager: Option<&mut TickManager> = {
+                                if let Some(tick_manager) = &mut self.tick_manager {
+                                    Some(tick_manager)
+                                } else {
+                                    None
+                                }
+                            };
+                            server_connection.process_incoming_header(&header, tick_manager);
 
                             match header.packet_type() {
                                 PacketType::Data => {
@@ -412,47 +368,16 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
                                 _ => {} // TODO: explicitly cover these cases
                             }
                         } else {
-                            let (header, payload) = StandardHeader::read(packet.payload());
-                            match header.packet_type() {
-                                PacketType::ServerChallengeResponse => {
-                                    if self.connection_state
-                                        == ConnectionState::AwaitingChallengeResponse
-                                    {
-                                        if let Some(my_timestamp) = self.pre_connection_timestamp {
-                                            let mut reader = PacketReader::new(&payload);
-                                            let server_tick = reader
-                                                .get_cursor()
-                                                .read_u16::<BigEndian>()
-                                                .unwrap();
-                                            let payload_timestamp = Timestamp::read(&mut reader);
+                            if self
+                                .handshake_manager
+                                .receive_packet(&mut self.tick_manager, packet)
+                                == HandshakeResult::Connected
+                            {
+                                let server_connection =
+                                    Connection::new(self.server_address(), &self.connection_config);
 
-                                            if my_timestamp == payload_timestamp {
-                                                let mut digest_bytes: Vec<u8> = Vec::new();
-                                                for _ in 0..32 {
-                                                    digest_bytes.push(reader.read_u8());
-                                                }
-                                                self.pre_connection_digest =
-                                                    Some(digest_bytes.into_boxed_slice());
-
-                                                self.tick_manager.set_initial_tick(server_tick);
-
-                                                self.connection_state =
-                                                    ConnectionState::AwaitingConnectResponse;
-                                            }
-                                        }
-                                    }
-                                }
-                                PacketType::ServerConnectResponse => {
-                                    let server_connection = ServerConnection::new(
-                                        self.server_address(),
-                                        &self.connection_config,
-                                    );
-
-                                    self.server_connection = Some(server_connection);
-                                    self.connection_state = ConnectionState::Connected;
-                                    self.outstanding_connect = true;
-                                }
-                                _ => {}
+                                self.server_connection = Some(server_connection);
+                                self.outstanding_connect = true;
                             }
                         }
                     } else {
@@ -466,67 +391,21 @@ impl<P: ProtocolType, K: EntityType> Client<P, K> {
             }
         }
     }
-
-    fn internal_send_with_connection(
-        host_tick: u16,
-        io: &mut Io,
-        connection: &mut ServerConnection<P, K>,
-        packet_type: PacketType,
-        packet: Packet,
-    ) {
-        let new_payload = connection.process_outgoing_header(
-            host_tick,
-            connection.get_last_received_tick(),
-            packet_type,
-            packet.payload(),
-        );
-        io.send_packet(Packet::new_raw(new_payload));
-        connection.mark_sent();
-    }
-
-    fn internal_send_connectionless(io: &mut Io, packet_type: PacketType, packet: Packet) {
-        let new_payload =
-            naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
-        io.send_packet(Packet::new_raw(new_payload));
-    }
 }
 
-// IO
-#[derive(Debug)]
-struct Io {
-    packet_sender: Option<PacketSender>,
-    packet_receiver: Option<PacketReceiver>,
-}
-
-impl Io {
-    pub fn new() -> Self {
-        Io {
-            packet_sender: None,
-            packet_receiver: None,
-        }
-    }
-
-    pub fn load(&mut self, packet_sender: PacketSender, packet_receiver: PacketReceiver) {
-        if self.packet_sender.is_some() {
-            panic!("Packet sender/receiver already loaded! Cannot do this twice!");
-        }
-
-        self.packet_sender = Some(packet_sender);
-        self.packet_receiver = Some(packet_receiver);
-    }
-
-    pub fn send_packet(&mut self, packet: Packet) {
-        self.packet_sender
-            .as_mut()
-            .expect("Cannot call Client.send_packet() until you call Client.connect()!")
-            .send(packet);
-    }
-
-    pub fn receive_packet(&mut self) -> Result<Option<Packet>, NaiaClientSocketError> {
-        return self
-            .packet_receiver
-            .as_mut()
-            .expect("Cannot call Client.receive_packet() until you call Client.connect()!")
-            .receive();
-    }
+fn internal_send_with_connection<P: ProtocolType, E: Copy + Eq + Hash>(
+    host_tick: Option<u16>,
+    io: &mut Io,
+    connection: &mut Connection<P, E>,
+    packet_type: PacketType,
+    packet: Packet,
+) {
+    let new_payload = connection.process_outgoing_header(
+        host_tick,
+        connection.get_last_received_tick(),
+        packet_type,
+        packet.payload(),
+    );
+    io.send_packet(Packet::new_raw(new_payload));
+    connection.mark_sent();
 }

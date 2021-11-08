@@ -1,13 +1,15 @@
-use naia_server::{Event, ProtocolType, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig};
+use naia_server::{
+    Event, ProtocolType, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldRefType,
+};
 
-use naia_default_world::{Entity, World as DefaultWorld};
+use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_basic_demo_shared::{
     get_server_address, get_shared_config,
     protocol::{Character, Protocol, StringMessage},
 };
 
-type World = DefaultWorld<Protocol>;
+type World = DemoWorld<Protocol>;
 type Server = NaiaServer<Protocol, Entity>;
 
 pub struct App {
@@ -58,8 +60,8 @@ impl App {
                 // Create a Character
                 let character = Character::new((count * 4) as u8, 0, first, last);
                 let character_key = server
-                    .spawn_entity(&mut world.proxy_mut())
-                    .insert_component(&character)
+                    .spawn_entity(world.proxy_mut())
+                    .insert_component(character)
                     .id();
 
                 // Add the Character Entity to the main Room
@@ -76,12 +78,11 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        for event in self.server.receive(self.world.proxy()) {
+        for event in self.server.receive() {
             match event {
-                Ok(Event::Authorization(user_key, Protocol::Auth(auth_ref))) => {
-                    let auth_message = auth_ref.borrow();
-                    let username = auth_message.username.get();
-                    let password = auth_message.password.get();
+                Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {
+                    let username = auth.username.get();
+                    let password = auth.password.get();
                     if username == "charlie" && password == "12345" {
                         // Accept incoming connection
                         self.server.accept_connection(&user_key);
@@ -102,8 +103,7 @@ impl App {
                 Ok(Event::Disconnection(_, user)) => {
                     info!("Naia Server disconnected from: {:?}", user.address);
                 }
-                Ok(Event::Message(user_key, Protocol::StringMessage(message_ref))) => {
-                    let message = message_ref.borrow();
+                Ok(Event::Message(user_key, Protocol::StringMessage(message))) => {
                     let message_contents = message.contents.get();
                     info!(
                         "Server recv from ({}) <- {}",
@@ -124,32 +124,34 @@ impl App {
                         );
 
                         let new_message = StringMessage::new(new_message_contents);
-                        self.server.queue_message(&user_key, &new_message, true);
+                        self.server.send_message(&user_key, &new_message, true);
                     }
 
                     // Iterate through Characters, marching them from (0,0) to (20, N)
-                    for entity in self.server.entities(&self.world.proxy()) {
-                        if let Some(character_ref) = self
+                    for entity in self.server.entities(self.world.proxy()) {
+                        if let Some(mut character) = self
                             .server
-                            .entity(self.world.proxy(), &entity)
+                            .entity_mut(self.world.proxy_mut(), &entity)
                             .component::<Character>()
                         {
-                            character_ref.borrow_mut().step();
+                            character.step();
                         }
                     }
 
                     // Update scopes of entities
-                    for (_, user_key, entity) in self.server.scope_checks() {
-                        if let Some(character_ref) = self
-                            .server
-                            .entity(self.world.proxy(), &entity)
-                            .component::<Character>()
-                        {
-                            let x = *character_ref.borrow().x.get();
-                            if x >= 5 && x <= 15 {
-                                self.server.user_scope(&user_key).include(&entity);
-                            } else {
-                                self.server.user_scope(&user_key).exclude(&entity);
+                    {
+                        let server = &mut self.server;
+                        let world = &self.world;
+                        for (_, user_key, entity) in server.scope_checks() {
+                            if let Some(character) =
+                                world.proxy().get_component::<Character>(&entity)
+                            {
+                                let x = *character.x.get();
+                                if x >= 5 && x <= 15 {
+                                    server.user_scope(&user_key).include(&entity);
+                                } else {
+                                    server.user_scope(&user_key).exclude(&entity);
+                                }
                             }
                         }
                     }

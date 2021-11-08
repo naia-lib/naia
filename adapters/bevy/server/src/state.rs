@@ -1,13 +1,14 @@
 use std::marker::PhantomData;
 
 use bevy::ecs::{
+    entity::Entity,
     system::{SystemParamFetch, SystemParamState, SystemState},
     world::{Mut, World},
 };
 
 use naia_server::{ProtocolType, Server as NaiaServer};
 
-use naia_bevy_shared::{Entity, WorldProxyMut};
+use naia_bevy_shared::WorldProxyMut;
 
 use super::{commands::Command, server::Server};
 
@@ -26,11 +27,9 @@ impl<P: ProtocolType> State<P> {
         // resource scope
         world.resource_scope(
             |world: &mut World, mut server: Mut<NaiaServer<P, Entity>>| {
-                let world_proxy = &mut world.proxy_mut();
-
                 // Process queued commands
                 for command in self.commands.drain(..) {
-                    command.write(&mut server, world_proxy);
+                    command.write(&mut server, world.proxy_mut());
                 }
             },
         );

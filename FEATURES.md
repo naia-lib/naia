@@ -13,7 +13,7 @@
 * [x] Entities & their Components sync with Clients when "in scope"
 * [x] Rooms restrict syncing to their contained Users & Entities
 * [x] Customizable scoping function for advanced usage
-* [x] Rtt estimations
+* [x] RTT estimations
 * [x] Client Tick events
 * [x] Synced Tick between Server/Client
 * [x] Support Client prediction of Entities
@@ -44,10 +44,5 @@ These planned changes for naia-socket will bring new features to naia as well.
 * [ ] Integration & Unit Tests
 * [ ] Better error handling
 * [ ] Load Testing & Benchmarks
-* [ ] Optionally use stdweb instead of web_sys for Web build
-* [ ] Server socket can run on a separate thread
-* [ ] Udp Server & Linux Client uses DTLS to reach parity with WebRTC
-* [ ] Windows-compatible Client Socket
-* [ ] MacOS-compatible Client Socket
 * [ ] Android-compatible Client Socket
 * [ ] iOS-compatible Client Socket

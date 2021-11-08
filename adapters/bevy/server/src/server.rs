@@ -1,16 +1,17 @@
 use std::{collections::VecDeque, marker::PhantomData};
 
 use bevy::ecs::{
+    entity::Entity,
     system::SystemParam,
     world::{Mut, World},
 };
 
 use naia_server::{
-    EntityRef, Event, ImplRef, NaiaServerError, ProtocolType, RoomKey, RoomMut, RoomRef,
+    EntityRef, Event, NaiaServerError, ProtocolType, Replicate, RoomKey, RoomMut, RoomRef,
     Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
-use naia_bevy_shared::{tick::Ticker, Entity, WorldProxy, WorldRef};
+use naia_bevy_shared::{WorldProxy, WorldRef};
 
 use super::{commands::Command, entity_mut::EntityMut, state::State};
 
@@ -20,7 +21,6 @@ pub struct Server<'a, P: ProtocolType> {
     state: &'a mut State<P>,
     world: &'a World,
     server: Mut<'a, NaiaServer<P, Entity>>,
-    ticker: Mut<'a, Ticker>,
     phantom_p: PhantomData<P>,
 }
 
@@ -33,22 +33,17 @@ impl<'a, P: ProtocolType> Server<'a, P> {
                 .get_resource_unchecked_mut::<NaiaServer<P, Entity>>()
                 .expect("Naia Server has not been correctly initialized!");
 
-            let ticker = world
-                .get_resource_unchecked_mut::<Ticker>()
-                .expect("Naia Server has not been correctly initialized!");
-
             Self {
                 state,
                 world,
                 server,
-                ticker,
                 phantom_p: PhantomData,
             }
         }
     }
 
     pub fn receive(&mut self) -> VecDeque<Result<Event<P, Entity>, NaiaServerError>> {
-        return self.server.receive(self.world.proxy());
+        return self.server.receive();
     }
 
     //// Connections ////
@@ -62,7 +57,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     }
 
     //// Messages ////
-    pub fn queue_message<R: ImplRef<P>>(
+    pub fn send_message<R: Replicate<P>>(
         &mut self,
         user_key: &UserKey,
         message_ref: &R,
@@ -70,7 +65,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     ) {
         return self
             .server
-            .queue_message(user_key, message_ref, guaranteed_delivery);
+            .send_message(user_key, message_ref, guaranteed_delivery);
     }
 
     //// Updates ////
@@ -86,7 +81,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     //// Entities ////
 
     pub fn spawn(&mut self) -> EntityMut<'a, '_, P> {
-        let entity = Entity::new(self.world.entities().reserve_entity());
+        let entity = self.world.entities().reserve_entity();
         self.server.spawn_entity_at(&entity);
         EntityMut::new(entity, self)
     }
@@ -100,7 +95,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     }
 
     pub fn entities(&self) -> Vec<Entity> {
-        return self.server.entities(&self.world.proxy());
+        return self.server.entities(self.world.proxy());
     }
 
     //// Users ////
@@ -165,12 +160,8 @@ impl<'a, P: ProtocolType> Server<'a, P> {
         return self.server.client_tick(user_key);
     }
 
-    pub fn server_tick(&self) -> u16 {
+    pub fn server_tick(&self) -> Option<u16> {
         return self.server.server_tick();
-    }
-
-    pub fn tick_start(&mut self) {
-        self.ticker.tick_start();
     }
 
     // Crate-public methods

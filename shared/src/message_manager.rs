@@ -3,20 +3,22 @@ use std::{
     vec::Vec,
 };
 
-use naia_socket_shared::{PacketReader, Ref};
+use naia_socket_shared::PacketReader;
 
 use super::{
-    manifest::Manifest, packet_notifiable::PacketNotifiable, protocol_type::ProtocolType,
-    replicate::Replicate,
+    manifest::Manifest,
+    packet_notifiable::PacketNotifiable,
+    protocol_type::{ProtocolKindType, ProtocolType},
+    replicate::ReplicateSafe,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 #[derive(Debug)]
 pub struct MessageManager<P: ProtocolType> {
-    queued_outgoing_messages: VecDeque<(bool, Ref<dyn Replicate<P>>)>,
+    queued_outgoing_messages: VecDeque<(bool, P)>,
     queued_incoming_messages: VecDeque<P>,
-    sent_guaranteed_messages: HashMap<u16, Vec<Ref<dyn Replicate<P>>>>,
+    sent_guaranteed_messages: HashMap<u16, Vec<P>>,
     last_popped_message_guarantee: bool,
 }
 
@@ -38,13 +40,13 @@ impl<P: ProtocolType> MessageManager<P> {
     }
 
     /// Gets the next queued Message to be transmitted
-    pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<Ref<dyn Replicate<P>>> {
+    pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<P> {
         match self.queued_outgoing_messages.pop_front() {
             Some((guaranteed, message)) => {
-                //place in transmission record if this is a gauranteed message
+                //place in transmission record if this is a guaranteed message
                 if guaranteed {
                     if !self.sent_guaranteed_messages.contains_key(&packet_index) {
-                        let sent_messages_list: Vec<Ref<dyn Replicate<P>>> = Vec::new();
+                        let sent_messages_list: Vec<P> = Vec::new();
                         self.sent_guaranteed_messages
                             .insert(packet_index, sent_messages_list);
                     }
@@ -66,9 +68,7 @@ impl<P: ProtocolType> MessageManager<P> {
 
     /// If  the last popped Message from the queue somehow wasn't able to be
     /// written into a packet, put the Message back into the front of the queue
-    pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: &Ref<dyn Replicate<P>>) {
-        let cloned_message = message.clone();
-
+    pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: P) {
         if self.last_popped_message_guarantee {
             if let Some(sent_messages_list) = self.sent_guaranteed_messages.get_mut(&packet_index) {
                 sent_messages_list.pop();
@@ -79,17 +79,17 @@ impl<P: ProtocolType> MessageManager<P> {
         }
 
         self.queued_outgoing_messages
-            .push_front((self.last_popped_message_guarantee, cloned_message));
+            .push_front((self.last_popped_message_guarantee, message));
     }
 
     /// Queues an Message to be transmitted to the remote host
-    pub fn queue_outgoing_message(
+    pub fn queue_outgoing_message<R: ReplicateSafe<P>>(
         &mut self,
-        message: &Ref<dyn Replicate<P>>,
+        message: &R,
         guaranteed_delivery: bool,
     ) {
         self.queued_outgoing_messages
-            .push_back((guaranteed_delivery, message.clone()));
+            .push_back((guaranteed_delivery, message.protocol_copy()));
     }
 
     /// Returns whether any Messages have been received that must be handed to
@@ -105,12 +105,17 @@ impl<P: ProtocolType> MessageManager<P> {
 
     /// Given incoming packet data, read transmitted Messages and store them to
     /// be returned to the application
-    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>) {
+    pub fn process_data(
+        &mut self,
+        reader: &mut PacketReader,
+        manifest: &Manifest<P>,
+        packet_index: u16,
+    ) {
         let message_count = reader.read_u8();
         for _x in 0..message_count {
-            let naia_id: u16 = reader.read_u16();
+            let component_kind: P::Kind = P::Kind::from_u16(reader.read_u16());
 
-            let new_message = manifest.create_replica(naia_id, reader);
+            let new_message = manifest.create_replica(component_kind, reader, packet_index);
             self.queued_incoming_messages.push_back(new_message);
         }
     }

@@ -1,14 +1,13 @@
 use std::collections::HashMap;
 
 use super::{
+    message_manager::MessageManager,
+    packet_notifiable::PacketNotifiable,
+    packet_type::PacketType,
+    protocol_type::ProtocolType,
     sequence_buffer::{SequenceBuffer, SequenceNumber},
     standard_header::StandardHeader,
     wrapping_number::sequence_greater_than,
-};
-
-use super::{
-    message_manager::MessageManager, packet_notifiable::PacketNotifiable, packet_type::PacketType,
-    protocol_type::ProtocolType,
 };
 
 const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
