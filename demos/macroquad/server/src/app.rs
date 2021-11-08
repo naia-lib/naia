@@ -96,9 +96,8 @@ impl App {
                         .id();
                     self.user_to_prediction_map.insert(user_key, entity);
                 }
-                Ok(Event::Disconnection(user_key)) => {
-                    //let user_address = self.server.user(&user_key).address();
-                    info!("Naia Server disconnected from user");
+                Ok(Event::Disconnection(user_key, user)) => {
+                    info!("Naia Server disconnected from: {}", user.address);
                     if let Some(entity) = self.user_to_prediction_map.remove(&user_key) {
                         self.server
                             .entity_mut(self.world.proxy_mut(), &entity)

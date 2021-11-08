@@ -2,7 +2,7 @@ use log::info;
 
 use naia_hecs_client::{Event, WorldProxyMut};
 
-use naia_hecs_demo_shared::protocol::{Protocol, StringMessage};
+use naia_hecs_demo_shared::protocol::Protocol;
 
 use crate::app::App;
 
@@ -14,13 +14,6 @@ pub fn process_events(app: &mut App) {
             }
             Ok(Event::Disconnection) => {
                 info!("Client disconnected from: {}", app.client.server_address());
-            }
-            Ok(Event::Message(Protocol::StringMessage(_))) => {
-                let send_message_contents =
-                    format!("Client Packet (message {})", app.message_count);
-                let send_message = StringMessage::new(send_message_contents);
-                app.client.send_message(&send_message, true);
-                app.message_count += 1;
             }
             Ok(Event::SpawnEntity(_, _)) => {
                 info!("creation of entity");

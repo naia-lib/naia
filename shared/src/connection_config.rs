@@ -12,9 +12,9 @@ pub struct ConnectionConfig {
     /// The duration to wait before sending a ping message to the remote host,
     /// in order to estimate RTT time
     pub ping_interval: Duration,
-    /// Number of samples to measure RTT & Jitter by. A higher number will
-    /// smooth out RTT measurements, but at the cost of responsiveness.
-    pub rtt_sample_size: u16,
+    /// Number of samples to measure Ping & Jitter by. A higher number will
+    /// smooth out Ping measurements, but at the cost of responsiveness.
+    pub ping_sample_size: u16,
 }
 
 impl ConnectionConfig {
@@ -29,7 +29,7 @@ impl ConnectionConfig {
             disconnection_timeout_duration,
             heartbeat_interval,
             ping_interval,
-            rtt_sample_size,
+            ping_sample_size: rtt_sample_size,
         }
     }
 }
@@ -40,7 +40,7 @@ impl Default for ConnectionConfig {
             disconnection_timeout_duration: Duration::from_secs(10),
             heartbeat_interval: Duration::from_secs(4),
             ping_interval: Duration::from_secs(1),
-            rtt_sample_size: 20,
+            ping_sample_size: 20,
         }
     }
 }

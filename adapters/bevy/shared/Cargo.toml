@@ -1,6 +1,6 @@
 [package]
 name = "naia-bevy-shared"
-version = "0.7.0-alpha.1"
+version = "0.7.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Library to faciliate naia & Bevy interop, functionality shared by client & server versions"
 homepage = "https://github.com/naia-rs/naia"
@@ -14,5 +14,5 @@ maintenance = { status = "actively-developed" }
 [features]
 
 [dependencies]
-naia-shared = { version = "0.7.0-alpha.1", path = "../../../shared", features = ["wbindgen", "multithread"] }
+naia-shared = { version = "0.7.0", path = "../../../shared", features = ["wbindgen"] }
 bevy = { version="=0.5.0", default-features=false }

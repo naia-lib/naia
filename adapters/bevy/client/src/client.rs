@@ -57,7 +57,7 @@ impl<'a, P: ProtocolType> Client<'a, P> {
 
     // Interpolation
 
-    pub fn interpolation(&self) -> f32 {
+    pub fn interpolation(&self) -> Option<f32> {
         return self.client.interpolation();
     }
 
@@ -82,11 +82,11 @@ impl<'a, P: ProtocolType> Client<'a, P> {
 
     //// Ticks ////
 
-    pub fn client_tick(&self) -> u16 {
+    pub fn client_tick(&self) -> Option<u16> {
         return self.client.client_tick();
     }
 
-    pub fn server_tick(&self) -> u16 {
+    pub fn server_tick(&self) -> Option<u16> {
         return self.client.server_tick();
     }
 }

@@ -53,7 +53,7 @@ impl<P: ProtocolType> CommandReceiver<P> {
             let past_commands_number: u8 = reader.read_u8();
 
             // process most recent sent command
-            let success = self.process_command(
+            self.process_command(
                 server_tick_opt,
                 client_tick,
                 reader,
@@ -61,9 +61,6 @@ impl<P: ProtocolType> CommandReceiver<P> {
                 owned_entity,
                 replica_kind,
             );
-            if !success {
-                info!("got a late new command");
-            }
 
             // process past commands (for redundancy)
             for _y in 0..past_commands_number {
