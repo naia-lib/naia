@@ -1,4 +1,3 @@
-[![Build Status](https://img.shields.io/circleci/project/github/naia-rs/naia.svg)](https://circleci.com/gh/naia-rs/naia)
 [![Latest Version](https://img.shields.io/crates/v/naia-server.svg)](https://crates.io/crates/naia-server)
 [![API Documentation](https://docs.rs/naia-server/badge.svg)](https://docs.rs/naia-server)
 ![](https://tokei.rs/b1/github/naia-rs/naia)

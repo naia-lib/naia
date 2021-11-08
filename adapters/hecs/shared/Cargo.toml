@@ -1,12 +1,10 @@
 [package]
 name = "naia-hecs-shared"
-version = "0.5.0"
+version = "0.7.0-alpha.1"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-description = ""
-documentation = "https://docs.rs/naia-client"
+description = "Library to faciliate naia & Hecs interop, functionality shared by client & server versions"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
-readme = "../README.md"
 keywords = ["wasm", "webrtc", "udp", "networking", "gamedev"]
 license = "MIT OR Apache-2.0"
 categories = ["network-programming", "game-development", "wasm", "web-programming"]
@@ -20,5 +18,5 @@ wbindgen = [ "naia-shared/wbindgen" ]
 mquad = [ "naia-shared/mquad" ]
 
 [dependencies]
-naia-shared = { path = "../../../shared" }
-hecs = { path = "../../../../Forks/hecs" }
+naia-shared = { version = "0.7.0-alpha.1", path = "../../../shared" }
+hecs = { version = "=0.5.2" }
