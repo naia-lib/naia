@@ -35,9 +35,9 @@ pub fn authorization_event(
     }
 }
 
-pub fn connection_event(
+pub fn connection_event<'world, 'state>(
     mut event_reader: EventReader<ConnectionEvent>,
-    mut server: Server<Protocol>,
+    mut server: Server<'world, 'state, Protocol>,
     mut global: ResMut<Global>,
 ) {
     for event in event_reader.iter() {

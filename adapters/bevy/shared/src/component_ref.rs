@@ -17,7 +17,7 @@ impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for Compone
 }
 
 // ComponentMut
-pub struct ComponentMut<'a, T>(pub BevyMut<'a, T>);
+pub struct ComponentMut<'a, T>(pub &'a mut T);
 
 impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for ComponentMut<'a, R> {
     fn to_ref(&self) -> &R {
@@ -41,7 +41,7 @@ impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ReplicaDynRefTrait<P> for Compone
 }
 
 // ComponentDynMut
-pub struct ComponentDynMut<'a, T>(pub BevyMut<'a, T>);
+pub struct ComponentDynMut<'a, T>(pub &'a mut T);
 
 impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ReplicaDynRefTrait<P> for ComponentDynMut<'a, R> {
     fn to_dyn_ref(&self) -> &dyn ReplicateSafe<P> {

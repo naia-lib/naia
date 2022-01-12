@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 members = [
     "client",
     "server",
@@ -21,9 +22,6 @@ members = [
     "demos/macroquad/server",
     "demos/macroquad/shared",
     "demos/macroquad/client",
-    "demos/hecs/server",
-    "demos/hecs/shared",
-    "demos/hecs/client",
     "demos/bevy/server",
     "demos/bevy/shared",
     "demos/bevy/client",

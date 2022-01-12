@@ -1,7 +1,10 @@
+use std::marker::PhantomData;
 use bevy::ecs::{
     entity::Entity,
     world::{Mut, World},
 };
+use bevy::ecs::component::SparseStorage;
+use bevy::prelude::Component;
 
 use naia_shared::{
     DiffMask, PacketReader, ProtocolInserter, ProtocolKindType, ProtocolType, ReplicaDynRefWrapper,
@@ -132,8 +135,8 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
         &mut self,
         entity: &Entity,
     ) -> Option<ReplicaMutWrapper<P, R>> {
-        if let Some(bevy_mut) = self.world.get_mut::<R>(*entity) {
-            let wrapper = ComponentMut(bevy_mut);
+        if let Some(bevy_mut) = self.world.get_mut::<ReplicateSafeComponent<P, R>>(*entity) {
+            let wrapper = ComponentMut(&mut bevy_mut.into_inner().inner);
             let component_mut = ReplicaMutWrapper::new(wrapper);
             return Some(component_mut);
         }
@@ -217,11 +220,11 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
         }
 
         // insert into ecs
-        self.world.entity_mut(*entity).insert(component_ref);
+        self.world.entity_mut(*entity).insert(ReplicateSafeComponent { inner: component_ref, _proto: Default::default() });
     }
 
     fn remove_component<R: ReplicateSafe<P>>(&mut self, entity: &Entity) -> Option<R> {
-        return self.world.entity_mut(*entity).remove::<R>();
+        return self.world.entity_mut(*entity).remove::<ReplicateSafeComponent<P, R>>().map(|f| f.inner);
     }
 
     fn remove_component_of_kind(&mut self, entity: &Entity, component_kind: &P::Kind) -> Option<P> {
@@ -254,7 +257,7 @@ fn entities<P: ProtocolType>(world: &World) -> Vec<Entity> {
 }
 
 fn has_component<P: ProtocolType, R: ReplicateSafe<P>>(world: &World, entity: &Entity) -> bool {
-    return world.get::<R>(*entity).is_some();
+    return world.get::<ReplicateSafeComponent<P, R>>(*entity).is_some();
 }
 
 fn has_component_of_kind<P: ProtocolType>(
@@ -271,8 +274,8 @@ fn get_component<'a, P: ProtocolType, R: ReplicateSafe<P>>(
     world: &'a World,
     entity: &Entity,
 ) -> Option<ReplicaRefWrapper<'a, P, R>> {
-    if let Some(bevy_ref) = world.get::<R>(*entity) {
-        let wrapper = ComponentRef(bevy_ref);
+    if let Some(bevy_ref) = world.get::<ReplicateSafeComponent<P, R>>(*entity) {
+        let wrapper = ComponentRef(&bevy_ref.inner);
         let component_ref = ReplicaRefWrapper::new(wrapper);
         return Some(component_ref);
     }
@@ -304,3 +307,11 @@ fn get_world_data_unchecked_mut<P: ProtocolType>(world: &World) -> Mut<WorldData
             .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
     }
 }
+
+pub struct ReplicateSafeComponent<P: ProtocolType, R: ReplicateSafe<P>> {
+    pub(crate) inner: R,
+    _proto: PhantomData<P>,
+}
+
+// FIXME: how should an API consumer decide which storage to use?
+impl<P: ProtocolType, R: ReplicateSafe<P>> Component for ReplicateSafeComponent<P, R> { type Storage = SparseStorage; }

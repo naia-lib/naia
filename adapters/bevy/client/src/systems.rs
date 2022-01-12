@@ -170,3 +170,11 @@ pub fn should_tick(resource: Res<ClientResource>) -> ShouldRun {
 pub fn finish_tick(mut resource: ResMut<ClientResource>) {
     resource.ticker.reset();
 }
+
+pub fn should_do_io<P: ProtocolType>(client: Res<Client<P, Entity>>) -> ShouldRun {
+    if client.connection_requested() {
+        ShouldRun::Yes
+    } else {
+        ShouldRun::No
+    }
+}

@@ -1,3 +1,4 @@
+use bevy_ecs::prelude::Component;
 use nanoserde::{DeBin, SerBin};
 
 use naia_derive::Replicate;
@@ -16,7 +17,7 @@ impl Default for ColorValue {
     }
 }
 
-#[derive(Replicate)]
+#[derive(Component, Replicate)]
 #[protocol_path = "crate::protocol::Protocol"]
 pub struct Color {
     pub value: Property<ColorValue>,
