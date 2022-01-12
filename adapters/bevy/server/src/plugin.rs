@@ -1,7 +1,7 @@
 use std::{ops::DerefMut, sync::Mutex};
 
 use bevy::{
-    app::{AppBuilder, CoreStage, Plugin as PluginType},
+    app::{App, CoreStage, Plugin as PluginType},
     ecs::schedule::SystemStage,
     prelude::*,
 };
@@ -55,7 +55,7 @@ impl<P: ProtocolType> Plugin<P> {
 }
 
 impl<P: ProtocolType> PluginType for Plugin<P> {
-    fn build(&self, app: &mut AppBuilder) {
+    fn build(&self, app: &mut App) {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
         let mut server = Server::<P, Entity>::new(config.server_config, config.shared_config);
         server.listen(config.server_addrs);

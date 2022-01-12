@@ -17,17 +17,17 @@ use super::{commands::Command, entity_mut::EntityMut, state::State};
 
 // Server
 
-pub struct Server<'a, P: ProtocolType> {
-    state: &'a mut State<P>,
-    world: &'a World,
-    server: Mut<'a, NaiaServer<P, Entity>>,
+pub struct Server<'world, 'state, P: ProtocolType> {
+    state: &'state mut State<P>,
+    world: &'world World,
+    server: Mut<'world, NaiaServer<P, Entity>>,
     phantom_p: PhantomData<P>,
 }
 
-impl<'a, P: ProtocolType> Server<'a, P> {
+impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
     // Public Methods //
 
-    pub fn new(state: &'a mut State<P>, world: &'a World) -> Self {
+    pub fn new(state: &'state mut State<P>, world: &'world World) -> Self {
         unsafe {
             let server = world
                 .get_resource_unchecked_mut::<NaiaServer<P, Entity>>()
@@ -80,7 +80,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
 
     //// Entities ////
 
-    pub fn spawn(&mut self) -> EntityMut<'a, '_, P> {
+    pub fn spawn<'a>(&'a mut self) -> EntityMut<'a, 'world, 'state, P> {
         let entity = self.world.entities().reserve_entity();
         self.server.spawn_entity_at(&entity);
         EntityMut::new(entity, self)
@@ -90,7 +90,7 @@ impl<'a, P: ProtocolType> Server<'a, P> {
         return self.server.entity(self.world.proxy(), entity);
     }
 
-    pub fn entity_mut(&mut self, entity: &Entity) -> EntityMut<'a, '_, P> {
+    pub fn entity_mut<'a>(&'a mut self, entity: &Entity) -> EntityMut<'a, 'world, 'state, P> {
         EntityMut::new(*entity, self)
     }
 
@@ -189,6 +189,6 @@ impl<'a, P: ProtocolType> Server<'a, P> {
     // Private methods
 }
 
-impl<'a, P: ProtocolType> SystemParam for Server<'a, P> {
+impl<'world, 'state, P: ProtocolType> SystemParam for Server<'world, 'state, P> {
     type Fetch = State<P>;
 }

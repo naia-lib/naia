@@ -14,4 +14,4 @@ use-webrtc = [ "naia-bevy-server/use-webrtc" ]
 [dependencies]
 naia-bevy-demo-shared = { path = "../shared" }
 naia-bevy-server = { path = "../../../adapters/bevy/server" }
-bevy = { version="0.5.0", default-features=false }
+bevy = { version="0.6.0", default-features=false }

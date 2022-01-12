@@ -1,13 +1,14 @@
 use std::{net::SocketAddr, ops::DerefMut, sync::Mutex};
 
 use bevy::{
-    app::{AppBuilder, CoreStage, Plugin as PluginType},
+    app::{App, CoreStage, Plugin as PluginType},
     ecs::schedule::SystemStage,
     prelude::*,
 };
 
 use naia_client::{Client, ClientConfig, ProtocolType, Replicate, SharedConfig};
 
+use crate::systems::should_do_io;
 use naia_bevy_shared::WorldData;
 
 use super::{
@@ -66,13 +67,9 @@ impl<P: ProtocolType, R: Replicate<P>> Plugin<P, R> {
 }
 
 impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
-    fn build(&self, app: &mut AppBuilder) {
+    fn build(&self, app: &mut App) {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
         let mut client = Client::<P, Entity>::new(config.client_config, config.shared_config);
-        if let Some(auth) = config.auth {
-            client.auth(auth);
-        }
-        client.connect(config.server_address);
 
         app
         // RESOURCES //
@@ -95,7 +92,8 @@ impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
             // events //
             .add_stage_before(CoreStage::PreUpdate,
                               PrivateStage::BeforeReceiveEvents,
-                              SystemStage::single_threaded())
+                              SystemStage::single_threaded()
+                                  .with_run_criteria(should_do_io::<P>.system()))
             .add_stage_after(PrivateStage::BeforeReceiveEvents,
                               Stage::ReceiveEvents,
                               SystemStage::single_threaded())
@@ -134,7 +132,7 @@ impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
                               PrivateStage::AfterTick,
                               SystemStage::parallel()
                                  .with_run_criteria(should_tick.system()))
-        // SYSTEMS //
+            // SYSTEMS //
             .add_system_to_stage(PrivateStage::BeforeReceiveEvents,
                                  before_receive_events::<P>.exclusive_system())
             .add_system_to_stage(PrivateStage::AfterConnection,

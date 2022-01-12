@@ -9,13 +9,13 @@ use super::{
 
 // EntityMut
 
-pub struct EntityMut<'a, 'b, P: ProtocolType> {
+pub struct EntityMut<'s, 'world, 'state, P: ProtocolType> {
     entity: Entity,
-    server: &'b mut Server<'a, P>,
+    server: &'s mut Server<'world, 'state, P>,
 }
 
-impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
-    pub fn new(entity: Entity, server: &'b mut Server<'a, P>) -> Self {
+impl<'s, 'world, 'state, P: ProtocolType> EntityMut<'s, 'world, 'state, P> {
+    pub fn new(entity: Entity, server: &'s mut Server<'world, 'state, P>) -> Self {
         return EntityMut { entity, server };
     }
 
@@ -72,7 +72,7 @@ impl<'a, 'b, P: ProtocolType> EntityMut<'a, 'b, P> {
 
     // Exit
 
-    pub fn server(&mut self) -> &mut Server<'a, P> {
+    pub fn server(&mut self) -> &mut Server<'world, 'state, P> {
         self.server
     }
 }

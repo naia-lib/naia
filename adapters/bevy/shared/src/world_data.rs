@@ -2,8 +2,10 @@ use std::{
     any::Any,
     collections::{HashMap, HashSet},
 };
+use bevy::ecs::component::SparseStorage;
 
 use bevy::ecs::entity::Entity;
+use bevy::prelude::Component;
 
 use naia_shared::{ProtocolType, ReplicateSafe};
 
@@ -66,4 +68,6 @@ impl<P: ProtocolType> WorldData<P> {
 }
 
 unsafe impl<P: ProtocolType> Send for WorldData<P> {}
+
 unsafe impl<P: ProtocolType> Sync for WorldData<P> {}
+
