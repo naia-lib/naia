@@ -28,4 +28,7 @@ members = [
     "demos/tickless/server",
     "demos/tickless/shared",
     "demos/tickless/client",
+    "demos/hecs/server",
+    "demos/hecs/shared",
+    "demos/hecs/client",
     ]

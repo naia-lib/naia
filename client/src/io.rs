@@ -19,10 +19,6 @@ impl Io {
         }
     }
 
-    pub fn is_loaded(&self) -> bool {
-        self.packet_sender.is_some()
-    }
-
     pub fn load(&mut self, packet_sender: PacketSender, packet_receiver: PacketReceiver) {
         if self.packet_sender.is_some() {
             panic!("Packet sender/receiver already loaded! Cannot do this twice!");
