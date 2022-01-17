@@ -1,7 +1,9 @@
 use std::{any::Any, marker::PhantomData};
 
-use bevy::ecs::{entity::Entity, world::World};
-use bevy::prelude::Component;
+use bevy::{
+    ecs::{entity::Entity, world::World},
+    prelude::Component,
+};
 
 use naia_shared::{ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
 
@@ -63,7 +65,7 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
         entity: &Entity,
     ) -> Option<ReplicaDynMutWrapper<'w, P>> {
         if let Some(component_mut) = world.get_mut::<R>(*entity) {
-            let wrapper = ComponentDynMut(component_mut.into_inner());
+            let wrapper = ComponentDynMut(component_mut);
             let component_dyn_mut = ReplicaDynMutWrapper::new(wrapper);
             return Some(component_dyn_mut);
         }

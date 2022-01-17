@@ -133,7 +133,7 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
         entity: &Entity,
     ) -> Option<ReplicaMutWrapper<P, R>> {
         if let Some(bevy_mut) = self.world.get_mut::<R>(*entity) {
-            let wrapper = ComponentMut(bevy_mut.into_inner());
+            let wrapper = ComponentMut(bevy_mut);
             let component_mut = ReplicaMutWrapper::new(wrapper);
             return Some(component_mut);
         }
