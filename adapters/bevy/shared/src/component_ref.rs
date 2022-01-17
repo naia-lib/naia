@@ -1,7 +1,5 @@
 use std::ops::{Deref, DerefMut};
 
-use bevy::ecs::world::Mut as BevyMut;
-
 use naia_shared::{
     ProtocolType, ReplicaDynMutTrait, ReplicaDynRefTrait, ReplicaMutTrait, ReplicaRefTrait,
     ReplicateSafe,

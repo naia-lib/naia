@@ -4,7 +4,6 @@ use bevy::ecs::{entity::Entity, world::World};
 use bevy::prelude::Component;
 
 use naia_shared::{ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
-use crate::world_proxy::ReplicateSafeComponent;
 
 use super::component_ref::{ComponentDynMut, ComponentDynRef};
 
@@ -50,8 +49,8 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
         world: &'w World,
         entity: &Entity,
     ) -> Option<ReplicaDynRefWrapper<'w, P>> {
-        if let Some(component_ref) = world.get::<ReplicateSafeComponent<P, R>>(*entity) {
-            let wrapper = ComponentDynRef(&component_ref.inner);
+        if let Some(component_ref) = world.get::<R>(*entity) {
+            let wrapper = ComponentDynRef(component_ref);
             let component_dyn_ref = ReplicaDynRefWrapper::new(wrapper);
             return Some(component_dyn_ref);
         }
@@ -63,8 +62,8 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
         world: &'w mut World,
         entity: &Entity,
     ) -> Option<ReplicaDynMutWrapper<'w, P>> {
-        if let Some(component_mut) = world.get_mut::<ReplicateSafeComponent<P, R>>(*entity) {
-            let wrapper = ComponentDynMut(&mut component_mut.into_inner().inner);
+        if let Some(component_mut) = world.get_mut::<R>(*entity) {
+            let wrapper = ComponentDynMut(component_mut.into_inner());
             let component_dyn_mut = ReplicaDynMutWrapper::new(wrapper);
             return Some(component_dyn_mut);
         }
@@ -74,8 +73,8 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
     fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P> {
         return world
             .entity_mut(*entity)
-            .remove::<ReplicateSafeComponent<P, R>>()
-            .map_or(None, |v| Some(v.inner.into_protocol()));
+            .remove::<R>()
+            .map_or(None, |v| Some(v.into_protocol()));
     }
 
     fn mirror_components(
@@ -84,11 +83,11 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
         mutable_entity: &Entity,
         immutable_entity: &Entity,
     ) {
-        let mut query = world.query::<&mut ReplicateSafeComponent<P, R>>();
+        let mut query = world.query::<&mut R>();
         unsafe {
             if let Ok(immutable_component) = query.get_unchecked(world, *immutable_entity) {
                 if let Ok(mut mutable_component) = query.get_unchecked(world, *mutable_entity) {
-                    mutable_component.inner.mirror(&immutable_component.inner.protocol_copy());
+                    mutable_component.mirror(&immutable_component.protocol_copy());
                 }
             }
         }
