@@ -18,6 +18,7 @@ maintenance = { status = "actively-developed" }
 [features]
 wbindgen = [ "naia-client-socket/wbindgen", "naia-shared/wbindgen" ]
 mquad = [ "naia-client-socket/mquad", "naia-shared/mquad" ]
+bevy-support = ["naia-shared/bevy-support"]
 
 [dependencies]
 naia-client-socket = { version = "=0.7.1" }

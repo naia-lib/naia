@@ -18,9 +18,11 @@ maintenance = { status = "actively-developed" }
 [features]
 wbindgen = [ "naia-socket-shared/wbindgen" ]
 mquad = [ "naia-socket-shared/mquad" ]
+bevy-support = [ "bevy" ]
 
 [dependencies]
 naia-socket-shared = { version = "=0.7.0" }
 byteorder = "1.3"
 log = "0.4"
 nanoserde = "0.1.29"
+bevy = { version = "0.6", default_features = false, optional = true }

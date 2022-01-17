@@ -20,6 +20,6 @@ native = []
 naia-bevy-client = { path = "../../../adapters/bevy/client" }
 naia-bevy-demo-shared = { path = "../shared" }
 bevy = { version="0.6.0", default-features=false }
-winit = { version = "0.24.0" }
+winit = { version = "0.26" }
 rand = { version = "0.7" }
 getrandom = { version="0.1", features=["wasm-bindgen"] }

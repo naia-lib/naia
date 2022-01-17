@@ -2,10 +2,9 @@ use std::marker::PhantomData;
 
 use bevy::ecs::{
     entity::Entity,
-    system::{SystemParamFetch, SystemParamState, SystemState},
+    system::{SystemMeta, SystemParamFetch, SystemParamState},
     world::{Mut, World},
 };
-use bevy::ecs::system::SystemMeta;
 
 use naia_server::{ProtocolType, Server as NaiaServer};
 

@@ -71,6 +71,11 @@ impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
         let mut client = Client::<P, Entity>::new(config.client_config, config.shared_config);
 
+        if let Some(auth) = config.auth {
+            client.auth(auth);
+        }
+        client.connect(config.server_address);
+
         app
         // RESOURCES //
             .insert_resource(client)

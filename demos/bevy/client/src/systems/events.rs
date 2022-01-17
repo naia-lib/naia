@@ -1,7 +1,7 @@
 use bevy::{
     ecs::{
         query::With,
-        system::{Commands, Query, ResMut},
+        system::{Commands, Query},
     },
     log::info,
     prelude::*,
@@ -18,8 +18,6 @@ use naia_bevy_demo_shared::{
     protocol::{Color, ColorValue, Position, Protocol, ProtocolKind},
 };
 
-use crate::resources::Global;
-
 const SQUARE_SIZE: f32 = 32.0;
 
 pub fn connect_event(client: Client<Protocol>) {
@@ -32,7 +30,6 @@ pub fn disconnect_event(client: Client<Protocol>) {
 
 pub fn spawn_entity_event(
     mut local: Commands,
-    global: ResMut<Global>,
     mut event_reader: EventReader<SpawnEntityEvent<Protocol>>,
     q_color: Query<&Color>,
 ) {
@@ -45,20 +42,24 @@ pub fn spawn_entity_event(
                     if let Ok(color) = q_color.get(*entity) {
                         info!("add color to entity");
 
-                        let material = {
+                        use bevy::prelude::*;
+                        let color = {
                             match &color.value.get() {
-                                ColorValue::Red => global.materials.red.clone(),
-                                ColorValue::Blue => global.materials.blue.clone(),
-                                ColorValue::Yellow => global.materials.yellow.clone(),
+                                ColorValue::Red => Color::RED,
+                                ColorValue::Blue => Color::BLUE,
+                                ColorValue::Yellow => Color::YELLOW,
                             }
                         };
 
-                        // local.entity(*entity).insert_bundle(SpriteBundle {
-                        //     material: material.clone(),
-                        //     sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                        //     transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                        //     ..Default::default()
-                        // });
+                        local.entity(*entity).insert_bundle(SpriteBundle {
+                            sprite: Sprite {
+                                custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                                color,
+                                ..Default::default()
+                            },
+                            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                            ..Default::default()
+                        });
                     }
                 }
                 _ => {}
@@ -67,22 +68,20 @@ pub fn spawn_entity_event(
     }
 }
 
-pub fn own_entity_event(
-    mut local: Commands,
-    global: ResMut<Global>,
-    mut event_reader: EventReader<OwnEntityEvent>,
-) {
+pub fn own_entity_event(mut local: Commands, mut event_reader: EventReader<OwnEntityEvent>) {
     for OwnEntityEvent(owned_entity) in event_reader.iter() {
         info!("gave ownership of entity");
 
         let predicted_entity = owned_entity.predicted;
-        //
-        // local.entity(predicted_entity).insert_bundle(SpriteBundle {
-        //     material: global.materials.white.clone(),
-        //     sprite: Sprite::new(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-        //     transform: Transform::from_xyz(0.0, 0.0, 0.0),
-        //     ..Default::default()
-        // });
+
+        local.entity(predicted_entity).insert_bundle(SpriteBundle {
+            sprite: Sprite {
+                custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                ..Default::default()
+            },
+            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+            ..Default::default()
+        });
     }
 }
 
@@ -94,7 +93,7 @@ pub fn new_command_event(
         if let NewCommandEvent(owned_entity, Protocol::KeyCommand(command)) = event {
             let predicted_entity = owned_entity.predicted;
             if let Ok(mut position) = q_player_position.get_mut(predicted_entity) {
-                // shared_behavior::process_command(command, &mut position);
+                shared_behavior::process_command(command, &mut position);
             }
         }
     }
@@ -108,7 +107,7 @@ pub fn replay_command_event(
         if let ReplayCommandEvent(owned_entity, Protocol::KeyCommand(command)) = event {
             let predicted_entity = owned_entity.predicted;
             if let Ok(mut position) = q_player_position.get_mut(predicted_entity) {
-                // shared_behavior::process_command(command, &mut position);
+                shared_behavior::process_command(command, &mut position);
             }
         }
     }
