@@ -8,7 +8,6 @@ use bevy::{
 
 use naia_client::{Client, ClientConfig, ProtocolType, Replicate, SharedConfig};
 
-use crate::systems::should_do_io;
 use naia_bevy_shared::WorldData;
 
 use super::{
@@ -97,8 +96,7 @@ impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
             // events //
             .add_stage_before(CoreStage::PreUpdate,
                               PrivateStage::BeforeReceiveEvents,
-                              SystemStage::single_threaded()
-                                  .with_run_criteria(should_do_io::<P>.system()))
+                              SystemStage::single_threaded())
             .add_stage_after(PrivateStage::BeforeReceiveEvents,
                               Stage::ReceiveEvents,
                               SystemStage::single_threaded())
