@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, ops::DerefMut, sync::Mutex};
 
 use bevy::{
-    app::{AppBuilder, CoreStage, Plugin as PluginType},
+    app::{App, CoreStage, Plugin as PluginType},
     ecs::schedule::SystemStage,
     prelude::*,
 };
@@ -66,9 +66,10 @@ impl<P: ProtocolType, R: Replicate<P>> Plugin<P, R> {
 }
 
 impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
-    fn build(&self, app: &mut AppBuilder) {
+    fn build(&self, app: &mut App) {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
         let mut client = Client::<P, Entity>::new(config.client_config, config.shared_config);
+
         if let Some(auth) = config.auth {
             client.auth(auth);
         }
@@ -134,7 +135,7 @@ impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
                               PrivateStage::AfterTick,
                               SystemStage::parallel()
                                  .with_run_criteria(should_tick.system()))
-        // SYSTEMS //
+            // SYSTEMS //
             .add_system_to_stage(PrivateStage::BeforeReceiveEvents,
                                  before_receive_events::<P>.exclusive_system())
             .add_system_to_stage(PrivateStage::AfterConnection,

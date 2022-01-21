@@ -10,7 +10,7 @@ mod systems;
 use systems::{events, init, input, sync, tick};
 
 fn main() {
-    let mut app = App::build();
+    let mut app = App::new();
 
     // Plugins
     app.add_plugins(DefaultPlugins)

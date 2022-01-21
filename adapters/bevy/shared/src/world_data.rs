@@ -66,4 +66,5 @@ impl<P: ProtocolType> WorldData<P> {
 }
 
 unsafe impl<P: ProtocolType> Send for WorldData<P> {}
+
 unsafe impl<P: ProtocolType> Sync for WorldData<P> {}
