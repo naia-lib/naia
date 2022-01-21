@@ -23,7 +23,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let extract_and_insert_method = get_extract_and_insert_method(&protocol_name, &input.data);
 
     let gen = quote! {
-        use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}};
+        use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}, sync::RwLock, collections::HashMap};
         use naia_shared::{ProtocolType, ProtocolInserter, ProtocolKindType, ReplicateSafe,
             DiffMask, PacketReader, ReplicaDynRef, ReplicaDynMut, Replicate, Manifest};
 
@@ -155,54 +155,43 @@ fn get_kind_of_method() -> TokenStream {
 }
 
 fn get_type_to_kind_method(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
-    let mut const_list = quote! {};
+    let mut insert_list = quote! {};
 
     {
         for variant in properties {
             let variant_name_string = variant.to_string();
             let variant_name_ident = Ident::new(&variant_name_string, Span::call_site());
 
-            let id_const_name =
-                format_ident!("{}_TYPE_ID", variant_name_string.to_uppercase().as_str());
-            let id_const_ident = Ident::new(&id_const_name.to_string(), Span::call_site());
             let new_output_right = quote! {
-                const #id_const_ident: TypeId = TypeId::of::<#variant_name_ident>();
+                map.insert(TypeId::of::<#variant_name_ident>(), #enum_name::#variant_name_ident);
             };
             let new_output_result = quote! {
-                #const_list
+                #insert_list
                 #new_output_right
             };
-            const_list = new_output_result;
-        }
-    }
-
-    let mut match_branches = quote! {};
-
-    {
-        for variant in properties {
-            let variant_name_string = variant.to_string();
-            let variant_name_ident = Ident::new(&variant_name_string, Span::call_site());
-
-            let id_const_name =
-                format_ident!("{}_TYPE_ID", variant_name_string.to_uppercase().as_str());
-            let id_const_ident = Ident::new(&id_const_name.to_string(), Span::call_site());
-            let new_output_right = quote! {
-                #id_const_ident => #enum_name::#variant_name_ident,
-            };
-            let new_output_result = quote! {
-                #match_branches
-                #new_output_right
-            };
-            match_branches = new_output_result;
+            insert_list = new_output_result;
         }
     }
 
     return quote! {
         fn type_to_kind(type_id: TypeId) -> Self::Kind {
-            #const_list
-            match type_id {
-                #match_branches
-                _ => #enum_name::UNKNOWN,
+            unsafe {
+                static mut TYPE_TO_KIND_MAP: Option<RwLock<HashMap<TypeId, #enum_name>>> = None;
+
+                if TYPE_TO_KIND_MAP.is_none() {
+                    let mut map: HashMap<TypeId, #enum_name> = HashMap::new();
+                    #insert_list
+                    TYPE_TO_KIND_MAP = Some((RwLock::new(map)));
+                }
+
+                match TYPE_TO_KIND_MAP.as_ref().unwrap().read().unwrap().deref().get(&type_id) {
+                    Some(kind) => {
+                        return *kind;
+                    }
+                    None => {
+                        return #enum_name::UNKNOWN;
+                    }
+                }
             }
         }
     };
