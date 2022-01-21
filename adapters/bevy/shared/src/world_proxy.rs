@@ -128,6 +128,41 @@ impl<'w, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldMut<'w> {
 }
 
 impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
+    fn spawn_entity(&mut self) -> Entity {
+        let entity = self.world.spawn().id();
+
+        let mut world_data = get_world_data_unchecked_mut::<P>(&mut self.world);
+        world_data.spawn_entity(&entity);
+
+        return entity;
+    }
+
+    fn despawn_entity(&mut self, entity: &Entity) {
+        let mut world_data = get_world_data_unchecked_mut::<P>(&self.world);
+        world_data.despawn_entity(entity);
+
+        self.world.despawn(*entity);
+    }
+
+    fn get_component_kinds(&mut self, entity: &Entity) -> Vec<P::Kind> {
+        let mut kinds = Vec::new();
+
+        let components = self.world.components();
+
+        for component_id in self.world.entity(*entity).archetype().components() {
+            let component_info = components
+                .get_info(component_id)
+                .expect("Components need info to instantiate");
+            let ref_type = component_info
+                .type_id()
+                .expect("Components need type_id to instantiate");
+            let kind = P::type_to_kind(ref_type);
+            kinds.push(kind);
+        }
+
+        return kinds;
+    }
+
     fn get_component_mut<R: ReplicateSafe<P>>(
         &mut self,
         entity: &Entity,
@@ -170,41 +205,6 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
                     accessor.mirror_components(world, mutable_entity, immutable_entity);
                 }
             });
-    }
-
-    fn spawn_entity(&mut self) -> Entity {
-        let entity = self.world.spawn().id();
-
-        let mut world_data = get_world_data_unchecked_mut::<P>(&mut self.world);
-        world_data.spawn_entity(&entity);
-
-        return entity;
-    }
-
-    fn despawn_entity(&mut self, entity: &Entity) {
-        let mut world_data = get_world_data_unchecked_mut::<P>(&self.world);
-        world_data.despawn_entity(entity);
-
-        self.world.despawn(*entity);
-    }
-
-    fn get_component_kinds(&mut self, entity: &Entity) -> Vec<P::Kind> {
-        let mut kinds = Vec::new();
-
-        let components = self.world.components();
-
-        for component_id in self.world.entity(*entity).archetype().components() {
-            let component_info = components
-                .get_info(component_id)
-                .expect("Components need info to instantiate");
-            let ref_type = component_info
-                .type_id()
-                .expect("Components need type_id to instantiate");
-            let kind = P::type_to_kind(ref_type);
-            kinds.push(kind);
-        }
-
-        return kinds;
     }
 
     fn insert_component<I: ReplicateSafe<P>>(&mut self, entity: &Entity, component_ref: I) {
