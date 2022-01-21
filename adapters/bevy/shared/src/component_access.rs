@@ -1,9 +1,6 @@
 use std::{any::Any, marker::PhantomData};
 
-use bevy::{
-    ecs::{entity::Entity, world::World},
-    prelude::Component,
-};
+use bevy::ecs::{entity::Entity, world::World};
 
 use naia_shared::{ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
 
@@ -29,7 +26,6 @@ pub trait ComponentAccess<P: ProtocolType>: Send + Sync {
     );
 }
 
-#[derive(Component)]
 pub struct ComponentAccessor<P: ProtocolType, R: ReplicateSafe<P>> {
     phantom_p: PhantomData<P>,
     phantom_r: PhantomData<R>,

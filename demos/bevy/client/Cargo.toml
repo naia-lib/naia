@@ -14,8 +14,6 @@ default = [
   "bevy/png",
 ]
 
-native = []
-
 [dependencies]
 naia-bevy-client = { path = "../../../adapters/bevy/client" }
 naia-bevy-demo-shared = { path = "../shared" }

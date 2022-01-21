@@ -1,10 +1,7 @@
-use bevy::{
-    ecs::{
-        entity::Entity,
-        query::With,
-        system::{Query, ResMut},
-    },
-    log::info,
+use bevy::ecs::{
+    entity::Entity,
+    query::With,
+    system::{Query, ResMut},
 };
 
 use naia_bevy_client::{components::Predicted, Client};
@@ -19,7 +16,7 @@ pub fn tick(
     q_player_position: Query<Entity, With<Predicted>>,
 ) {
     //All game logic should happen here, on a tick event
-    info!("tick");
+    //info!("tick");
 
     if let Ok(entity) = q_player_position.get_single() {
         if let Some(command) = global.queued_command.take() {
