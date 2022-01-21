@@ -1,11 +1,11 @@
 use std::ops::{Deref, DerefMut};
 
+use bevy::prelude::Mut as BevyMut;
+
 use naia_shared::{
     ProtocolType, ReplicaDynMutTrait, ReplicaDynRefTrait, ReplicaMutTrait, ReplicaRefTrait,
     ReplicateSafe,
 };
-
-use bevy::prelude::Mut as BevyMut;
 
 // ComponentRef
 pub struct ComponentRef<'a, T>(pub &'a T);
