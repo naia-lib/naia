@@ -21,6 +21,7 @@ features = [ "use-webrtc" ]
 [features]
 use-udp = [ "naia-server-socket/use-udp" ]
 use-webrtc = [ "naia-server-socket/use-webrtc" ]
+bevy-support = ["naia-shared/bevy-support"]
 
 [dependencies]
 naia-server-socket = { version = "=0.7.0" }
