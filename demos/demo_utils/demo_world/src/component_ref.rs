@@ -49,9 +49,3 @@ impl<'a, P: ProtocolType, R: ReplicateSafe<P>> ReplicaMutTrait<P, R> for Compone
         return &mut self.inner;
     }
 }
-
-// ComponentDynRef
-//pub type ComponentDynRef<'a, P> = ReplicaDynRef<'a, P>;
-
-// ComponentDynMut
-//pub type ComponentDynMut<'a, P> = ReplicaDynMut<'a, P>;

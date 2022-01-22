@@ -8,6 +8,9 @@
     unused_import_braces
 )]
 
+#[macro_use]
+extern crate cfg_if;
+
 mod ack_manager;
 mod base_connection;
 mod connection_config;

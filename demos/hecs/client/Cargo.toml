@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../../"
 publish = false
-edition = "2018"
+edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [lib]
@@ -24,7 +24,7 @@ log = "0.4"
 cfg-if = "0.1.10"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-simple_logger = { version = "1.4" }
+simple_logger = { version = "=2.0.0" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-logger = { version = "0.2.0" }

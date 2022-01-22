@@ -3,7 +3,7 @@ name = "naia-bevy-client-demo"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../../"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [features]
@@ -14,19 +14,10 @@ default = [
   "bevy/png",
 ]
 
-native = [
-  "bevy/bevy_wgpu",
-]
-
-web = [
-  "bevy_webgl2"
-]
-
 [dependencies]
 naia-bevy-client = { path = "../../../adapters/bevy/client" }
 naia-bevy-demo-shared = { path = "../shared" }
-bevy = { version="0.5.0", default-features=false }
-bevy_webgl2 = { version="0.5.0", optional=true }
-winit = { version = "0.24.0" }
+bevy = { version="0.6.0", default-features=false }
+winit = { version = "0.26" }
 rand = { version = "0.7" }
 getrandom = { version="0.1", features=["wasm-bindgen"] }

@@ -16,7 +16,7 @@ pub trait Replicate<P: ProtocolType>: ReplicateSafe<P> {
 }
 
 /// The part of ReplicateSafe which is object-safe
-pub trait ReplicateSafe<P: ProtocolType>: Sync + Send + 'static {
+pub trait ReplicateSafe<P: ProtocolType>: ReplicateInner {
     /// Gets the TypeId of the Message/Component, used to map to a
     /// registered ProtocolType
     fn get_kind(&self) -> P::Kind;
@@ -48,4 +48,26 @@ pub trait ReplicateSafe<P: ProtocolType>: Sync + Send + 'static {
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Message/Component on the client
     fn write_partial(&self, diff_mask: &DiffMask, out_bytes: &mut Vec<u8>);
+}
+
+cfg_if! {
+    if #[cfg(feature = "bevy_support")]
+    {
+        // Require that Bevy Component to be implemented
+        use bevy::{ecs::component::TableStorage, prelude::Component};
+
+        pub trait ReplicateInner: Component<Storage = TableStorage> + Sync + Send + 'static {}
+
+        impl<T> ReplicateInner for T
+        where T: Component<Storage = TableStorage> + Sync + Send + 'static {
+        }
+    }
+    else
+    {
+        pub trait ReplicateInner: Sync + Send + 'static {}
+
+        impl<T> ReplicateInner for T
+        where T: Sync + Send + 'static {
+        }
+    }
 }
