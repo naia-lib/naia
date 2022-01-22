@@ -1,12 +1,12 @@
 [package]
 name = "naia-bevy-server"
-version = "0.7.0"
+version = "0.7.3"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Library to faciliate naia_server & Bevy interop"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
 license = "MIT OR Apache-2.0"
-edition = "2018"
+edition = "2021"
 
 [badges]
 maintenance = { status = "actively-developed" }
@@ -16,6 +16,6 @@ use-udp = [ "naia-server/use-udp" ]
 use-webrtc = [ "naia-server/use-webrtc" ]
 
 [dependencies]
-naia-server = { version = "0.7.0", path = "../../../server" }
-naia-bevy-shared = { version = "0.7.0", path = "../shared" }
-bevy = { version="=0.5.0", default-features=false }
+naia-server = { version = "=0.7.3", path = "../../../server", features = ["bevy_support"] }
+naia-bevy-shared = { version = "=0.7.3", path = "../shared" }
+bevy = { version="=0.6.0", default-features=false }

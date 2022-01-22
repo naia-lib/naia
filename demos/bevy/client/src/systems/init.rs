@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 
-use crate::resources::{Global, Materials};
+use crate::resources::Global;
 
-pub fn init(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
+pub fn init(mut commands: Commands) {
     info!("Naia Bevy Client Demo started");
 
     // Setup Camera
@@ -10,12 +10,6 @@ pub fn init(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>
 
     // Setup Colors
     commands.insert_resource(Global {
-        materials: Materials {
-            white: materials.add(Color::rgb(1.0, 1.0, 1.0).into()),
-            red: materials.add(Color::rgb(1.0, 0.0, 0.0).into()),
-            blue: materials.add(Color::rgb(0.0, 0.0, 1.0).into()),
-            yellow: materials.add(Color::rgb(1.0, 1.0, 0.0).into()),
-        },
         queued_command: None,
     });
 }

@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use bevy::ecs::{
     entity::Entity,
-    system::{SystemParamFetch, SystemParamState, SystemState},
+    system::{SystemMeta, SystemParamFetch, SystemParamState},
     world::{Mut, World},
 };
 
@@ -50,7 +50,7 @@ impl<P: ProtocolType> State<P> {
 unsafe impl<P: ProtocolType> SystemParamState for State<P> {
     type Config = ();
 
-    fn init(_world: &mut World, _system_state: &mut SystemState, _config: Self::Config) -> Self {
+    fn init(_world: &mut World, _system_state: &mut SystemMeta, _config: Self::Config) -> Self {
         State {
             commands: Vec::new(),
             phantom_p: PhantomData,
@@ -64,14 +64,14 @@ unsafe impl<P: ProtocolType> SystemParamState for State<P> {
     fn default_config() {}
 }
 
-impl<'a, P: ProtocolType> SystemParamFetch<'a> for State<P> {
-    type Item = Server<'a, P>;
+impl<'world, 'state, P: ProtocolType> SystemParamFetch<'world, 'state> for State<P> {
+    type Item = Server<'world, 'state, P>;
 
     #[inline]
     unsafe fn get_param(
-        state: &'a mut Self,
-        _system_state: &'a SystemState,
-        world: &'a World,
+        state: &'state mut Self,
+        _system_state: &SystemMeta,
+        world: &'world World,
         _change_tick: u32,
     ) -> Self::Item {
         Server::new(state, world)

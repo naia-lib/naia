@@ -10,7 +10,7 @@ mod systems;
 use systems::{events, init, input, sync, tick};
 
 fn main() {
-    let mut app = App::build();
+    let mut app = App::new();
 
     // Plugins
     app.add_plugins(DefaultPlugins)
@@ -20,9 +20,6 @@ fn main() {
             get_server_address(),
             Some(Auth::new("charlie", "12345")),
         ));
-
-    #[cfg(target_arch = "wasm32")]
-    app.add_plugin(bevy_webgl2::WebGL2Plugin);
 
     app
     // Startup System

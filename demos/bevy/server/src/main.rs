@@ -26,7 +26,7 @@ fn main() {
     );
 
     // Build App
-    let mut app = App::build();
+    let mut app = App::new();
 
     app
     // Plugins
