@@ -336,7 +336,8 @@ pub fn get_cast_method(protocol_name: &Ident, data: &Data) -> TokenStream {
 
                 let new_output_right = quote! {
                     #protocol_name::#variant_name(replica) => {
-                        if let Some(any_ref) = Any::downcast_ref::<R>(&replica) {
+                        let any_replica: &dyn Any = &replica;
+                        if let Some(any_ref) = any_replica.downcast_ref::<R>() {
                             return Some(any_ref.clone());
                         }
                     }
