@@ -6,7 +6,7 @@ description = "Library to faciliate naia_server & Bevy interop"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
 license = "MIT OR Apache-2.0"
-edition = "2018"
+edition = "2021"
 
 [badges]
 maintenance = { status = "actively-developed" }
