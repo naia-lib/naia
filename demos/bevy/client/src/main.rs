@@ -21,9 +21,6 @@ fn main() {
             Some(Auth::new("charlie", "12345")),
         ));
 
-    #[cfg(target_arch = "wasm32")]
-    app.add_plugin(bevy_webgl2::WebGL2Plugin);
-
     app
     // Startup System
     .add_startup_system(
