@@ -1,6 +1,6 @@
 [package]
 name = "naia-hecs-shared"
-version = "0.7.0"
+version = "0.7.3"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Library to faciliate naia & Hecs interop, functionality shared by client & server versions"
 homepage = "https://github.com/naia-rs/naia"
@@ -18,5 +18,5 @@ wbindgen = [ "naia-shared/wbindgen" ]
 mquad = [ "naia-shared/mquad" ]
 
 [dependencies]
-naia-shared = { version = "0.7.0", path = "../../../shared" }
+naia-shared = { version = "=0.7.3", path = "../../../shared" }
 hecs = { version = "=0.5.2" }
