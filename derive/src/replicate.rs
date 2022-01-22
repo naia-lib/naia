@@ -372,10 +372,10 @@ pub fn get_new_complete_method(
     let mut args = quote! {};
     for (field_name, field_type) in properties.iter() {
         let new_output_right = quote! {
-            #field_name: #field_type
+            #field_name: #field_type,
         };
         let new_output_result = quote! {
-            #args#new_output_right,
+            #args #new_output_right
         };
         args = new_output_result;
     }
