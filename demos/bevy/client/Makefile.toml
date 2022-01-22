@@ -3,7 +3,6 @@ ENV_DIR = {source="${CARGO_MAKE_PROFILE}", default_value = "debug", mapping = {r
 CARGO_TARGET_DIR = {value = "target", condition = {env_not_set = ["CARGO_TARGET_DIR"]}}
 CARGO_WASM_PATH = "${CARGO_TARGET_DIR}/wasm32-unknown-unknown/${ENV_DIR}/${CARGO_MAKE_CRATE_NAME}.wasm"
 CARGO_PROFILE = "dev"
-TARGET_DIR = "target"
 CARGO_MANIFEST_DIR = "${CARGO_MAKE_WORKING_DIRECTORY}"
 
 [env.release]
@@ -28,7 +27,7 @@ command = "cargo"
 dependencies = ["install-target-wasm32-unknown-unknown"]
 
 [tasks.build-web]
-args = ["--out-dir", "${TARGET_DIR}", "--target", "web", "${CARGO_WASM_PATH}"]
+args = ["--out-dir", "${CARGO_TARGET_DIR}", "--out-name", "wasm", "--target", "no-modules", "--no-typescript", "${CARGO_WASM_PATH}"]
 command = "wasm-bindgen"
 dependencies = ["cargo-build-web", "wasm-bindgen-cli"]
 
