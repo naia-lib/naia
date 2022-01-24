@@ -1,27 +1,19 @@
 use std::collections::HashMap;
 
-use naia_shared::{LocalComponentKey, LocalEntity, ProtocolKindType};
+use naia_shared::{LocalComponentKey, ProtocolKindType};
 
 #[derive(Debug)]
-pub struct EntityRecord<E: Copy, K: ProtocolKindType> {
-    local_entity: LocalEntity,
+pub struct EntityRecord<K: ProtocolKindType> {
     kind_to_key_map: HashMap<K, LocalComponentKey>,
     key_to_kind_map: HashMap<LocalComponentKey, K>,
-    prediction_key: Option<E>,
 }
 
-impl<E: Copy, K: ProtocolKindType> EntityRecord<E, K> {
-    pub fn new(local_entity: &LocalEntity) -> Self {
+impl<K: ProtocolKindType> EntityRecord<K> {
+    pub fn new() -> Self {
         EntityRecord {
-            local_entity: *local_entity,
             kind_to_key_map: HashMap::new(),
             key_to_kind_map: HashMap::new(),
-            prediction_key: None,
         }
-    }
-
-    pub fn local_entity(&self) -> LocalEntity {
-        return self.local_entity;
     }
 
     // Components / Kinds //
@@ -49,23 +41,5 @@ impl<E: Copy, K: ProtocolKindType> EntityRecord<E, K> {
             output.push(*key);
         }
         return output;
-    }
-
-    // Ownership / Prediction //
-
-    pub fn is_owned(&self) -> bool {
-        return self.prediction_key.is_some();
-    }
-
-    pub fn set_prediction(&mut self, prediction_entity: &E) {
-        self.prediction_key = Some(*prediction_entity);
-    }
-
-    pub fn disown(&mut self) -> Option<E> {
-        return self.prediction_key.take();
-    }
-
-    pub fn get_prediction(&self) -> Option<E> {
-        return self.prediction_key;
     }
 }

@@ -11,10 +11,6 @@ pub enum EntityActionType {
     SpawnEntity,
     /// Action indicating an Entity to be deleted
     DespawnEntity,
-    /// Action indicating an Entity to be assigned
-    OwnEntity,
-    /// Action indicating an Entity to be unassigned
-    DisownEntity,
     /// Action indicating a Component to be added to an Entity
     InsertComponent,
     /// Unknown / Undefined message, should always be last variant in this list

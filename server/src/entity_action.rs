@@ -6,8 +6,6 @@ use super::keys::ComponentKey;
 pub enum EntityAction<P: ProtocolType, E: Copy> {
     SpawnEntity(E, Vec<(ComponentKey, P::Kind)>),
     DespawnEntity(E),
-    OwnEntity(E),
-    DisownEntity(E),
     InsertComponent(E, ComponentKey, P::Kind),
     UpdateComponent(E, ComponentKey, DiffMask, P::Kind),
     RemoveComponent(ComponentKey),
@@ -18,8 +16,6 @@ impl<P: ProtocolType, E: Copy> EntityAction<P, E> {
         match self {
             EntityAction::SpawnEntity(_, _) => EntityActionType::SpawnEntity,
             EntityAction::DespawnEntity(_) => EntityActionType::DespawnEntity,
-            EntityAction::OwnEntity(_) => EntityActionType::OwnEntity,
-            EntityAction::DisownEntity(_) => EntityActionType::DisownEntity,
             EntityAction::InsertComponent(_, _, _) => EntityActionType::InsertComponent,
             EntityAction::UpdateComponent(_, _, _, _) => EntityActionType::UpdateComponent,
             EntityAction::RemoveComponent(_) => EntityActionType::RemoveComponent,
@@ -32,8 +28,6 @@ impl<P: ProtocolType, E: Copy> Clone for EntityAction<P, E> {
         match self {
             EntityAction::SpawnEntity(a, b) => EntityAction::SpawnEntity(*a, b.clone()),
             EntityAction::DespawnEntity(a) => EntityAction::DespawnEntity(*a),
-            EntityAction::OwnEntity(a) => EntityAction::OwnEntity(*a),
-            EntityAction::DisownEntity(a) => EntityAction::DisownEntity(*a),
             EntityAction::InsertComponent(a, b, c) => EntityAction::InsertComponent(*a, *b, *c),
             EntityAction::UpdateComponent(a, b, c, d) => {
                 EntityAction::UpdateComponent(*a, *b, c.clone(), *d)

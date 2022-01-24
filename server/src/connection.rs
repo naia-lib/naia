@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock},
@@ -11,18 +10,16 @@ use naia_shared::{
 };
 
 use super::{
-    command_receiver::CommandReceiver, entity_manager::EntityManager,
+    entity_manager::EntityManager,
     global_diff_handler::GlobalDiffHandler, keys::ComponentKey, packet_writer::PacketWriter,
     ping_manager::PingManager, user::user_key::UserKey, world_record::WorldRecord,
 };
 
 pub struct Connection<P: ProtocolType, E: Copy + Eq + Hash> {
     pub user_key: UserKey,
-    owned_entities: HashSet<E>,
     base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
-    command_receiver: CommandReceiver<P>,
 }
 
 impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
@@ -34,11 +31,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
     ) -> Self {
         Connection {
             user_key: *user_key,
-            owned_entities: HashSet::new(),
             base_connection: BaseConnection::new(user_address, connection_config),
             entity_manager: EntityManager::new(user_address, diff_handler),
             ping_manager: PingManager::new(),
-            command_receiver: CommandReceiver::new(),
         }
     }
 
@@ -98,8 +93,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
 
     pub fn process_incoming_data(
         &mut self,
-        server_tick: Option<u16>,
-        client_tick: u16,
         manifest: &Manifest<P>,
         data: &[u8],
     ) {
@@ -107,14 +100,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
         while reader.has_more() {
             let manager_type: ManagerType = reader.read_u8().into();
             match manager_type {
-                ManagerType::Command => {
-                    self.command_receiver.process_incoming_commands(
-                        server_tick,
-                        client_tick,
-                        &mut reader,
-                        manifest,
-                    );
-                }
                 ManagerType::Message => {
                     // packet index shouldn't matter here because the server's impl of Property
                     // doesn't use it
@@ -128,24 +113,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
 
     pub fn collect_component_updates(&mut self, world_record: &WorldRecord<E, P::Kind>) {
         self.entity_manager.collect_component_updates(world_record);
-    }
-
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(E, P)> {
-        if let Some((local_entity, command)) =
-            self.command_receiver.pop_incoming_command(server_tick)
-        {
-            // get global entity from the local one
-            if let Some(global_entity) = self
-                .entity_manager
-                .get_global_entity_from_local(local_entity)
-            {
-                // make sure Command is valid (the entity really is owned by this connection)
-                if self.entity_manager.has_entity_prediction(global_entity) {
-                    return Some((*global_entity, command));
-                }
-            }
-        }
-        return None;
     }
 
     pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
@@ -164,18 +131,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
 
     pub fn despawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, entity: &E) {
         self.entity_manager.despawn_entity(world_record, entity);
-    }
-
-    pub fn has_prediction_entity(&self, entity: &E) -> bool {
-        return self.entity_manager.has_entity_prediction(entity);
-    }
-
-    pub fn add_prediction_entity(&mut self, entity: &E) {
-        self.entity_manager.add_prediction_entity(entity);
-    }
-
-    pub fn remove_prediction_entity(&mut self, entity: &E) {
-        self.entity_manager.remove_prediction_entity(entity);
     }
 
     pub fn insert_component(
@@ -254,23 +209,5 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
 
     pub fn get_last_received_tick(&self) -> u16 {
         return self.base_connection.get_last_received_tick();
-    }
-
-    pub fn own_entity(&mut self, entity: &E) {
-        self.owned_entities.insert(*entity);
-    }
-
-    pub fn disown_entity(&mut self, entity: &E) {
-        self.owned_entities.remove(&entity);
-    }
-
-    pub fn owned_entities(&self) -> Vec<E> {
-        let mut output = Vec::new();
-
-        for owned_entity in &self.owned_entities {
-            output.push(*owned_entity);
-        }
-
-        return output;
     }
 }

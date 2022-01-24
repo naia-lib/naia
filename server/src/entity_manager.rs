@@ -233,10 +233,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     pub fn despawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, global_entity: &E) {
-        if self.has_entity_prediction(global_entity) {
-            self.remove_prediction_entity(global_entity);
-        }
-
         if let Some(entity_record) = self.entity_records.get_mut(global_entity) {
             match entity_record.status {
                 LocalityStatus::Creating => {
@@ -266,45 +262,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
 
     pub fn has_entity(&self, entity: &E) -> bool {
         return self.entity_records.contains_key(entity);
-    }
-
-    // Prediction Entities
-
-    pub fn add_prediction_entity(&mut self, entity: &E) {
-        let entity_record = self
-            .entity_records
-            .get_mut(entity)
-            .expect("attempting to assign a nonexistent Entity");
-        if entity_record.is_prediction {
-            panic!("attempting to assign an Entity twice!");
-        }
-
-        // success
-        entity_record.is_prediction = true;
-        self.queued_actions
-            .push_back(EntityAction::OwnEntity(*entity));
-    }
-
-    pub fn remove_prediction_entity(&mut self, entity: &E) {
-        let entity_record = self
-            .entity_records
-            .get_mut(entity)
-            .expect("attempting to disown on Entity which is not in-scope");
-        if !entity_record.is_prediction {
-            panic!("attempting to disown an Entity which is not currently assigned");
-        }
-
-        // success
-        entity_record.is_prediction = false;
-        self.queued_actions
-            .push_back(EntityAction::DisownEntity(*entity));
-    }
-
-    pub fn has_entity_prediction(&self, entity: &E) -> bool {
-        if let Some(entity_record) = self.entity_records.get(entity) {
-            return entity_record.is_prediction;
-        }
-        return false;
     }
 
     // Components
@@ -368,10 +325,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     // Ect..
-
-    pub fn get_global_entity_from_local(&self, local_entity: LocalEntity) -> Option<&E> {
-        return self.local_to_global_entity_map.get(&local_entity);
-    }
 
     pub fn collect_component_updates(&mut self, world_record: &WorldRecord<E, P::Kind>) {
         for (component_key, record) in self.component_records.iter() {
@@ -451,18 +404,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
             }
             EntityAction::DespawnEntity(global_entity) => {
-                let local_entity = self.entity_records.get(global_entity).unwrap().local_key;
-                action_total_bytes
-                    .write_u16::<BigEndian>(local_entity.to_u16())
-                    .unwrap(); //write local entity
-            }
-            EntityAction::OwnEntity(global_entity) => {
-                let local_entity = self.entity_records.get(global_entity).unwrap().local_key;
-                action_total_bytes
-                    .write_u16::<BigEndian>(local_entity.to_u16())
-                    .unwrap(); //write local entity
-            }
-            EntityAction::DisownEntity(global_entity) => {
                 let local_entity = self.entity_records.get(global_entity).unwrap().local_key;
                 action_total_bytes
                     .write_u16::<BigEndian>(local_entity.to_u16())
@@ -787,8 +728,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 deleted_components.push(global_component_key);
                             }
                         }
-                        EntityAction::OwnEntity(_) => {}
-                        EntityAction::DisownEntity(_) => {}
                         EntityAction::InsertComponent(_, global_component_key, _) => {
                             let component_record = self
                                 .component_records
@@ -834,8 +773,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> PacketNotifiable for EntityManager<P,
                     // guaranteed delivery actions
                     EntityAction::SpawnEntity(_, _)
                     | EntityAction::DespawnEntity(_)
-                    | EntityAction::OwnEntity(_)
-                    | EntityAction::DisownEntity(_)
                     | EntityAction::InsertComponent(_, _, _)
                     | EntityAction::RemoveComponent(_) => {
                         self.queued_actions.push_back(dropped_action);

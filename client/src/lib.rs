@@ -10,9 +10,10 @@
     unused_import_braces
 )]
 
+extern crate naia_shared;
+
 mod client;
 mod client_config;
-mod command_receiver;
 mod connection;
 mod connection_state;
 mod entity_action;
@@ -23,8 +24,6 @@ mod error;
 mod event;
 mod handshake_manager;
 mod io;
-mod owned_entity;
-mod packet_writer;
 mod ping_manager;
 mod tick_manager;
 mod tick_queue;
@@ -39,4 +38,3 @@ pub use entity_ref::EntityRef;
 pub use error::NaiaClientError;
 pub use event::Event;
 pub use naia_client_socket::Packet;
-pub use owned_entity::OwnedEntity;

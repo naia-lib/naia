@@ -17,7 +17,6 @@ use super::{
     event::Event,
     handshake_manager::{HandshakeManager, HandshakeResult},
     io::Io,
-    owned_entity::OwnedEntity,
     tick_manager::TickManager,
 };
 
@@ -115,17 +114,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
         }
     }
 
-    /// Queues up a Command for an assigned Entity to be sent to the Server
-    pub fn send_command<R: ReplicateSafe<P>>(&mut self, predicted_entity: &E, command: R) {
-        if let Some(connection) = self.server_connection.as_mut() {
-            if let Some(confirmed_entity) = connection.get_confirmed_entity(predicted_entity) {
-                let entity_pair: OwnedEntity<E> =
-                    OwnedEntity::new(&confirmed_entity, &predicted_entity);
-                connection.send_command(entity_pair, command);
-            }
-        }
-    }
-
     // Entities
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -135,8 +123,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
         &'s self,
         world: W,
         entity: &E,
-    ) -> EntityRef<'s, P, E, W> {
-        return EntityRef::new(self, world, &entity);
+    ) -> EntityRef<P, E, W> {
+        return EntityRef::new(world, &entity);
     }
 
     /// Return a list of all Entities
@@ -236,8 +224,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                     events.push_back(Ok(Event::Disconnection));
                     return events; // exit early, we're disconnected, who cares?
                 }
-                // process replays
-                connection.process_replays(&mut world);
                 // receive messages
                 while let Some(message) = connection.get_incoming_message() {
                     events.push_back(Ok(Event::Message(message)));
@@ -250,9 +236,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                                 Event::SpawnEntity(entity, component_list)
                             }
                             EntityAction::DespawnEntity(entity) => Event::DespawnEntity(entity),
-                            EntityAction::OwnEntity(entity) => Event::OwnEntity(entity),
-                            EntityAction::DisownEntity(entity) => Event::DisownEntity(entity),
-                            EntityAction::RewindEntity(entity) => Event::RewindEntity(entity),
                             EntityAction::InsertComponent(entity, component_key) => {
                                 Event::InsertComponent(entity, component_key)
                             }
@@ -265,14 +248,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
                         }
                     };
                     events.push_back(Ok(event));
-                }
-                // receive replay command
-                while let Some((owned_entity, command)) = connection.get_incoming_replay() {
-                    events.push_back(Ok(Event::ReplayCommand(owned_entity, command)));
-                }
-                // receive command
-                while let Some((owned_entity, command)) = connection.get_incoming_command() {
-                    events.push_back(Ok(Event::NewCommand(owned_entity, command)));
                 }
                 // send heartbeats
                 if connection.should_send_heartbeat() {
@@ -315,19 +290,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
         }
 
         events
-    }
-
-    // Crate-Public functions
-
-    //// Entities
-
-    /// Get whether or not the Entity associated with a given EntityKey has
-    /// been assigned to the current User
-    pub(crate) fn entity_is_owned(&self, entity: &E) -> bool {
-        if let Some(connection) = &self.server_connection {
-            return connection.entity_is_owned(entity);
-        }
-        return false;
     }
 
     // internal functions

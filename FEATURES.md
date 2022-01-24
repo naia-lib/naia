@@ -16,8 +16,6 @@
 * [x] RTT estimations
 * [x] Client Tick events
 * [x] Synced Tick between Server/Client
-* [x] Support Client prediction of Entities
-* [x] Send consecutive copies of Messages (see Tribes 2 Networking Model's "MoveManager")
 
 ## Planned
 This list is not sorted by order of priority
