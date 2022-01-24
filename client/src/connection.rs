@@ -1,15 +1,12 @@
-use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
+use std::{hash::Hash, net::SocketAddr};
 
 use naia_client_socket::Packet;
 
-use naia_shared::{
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType,
-};
+use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolType, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType, MessagePacketWriter};
 
 use super::{
-    command_receiver::CommandReceiver, entity_action::EntityAction, entity_manager::EntityManager,
-    owned_entity::OwnedEntity, packet_writer::PacketWriter, ping_manager::PingManager,
+    entity_action::EntityAction, entity_manager::EntityManager,
+    ping_manager::PingManager,
     tick_manager::TickManager, tick_queue::TickQueue,
 };
 
@@ -17,8 +14,6 @@ pub struct Connection<P: ProtocolType, E: Copy + Eq + Hash> {
     base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
-    command_sender: VecDeque<(OwnedEntity<E>, P)>,
-    command_receiver: CommandReceiver<P, E>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
@@ -31,34 +26,13 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
                 connection_config.ping_interval,
                 connection_config.ping_sample_size,
             ),
-            command_sender: VecDeque::new(),
-            command_receiver: CommandReceiver::new(),
             jitter_buffer: TickQueue::new(),
         };
     }
 
     pub fn get_outgoing_packet(&mut self, host_tick_opt: Option<u16>) -> Option<Box<[u8]>> {
-        if self.base_connection.has_outgoing_messages() || !self.command_sender.is_empty() {
-            let mut writer = PacketWriter::new();
-
-            // Commands
-            if let Some(host_tick) = host_tick_opt {
-                while let Some((owned_entity, command)) = self.command_sender.pop_front() {
-                    if writer.write_command(
-                        host_tick,
-                        &self.entity_manager,
-                        &self.command_receiver,
-                        &owned_entity,
-                        &command,
-                    ) {
-                        self.command_receiver
-                            .send_command(host_tick, owned_entity, command);
-                    } else {
-                        self.command_sender.push_front((owned_entity, command));
-                        break;
-                    }
-                }
-            }
+        if self.base_connection.has_outgoing_messages() {
+            let mut writer = MessagePacketWriter::new();
 
             // Messages
             let next_packet_index: u16 = self.get_next_packet_index();
@@ -75,7 +49,15 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
             // Add header
             if writer.has_bytes() {
                 // Get bytes from writer
-                let out_bytes = writer.get_bytes();
+
+                let out_bytes = {
+                    let mut out_bytes = Vec::<u8>::new();
+
+                    //Write manager "header" manager type
+                    writer.get_bytes(&mut out_bytes);
+
+                    out_bytes.into_boxed_slice()
+                };
 
                 // Add header to it
                 let payload = self.process_outgoing_header(
@@ -94,7 +76,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
     pub fn process_incoming_data<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
-        packet_tick: u16,
         packet_index: u16,
         manifest: &Manifest<P>,
         data: &[u8],
@@ -111,8 +92,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
                     self.entity_manager.process_data(
                         world,
                         manifest,
-                        &mut self.command_receiver,
-                        packet_tick,
                         packet_index,
                         &mut reader,
                     );
@@ -137,10 +116,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
     // Pass-through methods to underlying Entity Manager
     pub fn get_incoming_entity_action(&mut self) -> Option<EntityAction<P, E>> {
         return self.entity_manager.pop_incoming_message();
-    }
-
-    pub fn entity_is_owned(&self, entity: &E) -> bool {
-        return self.entity_manager.entity_is_owned(entity);
     }
 
     /// Reads buffered incoming data on the appropriate tick boundary
@@ -174,10 +149,10 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
         manifest: &Manifest<P>,
         target_tick: u16,
     ) {
-        while let Some((tick, packet_index, data_packet)) =
+        while let Some((_, packet_index, data_packet)) =
             self.get_buffered_data_packet(target_tick)
         {
-            self.process_incoming_data(world, tick, packet_index, manifest, &data_packet);
+            self.process_incoming_data(world, packet_index, manifest, &data_packet);
         }
     }
 
@@ -246,36 +221,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
 
     pub fn get_last_received_tick(&self) -> u16 {
         self.base_connection.get_last_received_tick()
-    }
-
-    // Commands
-    pub fn send_command<R: ReplicateSafe<P>>(&mut self, entity: OwnedEntity<E>, command: R) {
-        let command_protocol = command.into_protocol();
-        return self.command_sender.push_back((entity, command_protocol));
-    }
-
-    pub fn process_replays<W: WorldMutType<P, E>>(&mut self, world: &mut W) {
-        self.command_receiver
-            .process_command_replay(world, &mut self.entity_manager);
-    }
-
-    pub fn get_incoming_replay(&mut self) -> Option<(OwnedEntity<E>, P)> {
-        if let Some((_tick, owned_entity, command)) = self.command_receiver.pop_command_replay() {
-            return Some((owned_entity, command));
-        }
-
-        return None;
-    }
-
-    pub fn get_incoming_command(&mut self) -> Option<(OwnedEntity<E>, P)> {
-        if let Some((_tick, owned_entity, command)) = self.command_receiver.pop_command() {
-            return Some((owned_entity, command));
-        }
-        return None;
-    }
-
-    pub fn get_confirmed_entity(&self, predicted_entity: &E) -> Option<&E> {
-        return self.entity_manager.get_confirmed_entity(predicted_entity);
     }
 
     // Ping related

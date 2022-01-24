@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, VecDeque},
     hash::Hash,
-    ops::Deref,
 };
 
 use log::warn;
@@ -12,15 +11,13 @@ use naia_shared::{
 };
 
 use super::{
-    command_receiver::CommandReceiver, entity_action::EntityAction, entity_record::EntityRecord,
-    owned_entity::OwnedEntity,
+    entity_action::EntityAction, entity_record::EntityRecord,
 };
 
 pub struct EntityManager<P: ProtocolType, E: Copy + Eq + Hash> {
-    entity_records: HashMap<E, EntityRecord<E, P::Kind>>,
+    entity_records: HashMap<E, EntityRecord<P::Kind>>,
     local_to_world_entity: HashMap<LocalEntity, E>,
     component_to_entity_map: HashMap<LocalComponentKey, E>,
-    predicted_to_confirmed_entity: HashMap<E, E>,
     queued_incoming_messages: VecDeque<EntityAction<P, E>>,
 }
 
@@ -30,7 +27,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
             local_to_world_entity: HashMap::new(),
             entity_records: HashMap::new(),
             component_to_entity_map: HashMap::new(),
-            predicted_to_confirmed_entity: HashMap::new(),
             queued_incoming_messages: VecDeque::new(),
         }
     }
@@ -39,8 +35,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
-        command_receiver: &mut CommandReceiver<P, E>,
-        packet_tick: u16,
         packet_index: u16,
         reader: &mut PacketReader,
     ) {
@@ -69,7 +63,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
                         self.local_to_world_entity
                             .insert(local_entity, world_entity);
                         self.entity_records
-                            .insert(world_entity, EntityRecord::new(&local_entity));
+                            .insert(world_entity, EntityRecord::new());
                         let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
 
                         let mut component_list: Vec<P::Kind> = Vec::new();
@@ -107,12 +101,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
                     let local_entity = LocalEntity::from_u16(reader.read_u16());
                     if let Some(world_entity) = self.local_to_world_entity.remove(&local_entity) {
                         if let Some(entity_record) = self.entity_records.remove(&world_entity) {
-                            if entity_record.is_owned() {
-                                let prediction_entity = entity_record.get_prediction().unwrap();
-                                self.predicted_to_confirmed_entity
-                                    .remove(&prediction_entity);
-                                command_receiver.prediction_cleanup(&world_entity);
-                            }
 
                             // Generate event for each component, handing references off just in
                             // case
@@ -138,66 +126,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
                         }
                     }
                     warn!("received message attempting to delete nonexistent entity");
-                }
-                EntityActionType::OwnEntity => {
-                    // Assign Prediction Entity
-                    let local_entity = LocalEntity::from_u16(reader.read_u16());
-                    if let Some(world_entity) = self.local_to_world_entity.remove(&local_entity) {
-                        if let Some(entity_record) = self.entity_records.get_mut(&world_entity) {
-                            let prediction_entity = world.spawn_entity();
-
-                            entity_record.set_prediction(&prediction_entity);
-                            self.predicted_to_confirmed_entity
-                                .insert(prediction_entity, world_entity);
-
-                            // create copies of components //
-                            for component_kind in world.get_component_kinds(&world_entity) {
-                                let mut component_copy_opt: Option<P> = None;
-                                if let Some(component) =
-                                    world.get_component_of_kind(&world_entity, &component_kind)
-                                {
-                                    component_copy_opt =
-                                        Some(component.deref().deref().protocol_copy());
-                                }
-                                if let Some(component_copy) = component_copy_opt {
-                                    component_copy.extract_and_insert(&prediction_entity, world);
-                                }
-                            }
-                            /////////////////////////////////
-
-                            command_receiver.prediction_init(&world_entity);
-
-                            self.queued_incoming_messages
-                                .push_back(EntityAction::OwnEntity(OwnedEntity::new(
-                                    &world_entity,
-                                    &prediction_entity,
-                                )));
-                        }
-                    }
-                }
-                EntityActionType::DisownEntity => {
-                    // Unassign Prediction Entity
-                    let local_entity = LocalEntity::from_u16(reader.read_u16());
-                    if let Some(world_entity) = self.local_to_world_entity.get(&local_entity) {
-                        if let Some(entity_record) = self.entity_records.get_mut(&world_entity) {
-                            if entity_record.is_owned() {
-                                let prediction_entity = entity_record.disown().unwrap();
-                                self.predicted_to_confirmed_entity
-                                    .remove(&prediction_entity);
-
-                                world.despawn_entity(&prediction_entity);
-
-                                command_receiver.prediction_cleanup(&world_entity);
-
-                                self.queued_incoming_messages.push_back(
-                                    EntityAction::DisownEntity(OwnedEntity::new(
-                                        world_entity,
-                                        &prediction_entity,
-                                    )),
-                                );
-                            }
-                        }
-                    }
                 }
                 EntityActionType::InsertComponent => {
                     // Add Component to Entity
@@ -234,9 +162,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                             new_component.extract_and_insert(world_entity, world);
 
-                            //TODO: handle inserting Component into an Entity that has a
-                            // Prediction... !!!
-
                             self.queued_incoming_messages
                                 .push_back(EntityAction::InsertComponent(
                                     *world_entity,
@@ -265,16 +190,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 reader,
                                 packet_index,
                             );
-
-                            // check if Entity is Owned
-                            if entity_record.is_owned() {
-                                // replay commands
-                                command_receiver.replay_commands(packet_tick, &world_entity);
-
-                                // remove command history until the tick that has already been
-                                // checked
-                                command_receiver.remove_history_until(packet_tick, &world_entity);
-                            }
 
                             self.queued_incoming_messages
                                 .push_back(EntityAction::UpdateComponent(
@@ -326,51 +241,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
-    pub fn world_to_local_entity(&self, world_entity: &E) -> Option<LocalEntity> {
-        if let Some(entity_record) = self.entity_records.get(world_entity) {
-            return Some(entity_record.local_entity());
-        }
-        return None;
-    }
-
-    pub fn get_predicted_entity(&self, world_entity: &E) -> Option<E> {
-        if let Some(entity_record) = self.entity_records.get(world_entity) {
-            return entity_record.get_prediction();
-        }
-        return None;
-    }
-
-    pub fn get_confirmed_entity(&self, predicted_entity: &E) -> Option<&E> {
-        return self.predicted_to_confirmed_entity.get(predicted_entity);
-    }
-
     pub fn pop_incoming_message(&mut self) -> Option<EntityAction<P, E>> {
         return self.queued_incoming_messages.pop_front();
-    }
-
-    pub fn entity_is_owned(&self, key: &E) -> bool {
-        if let Some(entity_record) = self.entity_records.get(key) {
-            return entity_record.is_owned();
-        }
-        return false;
-    }
-
-    pub fn prediction_reset_entity<W: WorldMutType<P, E>>(
-        &mut self,
-        world: &mut W,
-        world_entity: &E,
-    ) {
-        if let Some(predicted_entity) = self.get_predicted_entity(&world_entity) {
-            // go through all components to make prediction components = world components
-            for component_kind in world.get_component_kinds(world_entity) {
-                world.mirror_components(&predicted_entity, &world_entity, &component_kind);
-            }
-
-            self.queued_incoming_messages
-                .push_back(EntityAction::RewindEntity(OwnedEntity::new(
-                    world_entity,
-                    &predicted_entity,
-                )));
-        }
     }
 }

@@ -134,7 +134,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P, E>, NaiaServerError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P>, NaiaServerError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with all clients, and receive packets
@@ -167,23 +167,10 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             }
         }
 
-        // TODO: have 1 single queue for commands/messages from all users, as it's
+        // TODO: have 1 single queue for messages from all users, as it's
         // possible this current technique unfairly favors the 1st users in
         // self.user_connections
-        let server_tick_opt = self.server_tick();
         for (_, connection) in self.user_connections.iter_mut() {
-            //receive commands from anyone
-            if let Some(server_tick) = server_tick_opt {
-                while let Some((prediction_key, command)) =
-                    connection.get_incoming_command(server_tick)
-                {
-                    events.push_back(Ok(Event::Command(
-                        connection.user_key,
-                        prediction_key,
-                        command,
-                    )));
-                }
-            }
             //receive messages from anyone
             while let Some(message) = connection.get_incoming_message() {
                 events.push_back(Ok(Event::Message(connection.user_key, message)));
@@ -314,9 +301,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         &'s self,
         world: W,
         entity: &E,
-    ) -> EntityRef<'s, P, E, W> {
+    ) -> EntityRef<P, E, W> {
         if world.has_entity(entity) {
-            return EntityRef::new(self, world, &entity);
+            return EntityRef::new(world, &entity);
         }
         panic!("No Entity exists for given Key!");
     }
@@ -496,10 +483,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         if !world.has_entity(entity) {
             panic!("attempted to de-spawn nonexistent entity");
         }
-        // Clean up ownership if applicable
-        if self.entity_has_owner(entity) {
-            self.entity_disown(entity);
-        }
 
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
@@ -521,74 +504,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
 
         self.entity_scope_map.remove_entity(entity);
         self.entity_records.remove(entity);
-    }
-
-    /// Returns whether or not an Entity has an owner
-    pub(crate) fn entity_has_owner(&self, entity: &E) -> bool {
-        if let Some(record) = self.entity_records.get(entity) {
-            return record.owner_key.is_some();
-        }
-        return false;
-    }
-
-    /// Gets the UserKey of the User that currently owns an Entity, if it exists
-    pub(crate) fn entity_get_owner(&self, entity: &E) -> Option<UserKey> {
-        if let Some(record) = self.entity_records.get(entity) {
-            return record.owner_key;
-        }
-        return None;
-    }
-
-    /// Set the 'owner' of an Entity to a User associated with a given UserKey.
-    /// Users are only able to issue Commands to Entities of which they are the
-    /// owner
-    pub(crate) fn entity_set_owner(&mut self, entity: &E, user_key: &UserKey) {
-        // check that entity is initialized & un-owned
-        if let Some(entity_record) = self.entity_records.get_mut(entity) {
-            if entity_record.owner_key.is_some() {
-                panic!("attempting to take ownership of an Entity that is already owned");
-            };
-
-            // get at the User's connection
-            if let Some(user) = self.users.get(*user_key) {
-                if let Some(user_connection) = self.user_connections.get_mut(&user.address) {
-                    // add Entity to User's connection if it's not already in-scope
-                    if !user_connection.has_entity(entity) {
-                        //add entity to user connection
-                        user_connection.spawn_entity(&self.world_record, entity);
-                    }
-
-                    // assign Entity to User as a Prediction
-                    user_connection.add_prediction_entity(entity);
-
-                    // put in ownership map
-                    entity_record.owner_key = Some(*user_key);
-                    user_connection.own_entity(entity);
-                }
-            }
-        }
-    }
-
-    /// Removes ownership of an Entity from their current owner User.
-    /// No User is able to issue Commands to an un-owned Entity.
-    pub(crate) fn entity_disown(&mut self, entity: &E) {
-        // a couple sanity checks ..
-        if let Some(entity_record) = self.entity_records.get_mut(entity) {
-            let current_owner_key: UserKey = entity_record
-                .owner_key
-                .expect("attempting to disown entity that does not have an owner..");
-
-            if let Some(user) = self.users.get(current_owner_key) {
-                if let Some(user_connection) = self.user_connections.get_mut(&user.address) {
-                    user_connection.remove_prediction_entity(entity);
-
-                    // remove from ownership map
-                    entity_record.owner_key = None;
-
-                    user_connection.disown_entity(entity);
-                }
-            }
-        }
     }
 
     //// Entity Scopes
@@ -691,13 +606,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         }
 
         if let Some(user) = self.users.remove(*user_key) {
-            if let Some(user_connection) = self.user_connections.remove(&user.address) {
-                for owned_entity in user_connection.owned_entities() {
-                    if let Some(entity_record) = self.entity_records.get_mut(&owned_entity) {
-                        entity_record.owner_key = None;
-                    }
-                }
-            }
 
             self.entity_scope_map.remove_user(user_key);
             self.handshake_manager.delete_user(&user.address);
@@ -901,13 +809,10 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                             }
                         }
                         PacketType::Data => {
-                            let server_tick_opt = self.server_tick();
                             match self.user_connections.get_mut(&address) {
                                 Some(connection) => {
                                     connection.process_incoming_header(&self.world_record, &header);
                                     connection.process_incoming_data(
-                                        server_tick_opt,
-                                        header.host_tick(),
                                         &self.manifest,
                                         &payload,
                                     );
@@ -1008,16 +913,12 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
                                 let currently_in_scope = user_connection.has_entity(entity);
 
                                 let should_be_in_scope: bool;
-                                if user_connection.has_prediction_entity(entity) {
-                                    should_be_in_scope = true;
+                                if let Some(in_scope) =
+                                    self.entity_scope_map.get(user_key, entity)
+                                {
+                                    should_be_in_scope = *in_scope;
                                 } else {
-                                    if let Some(in_scope) =
-                                        self.entity_scope_map.get(user_key, entity)
-                                    {
-                                        should_be_in_scope = *in_scope;
-                                    } else {
-                                        should_be_in_scope = false;
-                                    }
+                                    should_be_in_scope = false;
                                 }
 
                                 if should_be_in_scope {

@@ -6,7 +6,6 @@ use super::locality_status::LocalityStatus;
 pub struct LocalEntityRecord {
     pub local_key: LocalEntity,
     pub status: LocalityStatus,
-    pub is_prediction: bool,
 }
 
 impl LocalEntityRecord {
@@ -14,7 +13,6 @@ impl LocalEntityRecord {
         LocalEntityRecord {
             local_key,
             status: LocalityStatus::Creating,
-            is_prediction: false,
         }
     }
 }

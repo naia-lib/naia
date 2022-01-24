@@ -1,26 +1,26 @@
-use std::hash::Hash;
+use std::{marker::PhantomData, hash::Hash};
 
 use naia_shared::{
     ProtocolType, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType,
     WorldRefType,
 };
 
-use super::{room::room_key::RoomKey, server::Server, user::user_key::UserKey};
+use super::{room::room_key::RoomKey, server::Server};
 
 // EntityRef
 
 /// A reference to an Entity being tracked by the Server
-pub struct EntityRef<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> {
-    server: &'s Server<P, E>,
+pub struct EntityRef<P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> {
+    phantom_p: PhantomData<P>,
     world: W,
     id: E,
 }
 
-impl<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<'s, P, E, W> {
+impl<P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E, W> {
     /// Return a new EntityRef
-    pub(crate) fn new(server: &'s Server<P, E>, world: W, key: &E) -> Self {
+    pub(crate) fn new(world: W, key: &E) -> Self {
         EntityRef {
-            server,
+            phantom_p: PhantomData,
             world,
             id: *key,
         }
@@ -41,18 +41,6 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<
     /// Gets a Ref to a Component associated with the Entity
     pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ReplicaRefWrapper<P, R>> {
         return self.world.get_component::<R>(&self.id);
-    }
-
-    // Ownership
-
-    /// Returns whether or not the Entity is owned/controlled by a User
-    pub fn has_owner(&self) -> bool {
-        return self.server.entity_has_owner(&self.id);
-    }
-
-    /// Returns the UserKey associated with the Entity's owner/controller
-    pub fn get_owner(&self) -> Option<UserKey> {
-        return self.server.entity_get_owner(&self.id);
     }
 }
 
@@ -114,29 +102,6 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<
             .remove_component::<R, W>(&mut self.world, &self.id);
     }
 
-    // Users & Assignment
-
-    pub fn has_owner(&self) -> bool {
-        return self.server.entity_has_owner(&self.id);
-    }
-
-    pub fn get_owner(&self) -> Option<UserKey> {
-        return self.server.entity_get_owner(&self.id);
-    }
-
-    pub fn set_owner(&mut self, user_key: &UserKey) -> &mut Self {
-        // user_own?
-        self.server.entity_set_owner(&self.id, user_key);
-
-        self
-    }
-
-    pub fn disown(&mut self) -> &mut Self {
-        self.server.entity_disown(&self.id);
-
-        self
-    }
-
     // Rooms
 
     pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
@@ -165,21 +130,6 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash> WorldlessEntityMut<'s, P, E> {
 
     pub fn id(&self) -> E {
         self.id
-    }
-
-    // Users & Assignment
-
-    pub fn has_owner(&self) -> bool {
-        return self.server.entity_has_owner(&self.id);
-    }
-
-    pub fn get_owner(&self) -> Option<UserKey> {
-        return self.server.entity_get_owner(&self.id);
-    }
-
-    pub fn disown(&mut self) -> &mut Self {
-        self.server.entity_disown(&self.id);
-        self
     }
 
     // Rooms

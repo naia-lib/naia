@@ -62,7 +62,7 @@ pub trait WorldMutType<P: ProtocolType, E>: WorldRefType<P, E> + ProtocolInserte
         reader: &mut PacketReader,
         packet_index: u16,
     );
-    /// mirrors the state of the same component owned by two different entities
+    /// mirrors the state of the same component of two different entities
     /// (setting 1st entity's component to 2nd entity's component's state)
     fn mirror_components(
         &mut self,
