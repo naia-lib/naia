@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, Stage};
 
-use naia_bevy_demo_shared::{get_server_address, get_shared_config, protocol::Auth};
+use naia_bevy_demo_shared::get_shared_config;
 
 mod resources;
 mod systems;
@@ -17,8 +17,6 @@ fn main() {
         .add_plugin(ClientPlugin::new(
             ClientConfig::default(),
             get_shared_config(),
-            get_server_address(),
-            Some(Auth::new("charlie", "12345")),
         ));
 
     app

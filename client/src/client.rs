@@ -100,6 +100,11 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
         );
     }
 
+    /// Check if a request to connect to an external server been made
+    pub fn connection_exists(&self) -> bool {
+        self.io.loaded()
+    }
+
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
         self.handshake_manager
