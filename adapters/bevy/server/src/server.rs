@@ -8,7 +8,7 @@ use bevy::ecs::{
 
 use naia_server::{
     EntityRef, Event, NaiaServerError, ProtocolType, Replicate, RoomKey, RoomMut, RoomRef,
-    Server as NaiaServer, UserKey, UserMut, UserRef, UserScopeMut,
+    Server as NaiaServer, ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
@@ -47,6 +47,10 @@ impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
     }
 
     //// Connections ////
+
+    pub fn listen(&mut self, server_addrs: ServerAddrs) {
+        self.server.listen(server_addrs);
+    }
 
     pub fn accept_connection(&mut self, user_key: &UserKey) {
         self.server.accept_connection(user_key);

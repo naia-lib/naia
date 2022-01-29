@@ -132,6 +132,11 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         );
     }
 
+    /// Check if server is listening for connections
+    pub fn listening_connections(&self) -> bool {
+        self.io.loaded()
+    }
+
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
     pub fn receive(&mut self) -> VecDeque<Result<Event<P, E>, NaiaServerError>> {

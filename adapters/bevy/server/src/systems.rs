@@ -77,3 +77,11 @@ pub fn should_tick(resource: Res<ServerResource>) -> ShouldRun {
 pub fn finish_tick(mut resource: ResMut<ServerResource>) {
     resource.ticker.reset();
 }
+
+pub fn should_do_io<P: ProtocolType>(server: Res<Server<P, Entity>>) -> ShouldRun {
+    if server.listening_connections() {
+        ShouldRun::Yes
+    } else {
+        ShouldRun::No
+    }
+}

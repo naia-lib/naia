@@ -6,8 +6,9 @@ use bevy::{
     prelude::*,
 };
 
-use naia_server::{ProtocolType, Server, ServerAddrs, ServerConfig, SharedConfig};
+use naia_server::{ProtocolType, Server, ServerConfig, SharedConfig};
 
+use crate::systems::should_do_io;
 use naia_bevy_shared::WorldData;
 
 use super::{
@@ -20,19 +21,13 @@ use super::{
 struct PluginConfig<P: ProtocolType> {
     server_config: ServerConfig,
     shared_config: SharedConfig<P>,
-    server_addrs: ServerAddrs,
 }
 
 impl<P: ProtocolType> PluginConfig<P> {
-    pub fn new(
-        server_config: ServerConfig,
-        shared_config: SharedConfig<P>,
-        server_addresses: ServerAddrs,
-    ) -> Self {
+    pub fn new(server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
         PluginConfig {
             server_config,
             shared_config,
-            server_addrs: server_addresses,
         }
     }
 }
@@ -42,12 +37,8 @@ pub struct Plugin<P: ProtocolType> {
 }
 
 impl<P: ProtocolType> Plugin<P> {
-    pub fn new(
-        server_config: ServerConfig,
-        shared_config: SharedConfig<P>,
-        server_addresses: ServerAddrs,
-    ) -> Self {
-        let config = PluginConfig::new(server_config, shared_config, server_addresses);
+    pub fn new(server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
+        let config = PluginConfig::new(server_config, shared_config);
         return Plugin {
             config: Mutex::new(Some(config)),
         };
@@ -57,8 +48,7 @@ impl<P: ProtocolType> Plugin<P> {
 impl<P: ProtocolType> PluginType for Plugin<P> {
     fn build(&self, app: &mut App) {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
-        let mut server = Server::<P, Entity>::new(config.server_config, config.shared_config);
-        server.listen(config.server_addrs);
+        let server = Server::<P, Entity>::new(config.server_config, config.shared_config);
 
         app
         // RESOURCES //
@@ -74,7 +64,7 @@ impl<P: ProtocolType> PluginType for Plugin<P> {
         // STAGES //
             .add_stage_before(CoreStage::PreUpdate,
                               PrivateStage::BeforeReceiveEvents,
-                              SystemStage::single_threaded())
+                              SystemStage::single_threaded().with_run_criteria(should_do_io::<P>))
             .add_stage_after(PrivateStage::BeforeReceiveEvents,
                               Stage::ReceiveEvents,
                               SystemStage::single_threaded())
