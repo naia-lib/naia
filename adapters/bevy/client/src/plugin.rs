@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, ops::DerefMut, sync::Mutex};
+use std::{ops::DerefMut, sync::Mutex};
 
 use bevy::{
     app::{App, CoreStage, Plugin as PluginType},
@@ -6,8 +6,9 @@ use bevy::{
     prelude::*,
 };
 
-use naia_client::{Client, ClientConfig, ProtocolType, Replicate, SharedConfig};
+use naia_client::{Client, ClientConfig, ProtocolType, SharedConfig};
 
+use crate::systems::should_do_io;
 use naia_bevy_shared::WorldData;
 
 use super::{
@@ -24,56 +25,43 @@ use super::{
     },
 };
 
-struct PluginConfig<P: ProtocolType, R: Replicate<P>> {
+struct PluginConfig<P: ProtocolType> {
     client_config: ClientConfig,
     shared_config: SharedConfig<P>,
-    server_address: SocketAddr,
-    auth: Option<R>,
 }
 
-impl<P: ProtocolType, R: Replicate<P>> PluginConfig<P, R> {
+impl<P: ProtocolType> PluginConfig<P> {
     pub fn new(
         client_config: ClientConfig,
         shared_config: SharedConfig<P>,
-        server_address: SocketAddr,
-        auth: Option<R>,
     ) -> Self {
         PluginConfig {
             client_config,
             shared_config,
-            server_address,
-            auth,
         }
     }
 }
 
-pub struct Plugin<P: ProtocolType, R: Replicate<P>> {
-    config: Mutex<Option<PluginConfig<P, R>>>,
+pub struct Plugin<P: ProtocolType> {
+    config: Mutex<Option<PluginConfig<P>>>,
 }
 
-impl<P: ProtocolType, R: Replicate<P>> Plugin<P, R> {
+impl<P: ProtocolType> Plugin<P> {
     pub fn new(
         client_config: ClientConfig,
         shared_config: SharedConfig<P>,
-        server_address: SocketAddr,
-        auth_ref: Option<R>,
     ) -> Self {
-        let config = PluginConfig::new(client_config, shared_config, server_address, auth_ref);
+        let config = PluginConfig::new(client_config, shared_config);
         return Plugin {
             config: Mutex::new(Some(config)),
         };
     }
 }
 
-impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
+impl<P: ProtocolType> PluginType for Plugin<P> {
     fn build(&self, app: &mut App) {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
-        let mut client = Client::<P, Entity>::new(config.client_config, config.shared_config);
-
-        if let Some(auth) = config.auth {
-            client.auth(auth);
-        }
-        client.connect(config.server_address);
+        let client = Client::<P, Entity>::new(config.client_config, config.shared_config);
 
         app
         // RESOURCES //
@@ -96,7 +84,7 @@ impl<P: ProtocolType, R: Replicate<P>> PluginType for Plugin<P, R> {
             // events //
             .add_stage_before(CoreStage::PreUpdate,
                               PrivateStage::BeforeReceiveEvents,
-                              SystemStage::single_threaded())
+                              SystemStage::single_threaded().with_run_criteria(should_do_io::<P>))
             .add_stage_after(PrivateStage::BeforeReceiveEvents,
                               Stage::ReceiveEvents,
                               SystemStage::single_threaded())
