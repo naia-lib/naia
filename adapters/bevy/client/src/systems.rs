@@ -7,8 +7,8 @@ use bevy::{
         world::{Mut, World},
     },
 };
-use naia_bevy_shared::WorldProxyMut;
 use naia_client::{Client, Event, ProtocolType};
+use naia_bevy_shared::WorldProxyMut;
 
 use crate::events::{
     DespawnEntityEvent, DisownEntityEvent, InsertComponentEvent, MessageEvent, NewCommandEvent,

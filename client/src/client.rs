@@ -1,10 +1,11 @@
+use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
+
 use naia_client_socket::{Packet, Socket};
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
     ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };
-use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use super::{
     client_config::ClientConfig,

@@ -1,18 +1,18 @@
-use slotmap::DenseSlotMap;
-
-use naia_server_socket::{Packet, ServerAddrs, Socket};
-pub use naia_shared::{
-    BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey, ManagerType,
-    Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType,
-    ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
-    WorldMutType, WorldRefType, wrapping_diff,
-};
 use std::{
     collections::{HashMap, VecDeque},
     hash::Hash,
     net::SocketAddr,
     panic,
     sync::{Arc, RwLock},
+};
+
+use slotmap::DenseSlotMap;
+use naia_server_socket::{Packet, ServerAddrs, Socket};
+pub use naia_shared::{
+    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
+    ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
+    ProtocolKindType, ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
+    Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -26,10 +26,10 @@ use super::{
     handshake_manager::{HandshakeManager, HandshakeResult},
     io::Io,
     keys::ComponentKey,
-    room::{Room, room_key::RoomKey, RoomMut, RoomRef},
+    room::{room_key::RoomKey, Room, RoomMut, RoomRef},
     server_config::ServerConfig,
     tick_manager::TickManager,
-    user::{User, user_key::UserKey, UserMut, UserRef},
+    user::{user_key::UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
 };
