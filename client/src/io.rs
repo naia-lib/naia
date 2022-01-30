@@ -1,5 +1,4 @@
 use naia_client_socket::{NaiaClientSocketError, Packet, PacketReceiver, PacketSender};
-
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
     ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
@@ -19,10 +18,6 @@ impl Io {
         }
     }
 
-    pub fn loaded(&self) -> bool {
-        self.packet_sender.is_some()
-    }
-
     pub fn load(&mut self, packet_sender: PacketSender, packet_receiver: PacketReceiver) {
         if self.packet_sender.is_some() {
             panic!("Packet sender/receiver already loaded! Cannot do this twice!");
@@ -30,6 +25,10 @@ impl Io {
 
         self.packet_sender = Some(packet_sender);
         self.packet_receiver = Some(packet_receiver);
+    }
+
+    pub fn is_loaded(&self) -> bool {
+        self.packet_sender.is_some()
     }
 
     pub fn send_packet(&mut self, packet: Packet) {

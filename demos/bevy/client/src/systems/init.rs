@@ -1,8 +1,11 @@
 use bevy::prelude::*;
+use naia_bevy_client::Client;
+use naia_bevy_demo_shared::{
+    get_server_address,
+    protocol::{Auth, Protocol},
+};
 
 use crate::resources::Global;
-use naia_bevy_demo_shared::{get_server_address, protocol::{Protocol, Auth}};
-use naia_bevy_client::Client;
 
 pub fn init(mut commands: Commands, mut client: Client<Protocol>) {
     info!("Naia Bevy Client Demo started");
@@ -18,4 +21,3 @@ pub fn init(mut commands: Commands, mut client: Client<Protocol>) {
         queued_command: None,
     });
 }
-

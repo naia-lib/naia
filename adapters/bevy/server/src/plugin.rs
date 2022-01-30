@@ -1,21 +1,17 @@
-use std::{ops::DerefMut, sync::Mutex};
-
 use bevy::{
     app::{App, CoreStage, Plugin as PluginType},
     ecs::schedule::SystemStage,
     prelude::*,
 };
-
-use naia_server::{ProtocolType, Server, ServerConfig, SharedConfig};
-
-use crate::systems::should_do_io;
 use naia_bevy_shared::WorldData;
+use naia_server::{ProtocolType, Server, ServerConfig, SharedConfig};
+use std::{ops::DerefMut, sync::Mutex};
 
 use super::{
     events::{AuthorizationEvent, CommandEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
     resource::ServerResource,
     stage::{PrivateStage, Stage},
-    systems::{before_receive_events, finish_tick, should_tick},
+    systems::{before_receive_events, finish_tick, should_receive, should_tick},
 };
 
 struct PluginConfig<P: ProtocolType> {
@@ -64,22 +60,24 @@ impl<P: ProtocolType> PluginType for Plugin<P> {
         // STAGES //
             .add_stage_before(CoreStage::PreUpdate,
                               PrivateStage::BeforeReceiveEvents,
-                              SystemStage::single_threaded().with_run_criteria(should_do_io::<P>))
+                              SystemStage::single_threaded()
+                                  .with_run_criteria(should_receive::<P>))
             .add_stage_after(PrivateStage::BeforeReceiveEvents,
-                              Stage::ReceiveEvents,
-                              SystemStage::single_threaded())
+                             Stage::ReceiveEvents,
+                             SystemStage::single_threaded()
+                                 .with_run_criteria(should_receive::<P>))
             .add_stage_after(CoreStage::PostUpdate,
                               Stage::Tick,
                               SystemStage::single_threaded()
-                                 .with_run_criteria(should_tick.system()))
+                                 .with_run_criteria(should_tick))
             .add_stage_after(Stage::Tick,
                               PrivateStage::AfterTick,
                               SystemStage::parallel()
-                                 .with_run_criteria(should_tick.system()))
+                                 .with_run_criteria(should_tick))
         // SYSTEMS //
             .add_system_to_stage(PrivateStage::BeforeReceiveEvents,
                                  before_receive_events::<P>.exclusive_system())
             .add_system_to_stage(PrivateStage::AfterTick,
-                                 finish_tick.system());
+                                 finish_tick);
     }
 }
