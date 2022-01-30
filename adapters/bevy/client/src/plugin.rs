@@ -1,11 +1,12 @@
+use std::{ops::DerefMut, sync::Mutex};
+
 use bevy::{
     app::{App, CoreStage, Plugin as PluginType},
     ecs::schedule::SystemStage,
     prelude::*,
 };
-use naia_bevy_shared::WorldData;
 use naia_client::{Client, ClientConfig, ProtocolType, SharedConfig};
-use std::{ops::DerefMut, sync::Mutex};
+use naia_bevy_shared::WorldData;
 
 use crate::systems::should_receive;
 

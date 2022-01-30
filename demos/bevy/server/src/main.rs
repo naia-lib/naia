@@ -1,10 +1,11 @@
 use bevy::{log::LogPlugin, prelude::*};
-use naia_bevy_demo_shared::get_shared_config;
 use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
-use systems::{events, init, tick};
+use naia_bevy_demo_shared::get_shared_config;
 
 mod resources;
 mod systems;
+
+use systems::{events, init, tick};
 
 fn main() {
     info!("Naia Bevy Server Demo starting up");

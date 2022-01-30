@@ -1,10 +1,11 @@
 use bevy::prelude::*;
 use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, Stage};
 use naia_bevy_demo_shared::get_shared_config;
-use systems::{events, init, input, sync, tick};
 
 mod resources;
 mod systems;
+
+use systems::{events, init, input, sync, tick};
 
 fn main() {
     let mut app = App::new();
