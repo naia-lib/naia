@@ -1,13 +1,10 @@
 use bevy::{log::LogPlugin, prelude::*};
-
-use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
-
 use naia_bevy_demo_shared::get_shared_config;
+use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
+use systems::{events, init, tick};
 
 mod resources;
 mod systems;
-
-use systems::{events, init, tick};
 
 fn main() {
     info!("Naia Bevy Server Demo starting up");
@@ -23,24 +20,24 @@ fn main() {
 
     // Startup System
     .add_startup_system(
-        init.system())
+        init)
     // Receive Server Events
     .add_system_to_stage(
-    Stage::ReceiveEvents,
-    events::authorization_event.system())
-    .add_system_to_stage(
-    Stage::ReceiveEvents,
-    events::connection_event.system())
-    .add_system_to_stage(
-    Stage::ReceiveEvents,
-    events::disconnection_event.system())
+        Stage::ReceiveEvents,
+        events::authorization_event)
     .add_system_to_stage(
         Stage::ReceiveEvents,
-        events::command_event.system())
+        events::connection_event)
+    .add_system_to_stage(
+        Stage::ReceiveEvents,
+        events::disconnection_event)
+    .add_system_to_stage(
+        Stage::ReceiveEvents,
+        events::command_event)
     // Gameplay Loop on Tick
     .add_system_to_stage(
         Stage::Tick,
-        tick.system())
+        tick)
 
     // Run App
     .run();

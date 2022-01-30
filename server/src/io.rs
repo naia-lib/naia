@@ -1,13 +1,11 @@
-use std::panic;
-
 use naia_server_socket::{NaiaServerSocketError, Packet, PacketReceiver, PacketSender};
-
 pub use naia_shared::{
-    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
-    ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
-    ProtocolKindType, ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
-    Timestamp, WorldMutType, WorldRefType,
+    BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey, ManagerType,
+    Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType,
+    ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
+    WorldMutType, WorldRefType, wrapping_diff,
 };
+use std::panic;
 
 pub struct Io {
     packet_sender: Option<PacketSender>,
@@ -22,10 +20,6 @@ impl Io {
         }
     }
 
-    pub fn loaded(&self) -> bool {
-        self.packet_sender.is_some()
-    }
-
     pub fn load(&mut self, packet_sender: PacketSender, packet_receiver: PacketReceiver) {
         if self.packet_sender.is_some() {
             panic!("Packet sender/receiver already loaded! Cannot do this twice!");
@@ -33,6 +27,10 @@ impl Io {
 
         self.packet_sender = Some(packet_sender);
         self.packet_receiver = Some(packet_receiver);
+    }
+
+    pub fn is_loaded(&self) -> bool {
+        self.packet_sender.is_some()
     }
 
     pub fn send_packet(&self, packet: Packet) {

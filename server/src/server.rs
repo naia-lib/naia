@@ -1,20 +1,18 @@
+use slotmap::DenseSlotMap;
+
+use naia_server_socket::{Packet, ServerAddrs, Socket};
+pub use naia_shared::{
+    BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey, ManagerType,
+    Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType,
+    ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
+    WorldMutType, WorldRefType, wrapping_diff,
+};
 use std::{
     collections::{HashMap, VecDeque},
     hash::Hash,
     net::SocketAddr,
     panic,
     sync::{Arc, RwLock},
-};
-
-use slotmap::DenseSlotMap;
-
-use naia_server_socket::{Packet, ServerAddrs, Socket};
-
-pub use naia_shared::{
-    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
-    ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
-    ProtocolKindType, ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
-    Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -28,10 +26,10 @@ use super::{
     handshake_manager::{HandshakeManager, HandshakeResult},
     io::Io,
     keys::ComponentKey,
-    room::{room_key::RoomKey, Room, RoomMut, RoomRef},
+    room::{Room, room_key::RoomKey, RoomMut, RoomRef},
     server_config::ServerConfig,
     tick_manager::TickManager,
-    user::{user_key::UserKey, User, UserMut, UserRef},
+    user::{User, user_key::UserKey, UserMut, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
 };
@@ -132,9 +130,10 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
         );
     }
 
-    /// Check if server is listening for connections
-    pub fn listening_connections(&self) -> bool {
-        self.io.loaded()
+    /// Returns whether or not the Server has initialized correctly and is
+    /// listening for Clients
+    pub fn is_listening(&self) -> bool {
+        self.io.is_loaded()
     }
 
     /// Must be called regularly, maintains connection to and receives messages

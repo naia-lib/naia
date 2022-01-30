@@ -7,19 +7,18 @@ use bevy::{
         world::{Mut, World},
     },
 };
-
+use naia_bevy_shared::WorldProxyMut;
 use naia_client::{Client, Event, ProtocolType};
 
-use naia_bevy_shared::WorldProxyMut;
-
-use super::{
-    components::{Confirmed, Predicted},
-    resource::ClientResource,
-};
 use crate::events::{
     DespawnEntityEvent, DisownEntityEvent, InsertComponentEvent, MessageEvent, NewCommandEvent,
     OwnEntityEvent, RemoveComponentEvent, ReplayCommandEvent, RewindEntityEvent, SpawnEntityEvent,
     UpdateComponentEvent,
+};
+
+use super::{
+    components::{Confirmed, Predicted},
+    resource::ClientResource,
 };
 
 pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
@@ -137,9 +136,9 @@ pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
 
 pub fn should_connect(resource: Res<ClientResource>) -> ShouldRun {
     if resource.connector.is_set() {
-        return ShouldRun::Yes;
+        ShouldRun::Yes
     } else {
-        return ShouldRun::No;
+        ShouldRun::No
     }
 }
 
@@ -149,9 +148,9 @@ pub fn finish_connect(mut resource: ResMut<ClientResource>) {
 
 pub fn should_disconnect(resource: Res<ClientResource>) -> ShouldRun {
     if resource.disconnector.is_set() {
-        return ShouldRun::Yes;
+        ShouldRun::Yes
     } else {
-        return ShouldRun::No;
+        ShouldRun::No
     }
 }
 
@@ -161,9 +160,9 @@ pub fn finish_disconnect(mut resource: ResMut<ClientResource>) {
 
 pub fn should_tick(resource: Res<ClientResource>) -> ShouldRun {
     if resource.ticker.is_set() {
-        return ShouldRun::Yes;
+        ShouldRun::Yes
     } else {
-        return ShouldRun::No;
+        ShouldRun::No
     }
 }
 
@@ -171,8 +170,8 @@ pub fn finish_tick(mut resource: ResMut<ClientResource>) {
     resource.ticker.reset();
 }
 
-pub fn should_do_io<P: ProtocolType>(client: Res<Client<P, Entity>>) -> ShouldRun {
-    if client.connection_exists() {
+pub fn should_receive<P: ProtocolType>(client: Res<Client<P, Entity>>) -> ShouldRun {
+    if client.is_connected() {
         ShouldRun::Yes
     } else {
         ShouldRun::No
