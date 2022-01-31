@@ -1,6 +1,6 @@
 use bevy::ecs::entity::Entity;
 
-use naia_server::{ProtocolType, Replicate, RoomKey, UserKey};
+use naia_server::{Protocolize, Replicate, RoomKey, UserKey};
 
 use super::{
     commands::{DespawnEntity, InsertComponent, OwnEntity, RemoveComponent},
@@ -9,12 +9,12 @@ use super::{
 
 // EntityMut
 
-pub struct EntityMut<'s, 'world, 'state, P: ProtocolType> {
+pub struct EntityMut<'s, 'world, 'state, P: Protocolize> {
     entity: Entity,
     server: &'s mut Server<'world, 'state, P>,
 }
 
-impl<'s, 'world, 'state, P: ProtocolType> EntityMut<'s, 'world, 'state, P> {
+impl<'s, 'world, 'state, P: Protocolize> EntityMut<'s, 'world, 'state, P> {
     pub fn new(entity: Entity, server: &'s mut Server<'world, 'state, P>) -> Self {
         return EntityMut { entity, server };
     }

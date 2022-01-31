@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use naia_socket_shared::PacketReader;
 
 use super::{
-    protocol_type::{ProtocolKindType, ProtocolType},
+    protocolize::{ProtocolKindType, Protocolize},
     replica_builder::ReplicaBuilder,
 };
 
@@ -11,11 +11,11 @@ use super::{
 /// able to map Message/Component TypeIds to their representation within
 /// specified enums. Also is able to create new Messages/Components
 /// using registered Builders, given a specific TypeId.
-pub struct Manifest<P: ProtocolType> {
+pub struct Manifest<P: Protocolize> {
     builder_map: HashMap<P::Kind, Box<dyn ReplicaBuilder<P>>>,
 }
 
-impl<P: ProtocolType> Manifest<P> {
+impl<P: Protocolize> Manifest<P> {
     /// Create a new Manifest
     pub fn new() -> Self {
         Manifest {

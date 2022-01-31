@@ -6,7 +6,7 @@ use bevy::ecs::{
     world::{Mut, World},
 };
 
-use naia_server::{ProtocolType, Server as NaiaServer};
+use naia_server::{Protocolize, Server as NaiaServer};
 
 use naia_bevy_shared::WorldProxyMut;
 
@@ -14,12 +14,12 @@ use super::{commands::Command, server::Server};
 
 // State
 
-pub struct State<P: ProtocolType> {
+pub struct State<P: Protocolize> {
     commands: Vec<Box<dyn Command<P>>>,
     phantom_p: PhantomData<P>,
 }
 
-impl<P: ProtocolType> State<P> {
+impl<P: Protocolize> State<P> {
     pub fn apply(&mut self, world: &mut World) {
         // Have to do this to get around 'world.flush()' only being crate-public
         world.spawn().despawn();
@@ -47,7 +47,7 @@ impl<P: ProtocolType> State<P> {
 }
 
 // SAFE: only local state is accessed
-unsafe impl<P: ProtocolType> SystemParamState for State<P> {
+unsafe impl<P: Protocolize> SystemParamState for State<P> {
     type Config = ();
 
     fn init(_world: &mut World, _system_state: &mut SystemMeta, _config: Self::Config) -> Self {
@@ -64,7 +64,7 @@ unsafe impl<P: ProtocolType> SystemParamState for State<P> {
     fn default_config() {}
 }
 
-impl<'world, 'state, P: ProtocolType> SystemParamFetch<'world, 'state> for State<P> {
+impl<'world, 'state, P: Protocolize> SystemParamFetch<'world, 'state> for State<P> {
     type Item = Server<'world, 'state, P>;
 
     #[inline]

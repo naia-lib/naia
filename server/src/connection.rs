@@ -6,7 +6,7 @@ use std::{
 
 use naia_shared::{
     BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
-    ProtocolType, ReplicateSafe, SequenceNumber, StandardHeader, WorldRefType,
+    Protocolize, ReplicateSafe, SequenceNumber, StandardHeader, WorldRefType,
 };
 
 use super::{
@@ -15,14 +15,14 @@ use super::{
     ping_manager::PingManager, user::user_key::UserKey, world_record::WorldRecord,
 };
 
-pub struct Connection<P: ProtocolType, E: Copy + Eq + Hash> {
+pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     pub user_key: UserKey,
     base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
 }
 
-impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     pub fn new(
         connection_config: &ConnectionConfig,
         user_address: SocketAddr,

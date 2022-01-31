@@ -4,7 +4,7 @@ use naia_server_socket::{NaiaServerSocketError, Packet, PacketReceiver, PacketSe
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
     ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
-    ProtocolKindType, ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
+    ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
     Timestamp, WorldMutType, WorldRefType,
 };
 

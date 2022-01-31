@@ -11,7 +11,7 @@ use naia_server_socket::{Packet, ServerAddrs, Socket};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
     ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
-    ProtocolKindType, ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
+    ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
     Timestamp, WorldMutType, WorldRefType,
 };
 
@@ -37,7 +37,7 @@ use super::{
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
-pub struct Server<P: ProtocolType, E: Copy + Eq + Hash> {
+pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
     // Config
     manifest: Manifest<P>,
     // Connection
@@ -66,7 +66,7 @@ pub struct Server<P: ProtocolType, E: Copy + Eq + Hash> {
     tick_manager: Option<TickManager>,
 }
 
-impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Create a new Server
     pub fn new(mut server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
         server_config.socket_config.link_condition_config =

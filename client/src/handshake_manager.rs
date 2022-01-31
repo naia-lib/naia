@@ -6,7 +6,7 @@ use naia_client_socket::Packet;
 
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
-    ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
+    Protocolize, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };
 
@@ -22,7 +22,7 @@ pub enum HandshakeResult {
     Connected,
 }
 
-pub struct HandshakeManager<P: ProtocolType> {
+pub struct HandshakeManager<P: Protocolize> {
     handshake_timer: Timer,
     pre_connection_timestamp: Option<Timestamp>,
     pre_connection_digest: Option<Box<[u8]>>,
@@ -30,7 +30,7 @@ pub struct HandshakeManager<P: ProtocolType> {
     auth_message: Option<P>,
 }
 
-impl<P: ProtocolType> HandshakeManager<P> {
+impl<P: Protocolize> HandshakeManager<P> {
     pub fn new(send_interval: Duration) -> Self {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();

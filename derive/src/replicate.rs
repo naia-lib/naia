@@ -46,7 +46,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, PacketReader, Replicate, ReplicateSafe, PropertyMutator, ProtocolType, ReplicaDynRef, ReplicaDynMut};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, PacketReader, Replicate, ReplicateSafe, PropertyMutator, Protocolize, ReplicaDynRef, ReplicaDynMut};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
         #property_enum_definition
         pub struct #replica_builder_name {
@@ -63,7 +63,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         impl #replica_name {
             pub fn get_builder() -> Box<dyn ReplicaBuilder<#protocol_name>> {
                 return Box::new(#replica_builder_name {
-                    kind: ProtocolType::kind_of::<#replica_name>(),
+                    kind: Protocolize::kind_of::<#replica_name>(),
                 });
             }
             #new_complete_method
@@ -72,7 +72,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         impl ReplicateSafe<#protocol_name> for #replica_name {
             fn get_diff_mask_size(&self) -> u8 { #diff_mask_size }
             fn get_kind(&self) -> #protocol_kind_name {
-                return ProtocolType::kind_of::<Self>();
+                return Protocolize::kind_of::<Self>();
             }
             #dyn_ref_method
             #dyn_mut_method

@@ -6,7 +6,7 @@ use bevy::ecs::{
     world::{Mut, World},
 };
 
-use naia_client::{Client as NaiaClient, EntityRef, ProtocolType, Replicate};
+use naia_client::{Client as NaiaClient, EntityRef, Protocolize, Replicate};
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
 
@@ -14,13 +14,13 @@ use super::state::State;
 
 // Client
 
-pub struct Client<'a, P: ProtocolType> {
+pub struct Client<'a, P: Protocolize> {
     world: &'a World,
     client: Mut<'a, NaiaClient<P, Entity>>,
     phantom_p: PhantomData<P>,
 }
 
-impl<'a, P: ProtocolType> Client<'a, P> {
+impl<'a, P: Protocolize> Client<'a, P> {
     // Public Methods //
 
     pub fn new(world: &'a World) -> Self {
@@ -99,6 +99,6 @@ impl<'a, P: ProtocolType> Client<'a, P> {
     }
 }
 
-impl<'a, P: ProtocolType> SystemParam for Client<'a, P> {
+impl<'a, P: Protocolize> SystemParam for Client<'a, P> {
     type Fetch = State<P>;
 }

@@ -84,7 +84,7 @@ impl<E: Copy + Eq + Hash> Room<E> {
 
 // room references
 
-use naia_shared::ProtocolType;
+use naia_shared::Protocolize;
 
 use super::server::Server;
 
@@ -92,12 +92,12 @@ use room_key::RoomKey;
 
 // RoomRef
 
-pub struct RoomRef<'s, P: ProtocolType, E: Copy + Eq + Hash> {
+pub struct RoomRef<'s, P: Protocolize, E: Copy + Eq + Hash> {
     server: &'s Server<P, E>,
     key: RoomKey,
 }
 
-impl<'s, P: ProtocolType, E: Copy + Eq + Hash> RoomRef<'s, P, E> {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash> RoomRef<'s, P, E> {
     pub fn new(server: &'s Server<P, E>, key: &RoomKey) -> Self {
         RoomRef { server, key: *key }
     }
@@ -128,12 +128,12 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash> RoomRef<'s, P, E> {
 }
 
 // RoomMut
-pub struct RoomMut<'s, P: ProtocolType, E: Copy + Eq + Hash> {
+pub struct RoomMut<'s, P: Protocolize, E: Copy + Eq + Hash> {
     server: &'s mut Server<P, E>,
     key: RoomKey,
 }
 
-impl<'s, P: ProtocolType, E: Copy + Eq + Hash> RoomMut<'s, P, E> {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash> RoomMut<'s, P, E> {
     pub fn new(server: &'s mut Server<P, E>, key: &RoomKey) -> Self {
         RoomMut { server, key: *key }
     }

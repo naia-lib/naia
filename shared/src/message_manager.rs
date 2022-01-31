@@ -8,21 +8,21 @@ use naia_socket_shared::PacketReader;
 use super::{
     manifest::Manifest,
     packet_notifiable::PacketNotifiable,
-    protocol_type::{ProtocolKindType, ProtocolType},
+    protocolize::{ProtocolKindType, Protocolize},
     replicate::ReplicateSafe,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 #[derive(Debug)]
-pub struct MessageManager<P: ProtocolType> {
+pub struct MessageManager<P: Protocolize> {
     queued_outgoing_messages: VecDeque<(bool, P)>,
     queued_incoming_messages: VecDeque<P>,
     sent_guaranteed_messages: HashMap<u16, Vec<P>>,
     last_popped_message_guarantee: bool,
 }
 
-impl<P: ProtocolType> MessageManager<P> {
+impl<P: Protocolize> MessageManager<P> {
     /// Creates a new MessageManager
     pub fn new() -> Self {
         MessageManager {
@@ -121,7 +121,7 @@ impl<P: ProtocolType> MessageManager<P> {
     }
 }
 
-impl<P: ProtocolType> PacketNotifiable for MessageManager<P> {
+impl<P: Protocolize> PacketNotifiable for MessageManager<P> {
     /// Occurs when a packet has been notified as delivered. Stops tracking the
     /// status of Messages in that packet.
     fn notify_packet_delivered(&mut self, packet_index: u16) {

@@ -6,7 +6,7 @@ cfg_if! {
     }
 }
 
-use naia_client::{Client as NaiaClient, ClientConfig, Event, ProtocolType};
+use naia_client::{Client as NaiaClient, ClientConfig, Event, Protocolize};
 
 use naia_demo_world::{Entity, World as DemoWorld};
 

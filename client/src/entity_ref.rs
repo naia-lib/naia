@@ -1,15 +1,15 @@
 use std::{hash::Hash, marker::PhantomData};
 
-use naia_shared::{ProtocolType, ReplicaRefWrapper, ReplicateSafe, WorldRefType};
+use naia_shared::{Protocolize, ReplicaRefWrapper, ReplicateSafe, WorldRefType};
 
 // EntityRef
-pub struct EntityRef<P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> {
+pub struct EntityRef<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> {
     world: W,
     id: E,
     phantom_p: PhantomData<P>
 }
 
-impl<P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E, W> {
+impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E, W> {
     pub fn new(world: W, key: &E) -> Self {
         EntityRef {
             world,

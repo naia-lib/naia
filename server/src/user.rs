@@ -1,6 +1,6 @@
 use std::{hash::Hash, net::SocketAddr};
 
-use naia_shared::ProtocolType;
+use naia_shared::Protocolize;
 
 use crate::{RoomKey, Server, UserKey};
 
@@ -28,12 +28,12 @@ impl User {
 
 // UserRef
 
-pub struct UserRef<'s, P: ProtocolType, E: Copy + Eq + Hash> {
+pub struct UserRef<'s, P: Protocolize, E: Copy + Eq + Hash> {
     server: &'s Server<P, E>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserRef<'s, P, E> {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash> UserRef<'s, P, E> {
     pub fn new(server: &'s Server<P, E>, key: &UserKey) -> Self {
         UserRef { server, key: *key }
     }
@@ -48,12 +48,12 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserRef<'s, P, E> {
 }
 
 // UserMut
-pub struct UserMut<'s, P: ProtocolType, E: Copy + Eq + Hash> {
+pub struct UserMut<'s, P: Protocolize, E: Copy + Eq + Hash> {
     server: &'s mut Server<P, E>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserMut<'s, P, E> {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash> UserMut<'s, P, E> {
     pub fn new(server: &'s mut Server<P, E>, key: &UserKey) -> Self {
         UserMut { server, key: *key }
     }

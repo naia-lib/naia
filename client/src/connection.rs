@@ -2,7 +2,7 @@ use std::{hash::Hash, net::SocketAddr};
 
 use naia_client_socket::Packet;
 
-use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolType, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType, MessagePacketWriter};
+use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType, MessagePacketWriter};
 
 use super::{
     entity_action::EntityAction, entity_manager::EntityManager,
@@ -10,14 +10,14 @@ use super::{
     tick_manager::TickManager, tick_queue::TickQueue,
 };
 
-pub struct Connection<P: ProtocolType, E: Copy + Eq + Hash> {
+pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
-impl<P: ProtocolType, E: Copy + Eq + Hash> Connection<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
         return Connection {
             base_connection: BaseConnection::new(address, connection_config),

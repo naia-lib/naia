@@ -4,7 +4,7 @@ mod inner {
     use std::marker::PhantomData;
 
     use naia_shared::{
-        DiffMask, PacketReader, ProtocolInserter, ProtocolType, ReplicaDynRefWrapper,
+        DiffMask, PacketReader, ProtocolInserter, Protocolize, ReplicaDynRefWrapper,
         ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
     };
 
@@ -12,11 +12,11 @@ mod inner {
 
     // EmptyWorldRef //
 
-    pub struct EmptyWorldRef<P: ProtocolType> {
+    pub struct EmptyWorldRef<P: Protocolize> {
         phantom: PhantomData<P>,
     }
 
-    impl<P: ProtocolType> EmptyWorldRef<P> {
+    impl<P: Protocolize> EmptyWorldRef<P> {
         pub fn new() -> Self {
             Self {
                 phantom: PhantomData,
@@ -26,11 +26,11 @@ mod inner {
 
     // EmptyWorldMut //
 
-    pub struct EmptyWorldMut<P: ProtocolType> {
+    pub struct EmptyWorldMut<P: Protocolize> {
         phantom: PhantomData<P>,
     }
 
-    impl<P: ProtocolType> EmptyWorldMut<P> {
+    impl<P: Protocolize> EmptyWorldMut<P> {
         pub fn new() -> Self {
             Self {
                 phantom: PhantomData,
@@ -40,7 +40,7 @@ mod inner {
 
     // WorldRefType //
 
-    impl<P: ProtocolType> WorldRefType<P, EmptyEntity> for EmptyWorldRef<P> {
+    impl<P: Protocolize> WorldRefType<P, EmptyEntity> for EmptyWorldRef<P> {
         fn has_entity(&self, _: &EmptyEntity) -> bool {
             unimplemented!()
         }
@@ -73,7 +73,7 @@ mod inner {
         }
     }
 
-    impl<P: ProtocolType> WorldRefType<P, EmptyEntity> for EmptyWorldMut<P> {
+    impl<P: Protocolize> WorldRefType<P, EmptyEntity> for EmptyWorldMut<P> {
         fn has_entity(&self, _: &EmptyEntity) -> bool {
             unimplemented!()
         }
@@ -106,7 +106,7 @@ mod inner {
         }
     }
 
-    impl<P: ProtocolType> WorldMutType<P, EmptyEntity> for EmptyWorldMut<P> {
+    impl<P: Protocolize> WorldMutType<P, EmptyEntity> for EmptyWorldMut<P> {
         fn get_component_mut<R: ReplicateSafe<P>>(
             &mut self,
             _: &EmptyEntity,
@@ -154,7 +154,7 @@ mod inner {
         }
     }
 
-    impl<P: ProtocolType> ProtocolInserter<P, EmptyEntity> for EmptyWorldMut<P> {
+    impl<P: Protocolize> ProtocolInserter<P, EmptyEntity> for EmptyWorldMut<P> {
         fn insert<I: ReplicateSafe<P>>(&mut self, _: &EmptyEntity, _: I) {
             unimplemented!()
         }

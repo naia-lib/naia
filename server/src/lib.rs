@@ -27,7 +27,7 @@ compile_error!("Naia Server requires either the 'use-udp' or 'use-webrtc' featur
 pub use naia_server_socket::ServerAddrs;
 
 pub use naia_shared::{
-    LinkConditionerConfig, ProtocolType, Random, ReplicaMutWrapper, Replicate, SharedConfig,
+    LinkConditionerConfig, Protocolize, Random, ReplicaMutWrapper, Replicate, SharedConfig,
     SocketConfig, WorldMutType, WorldRefType,
 };
 

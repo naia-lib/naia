@@ -7,7 +7,7 @@ use bevy::ecs::{
 };
 
 use naia_server::{
-    EntityRef, Event, NaiaServerError, ProtocolType, Replicate, RoomKey, RoomMut, RoomRef,
+    EntityRef, Event, NaiaServerError, Protocolize, Replicate, RoomKey, RoomMut, RoomRef,
     Server as NaiaServer, ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
@@ -17,14 +17,14 @@ use super::{commands::Command, entity_mut::EntityMut, state::State};
 
 // Server
 
-pub struct Server<'world, 'state, P: ProtocolType> {
+pub struct Server<'world, 'state, P: Protocolize> {
     state: &'state mut State<P>,
     world: &'world World,
     server: Mut<'world, NaiaServer<P, Entity>>,
     phantom_p: PhantomData<P>,
 }
 
-impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
+impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
     // Public Methods //
 
     pub fn new(state: &'state mut State<P>, world: &'world World) -> Self {
@@ -42,7 +42,7 @@ impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
         }
     }
 
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P, Entity>, NaiaServerError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P>, NaiaServerError>> {
         return self.server.receive();
     }
 
@@ -193,6 +193,6 @@ impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
     // Private methods
 }
 
-impl<'world, 'state, P: ProtocolType> SystemParam for Server<'world, 'state, P> {
+impl<'world, 'state, P: Protocolize> SystemParam for Server<'world, 'state, P> {
     type Fetch = State<P>;
 }
