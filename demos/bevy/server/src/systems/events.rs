@@ -98,8 +98,6 @@ pub fn disconnection_event(
         let DisconnectionEvent(user_key, user) = event;
         info!("Naia Server disconnected from: {:?}", user.address);
 
-        server.user_mut(&user_key).leave_room(&global.main_room_key);
-
         if let Some(entity) = global.user_to_prediction_map.remove(&user_key) {
             server
                 .entity_mut(&entity)

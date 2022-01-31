@@ -7,7 +7,6 @@ use bevy::{
         world::{Mut, World},
     },
 };
-
 use naia_server::{Event, ProtocolType, Server};
 
 use super::{
@@ -68,12 +67,20 @@ pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
 
 pub fn should_tick(resource: Res<ServerResource>) -> ShouldRun {
     if resource.ticker.is_set() {
-        return ShouldRun::Yes;
+        ShouldRun::Yes
     } else {
-        return ShouldRun::No;
+        ShouldRun::No
     }
 }
 
 pub fn finish_tick(mut resource: ResMut<ServerResource>) {
     resource.ticker.reset();
+}
+
+pub fn should_receive<P: ProtocolType>(server: Res<Server<P, Entity>>) -> ShouldRun {
+    if server.is_listening() {
+        ShouldRun::Yes
+    } else {
+        ShouldRun::No
+    }
 }

@@ -1,13 +1,13 @@
 use std::panic;
 
 use naia_server_socket::{NaiaServerSocketError, Packet, PacketReceiver, PacketSender};
-
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
     ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
     ProtocolKindType, ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
     Timestamp, WorldMutType, WorldRefType,
 };
+
 
 pub struct Io {
     packet_sender: Option<PacketSender>,
@@ -29,6 +29,10 @@ impl Io {
 
         self.packet_sender = Some(packet_sender);
         self.packet_receiver = Some(packet_receiver);
+    }
+
+    pub fn is_loaded(&self) -> bool {
+        self.packet_sender.is_some()
     }
 
     pub fn send_packet(&self, packet: Packet) {

@@ -18,6 +18,6 @@ wbindgen = [ "naia-client/wbindgen", "naia-hecs-shared/wbindgen" ]
 mquad = [ "naia-client/mquad", "naia-hecs-shared/mquad" ]
 
 [dependencies]
-naia-client = { version = "=0.7.3", path = "../../../client" }
+naia-client = { version = "=0.7.4", path = "../../../client" }
 naia-hecs-shared = { version = "=0.7.3", path = "../shared" }
 hecs = { version = "=0.5.2" }

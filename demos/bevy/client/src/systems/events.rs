@@ -1,18 +1,20 @@
 use bevy::{
     ecs::{
+        event::EventReader,
         query::With,
         system::{Commands, Query},
     },
     log::info,
-    prelude::*,
+    math::Vec2,
+    render::color::Color as BevyColor,
+    sprite::{Sprite, SpriteBundle},
+    transform::components::Transform,
 };
-
 use naia_bevy_client::{
     components::Predicted,
     events::{NewCommandEvent, OwnEntityEvent, ReplayCommandEvent, SpawnEntityEvent},
     Client,
 };
-
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     protocol::{Color, ColorValue, Position, Protocol, ProtocolKind},
@@ -42,12 +44,11 @@ pub fn spawn_entity_event(
                     if let Ok(color) = q_color.get(*entity) {
                         info!("add color to entity");
 
-                        use bevy::prelude::*;
                         let color = {
                             match &color.value.get() {
-                                ColorValue::Red => Color::RED,
-                                ColorValue::Blue => Color::BLUE,
-                                ColorValue::Yellow => Color::YELLOW,
+                                ColorValue::Red => BevyColor::RED,
+                                ColorValue::Blue => BevyColor::BLUE,
+                                ColorValue::Yellow => BevyColor::YELLOW,
                             }
                         };
 

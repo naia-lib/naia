@@ -7,9 +7,7 @@ use std::{
 };
 
 use slotmap::DenseSlotMap;
-
 use naia_server_socket::{Packet, ServerAddrs, Socket};
-
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
     ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
@@ -130,6 +128,12 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
             self.socket.get_packet_sender(),
             self.socket.get_packet_receiver(),
         );
+    }
+
+    /// Returns whether or not the Server has initialized correctly and is
+    /// listening for Clients
+    pub fn is_listening(&self) -> bool {
+        self.io.is_loaded()
     }
 
     /// Must be called regularly, maintains connection to and receives messages

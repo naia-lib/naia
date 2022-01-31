@@ -1,7 +1,6 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use naia_client_socket::{Packet, Socket};
-
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
     ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
@@ -89,6 +88,12 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
         }
     }
 
+    /// Set the auth object to use when setting up a connection with the Server
+    pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
+        self.handshake_manager
+            .set_auth_message(auth.into_protocol());
+    }
+
     /// Connect to the given server address
     pub fn connect(&mut self, server_address: SocketAddr) {
         self.address = Some(server_address);
@@ -99,10 +104,9 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
         );
     }
 
-    /// Set the auth object to use when setting up a connection with the Server
-    pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
-        self.handshake_manager
-            .set_auth_message(auth.into_protocol());
+    /// Returns whether or not a connection has been established with the Server
+    pub fn is_connected(&self) -> bool {
+        self.io.is_loaded()
     }
 
     // Messages
