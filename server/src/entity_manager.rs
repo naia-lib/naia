@@ -10,7 +10,7 @@ use std::{
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    DiffMask, KeyGenerator, LocalComponentKey, LocalEntity, NaiaKey, PacketNotifiable,
+    DiffMask, KeyGenerator, LocalComponentKey, EntityNetId, NaiaKey, PacketNotifiable,
     ProtocolKindType, Protocolize, WorldRefType, MTU_SIZE,
 };
 
@@ -26,9 +26,9 @@ use super::{
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     address: SocketAddr,
     // Entities
-    entity_generator: KeyGenerator<LocalEntity>,
+    entity_generator: KeyGenerator<EntityNetId>,
     entity_records: HashMap<E, LocalEntityRecord>,
-    local_to_global_entity_map: HashMap<LocalEntity, E>,
+    local_to_global_entity_map: HashMap<EntityNetId, E>,
     delayed_entity_deletions: HashSet<E>,
     // Components
     diff_handler: UserDiffHandler,
@@ -219,10 +219,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             }
 
             // then, add entity
-            let local_entity: LocalEntity = self.entity_generator.generate();
+            let local_id: EntityNetId = self.entity_generator.generate();
             self.local_to_global_entity_map
-                .insert(local_entity, *global_entity);
-            let local_entity_record = LocalEntityRecord::new(local_entity);
+                .insert(local_id, *global_entity);
+            let local_entity_record = LocalEntityRecord::new(local_id);
             self.entity_records
                 .insert(*global_entity, local_entity_record);
             self.queued_actions
@@ -365,10 +365,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
         match action {
             EntityAction::SpawnEntity(global_entity, component_list) => {
-                let local_entity = self.entity_records.get(global_entity).unwrap().local_key;
+                let local_id = self.entity_records.get(global_entity).unwrap().entity_net_id;
 
                 action_total_bytes
-                    .write_u16::<BigEndian>(local_entity.to_u16())
+                    .write_u16::<BigEndian>(local_id.to_u16())
                     .unwrap(); //write local entity
 
                 // get list of components
@@ -404,13 +404,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
             }
             EntityAction::DespawnEntity(global_entity) => {
-                let local_entity = self.entity_records.get(global_entity).unwrap().local_key;
+                let local_id = self.entity_records.get(global_entity).unwrap().entity_net_id;
                 action_total_bytes
-                    .write_u16::<BigEndian>(local_entity.to_u16())
+                    .write_u16::<BigEndian>(local_id.to_u16())
                     .unwrap(); //write local entity
             }
             EntityAction::InsertComponent(global_entity, global_component_key, component_kind) => {
-                let local_entity = self.entity_records.get(global_entity).unwrap().local_key;
+                let local_id = self.entity_records.get(global_entity).unwrap().entity_net_id;
                 let local_component_key = self
                     .component_records
                     .get(global_component_key)
@@ -427,7 +427,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                 //Write component "header"
                 action_total_bytes
-                    .write_u16::<BigEndian>(local_entity.to_u16())
+                    .write_u16::<BigEndian>(local_id.to_u16())
                     .unwrap(); //write local entity
                 action_total_bytes
                     .write_u16::<BigEndian>(component_kind.to_u16())
@@ -713,13 +713,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             }
                         }
                         EntityAction::DespawnEntity(global_entity) => {
-                            let local_entity =
-                                self.entity_records.get(&global_entity).unwrap().local_key;
+                            let local_id =
+                                self.entity_records.get(&global_entity).unwrap().entity_net_id;
 
                             // actually delete the entity from local records
                             self.entity_records.remove(&global_entity);
-                            self.local_to_global_entity_map.remove(&local_entity);
-                            self.entity_generator.recycle_key(&local_entity);
+                            self.local_to_global_entity_map.remove(&local_id);
+                            self.entity_generator.recycle_key(&local_id);
 
                             // delete all components associated with entity
                             for global_component_key in

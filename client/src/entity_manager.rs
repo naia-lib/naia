@@ -6,7 +6,7 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    DiffMask, EntityActionType, LocalComponentKey, LocalEntity, Manifest, NaiaKey, PacketReader,
+    DiffMask, EntityActionType, LocalComponentKey, EntityNetId, Manifest, NaiaKey, PacketReader,
     ProtocolKindType, Protocolize, WorldMutType,
 };
 
@@ -16,7 +16,7 @@ use super::{
 
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
-    local_to_world_entity: HashMap<LocalEntity, E>,
+    local_to_world_entity: HashMap<EntityNetId, E>,
     component_to_entity_map: HashMap<LocalComponentKey, E>,
     queued_incoming_messages: VecDeque<EntityAction<P, E>>,
 }
@@ -46,9 +46,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             match message_type {
                 EntityActionType::SpawnEntity => {
                     // Entity Creation
-                    let local_entity = LocalEntity::from_u16(reader.read_u16());
+                    let local_id = EntityNetId::from_u16(reader.read_u16());
                     let components_num = reader.read_u8();
-                    if self.local_to_world_entity.contains_key(&local_entity) {
+                    if self.local_to_world_entity.contains_key(&local_id) {
                         // its possible we received a very late duplicate message
                         warn!("attempted to insert duplicate entity");
                         // continue reading, just don't do anything with the data
@@ -61,9 +61,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                         // set up entity
                         let world_entity = world.spawn_entity();
                         self.local_to_world_entity
-                            .insert(local_entity, world_entity);
+                            .insert(local_id, world_entity);
                         self.entity_records
-                            .insert(world_entity, EntityRecord::new());
+                            .insert(world_entity, EntityRecord::new(local_id));
                         let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
 
                         let mut component_list: Vec<P::Kind> = Vec::new();
@@ -98,8 +98,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
                 EntityActionType::DespawnEntity => {
                     // Entity Deletion
-                    let local_entity = LocalEntity::from_u16(reader.read_u16());
-                    if let Some(world_entity) = self.local_to_world_entity.remove(&local_entity) {
+                    let local_id = EntityNetId::from_u16(reader.read_u16());
+                    if let Some(world_entity) = self.local_to_world_entity.remove(&local_id) {
                         if let Some(entity_record) = self.entity_records.remove(&world_entity) {
 
                             // Generate event for each component, handing references off just in
@@ -129,7 +129,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
                 EntityActionType::InsertComponent => {
                     // Add Component to Entity
-                    let local_entity = LocalEntity::from_u16(reader.read_u16());
+                    let local_id = EntityNetId::from_u16(reader.read_u16());
                     let component_kind = P::Kind::from_u16(reader.read_u16());
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
@@ -140,19 +140,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                         warn!(
                             "attempting to add duplicate local component key: {}, into entity: {}",
                             component_key.to_u16(),
-                            local_entity.to_u16()
+                            local_id.to_u16()
                         );
                     } else {
-                        if !self.local_to_world_entity.contains_key(&local_entity) {
+                        if !self.local_to_world_entity.contains_key(&local_id) {
                             // its possible we received a very late duplicate message
                             warn!(
                                 "attempting to add a component: {}, to nonexistent entity: {}",
                                 component_key.to_u16(),
-                                local_entity.to_u16()
+                                local_id.to_u16()
                             );
                         } else {
                             let world_entity =
-                                self.local_to_world_entity.get(&local_entity).unwrap();
+                                self.local_to_world_entity.get(&local_id).unwrap();
                             self.component_to_entity_map
                                 .insert(component_key, *world_entity);
 
@@ -243,5 +243,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
     pub fn pop_incoming_message(&mut self) -> Option<EntityAction<P, E>> {
         return self.queued_incoming_messages.pop_front();
+    }
+
+    pub fn entity_net_id(
+        &self,
+        entity: &E,
+    ) -> EntityNetId {
+        return self.entity_records.get(entity).unwrap().entity_net_id;
+    }
+
+    pub fn entity_from_net_id(
+        &self,
+        entity_net_id: &EntityNetId,
+    ) -> E {
+        return *self.local_to_world_entity.get(entity_net_id).unwrap();
     }
 }
