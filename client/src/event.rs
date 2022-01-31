@@ -1,9 +1,9 @@
-use naia_shared::ProtocolType;
+use naia_shared::Protocolize;
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
 #[derive(Debug)]
-pub enum Event<P: ProtocolType, E: Copy> {
+pub enum Event<P: Protocolize, E: Copy> {
     /// Occurs when the Client has successfully established a connection with
     /// the Server
     Connection,

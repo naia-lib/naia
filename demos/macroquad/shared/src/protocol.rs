@@ -1,4 +1,4 @@
-use naia_derive::ProtocolType;
+use naia_derive::Protocolize;
 
 mod auth;
 mod key_command;
@@ -8,7 +8,7 @@ pub use auth::Auth;
 pub use key_command::KeyCommand;
 pub use square::{Color, Square};
 
-#[derive(ProtocolType)]
+#[derive(Protocolize)]
 pub enum Protocol {
     Auth(Auth),
     KeyCommand(KeyCommand),

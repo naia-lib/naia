@@ -3,30 +3,30 @@ use naia_socket_shared::PacketReader;
 use crate::{
     diff_mask::DiffMask,
     property_mutate::PropertyMutator,
-    protocol_type::ProtocolType,
+    protocolize::Protocolize,
     replica_ref::{ReplicaDynMut, ReplicaDynRef},
 };
 
-/// A struct that implements ReplicateSafe is a Message/Component, or otherwise,
+/// A struct that implements Replicate is a Message/Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a
 /// remote host
-pub trait Replicate<P: ProtocolType>: ReplicateSafe<P> {
+pub trait Replicate<P: Protocolize>: ReplicateSafe<P> {
     /// Returns a clone of self
     fn clone(&self) -> Self;
 }
 
-/// The part of ReplicateSafe which is object-safe
-pub trait ReplicateSafe<P: ProtocolType>: ReplicateInner {
+/// The part of Replicate which is object-safe
+pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     /// Gets the TypeId of the Message/Component, used to map to a
-    /// registered ProtocolType
+    /// registered Protocolize
     fn get_kind(&self) -> P::Kind;
     /// Gets the number of bytes of the Message/Component's DiffMask
     fn get_diff_mask_size(&self) -> u8;
     /// Get an immutable reference to the inner Component/Message as a
-    /// ReplicateSafe trait object
+    /// Replicate trait object
     fn dyn_ref(&self) -> ReplicaDynRef<'_, P>;
     /// Get an mutable reference to the inner Component/Message as a
-    /// ReplicateSafe trait object
+    /// Replicate trait object
     fn dyn_mut(&mut self) -> ReplicaDynMut<'_, P>;
     /// Returns self as a Protocol
     fn into_protocol(self) -> P;

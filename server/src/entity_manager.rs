@@ -11,7 +11,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
     DiffMask, KeyGenerator, LocalComponentKey, LocalEntity, NaiaKey, PacketNotifiable,
-    ProtocolKindType, ProtocolType, WorldRefType, MTU_SIZE,
+    ProtocolKindType, Protocolize, WorldRefType, MTU_SIZE,
 };
 
 use super::{
@@ -23,7 +23,7 @@ use super::{
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
-pub struct EntityManager<P: ProtocolType, E: Copy + Eq + Hash> {
+pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     address: SocketAddr,
     // Entities
     entity_generator: KeyGenerator<LocalEntity>,
@@ -47,7 +47,7 @@ pub struct EntityManager<P: ProtocolType, E: Copy + Eq + Hash> {
     delivered_packets: VecDeque<u16>,
 }
 
-impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     /// Create a new EntityManager, given the client's address
     pub fn new(address: SocketAddr, diff_handler: &Arc<RwLock<GlobalDiffHandler>>) -> Self {
         EntityManager {
@@ -761,7 +761,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 }
 
-impl<P: ProtocolType, E: Copy + Eq + Hash> PacketNotifiable for EntityManager<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash> PacketNotifiable for EntityManager<P, E> {
     fn notify_packet_delivered(&mut self, packet_index: u16) {
         self.delivered_packets.push_back(packet_index);
     }
@@ -815,7 +815,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> PacketNotifiable for EntityManager<P,
     }
 }
 
-fn component_delete<P: ProtocolType, E: Copy>(
+fn component_delete<P: Protocolize, E: Copy>(
     queued_actions: &mut VecDeque<EntityAction<P, E>>,
     record: &mut LocalComponentRecord,
     component_key: &ComponentKey,
@@ -825,7 +825,7 @@ fn component_delete<P: ProtocolType, E: Copy>(
     queued_actions.push_back(EntityAction::RemoveComponent(*component_key));
 }
 
-fn entity_delete<P: ProtocolType, E: Copy>(
+fn entity_delete<P: Protocolize, E: Copy>(
     queued_actions: &mut VecDeque<EntityAction<P, E>>,
     entity_record: &mut LocalEntityRecord,
     entity: &E,

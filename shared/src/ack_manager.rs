@@ -4,7 +4,7 @@ use super::{
     message_manager::MessageManager,
     packet_notifiable::PacketNotifiable,
     packet_type::PacketType,
-    protocol_type::ProtocolType,
+    protocolize::Protocolize,
     sequence_buffer::{SequenceBuffer, SequenceNumber},
     standard_header::StandardHeader,
     wrapping_number::sequence_greater_than,
@@ -47,7 +47,7 @@ impl AckManager {
 
     /// Process an incoming packet, handle notifications of delivered / dropped
     /// packets
-    pub fn process_incoming<P: ProtocolType>(
+    pub fn process_incoming<P: Protocolize>(
         &mut self,
         header: &StandardHeader,
         message_manager: &mut MessageManager<P>,
@@ -123,7 +123,7 @@ impl AckManager {
         self.sequence_number = self.sequence_number.wrapping_add(1);
     }
 
-    fn notify_packet_delivered<P: ProtocolType>(
+    fn notify_packet_delivered<P: Protocolize>(
         &self,
         packet_sequence_number: u16,
         message_manager: &mut MessageManager<P>,
@@ -135,7 +135,7 @@ impl AckManager {
         }
     }
 
-    fn notify_packet_dropped<P: ProtocolType>(
+    fn notify_packet_dropped<P: Protocolize>(
         &self,
         packet_sequence_number: u16,
         message_manager: &mut MessageManager<P>,

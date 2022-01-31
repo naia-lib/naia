@@ -1,15 +1,15 @@
 use std::{any::Any, collections::HashMap};
 
-use naia_shared::{ProtocolType, ReplicateSafe};
+use naia_shared::{Protocolize, ReplicateSafe};
 
 use super::component_access::{ComponentAccess, ComponentAccessor};
 
 #[derive(Debug)]
-pub struct WorldData<P: ProtocolType> {
+pub struct WorldData<P: Protocolize> {
     kind_to_accessor_map: HashMap<P::Kind, Box<dyn Any>>,
 }
 
-impl<P: ProtocolType> WorldData<P> {
+impl<P: Protocolize> WorldData<P> {
     pub fn new() -> Self {
         WorldData {
             kind_to_accessor_map: HashMap::new(),
@@ -36,5 +36,5 @@ impl<P: ProtocolType> WorldData<P> {
     }
 }
 
-unsafe impl<P: ProtocolType> Send for WorldData<P> {}
-unsafe impl<P: ProtocolType> Sync for WorldData<P> {}
+unsafe impl<P: Protocolize> Send for WorldData<P> {}
+unsafe impl<P: Protocolize> Sync for WorldData<P> {}

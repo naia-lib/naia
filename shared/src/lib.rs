@@ -26,7 +26,7 @@ mod packet_notifiable;
 mod packet_type;
 mod property;
 mod property_mutate;
-mod protocol_type;
+mod protocolize;
 mod replica_builder;
 mod replica_ref;
 mod replicate;
@@ -58,7 +58,7 @@ pub use packet_notifiable::PacketNotifiable;
 pub use packet_type::PacketType;
 pub use property::Property;
 pub use property_mutate::{PropertyMutate, PropertyMutator};
-pub use protocol_type::{ProtocolInserter, ProtocolKindType, ProtocolType};
+pub use protocolize::{ProtocolInserter, ProtocolKindType, Protocolize};
 pub use replica_builder::ReplicaBuilder;
 pub use replica_ref::{
     ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef, ReplicaDynRefTrait,

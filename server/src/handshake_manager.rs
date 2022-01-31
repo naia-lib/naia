@@ -8,27 +8,27 @@ use naia_server_socket::Packet;
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
     ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
-    ProtocolKindType, ProtocolType, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
+    ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
     Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{connection::Connection, io::Io, world_record::WorldRecord};
 
-pub enum HandshakeResult<P: ProtocolType> {
+pub enum HandshakeResult<P: Protocolize> {
     None,
     DisconnectUser,
     AuthUser(P),
     ConnectUser,
 }
 
-pub struct HandshakeManager<P: ProtocolType> {
+pub struct HandshakeManager<P: Protocolize> {
     connection_hash_key: hmac::Key,
     require_auth: bool,
     address_to_timestamp_map: HashMap<SocketAddr, Timestamp>,
     phantom: PhantomData<P>,
 }
 
-impl<P: ProtocolType> HandshakeManager<P> {
+impl<P: Protocolize> HandshakeManager<P> {
     pub fn new(require_auth: bool) -> Self {
         let connection_hash_key =
             hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();

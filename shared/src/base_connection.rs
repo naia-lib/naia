@@ -6,13 +6,13 @@ use crate::{message_manager::MessageManager, wrapping_number::wrapping_diff};
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
-    packet_notifiable::PacketNotifiable, packet_type::PacketType, protocol_type::ProtocolType,
+    packet_notifiable::PacketNotifiable, packet_type::PacketType, protocolize::Protocolize,
     replicate::ReplicateSafe, sequence_buffer::SequenceNumber, standard_header::StandardHeader,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
-pub struct BaseConnection<P: ProtocolType> {
+pub struct BaseConnection<P: Protocolize> {
     address: SocketAddr,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
@@ -21,7 +21,7 @@ pub struct BaseConnection<P: ProtocolType> {
     last_received_tick: u16,
 }
 
-impl<P: ProtocolType> BaseConnection<P> {
+impl<P: Protocolize> BaseConnection<P> {
     /// Create a new BaseConnection, given the appropriate underlying managers
     pub fn new(address: SocketAddr, config: &ConnectionConfig) -> Self {
         return BaseConnection {

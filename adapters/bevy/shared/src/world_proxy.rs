@@ -4,7 +4,7 @@ use bevy::ecs::{
 };
 
 use naia_shared::{
-    DiffMask, PacketReader, ProtocolInserter, ProtocolKindType, ProtocolType, ReplicaDynRefWrapper,
+    DiffMask, PacketReader, ProtocolInserter, ProtocolKindType, Protocolize, ReplicaDynRefWrapper,
     ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe, WorldMutType, WorldRefType,
 };
 
@@ -49,7 +49,7 @@ impl<'w> WorldRef<'w> {
     }
 }
 
-impl<'w, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldRef<'w> {
+impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldRef<'w> {
     fn has_entity(&self, entity: &Entity) -> bool {
         return has_entity(self.world, entity);
     }
@@ -94,7 +94,7 @@ impl<'w> WorldMut<'w> {
     }
 }
 
-impl<'w, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldMut<'w> {
+impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
     fn has_entity(&self, entity: &Entity) -> bool {
         return has_entity(self.world, entity);
     }
@@ -127,7 +127,7 @@ impl<'w, P: 'static + ProtocolType> WorldRefType<P, Entity> for WorldMut<'w> {
     }
 }
 
-impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
+impl<'w, P: 'static + Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
     fn spawn_entity(&mut self) -> Entity {
         let entity = self.world.spawn().id();
 
@@ -236,7 +236,7 @@ impl<'w, P: 'static + ProtocolType> WorldMutType<P, Entity> for WorldMut<'w> {
     }
 }
 
-impl<'w, P: ProtocolType> ProtocolInserter<P, Entity> for WorldMut<'w> {
+impl<'w, P: Protocolize> ProtocolInserter<P, Entity> for WorldMut<'w> {
     fn insert<I: ReplicateSafe<P>>(&mut self, entity: &Entity, impl_ref: I) {
         self.insert_component::<I>(entity, impl_ref);
     }
@@ -248,16 +248,16 @@ fn has_entity(world: &World, entity: &Entity) -> bool {
     return world.get_entity(*entity).is_some();
 }
 
-fn entities<P: ProtocolType>(world: &World) -> Vec<Entity> {
+fn entities<P: Protocolize>(world: &World) -> Vec<Entity> {
     let world_data = get_world_data::<P>(world);
     return world_data.get_entities();
 }
 
-fn has_component<P: ProtocolType, R: ReplicateSafe<P>>(world: &World, entity: &Entity) -> bool {
+fn has_component<P: Protocolize, R: ReplicateSafe<P>>(world: &World, entity: &Entity) -> bool {
     return world.get::<R>(*entity).is_some();
 }
 
-fn has_component_of_kind<P: ProtocolType>(
+fn has_component_of_kind<P: Protocolize>(
     world: &World,
     entity: &Entity,
     component_kind: &P::Kind,
@@ -267,7 +267,7 @@ fn has_component_of_kind<P: ProtocolType>(
         .contains_type_id(component_kind.to_type_id());
 }
 
-fn get_component<'a, P: ProtocolType, R: ReplicateSafe<P>>(
+fn get_component<'a, P: Protocolize, R: ReplicateSafe<P>>(
     world: &'a World,
     entity: &Entity,
 ) -> Option<ReplicaRefWrapper<'a, P, R>> {
@@ -279,7 +279,7 @@ fn get_component<'a, P: ProtocolType, R: ReplicateSafe<P>>(
     return None;
 }
 
-fn get_component_of_kind<'a, P: ProtocolType>(
+fn get_component_of_kind<'a, P: Protocolize>(
     world: &'a World,
     entity: &Entity,
     component_kind: &P::Kind,
@@ -291,13 +291,13 @@ fn get_component_of_kind<'a, P: ProtocolType>(
     return None;
 }
 
-fn get_world_data<P: ProtocolType>(world: &World) -> &WorldData<P> {
+fn get_world_data<P: Protocolize>(world: &World) -> &WorldData<P> {
     return world
         .get_resource::<WorldData<P>>()
         .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
 }
 
-fn get_world_data_unchecked_mut<P: ProtocolType>(world: &World) -> Mut<WorldData<P>> {
+fn get_world_data_unchecked_mut<P: Protocolize>(world: &World) -> Mut<WorldData<P>> {
     unsafe {
         return world
             .get_resource_unchecked_mut::<WorldData<P>>()

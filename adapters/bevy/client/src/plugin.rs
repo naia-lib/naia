@@ -5,7 +5,7 @@ use bevy::{
     ecs::schedule::SystemStage,
     prelude::*,
 };
-use naia_client::{Client, ClientConfig, ProtocolType, SharedConfig};
+use naia_client::{Client, ClientConfig, Protocolize, SharedConfig};
 use naia_bevy_shared::WorldData;
 
 use crate::systems::should_receive;
@@ -24,12 +24,12 @@ use super::{
     },
 };
 
-struct PluginConfig<P: ProtocolType> {
+struct PluginConfig<P: Protocolize> {
     client_config: ClientConfig,
     shared_config: SharedConfig<P>,
 }
 
-impl<P: ProtocolType> PluginConfig<P> {
+impl<P: Protocolize> PluginConfig<P> {
     pub fn new(client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
         PluginConfig {
             client_config,
@@ -38,11 +38,11 @@ impl<P: ProtocolType> PluginConfig<P> {
     }
 }
 
-pub struct Plugin<P: ProtocolType> {
+pub struct Plugin<P: Protocolize> {
     config: Mutex<Option<PluginConfig<P>>>,
 }
 
-impl<P: ProtocolType> Plugin<P> {
+impl<P: Protocolize> Plugin<P> {
     pub fn new(client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
         let config = PluginConfig::new(client_config, shared_config);
         return Plugin {
@@ -51,7 +51,7 @@ impl<P: ProtocolType> Plugin<P> {
     }
 }
 
-impl<P: ProtocolType> PluginType for Plugin<P> {
+impl<P: Protocolize> PluginType for Plugin<P> {
     fn build(&self, app: &mut App) {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
         let client = Client::<P, Entity>::new(config.client_config, config.shared_config);

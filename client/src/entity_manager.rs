@@ -7,21 +7,21 @@ use log::warn;
 
 use naia_shared::{
     DiffMask, EntityActionType, LocalComponentKey, LocalEntity, Manifest, NaiaKey, PacketReader,
-    ProtocolKindType, ProtocolType, WorldMutType,
+    ProtocolKindType, Protocolize, WorldMutType,
 };
 
 use super::{
     entity_action::EntityAction, entity_record::EntityRecord,
 };
 
-pub struct EntityManager<P: ProtocolType, E: Copy + Eq + Hash> {
+pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
     local_to_world_entity: HashMap<LocalEntity, E>,
     component_to_entity_map: HashMap<LocalComponentKey, E>,
     queued_incoming_messages: VecDeque<EntityAction<P, E>>,
 }
 
-impl<P: ProtocolType, E: Copy + Eq + Hash> EntityManager<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     pub fn new() -> Self {
         EntityManager {
             local_to_world_entity: HashMap::new(),

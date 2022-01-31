@@ -1,5 +1,5 @@
 use naia_server::{
-    Event, ProtocolType, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldRefType,
+    Event, Protocolize, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldRefType,
 };
 
 use naia_demo_world::{Entity, World as DemoWorld};
@@ -20,7 +20,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new<P: ProtocolType>() -> Self {
+    pub fn new<P: Protocolize>() -> Self {
         info!("Basic Naia Server Demo started");
 
         let server_addresses = ServerAddrs::new(

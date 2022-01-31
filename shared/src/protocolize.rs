@@ -7,26 +7,26 @@ use super::{
 
 /// An Enum with a variant for every Component/Message that can be sent
 /// between Client/Host
-pub trait ProtocolType: Sized + Sync + Send + 'static {
+pub trait Protocolize: Sized + Sync + Send + 'static {
     type Kind: ProtocolKindType;
 
-    /// Get kind of ReplicateSafe type
+    /// Get kind of Replicate type
     fn kind_of<R: ReplicateSafe<Self>>() -> Self::Kind;
     /// Get kind from a type_id
     fn type_to_kind(type_id: TypeId) -> Self::Kind;
     /// Get an immutable reference to the inner Component/Message as a
-    /// ReplicateSafe trait object
+    /// Replicate trait object
     fn dyn_ref(&self) -> ReplicaDynRef<'_, Self>;
     /// Get an mutable reference to the inner Component/Message as a
-    /// ReplicateSafe trait object
+    /// Replicate trait object
     fn dyn_mut(&mut self) -> ReplicaDynMut<'_, Self>;
-    /// Cast to a ReplicateSafe impl
+    /// Cast to a Replicate impl
     fn cast<R: Replicate<Self>>(self) -> Option<R>;
     /// Cast to a typed immutable reference to the inner Component/Message
     fn cast_ref<R: ReplicateSafe<Self>>(&self) -> Option<&R>;
     /// Cast to a typed mutable reference to the inner Component/Message
     fn cast_mut<R: ReplicateSafe<Self>>(&mut self) -> Option<&mut R>;
-    /// Extract an inner ReplicateSafe impl from the ProtocolType into a
+    /// Extract an inner Replicate impl from the Protocolize into a
     /// ProtocolInserter impl
     fn extract_and_insert<N, X: ProtocolInserter<Self, N>>(&self, entity: &N, inserter: &mut X);
     /// Returns a clone of self
@@ -39,6 +39,6 @@ pub trait ProtocolKindType: Eq + Hash + Copy + Send + Sync {
     fn to_type_id(&self) -> TypeId;
 }
 
-pub trait ProtocolInserter<P: ProtocolType, N> {
+pub trait ProtocolInserter<P: Protocolize, N> {
     fn insert<R: ReplicateSafe<P>>(&mut self, entity: &N, component: R);
 }

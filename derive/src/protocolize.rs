@@ -2,7 +2,7 @@ use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, Data, DeriveInput, Ident};
 
-pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let protocol_name = input.ident;
@@ -24,7 +24,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}, sync::RwLock, collections::HashMap};
-        use naia_shared::{ProtocolType, ProtocolInserter, ProtocolKindType, ReplicateSafe,
+        use naia_shared::{Protocolize, ProtocolInserter, ProtocolKindType, ReplicateSafe,
             DiffMask, PacketReader, ReplicaDynRef, ReplicaDynMut, Replicate, Manifest};
 
         #kind_enum_def
@@ -33,7 +33,7 @@ pub fn protocol_type_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
             #load_method
         }
 
-        impl ProtocolType for #protocol_name {
+        impl Protocolize for #protocol_name {
             type Kind = #kind_enum_name;
             #kind_of_method
             #type_to_kind_method

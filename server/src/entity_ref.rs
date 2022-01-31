@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, hash::Hash};
 
 use naia_shared::{
-    ProtocolType, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType,
+    Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType,
     WorldRefType,
 };
 
@@ -10,13 +10,13 @@ use super::{room::room_key::RoomKey, server::Server};
 // EntityRef
 
 /// A reference to an Entity being tracked by the Server
-pub struct EntityRef<P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> {
+pub struct EntityRef<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> {
     phantom_p: PhantomData<P>,
     world: W,
     id: E,
 }
 
-impl<P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E, W> {
+impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E, W> {
     /// Return a new EntityRef
     pub(crate) fn new(world: W, key: &E) -> Self {
         EntityRef {
@@ -45,13 +45,13 @@ impl<P: ProtocolType, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E
 }
 
 // EntityMut
-pub struct EntityMut<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldMutType<P, E>> {
+pub struct EntityMut<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> {
     server: &'s mut Server<P, E>,
     world: W,
     id: E,
 }
 
-impl<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<'s, P, E, W> {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<'s, P, E, W> {
     pub(crate) fn new(server: &'s mut Server<P, E>, world: W, key: &E) -> Self {
         EntityMut {
             server,
@@ -118,12 +118,12 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<
 }
 
 // WorldlessEntityMut
-pub struct WorldlessEntityMut<'s, P: ProtocolType, E: Copy + Eq + Hash> {
+pub struct WorldlessEntityMut<'s, P: Protocolize, E: Copy + Eq + Hash> {
     server: &'s mut Server<P, E>,
     id: E,
 }
 
-impl<'s, P: ProtocolType, E: Copy + Eq + Hash> WorldlessEntityMut<'s, P, E> {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash> WorldlessEntityMut<'s, P, E> {
     pub(crate) fn new(server: &'s mut Server<P, E>, key: &E) -> Self {
         WorldlessEntityMut { server, id: *key }
     }

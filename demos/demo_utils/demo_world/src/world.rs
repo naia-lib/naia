@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use slotmap::DenseSlotMap;
 
 use naia_shared::{
-    DiffMask, PacketReader, ProtocolInserter, ProtocolType, ReplicaDynMutWrapper,
+    DiffMask, PacketReader, ProtocolInserter, Protocolize, ReplicaDynMutWrapper,
     ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
     WorldMutType, WorldRefType,
 };
@@ -19,11 +19,11 @@ use super::{
 /// use to store Entities/Components.
 /// It's recommended to use this only when you do not have another ECS library's
 /// own World available.
-pub struct World<P: ProtocolType> {
+pub struct World<P: Protocolize> {
     pub entities: DenseSlotMap<Entity, HashMap<P::Kind, P>>,
 }
 
-impl<P: ProtocolType> World<P> {
+impl<P: Protocolize> World<P> {
     /// Create a new default World
     pub fn new() -> Self {
         World {
@@ -44,11 +44,11 @@ impl<P: ProtocolType> World<P> {
 
 // WorldRef //
 
-pub struct WorldRef<'w, P: ProtocolType> {
+pub struct WorldRef<'w, P: Protocolize> {
     world: &'w World<P>,
 }
 
-impl<'w, P: ProtocolType> WorldRef<'w, P> {
+impl<'w, P: Protocolize> WorldRef<'w, P> {
     pub fn new(world: &'w World<P>) -> Self {
         WorldRef { world }
     }
@@ -56,11 +56,11 @@ impl<'w, P: ProtocolType> WorldRef<'w, P> {
 
 // WorldMut //
 
-pub struct WorldMut<'w, P: ProtocolType> {
+pub struct WorldMut<'w, P: Protocolize> {
     world: &'w mut World<P>,
 }
 
-impl<'w, P: ProtocolType> WorldMut<'w, P> {
+impl<'w, P: Protocolize> WorldMut<'w, P> {
     pub fn new(world: &'w mut World<P>) -> Self {
         WorldMut { world }
     }
@@ -68,7 +68,7 @@ impl<'w, P: ProtocolType> WorldMut<'w, P> {
 
 // WorldRefType //
 
-impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, P> {
+impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w, P> {
     fn has_entity(&self, entity: &Entity) -> bool {
         return has_entity(self.world, entity);
     }
@@ -101,7 +101,7 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldRef<'w, P> {
     }
 }
 
-impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, P> {
+impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w, P> {
     fn has_entity(&self, entity: &Entity) -> bool {
         return has_entity(self.world, entity);
     }
@@ -134,13 +134,13 @@ impl<'w, P: ProtocolType> WorldRefType<P, Entity> for WorldMut<'w, P> {
     }
 }
 
-impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
+impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
     fn get_component_mut<R: ReplicateSafe<P>>(
         &mut self,
         entity: &Entity,
     ) -> Option<ReplicaMutWrapper<P, R>> {
         if let Some(component_map) = self.world.entities.get_mut(*entity) {
-            if let Some(component_protocol) = component_map.get_mut(&ProtocolType::kind_of::<R>()) {
+            if let Some(component_protocol) = component_map.get_mut(&Protocolize::kind_of::<R>()) {
                 if let Some(raw_ref) = component_protocol.cast_mut::<R>() {
                     let wrapper = ComponentMut::<P, R>::new(raw_ref);
                     let wrapped_ref = ReplicaMutWrapper::new(wrapper);
@@ -216,7 +216,7 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
     fn insert_component<R: ReplicateSafe<P>>(&mut self, entity: &Entity, component_ref: R) {
         if let Some(component_map) = self.world.entities.get_mut(*entity) {
             let protocol = component_ref.into_protocol();
-            let component_kind = ProtocolType::kind_of::<R>();
+            let component_kind = Protocolize::kind_of::<R>();
             if component_map.contains_key(&component_kind) {
                 panic!("Entity already has a Component of that type!");
             }
@@ -226,7 +226,7 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
 
     fn remove_component<R: Replicate<P>>(&mut self, entity: &Entity) -> Option<R> {
         if let Some(component_map) = self.world.entities.get_mut(*entity) {
-            if let Some(protocol) = component_map.remove(&ProtocolType::kind_of::<R>()) {
+            if let Some(protocol) = component_map.remove(&Protocolize::kind_of::<R>()) {
                 return protocol.cast::<R>();
             }
         }
@@ -242,7 +242,7 @@ impl<'w, P: ProtocolType> WorldMutType<P, Entity> for WorldMut<'w, P> {
     }
 }
 
-impl<'w, P: ProtocolType> ProtocolInserter<P, Entity> for WorldMut<'w, P> {
+impl<'w, P: Protocolize> ProtocolInserter<P, Entity> for WorldMut<'w, P> {
     fn insert<I: ReplicateSafe<P>>(&mut self, entity: &Entity, impl_ref: I) {
         self.insert_component::<I>(entity, impl_ref);
     }
@@ -250,11 +250,11 @@ impl<'w, P: ProtocolType> ProtocolInserter<P, Entity> for WorldMut<'w, P> {
 
 // private methods //
 
-fn has_entity<P: ProtocolType>(world: &World<P>, entity: &Entity) -> bool {
+fn has_entity<P: Protocolize>(world: &World<P>, entity: &Entity) -> bool {
     return world.entities.contains_key(*entity);
 }
 
-fn entities<P: ProtocolType>(world: &World<P>) -> Vec<Entity> {
+fn entities<P: Protocolize>(world: &World<P>) -> Vec<Entity> {
     let mut output = Vec::new();
 
     for (key, _) in &world.entities {
@@ -264,15 +264,15 @@ fn entities<P: ProtocolType>(world: &World<P>) -> Vec<Entity> {
     return output;
 }
 
-fn has_component<P: ProtocolType, R: ReplicateSafe<P>>(world: &World<P>, entity: &Entity) -> bool {
+fn has_component<P: Protocolize, R: ReplicateSafe<P>>(world: &World<P>, entity: &Entity) -> bool {
     if let Some(component_map) = world.entities.get(*entity) {
-        return component_map.contains_key(&ProtocolType::kind_of::<R>());
+        return component_map.contains_key(&Protocolize::kind_of::<R>());
     }
 
     return false;
 }
 
-fn has_component_of_type<P: ProtocolType>(
+fn has_component_of_type<P: Protocolize>(
     world: &World<P>,
     entity: &Entity,
     component_type: &P::Kind,
@@ -284,12 +284,12 @@ fn has_component_of_type<P: ProtocolType>(
     return false;
 }
 
-fn get_component<'a, P: ProtocolType, R: ReplicateSafe<P>>(
+fn get_component<'a, P: Protocolize, R: ReplicateSafe<P>>(
     world: &'a World<P>,
     entity: &Entity,
 ) -> Option<ReplicaRefWrapper<'a, P, R>> {
     if let Some(component_map) = world.entities.get(*entity) {
-        if let Some(component_protocol) = component_map.get(&ProtocolType::kind_of::<R>()) {
+        if let Some(component_protocol) = component_map.get(&Protocolize::kind_of::<R>()) {
             if let Some(raw_ref) = component_protocol.cast_ref::<R>() {
                 let wrapper = ComponentRef::<P, R>::new(raw_ref);
                 let wrapped_ref = ReplicaRefWrapper::new(wrapper);
@@ -301,7 +301,7 @@ fn get_component<'a, P: ProtocolType, R: ReplicateSafe<P>>(
     return None;
 }
 
-fn get_component_of_kind<'a, P: ProtocolType>(
+fn get_component_of_kind<'a, P: Protocolize>(
     world: &'a World<P>,
     entity: &Entity,
     component_type: &P::Kind,
@@ -316,7 +316,7 @@ fn get_component_of_kind<'a, P: ProtocolType>(
     return None;
 }
 
-fn get_component_mut_of_kind<'a, P: ProtocolType>(
+fn get_component_mut_of_kind<'a, P: Protocolize>(
     world: &'a mut World<P>,
     entity: &Entity,
     component_type: &P::Kind,

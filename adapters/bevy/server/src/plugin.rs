@@ -5,7 +5,7 @@ use bevy::{
     ecs::schedule::SystemStage,
     prelude::*,
 };
-use naia_server::{ProtocolType, Server, ServerConfig, SharedConfig};
+use naia_server::{Protocolize, Server, ServerConfig, SharedConfig};
 use naia_bevy_shared::WorldData;
 
 use super::{
@@ -15,12 +15,12 @@ use super::{
     systems::{before_receive_events, finish_tick, should_receive, should_tick},
 };
 
-struct PluginConfig<P: ProtocolType> {
+struct PluginConfig<P: Protocolize> {
     server_config: ServerConfig,
     shared_config: SharedConfig<P>,
 }
 
-impl<P: ProtocolType> PluginConfig<P> {
+impl<P: Protocolize> PluginConfig<P> {
     pub fn new(server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
         PluginConfig {
             server_config,
@@ -29,11 +29,11 @@ impl<P: ProtocolType> PluginConfig<P> {
     }
 }
 
-pub struct Plugin<P: ProtocolType> {
+pub struct Plugin<P: Protocolize> {
     config: Mutex<Option<PluginConfig<P>>>,
 }
 
-impl<P: ProtocolType> Plugin<P> {
+impl<P: Protocolize> Plugin<P> {
     pub fn new(server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
         let config = PluginConfig::new(server_config, shared_config);
         return Plugin {
@@ -42,7 +42,7 @@ impl<P: ProtocolType> Plugin<P> {
     }
 }
 
-impl<P: ProtocolType> PluginType for Plugin<P> {
+impl<P: Protocolize> PluginType for Plugin<P> {
     fn build(&self, app: &mut App) {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
         let server = Server::<P, Entity>::new(config.server_config, config.shared_config);

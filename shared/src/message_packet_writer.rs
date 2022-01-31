@@ -2,7 +2,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use super::{
     manager_type::ManagerType,
-    protocol_type::{ProtocolKindType, ProtocolType},
+    protocolize::{ProtocolKindType, Protocolize},
     standard_header::StandardHeader,
 };
 
@@ -49,7 +49,7 @@ impl MessagePacketWriter {
 
     /// Writes an Message into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_message<P: ProtocolType>(&mut self, message: &P) -> bool {
+    pub fn write_message<P: Protocolize>(&mut self, message: &P) -> bool {
         let message_ref = message.dyn_ref();
 
         //Write message payload

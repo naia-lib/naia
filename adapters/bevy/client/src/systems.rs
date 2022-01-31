@@ -7,7 +7,7 @@ use bevy::{
         world::{Mut, World},
     },
 };
-use naia_client::{Client, Event, ProtocolType};
+use naia_client::{Client, Event, Protocolize};
 use naia_bevy_shared::WorldProxyMut;
 
 use crate::events::{
@@ -21,7 +21,7 @@ use super::{
     resource::ClientResource,
 };
 
-pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
+pub fn before_receive_events<P: Protocolize>(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<Client<P, Entity>>| {
         world.resource_scope(|world, mut client_resource: Mut<ClientResource>| {
             let event_results = client.receive(world.proxy_mut());
@@ -170,7 +170,7 @@ pub fn finish_tick(mut resource: ResMut<ClientResource>) {
     resource.ticker.reset();
 }
 
-pub fn should_receive<P: ProtocolType>(client: Res<Client<P, Entity>>) -> ShouldRun {
+pub fn should_receive<P: Protocolize>(client: Res<Client<P, Entity>>) -> ShouldRun {
     if client.is_connected() {
         ShouldRun::Yes
     } else {

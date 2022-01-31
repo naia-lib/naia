@@ -1,17 +1,17 @@
 use std::hash::Hash;
 
-use naia_shared::ProtocolType;
+use naia_shared::Protocolize;
 
 use crate::UserKey;
 
 use super::server::Server;
 
-pub struct UserScopeMut<'s, P: ProtocolType, E: Copy + Eq + Hash> {
+pub struct UserScopeMut<'s, P: Protocolize, E: Copy + Eq + Hash> {
     server: &'s mut Server<P, E>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserScopeMut<'s, P, E> {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash> UserScopeMut<'s, P, E> {
     pub fn new(server: &'s mut Server<P, E>, key: &UserKey) -> Self {
         UserScopeMut { server, key: *key }
     }

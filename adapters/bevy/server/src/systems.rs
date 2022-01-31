@@ -7,14 +7,14 @@ use bevy::{
         world::{Mut, World},
     },
 };
-use naia_server::{Event, ProtocolType, Server};
+use naia_server::{Event, Protocolize, Server};
 
 use super::{
     events::{AuthorizationEvent, CommandEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
     resource::ServerResource,
 };
 
-pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
+pub fn before_receive_events<P: Protocolize>(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<Server<P, Entity>>| {
         world.resource_scope(|world, mut server_resource: Mut<ServerResource>| {
             let event_results = server.receive();
@@ -77,7 +77,7 @@ pub fn finish_tick(mut resource: ResMut<ServerResource>) {
     resource.ticker.reset();
 }
 
-pub fn should_receive<P: ProtocolType>(server: Res<Server<P, Entity>>) -> ShouldRun {
+pub fn should_receive<P: Protocolize>(server: Res<Server<P, Entity>>) -> ShouldRun {
     if server.is_listening() {
         ShouldRun::Yes
     } else {

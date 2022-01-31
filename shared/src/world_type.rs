@@ -2,7 +2,7 @@ use naia_socket_shared::PacketReader;
 
 use super::{
     diff_mask::DiffMask,
-    protocol_type::{ProtocolInserter, ProtocolType},
+    protocolize::{ProtocolInserter, Protocolize},
     replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
     replicate::{Replicate, ReplicateSafe},
 };
@@ -10,7 +10,7 @@ use super::{
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
 /// the WorldMutType in-sync with it's own Entities/Components
-pub trait WorldRefType<P: ProtocolType, E> {
+pub trait WorldRefType<P: Protocolize, E> {
     // Entities
     /// check whether entity exists
     fn has_entity(&self, entity: &E) -> bool;
@@ -38,7 +38,7 @@ pub trait WorldRefType<P: ProtocolType, E> {
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
 /// the WorldMutType in-sync with it's own Entities/Components
-pub trait WorldMutType<P: ProtocolType, E>: WorldRefType<P, E> + ProtocolInserter<P, E> {
+pub trait WorldMutType<P: Protocolize, E>: WorldRefType<P, E> + ProtocolInserter<P, E> {
     // Entities
     /// spawn an entity
     fn spawn_entity(&mut self) -> E;
