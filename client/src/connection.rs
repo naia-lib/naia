@@ -2,7 +2,9 @@ use std::{hash::Hash, net::SocketAddr};
 
 use naia_client_socket::Packet;
 
-use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType, MessagePacketWriter};
+use naia_shared::{BaseConnection, ConnectionConfig, EntityNetId, ManagerType, Manifest, PacketReader,
+                  PacketType, Protocolize, ReplicateSafe, SequenceNumber, StandardHeader,
+                  WorldMutType, MessagePacketWriter};
 
 use super::{
     entity_action::EntityAction, entity_manager::EntityManager,
@@ -244,6 +246,22 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     pub fn get_jitter(&self) -> f32 {
         return self.ping_manager.get_jitter();
     }
+
+    pub fn entity_net_id(
+        &self,
+        entity: &E,
+    ) -> EntityNetId {
+        return self.entity_manager.entity_net_id(entity);
+    }
+
+    pub fn entity_from_net_id(
+        &self,
+        entity_net_id: &EntityNetId,
+    ) -> E {
+        return self.entity_manager.entity_from_net_id(entity_net_id);
+    }
+
+    // Private methods
 
     fn get_buffered_data_packet(&mut self, current_tick: u16) -> Option<(u16, u16, Box<[u8]>)> {
         if let Some((tick, (index, payload))) = self.jitter_buffer.pop_item(current_tick) {

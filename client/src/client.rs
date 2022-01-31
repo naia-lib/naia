@@ -18,6 +18,7 @@ use super::{
     io::Io,
     tick_manager::TickManager,
 };
+use naia_shared::EntityNetId;
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
@@ -129,6 +130,26 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         entity: &E,
     ) -> EntityRef<P, E, W> {
         return EntityRef::new(world, &entity);
+    }
+
+    /// Retrieves an EntityNetId (which exists only within the connection) from
+    /// an Entity (which exists in a World).
+    /// Panics if the Entity does not exist.
+    pub fn entity_net_id(
+        &self,
+        entity: &E,
+    ) -> EntityNetId {
+        return self.server_connection.as_ref().unwrap().entity_net_id(entity);
+    }
+
+    /// Retrieves an Entity (which exists in a World) from an EntityNetId
+    /// (which exists only within the connection).
+    /// Panics if the Entity does not exist.
+    pub fn entity_from_net_id(
+        &self,
+        entity_net_id: &EntityNetId,
+    ) -> E {
+        return self.server_connection.as_ref().unwrap().entity_from_net_id(entity_net_id);
     }
 
     /// Return a list of all Entities

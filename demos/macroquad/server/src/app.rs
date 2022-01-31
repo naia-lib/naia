@@ -8,7 +8,7 @@ use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
-    protocol::{Color, Protocol, Square},
+    protocol::{Color, Protocol, Square, EntityAssignment},
 };
 
 type World = DemoWorld<Protocol>;
@@ -91,10 +91,13 @@ impl App {
                         .server
                         .spawn_entity(self.world.proxy_mut())
                         .insert_component(square)
-                        .set_owner(&user_key)
                         .enter_room(&self.main_room_key)
-                        .id();
+                        .get();
                     self.user_to_prediction_map.insert(user_key, entity);
+
+                    let entity_net_id = self.server.entity_net_id(entity);
+                    let assignment_message = EntityAssignment::new(true, entity_net_id);
+                    self.server.send_message(&user_key, &assignment_message, false);
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
                     info!("Naia Server disconnected from: {}", user.address);
@@ -105,13 +108,15 @@ impl App {
                             .despawn();
                     }
                 }
-                Ok(Event::Command(_, entity, Protocol::KeyCommand(key_command_ref))) => {
+                Ok(Event::Message(user_key, Protocol::KeyCommand(key_command))) => {
+                    let entity_net_id = key_command.entity_net_id.get();
+                    let entity = self.server.entity_from_net_id(entity_net_id);
                     if let Some(mut square) = self
                         .server
                         .entity_mut(self.world.proxy_mut(), &entity)
                         .component::<Square>()
                     {
-                        shared_behavior::process_command(&key_command_ref, &mut square);
+                        shared_behavior::process_command(&key_command, &mut square);
                     }
                 }
                 Ok(Event::Tick) => {

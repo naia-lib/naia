@@ -51,26 +51,29 @@ impl App {
     }
 
     fn input(&mut self) {
-        let w = is_key_down(KeyCode::W);
-        let s = is_key_down(KeyCode::S);
-        let a = is_key_down(KeyCode::A);
-        let d = is_key_down(KeyCode::D);
+        if let Some(entity) = self.owned_entity {
+            let entity_net_id = self.client.entity_net_id(&entity);
+            let w = is_key_down(KeyCode::W);
+            let s = is_key_down(KeyCode::S);
+            let a = is_key_down(KeyCode::A);
+            let d = is_key_down(KeyCode::D);
 
-        if let Some(command) = &mut self.queued_command {
-            if w {
-                command.w.set(true);
+            if let Some(command) = &mut self.queued_command {
+                if w {
+                    command.w.set(true);
+                }
+                if s {
+                    command.s.set(true);
+                }
+                if a {
+                    command.a.set(true);
+                }
+                if d {
+                    command.d.set(true);
+                }
+            } else {
+                self.queued_command = Some(KeyCommand::new(entity_net_id, w, s, a, d));
             }
-            if s {
-                command.s.set(true);
-            }
-            if a {
-                command.a.set(true);
-            }
-            if d {
-                command.d.set(true);
-            }
-        } else {
-            self.queued_command = Some(KeyCommand::new(w, s, a, d));
         }
     }
 
@@ -84,9 +87,18 @@ impl App {
                     info!("Client disconnected from: {}", self.client.server_address());
                 }
                 Ok(Event::Tick) => {
-                    if let Some(entity) = self.owned_entity {
-                        if let Some(command) = self.queued_command.take() {
-                            self.client.send_command(&entity, command);
+                    if let Some(command) = self.queued_command.take() {
+                        let entity_net_id = command.entity_net_id.get();
+                        let entity = self.client.entity_from_net_id(entity_net_id);
+
+                        // Send command
+
+
+                        // Apply command
+                        if let Some(mut square_ref) =
+                            self.world.proxy_mut().get_component_mut::<Square>(&entity)
+                        {
+                            shared_behavior::process_command(&command, &mut square_ref);
                         }
                     }
                 }
@@ -96,21 +108,23 @@ impl App {
                 Ok(Event::DespawnEntity(entity)) => {
                     self.squares.remove(&entity);
                 }
-                Ok(Event::OwnEntity(entity)) => {
-                    info!("gave ownership of entity");
-                    self.owned_entity = Some(entity.predicted);
-                }
-                Ok(Event::DisownEntity(_)) => {
-                    info!("removed ownership of entity");
-                    self.owned_entity = None;
-                }
-                Ok(Event::NewCommand(_, Protocol::KeyCommand(key_command_ref)))
-                | Ok(Event::ReplayCommand(_, Protocol::KeyCommand(key_command_ref))) => {
-                    if let Some(entity) = &self.owned_entity {
-                        if let Some(mut square_ref) =
-                            self.world.proxy_mut().get_component_mut::<Square>(entity)
-                        {
-                            shared_behavior::process_command(&key_command_ref, &mut square_ref);
+                Ok(Event::Message(Protocol::EntityAssignment(entity_assignment))) => {
+                    let assign = *entity_assignment.assign.get();
+                    let entity_net_id = entity_assignment.entity_net_id.get();
+
+                    let entity = self.client.entity_from_net_id(entity_net_id);
+
+                    if assign {
+                        info!("gave ownership of entity");
+                        self.owned_entity = Some(entity);
+                    } else {
+                        let mut disown: bool = false;
+                        if let Some(owned_entity) = self.owned_entity {
+                            if owned_entity == entity { disown = true; }
+                        }
+                        if disown {
+                            info!("removed ownership of entity");
+                            self.owned_entity = None;
                         }
                     }
                 }
