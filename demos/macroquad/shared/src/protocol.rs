@@ -10,7 +10,6 @@ pub use entity_assignment::EntityAssignment;
 pub use key_command::KeyCommand;
 pub use square::{Color, Square};
 
-
 #[derive(Protocolize)]
 pub enum Protocol {
     Auth(Auth),

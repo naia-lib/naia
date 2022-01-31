@@ -51,8 +51,7 @@ impl App {
     }
 
     fn input(&mut self) {
-        if let Some(entity) = self.owned_entity {
-            let entity_net_id = self.client.entity_net_id(&entity);
+        if let Some(_) = self.owned_entity {
             let w = is_key_down(KeyCode::W);
             let s = is_key_down(KeyCode::S);
             let a = is_key_down(KeyCode::A);
@@ -72,7 +71,7 @@ impl App {
                     command.d.set(true);
                 }
             } else {
-                self.queued_command = Some(KeyCommand::new(entity_net_id, w, s, a, d));
+                self.queued_command = Some(KeyCommand::new(w, s, a, d));
             }
         }
     }
@@ -87,18 +86,18 @@ impl App {
                     info!("Client disconnected from: {}", self.client.server_address());
                 }
                 Ok(Event::Tick) => {
-                    if let Some(command) = self.queued_command.take() {
-                        let entity_net_id = command.entity_net_id.get();
-                        let entity = self.client.entity_from_net_id(entity_net_id);
+                    if let Some(entity) = self.owned_entity {
+                        if let Some(command) = self.queued_command.take() {
 
-                        // Send command
+                            // Send command
+                            self.client.entity(self.world.proxy(), &entity).send_message(command);
 
-
-                        // Apply command
-                        if let Some(mut square_ref) =
+                            // Apply command
+                            if let Some(mut square_ref) =
                             self.world.proxy_mut().get_component_mut::<Square>(&entity)
-                        {
-                            shared_behavior::process_command(&command, &mut square_ref);
+                            {
+                                shared_behavior::process_command(&command, &mut square_ref);
+                            }
                         }
                     }
                 }
@@ -108,11 +107,8 @@ impl App {
                 Ok(Event::DespawnEntity(entity)) => {
                     self.squares.remove(&entity);
                 }
-                Ok(Event::Message(Protocol::EntityAssignment(entity_assignment))) => {
+                Ok(Event::MessageEntity(entity, Protocol::EntityAssignment(entity_assignment))) => {
                     let assign = *entity_assignment.assign.get();
-                    let entity_net_id = entity_assignment.entity_net_id.get();
-
-                    let entity = self.client.entity_from_net_id(entity_net_id);
 
                     if assign {
                         info!("gave ownership of entity");

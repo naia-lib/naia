@@ -92,12 +92,9 @@ impl App {
                         .spawn_entity(self.world.proxy_mut())
                         .insert_component(square)
                         .enter_room(&self.main_room_key)
-                        .get();
+                        .send_message(&user_key, EntityAssignment::new(true))
+                        .id();
                     self.user_to_prediction_map.insert(user_key, entity);
-
-                    let entity_net_id = self.server.entity_net_id(entity);
-                    let assignment_message = EntityAssignment::new(true, entity_net_id);
-                    self.server.send_message(&user_key, &assignment_message, false);
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
                     info!("Naia Server disconnected from: {}", user.address);
@@ -108,9 +105,7 @@ impl App {
                             .despawn();
                     }
                 }
-                Ok(Event::Message(user_key, Protocol::KeyCommand(key_command))) => {
-                    let entity_net_id = key_command.entity_net_id.get();
-                    let entity = self.server.entity_from_net_id(entity_net_id);
+                Ok(Event::MessageEntity(user_key, entity, Protocol::KeyCommand(key_command))) => {
                     if let Some(mut square) = self
                         .server
                         .entity_mut(self.world.proxy_mut(), &entity)
