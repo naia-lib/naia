@@ -63,67 +63,59 @@ pub fn get_variants(data: &Data) -> Vec<Ident> {
 pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
     let hashtag = Punct::new('#', Spacing::Alone);
 
-    let mut variant_list = quote! {};
+    let mut variant_definitions = quote! {};
+    let mut variants_from_u16 = quote! {};
+    let mut variants_to_type_id = quote! {};
+
     let mut variant_index: u16 = 0;
 
-    {
-        for variant in properties {
-            let variant_name = Ident::new(&variant.to_string(), Span::call_site());
+    for variant in properties {
+        let variant_name = Ident::new(&variant.to_string(), Span::call_site());
 
+        // Variant definitions
+        {
             let new_output_right = quote! {
                 #variant_name = #variant_index,
             };
             let new_output_result = quote! {
-                #variant_list
+                #variant_definitions
                 #new_output_right
             };
-            variant_list = new_output_result;
-
-            variant_index += 1;
+            variant_definitions = new_output_result;
         }
-    }
 
-    let mut variant_match = quote! {};
-    {
-        let mut variant_match_index: u16 = 0;
-
-        for variant in properties {
-            let variant_name = Ident::new(&variant.to_string(), Span::call_site());
-
+        // Variants from_u16() match branch
+        {
             let new_output_right = quote! {
-                #variant_match_index => #enum_name::#variant_name,
+                #variant_index => #enum_name::#variant_name,
             };
             let new_output_result = quote! {
-                #variant_match
+                #variants_from_u16
                 #new_output_right
             };
-            variant_match = new_output_result;
-
-            variant_match_index += 1;
+            variants_from_u16 = new_output_result;
         }
-    }
 
-    let mut variant_types = quote! {};
-    {
-        for variant in properties {
-            let variant_name = Ident::new(&variant.to_string(), Span::call_site());
-
+        // Variants to_type_id() match branch
+        {
             let new_output_right = quote! {
-                #variant_name => TypeId::of::<#variant_name>(),
+                #enum_name::#variant_name => TypeId::of::<#variant_name>(),
             };
             let new_output_result = quote! {
-                #variant_types
+                #variants_to_type_id
                 #new_output_right
             };
-            variant_types = new_output_result;
+            variants_to_type_id = new_output_result;
         }
+
+        variant_index += 1;
     }
 
     return quote! {
         #hashtag[repr(u16)]
         #hashtag[derive(Hash, Eq, PartialEq, Copy, Clone)]
         pub enum #enum_name {
-            #variant_list
+            #variant_definitions
             UNKNOWN = #variant_index,
         }
 
@@ -133,13 +125,14 @@ pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream 
             }
             fn from_u16(val: u16) -> Self {
                 match val {
-                    #variant_match
+                    #variants_from_u16
                     _ => #enum_name::UNKNOWN,
                 }
             }
             fn to_type_id(&self) -> TypeId {
                 match self {
-                    #variant_types
+                    #variants_to_type_id
+                    _ => TypeId::of::<()>()
                 }
             }
         }
