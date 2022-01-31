@@ -18,6 +18,6 @@ use-udp = [ "naia-server/use-udp" ]
 use-webrtc = [ "naia-server/use-webrtc" ]
 
 [dependencies]
-naia-server = { version = "=0.7.3", path = "../../../server" }
-naia-hecs-shared = { version = "=0.7.3", path = "../shared" }
+naia-server = { path = "../../../server" }
+naia-hecs-shared = { path = "../shared" }
 hecs = { version = "=0.5.2" }
