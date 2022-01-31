@@ -138,7 +138,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P>, NaiaServerError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P, E>, NaiaServerError>> {
         let mut events = VecDeque::new();
 
         // Need to run this to maintain connection with all clients, and receive packets
@@ -333,29 +333,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     pub fn worldless_entity_mut<'s>(&'s mut self, entity: &E) -> WorldlessEntityMut<'s, P, E> {
         return WorldlessEntityMut::new(self, &entity);
     }
-
-    /// Retrieves an EntityNetId (which exists only within the connection) from
-    /// an Entity (which exists in a World).
-    /// Panics if the Entity does not exist.
-    pub fn entity_net_id(
-        &self,
-        user_key: &UserKey,
-        entity: &E,
-    ) -> EntityNetId {
-        let user = self.users.get(*user_key).unwrap();
-        let user_connection = self.user_connections.get(&user.address).unwrap();
-        return user_connection.entity_net_id(entity);
-    }
-
-//    /// Retrieves an Entity (which exists in a World) from an EntityNetId
-//    /// (which exists only within the connection).
-//    /// Panics if the Entity does not exist.
-//    pub fn entity_from_net_id(
-//        &self,
-//        entity_net_id: &EntityNetId,
-//    ) -> E {
-//        return self.server_connection.as_ref().unwrap().entity_from_net_id(entity_net_id);
-//    }
 
     /// Gets a Vec of all Entities in the given World
     pub fn entities<W: WorldRefType<P, E>>(&self, world: W) -> Vec<E> {

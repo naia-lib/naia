@@ -18,7 +18,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E,
         }
     }
 
-    pub fn get(&self) -> E {
+    pub fn id(&self) -> E {
         self.entity
     }
 

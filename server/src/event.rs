@@ -4,7 +4,7 @@ use super::user::{user_key::UserKey, User};
 
 /// An Event that is emitted as a result of some communication with a Client, or
 /// a Tick event
-pub enum Event<P: Protocolize> {
+pub enum Event<P: Protocolize, E> {
     /// Occurs when a Client attempts to establish a connection with the Server.
     /// Used accept or reject incoming Clients
     Authorization(UserKey, P),
@@ -20,4 +20,6 @@ pub enum Event<P: Protocolize> {
     Tick,
     /// A Message emitted to the Server from a Client
     Message(UserKey, P),
+    /// A Message emitted to the Server from a Client, associated with an Entity
+    MessageEntity(UserKey, E, P),
 }

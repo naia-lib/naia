@@ -244,18 +244,4 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     pub fn pop_incoming_message(&mut self) -> Option<EntityAction<P, E>> {
         return self.queued_incoming_messages.pop_front();
     }
-
-    pub fn entity_net_id(
-        &self,
-        entity: &E,
-    ) -> EntityNetId {
-        return self.entity_records.get(entity).unwrap().entity_net_id;
-    }
-
-    pub fn entity_from_net_id(
-        &self,
-        entity_net_id: &EntityNetId,
-    ) -> E {
-        return *self.local_to_world_entity.get(entity_net_id).unwrap();
-    }
 }

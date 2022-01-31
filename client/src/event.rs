@@ -18,6 +18,8 @@ pub enum Event<P: Protocolize, E: Copy> {
     /// Occurs when an Entity on the Server has been destroyed, or left the
     /// Client's scope
     DespawnEntity(E),
+    /// A Message emitted to the Client from the Server, associated with an Entity
+    MessageEntity(E, P),
     /// Occurs when a Component should be added to a given Entity
     InsertComponent(E, P::Kind),
     /// Occurs when a Component has had a state change on the Server while
@@ -25,6 +27,6 @@ pub enum Event<P: Protocolize, E: Copy> {
     UpdateComponent(E, P::Kind),
     /// Occurs when a Component should be removed from the given Entity
     RemoveComponent(E, P),
-    /// An Message emitted to the Client from the Server
+    /// A Message emitted to the Client from the Server
     Message(P),
 }

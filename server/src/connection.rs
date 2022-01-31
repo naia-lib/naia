@@ -49,6 +49,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             let mut writer = PacketWriter::new();
 
             let next_packet_index: u16 = self.get_next_packet_index();
+
+            // Write Messages
             while let Some(popped_message) =
                 self.base_connection.pop_outgoing_message(next_packet_index)
             {
@@ -58,6 +60,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                     break;
                 }
             }
+
+            // Write Entity actions
             while let Some(popped_entity_action) = self
                 .entity_manager
                 .pop_outgoing_action::<W>(world_record, next_packet_index)
