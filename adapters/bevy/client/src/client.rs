@@ -39,6 +39,14 @@ impl<'a, P: ProtocolType> Client<'a, P> {
 
     //// Connections ////
 
+    pub fn auth<R: Replicate<P>>(&mut self, auth: R) {
+        self.client.auth(auth);
+    }
+
+    pub fn connect(&mut self, server_address: SocketAddr) {
+        self.client.connect(server_address);
+    }
+
     pub fn server_address(&self) -> SocketAddr {
         return self.client.server_address();
     }
