@@ -11,7 +11,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
     DiffMask, KeyGenerator, LocalComponentKey, EntityNetId, NaiaKey, PacketNotifiable,
-    ProtocolKindType, Protocolize, WorldRefType, MTU_SIZE,
+    ProtocolKindType, Protocolize, WorldRefType, MTU_SIZE, ReplicateSafe
 };
 
 use super::{
@@ -264,6 +264,32 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         return self.entity_records.contains_key(entity);
     }
 
+    pub fn send_entity_message<R: ReplicateSafe<P>>(
+        &mut self,
+        entity: &E,
+        message: &R,
+    ) {
+        if let Some(entity_record) = self.entity_records.get(&entity) {
+            match entity_record.status {
+                LocalityStatus::Created => {
+                    // send MessageEntity action
+                    self.queued_actions.push_back(EntityAction::MessageEntity(
+                        *entity,
+                        message.protocol_copy(),
+                    ));
+                    return;
+                }
+                LocalityStatus::Deleting => {
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        // Entity hasn't been added to the User Scope yet, or replicated to Client yet
+        unimplemented!();
+    }
+
     // Components
 
     pub fn insert_component(
@@ -408,6 +434,29 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 action_total_bytes
                     .write_u16::<BigEndian>(local_id.to_u16())
                     .unwrap(); //write local entity
+            }
+            EntityAction::MessageEntity(global_entity, message) => {
+                let local_id = self.entity_records.get(global_entity).unwrap().entity_net_id;
+
+                let message_ref = message.dyn_ref();
+
+                //Write message payload
+                let mut message_payload_bytes = Vec::<u8>::new();
+                message_ref.write(&mut message_payload_bytes);
+
+                //write local entity
+                action_total_bytes
+                    .write_u16::<BigEndian>(local_id.to_u16())
+                    .unwrap();
+
+                // write message's naia id
+                let message_kind = message_ref.get_kind();
+                action_total_bytes
+                    .write_u16::<BigEndian>(message_kind.to_u16())
+                    .unwrap();
+
+                // write payload
+                action_total_bytes.append(&mut message_payload_bytes);
             }
             EntityAction::InsertComponent(global_entity, global_component_key, component_kind) => {
                 let local_id = self.entity_records.get(global_entity).unwrap().entity_net_id;
@@ -728,6 +777,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 deleted_components.push(global_component_key);
                             }
                         }
+                        EntityAction::MessageEntity(_, _) => {
+                            // Don't do anything, mission accomplished
+                        }
                         EntityAction::InsertComponent(_, global_component_key, _) => {
                             let component_record = self
                                 .component_records
@@ -773,6 +825,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> PacketNotifiable for EntityManager<P, 
                     // guaranteed delivery actions
                     EntityAction::SpawnEntity(_, _)
                     | EntityAction::DespawnEntity(_)
+                    | EntityAction::MessageEntity(_, _)
                     | EntityAction::InsertComponent(_, _, _)
                     | EntityAction::RemoveComponent(_) => {
                         self.queued_actions.push_back(dropped_action);

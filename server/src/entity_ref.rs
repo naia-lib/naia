@@ -5,7 +5,7 @@ use naia_shared::{
     WorldRefType,
 };
 
-use super::{room::room_key::RoomKey, server::Server};
+use super::{room::room_key::RoomKey, server::Server, user::user_key::UserKey};
 
 // EntityRef
 
@@ -112,6 +112,15 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<'
 
     pub fn leave_room(&mut self, room_key: &RoomKey) -> &mut Self {
         self.server.room_remove_entity(room_key, &self.entity);
+
+        self
+    }
+
+    // Messages
+
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, user_key: &UserKey, message: &R) -> &mut Self {
+        self.server
+            .send_entity_message(user_key, &self.entity, message);
 
         self
     }

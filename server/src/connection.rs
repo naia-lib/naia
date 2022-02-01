@@ -150,6 +150,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         self.entity_manager.remove_component(component_key);
     }
 
+    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R) {
+        self.entity_manager
+            .send_entity_message(entity, message);
+    }
+
     // Pass-through methods to underlying common connection
 
     pub fn mark_sent(&mut self) {
