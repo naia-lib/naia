@@ -240,6 +240,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                                 Event::SpawnEntity(entity, component_list)
                             }
                             EntityAction::DespawnEntity(entity) => Event::DespawnEntity(entity),
+                            EntityAction::MessageEntity(entity, message) => {
+                                Event::MessageEntity(entity, message.clone())
+                            }
                             EntityAction::InsertComponent(entity, component_key) => {
                                 Event::InsertComponent(entity, component_key)
                             }
