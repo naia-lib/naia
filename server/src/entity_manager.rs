@@ -30,6 +30,7 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, LocalEntityRecord>,
     local_to_global_entity_map: HashMap<EntityNetId, E>,
     delayed_entity_deletions: HashSet<E>,
+    delayed_entity_messages: HashMap<E, VecDeque<P>>,
     // Components
     diff_handler: UserDiffHandler,
     component_key_generator: KeyGenerator<LocalComponentKey>,
@@ -57,6 +58,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             entity_records: HashMap::new(),
             local_to_global_entity_map: HashMap::new(),
             delayed_entity_deletions: HashSet::new(),
+            delayed_entity_messages: HashMap::new(),
             // Components
             diff_handler: UserDiffHandler::new(diff_handler),
             component_key_generator: KeyGenerator::new(),
@@ -287,7 +289,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
 
         // Entity hasn't been added to the User Scope yet, or replicated to Client yet
-        unimplemented!();
+        if !self.delayed_entity_messages.contains_key(entity) {
+            self.delayed_entity_messages.insert(*entity, VecDeque::new());
+        }
+        let message_queue = self.delayed_entity_messages.get_mut(entity).unwrap();
+        message_queue.push_back(message.protocol_copy());
     }
 
     // Components
@@ -437,7 +443,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             }
             EntityAction::MessageEntity(global_entity, message) => {
                 let local_id = self.entity_records.get(global_entity).unwrap().entity_net_id;
-
                 let message_ref = message.dyn_ref();
 
                 //write local entity
@@ -452,7 +457,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     .unwrap();
 
                 //Write message payload
-                let mut message_payload_bytes = Vec::<u8>::new();
                 message_ref.write(&mut action_total_bytes);
             }
             EntityAction::InsertComponent(global_entity, global_component_key, component_kind) => {
@@ -719,10 +723,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                     &global_entity,
                                 );
                             } else {
-                                // set to status of created
+                                // set to status of Entity to Created
                                 entity_record.status = LocalityStatus::Created;
 
-                                // set status of components to created
+                                // set status of Components to Created
                                 while let Some((global_component_key, _)) = component_list.pop() {
                                     let component_record = self
                                         .component_records
@@ -756,6 +760,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                         );
                                     }
                                 }
+
+                                // send any Entity messages that have been waiting
+                                if let Some(message_queue) = self.delayed_entity_messages.get_mut(&global_entity) {
+                                    while let Some(message) = message_queue.pop_front() {
+                                        self.queued_actions.push_back(
+                                            EntityAction::MessageEntity(
+                                                global_entity,
+                                                message
+                                            ),
+                                        );
+                                    }
+                                }
                             }
                         }
                         EntityAction::DespawnEntity(global_entity) => {
@@ -764,6 +780,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                             // actually delete the entity from local records
                             self.entity_records.remove(&global_entity);
+                            self.delayed_entity_messages.remove(&global_entity);
                             self.local_to_global_entity_map.remove(&local_id);
                             self.entity_generator.recycle_key(&local_id);
 

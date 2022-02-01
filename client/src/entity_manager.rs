@@ -264,6 +264,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
+    pub fn world_to_local_entity(&self, world_entity: &E) -> Option<EntityNetId> {
+        if let Some(entity_record) = self.entity_records.get(world_entity) {
+            return Some(entity_record.entity_net_id);
+        }
+        return None;
+    }
+
     pub fn pop_incoming_message(&mut self) -> Option<EntityAction<P, E>> {
         return self.queued_incoming_messages.pop_front();
     }

@@ -90,7 +90,7 @@ impl App {
                         if let Some(command) = self.queued_command.take() {
 
                             // Send command
-                            self.client.entity(self.world.proxy(), &entity).send_message(command);
+                            self.client.entity_mut(&entity).send_message(&command);
 
                             // Apply command
                             if let Some(mut square_ref) =
