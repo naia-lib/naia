@@ -3,7 +3,7 @@ use std::hash::Hash;
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    wrapping_diff, ManagerType, MessagePacketWriter, NaiaKey, ProtocolKindType, Protocolize,
+    ManagerType, MessagePacketWriter, NaiaKey, ProtocolKindType, Protocolize,
     MTU_SIZE,
 };
 
@@ -38,7 +38,7 @@ impl PacketWriter {
 
         //Write manager "header" (manager type & command count)
         if self.command_count != 0 {
-            out_bytes.write_u8(ManagerType::Command as u8).unwrap(); // write manager type
+            out_bytes.write_u8(ManagerType::EntityMessage as u8).unwrap(); // write manager type
             out_bytes.write_u8(self.command_count).unwrap(); // write number of commands in the following message
             out_bytes.append(&mut self.command_working_bytes); // write command payload
             self.command_count = 0;
@@ -59,7 +59,6 @@ impl PacketWriter {
     /// eventually be put into the outgoing packet
     pub fn write_entity_message<P: Protocolize, E: Copy + Eq + Hash>(
         &mut self,
-        host_tick: u16,
         entity_manager: &EntityManager<P, E>,
         world_entity: &E,
         message: &P,

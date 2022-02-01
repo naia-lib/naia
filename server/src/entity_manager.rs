@@ -358,6 +358,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
     // Ect..
 
+    pub fn get_global_entity_from_local(&self, local_entity: EntityNetId) -> Option<&E> {
+        return self.local_to_global_entity_map.get(&local_entity);
+    }
+
     pub fn collect_component_updates(&mut self, world_record: &WorldRecord<E, P::Kind>) {
         for (component_key, record) in self.component_records.iter() {
             if record.status == LocalityStatus::Created

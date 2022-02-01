@@ -176,21 +176,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // self.user_connections
         let server_tick_opt = self.server_tick();
         for (_, connection) in self.user_connections.iter_mut() {
-            //receive commands from anyone
-            if let Some(server_tick) = server_tick_opt {
-                while let Some((prediction_key, command)) =
-                    connection.get_incoming_command(server_tick)
-                {
-                    events.push_back(Ok(Event::Command(
-                        connection.user_key,
-                        prediction_key,
-                        command,
-                    )));
-                }
-            }
             //receive messages from anyone
             while let Some(message) = connection.get_incoming_message() {
                 events.push_back(Ok(Event::Message(connection.user_key, message)));
+            }
+            //receive entity messages from anyone
+            if let Some(server_tick) = server_tick_opt {
+                while let Some((entity, message)) =
+                    connection.get_incoming_entity_message(server_tick)
+                {
+                    events.push_back(Ok(Event::MessageEntity(
+                        connection.user_key,
+                        entity,
+                        message,
+                    )));
+                }
             }
         }
 
@@ -832,10 +832,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                             }
                         }
                         PacketType::Data => {
+                            let server_tick_opt = self.server_tick();
                             match self.user_connections.get_mut(&address) {
                                 Some(connection) => {
                                     connection.process_incoming_header(&self.world_record, &header);
                                     connection.process_incoming_data(
+                                        server_tick_opt,
+                                        header.host_tick(),
                                         &self.manifest,
                                         &payload,
                                     );
