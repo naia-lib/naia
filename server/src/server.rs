@@ -174,7 +174,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // TODO: have 1 single queue for messages from all users, as it's
         // possible this current technique unfairly favors the 1st users in
         // self.user_connections
+        let server_tick_opt = self.server_tick();
         for (_, connection) in self.user_connections.iter_mut() {
+            //receive commands from anyone
+            if let Some(server_tick) = server_tick_opt {
+                while let Some((prediction_key, command)) =
+                    connection.get_incoming_command(server_tick)
+                {
+                    events.push_back(Ok(Event::Command(
+                        connection.user_key,
+                        prediction_key,
+                        command,
+                    )));
+                }
+            }
             //receive messages from anyone
             while let Some(message) = connection.get_incoming_message() {
                 events.push_back(Ok(Event::Message(connection.user_key, message)));
@@ -719,7 +732,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     // Messages
 
-    /// Adds a Component to an Entity
+    /// Sends a Message to a User, associated with a given Entity, once that Entity is in-scope
     pub(crate) fn send_entity_message<R: ReplicateSafe<P>>(
         &mut self,
         user_key: &UserKey,

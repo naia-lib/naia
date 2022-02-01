@@ -10,7 +10,7 @@ use naia_shared::{
 };
 
 use super::{
-    entity_manager::EntityManager,
+    entity_manager::EntityManager, command_receiver::CommandReceiver,
     global_diff_handler::GlobalDiffHandler, keys::ComponentKey, packet_writer::PacketWriter,
     ping_manager::PingManager, user::user_key::UserKey, world_record::WorldRecord,
 };
@@ -20,6 +20,7 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
+    command_receiver: CommandReceiver<P>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
@@ -34,6 +35,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             base_connection: BaseConnection::new(user_address, connection_config),
             entity_manager: EntityManager::new(user_address, diff_handler),
             ping_manager: PingManager::new(),
+            command_receiver: CommandReceiver::new(),
         }
     }
 
@@ -104,6 +106,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         while reader.has_more() {
             let manager_type: ManagerType = reader.read_u8().into();
             match manager_type {
+                ManagerType::Command => {
+                    self.command_receiver.process_incoming_commands(
+                        server_tick,
+                        client_tick,
+                        &mut reader,
+                        manifest,
+                    );
+                }
                 ManagerType::Message => {
                     // packet index shouldn't matter here because the server's impl of Property
                     // doesn't use it
@@ -117,6 +127,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
     pub fn collect_component_updates(&mut self, world_record: &WorldRecord<E, P::Kind>) {
         self.entity_manager.collect_component_updates(world_record);
+    }
+
+    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(E, P)> {
+        if let Some((local_entity, command)) =
+            self.command_receiver.pop_incoming_command(server_tick)
+        {
+            // get global entity from the local one
+            if let Some(global_entity) = self
+                .entity_manager
+                .get_global_entity_from_local(local_entity)
+            {
+                return Some((*global_entity, command));
+            }
+        }
+        return None;
     }
 
     pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {

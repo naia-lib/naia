@@ -2,6 +2,8 @@ use std::{hash::Hash, marker::PhantomData};
 
 use naia_shared::{Protocolize, ReplicaRefWrapper, ReplicateSafe, WorldRefType};
 
+use super::client::Client;
+
 // EntityRef
 pub struct EntityRef<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> {
     world: W,
@@ -28,5 +30,29 @@ impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E,
 
     pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ReplicaRefWrapper<P, R>> {
         return self.world.get_component::<R>(&self.entity);
+    }
+}
+
+// EntityMut
+pub struct EntityMut<'c, P: Protocolize, E: Copy + Eq + Hash> {
+    client: &'c mut Client<P, E>,
+    entity: E,
+}
+
+impl<'c, P: Protocolize, E: Copy + Eq + Hash> EntityMut<'c, P, E> {
+    pub fn new(client: &'c mut Client<P, E>, entity: &E) -> Self {
+        EntityMut {
+            client,
+            entity: *entity,
+        }
+    }
+
+    // Messages
+
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R) -> &mut Self {
+        self.client
+            .send_entity_message(&self.entity, message);
+
+        self
     }
 }

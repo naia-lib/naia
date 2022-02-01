@@ -1,14 +1,14 @@
-use std::{hash::Hash, net::SocketAddr};
+use std::{hash::Hash, net::SocketAddr, collections::VecDeque};
 
 use naia_client_socket::Packet;
 
 use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader,
                   PacketType, Protocolize, ReplicateSafe, SequenceNumber, StandardHeader,
-                  WorldMutType, MessagePacketWriter};
+                  WorldMutType};
 
 use super::{
     entity_action::EntityAction, entity_manager::EntityManager,
-    ping_manager::PingManager,
+    packet_writer::PacketWriter, ping_manager::PingManager,
     tick_manager::TickManager, tick_queue::TickQueue,
 };
 
@@ -16,6 +16,7 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
+    entity_message_list: VecDeque<(E, P)>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
@@ -28,13 +29,29 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                 connection_config.ping_interval,
                 connection_config.ping_sample_size,
             ),
+            entity_message_list: VecDeque::new(),
             jitter_buffer: TickQueue::new(),
         };
     }
 
     pub fn get_outgoing_packet(&mut self, host_tick_opt: Option<u16>) -> Option<Box<[u8]>> {
-        if self.base_connection.has_outgoing_messages() {
-            let mut writer = MessagePacketWriter::new();
+        if self.base_connection.has_outgoing_messages() || !self.entity_message_list.is_empty() {
+            let mut writer = PacketWriter::new();
+
+            // Entity Messages
+            if let Some(host_tick) = host_tick_opt {
+                while let Some((entity, message)) = self.entity_message_list.pop_front() {
+                    if !writer.write_entity_message(
+                        host_tick,
+                        &self.entity_manager,
+                        &entity,
+                        &message,
+                    ) {
+                        self.entity_message_list.push_front((entity, message));
+                        break;
+                    }
+                }
+            }
 
             // Messages
             let next_packet_index: u16 = self.get_next_packet_index();
@@ -52,14 +69,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             if writer.has_bytes() {
                 // Get bytes from writer
 
-                let out_bytes = {
-                    let mut out_bytes = Vec::<u8>::new();
-
-                    //Write manager "header" manager type
-                    writer.get_bytes(&mut out_bytes);
-
-                    out_bytes.into_boxed_slice()
-                };
+                let out_bytes = writer.get_bytes();
 
                 // Add header to it
                 let payload = self.process_outgoing_header(
@@ -215,6 +225,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         return self
             .base_connection
             .send_message(message, guaranteed_delivery);
+    }
+
+    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R) {
+        let message_protocol = message.protocol_copy();
+        return self.entity_message_list.push_back((*entity, message_protocol));
     }
 
     pub fn get_incoming_message(&mut self) -> Option<P> {

@@ -11,7 +11,7 @@ use super::{
     client_config::ClientConfig,
     connection::Connection,
     entity_action::EntityAction,
-    entity_ref::EntityRef,
+    entity_ref::{EntityRef, EntityMut},
     error::NaiaClientError,
     event::Event,
     handshake_manager::{HandshakeManager, HandshakeResult},
@@ -129,6 +129,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         entity: &E,
     ) -> EntityRef<P, E, W> {
         return EntityRef::new(world, &entity);
+    }
+
+    /// Retrieves an EntityMut that exposes write operations for the
+    /// given Entity.
+    /// Panics if the Entity does not exist.
+    pub fn entity_mut<'s>(
+        &'s mut self,
+        entity: &E,
+    ) -> EntityMut<P, E> {
+        return EntityMut::new(self, &entity);
     }
 
     /// Return a list of all Entities
@@ -297,6 +307,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         }
 
         events
+    }
+
+    // Crate-public functions
+
+    /// Sends a Message to the Server, associated with a given Entity
+    pub(crate) fn send_entity_message<R: ReplicateSafe<P>>(
+        &mut self,
+        entity: &E,
+        message: &R,
+    ) {
+        if let Some(connection) = self.server_connection.as_mut() {
+            connection.send_entity_message(entity, message);
+        }
     }
 
     // internal functions
