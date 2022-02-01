@@ -10,7 +10,7 @@ use naia_shared::{
 };
 
 use super::{
-    entity_manager::EntityManager, command_receiver::CommandReceiver,
+    entity_manager::EntityManager, entity_message_receiver::EntityMessageReceiver,
     global_diff_handler::GlobalDiffHandler, keys::ComponentKey, packet_writer::PacketWriter,
     ping_manager::PingManager, user::user_key::UserKey, world_record::WorldRecord,
 };
@@ -20,7 +20,7 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
-    command_receiver: CommandReceiver<P>,
+    entity_message_receiver: EntityMessageReceiver<P>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
@@ -35,7 +35,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             base_connection: BaseConnection::new(user_address, connection_config),
             entity_manager: EntityManager::new(user_address, diff_handler),
             ping_manager: PingManager::new(),
-            command_receiver: CommandReceiver::new(),
+            entity_message_receiver: EntityMessageReceiver::new(),
         }
     }
 
@@ -99,6 +99,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
     pub fn process_incoming_data(
         &mut self,
+        server_tick: Option<u16>,
+        client_tick: u16,
         manifest: &Manifest<P>,
         data: &[u8],
     ) {
@@ -106,8 +108,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         while reader.has_more() {
             let manager_type: ManagerType = reader.read_u8().into();
             match manager_type {
-                ManagerType::Command => {
-                    self.command_receiver.process_incoming_commands(
+                ManagerType::EntityMessage => {
+                    self.entity_message_receiver.process_incoming_messages(
                         server_tick,
                         client_tick,
                         &mut reader,
@@ -129,16 +131,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         self.entity_manager.collect_component_updates(world_record);
     }
 
-    pub fn get_incoming_command(&mut self, server_tick: u16) -> Option<(E, P)> {
-        if let Some((local_entity, command)) =
-            self.command_receiver.pop_incoming_command(server_tick)
+    pub fn get_incoming_entity_message(&mut self, server_tick: u16) -> Option<(E, P)> {
+        if let Some((local_entity, message)) =
+            self.entity_message_receiver.pop_incoming_entity_message(server_tick)
         {
             // get global entity from the local one
             if let Some(global_entity) = self
                 .entity_manager
                 .get_global_entity_from_local(local_entity)
             {
-                return Some((*global_entity, command));
+                return Some((*global_entity, message));
             }
         }
         return None;

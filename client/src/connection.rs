@@ -39,17 +39,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             let mut writer = PacketWriter::new();
 
             // Entity Messages
-            if let Some(host_tick) = host_tick_opt {
-                while let Some((entity, message)) = self.entity_message_list.pop_front() {
-                    if !writer.write_entity_message(
-                        host_tick,
-                        &self.entity_manager,
-                        &entity,
-                        &message,
-                    ) {
-                        self.entity_message_list.push_front((entity, message));
-                        break;
-                    }
+            while let Some((entity, message)) = self.entity_message_list.pop_front() {
+                if !writer.write_entity_message(
+                    &self.entity_manager,
+                    &entity,
+                    &message,
+                ) {
+                    self.entity_message_list.push_front((entity, message));
+                    break;
                 }
             }
 

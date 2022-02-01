@@ -31,7 +31,7 @@ pub struct ClientConfig {
     /// processed by the Server with a higher number. This is especially
     /// helpful early on in the connection, when estimates of latency are
     /// less accurate.
-    pub minimum_command_latency: Option<Duration>,
+    pub minimum_latency: Option<Duration>,
 }
 
 impl Default for ClientConfig {
@@ -43,7 +43,7 @@ impl Default for ClientConfig {
             send_handshake_interval: Duration::from_secs(1),
             ping_interval: Duration::from_secs(1),
             rtt_sample_size: 20,
-            minimum_command_latency: None,
+            minimum_latency: None,
         }
     }
 }

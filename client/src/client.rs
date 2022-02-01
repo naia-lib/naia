@@ -61,7 +61,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             if let Some(duration) = shared_config.tick_interval {
                 Some(TickManager::new(
                     duration,
-                    client_config.minimum_command_latency,
+                    client_config.minimum_latency,
                 ))
             } else {
                 None

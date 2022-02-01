@@ -8,8 +8,8 @@ pub enum ManagerType {
     Message = 1,
     /// A EntityManager
     Entity = 2,
-    /// A CommandManager
-    Command = 3,
+    /// A EntityMessageManager
+    EntityMessage = 3,
     /// Unknown Manager
     Unknown = 255,
 }
@@ -19,7 +19,7 @@ impl From<u8> for ManagerType {
         match orig {
             1 => return ManagerType::Message,
             2 => return ManagerType::Entity,
-            3 => return ManagerType::Command,
+            3 => return ManagerType::EntityMessage,
             _ => return ManagerType::Unknown,
         };
     }
