@@ -145,11 +145,14 @@ impl App {
 
                         self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
                     } else {
-                        let mut disown: bool = false;
+                        let mut disowned: bool = false;
                         if let Some(owned_entity) = &self.owned_entity {
-                            if owned_entity.confirmed == entity { disown = true; }
+                            if owned_entity.confirmed == entity {
+                                self.world.proxy_mut().despawn_entity(&owned_entity.predicted);
+                                disowned = true;
+                            }
                         }
-                        if disown {
+                        if disowned {
                             info!("removed ownership of entity");
                             self.owned_entity = None;
                         }
