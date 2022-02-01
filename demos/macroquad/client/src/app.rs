@@ -1,8 +1,8 @@
-use std::collections::HashSet;
+use std::{ops::Deref, collections::HashSet};
 
 use macroquad::prelude::*;
 
-use naia_client::{Client as NaiaClient, ClientConfig, Event};
+use naia_client::{Client as NaiaClient, ClientConfig, Event, Protocolize};
 
 use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
 
@@ -16,11 +16,22 @@ type Client = NaiaClient<Protocol, Entity>;
 
 const SQUARE_SIZE: f32 = 32.0;
 
+struct OwnedEntity {
+    pub confirmed: Entity,
+    pub predicted: Entity,
+}
+
+impl OwnedEntity {
+    pub fn new(confirmed_entity: Entity, predicted_entity: Entity) -> Self {
+        OwnedEntity { confirmed: confirmed_entity, predicted: predicted_entity }
+    }
+}
+
 pub struct App {
     client: Client,
     world: World,
     queued_command: Option<KeyCommand>,
-    owned_entity: Option<Entity>,
+    owned_entity: Option<OwnedEntity>,
     squares: HashSet<Entity>,
 }
 
@@ -86,15 +97,15 @@ impl App {
                     info!("Client disconnected from: {}", self.client.server_address());
                 }
                 Ok(Event::Tick) => {
-                    if let Some(entity) = self.owned_entity {
+                    if let Some(owned_entity) = &self.owned_entity {
                         if let Some(command) = self.queued_command.take() {
 
                             // Send command
-                            self.client.entity_mut(&entity).send_message(&command);
+                            self.client.entity_mut(&owned_entity.confirmed).send_message(&command);
 
                             // Apply command
                             if let Some(mut square_ref) =
-                            self.world.proxy_mut().get_component_mut::<Square>(&entity)
+                            self.world.proxy_mut().get_component_mut::<Square>(&owned_entity.predicted)
                             {
                                 shared_behavior::process_command(&command, &mut square_ref);
                             }
@@ -112,11 +123,31 @@ impl App {
 
                     if assign {
                         info!("gave ownership of entity");
-                        self.owned_entity = Some(entity);
+
+                        ////////////////////////////////
+                        let mut world_mut = self.world.proxy_mut();
+                        let prediction_entity = world_mut.spawn_entity();
+
+                        // create copies of components //
+                        for component_kind in world_mut.get_component_kinds(&entity) {
+                            let mut component_copy_opt: Option<Protocol> = None;
+                            if let Some(component) =
+                                world_mut.get_component_of_kind(&entity, &component_kind)
+                            {
+                                component_copy_opt =
+                                    Some(component.deref().deref().protocol_copy());
+                            }
+                            if let Some(component_copy) = component_copy_opt {
+                                component_copy.extract_and_insert(&prediction_entity, &mut world_mut);
+                            }
+                        }
+                        ////////////////////////////////
+
+                        self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
                     } else {
                         let mut disown: bool = false;
-                        if let Some(owned_entity) = self.owned_entity {
-                            if owned_entity == entity { disown = true; }
+                        if let Some(owned_entity) = &self.owned_entity {
+                            if owned_entity.confirmed == entity { disown = true; }
                         }
                         if disown {
                             info!("removed ownership of entity");
@@ -156,7 +187,7 @@ impl App {
 
             // draw own square
             if let Some(entity) = &self.owned_entity {
-                if let Some(square) = self.world.proxy().get_component::<Square>(entity) {
+                if let Some(square) = self.world.proxy().get_component::<Square>(&entity.predicted) {
                     draw_rectangle(
                         f32::from(*(square.x.get())),
                         f32::from(*(square.y.get())),
