@@ -3,14 +3,16 @@
 #[derive(Copy, Clone)]
 #[repr(u8)]
 pub enum EntityActionType {
-    /// Action indicating a Replica to be updated
+    /// Action indicating a Component to be updated
     UpdateComponent = 0,
-    /// Action indicating a Replica to be deleted
+    /// Action indicating a Component to be deleted
     RemoveComponent,
     /// Action indicating an Entity to be created
     SpawnEntity,
     /// Action indicating an Entity to be deleted
     DespawnEntity,
+    /// Action indicating a Message to be sent to an Entity
+    MessageEntity,
     /// Action indicating a Component to be added to an Entity
     InsertComponent,
     /// Unknown / Undefined message, should always be last variant in this list

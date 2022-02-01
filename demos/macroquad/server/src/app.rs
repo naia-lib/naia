@@ -92,7 +92,7 @@ impl App {
                         .spawn_entity(self.world.proxy_mut())
                         .insert_component(square)
                         .enter_room(&self.main_room_key)
-                        .send_message(&user_key, EntityAssignment::new(true))
+                        .send_message(&user_key, &EntityAssignment::new(true))
                         .id();
                     self.user_to_prediction_map.insert(user_key, entity);
                 }
@@ -105,7 +105,7 @@ impl App {
                             .despawn();
                     }
                 }
-                Ok(Event::MessageEntity(user_key, entity, Protocol::KeyCommand(key_command))) => {
+                Ok(Event::MessageEntity(_, entity, Protocol::KeyCommand(key_command))) => {
                     if let Some(mut square) = self
                         .server
                         .entity_mut(self.world.proxy_mut(), &entity)

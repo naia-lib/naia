@@ -717,6 +717,22 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         return 0;
     }
 
+    // Messages
+
+    /// Adds a Component to an Entity
+    pub(crate) fn send_entity_message<R: ReplicateSafe<P>>(
+        &mut self,
+        user_key: &UserKey,
+        entity: &E,
+        message: &R,
+    ) {
+        if let Some(user) = self.users.get(*user_key) {
+            if let Some(connection) = self.user_connections.get_mut(&user.address) {
+                connection.send_entity_message(entity, message);
+            }
+        }
+    }
+
     // Private methods
 
     fn maintain_socket(&mut self) {
