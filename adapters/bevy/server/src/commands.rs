@@ -84,28 +84,3 @@ impl<P: Protocolize, R: Replicate<P>> Command<P> for RemoveComponent<P, R> {
             .remove_component::<R>();
     }
 }
-
-//// Own Entity ////
-
-#[derive(Debug)]
-pub(crate) struct OwnEntity {
-    entity: Entity,
-    user_key: UserKey,
-}
-
-impl OwnEntity {
-    pub fn new(entity: &Entity, user_key: &UserKey) -> Self {
-        return OwnEntity {
-            entity: *entity,
-            user_key: *user_key,
-        };
-    }
-}
-
-impl<P: Protocolize> Command<P> for OwnEntity {
-    fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: WorldMut) {
-        server
-            .entity_mut(world, &self.entity)
-            .set_owner(&self.user_key);
-    }
-}

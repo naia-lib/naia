@@ -17,7 +17,7 @@ pub use naia_shared::{
 
 use super::{
     connection::Connection,
-    entity_ref::{EntityMut, EntityRef, WorldlessEntityMut},
+    entity_ref::{EntityMut, EntityRef},
     entity_scope_map::EntityScopeMap,
     error::NaiaServerError,
     event::Event,
@@ -292,10 +292,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     }
 
     /// Creates a new Entity with a specific id
-    pub fn spawn_entity_at<'s>(&'s mut self, entity: &E) -> WorldlessEntityMut<'s, P, E> {
+    pub fn spawn_entity_at<'s>(&'s mut self, entity: &E) {
         self.spawn_entity_init(&entity);
-
-        return WorldlessEntityMut::new(self, entity);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -324,14 +322,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             return EntityMut::new(self, world, &entity);
         }
         panic!("No Entity exists for given Key!");
-    }
-
-    /// Retrieves a WorldlessEntityMut that exposes read and write operations
-    /// on the Entity, but with no references allowed to the World.
-    /// This is a very niche use case.
-    /// Panics if the Entity does not exist.
-    pub fn worldless_entity_mut<'s>(&'s mut self, entity: &E) -> WorldlessEntityMut<'s, P, E> {
-        return WorldlessEntityMut::new(self, &entity);
     }
 
     /// Gets a Vec of all Entities in the given World

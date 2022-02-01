@@ -42,7 +42,7 @@ impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
         }
     }
 
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P>, NaiaServerError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P, Entity>, NaiaServerError>> {
         return self.server.receive();
     }
 
@@ -170,14 +170,8 @@ impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
 
     // Crate-public methods
 
-    pub(crate) fn add<C: Command<P>>(&mut self, command: C) {
+    pub(crate) fn queue_command<C: Command<P>>(&mut self, command: C) {
         self.state.push(command);
-    }
-
-    // users
-
-    pub(crate) fn entity_disown(&mut self, entity: &Entity) {
-        self.server.worldless_entity_mut(entity).disown();
     }
 
     // rooms

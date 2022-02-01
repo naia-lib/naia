@@ -116,31 +116,3 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<'
         self
     }
 }
-
-// WorldlessEntityMut
-pub struct WorldlessEntityMut<'s, P: Protocolize, E: Copy + Eq + Hash> {
-    server: &'s mut Server<P, E>,
-    id: E,
-}
-
-impl<'s, P: Protocolize, E: Copy + Eq + Hash> WorldlessEntityMut<'s, P, E> {
-    pub(crate) fn new(server: &'s mut Server<P, E>, key: &E) -> Self {
-        WorldlessEntityMut { server, id: *key }
-    }
-
-    pub fn id(&self) -> E {
-        self.id
-    }
-
-    // Rooms
-
-    pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
-        self.server.room_add_entity(room_key, &self.id);
-        self
-    }
-
-    pub fn leave_room(&mut self, room_key: &RoomKey) -> &mut Self {
-        self.server.room_remove_entity(room_key, &self.id);
-        self
-    }
-}

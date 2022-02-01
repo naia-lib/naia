@@ -3,7 +3,7 @@ use bevy::ecs::entity::Entity;
 use naia_server::{Protocolize, Replicate, RoomKey, UserKey};
 
 use super::{
-    commands::{DespawnEntity, InsertComponent, OwnEntity, RemoveComponent},
+    commands::{DespawnEntity, InsertComponent, RemoveComponent},
     server::Server,
 };
 
@@ -27,32 +27,19 @@ impl<'s, 'world, 'state, P: Protocolize> EntityMut<'s, 'world, 'state, P> {
     // Despawn
 
     pub fn despawn(&mut self) {
-        self.server.add(DespawnEntity::new(&self.entity))
+        self.server.queue_command(DespawnEntity::new(&self.entity))
     }
 
     // Components
 
     pub fn insert<R: Replicate<P>>(&mut self, component: R) -> &mut Self {
         self.server
-            .add(InsertComponent::new(&self.entity, component));
+            .queue_command(InsertComponent::new(&self.entity, component));
         self
     }
 
     pub fn remove<R: Replicate<P>>(&mut self) -> &mut Self {
-        self.server.add(RemoveComponent::<P, R>::new(&self.entity));
-        self
-    }
-
-    // Users
-
-    pub fn set_owner(&mut self, user_key: &UserKey) -> &mut Self {
-        self.server.add(OwnEntity::new(&self.entity, user_key));
-        self
-    }
-
-    pub fn disown(&mut self) -> &mut Self {
-        self.server.entity_disown(&self.entity);
-
+        self.server.queue_command(RemoveComponent::<P, R>::new(&self.entity));
         self
     }
 
