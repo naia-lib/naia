@@ -127,6 +127,29 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     }
                     warn!("received message attempting to delete nonexistent entity");
                 }
+                EntityActionType::MessageEntity => {
+                    let local_entity_id = EntityNetId::from_u16(reader.read_u16());
+                    let message_kind = P::Kind::from_u16(reader.read_u16());
+
+                    let new_message =
+                        manifest.create_replica(message_kind, reader, packet_index);
+
+                    if !self.local_to_world_entity.contains_key(&local_entity_id) {
+                        // received message BEFORE spawn, or AFTER despawn
+                        panic!(
+                            "attempting to receive message to nonexistent entity: {}",
+                            local_entity_id.to_u16()
+                        );
+                    } else {
+                        let world_entity =
+                            self.local_to_world_entity.get(&local_entity_id).unwrap();
+
+                        self.queued_incoming_messages.push_back(EntityAction::MessageEntity(
+                            *world_entity,
+                            new_message,
+                        ));
+                    }
+                }
                 EntityActionType::InsertComponent => {
                     // Add Component to Entity
                     let local_id = EntityNetId::from_u16(reader.read_u16());

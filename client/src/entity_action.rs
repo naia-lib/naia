@@ -4,6 +4,7 @@ use naia_shared::Protocolize;
 pub enum EntityAction<P: Protocolize, E: Copy> {
     SpawnEntity(E, Vec<P::Kind>),
     DespawnEntity(E),
+    MessageEntity(E, P),
     InsertComponent(E, P::Kind),
     UpdateComponent(E, P::Kind),
     RemoveComponent(E, P),

@@ -440,10 +440,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                 let message_ref = message.dyn_ref();
 
-                //Write message payload
-                let mut message_payload_bytes = Vec::<u8>::new();
-                message_ref.write(&mut message_payload_bytes);
-
                 //write local entity
                 action_total_bytes
                     .write_u16::<BigEndian>(local_id.to_u16())
@@ -455,8 +451,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     .write_u16::<BigEndian>(message_kind.to_u16())
                     .unwrap();
 
-                // write payload
-                action_total_bytes.append(&mut message_payload_bytes);
+                //Write message payload
+                let mut message_payload_bytes = Vec::<u8>::new();
+                message_ref.write(&mut action_total_bytes);
             }
             EntityAction::InsertComponent(global_entity, global_component_key, component_kind) => {
                 let local_id = self.entity_records.get(global_entity).unwrap().entity_net_id;
