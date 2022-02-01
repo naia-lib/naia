@@ -10,7 +10,7 @@ use bevy::{
 use naia_server::{Event, Protocolize, Server};
 
 use super::{
-    events::{AuthorizationEvent, CommandEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
+    events::{AuthorizationEvent, MessageEntityEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
     resource::ServerResource,
 };
 
@@ -32,8 +32,8 @@ pub fn before_receive_events<P: Protocolize>(world: &mut World) {
                 let mut message_event_writer = world
                     .get_resource_unchecked_mut::<Events<MessageEvent<P>>>()
                     .unwrap();
-                let mut command_event_writer = world
-                    .get_resource_unchecked_mut::<Events<CommandEvent<P>>>()
+                let mut message_entity_event_writer = world
+                    .get_resource_unchecked_mut::<Events<MessageEntityEvent<P>>>()
                     .unwrap();
 
                 for event_result in event_results {
@@ -54,8 +54,8 @@ pub fn before_receive_events<P: Protocolize>(world: &mut World) {
                         Ok(Event::Message(user_key, message)) => {
                             message_event_writer.send(MessageEvent(user_key, message));
                         }
-                        Ok(Event::Command(user_key, entity, command)) => {
-                            command_event_writer.send(CommandEvent(user_key, entity, command));
+                        Ok(Event::MessageEntity(user_key, entity, message)) => {
+                            message_entity_event_writer.send(MessageEntityEvent(user_key, entity, message));
                         }
                         Err(_) => {}
                     }

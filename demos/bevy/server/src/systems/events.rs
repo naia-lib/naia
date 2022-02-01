@@ -5,7 +5,7 @@ use bevy::{
 };
 
 use naia_bevy_server::{
-    events::{AuthorizationEvent, CommandEvent, ConnectionEvent, DisconnectionEvent},
+    events::{AuthorizationEvent, MessageEntityEvent, ConnectionEvent, DisconnectionEvent},
     Random, Server,
 };
 
@@ -81,7 +81,7 @@ pub fn connection_event<'world, 'state>(
             // Insert Color component
             .insert(color)
             // Set Entity's owner to user
-            .set_owner(&user_key)
+            .send_message(&user_key, EntityAssignment::new(true))
             // return Entity id
             .id();
 
@@ -108,11 +108,11 @@ pub fn disconnection_event(
 }
 
 pub fn command_event(
-    mut event_reader: EventReader<CommandEvent<Protocol>>,
+    mut event_reader: EventReader<MessageEntityEvent<Protocol>>,
     mut q_player_position: Query<&mut Position>,
 ) {
     for event in event_reader.iter() {
-        if let CommandEvent(_, entity, Protocol::KeyCommand(key_command)) = event {
+        if let MessageEntityEvent(_, entity, Protocol::KeyCommand(key_command)) = event {
             if let Ok(mut position) = q_player_position.get_mut(*entity) {
                 shared_behavior::process_command(key_command, &mut position);
             }

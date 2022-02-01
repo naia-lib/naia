@@ -9,7 +9,7 @@ use naia_server::{Protocolize, Server, ServerConfig, SharedConfig};
 use naia_bevy_shared::WorldData;
 
 use super::{
-    events::{AuthorizationEvent, CommandEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
+    events::{AuthorizationEvent, MessageEntityEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
     resource::ServerResource,
     stage::{PrivateStage, Stage},
     systems::{before_receive_events, finish_tick, should_receive, should_tick},
@@ -57,7 +57,7 @@ impl<P: Protocolize> PluginType for Plugin<P> {
             .add_event::<ConnectionEvent>()
             .add_event::<DisconnectionEvent>()
             .add_event::<MessageEvent<P>>()
-            .add_event::<CommandEvent<P>>()
+            .add_event::<MessageEntityEvent<P>>()
         // STAGES //
             .add_stage_before(CoreStage::PreUpdate,
                               PrivateStage::BeforeReceiveEvents,
