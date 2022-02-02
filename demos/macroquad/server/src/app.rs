@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use naia_server::{
-    Event, Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
+    Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
+    shared::{Random}
 };
 
 use naia_demo_world::{Entity, World as DemoWorld};

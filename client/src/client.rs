@@ -175,7 +175,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Gets the current tick of the Client
     pub fn client_tick(&self) -> Option<u16> {
         if let Some(tick_manager) = &self.tick_manager {
-            Some(tick_manager.get_client_tick())
+            Some(tick_manager.client_tick())
         } else {
             None
         }

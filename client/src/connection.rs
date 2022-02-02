@@ -136,8 +136,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     ) -> bool {
         if tick_manager.mark_frame() {
             // then we apply all received updates to components at once
-            let target_tick = tick_manager.get_server_tick();
-            self.process_buffered_packet(world, manifest, target_tick);
+            let receiving_tick = tick_manager.receiving_tick();
+            self.process_buffered_packet(world, manifest, receiving_tick);
             return true;
         }
         return false;

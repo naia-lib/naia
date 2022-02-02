@@ -10,8 +10,6 @@
     unused_import_braces
 )]
 
-extern crate naia_shared;
-
 mod client;
 mod client_config;
 mod connection;
@@ -29,9 +27,7 @@ mod tick_manager;
 mod tick_queue;
 mod packet_writer;
 
-pub use naia_shared::{
-    wrapping_diff, Instant, LinkConditionerConfig, Protocolize, Random, Replicate, SharedConfig,
-};
+pub use naia_shared as shared;
 
 pub use client::Client;
 pub use client_config::ClientConfig;
