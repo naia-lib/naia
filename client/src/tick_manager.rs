@@ -9,6 +9,7 @@ pub struct TickManager {
     server_tick: u16,
     client_tick_adjust: u16,
     server_tick_adjust: u16,
+    receiving_tick_adjust: u16,
     server_tick_running_diff: i16,
     last_tick_instant: Instant,
     pub fraction: f32,
@@ -35,6 +36,7 @@ impl TickManager {
             server_tick: 1,
             client_tick_adjust: 0,
             server_tick_adjust: 0,
+            receiving_tick_adjust: 0,
             server_tick_running_diff: 0,
             last_tick_instant: Instant::now(),
             accumulator: 0.0,
@@ -68,6 +70,7 @@ impl TickManager {
         self.server_tick = server_tick;
         self.server_tick_adjust = ((3000.0 / self.tick_interval_millis) + 1.0) as u16;
         self.client_tick_adjust = ((5000.0 / self.tick_interval_millis) + 1.0) as u16;
+        self.receiving_tick_adjust = ((3000.0 / self.tick_interval_millis) + 1.0) as u16;
     }
 
     /// Using information from the Server and RTT/Jitter measurements, determine
@@ -96,29 +99,38 @@ impl TickManager {
 
         // Calculate incoming & outgoing jitter buffer tick offsets
         let jitter_based_offset = jitter_deviation * 3.0;
-        self.server_tick_adjust = (jitter_based_offset / self.tick_interval_millis).ceil() as u16;
+        self.receiving_tick_adjust = (jitter_based_offset / self.tick_interval_millis).ceil() as u16;
 
         // NOTE: I've struggled multiple times with why (ping_average * 2.0) exists in
         // this calculation, figured it out, then returned to struggle later.
         // This is not a bug!
         // Keep in mind that self.server_tick here is the tick we have RECEIVED from the
         // Server which means that the real current server_tick is likely
-        // self.server_tick + ping_average / tick_interval By multiplying the
-        // ping average here, we are correcting for our late self.server_tick value
+        // self.server_tick - ping_average / tick_interval.
+        // By multiplying the ping average here, we are correcting for our late self.server_tick value
         let target_client_adjust_millis = self
             .minimum_latency
             .max((ping_average * 2.0) + jitter_based_offset);
         self.client_tick_adjust =
             ((target_client_adjust_millis / self.tick_interval_millis) + 1.0).ceil() as u16;
+
+        // Calculate estimate of server's tick at this very moment
+        self.server_tick_adjust =
+            (ping_average / self.tick_interval_millis).round() as u16;
     }
 
     /// Gets the server tick with the incoming jitter buffer offset applied
-    pub fn get_server_tick(&self) -> u16 {
+    pub fn receiving_tick(&self) -> u16 {
+        return self.server_tick.wrapping_sub(self.receiving_tick_adjust);
+    }
+
+    /// Gets the server tick with the incoming jitter buffer offset applied
+    pub fn server_tick(&self) -> u16 {
         return self.server_tick.wrapping_sub(self.server_tick_adjust);
     }
 
     /// Gets the client tick with the outgoing jitter buffer offset applied
-    pub fn get_client_tick(&self) -> u16 {
+    pub fn client_tick(&self) -> u16 {
         return self.server_tick.wrapping_add(self.client_tick_adjust);
     }
 }

@@ -17,7 +17,6 @@ extern crate log;
 
 #[macro_use]
 extern crate slotmap;
-extern crate naia_shared;
 
 #[cfg(all(feature = "use-udp", feature = "use-webrtc"))]
 compile_error!("Naia Server can only use UDP or WebRTC, you must pick one");
@@ -27,10 +26,7 @@ compile_error!("Naia Server requires either the 'use-udp' or 'use-webrtc' featur
 
 pub use naia_server_socket::ServerAddrs;
 
-pub use naia_shared::{
-    LinkConditionerConfig, Protocolize, Random, ReplicaMutWrapper, Replicate, SharedConfig,
-    SocketConfig, WorldMutType, WorldRefType,
-};
+pub use naia_shared as shared;
 
 mod entity_message_receiver;
 mod connection;
