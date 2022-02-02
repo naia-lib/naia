@@ -10,7 +10,7 @@ use std::{
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    DiffMask, KeyGenerator, LocalComponentKey, EntityNetId, NaiaKey, PacketNotifiable,
+    DiffMask, KeyGenerator, LocalComponentKey, NetEntity, NaiaKey, PacketNotifiable,
     ProtocolKindType, Protocolize, WorldRefType, MTU_SIZE, ReplicateSafe
 };
 
@@ -26,9 +26,9 @@ use super::{
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     address: SocketAddr,
     // Entities
-    entity_generator: KeyGenerator<EntityNetId>,
+    entity_generator: KeyGenerator<NetEntity>,
     entity_records: HashMap<E, LocalEntityRecord>,
-    local_to_global_entity_map: HashMap<EntityNetId, E>,
+    local_to_global_entity_map: HashMap<NetEntity, E>,
     delayed_entity_deletions: HashSet<E>,
     delayed_entity_messages: HashMap<E, VecDeque<P>>,
     // Components
@@ -221,7 +221,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             }
 
             // then, add entity
-            let local_id: EntityNetId = self.entity_generator.generate();
+            let local_id: NetEntity = self.entity_generator.generate();
             self.local_to_global_entity_map
                 .insert(local_id, *global_entity);
             let local_entity_record = LocalEntityRecord::new(local_id);
@@ -358,7 +358,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
     // Ect..
 
-    pub fn get_global_entity_from_local(&self, local_entity: EntityNetId) -> Option<&E> {
+    pub fn get_global_entity_from_local(&self, local_entity: NetEntity) -> Option<&E> {
         return self.local_to_global_entity_map.get(&local_entity);
     }
 

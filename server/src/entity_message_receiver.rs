@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    sequence_greater_than, EntityNetId, Manifest, NaiaKey, PacketReader, ProtocolKindType,
+    sequence_greater_than, NetEntity, Manifest, NaiaKey, PacketReader, ProtocolKindType,
     Protocolize, SequenceBuffer,
 };
 
@@ -10,7 +10,7 @@ const MESSAGE_BUFFER_MAX_SIZE: u16 = 64;
 /// Handles incoming Entity Messages, buffering them to be received on the correct tick
 #[derive(Debug)]
 pub struct EntityMessageReceiver<P: Protocolize> {
-    queued_incoming_messages: SequenceBuffer<HashMap<EntityNetId, P>>,
+    queued_incoming_messages: SequenceBuffer<HashMap<NetEntity, P>>,
 }
 
 impl<P: Protocolize> EntityMessageReceiver<P> {
@@ -22,9 +22,9 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
     }
 
     /// Get the most recently received Entity Message
-    pub fn pop_incoming_entity_message(&mut self, server_tick: u16) -> Option<(EntityNetId, P)> {
+    pub fn pop_incoming_entity_message(&mut self, server_tick: u16) -> Option<(NetEntity, P)> {
         if let Some(map) = self.queued_incoming_messages.get_mut(server_tick) {
-            let mut any_entity: Option<EntityNetId> = None;
+            let mut any_entity: Option<NetEntity> = None;
             if let Some(any_entity_ref) = map.keys().next() {
                 any_entity = Some(*any_entity_ref);
             }
@@ -48,7 +48,7 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
     ) {
         let message_count = reader.read_u8();
         for _x in 0..message_count {
-            let owned_entity = EntityNetId::from_u16(reader.read_u16());
+            let owned_entity = NetEntity::from_u16(reader.read_u16());
             let replica_kind: P::Kind = P::Kind::from_u16(reader.read_u16());
 
             let new_message = manifest.create_replica(replica_kind, reader, 0);

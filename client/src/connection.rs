@@ -16,7 +16,7 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
-    entity_message_list: VecDeque<(E, P)>,
+    outgoing_entity_messages: VecDeque<(E, P)>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
@@ -29,23 +29,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                 connection_config.ping_interval,
                 connection_config.ping_sample_size,
             ),
-            entity_message_list: VecDeque::new(),
+            outgoing_entity_messages: VecDeque::new(),
             jitter_buffer: TickQueue::new(),
         };
     }
 
     pub fn get_outgoing_packet(&mut self, host_tick_opt: Option<u16>) -> Option<Box<[u8]>> {
-        if self.base_connection.has_outgoing_messages() || !self.entity_message_list.is_empty() {
+        if self.base_connection.has_outgoing_messages() || !self.outgoing_entity_messages.is_empty() {
             let mut writer = PacketWriter::new();
 
             // Entity Messages
-            while let Some((entity, message)) = self.entity_message_list.pop_front() {
+            while let Some((entity, message)) = self.outgoing_entity_messages.pop_front() {
                 if !writer.write_entity_message(
                     &self.entity_manager,
                     &entity,
                     &message,
                 ) {
-                    self.entity_message_list.push_front((entity, message));
+                    self.outgoing_entity_messages.push_front((entity, message));
                     break;
                 }
             }
@@ -224,9 +224,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             .send_message(message, guaranteed_delivery);
     }
 
-    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R) {
+    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R, client_tick: u16) {
         let message_protocol = message.protocol_copy();
-        return self.entity_message_list.push_back((*entity, message_protocol));
+        return self.outgoing_entity_messages.push_back((*entity, message_protocol));
     }
 
     pub fn get_incoming_message(&mut self) -> Option<P> {

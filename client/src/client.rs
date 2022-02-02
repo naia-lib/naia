@@ -181,8 +181,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         }
     }
 
-    /// Gets the last received tick from the Server
+    /// Gets the current tick of the Server
     pub fn server_tick(&self) -> Option<u16> {
+        if let Some(tick_manager) = &self.tick_manager {
+            Some(tick_manager.server_tick())
+        } else {
+            None
+        }
+    }
+
+    /// Gets the last received tick from the Server
+    pub fn last_received_tick(&self) -> Option<u16> {
         if let Some(server_connection) = &self.server_connection {
             Some(server_connection.get_last_received_tick())
         } else {
@@ -317,8 +326,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         entity: &E,
         message: &R,
     ) {
-        if let Some(connection) = self.server_connection.as_mut() {
-            connection.send_entity_message(entity, message);
+        if let Some(client_tick) = self.client_tick() {
+            if let Some(connection) = self.server_connection.as_mut() {
+                connection.send_entity_message(entity, message, client_tick);
+            }
         }
     }
 
