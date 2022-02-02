@@ -49,7 +49,7 @@ pub use connection_config::ConnectionConfig;
 pub use diff_mask::DiffMask;
 pub use entity_action_type::EntityActionType;
 pub use key_store::KeyGenerator;
-pub use keys::{LocalComponentKey, EntityNetId, NaiaKey};
+pub use keys::{LocalComponentKey, NetEntity, NaiaKey};
 pub use manager_type::ManagerType;
 pub use manifest::Manifest;
 pub use message_manager::MessageManager;

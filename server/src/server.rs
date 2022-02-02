@@ -9,7 +9,7 @@ use std::{
 use slotmap::DenseSlotMap;
 use naia_server_socket::{Packet, ServerAddrs, Socket};
 pub use naia_shared::{
-    wrapping_diff, BaseConnection, ConnectionConfig, EntityNetId, Instant, KeyGenerator,
+    wrapping_diff, BaseConnection, ConnectionConfig, NetEntity, Instant, KeyGenerator,
     LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
     PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig,
     StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,

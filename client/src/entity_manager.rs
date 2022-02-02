@@ -6,7 +6,7 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    DiffMask, EntityActionType, LocalComponentKey, EntityNetId, Manifest, NaiaKey, PacketReader,
+    DiffMask, EntityActionType, LocalComponentKey, NetEntity, Manifest, NaiaKey, PacketReader,
     ProtocolKindType, Protocolize, WorldMutType,
 };
 
@@ -16,7 +16,7 @@ use super::{
 
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
-    local_to_world_entity: HashMap<EntityNetId, E>,
+    local_to_world_entity: HashMap<NetEntity, E>,
     component_to_entity_map: HashMap<LocalComponentKey, E>,
     queued_incoming_messages: VecDeque<EntityAction<P, E>>,
 }
@@ -46,7 +46,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             match message_type {
                 EntityActionType::SpawnEntity => {
                     // Entity Creation
-                    let local_id = EntityNetId::from_u16(reader.read_u16());
+                    let local_id = NetEntity::from_u16(reader.read_u16());
                     let components_num = reader.read_u8();
                     if self.local_to_world_entity.contains_key(&local_id) {
                         // its possible we received a very late duplicate message
@@ -98,7 +98,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
                 EntityActionType::DespawnEntity => {
                     // Entity Deletion
-                    let local_id = EntityNetId::from_u16(reader.read_u16());
+                    let local_id = NetEntity::from_u16(reader.read_u16());
                     if let Some(world_entity) = self.local_to_world_entity.remove(&local_id) {
                         if let Some(entity_record) = self.entity_records.remove(&world_entity) {
 
@@ -128,21 +128,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     warn!("received message attempting to delete nonexistent entity");
                 }
                 EntityActionType::MessageEntity => {
-                    let local_entity_id = EntityNetId::from_u16(reader.read_u16());
+                    let net_entity = NetEntity::from_u16(reader.read_u16());
                     let message_kind = P::Kind::from_u16(reader.read_u16());
 
                     let new_message =
                         manifest.create_replica(message_kind, reader, packet_index);
 
-                    if !self.local_to_world_entity.contains_key(&local_entity_id) {
+                    if !self.local_to_world_entity.contains_key(&net_entity) {
                         // received message BEFORE spawn, or AFTER despawn
                         panic!(
                             "attempting to receive message to nonexistent entity: {}",
-                            local_entity_id.to_u16()
+                            net_entity.to_u16()
                         );
                     } else {
                         let world_entity =
-                            self.local_to_world_entity.get(&local_entity_id).unwrap();
+                            self.local_to_world_entity.get(&net_entity).unwrap();
 
                         self.queued_incoming_messages.push_back(EntityAction::MessageEntity(
                             *world_entity,
@@ -152,7 +152,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
                 EntityActionType::InsertComponent => {
                     // Add Component to Entity
-                    let local_id = EntityNetId::from_u16(reader.read_u16());
+                    let local_id = NetEntity::from_u16(reader.read_u16());
                     let component_kind = P::Kind::from_u16(reader.read_u16());
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
@@ -264,7 +264,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
-    pub fn world_to_local_entity(&self, world_entity: &E) -> Option<EntityNetId> {
+    pub fn world_to_local_entity(&self, world_entity: &E) -> Option<NetEntity> {
         if let Some(entity_record) = self.entity_records.get(world_entity) {
             return Some(entity_record.entity_net_id);
         }

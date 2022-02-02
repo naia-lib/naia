@@ -15,11 +15,11 @@ pub trait NaiaKey<Impl = Self>: Eq + PartialEq + Clone + Copy + fmt::Display {
 /// An Entity in the Client's scope, that is being
 /// synced to the Client
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, DeBin, SerBin)]
-pub struct EntityNetId(u16);
+pub struct NetEntity(u16);
 
-impl NaiaKey for EntityNetId {
+impl NaiaKey for NetEntity {
     fn from_u16(k: u16) -> Self {
-        EntityNetId(k)
+        NetEntity(k)
     }
 
     fn to_u16(&self) -> u16 {
@@ -27,7 +27,7 @@ impl NaiaKey for EntityNetId {
     }
 }
 
-impl fmt::Display for EntityNetId {
+impl fmt::Display for NetEntity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }
