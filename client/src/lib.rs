@@ -13,7 +13,6 @@
 mod client;
 mod client_config;
 mod connection;
-mod connection_state;
 mod entity_action;
 mod entity_manager;
 mod entity_message_packet_writer;

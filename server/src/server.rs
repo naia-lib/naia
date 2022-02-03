@@ -794,17 +794,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                         }
                         PacketType::ClientConnectRequest => {
                             if let Some(mut connection) = self.user_connections.get_mut(&address) {
-                                if let HandshakeResult::DisconnectUser =
-                                    self.handshake_manager.receive_old_connect_request(
-                                        &mut self.io,
-                                        &self.world_record,
-                                        &mut connection,
-                                        &header,
-                                        &payload,
-                                    )
-                                {
-                                    self.outstanding_disconnects.push_back(connection.user_key);
-                                }
+                                self.handshake_manager.receive_old_connect_request(
+                                    &mut self.io,
+                                    &self.world_record,
+                                    &mut connection,
+                                    &header,
+                                    &payload,
+                                );
                             } else {
                                 match self.handshake_manager.receive_new_connect_request(
                                     &self.manifest,
@@ -821,7 +817,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                         let user_key = self.users.insert(user);
                                         self.accept_connection(&user_key);
                                     }
-                                    _ => {}
+                                    HandshakeResult::Invalid => {
+                                        // do nothing
+                                    }
+                                }
+                            }
+                        }
+                        PacketType::Disconnect => {
+                            if let Some(mut connection) = self.user_connections.get_mut(&address) {
+                                if self.handshake_manager.verify_disconnect_request(
+                                    &mut connection,
+                                    &payload,
+                                ) {
+                                    self.outstanding_disconnects.push_back(connection.user_key);
                                 }
                             }
                         }

@@ -14,7 +14,7 @@ use super::{
     entity_ref::{EntityMut, EntityRef},
     error::NaiaClientError,
     event::Event,
-    handshake_manager::{HandshakeManager, HandshakeResult},
+    handshake_manager::HandshakeManager,
     io::Io,
     tick_manager::TickManager,
 };
@@ -101,9 +101,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         );
     }
 
+    /// Returns whether or not the client is disconnected
+    pub fn is_disconnected(&self) -> bool {
+        !self.io.is_loaded()
+    }
+
+    /// Returns whether or not a connection is being established with the Server
+    pub fn is_connecting(&self) -> bool {
+        self.io.is_loaded()
+    }
+
     /// Returns whether or not a connection has been established with the Server
     pub fn is_connected(&self) -> bool {
-        self.io.is_loaded()
+        self.server_connection.is_some()
+    }
+
+    /// Disconnect from Server
+    pub fn disconnect(&mut self) {
+        self.handshake_manager.send_disconnect_packets(&mut self.io);
+        self.disconnect_cleanup();
     }
 
     // Messages
@@ -143,11 +159,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         return self
             .address
             .expect("Client has not initiated connection to Server yet!");
-    }
-
-    /// Return whether or not a connection has been established with the Server
-    pub fn connected(&self) -> bool {
-        return self.server_connection.is_some();
     }
 
     /// Gets the average Round Trip Time measured to the Server
@@ -222,8 +233,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 }
                 // drop connection if necessary
                 if connection.should_drop() {
-                    self.server_connection = None;
-                    self.handshake_manager.disconnect();
+                    self.disconnect_cleanup();
                     events.push_back(Ok(Event::Disconnection));
                     return events; // exit early, we're disconnected, who cares?
                 }
@@ -351,11 +361,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                                 _ => {} // TODO: explicitly cover these cases
                             }
                         } else {
-                            if self
-                                .handshake_manager
-                                .receive_packet(&mut self.tick_manager, packet)
-                                == HandshakeResult::Connected
-                            {
+                            self.handshake_manager.receive_packet(&mut self.tick_manager, packet);
+                            if self.handshake_manager.is_connected() {
                                 let server_connection =
                                     Connection::new(self.server_address(), &self.connection_config);
 
@@ -373,6 +380,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 }
             }
         }
+    }
+
+    fn disconnect_cleanup(&mut self) {
+        self.server_connection = None;
+        self.handshake_manager.disconnect();
+        self.io.reset();
     }
 }
 

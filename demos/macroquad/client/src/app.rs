@@ -47,12 +47,9 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Macroquad Client Demo started");
 
-        let server_address = get_server_address();
-        let auth = Auth::new("charlie", "12345");
 
-        let mut client = Client::new(ClientConfig::default(), get_shared_config());
-        client.auth(auth);
-        client.connect(server_address);
+
+        let client = Client::new(ClientConfig::default(), get_shared_config());
 
         App {
             client,
@@ -65,6 +62,23 @@ impl App {
     }
 
     pub fn update(&mut self) {
+
+        let q = is_key_down(KeyCode::Q);
+        let c = is_key_down(KeyCode::C);
+        if q {
+            if self.client.is_connected() {
+                return self.client.disconnect();
+            }
+        }
+        if c {
+            if self.client.is_disconnected() {
+                let server_address = get_server_address();
+                let auth = Auth::new("charlie", "12345");
+                self.client.auth(auth);
+                return self.client.connect(server_address);
+            }
+        }
+
         self.input();
         self.receive_events();
         self.draw();
@@ -99,6 +113,9 @@ impl App {
     }
 
     fn receive_events(&mut self) {
+        if self.client.is_disconnected() {
+            return;
+        }
         for event in self.client.receive(self.world.proxy_mut()) {
             match event {
                 Ok(Event::Connection) => {
@@ -230,7 +247,7 @@ impl App {
     fn draw(&mut self) {
         clear_background(BLACK);
 
-        if self.client.connected() {
+        if self.client.is_connected() {
             // draw unowned squares
             for entity in &self.squares {
                 if let Some(square) = self.world.proxy().get_component::<Square>(entity) {

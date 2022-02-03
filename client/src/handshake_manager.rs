@@ -11,14 +11,14 @@ pub use naia_shared::{
 };
 
 use super::{
-    connection_state::{ConnectionState, ConnectionState::AwaitingChallengeResponse},
     io::Io,
     tick_manager::TickManager,
 };
 
-#[derive(PartialEq)]
-pub enum HandshakeResult {
-    None,
+#[derive(Debug, PartialEq)]
+enum HandshakeState {
+    AwaitingChallengeResponse,
+    AwaitingConnectResponse,
     Connected,
 }
 
@@ -26,7 +26,7 @@ pub struct HandshakeManager<P: Protocolize> {
     handshake_timer: Timer,
     pre_connection_timestamp: Option<Timestamp>,
     pre_connection_digest: Option<Box<[u8]>>,
-    connection_state: ConnectionState,
+    connection_state: HandshakeState,
     auth_message: Option<P>,
 }
 
@@ -39,7 +39,7 @@ impl<P: Protocolize> HandshakeManager<P> {
             handshake_timer,
             pre_connection_timestamp: None,
             pre_connection_digest: None,
-            connection_state: AwaitingChallengeResponse,
+            connection_state: HandshakeState::AwaitingChallengeResponse,
             auth_message: None,
         }
     }
@@ -52,10 +52,10 @@ impl<P: Protocolize> HandshakeManager<P> {
         self.handshake_timer.reset();
 
         match self.connection_state {
-            ConnectionState::Connected => {
+            HandshakeState::Connected => {
                 // do nothing, not necessary
             }
-            ConnectionState::AwaitingChallengeResponse => {
+            HandshakeState::AwaitingChallengeResponse => {
                 if self.pre_connection_timestamp.is_none() {
                     self.pre_connection_timestamp = Some(Timestamp::now());
                 }
@@ -71,16 +71,12 @@ impl<P: Protocolize> HandshakeManager<P> {
                     Packet::new(timestamp_bytes),
                 );
             }
-            ConnectionState::AwaitingConnectResponse => {
-                // write timestamp & digest into payload
+            HandshakeState::AwaitingConnectResponse => {
                 let mut payload_bytes = Vec::new();
-                self.pre_connection_timestamp
-                    .as_mut()
-                    .unwrap()
-                    .write(&mut payload_bytes);
-                for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref() {
-                    payload_bytes.push(*digest_byte);
-                }
+
+                // write timestamp & digest into payload
+                self.write_signed_timestamp(&mut payload_bytes);
+
                 // write auth message if there is one
                 if let Some(auth_message) = &mut self.auth_message {
                     let auth_dyn = auth_message.dyn_ref();
@@ -106,25 +102,45 @@ impl<P: Protocolize> HandshakeManager<P> {
         }
     }
 
+    pub fn send_disconnect_packets(&mut self, io: &mut Io) {
+        let mut payload_bytes = Vec::new();
+
+        // write timestamp & digest into payload
+        self.write_signed_timestamp(&mut payload_bytes);
+
+        // create packet
+        let payload = naia_shared::utils::write_connectionless_payload(PacketType::Disconnect, &payload_bytes);
+        let packet = Packet::new_raw(payload);
+
+        for _ in 0..10 {
+            io.send_packet(packet.clone());
+        }
+    }
+
     pub fn set_auth_message(&mut self, auth: P) {
         self.auth_message = Some(auth);
     }
 
     pub fn disconnect(&mut self) {
+        self.auth_message = None;
         self.pre_connection_timestamp = None;
         self.pre_connection_digest = None;
-        self.connection_state = AwaitingChallengeResponse;
+        self.connection_state = HandshakeState::AwaitingChallengeResponse;
+    }
+
+    pub fn is_connected(&self) -> bool {
+        return self.connection_state == HandshakeState::Connected;
     }
 
     pub fn receive_packet(
         &mut self,
         tick_manager: &mut Option<TickManager>,
         packet: Packet,
-    ) -> HandshakeResult {
+    ) {
         let (header, payload) = StandardHeader::read(packet.payload());
         match header.packet_type() {
             PacketType::ServerChallengeResponse => {
-                if self.connection_state == ConnectionState::AwaitingChallengeResponse {
+                if self.connection_state == HandshakeState::AwaitingChallengeResponse {
                     if let Some(my_timestamp) = self.pre_connection_timestamp {
                         let mut reader = PacketReader::new(&payload);
                         let server_tick = reader.get_cursor().read_u16::<BigEndian>().unwrap();
@@ -141,19 +157,26 @@ impl<P: Protocolize> HandshakeManager<P> {
                                 tick_manager.set_initial_tick(server_tick);
                             }
 
-                            self.connection_state = ConnectionState::AwaitingConnectResponse;
+                            self.connection_state = HandshakeState::AwaitingConnectResponse;
                         }
                     }
                 }
             }
             PacketType::ServerConnectResponse => {
-                self.connection_state = ConnectionState::Connected;
-                return HandshakeResult::Connected;
+                self.connection_state = HandshakeState::Connected;
             }
             _ => {}
         }
+    }
 
-        return HandshakeResult::None;
+    fn write_signed_timestamp(&self, payload_bytes: &mut Vec<u8>) {
+        self.pre_connection_timestamp
+            .as_ref()
+            .unwrap()
+            .write(payload_bytes);
+        for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref() {
+            payload_bytes.push(*digest_byte);
+        }
     }
 }
 

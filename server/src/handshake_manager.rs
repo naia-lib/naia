@@ -15,8 +15,7 @@ pub use naia_shared::{
 use super::{connection::Connection, io::Io, world_record::WorldRecord};
 
 pub enum HandshakeResult<P: Protocolize> {
-    None,
-    DisconnectUser,
+    Invalid,
     AuthUser(P),
     ConnectUser,
 }
@@ -78,6 +77,30 @@ impl<P: Protocolize> HandshakeManager<P> {
         /////////////////////////
     }
 
+    fn timestamp_validate(
+        &self,
+        reader: &mut PacketReader,
+    ) -> Option<Timestamp> {
+        let timestamp = Timestamp::read(reader);
+        let mut digest_bytes: Vec<u8> = Vec::new();
+        for _ in 0..32 {
+            digest_bytes.push(reader.read_u8());
+        }
+
+        // Verify that timestamp hash has been written by this
+        // server instance
+        let mut timestamp_bytes: Vec<u8> = Vec::new();
+        timestamp.write(&mut timestamp_bytes);
+
+        let validation_result =
+            hmac::verify(&self.connection_hash_key, &timestamp_bytes, &digest_bytes);
+        if validation_result.is_err() {
+            return None;
+        } else {
+            return Some(timestamp);
+        }
+    }
+
     pub fn receive_new_connect_request(
         &mut self,
         manifest: &Manifest<P>,
@@ -85,38 +108,28 @@ impl<P: Protocolize> HandshakeManager<P> {
         incoming_bytes: &Box<[u8]>,
     ) -> HandshakeResult<P> {
         let mut reader = PacketReader::new(incoming_bytes);
-        let timestamp = Timestamp::read(&mut reader);
 
         // Verify that timestamp hash has been written by this
         // server instance
-        let mut timestamp_bytes: Vec<u8> = Vec::new();
-        timestamp.write(&mut timestamp_bytes);
-        let mut digest_bytes: Vec<u8> = Vec::new();
-        for _ in 0..32 {
-            digest_bytes.push(reader.read_u8());
-        }
-        let validation_result =
-            hmac::verify(&self.connection_hash_key, &timestamp_bytes, &digest_bytes);
-        if validation_result.is_err() {
-            return HandshakeResult::None;
-        }
+        if let Some(timestamp) = self.timestamp_validate(&mut reader) {
+            // Timestamp hash is validated, now start configured auth process
+            let has_auth = reader.read_u8() == 1;
 
-        // Timestamp hash is validated, now start configured auth process
+            if has_auth != self.require_auth {
+                return HandshakeResult::Invalid;
+            }
 
-        let has_auth = reader.read_u8() == 1;
+            self.address_to_timestamp_map.insert(*address, timestamp);
 
-        if has_auth != self.require_auth {
-            return HandshakeResult::None;
-        }
-
-        self.address_to_timestamp_map.insert(*address, timestamp);
-
-        if has_auth {
-            let auth_kind = P::Kind::from_u16(reader.read_u16());
-            let auth_message = manifest.create_replica(auth_kind, &mut reader, 0);
-            return HandshakeResult::AuthUser(auth_message);
+            if has_auth {
+                let auth_kind = P::Kind::from_u16(reader.read_u16());
+                let auth_message = manifest.create_replica(auth_kind, &mut reader, 0);
+                return HandshakeResult::AuthUser(auth_message);
+            } else {
+                return HandshakeResult::ConnectUser;
+            }
         } else {
-            return HandshakeResult::ConnectUser;
+            return HandshakeResult::Invalid;
         }
     }
 
@@ -127,25 +140,47 @@ impl<P: Protocolize> HandshakeManager<P> {
         connection: &mut Connection<P, E>,
         incoming_header: &StandardHeader,
         incoming_payload: &Box<[u8]>,
-    ) -> HandshakeResult<P> {
+    ) {
         // At this point, we have already sent the ServerConnectResponse
         // message, but we continue to send the message till the Client
         // stops sending the ClientConnectRequest
 
         let mut reader = PacketReader::new(incoming_payload);
-        let new_timestamp = Timestamp::read(&mut reader);
 
-        if let Some(prev_timestamp) = self.address_to_timestamp_map.get(&connection.address()) {
-            if *prev_timestamp == new_timestamp {
-                connection.process_incoming_header(world_record, &incoming_header);
+        // Verify that timestamp hash has been written by this
+        // server instance
+        if let Some(new_timestamp) = self.timestamp_validate(&mut reader) {
+            if let Some(old_timestamp) = self.address_to_timestamp_map.get(&connection.address()) {
+                if *old_timestamp == new_timestamp {
+                    connection.process_incoming_header(world_record, &incoming_header);
+                    self.send_connect_accept_response(io, connection);
+                }
+            }
+        }
+    }
 
-                self.send_connect_accept_response(io, connection);
-            } else {
-                return HandshakeResult::DisconnectUser;
+    pub fn verify_disconnect_request<E: Copy + Eq + Hash>(
+        &mut self,
+        connection: &mut Connection<P, E>,
+        incoming_payload: &Box<[u8]>,
+    ) -> bool {
+        // At this point, we have already sent the ServerConnectResponse
+        // message, but we continue to send the message till the Client
+        // stops sending the ClientConnectRequest
+
+        let mut reader = PacketReader::new(incoming_payload);
+
+        // Verify that timestamp hash has been written by this
+        // server instance
+        if let Some(new_timestamp) = self.timestamp_validate(&mut reader) {
+            if let Some(old_timestamp) = self.address_to_timestamp_map.get(&connection.address()) {
+                if *old_timestamp == new_timestamp {
+                    return true;
+                }
             }
         }
 
-        return HandshakeResult::None;
+        return false;
     }
 
     pub fn delete_user(&mut self, address: &SocketAddr) {

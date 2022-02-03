@@ -22,6 +22,8 @@ pub enum PacketType {
     /// A Pong message, used to calculate RTT. Must be the response to all Ping
     /// messages
     Pong = 8,
+    /// Used to request a graceful Client disconnect from the Server
+    Disconnect = 9,
     /// An unknown packet type
     Unknown = 255,
 }
