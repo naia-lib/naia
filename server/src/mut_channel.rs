@@ -97,6 +97,13 @@ impl MutReceiver {
         self.mask.as_ref().read().ok()
     }
 
+    pub fn diff_mask_is_clear(&self) -> bool {
+        if let Ok(mask) = self.mask.as_ref().read() {
+            return mask.is_clear();
+        }
+        return true;
+    }
+
     pub fn mutate(&self, diff: u8) {
         if let Ok(mut mask) = self.mask.as_ref().write() {
             mask.set_bit(diff, true);

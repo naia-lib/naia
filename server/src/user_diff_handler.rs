@@ -44,8 +44,15 @@ impl UserDiffHandler {
         return None;
     }
 
-    pub fn has_diff_mask(&self, component_key: &ComponentKey) -> bool {
-        return self.receivers.contains_key(component_key);
+//    pub fn has_diff_mask(&self, component_key: &ComponentKey) -> bool {
+//        return self.receivers.contains_key(component_key);
+//    }
+
+    pub fn diff_mask_is_clear(&self, component_key: &ComponentKey) -> bool {
+        if let Some(receiver) = self.receivers.get(component_key) {
+            return receiver.diff_mask_is_clear();
+        }
+        return true;
     }
 
     pub fn or_diff_mask(&mut self, component_key: &ComponentKey, other_mask: &DiffMask) {

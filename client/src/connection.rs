@@ -9,7 +9,7 @@ use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, Packe
 use super::{
     entity_action::EntityAction, entity_manager::EntityManager,
     packet_writer::PacketWriter, ping_manager::PingManager,
-    tick_manager::TickManager, tick_queue::TickQueue, entity_message_sender::EntityMessageSender,
+    tick_manager::TickManager, tick_queue::TickQueue, entity_message_sender::{EntityMessageSender, Tick, MsgId as EntityMessageId},
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
@@ -34,26 +34,32 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         };
     }
 
-    pub fn get_outgoing_packet(&mut self, client_tick: u16, entity_messages: &mut VecDeque<(u16, E, P)>) -> Option<Box<[u8]>> {
+    pub fn get_outgoing_packet(&mut self, client_tick: u16, entity_messages: &mut VecDeque<(EntityMessageId, Tick, E, P)>) -> Option<Box<[u8]>> {
 
         if self.base_connection.has_outgoing_messages() || entity_messages.len() > 0 {
             let mut writer = PacketWriter::new();
 
+            let next_packet_index: u16 = self.get_next_packet_index();
+
             // Entity Messages
-            while let Some((client_tick, entity, message)) = entity_messages.pop_front() {
-                if !writer.write_entity_message(
+            while let Some((message_id, client_tick, entity, message)) = entity_messages.pop_front() {
+                if writer.write_entity_message(
                     &self.entity_manager,
                     &entity,
                     &message,
                     &client_tick
                 ) {
-                    entity_messages.push_front((client_tick, entity, message));
+                    // success!
+                    self.entity_message_sender.message_written(next_packet_index, client_tick, message_id);
+                }
+                else {
+                    // not enough space to write into packet
+                    entity_messages.push_front((message_id, client_tick, entity, message));
                     break;
                 }
             }
 
             // Messages
-            let next_packet_index: u16 = self.get_next_packet_index();
             while let Some(popped_message) =
                 self.base_connection.pop_outgoing_message(next_packet_index)
             {
@@ -84,7 +90,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         return None;
     }
 
-    pub fn get_entity_messages(&mut self, server_receivable_tick: u16) -> VecDeque<(u16, E, P)> {
+    pub fn get_entity_messages(&mut self, server_receivable_tick: u16) -> VecDeque<(EntityMessageId, Tick, E, P)> {
         return self.entity_message_sender.get_messages(server_receivable_tick);
     }
 
@@ -204,7 +210,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             );
         }
         self.base_connection
-            .process_incoming_header(header, &mut None);
+            .process_incoming_header(header, &mut Some(&mut self.entity_message_sender));
     }
 
     pub fn process_outgoing_header(
