@@ -278,11 +278,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         self.update_entity_scopes(&world);
 
         // loop through all connections, send packet
-        let server_tick_opt = self.server_tick();
+        let server_tick = self.server_tick().unwrap_or(0);
         for (address, connection) in self.user_connections.iter_mut() {
             connection.collect_component_updates(&self.world_record);
             while let Some(payload) =
-                connection.get_outgoing_packet(&world, &self.world_record, server_tick_opt)
+                connection.get_outgoing_packet(&world, &self.world_record, server_tick)
             {
                 self.io.send_packet(Packet::new_raw(*address, payload));
                 connection.mark_sent();
@@ -471,11 +471,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Gets the current tick of the Server
     pub fn server_tick(&self) -> Option<u16> {
-        if let Some(tick_manager) = &self.tick_manager {
-            return Some(tick_manager.get_tick());
-        } else {
-            None
-        }
+        return self.tick_manager.as_ref().map(|tick_manager| tick_manager.get_tick());
     }
 
     // Crate-Public methods
@@ -753,8 +749,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         if self.heartbeat_timer.ringing() {
             self.heartbeat_timer.reset();
 
-            let server_tick_opt = self.server_tick();
-
+            let server_tick = self.server_tick().unwrap_or(0);
             for (user_address, connection) in self.user_connections.iter_mut() {
                 if connection.should_drop() {
                     self.outstanding_disconnects.push_back(connection.user_key);
@@ -765,7 +760,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     // Don't try to refactor this to self.internal_send, doesn't seem to
                     // work cause of iter_mut()
                     let payload = connection.process_outgoing_header(
-                        server_tick_opt,
+                        server_tick,
                         connection.get_last_received_tick(),
                         PacketType::Heartbeat,
                         &[],
@@ -838,7 +833,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                     connection.process_incoming_header(&self.world_record, &header);
                                     connection.process_incoming_data(
                                         server_tick_opt,
-                                        header.host_tick(),
                                         &self.manifest,
                                         &payload,
                                     );
@@ -864,13 +858,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                             }
                         }
                         PacketType::Ping => {
-                            let server_tick_opt = self.server_tick();
+                            let server_tick = self.server_tick().unwrap_or(0);
                             match self.user_connections.get_mut(&address) {
                                 Some(connection) => {
                                     connection.process_incoming_header(&self.world_record, &header);
                                     let ping_payload = connection.process_ping(&payload);
                                     let payload_with_header = connection.process_outgoing_header(
-                                        server_tick_opt,
+                                        server_tick,
                                         connection.get_last_received_tick(),
                                         PacketType::Pong,
                                         &ping_payload,

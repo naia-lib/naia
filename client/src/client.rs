@@ -174,29 +174,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
     /// Gets the current tick of the Client
     pub fn client_tick(&self) -> Option<u16> {
-        if let Some(tick_manager) = &self.tick_manager {
-            Some(tick_manager.client_tick())
-        } else {
-            None
-        }
-    }
-
-    /// Gets the current tick of the Server
-    pub fn server_tick(&self) -> Option<u16> {
-        if let Some(tick_manager) = &self.tick_manager {
-            Some(tick_manager.server_tick())
-        } else {
-            None
-        }
-    }
-
-    /// Gets the last received tick from the Server
-    pub fn last_received_tick(&self) -> Option<u16> {
-        if let Some(server_connection) = &self.server_connection {
-            Some(server_connection.get_last_received_tick())
-        } else {
-            None
-        }
+        return self.tick_manager.as_ref().map(|tick_manager| tick_manager.client_sending_tick());
     }
 
     // Interpolation
@@ -265,8 +243,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                             EntityAction::InsertComponent(entity, component_key) => {
                                 Event::InsertComponent(entity, component_key)
                             }
-                            EntityAction::UpdateComponent(entity, component_key) => {
-                                Event::UpdateComponent(entity, component_key)
+                            EntityAction::UpdateComponent(tick, entity, component_key) => {
+                                Event::UpdateComponent(tick, entity, component_key)
                             }
                             EntityAction::RemoveComponent(entity, component) => {
                                 Event::RemoveComponent(entity, component.clone())
@@ -297,9 +275,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                     );
                 }
                 // send packets
-                while let Some(payload) = connection.get_outgoing_packet(client_tick_opt) {
-                    self.io.send_packet(Packet::new_raw(payload));
-                    connection.mark_sent();
+                if let Some(client_tick) = client_tick_opt {
+                    if let Some(tick_manager) = &self.tick_manager {
+                        let mut entity_messages = connection.get_entity_messages(tick_manager.server_receivable_tick());
+                        while let Some(payload) = connection.get_outgoing_packet(client_tick, &mut entity_messages) {
+                            self.io.send_packet(Packet::new_raw(payload));
+                            connection.mark_sent();
+                        }
+                    }
                 }
                 // update current tick & apply updates on tick boundary
                 if let Some(tick_manager) = &mut self.tick_manager {
@@ -397,14 +380,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 }
 
 fn internal_send_with_connection<P: Protocolize, E: Copy + Eq + Hash>(
-    host_tick: Option<u16>,
+    client_tick: Option<u16>,
     io: &mut Io,
     connection: &mut Connection<P, E>,
     packet_type: PacketType,
     packet: Packet,
 ) {
     let new_payload = connection.process_outgoing_header(
-        host_tick,
+        client_tick.unwrap_or(0),
         connection.get_last_received_tick(),
         packet_type,
         packet.payload(),

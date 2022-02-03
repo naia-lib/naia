@@ -49,23 +49,21 @@ impl MessagePacketWriter {
 
     /// Writes an Message into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_message<P: Protocolize>(&mut self, message: &P) -> bool {
+    pub fn write_message<P: Protocolize>(&mut self, total_bytes: usize, message: &P) -> bool {
         let message_ref = message.dyn_ref();
 
-        //Write message payload
-        let mut message_payload_bytes = Vec::<u8>::new();
-        message_ref.write(&mut message_payload_bytes);
-
-        //Write message "header"
         let mut message_total_bytes = Vec::<u8>::new();
 
+        // write message kind
         let message_kind = message_ref.get_kind();
         message_total_bytes
             .write_u16::<BigEndian>(message_kind.to_u16())
-            .unwrap(); // write naia id
-        message_total_bytes.append(&mut message_payload_bytes); // write payload
+            .unwrap();
 
-        let mut hypothetical_next_payload_size = self.bytes_number() + message_total_bytes.len();
+        // write payload
+        message_ref.write(&mut message_total_bytes);
+
+        let mut hypothetical_next_payload_size = total_bytes + message_total_bytes.len();
         if self.message_count == 0 {
             hypothetical_next_payload_size += 2;
         }
@@ -73,7 +71,7 @@ impl MessagePacketWriter {
             if self.message_count == 255 {
                 return false;
             }
-            self.message_count = self.message_count.wrapping_add(1);
+            self.message_count += 1;
             self.message_working_bytes.append(&mut message_total_bytes);
             return true;
         } else {

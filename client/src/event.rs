@@ -1,5 +1,7 @@
 use naia_shared::Protocolize;
 
+use super::tick::Tick;
+
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
 #[derive(Debug)]
@@ -24,7 +26,7 @@ pub enum Event<P: Protocolize, E: Copy> {
     InsertComponent(E, P::Kind),
     /// Occurs when a Component has had a state change on the Server while
     /// the Entity it is attached to has come into scope for the Client
-    UpdateComponent(E, P::Kind),
+    UpdateComponent(Tick, E, P::Kind),
     /// Occurs when a Component should be removed from the given Entity
     RemoveComponent(E, P),
     /// A Message emitted to the Client from the Server
