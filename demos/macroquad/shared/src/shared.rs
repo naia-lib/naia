@@ -11,14 +11,14 @@ pub fn get_server_address() -> SocketAddr {
 }
 
 pub fn get_shared_config() -> SharedConfig<Protocol> {
-    let tick_interval = Some(Duration::from_millis(50));
+    let tick_interval = Some(Duration::from_millis(20));
 
     //let link_condition = None;
-    let link_condition = Some(LinkConditionerConfig::average_condition());
-    //let link_condition = Some(LinkConditionerConfig {
-    //    incoming_latency: 500,
-    //    incoming_jitter: 0,
-    //    incoming_loss: 0.0,
-    //});
+    //let link_condition = Some(LinkConditionerConfig::poor_condition());
+    let link_condition = Some(LinkConditionerConfig {
+        incoming_latency: 500,
+        incoming_jitter: 0,
+        incoming_loss: 0.0,
+    });
     return SharedConfig::new(Protocol::load(), tick_interval, link_condition);
 }

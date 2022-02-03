@@ -10,7 +10,7 @@ use super::{
     wrapping_number::sequence_greater_than,
 };
 
-const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
+pub const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
 const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
 
 /// Keeps track of sent & received packets, and contains ack information that is

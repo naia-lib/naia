@@ -15,7 +15,7 @@ type World = DemoWorld<Protocol>;
 type Client = NaiaClient<Protocol, Entity>;
 
 const SQUARE_SIZE: f32 = 32.0;
-const COMMAND_HISTORY_SIZE: u16 = 64;
+const COMMAND_HISTORY_SIZE: u16 = 256;
 
 struct OwnedEntity {
     pub confirmed: Entity,
@@ -71,21 +71,23 @@ impl App {
             let a = is_key_down(KeyCode::A);
             let d = is_key_down(KeyCode::D);
 
-            if let Some(command) = &mut self.queued_command {
-                if w {
-                    command.w.set(true);
+            if w || s || a || d {
+                if let Some(command) = &mut self.queued_command {
+                    if w {
+                        command.w.set(true);
+                    }
+                    if s {
+                        command.s.set(true);
+                    }
+                    if a {
+                        command.a.set(true);
+                    }
+                    if d {
+                        command.d.set(true);
+                    }
+                } else {
+                    self.queued_command = Some(KeyCommand::new(w, s, a, d));
                 }
-                if s {
-                    command.s.set(true);
-                }
-                if a {
-                    command.a.set(true);
-                }
-                if d {
-                    command.d.set(true);
-                }
-            } else {
-                self.queued_command = Some(KeyCommand::new(w, s, a, d));
             }
         }
     }
@@ -183,21 +185,21 @@ impl App {
                                 world_mut.mirror_components(&client_entity, &server_entity, &component_kind);
                             }
 
-                            let server_tick_u16 = server_tick.u16();
-
-                            // Remove history of commands until current received tick
-                            self.command_history.remove_until(server_tick_u16);
-
-                            // Replay all existing historical commands until current tick
-                            let server_tick_less_one = server_tick_u16.wrapping_sub(1);
-                            let current_tick = self.command_history.sequence_num();
-                            for tick in server_tick_less_one..=current_tick {
-                                if let Some(command) = self.command_history.get_mut(tick) {
-                                    if let Some(mut square_ref) = world_mut.get_component_mut::<Square>(&client_entity) {
-                                        shared_behavior::process_command(&command, &mut square_ref);
-                                    }
-                                }
-                            }
+//                            let server_tick_u16 = server_tick.u16();
+//
+//                            // Remove history of commands until current received tick
+//                            self.command_history.remove_until(server_tick_u16);
+//
+//                            // Replay all existing historical commands until current tick
+//                            let server_tick_less_one = server_tick_u16.wrapping_sub(1);
+//                            let current_tick = self.command_history.sequence_num();
+//                            for tick in server_tick_less_one..=current_tick {
+//                                if let Some(command) = self.command_history.get_mut(tick) {
+//                                    if let Some(mut square_ref) = world_mut.get_component_mut::<Square>(&client_entity) {
+//                                        shared_behavior::process_command(&command, &mut square_ref);
+//                                    }
+//                                }
+//                            }
                         }
                     }
                 }

@@ -43,7 +43,7 @@ pub use naia_socket_shared::{
     Instant, LinkConditionerConfig, PacketReader, Random, SocketConfig, Timer, Timestamp,
 };
 
-pub use ack_manager::AckManager;
+pub use ack_manager::{AckManager, REDUNDANT_PACKET_ACKS_SIZE};
 pub use base_connection::BaseConnection;
 pub use connection_config::ConnectionConfig;
 pub use diff_mask::DiffMask;

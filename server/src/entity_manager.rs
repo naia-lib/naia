@@ -365,7 +365,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     pub fn collect_component_updates(&mut self, world_record: &WorldRecord<E, P::Kind>) {
         for (component_key, record) in self.component_records.iter() {
             if record.status == LocalityStatus::Created
-                && self.diff_handler.has_diff_mask(component_key)
+                && !self.diff_handler.diff_mask_is_clear(component_key)
             {
                 let (entity, component_kind) = world_record
                     .get_component_record(component_key)
