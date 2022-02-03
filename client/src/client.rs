@@ -11,7 +11,7 @@ use super::{
     client_config::ClientConfig,
     connection::Connection,
     entity_action::EntityAction,
-    entity_ref::{EntityRef, EntityMut},
+    entity_ref::{EntityMut, EntityRef},
     error::NaiaClientError,
     event::Event,
     handshake_manager::{HandshakeManager, HandshakeResult},
@@ -59,10 +59,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
         let tick_manager = {
             if let Some(duration) = shared_config.tick_interval {
-                Some(TickManager::new(
-                    duration,
-                    client_config.minimum_latency,
-                ))
+                Some(TickManager::new(duration, client_config.minimum_latency))
             } else {
                 None
             }
@@ -123,21 +120,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// given Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<'s, W: WorldRefType<P, E>>(
-        &'s self,
-        world: W,
-        entity: &E,
-    ) -> EntityRef<P, E, W> {
+    pub fn entity<'s, W: WorldRefType<P, E>>(&'s self, world: W, entity: &E) -> EntityRef<P, E, W> {
         return EntityRef::new(world, &entity);
     }
 
     /// Retrieves an EntityMut that exposes write operations for the
     /// given Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity_mut<'s>(
-        &'s mut self,
-        entity: &E,
-    ) -> EntityMut<P, E> {
+    pub fn entity_mut<'s>(&'s mut self, entity: &E) -> EntityMut<P, E> {
         return EntityMut::new(self, &entity);
     }
 
@@ -174,7 +164,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
     /// Gets the current tick of the Client
     pub fn client_tick(&self) -> Option<u16> {
-        return self.tick_manager.as_ref().map(|tick_manager| tick_manager.client_sending_tick());
+        return self
+            .tick_manager
+            .as_ref()
+            .map(|tick_manager| tick_manager.client_sending_tick());
     }
 
     // Interpolation
@@ -209,6 +202,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         match &mut self.server_connection {
             Some(connection) => {
+                let mut did_tick = false;
+                // update current tick & apply updates on tick boundary
+                if let Some(tick_manager) = &mut self.tick_manager {
+                    if connection.frame_begin(&mut world, &self.manifest, tick_manager) {
+                        did_tick = true;
+                    }
+                } else {
+                    connection.tickless_read_incoming(&mut world, &self.manifest);
+                }
                 // return connect event
                 if self.outstanding_connect {
                     events.push_back(Ok(Event::Connection));
@@ -277,20 +279,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 // send packets
                 if let Some(client_tick) = client_tick_opt {
                     if let Some(tick_manager) = &self.tick_manager {
-                        let mut entity_messages = connection.get_entity_messages(tick_manager.server_receivable_tick());
-                        while let Some(payload) = connection.get_outgoing_packet(client_tick, &mut entity_messages) {
+                        let mut entity_messages =
+                            connection.get_entity_messages(tick_manager.server_receivable_tick());
+                        while let Some(payload) =
+                            connection.get_outgoing_packet(client_tick, &mut entity_messages)
+                        {
                             self.io.send_packet(Packet::new_raw(payload));
                             connection.mark_sent();
                         }
                     }
                 }
-                // update current tick & apply updates on tick boundary
-                if let Some(tick_manager) = &mut self.tick_manager {
-                    if connection.frame_begin(&mut world, &self.manifest, tick_manager) {
-                        events.push_back(Ok(Event::Tick));
-                    }
-                } else {
-                    connection.tickless_read_incoming(&mut world, &self.manifest);
+                // tick event
+                if did_tick {
+                    events.push_back(Ok(Event::Tick));
                 }
             }
             None => {
@@ -304,11 +305,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     // Crate-public functions
 
     /// Sends a Message to the Server, associated with a given Entity
-    pub(crate) fn send_entity_message<R: ReplicateSafe<P>>(
-        &mut self,
-        entity: &E,
-        message: &R,
-    ) {
+    pub(crate) fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R) {
         if let Some(client_tick) = self.client_tick() {
             if let Some(connection) = self.server_connection.as_mut() {
                 connection.send_entity_message(entity, message, client_tick);

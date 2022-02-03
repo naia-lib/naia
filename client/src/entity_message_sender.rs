@@ -1,15 +1,20 @@
-use std::{collections::{HashMap, VecDeque}, hash::Hash};
+use std::{
+    collections::{HashMap, VecDeque},
+    hash::Hash,
+};
 
-use naia_shared::{Protocolize, ReplicateSafe, SequenceBuffer, PacketNotifiable, REDUNDANT_PACKET_ACKS_SIZE};
+use naia_shared::{PacketNotifiable, Protocolize, ReplicateSafe, SequenceBuffer};
 
-const MESSAGE_HISTORY_SIZE: u16 = 32;
+const MESSAGE_HISTORY_SIZE: u16 = 64;
 
 pub type MsgId = u8;
 type PacketIndex = u16;
 pub type Tick = u16;
 
 pub struct EntityMessageSender<P: Protocolize, E: Copy + Eq + Hash> {
+    // This SequenceBuffer is indexed by Tick
     outgoing_messages: SequenceBuffer<MessageMap<P, E>>,
+    // This SequenceBuffer is indexed by PacketIndex
     sent_messages: SequenceBuffer<Vec<(Tick, MsgId)>>,
 }
 
@@ -17,11 +22,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
     pub fn new() -> Self {
         EntityMessageSender {
             outgoing_messages: SequenceBuffer::with_capacity(MESSAGE_HISTORY_SIZE),
-            sent_messages: SequenceBuffer::with_capacity(REDUNDANT_PACKET_ACKS_SIZE),
+            sent_messages: SequenceBuffer::with_capacity(MESSAGE_HISTORY_SIZE),
         }
     }
 
-    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R, client_tick: Tick) {
+    pub fn send_entity_message<R: ReplicateSafe<P>>(
+        &mut self,
+        entity: &E,
+        message: &R,
+        client_tick: Tick,
+    ) {
         let message_protocol = message.protocol_copy();
 
         if !self.outgoing_messages.exists(client_tick) {
@@ -51,8 +61,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
 
     pub fn message_written(&mut self, packet_index: PacketIndex, tick: Tick, message_id: MsgId) {
         if !self.sent_messages.exists(packet_index) {
-            self.sent_messages
-                .insert(packet_index, Vec::new());
+            self.sent_messages.insert(packet_index, Vec::new());
         }
         if let Some(list) = self.sent_messages.get_mut(packet_index) {
             list.push((tick, message_id));
@@ -71,8 +80,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> PacketNotifiable for EntityMessageSend
         }
     }
 
-    fn notify_packet_dropped(&mut self, _dropped_packet_index: u16) {
-    }
+    fn notify_packet_dropped(&mut self, _dropped_packet_index: u16) {}
 }
 
 // MessageMap

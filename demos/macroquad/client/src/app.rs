@@ -1,8 +1,11 @@
-use std::{ops::Deref, collections::HashSet};
+use std::{collections::HashSet, ops::Deref};
 
 use macroquad::prelude::*;
 
-use naia_client::{Client as NaiaClient, ClientConfig, Event, shared::{Protocolize, Replicate, SequenceBuffer}};
+use naia_client::{
+    shared::{Protocolize, Replicate, SequenceBuffer},
+    Client as NaiaClient, ClientConfig, Event,
+};
 
 use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
 
@@ -15,7 +18,7 @@ type World = DemoWorld<Protocol>;
 type Client = NaiaClient<Protocol, Entity>;
 
 const SQUARE_SIZE: f32 = 32.0;
-const COMMAND_HISTORY_SIZE: u16 = 256;
+const COMMAND_HISTORY_SIZE: u16 = 64;
 
 struct OwnedEntity {
     pub confirmed: Entity,
@@ -24,7 +27,10 @@ struct OwnedEntity {
 
 impl OwnedEntity {
     pub fn new(confirmed_entity: Entity, predicted_entity: Entity) -> Self {
-        OwnedEntity { confirmed: confirmed_entity, predicted: predicted_entity }
+        OwnedEntity {
+            confirmed: confirmed_entity,
+            predicted: predicted_entity,
+        }
     }
 }
 
@@ -105,16 +111,19 @@ impl App {
                     if let Some(owned_entity) = &self.owned_entity {
                         if let Some(command) = self.queued_command.take() {
                             if let Some(client_tick) = self.client.client_tick() {
-
                                 // Record command
                                 self.command_history.insert(client_tick, command.clone());
 
                                 // Send command
-                                self.client.entity_mut(&owned_entity.confirmed).send_message(&command);
+                                self.client
+                                    .entity_mut(&owned_entity.confirmed)
+                                    .send_message(&command);
 
                                 // Apply command
-                                if let Some(mut square_ref) =
-                                self.world.proxy_mut().get_component_mut::<Square>(&owned_entity.predicted)
+                                if let Some(mut square_ref) = self
+                                    .world
+                                    .proxy_mut()
+                                    .get_component_mut::<Square>(&owned_entity.predicted)
                                 {
                                     shared_behavior::process_command(&command, &mut square_ref);
                                 }
@@ -148,7 +157,8 @@ impl App {
                                     Some(component.deref().deref().protocol_copy());
                             }
                             if let Some(component_copy) = component_copy_opt {
-                                component_copy.extract_and_insert(&prediction_entity, &mut world_mut);
+                                component_copy
+                                    .extract_and_insert(&prediction_entity, &mut world_mut);
                             }
                         }
                         ////////////////////////////////
@@ -158,7 +168,9 @@ impl App {
                         let mut disowned: bool = false;
                         if let Some(owned_entity) = &self.owned_entity {
                             if owned_entity.confirmed == entity {
-                                self.world.proxy_mut().despawn_entity(&owned_entity.predicted);
+                                self.world
+                                    .proxy_mut()
+                                    .despawn_entity(&owned_entity.predicted);
                                 disowned = true;
                             }
                         }
@@ -170,36 +182,40 @@ impl App {
                 }
                 Ok(Event::UpdateComponent(server_tick, updated_entity, _)) => {
                     if let Some(owned_entity) = &self.owned_entity {
-
                         let mut world_mut = self.world.proxy_mut();
                         let server_entity = owned_entity.confirmed;
 
                         // If entity is owned
                         if updated_entity == server_entity {
-
                             let client_entity = owned_entity.predicted;
 
                             // Set prediction to server authoritative Entity
-                            // go through all components to make prediction components = world components
+                            // go through all components to make prediction components = world
+                            // components
                             for component_kind in world_mut.get_component_kinds(&server_entity) {
-                                world_mut.mirror_components(&client_entity, &server_entity, &component_kind);
+                                world_mut.mirror_components(
+                                    &client_entity,
+                                    &server_entity,
+                                    &component_kind,
+                                );
                             }
 
-//                            let server_tick_u16 = server_tick.u16();
-//
-//                            // Remove history of commands until current received tick
-//                            self.command_history.remove_until(server_tick_u16);
-//
-//                            // Replay all existing historical commands until current tick
-//                            let server_tick_less_one = server_tick_u16.wrapping_sub(1);
-//                            let current_tick = self.command_history.sequence_num();
-//                            for tick in server_tick_less_one..=current_tick {
-//                                if let Some(command) = self.command_history.get_mut(tick) {
-//                                    if let Some(mut square_ref) = world_mut.get_component_mut::<Square>(&client_entity) {
-//                                        shared_behavior::process_command(&command, &mut square_ref);
-//                                    }
-//                                }
-//                            }
+                            let server_tick_u16 = server_tick.u16();
+
+                            // Remove history of commands until current received tick
+                            self.command_history.remove_until(server_tick_u16);
+
+                            // Replay all existing historical commands until current tick
+                            let current_tick = self.command_history.newest();
+                            for tick in server_tick_u16..=current_tick {
+                                if let Some(command) = self.command_history.get_mut(tick) {
+                                    if let Some(mut square_ref) =
+                                        world_mut.get_component_mut::<Square>(&client_entity)
+                                    {
+                                        shared_behavior::process_command(&command, &mut square_ref);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -235,7 +251,11 @@ impl App {
 
             // draw own square
             if let Some(entity) = &self.owned_entity {
-                if let Some(square) = self.world.proxy().get_component::<Square>(&entity.predicted) {
+                if let Some(square) = self
+                    .world
+                    .proxy()
+                    .get_component::<Square>(&entity.predicted)
+                {
                     draw_rectangle(
                         f32::from(*(square.x.get())),
                         f32::from(*(square.y.get())),

@@ -5,11 +5,13 @@ use bevy::{
     ecs::schedule::SystemStage,
     prelude::*,
 };
-use naia_server::{Protocolize, Server, ServerConfig, SharedConfig};
 use naia_bevy_shared::WorldData;
+use naia_server::{Protocolize, Server, ServerConfig, SharedConfig};
 
 use super::{
-    events::{AuthorizationEvent, MessageEntityEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
+    events::{
+        AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEntityEvent, MessageEvent,
+    },
     resource::ServerResource,
     stage::{PrivateStage, Stage},
     systems::{before_receive_events, finish_tick, should_receive, should_tick},

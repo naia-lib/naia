@@ -99,7 +99,8 @@ impl TickManager {
 
         // Calculate incoming & outgoing jitter buffer tick offsets
         let jitter_based_offset = jitter_deviation * 3.0;
-        self.client_receiving_tick_adjust = (jitter_based_offset / self.tick_interval_millis).ceil() as u16;
+        self.client_receiving_tick_adjust =
+            (jitter_based_offset / self.tick_interval_millis).ceil() as u16;
 
         // NOTE: I've struggled multiple times with why (ping_average * 2.0) exists in
         // this calculation, figured it out, then returned to struggle later.
@@ -107,7 +108,8 @@ impl TickManager {
         // Keep in mind that self.server_tick here is the tick we have RECEIVED from the
         // Server which means that the real current server_tick is likely
         // self.server_tick + ping_average / tick_interval.
-        // By multiplying the ping average here, we are correcting for our late (and lesser) self.server_tick value
+        // By multiplying the ping average here, we are correcting for our late (and
+        // lesser) self.server_tick value
         let client_sending_adjust_millis = self
             .minimum_latency
             .max((ping_average * 2.0) + jitter_based_offset);
@@ -122,18 +124,23 @@ impl TickManager {
 
     /// Gets the tick at which the Client is sending updates
     pub fn client_sending_tick(&self) -> u16 {
-        return self.received_server_tick.wrapping_add(self.client_sending_tick_adjust);
+        return self
+            .received_server_tick
+            .wrapping_add(self.client_sending_tick_adjust);
     }
 
-    /// Gets the tick at which to receive messages from the Server (after jitter buffer offset is applied)
+    /// Gets the tick at which to receive messages from the Server (after jitter
+    /// buffer offset is applied)
     pub fn client_receiving_tick(&self) -> u16 {
-        return self.received_server_tick.wrapping_sub(self.client_receiving_tick_adjust);
+        return self
+            .received_server_tick
+            .wrapping_sub(self.client_receiving_tick_adjust);
     }
 
     /// Gets the earliest tick the Server may be able to receive Client messages
     pub fn server_receivable_tick(&self) -> u16 {
-        return self.received_server_tick.wrapping_add(self.server_receivable_tick_adjust);
+        return self
+            .received_server_tick
+            .wrapping_add(self.server_receivable_tick_adjust);
     }
-
-
 }

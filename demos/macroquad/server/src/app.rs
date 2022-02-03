@@ -1,15 +1,14 @@
 use std::collections::HashMap;
 
 use naia_server::{
-    Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
-    shared::{Random}
+    shared::Random, Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
 };
 
 use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
-    protocol::{Color, Protocol, Square, EntityAssignment},
+    protocol::{Color, EntityAssignment, Protocol, Square},
 };
 
 type World = DemoWorld<Protocol>;

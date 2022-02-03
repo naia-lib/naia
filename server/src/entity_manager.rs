@@ -10,8 +10,8 @@ use std::{
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{
-    DiffMask, KeyGenerator, LocalComponentKey, NetEntity, NaiaKey, PacketNotifiable,
-    ProtocolKindType, Protocolize, WorldRefType, MTU_SIZE, ReplicateSafe
+    DiffMask, KeyGenerator, LocalComponentKey, NaiaKey, NetEntity, PacketNotifiable,
+    ProtocolKindType, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE,
 };
 
 use super::{
@@ -266,11 +266,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         return self.entity_records.contains_key(entity);
     }
 
-    pub fn send_entity_message<R: ReplicateSafe<P>>(
-        &mut self,
-        entity: &E,
-        message: &R,
-    ) {
+    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R) {
         if let Some(entity_record) = self.entity_records.get(&entity) {
             match entity_record.status {
                 LocalityStatus::Created => {
@@ -290,7 +286,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
         // Entity hasn't been added to the User Scope yet, or replicated to Client yet
         if !self.delayed_entity_messages.contains_key(entity) {
-            self.delayed_entity_messages.insert(*entity, VecDeque::new());
+            self.delayed_entity_messages
+                .insert(*entity, VecDeque::new());
         }
         let message_queue = self.delayed_entity_messages.get_mut(entity).unwrap();
         message_queue.push_back(message.protocol_copy());
@@ -401,7 +398,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
         match action {
             EntityAction::SpawnEntity(global_entity, component_list) => {
-                let local_id = self.entity_records.get(global_entity).unwrap().entity_net_id;
+                let local_id = self
+                    .entity_records
+                    .get(global_entity)
+                    .unwrap()
+                    .entity_net_id;
 
                 action_total_bytes
                     .write_u16::<BigEndian>(local_id.to_u16())
@@ -440,13 +441,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
             }
             EntityAction::DespawnEntity(global_entity) => {
-                let local_id = self.entity_records.get(global_entity).unwrap().entity_net_id;
+                let local_id = self
+                    .entity_records
+                    .get(global_entity)
+                    .unwrap()
+                    .entity_net_id;
                 action_total_bytes
                     .write_u16::<BigEndian>(local_id.to_u16())
                     .unwrap(); //write local entity
             }
             EntityAction::MessageEntity(global_entity, message) => {
-                let local_id = self.entity_records.get(global_entity).unwrap().entity_net_id;
+                let local_id = self
+                    .entity_records
+                    .get(global_entity)
+                    .unwrap()
+                    .entity_net_id;
                 let message_ref = message.dyn_ref();
 
                 //write local entity
@@ -464,7 +473,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 message_ref.write(&mut action_total_bytes);
             }
             EntityAction::InsertComponent(global_entity, global_component_key, component_kind) => {
-                let local_id = self.entity_records.get(global_entity).unwrap().entity_net_id;
+                let local_id = self
+                    .entity_records
+                    .get(global_entity)
+                    .unwrap()
+                    .entity_net_id;
                 let local_component_key = self
                     .component_records
                     .get(global_component_key)
@@ -766,21 +779,24 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 }
 
                                 // send any Entity messages that have been waiting
-                                if let Some(message_queue) = self.delayed_entity_messages.get_mut(&global_entity) {
+                                if let Some(message_queue) =
+                                    self.delayed_entity_messages.get_mut(&global_entity)
+                                {
                                     while let Some(message) = message_queue.pop_front() {
-                                        self.queued_actions.push_back(
-                                            EntityAction::MessageEntity(
-                                                global_entity,
-                                                message
-                                            ),
-                                        );
+                                        self.queued_actions.push_back(EntityAction::MessageEntity(
+                                            global_entity,
+                                            message,
+                                        ));
                                     }
                                 }
                             }
                         }
                         EntityAction::DespawnEntity(global_entity) => {
-                            let local_id =
-                                self.entity_records.get(&global_entity).unwrap().entity_net_id;
+                            let local_id = self
+                                .entity_records
+                                .get(&global_entity)
+                                .unwrap()
+                                .entity_net_id;
 
                             // actually delete the entity from local records
                             self.entity_records.remove(&global_entity);

@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    sequence_greater_than, NetEntity, Manifest, NaiaKey, PacketReader, ProtocolKindType,
+    sequence_greater_than, Manifest, NaiaKey, NetEntity, PacketReader, ProtocolKindType,
     Protocolize, SequenceBuffer,
 };
 
 const MESSAGE_BUFFER_MAX_SIZE: u16 = 64;
 
-/// Handles incoming Entity Messages, buffering them to be received on the correct tick
+/// Handles incoming Entity Messages, buffering them to be received on the
+/// correct tick
 #[derive(Debug)]
 pub struct EntityMessageReceiver<P: Protocolize> {
     incoming_messages: SequenceBuffer<HashMap<NetEntity, P>>,
@@ -37,8 +38,8 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
         return None;
     }
 
-    /// Given incoming packet data, read transmitted Entity Message and store them to
-    /// be returned to the application
+    /// Given incoming packet data, read transmitted Entity Message and store
+    /// them to be returned to the application
     pub fn process_incoming_messages(
         &mut self,
         server_tick_opt: Option<u16>,
@@ -56,8 +57,7 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
             if let Some(server_tick) = server_tick_opt {
                 if sequence_greater_than(client_tick, server_tick) {
                     if !self.incoming_messages.exists(client_tick) {
-                        self.incoming_messages
-                            .insert(client_tick, HashMap::new());
+                        self.incoming_messages.insert(client_tick, HashMap::new());
                     }
                     let map = self.incoming_messages.get_mut(client_tick).unwrap();
                     if !map.contains_key(&owned_entity) {

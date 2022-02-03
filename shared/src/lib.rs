@@ -43,13 +43,13 @@ pub use naia_socket_shared::{
     Instant, LinkConditionerConfig, PacketReader, Random, SocketConfig, Timer, Timestamp,
 };
 
-pub use ack_manager::{AckManager, REDUNDANT_PACKET_ACKS_SIZE};
+pub use ack_manager::AckManager;
 pub use base_connection::BaseConnection;
 pub use connection_config::ConnectionConfig;
 pub use diff_mask::DiffMask;
 pub use entity_action_type::EntityActionType;
 pub use key_store::KeyGenerator;
-pub use keys::{LocalComponentKey, NetEntity, NaiaKey};
+pub use keys::{LocalComponentKey, NaiaKey, NetEntity};
 pub use manager_type::ManagerType;
 pub use manifest::Manifest;
 pub use message_manager::MessageManager;

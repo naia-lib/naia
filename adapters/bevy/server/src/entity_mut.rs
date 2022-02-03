@@ -39,7 +39,8 @@ impl<'s, 'world, 'state, P: Protocolize> EntityMut<'s, 'world, 'state, P> {
     }
 
     pub fn remove<R: Replicate<P>>(&mut self) -> &mut Self {
-        self.server.queue_command(RemoveComponent::<P, R>::new(&self.entity));
+        self.server
+            .queue_command(RemoveComponent::<P, R>::new(&self.entity));
         self
     }
 

@@ -28,10 +28,10 @@ pub use naia_server_socket::ServerAddrs;
 
 pub use naia_shared as shared;
 
-mod entity_message_receiver;
 mod connection;
 mod entity_action;
 mod entity_manager;
+mod entity_message_receiver;
 mod entity_ref;
 mod entity_scope_map;
 mod error;

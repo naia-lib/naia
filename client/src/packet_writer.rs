@@ -1,10 +1,10 @@
 use std::hash::Hash;
 
-use naia_shared::{
-    MessagePacketWriter, Protocolize,
-};
+use naia_shared::{MessagePacketWriter, Protocolize};
 
-use super::{entity_manager::EntityManager, entity_message_packet_writer::EntityMessagePacketWriter};
+use super::{
+    entity_manager::EntityManager, entity_message_packet_writer::EntityMessagePacketWriter,
+};
 
 /// Handles writing of Message/EntityMessage data into an outgoing packet
 pub struct PacketWriter {
@@ -53,12 +53,19 @@ impl PacketWriter {
         client_tick: &u16,
     ) -> bool {
         return self.entity_message_writer.write_entity_message(
-            self.bytes_number(), entity_manager, world_entity, message, client_tick);
+            self.bytes_number(),
+            entity_manager,
+            world_entity,
+            message,
+            client_tick,
+        );
     }
 
     /// Writes a Message into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
     pub fn write_message<P: Protocolize>(&mut self, message: &P) -> bool {
-        return self.message_writer.write_message(self.bytes_number(), message);
+        return self
+            .message_writer
+            .write_message(self.bytes_number(), message);
     }
 }

@@ -8,7 +8,7 @@ use super::client::Client;
 pub struct EntityRef<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> {
     world: W,
     entity: E,
-    phantom_p: PhantomData<P>
+    phantom_p: PhantomData<P>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E, W> {
@@ -50,8 +50,7 @@ impl<'c, P: Protocolize, E: Copy + Eq + Hash> EntityMut<'c, P, E> {
     // Messages
 
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R) -> &mut Self {
-        self.client
-            .send_entity_message(&self.entity, message);
+        self.client.send_entity_message(&self.entity, message);
 
         self
     }

@@ -5,8 +5,8 @@ use std::{
 };
 
 use naia_shared::{
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
-    Protocolize, ReplicateSafe, SequenceNumber, StandardHeader, WorldRefType,
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize,
+    ReplicateSafe, SequenceNumber, StandardHeader, WorldRefType,
 };
 
 use super::{
@@ -130,8 +130,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     }
 
     pub fn get_incoming_entity_message(&mut self, server_tick: u16) -> Option<(E, P)> {
-        if let Some((local_entity, message)) =
-            self.entity_message_receiver.pop_incoming_entity_message(server_tick)
+        if let Some((local_entity, message)) = self
+            .entity_message_receiver
+            .pop_incoming_entity_message(server_tick)
         {
             // get global entity from the local one
             if let Some(global_entity) = self
@@ -176,8 +177,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     }
 
     pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R) {
-        self.entity_manager
-            .send_entity_message(entity, message);
+        self.entity_manager.send_entity_message(entity, message);
     }
 
     // Pass-through methods to underlying common connection

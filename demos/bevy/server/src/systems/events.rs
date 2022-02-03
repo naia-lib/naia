@@ -5,7 +5,7 @@ use bevy::{
 };
 
 use naia_bevy_server::{
-    events::{AuthorizationEvent, MessageEntityEvent, ConnectionEvent, DisconnectionEvent},
+    events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEntityEvent},
     Random, Server,
 };
 

@@ -6,8 +6,6 @@ pub struct GlobalEntityRecord {
 
 impl GlobalEntityRecord {
     pub fn new() -> Self {
-        Self {
-            room_key: None,
-        }
+        Self { room_key: None }
     }
 }
