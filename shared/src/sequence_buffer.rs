@@ -129,6 +129,11 @@ impl<T> SequenceBuffer<T> {
             .wrapping_sub(self.entry_sequences.len() as u16);
     }
 
+    /// Gets the newest stored sequence number
+    pub fn newest(&self) -> u16 {
+        return self.sequence_num;
+    }
+
     /// Clear sequence buffer completely
     pub fn clear(&mut self) {
         let size = self.entry_sequences.len();

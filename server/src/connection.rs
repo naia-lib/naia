@@ -43,7 +43,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         &mut self,
         world: &W,
         world_record: &WorldRecord<E, P::Kind>,
-        host_tick: Option<u16>,
+        server_tick: u16,
     ) -> Option<Box<[u8]>> {
         if self.base_connection.has_outgoing_messages()
             || self.entity_manager.has_outgoing_actions()
@@ -85,7 +85,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
                 // Add header to it
                 let payload = self.process_outgoing_header(
-                    host_tick,
+                    server_tick,
                     self.base_connection.get_last_received_tick(),
                     PacketType::Data,
                     &out_bytes,
@@ -100,7 +100,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     pub fn process_incoming_data(
         &mut self,
         server_tick: Option<u16>,
-        client_tick: u16,
         manifest: &Manifest<P>,
         data: &[u8],
     ) {
@@ -111,7 +110,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                 ManagerType::EntityMessage => {
                     self.entity_message_receiver.process_incoming_messages(
                         server_tick,
-                        client_tick,
                         &mut reader,
                         manifest,
                     );
@@ -212,7 +210,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
     pub fn process_outgoing_header(
         &mut self,
-        host_tick: Option<u16>,
+        host_tick: u16,
         last_received_tick: u16,
         packet_type: PacketType,
         payload: &[u8],

@@ -9,14 +9,14 @@ use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, Packe
 use super::{
     entity_action::EntityAction, entity_manager::EntityManager,
     packet_writer::PacketWriter, ping_manager::PingManager,
-    tick_manager::TickManager, tick_queue::TickQueue,
+    tick_manager::TickManager, tick_queue::TickQueue, entity_message_sender::EntityMessageSender,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
-    outgoing_entity_messages: VecDeque<(E, P)>,
+    entity_message_sender: EntityMessageSender<P, E>,
     jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
 }
 
@@ -29,23 +29,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                 connection_config.ping_interval,
                 connection_config.ping_sample_size,
             ),
-            outgoing_entity_messages: VecDeque::new(),
+            entity_message_sender: EntityMessageSender::new(),
             jitter_buffer: TickQueue::new(),
         };
     }
 
-    pub fn get_outgoing_packet(&mut self, host_tick_opt: Option<u16>) -> Option<Box<[u8]>> {
-        if self.base_connection.has_outgoing_messages() || !self.outgoing_entity_messages.is_empty() {
+    pub fn get_outgoing_packet(&mut self, client_tick: u16, entity_messages: &mut VecDeque<(u16, E, P)>) -> Option<Box<[u8]>> {
+
+        if self.base_connection.has_outgoing_messages() || entity_messages.len() > 0 {
             let mut writer = PacketWriter::new();
 
             // Entity Messages
-            while let Some((entity, message)) = self.outgoing_entity_messages.pop_front() {
+            while let Some((client_tick, entity, message)) = entity_messages.pop_front() {
                 if !writer.write_entity_message(
                     &self.entity_manager,
                     &entity,
                     &message,
+                    &client_tick
                 ) {
-                    self.outgoing_entity_messages.push_front((entity, message));
+                    entity_messages.push_front((client_tick, entity, message));
                     break;
                 }
             }
@@ -70,7 +72,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
                 // Add header to it
                 let payload = self.process_outgoing_header(
-                    host_tick_opt,
+                    client_tick,
                     self.base_connection.get_last_received_tick(),
                     PacketType::Data,
                     &out_bytes,
@@ -82,11 +84,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         return None;
     }
 
+    pub fn get_entity_messages(&mut self, server_receivable_tick: u16) -> VecDeque<(u16, E, P)> {
+        return self.entity_message_sender.get_messages(server_receivable_tick);
+    }
+
     pub fn process_incoming_data<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
         packet_index: u16,
         manifest: &Manifest<P>,
+        server_tick: u16,
         data: &[u8],
     ) {
         let mut reader = PacketReader::new(data);
@@ -102,6 +109,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                         world,
                         manifest,
                         packet_index,
+                        server_tick,
                         &mut reader,
                     );
                 }
@@ -136,7 +144,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     ) -> bool {
         if tick_manager.mark_frame() {
             // then we apply all received updates to components at once
-            let receiving_tick = tick_manager.receiving_tick();
+            let receiving_tick = tick_manager.client_receiving_tick();
             self.process_buffered_packet(world, manifest, receiving_tick);
             return true;
         }
@@ -158,10 +166,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         manifest: &Manifest<P>,
         target_tick: u16,
     ) {
-        while let Some((_, packet_index, data_packet)) =
+        while let Some((server_tick, packet_index, data_packet)) =
             self.get_buffered_data_packet(target_tick)
         {
-            self.process_incoming_data(world, packet_index, manifest, &data_packet);
+            self.process_incoming_data(world, packet_index, manifest, server_tick,&data_packet);
         }
     }
 
@@ -201,13 +209,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
     pub fn process_outgoing_header(
         &mut self,
-        host_tick: Option<u16>,
+        client_tick: u16,
         last_received_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
         return self.base_connection.process_outgoing_header(
-            host_tick,
+            client_tick,
             last_received_tick,
             packet_type,
             payload,
@@ -225,8 +233,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     }
 
     pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R, client_tick: u16) {
-        let message_protocol = message.protocol_copy();
-        return self.outgoing_entity_messages.push_back((*entity, message_protocol));
+        return self.entity_message_sender.send_entity_message(entity, message, client_tick);
     }
 
     pub fn get_incoming_message(&mut self) -> Option<P> {

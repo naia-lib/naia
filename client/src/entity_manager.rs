@@ -11,7 +11,7 @@ use naia_shared::{
 };
 
 use super::{
-    entity_action::EntityAction, entity_record::EntityRecord,
+    entity_action::EntityAction, entity_record::EntityRecord, tick::Tick
 };
 
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
@@ -36,6 +36,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         world: &mut W,
         manifest: &Manifest<P>,
         packet_index: u16,
+        server_tick: u16,
         reader: &mut PacketReader,
     ) {
         let entity_action_count = reader.read_u8();
@@ -216,6 +217,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                             self.queued_incoming_messages
                                 .push_back(EntityAction::UpdateComponent(
+                                    Tick(server_tick),
                                     *world_entity,
                                     *component_kind,
                                 ));

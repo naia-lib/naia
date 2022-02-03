@@ -166,7 +166,7 @@ impl App {
                         }
                     }
                 }
-                Ok(Event::UpdateComponent(updated_entity, _)) => {
+                Ok(Event::UpdateComponent(server_tick, updated_entity, _)) => {
                     if let Some(owned_entity) = &self.owned_entity {
 
                         let mut world_mut = self.world.proxy_mut();
@@ -175,26 +175,26 @@ impl App {
                         // If entity is owned
                         if updated_entity == server_entity {
 
-                            if let Some(server_tick) = self.client.server_tick() {
-                                let client_entity = owned_entity.predicted;
+                            let client_entity = owned_entity.predicted;
 
-                                // Set prediction to server authoritative Entity
-                                // go through all components to make prediction components = world components
-                                for component_kind in world_mut.get_component_kinds(&server_entity) {
-                                    world_mut.mirror_components(&client_entity, &server_entity, &component_kind);
-                                }
+                            // Set prediction to server authoritative Entity
+                            // go through all components to make prediction components = world components
+                            for component_kind in world_mut.get_component_kinds(&server_entity) {
+                                world_mut.mirror_components(&client_entity, &server_entity, &component_kind);
+                            }
 
-                                // Remove history of commands until current received tick
-                                self.command_history.remove_until(server_tick);
+                            let server_tick_u16 = server_tick.u16();
 
-                                // Replay all existing historical commands until current tick
-                                let server_tick_less_one = server_tick.wrapping_sub(1);
-                                let current_tick = self.command_history.sequence_num();
-                                for tick in server_tick_less_one..=current_tick {
-                                    if let Some(command) = self.command_history.get_mut(tick) {
-                                        if let Some(mut square_ref) = world_mut.get_component_mut::<Square>(&client_entity) {
-                                            shared_behavior::process_command(&command, &mut square_ref);
-                                        }
+                            // Remove history of commands until current received tick
+                            self.command_history.remove_until(server_tick_u16);
+
+                            // Replay all existing historical commands until current tick
+                            let server_tick_less_one = server_tick_u16.wrapping_sub(1);
+                            let current_tick = self.command_history.sequence_num();
+                            for tick in server_tick_less_one..=current_tick {
+                                if let Some(command) = self.command_history.get_mut(tick) {
+                                    if let Some(mut square_ref) = world_mut.get_component_mut::<Square>(&client_entity) {
+                                        shared_behavior::process_command(&command, &mut square_ref);
                                     }
                                 }
                             }
