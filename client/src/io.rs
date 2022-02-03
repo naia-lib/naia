@@ -45,4 +45,9 @@ impl Io {
             .expect("Cannot call Client.receive_packet() until you call Client.connect()!")
             .receive();
     }
+
+    pub fn reset(&mut self) {
+        self.packet_sender = None;
+        self.packet_receiver = None;
+    }
 }
