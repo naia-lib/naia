@@ -8,7 +8,6 @@ pub use naia_shared::{
     Timestamp, WorldMutType, WorldRefType,
 };
 
-
 pub struct Io {
     packet_sender: Option<PacketSender>,
     packet_receiver: Option<PacketReceiver>,

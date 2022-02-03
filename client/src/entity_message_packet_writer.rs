@@ -2,10 +2,7 @@ use std::hash::Hash;
 
 use byteorder::{BigEndian, WriteBytesExt};
 
-use naia_shared::{
-    ManagerType, NaiaKey, ProtocolKindType, Protocolize,
-    MTU_SIZE,
-};
+use naia_shared::{ManagerType, NaiaKey, ProtocolKindType, Protocolize, MTU_SIZE};
 
 use super::entity_manager::EntityManager;
 
@@ -31,7 +28,9 @@ impl EntityMessagePacketWriter {
     pub fn get_bytes(&mut self, out_bytes: &mut Vec<u8>) {
         //Write manager "header" (manager type & command count)
         if self.message_count != 0 {
-            out_bytes.write_u8(ManagerType::EntityMessage as u8).unwrap(); // write manager type
+            out_bytes
+                .write_u8(ManagerType::EntityMessage as u8)
+                .unwrap(); // write manager type
             out_bytes.write_u8(self.message_count).unwrap(); // write number of commands in the following message
             out_bytes.append(&mut self.message_working_bytes); // write command payload
             self.message_count = 0;

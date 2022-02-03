@@ -6,14 +6,14 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use slotmap::DenseSlotMap;
 use naia_server_socket::{Packet, ServerAddrs, Socket};
 pub use naia_shared::{
-    wrapping_diff, BaseConnection, ConnectionConfig, NetEntity, Instant, KeyGenerator,
-    LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType, PropertyMutate,
-    PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig,
-    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
+    ManagerType, Manifest, NetEntity, PacketReader, PacketType, PropertyMutate, PropertyMutator,
+    ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
+    Timestamp, WorldMutType, WorldRefType,
 };
+use slotmap::DenseSlotMap;
 
 use super::{
     connection::Connection,
@@ -312,11 +312,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<'s, W: WorldRefType<P, E>>(
-        &'s self,
-        world: W,
-        entity: &E,
-    ) -> EntityRef<P, E, W> {
+    pub fn entity<'s, W: WorldRefType<P, E>>(&'s self, world: W, entity: &E) -> EntityRef<P, E, W> {
         if world.has_entity(entity) {
             return EntityRef::new(world, &entity);
         }
@@ -471,7 +467,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Gets the current tick of the Server
     pub fn server_tick(&self) -> Option<u16> {
-        return self.tick_manager.as_ref().map(|tick_manager| tick_manager.get_tick());
+        return self
+            .tick_manager
+            .as_ref()
+            .map(|tick_manager| tick_manager.get_tick());
     }
 
     // Crate-Public methods
@@ -609,7 +608,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         }
 
         if let Some(user) = self.users.remove(*user_key) {
-
             self.entity_scope_map.remove_user(user_key);
             self.handshake_manager.delete_user(&user.address);
 
@@ -728,7 +726,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     // Messages
 
-    /// Sends a Message to a User, associated with a given Entity, once that Entity is in-scope
+    /// Sends a Message to a User, associated with a given Entity, once that
+    /// Entity is in-scope
     pub(crate) fn send_entity_message<R: ReplicateSafe<P>>(
         &mut self,
         user_key: &UserKey,
@@ -933,8 +932,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                 let currently_in_scope = user_connection.has_entity(entity);
 
                                 let should_be_in_scope: bool;
-                                if let Some(in_scope) =
-                                    self.entity_scope_map.get(user_key, entity)
+                                if let Some(in_scope) = self.entity_scope_map.get(user_key, entity)
                                 {
                                     should_be_in_scope = *in_scope;
                                 } else {

@@ -1,6 +1,6 @@
 use bevy::{log::LogPlugin, prelude::*};
-use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
 use naia_bevy_demo_shared::get_shared_config;
+use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
 
 mod resources;
 mod systems;

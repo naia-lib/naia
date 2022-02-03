@@ -1,8 +1,8 @@
 use hecs::{Entity, World};
 
 use naia_shared::{
-    DiffMask, PacketReader, ProtocolInserter, Protocolize, ReplicaDynRefWrapper,
-    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
+    DiffMask, PacketReader, ProtocolInserter, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper,
+    ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
 };
 
 use super::{

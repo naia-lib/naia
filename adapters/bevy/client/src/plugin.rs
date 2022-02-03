@@ -5,8 +5,8 @@ use bevy::{
     ecs::schedule::SystemStage,
     prelude::*,
 };
-use naia_client::{Client, ClientConfig, Protocolize, SharedConfig};
 use naia_bevy_shared::WorldData;
+use naia_client::{Client, ClientConfig, Protocolize, SharedConfig};
 
 use crate::systems::should_receive;
 

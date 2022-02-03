@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
-use naia_bevy_server::{Server, ServerAddrs};
 use naia_bevy_demo_shared::{get_server_address, protocol::Protocol};
+use naia_bevy_server::{Server, ServerAddrs};
 
 use crate::resources::Global;
 

@@ -16,19 +16,19 @@ mod connection;
 mod connection_state;
 mod entity_action;
 mod entity_manager;
+mod entity_message_packet_writer;
+mod entity_message_sender;
 mod entity_record;
 mod entity_ref;
 mod error;
 mod event;
 mod handshake_manager;
 mod io;
+mod packet_writer;
 mod ping_manager;
+mod tick;
 mod tick_manager;
 mod tick_queue;
-mod packet_writer;
-mod entity_message_sender;
-mod entity_message_packet_writer;
-mod tick;
 
 pub use naia_shared as shared;
 

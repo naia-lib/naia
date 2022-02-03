@@ -6,13 +6,11 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    DiffMask, EntityActionType, LocalComponentKey, NetEntity, Manifest, NaiaKey, PacketReader,
+    DiffMask, EntityActionType, LocalComponentKey, Manifest, NaiaKey, NetEntity, PacketReader,
     ProtocolKindType, Protocolize, WorldMutType,
 };
 
-use super::{
-    entity_action::EntityAction, entity_record::EntityRecord, tick::Tick
-};
+use super::{entity_action::EntityAction, entity_record::EntityRecord, tick::Tick};
 
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
@@ -61,8 +59,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     } else {
                         // set up entity
                         let world_entity = world.spawn_entity();
-                        self.local_to_world_entity
-                            .insert(local_id, world_entity);
+                        self.local_to_world_entity.insert(local_id, world_entity);
                         self.entity_records
                             .insert(world_entity, EntityRecord::new(local_id));
                         let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
@@ -102,7 +99,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     let local_id = NetEntity::from_u16(reader.read_u16());
                     if let Some(world_entity) = self.local_to_world_entity.remove(&local_id) {
                         if let Some(entity_record) = self.entity_records.remove(&world_entity) {
-
                             // Generate event for each component, handing references off just in
                             // case
                             for component_kind in world.get_component_kinds(&world_entity) {
@@ -132,8 +128,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     let net_entity = NetEntity::from_u16(reader.read_u16());
                     let message_kind = P::Kind::from_u16(reader.read_u16());
 
-                    let new_message =
-                        manifest.create_replica(message_kind, reader, packet_index);
+                    let new_message = manifest.create_replica(message_kind, reader, packet_index);
 
                     if !self.local_to_world_entity.contains_key(&net_entity) {
                         // received message BEFORE spawn, or AFTER despawn
@@ -142,13 +137,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             net_entity.to_u16()
                         );
                     } else {
-                        let world_entity =
-                            self.local_to_world_entity.get(&net_entity).unwrap();
+                        let world_entity = self.local_to_world_entity.get(&net_entity).unwrap();
 
-                        self.queued_incoming_messages.push_back(EntityAction::MessageEntity(
-                            *world_entity,
-                            new_message,
-                        ));
+                        self.queued_incoming_messages
+                            .push_back(EntityAction::MessageEntity(*world_entity, new_message));
                     }
                 }
                 EntityActionType::InsertComponent => {
@@ -175,8 +167,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 local_id.to_u16()
                             );
                         } else {
-                            let world_entity =
-                                self.local_to_world_entity.get(&local_id).unwrap();
+                            let world_entity = self.local_to_world_entity.get(&local_id).unwrap();
                             self.component_to_entity_map
                                 .insert(component_key, *world_entity);
 

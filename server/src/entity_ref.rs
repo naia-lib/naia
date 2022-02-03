@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, hash::Hash};
+use std::{hash::Hash, marker::PhantomData};
 
 use naia_shared::{
     Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType,
@@ -118,7 +118,11 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<'
 
     // Messages
 
-    pub fn send_message<R: ReplicateSafe<P>>(&mut self, user_key: &UserKey, message: &R) -> &mut Self {
+    pub fn send_message<R: ReplicateSafe<P>>(
+        &mut self,
+        user_key: &UserKey,
+        message: &R,
+    ) -> &mut Self {
         self.server
             .send_entity_message(user_key, &self.entity, message);
 
