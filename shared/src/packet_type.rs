@@ -39,6 +39,7 @@ impl From<u8> for PacketType {
             6 => return PacketType::ServerConnectResponse,
             7 => return PacketType::Ping,
             8 => return PacketType::Pong,
+            9 => return PacketType::Disconnect,
             _ => return PacketType::Unknown,
         };
     }

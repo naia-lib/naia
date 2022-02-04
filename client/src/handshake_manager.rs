@@ -102,30 +102,19 @@ impl<P: Protocolize> HandshakeManager<P> {
         }
     }
 
-    pub fn send_disconnect_packets(&mut self, io: &mut Io) {
-        let mut payload_bytes = Vec::new();
+    /// Get an outgoing Disconnect payload
+    pub fn get_disconnect_packet(&mut self) -> Packet {
+
+        let mut out_bytes = Vec::<u8>::new();
 
         // write timestamp & digest into payload
-        self.write_signed_timestamp(&mut payload_bytes);
+        self.write_signed_timestamp(&mut out_bytes);
 
-        // create packet
-        let payload = naia_shared::utils::write_connectionless_payload(PacketType::Disconnect, &payload_bytes);
-        let packet = Packet::new_raw(payload);
-
-        for _ in 0..10 {
-            io.send_packet(packet.clone());
-        }
+        Packet::new(out_bytes)
     }
 
     pub fn set_auth_message(&mut self, auth: P) {
         self.auth_message = Some(auth);
-    }
-
-    pub fn disconnect(&mut self) {
-        self.auth_message = None;
-        self.pre_connection_timestamp = None;
-        self.pre_connection_digest = None;
-        self.connection_state = HandshakeState::AwaitingChallengeResponse;
     }
 
     pub fn is_connected(&self) -> bool {

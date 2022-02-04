@@ -4,7 +4,7 @@ use naia_client_socket::{Packet, Socket};
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
     Protocolize, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
-    WorldMutType, WorldRefType,
+    WorldMutType, WorldRefType, SocketConfig
 };
 
 use super::{
@@ -22,10 +22,12 @@ use super::{
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
 pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
-    // Manifest
-    manifest: Manifest<P>,
-    // Connection
+    // Config
+    client_config: ClientConfig,
+    shared_config: SharedConfig<P>,
     connection_config: ConnectionConfig,
+    socket_config: SocketConfig,
+    // Connection
     socket: Socket,
     io: Io,
     address: Option<SocketAddr>,
@@ -33,6 +35,7 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
     handshake_manager: HandshakeManager<P>,
     // Events
     outstanding_connect: bool,
+    outstanding_disconnect: bool,
     outstanding_errors: VecDeque<NaiaClientError>,
     // Ticks
     tick_manager: Option<TickManager>,
@@ -42,9 +45,7 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Create a new Client
-    pub fn new(mut client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
-        client_config.socket_config.link_condition_config =
-            shared_config.link_condition_config.clone();
+    pub fn new(client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
 
         let connection_config = ConnectionConfig::new(
             client_config.disconnection_timeout_duration,
@@ -53,7 +54,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             client_config.rtt_sample_size,
         );
 
-        let socket = Socket::new(client_config.socket_config);
+        let mut socket_config = client_config.socket_config.clone();
+        socket_config.link_condition_config = shared_config.link_condition_config.clone();
+        let socket = Socket::new(socket_config.clone());
 
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
 
@@ -66,17 +69,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         };
 
         Client {
-            // Manifest
-            manifest: shared_config.manifest,
+            // Config
+            client_config,
+            shared_config,
+            connection_config,
+            socket_config,
             // Connection
             io: Io::new(),
             socket,
-            connection_config,
             address: None,
             server_connection: None,
             handshake_manager,
             // Events
             outstanding_connect: false,
+            outstanding_disconnect: false,
             outstanding_errors: VecDeque::new(),
             // Ticks
             tick_manager,
@@ -87,12 +93,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
+        if !self.is_disconnected() {
+            panic!("Must call client.auth(..) BEFORE calling client.connect(..)");
+        }
         self.handshake_manager
             .set_auth_message(auth.into_protocol());
     }
 
     /// Connect to the given server address
     pub fn connect(&mut self, server_address: SocketAddr) {
+        if !self.is_disconnected() {
+            panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
+        }
         self.address = Some(server_address);
         self.socket.connect(server_address);
         self.io.load(
@@ -118,8 +130,27 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
     /// Disconnect from Server
     pub fn disconnect(&mut self) {
-        self.handshake_manager.send_disconnect_packets(&mut self.io);
-        self.disconnect_cleanup();
+
+        if !self.is_connected() {
+            panic!("Trying to disconnect Client which is not connected yet!")
+        }
+
+        // get current tick
+        let client_tick_opt = self.client_tick();
+
+        if let Some(connection) = &mut self.server_connection {
+            let disconnect_packet = self.handshake_manager.get_disconnect_packet();
+            for _ in 0..10 {
+                internal_send_with_connection::<P, E>(
+                    client_tick_opt,
+                    &mut self.io,
+                    connection,
+                    PacketType::Disconnect,
+                    disconnect_packet.clone(),
+                );
+            }
+            self.outstanding_disconnect = true;
+        }
     }
 
     // Messages
@@ -216,15 +247,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 let mut did_tick = false;
                 // update current tick & apply updates on tick boundary
                 if let Some(tick_manager) = &mut self.tick_manager {
-                    if connection.frame_begin(&mut world, &self.manifest, tick_manager) {
+                    if connection.frame_begin(&mut world, &self.shared_config.manifest, tick_manager) {
                         did_tick = true;
                     }
                 } else {
-                    connection.tickless_read_incoming(&mut world, &self.manifest);
+                    connection.tickless_read_incoming(&mut world, &self.shared_config.manifest);
                 }
                 // return connect event
                 if self.outstanding_connect {
-                    events.push_back(Ok(Event::Connection));
+                    events.push_back(Ok(Event::Connection(self.address.unwrap().clone())));
                     self.outstanding_connect = false;
                 }
                 // new errors
@@ -232,9 +263,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                     events.push_back(Err(err));
                 }
                 // drop connection if necessary
-                if connection.should_drop() {
+                if connection.should_drop() || self.outstanding_disconnect {
+                    let server_addr = self.server_address();
                     self.disconnect_cleanup();
-                    events.push_back(Ok(Event::Disconnection));
+                    events.clear();
+                    events.push_back(Ok(Event::Disconnection(server_addr)));
                     return events; // exit early, we're disconnected, who cares?
                 }
                 // receive messages
@@ -277,13 +310,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 }
                 // send pings
                 if connection.should_send_ping() {
-                    let ping_payload = connection.get_ping_payload();
+                    let ping_packet = connection.get_ping_packet();
                     internal_send_with_connection::<P, E>(
                         client_tick_opt,
                         &mut self.io,
                         connection,
                         PacketType::Ping,
-                        ping_payload,
+                        ping_packet,
                     );
                 }
                 // send packets
@@ -383,9 +416,28 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     }
 
     fn disconnect_cleanup(&mut self) {
+
+        // this is very similar to the newtype method .. can we coalesce and reduce duplication?
+
+        let socket = Socket::new(self.socket_config.clone());
+        let handshake_manager = HandshakeManager::new(self.client_config.send_handshake_interval);
+        let tick_manager = {
+            if let Some(duration) = self.shared_config.tick_interval {
+                Some(TickManager::new(duration, self.client_config.minimum_latency))
+            } else {
+                None
+            }
+        };
+
+        self.io = Io::new();
+        self.socket = socket;
+        self.address = None;
         self.server_connection = None;
-        self.handshake_manager.disconnect();
-        self.io.reset();
+        self.handshake_manager = handshake_manager;
+        self.outstanding_connect = false;
+        self.outstanding_disconnect = false;
+        self.outstanding_errors = VecDeque::new();
+        self.tick_manager = tick_manager;
     }
 }
 

@@ -601,17 +601,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// All necessary cleanup, when they're actually gone...
     pub(crate) fn delete_user(&mut self, user_key: &UserKey) -> Option<User> {
-        // TODO: cache this?
-        // Clean up all user data
-        for (_, room) in self.rooms.iter_mut() {
-            room.unsubscribe_user(&user_key);
-        }
 
         if let Some(user) = self.users.remove(*user_key) {
-            self.entity_scope_map.remove_user(user_key);
-            self.handshake_manager.delete_user(&user.address);
+            if let Some(_) = self.user_connections.remove(&user.address) {
+                self.entity_scope_map.remove_user(user_key);
+                self.handshake_manager.delete_user(&user.address);
 
-            return Some(user);
+                // TODO: cache this?
+                // Clean up all user data
+                for (_, room) in self.rooms.iter_mut() {
+                    room.unsubscribe_user(&user_key);
+                }
+
+                return Some(user);
+            }
         }
 
         return None;

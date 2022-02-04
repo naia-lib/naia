@@ -235,25 +235,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     pub fn despawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, global_entity: &E) {
-        if let Some(entity_record) = self.entity_records.get_mut(global_entity) {
-            match entity_record.status {
+        if let Some(entity_status) = self.entity_records.get(global_entity).map(|entity_record| entity_record.status.clone()) {
+            match entity_status {
                 LocalityStatus::Creating => {
                     // queue deletion action to be sent after creation
                     self.delayed_entity_deletions.insert(*global_entity);
                 }
                 LocalityStatus::Created => {
                     // send deletion action
-                    entity_delete::<P, E>(&mut self.queued_actions, entity_record, global_entity);
-
-                    // Entity deletion IS Component deletion, so update those component records
-                    // accordingly
-                    for global_component_key in world_record.get_component_keys(global_entity) {
-                        if let Some(component_record) =
-                            self.component_records.get_mut(&global_component_key)
-                        {
-                            component_record.status = LocalityStatus::Deleting;
-                        }
-                    }
+                    self.entity_delete(world_record, global_entity);
                 }
                 LocalityStatus::Deleting => {
                     // deletion in progress, do nothing
@@ -734,11 +724,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                             // do we need to delete this now?
                             if self.delayed_entity_deletions.remove(&global_entity) {
-                                entity_delete::<P, E>(
-                                    &mut self.queued_actions,
-                                    entity_record,
-                                    &global_entity,
-                                );
+                                self.entity_delete(world_record, &global_entity);
                             } else {
                                 // set to status of Entity to Created
                                 entity_record.status = LocalityStatus::Created;
@@ -803,13 +789,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             self.delayed_entity_messages.remove(&global_entity);
                             self.local_to_global_entity_map.remove(&local_id);
                             self.entity_generator.recycle_key(&local_id);
-
-                            // delete all components associated with entity
-                            for global_component_key in
-                                world_record.get_component_keys(&global_entity)
-                            {
-                                deleted_components.push(global_component_key);
-                            }
                         }
                         EntityAction::MessageEntity(_, _) => {
                             // Don't do anything, mission accomplished
@@ -843,6 +822,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             for deleted_component_key in deleted_components {
                 self.component_cleanup(&deleted_component_key);
             }
+        }
+    }
+
+    fn entity_delete(&mut self, world_record: &WorldRecord<E, P::Kind>, entity: &E) {
+        if let Some(entity_record) = self.entity_records.get_mut(entity) {
+            entity_record.status = LocalityStatus::Deleting;
+
+            // Entity deletion IS Component deletion, so update those component records
+            // accordingly
+            for global_component_key in world_record.get_component_keys(entity) {
+                self.component_cleanup(&global_component_key);
+            }
+
+            self.queued_actions.push_back(EntityAction::DespawnEntity(*entity));
         }
     }
 }
@@ -910,14 +903,4 @@ fn component_delete<P: Protocolize, E: Copy>(
     record.status = LocalityStatus::Deleting;
 
     queued_actions.push_back(EntityAction::RemoveComponent(*component_key));
-}
-
-fn entity_delete<P: Protocolize, E: Copy>(
-    queued_actions: &mut VecDeque<EntityAction<P, E>>,
-    entity_record: &mut LocalEntityRecord,
-    entity: &E,
-) {
-    entity_record.status = LocalityStatus::Deleting;
-
-    queued_actions.push_back(EntityAction::DespawnEntity(*entity));
 }
