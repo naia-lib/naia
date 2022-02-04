@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use naia_shared::Protocolize;
 
 use super::tick::Tick;
@@ -8,10 +10,10 @@ use super::tick::Tick;
 pub enum Event<P: Protocolize, E: Copy> {
     /// Occurs when the Client has successfully established a connection with
     /// the Server
-    Connection,
+    Connection(SocketAddr),
     /// Occurs when the Client has lost connection with the Server, usually as a
     /// result of a timeout
-    Disconnection,
+    Disconnection(SocketAddr),
     /// A Tick Event, the duration between Tick events is defined in the Config
     /// passed to the Client on initialization
     Tick,

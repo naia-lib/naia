@@ -279,9 +279,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         return self.ping_manager.should_send_ping();
     }
 
-    pub fn get_ping_payload(&mut self) -> Packet {
-        let payload = self.ping_manager.get_ping_payload();
-        return Packet::new_raw(payload);
+    pub fn get_ping_packet(&mut self) -> Packet {
+        self.ping_manager.get_ping_packet()
     }
 
     pub fn process_pong(&mut self, pong_payload: &[u8]) {

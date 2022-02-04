@@ -78,7 +78,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
                 output.push(*component_key);
             }
         } else {
-            panic!("entity does not exist!");
+            warn!("In WorldRecord.get_component_keys(), trying to access an entity that does not exist!");
         }
 
         output

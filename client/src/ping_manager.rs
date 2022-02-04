@@ -4,6 +4,8 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use naia_shared::{Instant, PacketReader, SequenceBuffer, SequenceNumber, Timer};
 
+use naia_client_socket::Packet;
+
 #[derive(Clone)]
 struct SentPing {
     time_sent: Instant,
@@ -40,7 +42,7 @@ impl PingManager {
     }
 
     /// Get an outgoing ping payload
-    pub fn get_ping_payload(&mut self) -> Box<[u8]> {
+    pub fn get_ping_packet(&mut self) -> Packet {
         self.ping_timer.reset();
 
         self.sent_pings.insert(
@@ -56,7 +58,7 @@ impl PingManager {
         // increment ping index
         self.ping_index = self.ping_index.wrapping_add(1);
 
-        out_bytes.into_boxed_slice()
+        Packet::new(out_bytes)
     }
 
     /// Process an incoming pong payload

@@ -12,14 +12,14 @@ pub fn get_server_address() -> SocketAddr {
 
 pub fn get_shared_config() -> SharedConfig<Protocol> {
     // Set tick rate to ~60 FPS
-    let tick_interval = Some(Duration::from_millis(16));
+    let tick_interval = Some(Duration::from_millis(64));
 
     //let link_condition = None;
     //let link_condition = Some(LinkConditionerConfig::poor_condition());
         let link_condition = Some(LinkConditionerConfig {
             incoming_latency: 500,
             incoming_jitter: 2,
-            incoming_loss: 0.0,
+            incoming_loss: 0.1,
         });
     return SharedConfig::new(Protocol::load(), tick_interval, link_condition);
 }

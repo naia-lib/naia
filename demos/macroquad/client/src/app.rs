@@ -13,6 +13,7 @@ use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
 };
+use macroquad::input::is_key_pressed;
 
 type World = DemoWorld<Protocol>;
 type Client = NaiaClient<Protocol, Entity>;
@@ -47,8 +48,6 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Macroquad Client Demo started");
 
-
-
         let client = Client::new(ClientConfig::default(), get_shared_config());
 
         App {
@@ -63,8 +62,8 @@ impl App {
 
     pub fn update(&mut self) {
 
-        let q = is_key_down(KeyCode::Q);
-        let c = is_key_down(KeyCode::C);
+        let q = is_key_pressed(KeyCode::Q);
+        let c = is_key_pressed(KeyCode::C);
         if q {
             if self.client.is_connected() {
                 return self.client.disconnect();
@@ -118,11 +117,17 @@ impl App {
         }
         for event in self.client.receive(self.world.proxy_mut()) {
             match event {
-                Ok(Event::Connection) => {
-                    info!("Client connected to: {}", self.client.server_address());
+                Ok(Event::Connection(server_address)) => {
+                    info!("Client connected to: {}", server_address);
                 }
-                Ok(Event::Disconnection) => {
-                    info!("Client disconnected from: {}", self.client.server_address());
+                Ok(Event::Disconnection(server_address)) => {
+                    info!("Client disconnected from: {}", server_address);
+
+                    self.world = World::new();
+                    self.owned_entity = None;
+                    self.squares = HashSet::new();
+                    self.queued_command = None;
+                    self.command_history = SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE);
                 }
                 Ok(Event::Tick) => {
                     if let Some(owned_entity) = &self.owned_entity {

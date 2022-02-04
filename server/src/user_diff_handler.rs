@@ -56,11 +56,15 @@ impl UserDiffHandler {
     }
 
     pub fn or_diff_mask(&mut self, component_key: &ComponentKey, other_mask: &DiffMask) {
-        let current_diff_mask = self
+        if let Some(current_diff_mask) = self
             .receivers
-            .get_mut(component_key)
-            .expect("DiffHandler doesn't have Component registered");
-        current_diff_mask.or_mask(other_mask);
+            .get_mut(component_key) {
+            current_diff_mask.or_mask(other_mask);
+        } else {
+            // Either this, or the component is not registered somehow..
+            warn!("attempting to retrieve a diff mask for a component which does not exist!");
+        }
+
     }
 
     pub fn clear_diff_mask(&mut self, component_key: &ComponentKey) {

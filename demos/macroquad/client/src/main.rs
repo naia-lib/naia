@@ -1,4 +1,5 @@
 extern crate cfg_if;
+extern crate macroquad;
 
 use macroquad::prelude::*;
 
