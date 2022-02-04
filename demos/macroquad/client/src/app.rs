@@ -13,13 +13,12 @@ use naia_macroquad_demo_shared::{
     behavior as shared_behavior, get_server_address, get_shared_config,
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
 };
-use macroquad::input::is_key_pressed;
 
 type World = DemoWorld<Protocol>;
 type Client = NaiaClient<Protocol, Entity>;
 
 const SQUARE_SIZE: f32 = 32.0;
-const COMMAND_HISTORY_SIZE: u16 = 64;
+const COMMAND_HISTORY_SIZE: u16 = 256;
 
 struct OwnedEntity {
     pub confirmed: Entity,
