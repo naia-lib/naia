@@ -32,15 +32,6 @@ fn main() {
         Stage::ReceiveEvents,
         events::spawn_entity_event)
     .add_system_to_stage(
-        Stage::ReceiveEvents,
-        events::own_entity_event)
-    .add_system_to_stage(
-        Stage::ReceiveEvents,
-        events::new_command_event)
-    .add_system_to_stage(
-        Stage::ReceiveEvents,
-        events::replay_command_event)
-    .add_system_to_stage(
         Stage::Frame,
         input)
     .add_system_to_stage(

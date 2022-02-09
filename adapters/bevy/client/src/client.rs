@@ -6,7 +6,7 @@ use bevy::ecs::{
     world::{Mut, World},
 };
 
-use naia_client::{Client as NaiaClient, EntityRef, Protocolize, Replicate};
+use naia_client::{Client as NaiaClient, EntityRef, shared::{Protocolize, Replicate}};
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
 
@@ -47,12 +47,16 @@ impl<'a, P: Protocolize> Client<'a, P> {
         self.client.connect(server_address);
     }
 
-    pub fn server_address(&self) -> SocketAddr {
-        return self.client.server_address();
+    pub fn is_connected(&self) -> bool {
+        return self.client.is_connected();
     }
 
-    pub fn connected(&self) -> bool {
-        return self.client.connected();
+    pub fn is_connecting(&self) -> bool {
+        return self.client.is_connecting();
+    }
+
+    pub fn server_address(&self) -> SocketAddr {
+        return self.client.server_address();
     }
 
     pub fn rtt(&self) -> f32 {
@@ -74,10 +78,6 @@ impl<'a, P: Protocolize> Client<'a, P> {
         return self.client.send_message(message_ref, guaranteed_delivery);
     }
 
-    pub fn send_command<R: Replicate<P>>(&mut self, entity: &Entity, command: R) {
-        return self.client.send_command(entity, command);
-    }
-
     //// Entities ////
 
     pub fn entity(&self, entity: &Entity) -> EntityRef<P, Entity, WorldRef> {
@@ -92,10 +92,6 @@ impl<'a, P: Protocolize> Client<'a, P> {
 
     pub fn client_tick(&self) -> Option<u16> {
         return self.client.client_tick();
-    }
-
-    pub fn server_tick(&self) -> Option<u16> {
-        return self.client.server_tick();
     }
 }
 

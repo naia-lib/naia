@@ -8,12 +8,11 @@ use bevy::{
     },
 };
 use naia_bevy_shared::WorldProxyMut;
-use naia_client::{Client, Event, Protocolize};
+use naia_client::{Client, Event, shared::Protocolize};
 
 use crate::events::{
-    DespawnEntityEvent, DisownEntityEvent, InsertComponentEvent, MessageEvent, NewCommandEvent,
-    OwnEntityEvent, RemoveComponentEvent, ReplayCommandEvent, RewindEntityEvent, SpawnEntityEvent,
-    UpdateComponentEvent,
+    DespawnEntityEvent, InsertComponentEvent, MessageEvent,
+    RemoveComponentEvent, SpawnEntityEvent,
 };
 
 use super::{
@@ -36,20 +35,8 @@ pub fn before_receive_events<P: Protocolize>(world: &mut World) {
                 let mut despawn_entity_event_writer = world
                     .get_resource_unchecked_mut::<Events<DespawnEntityEvent>>()
                     .unwrap();
-                let mut own_entity_event_writer = world
-                    .get_resource_unchecked_mut::<Events<OwnEntityEvent>>()
-                    .unwrap();
-                let mut disown_entity_event_writer = world
-                    .get_resource_unchecked_mut::<Events<DisownEntityEvent>>()
-                    .unwrap();
-                let mut rewind_entity_event_writer = world
-                    .get_resource_unchecked_mut::<Events<RewindEntityEvent>>()
-                    .unwrap();
                 let mut insert_component_event_writer = world
                     .get_resource_unchecked_mut::<Events<InsertComponentEvent<P>>>()
-                    .unwrap();
-                let mut update_component_event_writer = world
-                    .get_resource_unchecked_mut::<Events<UpdateComponentEvent<P>>>()
                     .unwrap();
                 let mut remove_component_event_writer = world
                     .get_resource_unchecked_mut::<Events<RemoveComponentEvent<P>>>()
@@ -57,20 +44,14 @@ pub fn before_receive_events<P: Protocolize>(world: &mut World) {
                 let mut message_event_writer = world
                     .get_resource_unchecked_mut::<Events<MessageEvent<P>>>()
                     .unwrap();
-                let mut new_command_event_writer = world
-                    .get_resource_unchecked_mut::<Events<NewCommandEvent<P>>>()
-                    .unwrap();
-                let mut replay_command_event_writer = world
-                    .get_resource_unchecked_mut::<Events<ReplayCommandEvent<P>>>()
-                    .unwrap();
 
                 for event_result in event_results {
                     match event_result {
-                        Ok(Event::Connection) => {
+                        Ok(Event::Connection(_)) => {
                             client_resource.connector.set();
                             continue;
                         }
-                        Ok(Event::Disconnection) => {
+                        Ok(Event::Disconnection(_)) => {
                             client_resource.disconnector.set();
                             continue;
                         }
@@ -83,19 +64,8 @@ pub fn before_receive_events<P: Protocolize>(world: &mut World) {
                             spawn_entity_event_writer
                                 .send(SpawnEntityEvent::<P>(entity, components));
                         }
-                        Ok(Event::OwnEntity(ref owned_entity)) => {
-                            let predicted_entity = owned_entity.predicted;
-                            entities_to_own.push(predicted_entity);
-                            own_entity_event_writer.send(OwnEntityEvent(owned_entity.clone()));
-                        }
                         Ok(Event::DespawnEntity(entity)) => {
                             despawn_entity_event_writer.send(DespawnEntityEvent(entity));
-                        }
-                        Ok(Event::DisownEntity(entity)) => {
-                            disown_entity_event_writer.send(DisownEntityEvent(entity));
-                        }
-                        Ok(Event::RewindEntity(entity)) => {
-                            rewind_entity_event_writer.send(RewindEntityEvent(entity));
                         }
                         Ok(Event::InsertComponent(entity, component)) => {
                             insert_component_event_writer
@@ -105,18 +75,14 @@ pub fn before_receive_events<P: Protocolize>(world: &mut World) {
                             remove_component_event_writer
                                 .send(RemoveComponentEvent(entity, component));
                         }
-                        Ok(Event::UpdateComponent(entity, component)) => {
-                            update_component_event_writer
-                                .send(UpdateComponentEvent(entity, component));
-                        }
                         Ok(Event::Message(message)) => {
                             message_event_writer.send(MessageEvent(message));
                         }
-                        Ok(Event::NewCommand(entity, command)) => {
-                            new_command_event_writer.send(NewCommandEvent(entity, command));
+                        Ok(Event::MessageEntity(_, _)) => {
+                            unimplemented!();
                         }
-                        Ok(Event::ReplayCommand(entity, command)) => {
-                            replay_command_event_writer.send(ReplayCommandEvent(entity, command));
+                        Ok(Event::UpdateComponent(_, _, _)) => {
+                            unimplemented!();
                         }
                         Err(_) => {}
                     }

@@ -6,14 +6,14 @@ use bevy::{
     prelude::*,
 };
 use naia_bevy_shared::WorldData;
-use naia_client::{Client, ClientConfig, Protocolize, SharedConfig};
+use naia_client::{Client, ClientConfig, shared::{Protocolize, SharedConfig}};
 
 use crate::systems::should_receive;
 
 use super::{
     events::{
-        DespawnEntityEvent, DisownEntityEvent, InsertComponentEvent, MessageEvent, NewCommandEvent,
-        OwnEntityEvent, RemoveComponentEvent, ReplayCommandEvent, RewindEntityEvent,
+        DespawnEntityEvent, InsertComponentEvent, MessageEvent,
+        RemoveComponentEvent,
         SpawnEntityEvent, UpdateComponentEvent,
     },
     resource::ClientResource,
@@ -64,15 +64,10 @@ impl<P: Protocolize> PluginType for Plugin<P> {
         // EVENTS //
             .add_event::<SpawnEntityEvent<P>>()
             .add_event::<DespawnEntityEvent>()
-            .add_event::<OwnEntityEvent>()
-            .add_event::<DisownEntityEvent>()
-            .add_event::<RewindEntityEvent>()
             .add_event::<InsertComponentEvent<P>>()
             .add_event::<UpdateComponentEvent<P>>()
             .add_event::<RemoveComponentEvent<P>>()
             .add_event::<MessageEvent<P>>()
-            .add_event::<NewCommandEvent<P>>()
-            .add_event::<ReplayCommandEvent<P>>()
         // STAGES //
             // events //
             .add_stage_before(CoreStage::PreUpdate,

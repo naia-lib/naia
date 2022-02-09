@@ -1,4 +1,4 @@
-pub use naia_client::{ClientConfig, OwnedEntity, Random};
+pub use naia_client::{ClientConfig, shared::Random};
 
 pub mod components;
 pub mod events;
