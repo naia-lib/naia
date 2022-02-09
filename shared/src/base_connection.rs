@@ -78,7 +78,6 @@ impl<P: Protocolize> BaseConnection<P> {
     pub fn process_outgoing_header(
         &mut self,
         host_tick: u16,
-        last_received_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
@@ -95,7 +94,6 @@ impl<P: Protocolize> BaseConnection<P> {
             last_remote_packet_index,
             bit_field,
             host_tick,
-            last_received_tick,
         );
         header.write(&mut header_bytes);
 

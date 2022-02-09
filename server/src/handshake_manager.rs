@@ -193,7 +193,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         connection: &mut Connection<P, E>,
     ) {
         let payload =
-            connection.process_outgoing_header(0, 0, PacketType::ServerConnectResponse, &[]);
+            connection.process_outgoing_header(0, PacketType::ServerConnectResponse, &[]);
         io.send_packet(Packet::new_raw(connection.address(), payload));
         connection.mark_sent();
     }

@@ -763,7 +763,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     // work cause of iter_mut()
                     let payload = connection.process_outgoing_header(
                         server_tick,
-                        connection.get_last_received_tick(),
                         PacketType::Heartbeat,
                         &[],
                     );
@@ -875,7 +874,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                     let ping_payload = connection.process_ping(&payload);
                                     let payload_with_header = connection.process_outgoing_header(
                                         server_tick,
-                                        connection.get_last_received_tick(),
                                         PacketType::Pong,
                                         &ping_payload,
                                     );

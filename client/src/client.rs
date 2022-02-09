@@ -450,7 +450,6 @@ fn internal_send_with_connection<P: Protocolize, E: Copy + Eq + Hash>(
 ) {
     let new_payload = connection.process_outgoing_header(
         client_tick.unwrap_or(0),
-        connection.get_last_received_tick(),
         packet_type,
         packet.payload(),
     );
