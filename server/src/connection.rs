@@ -86,7 +86,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                 // Add header to it
                 let payload = self.process_outgoing_header(
                     server_tick,
-                    self.base_connection.get_last_received_tick(),
                     PacketType::Data,
                     &out_bytes,
                 );
@@ -211,13 +210,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     pub fn process_outgoing_header(
         &mut self,
         host_tick: u16,
-        last_received_tick: u16,
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
         return self.base_connection.process_outgoing_header(
             host_tick,
-            last_received_tick,
             packet_type,
             payload,
         );

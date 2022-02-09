@@ -17,8 +17,6 @@ pub struct StandardHeader {
     ack_field: u32,
     // This the the current Tick of the host,
     host_tick: u16,
-    // This is the last received Tick of the remote host
-    last_received_tick: u16,
 }
 
 impl StandardHeader {
@@ -34,7 +32,6 @@ impl StandardHeader {
         last_remote_packet_index: u16,
         bit_field: u32,
         host_tick: u16,
-        last_received_tick: u16,
     ) -> StandardHeader {
         StandardHeader {
             p_type,
@@ -42,13 +39,12 @@ impl StandardHeader {
             last_remote_packet_index,
             ack_field: bit_field,
             host_tick,
-            last_received_tick,
         }
     }
 
     /// Returns the number of bytes in the header
     pub const fn bytes_number() -> usize {
-        return 13;
+        return 11;
     }
 
     /// Returns the packet type indicated by the header
@@ -76,11 +72,6 @@ impl StandardHeader {
         self.host_tick
     }
 
-    /// Returns the last received tick from the remote Host
-    pub fn last_received_tick(&self) -> u16 {
-        self.last_received_tick
-    }
-
     /// Writes the header to an outgoing byte buffer
     pub fn write(&self, buffer: &mut Vec<u8>) {
         buffer.write_u8(self.p_type as u8).unwrap();
@@ -92,9 +83,6 @@ impl StandardHeader {
             .unwrap();
         buffer.write_u32::<BigEndian>(self.ack_field).unwrap();
         buffer.write_u16::<BigEndian>(self.host_tick).unwrap();
-        buffer
-            .write_u16::<BigEndian>(self.last_received_tick)
-            .unwrap();
     }
 
     /// Reads the header from an incoming byte slice
@@ -104,7 +92,6 @@ impl StandardHeader {
         let ack_seq = msg.read_u16::<BigEndian>().unwrap();
         let ack_field = msg.read_u32::<BigEndian>().unwrap();
         let host_tick = msg.read_u16::<BigEndian>().unwrap();
-        let last_received_tick = msg.read_u16::<BigEndian>().unwrap();
 
         let mut buffer = Vec::new();
         msg.read_to_end(&mut buffer).unwrap();
@@ -116,7 +103,6 @@ impl StandardHeader {
                 last_remote_packet_index: ack_seq,
                 ack_field,
                 host_tick,
-                last_received_tick,
             },
             buffer.into_boxed_slice(),
         )
