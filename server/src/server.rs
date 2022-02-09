@@ -281,10 +281,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         let server_tick = self.server_tick().unwrap_or(0);
         for (address, connection) in self.user_connections.iter_mut() {
             connection.collect_component_updates(&self.world_record);
+            let mut sent = false;
             while let Some(payload) =
                 connection.get_outgoing_packet(&world, &self.world_record, server_tick)
             {
                 self.io.send_packet(Packet::new_raw(*address, payload));
+                sent = true;
+            }
+            if sent {
                 connection.mark_sent();
             }
         }
