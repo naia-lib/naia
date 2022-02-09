@@ -5,7 +5,7 @@ use bevy::ecs::{
     world::World,
 };
 
-use naia_client::Protocolize;
+use naia_client::shared::Protocolize;
 
 use super::client::Client;
 
