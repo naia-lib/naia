@@ -216,11 +216,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
     /// Gets the interpolation tween amount for the current frame
     pub fn interpolation(&self) -> Option<f32> {
-        if let Some(tick_manager) = &self.tick_manager {
-            Some(tick_manager.fraction)
-        } else {
-            None
-        }
+        self.tick_manager.as_ref().map(|tick_manager| tick_manager.interpolation())
     }
 
     // Receive Data from Server! Very important!
@@ -322,12 +318,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 // send packets
                 if let Some(client_tick) = client_tick_opt {
                     if let Some(tick_manager) = &self.tick_manager {
+                        let mut sent = false;
                         let mut entity_messages =
                             connection.get_entity_messages(tick_manager.server_receivable_tick());
                         while let Some(payload) =
                             connection.get_outgoing_packet(client_tick, &mut entity_messages)
                         {
                             self.io.send_packet(Packet::new_raw(payload));
+                            sent = true;
+                        }
+                        if sent {
                             connection.mark_sent();
                         }
                     }
