@@ -6,7 +6,7 @@ cfg_if! {
     }
 }
 
-use naia_client::{Client as NaiaClient, ClientConfig, Event, Protocolize};
+use naia_client::{shared::Protocolize, Client as NaiaClient, ClientConfig, Event};
 
 use naia_demo_world::{Entity, World as DemoWorld};
 
@@ -45,11 +45,11 @@ impl App {
     pub fn update(&mut self) {
         for event in self.client.receive(self.world.proxy_mut()) {
             match event {
-                Ok(Event::Connection) => {
-                    info!("Client connected to: {}", self.client.server_address());
+                Ok(Event::Connection(server_address)) => {
+                    info!("Client connected to: {}", server_address);
                 }
-                Ok(Event::Disconnection) => {
-                    info!("Client disconnected from: {}", self.client.server_address());
+                Ok(Event::Disconnection(server_address)) => {
+                    info!("Client disconnected from: {}", server_address);
                 }
                 Ok(Event::Message(Protocol::StringMessage(message))) => {
                     let message_contents = message.contents.get();
@@ -77,7 +77,7 @@ impl App {
                         );
                     }
                 }
-                Ok(Event::UpdateComponent(entity, _)) => {
+                Ok(Event::UpdateComponent(_, entity, _)) => {
                     if let Some(character) = self
                         .client
                         .entity(self.world.proxy(), &entity)

@@ -1,5 +1,6 @@
 use naia_server::{
-    Event, Protocolize, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldRefType,
+    shared::{Protocolize, WorldRefType},
+    Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
 };
 
 use naia_demo_world::{Entity, World as DemoWorld};
