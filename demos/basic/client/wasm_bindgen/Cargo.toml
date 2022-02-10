@@ -1,7 +1,7 @@
 [package]
 name = "naia-basic-client-demo-wb"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-workspace = "../../../"
+workspace = "../../.."
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
