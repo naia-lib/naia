@@ -2,14 +2,15 @@
 name = "naia-shared"
 version = "0.7.3"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = ".."
 description = "Common functionality shared between naia-server & naia-client crates"
 documentation = "https://docs.rs/naia-shared"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
 readme = "../README.md"
 keywords = ["webrtc", "udp", "wasm", "networking", "gamedev"]
-license = "MIT OR Apache-2.0"
 categories = ["network-programming", "game-development", "wasm", "web-programming"]
+license = "MIT OR Apache-2.0"
 edition = "2021"
 
 [badges]

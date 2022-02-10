@@ -2,14 +2,15 @@
 name = "naia-derive"
 version = "0.7.4"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = ".."
 description = "Procedural macros to simplify implementation of Naia Replicate & Protocolize traits"
 documentation = "https://docs.rs/naia-derive"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
 readme = "../README.md"
 keywords = ["webrtc", "udp", "wasm", "networking", "gamedev"]
-license = "MIT OR Apache-2.0"
 categories = ["network-programming", "game-development", "wasm", "web-programming"]
+license = "MIT OR Apache-2.0"
 edition = "2021"
 
 [badges]

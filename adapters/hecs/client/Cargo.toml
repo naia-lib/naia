@@ -2,12 +2,13 @@
 name = "naia-hecs-client"
 version = "0.7.3"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../../.."
 description = "Library to faciliate naia_client & Hecs interop"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
 keywords = ["wasm", "webrtc", "udp", "networking", "gamedev"]
-license = "MIT OR Apache-2.0"
 categories = ["network-programming", "game-development", "wasm", "web-programming"]
+license = "MIT OR Apache-2.0"
 edition = "2021"
 
 [badges]
