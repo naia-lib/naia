@@ -1,13 +1,11 @@
 [package]
 name = "naia-macroquad-client-demo"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../../../"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-
-[[bin]]
-name = "naia-macroquad-client-demo"
-path = "src/main.rs"
+publish = false
 
 [features]
 
