@@ -4,6 +4,7 @@ extern crate log;
 
 mod app;
 mod app_loop;
+mod systems;
 
 use app::App;
 use app_loop::start_loop;

@@ -10,7 +10,7 @@ publish = false
 [features]
 
 [dependencies]
-naia-client = { path = "../../../client" }
+naia-client = { path = "../../../client", features = ["wbindgen"] }
 naia-tickless-demo-shared = { path = "../shared" }
 naia-empty-world = { path = "../../demo_utils/empty_world" }
 log = "0.4"

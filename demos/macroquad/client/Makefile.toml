@@ -24,7 +24,7 @@ command = "cargo"
 dependencies = ["install-target-wasm32-unknown-unknown"]
 
 [tasks.delete-old-wasm]
-args = ["${CARGO_TARGET_DIR}/wasm_bg.wasm"]
+args = ["-f", "${CARGO_TARGET_DIR}/wasm_bg.wasm"]
 command = "rm"
 dependencies = ["build-web"]
 

@@ -4,7 +4,7 @@ extern crate log;
 
 mod app_loop;
 
-use naia_socket_client_demo_app::App;
+use naia_basic_client_demo_app::App;
 
 use app_loop::start_loop;
 

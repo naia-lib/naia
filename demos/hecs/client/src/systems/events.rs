@@ -7,11 +7,11 @@ use crate::app::App;
 pub fn process_events(app: &mut App) {
     for event in app.client.receive(app.world.proxy_mut(&mut app.world_data)) {
         match event {
-            Ok(Event::Connection) => {
-                info!("Client connected to: {}", app.client.server_address());
+            Ok(Event::Connection(server_address)) => {
+                info!("Client connected to: {}", server_address);
             }
-            Ok(Event::Disconnection) => {
-                info!("Client disconnected from: {}", app.client.server_address());
+            Ok(Event::Disconnection(server_address)) => {
+                info!("Client disconnected from: {}", server_address);
             }
             Ok(Event::SpawnEntity(_, _)) => {
                 info!("creation of entity");

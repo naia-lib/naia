@@ -1,3 +1,5 @@
+use log::info;
+
 use naia_client::{Client as NaiaClient, ClientConfig, Event};
 
 use naia_tickless_demo_shared::{get_server_address, get_shared_config, Protocol, Text};
@@ -29,13 +31,13 @@ impl App {
     pub fn update(&mut self) {
         for event in self.client.receive(EmptyWorldMut::new()) {
             match event {
-                Ok(Event::Connection) => {
-                    info!("Client connected to: {}", self.client.server_address());
+                Ok(Event::Connection(server_address)) => {
+                    info!("Client connected to: {}", server_address);
 
                     self.send_simple_message();
                 }
-                Ok(Event::Disconnection) => {
-                    info!("Client disconnected from: {}", self.client.server_address());
+                Ok(Event::Disconnection(server_address)) => {
+                    info!("Client disconnected from: {}", server_address);
                 }
                 Ok(Event::Tick) => {
                     info!("TICK SHOULD NOT HAPPEN!");
