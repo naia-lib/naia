@@ -12,7 +12,6 @@ members = [
     "adapters/bevy/server",
     "adapters/bevy/shared",
     "demos/demo_utils/demo_world",
-    "demos/demo_utils/dev_http_server",
     "demos/demo_utils/empty_world",
     "demos/basic/server",
     "demos/basic/shared",
