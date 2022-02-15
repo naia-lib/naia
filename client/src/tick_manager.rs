@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use naia_shared::{wrapping_diff, Instant};
 
+use crate::ping_manager::JITTER_TO_RTT_RATIO_ESTIMATE;
+
 /// Manages the current tick for the host
 pub struct TickManager {
     tick_interval_millis: f32,
@@ -71,11 +73,16 @@ impl TickManager {
     }
 
     /// Use tick data from initial server handshake to set the initial tick
-    pub fn set_initial_tick(&mut self, server_tick: u16) {
+    pub fn set_initial_tick(
+        &mut self,
+        server_tick: u16,
+        rtt_initial_estimate: Duration,
+    ) {
         self.received_server_tick = server_tick;
-        self.server_receivable_tick_adjust = ((3000.0 / self.tick_interval_millis) + 1.0) as u16;
-        self.client_sending_tick_adjust = ((5000.0 / self.tick_interval_millis) + 1.0) as u16;
-        self.client_receiving_tick_adjust = ((3000.0 / self.tick_interval_millis) + 1.0) as u16;
+
+        let rtt_average_f32 = rtt_initial_estimate.as_secs_f32() * 1000.0;
+        let jitter_deviation = rtt_average_f32 * JITTER_TO_RTT_RATIO_ESTIMATE;
+        self.record_server_tick(server_tick, rtt_average_f32, jitter_deviation);
     }
 
     /// Using information from the Server and RTT/Jitter measurements, determine
@@ -83,7 +90,7 @@ impl TickManager {
     pub fn record_server_tick(
         &mut self,
         server_tick: u16,
-        ping_average: f32,
+        rtt_average: f32,
         jitter_deviation: f32,
     ) {
         self.server_tick_running_diff += wrapping_diff(self.received_server_tick, server_tick);
@@ -103,7 +110,6 @@ impl TickManager {
         }
 
         // Calculate incoming & outgoing jitter buffer tick offsets
-        let rtt_average = ping_average * 2.0;
 
         // This should correspond with a three-sigma limit of 99.7%
         let jitter_limit = jitter_deviation * 3.0;

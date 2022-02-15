@@ -7,14 +7,16 @@ pub struct ConnectionConfig {
     /// initiating a disconnect
     pub disconnection_timeout_duration: Duration,
     /// The duration to wait before sending a heartbeat message to a remote
-    /// host, if the host has not already sent another message within that time.
+    /// host, if the host has not already sent another message within that time
     pub heartbeat_interval: Duration,
     /// The duration to wait before sending a ping message to the remote host,
     /// in order to estimate RTT time
     pub ping_interval: Duration,
-    /// Number of samples to measure Ping & Jitter by. A higher number will
-    /// smooth out Ping measurements, but at the cost of responsiveness.
-    pub ping_sample_size: u16,
+    /// The initial estimate for the RTT
+    pub rtt_initial_estimate: Duration,
+    /// Factor to smooth out estimate of RTT. A higher number will
+    /// smooth out measurements, but at the cost of responsiveness
+    pub rtt_smoothing_factor: f32,
 }
 
 impl ConnectionConfig {
@@ -23,13 +25,15 @@ impl ConnectionConfig {
         disconnection_timeout_duration: Duration,
         heartbeat_interval: Duration,
         ping_interval: Duration,
-        rtt_sample_size: u16,
+        rtt_initial_estimate: Duration,
+        rtt_smoothing_factor: f32,
     ) -> Self {
         ConnectionConfig {
             disconnection_timeout_duration,
             heartbeat_interval,
             ping_interval,
-            ping_sample_size: rtt_sample_size,
+            rtt_initial_estimate,
+            rtt_smoothing_factor,
         }
     }
 }
@@ -40,7 +44,8 @@ impl Default for ConnectionConfig {
             disconnection_timeout_duration: Duration::from_secs(10),
             heartbeat_interval: Duration::from_secs(4),
             ping_interval: Duration::from_secs(1),
-            ping_sample_size: 20,
+            rtt_initial_estimate: Duration::from_millis(200),
+            rtt_smoothing_factor: 0.1,
         }
     }
 }

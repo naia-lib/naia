@@ -32,7 +32,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             entity_manager: EntityManager::new(),
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
-                connection_config.ping_sample_size,
+                connection_config.rtt_initial_estimate,
+                connection_config.rtt_smoothing_factor,
             ),
             entity_message_sender: EntityMessageSender::new(),
             jitter_buffer: TickQueue::new(),
@@ -216,7 +217,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         if let Some(tick_manager) = tick_manager_opt {
             tick_manager.record_server_tick(
                 header.host_tick(),
-                self.ping_manager.ping(),
+                self.ping_manager.rtt(),
                 self.ping_manager.jitter(),
             );
         }

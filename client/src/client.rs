@@ -44,17 +44,12 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
 impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Create a new Client
     pub fn new(client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
-        let connection_config = ConnectionConfig::new(
-            client_config.disconnection_timeout_duration,
-            client_config.heartbeat_interval,
-            client_config.ping_interval,
-            client_config.rtt_sample_size,
-        );
+        let connection_config = client_config.connection_config.clone();
 
         let mut socket_config = client_config.socket_config.clone();
         socket_config.link_condition_config = shared_config.link_condition_config.clone();
 
-        let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
+        let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval, connection_config.rtt_initial_estimate);
 
         let tick_manager = {
             if let Some(duration) = shared_config.tick_interval {
@@ -434,7 +429,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     fn disconnect_cleanup(&mut self) {
         // this is very similar to the newtype method .. can we coalesce and reduce
         // duplication?
-        let handshake_manager = HandshakeManager::new(self.client_config.send_handshake_interval);
+        let handshake_manager = HandshakeManager::new(self.client_config.send_handshake_interval, self.connection_config.rtt_initial_estimate);
         let tick_manager = {
             if let Some(duration) = self.shared_config.tick_interval {
                 Some(TickManager::new(

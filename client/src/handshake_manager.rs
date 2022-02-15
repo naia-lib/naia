@@ -25,10 +25,11 @@ pub struct HandshakeManager<P: Protocolize> {
     pre_connection_digest: Option<Box<[u8]>>,
     connection_state: HandshakeState,
     auth_message: Option<P>,
+    rtt_initial_estimate: Duration,
 }
 
 impl<P: Protocolize> HandshakeManager<P> {
-    pub fn new(send_interval: Duration) -> Self {
+    pub fn new(send_interval: Duration, rtt_initial_estimate: Duration) -> Self {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
 
@@ -38,6 +39,7 @@ impl<P: Protocolize> HandshakeManager<P> {
             pre_connection_digest: None,
             connection_state: HandshakeState::AwaitingChallengeResponse,
             auth_message: None,
+            rtt_initial_estimate,
         }
     }
 
@@ -135,7 +137,7 @@ impl<P: Protocolize> HandshakeManager<P> {
                             self.pre_connection_digest = Some(digest_bytes.into_boxed_slice());
 
                             if let Some(tick_manager) = tick_manager {
-                                tick_manager.set_initial_tick(server_tick);
+                                tick_manager.set_initial_tick(server_tick, self.rtt_initial_estimate);
                             }
 
                             self.connection_state = HandshakeState::AwaitingConnectResponse;

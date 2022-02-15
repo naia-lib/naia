@@ -72,12 +72,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         server_config.socket_config.link_condition_config =
             shared_config.link_condition_config.clone();
 
-        let connection_config = ConnectionConfig::new(
-            server_config.disconnection_timeout_duration,
-            server_config.heartbeat_interval,
-            server_config.ping_interval,
-            server_config.rtt_sample_size,
-        );
+        let connection_config = server_config.connection_config.clone();
 
         let socket = Socket::new(server_config.socket_config);
 
