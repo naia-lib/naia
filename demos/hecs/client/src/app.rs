@@ -5,7 +5,7 @@ use hecs::{Entity, World};
 use naia_hecs_client::{Client as NaiaClient, ClientConfig, WorldData};
 
 use naia_hecs_demo_shared::{
-    get_server_address, get_shared_config,
+    get_shared_config,
     protocol::{Auth, Protocol},
 };
 
@@ -27,7 +27,7 @@ impl App {
         app_init(
             ClientConfig::default(),
             get_shared_config(),
-            get_server_address(),
+            "http://127.0.0.1:14191",
             Auth::new("charlie", "12345"),
         )
     }

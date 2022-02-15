@@ -4,7 +4,7 @@ use hecs::{Entity, World};
 
 use naia_hecs_server::{RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldData};
 
-use naia_hecs_demo_shared::{get_server_address, get_shared_config, protocol::Protocol};
+use naia_hecs_demo_shared::{get_shared_config, protocol::Protocol};
 
 use super::systems::{
     events::process_events,
@@ -28,15 +28,15 @@ impl App {
         info!("Naia Hecs Server Demo started");
 
         let server_addresses = ServerAddrs::new(
-            get_server_address(),
+            "127.0.0.1:14191"
+                .parse()
+                .expect("could not parse Signaling address/port"),
             // IP Address to listen on for UDP WebRTC data channels
             "127.0.0.1:14192"
                 .parse()
                 .expect("could not parse WebRTC data address/port"),
             // The public WebRTC IP address to advertise
-            "127.0.0.1:14192"
-                .parse()
-                .expect("could not parse advertised public WebRTC data address/port"),
+            "http://127.0.0.1:14192",
         );
 
         app_init(

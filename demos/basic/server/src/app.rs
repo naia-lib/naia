@@ -6,7 +6,7 @@ use naia_server::{
 use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_basic_demo_shared::{
-    get_server_address, get_shared_config,
+    get_shared_config,
     protocol::{Character, Protocol, StringMessage},
 };
 
@@ -25,15 +25,15 @@ impl App {
         info!("Basic Naia Server Demo started");
 
         let server_addresses = ServerAddrs::new(
-            get_server_address(),
+            "127.0.0.1:14191"
+                .parse()
+                .expect("could not parse Signaling address/port"),
             // IP Address to listen on for UDP WebRTC data channels
             "127.0.0.1:14192"
                 .parse()
                 .expect("could not parse WebRTC data address/port"),
             // The public WebRTC IP address to advertise
-            "127.0.0.1:14192"
-                .parse()
-                .expect("could not parse advertised public WebRTC data address/port"),
+            "http://127.0.0.1:14192",
         );
 
         let mut server = Server::new(ServerConfig::default(), get_shared_config());
