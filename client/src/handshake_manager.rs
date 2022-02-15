@@ -10,10 +10,7 @@ pub use naia_shared::{
     WorldMutType, WorldRefType,
 };
 
-use super::{
-    io::Io,
-    tick_manager::TickManager,
-};
+use super::{io::Io, tick_manager::TickManager};
 
 #[derive(Debug, PartialEq)]
 enum HandshakeState {
@@ -104,7 +101,6 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     /// Get an outgoing Disconnect payload
     pub fn get_disconnect_packet(&mut self) -> Packet {
-
         let mut out_bytes = Vec::<u8>::new();
 
         // write timestamp & digest into payload
@@ -121,18 +117,14 @@ impl<P: Protocolize> HandshakeManager<P> {
         return self.connection_state == HandshakeState::Connected;
     }
 
-    pub fn receive_packet(
-        &mut self,
-        tick_manager: &mut Option<TickManager>,
-        packet: Packet,
-    ) {
+    pub fn receive_packet(&mut self, tick_manager: &mut Option<TickManager>, packet: Packet) {
         let (header, payload) = StandardHeader::read(packet.payload());
         match header.packet_type() {
             PacketType::ServerChallengeResponse => {
                 if self.connection_state == HandshakeState::AwaitingChallengeResponse {
                     if let Some(my_timestamp) = self.pre_connection_timestamp {
                         let mut reader = PacketReader::new(&payload);
-                        let server_tick = reader.get_cursor().read_u16::<BigEndian>().unwrap();
+                        let server_tick = reader.cursor().read_u16::<BigEndian>().unwrap();
                         let payload_timestamp = Timestamp::read(&mut reader);
 
                         if my_timestamp == payload_timestamp {

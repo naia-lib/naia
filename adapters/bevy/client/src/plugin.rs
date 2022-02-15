@@ -6,14 +6,16 @@ use bevy::{
     prelude::*,
 };
 use naia_bevy_shared::WorldData;
-use naia_client::{Client, ClientConfig, shared::{Protocolize, SharedConfig}};
+use naia_client::{
+    shared::{Protocolize, SharedConfig},
+    Client, ClientConfig,
+};
 
 use crate::systems::should_receive;
 
 use super::{
     events::{
-        DespawnEntityEvent, InsertComponentEvent, MessageEvent,
-        RemoveComponentEvent,
+        DespawnEntityEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent,
         SpawnEntityEvent, UpdateComponentEvent,
     },
     resource::ClientResource,

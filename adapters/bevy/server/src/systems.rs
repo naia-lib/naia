@@ -7,7 +7,7 @@ use bevy::{
         world::{Mut, World},
     },
 };
-use naia_server::{Event, shared::{Protocolize}, Server};
+use naia_server::{shared::Protocolize, Event, Server};
 
 use super::{
     events::{

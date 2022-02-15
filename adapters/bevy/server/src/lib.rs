@@ -1,4 +1,4 @@
-pub use naia_server::{Event, RoomKey, ServerAddrs, ServerConfig, UserKey, shared::Random};
+pub use naia_server::{shared::Random, Event, RoomKey, ServerAddrs, ServerConfig, UserKey};
 
 pub mod events;
 

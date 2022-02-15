@@ -60,7 +60,6 @@ impl App {
     }
 
     pub fn update(&mut self) {
-
         let q = is_key_pressed(KeyCode::Q);
         let c = is_key_pressed(KeyCode::C);
         if q {

@@ -1,6 +1,9 @@
 use bevy::ecs::entity::Entity;
 
-use naia_server::{shared::{Protocolize, Replicate}, RoomKey, UserKey};
+use naia_server::{
+    shared::{Protocolize, Replicate},
+    RoomKey, UserKey,
+};
 
 use super::{
     commands::{DespawnEntity, InsertComponent, RemoveComponent},

@@ -235,7 +235,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     pub fn despawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, global_entity: &E) {
-        if let Some(entity_status) = self.entity_records.get(global_entity).map(|entity_record| entity_record.status.clone()) {
+        if let Some(entity_status) = self
+            .entity_records
+            .get(global_entity)
+            .map(|entity_record| entity_record.status.clone())
+        {
             match entity_status {
                 LocalityStatus::Creating => {
                     // queue deletion action to be sent after creation
@@ -835,7 +839,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 self.component_cleanup(&global_component_key);
             }
 
-            self.queued_actions.push_back(EntityAction::DespawnEntity(*entity));
+            self.queued_actions
+                .push_back(EntityAction::DespawnEntity(*entity));
         }
     }
 }

@@ -8,11 +8,10 @@ use bevy::{
     },
 };
 use naia_bevy_shared::WorldProxyMut;
-use naia_client::{Client, Event, shared::Protocolize};
+use naia_client::{shared::Protocolize, Client, Event};
 
 use crate::events::{
-    DespawnEntityEvent, InsertComponentEvent, MessageEvent,
-    RemoveComponentEvent, SpawnEntityEvent,
+    DespawnEntityEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent,
 };
 
 use super::{
