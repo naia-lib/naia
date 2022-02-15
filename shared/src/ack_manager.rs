@@ -41,7 +41,7 @@ impl AckManager {
     }
 
     /// Get the index of the next outgoing packet
-    pub fn get_local_packet_index(&self) -> SequenceNumber {
+    pub fn local_packet_index(&self) -> SequenceNumber {
         self.sequence_number
     }
 
@@ -147,12 +147,12 @@ impl AckManager {
         }
     }
 
-    pub(crate) fn get_last_remote_packet_index(&self) -> SequenceNumber {
+    pub(crate) fn last_remote_packet_index(&self) -> SequenceNumber {
         self.received_packets.sequence_num().wrapping_sub(1)
     }
 
-    pub(crate) fn get_ack_bitfield(&self) -> u32 {
-        let most_recent_remote_seq_num: u16 = self.get_last_remote_packet_index();
+    pub(crate) fn ack_bitfield(&self) -> u32 {
+        let most_recent_remote_seq_num: u16 = self.last_remote_packet_index();
         let mut ack_bitfield: u32 = 0;
         let mut mask: u32 = 1;
 

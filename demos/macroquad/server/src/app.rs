@@ -7,8 +7,9 @@ use naia_server::{
 use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_macroquad_demo_shared::{
-    behavior as shared_behavior, get_shared_config,
+    behavior as shared_behavior,
     protocol::{Color, EntityAssignment, Protocol, Square},
+    shared_config,
 };
 
 type World = DemoWorld<Protocol>;
@@ -37,7 +38,7 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        let mut server = Server::new(ServerConfig::default(), get_shared_config());
+        let mut server = Server::new(ServerConfig::default(), shared_config());
         server.listen(server_addresses);
 
         let world = World::new();

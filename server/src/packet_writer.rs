@@ -28,10 +28,10 @@ impl PacketWriter {
     }
 
     /// Gets the bytes to write into an outgoing packet
-    pub fn get_bytes(&mut self) -> Box<[u8]> {
+    pub fn bytes(&mut self) -> Box<[u8]> {
         let mut out_bytes = Vec::<u8>::new();
 
-        self.message_writer.get_bytes(&mut out_bytes);
+        self.message_writer.bytes(&mut out_bytes);
 
         //Write manager "header" (manager type & entity action count)
         if self.entity_action_count != 0 {

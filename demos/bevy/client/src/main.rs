@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, Stage};
-use naia_bevy_demo_shared::get_shared_config;
+use naia_bevy_demo_shared::shared_config;
 
 mod resources;
 mod systems;
@@ -14,7 +14,7 @@ fn main() {
     app.add_plugins(DefaultPlugins)
         .add_plugin(ClientPlugin::new(
             ClientConfig::default(),
-            get_shared_config(),
+            shared_config(),
         ));
 
     app

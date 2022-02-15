@@ -19,9 +19,9 @@ pub trait Replicate<P: Protocolize>: ReplicateSafe<P> {
 pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     /// Gets the TypeId of the Message/Component, used to map to a
     /// registered Protocolize
-    fn get_kind(&self) -> P::Kind;
+    fn kind(&self) -> P::Kind;
     /// Gets the number of bytes of the Message/Component's DiffMask
-    fn get_diff_mask_size(&self) -> u8;
+    fn diff_mask_size(&self) -> u8;
     /// Get an immutable reference to the inner Component/Message as a
     /// Replicate trait object
     fn dyn_ref(&self) -> ReplicaDynRef<'_, P>;

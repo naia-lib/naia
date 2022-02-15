@@ -1,5 +1,5 @@
 use bevy::{log::LogPlugin, prelude::*};
-use naia_bevy_demo_shared::get_shared_config;
+use naia_bevy_demo_shared::shared_config;
 use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
 
 mod resources;
@@ -17,7 +17,7 @@ fn main() {
     // Plugins
     .add_plugins(MinimalPlugins)
     .add_plugin(LogPlugin::default())
-    .add_plugin(ServerPlugin::new(ServerConfig::default(), get_shared_config()))
+    .add_plugin(ServerPlugin::new(ServerConfig::default(), shared_config()))
 
     // Startup System
     .add_startup_system(

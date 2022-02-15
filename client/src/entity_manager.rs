@@ -76,7 +76,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 panic!("attempted to insert duplicate component");
                             } else {
                                 {
-                                    let new_component_kind = new_component.dyn_ref().get_kind();
+                                    let new_component_kind = new_component.dyn_ref().kind();
                                     entity_record
                                         .insert_component(&component_key, &new_component_kind);
                                     component_list.push(new_component_kind);
@@ -101,7 +101,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                         if let Some(entity_record) = self.entity_records.remove(&world_entity) {
                             // Generate event for each component, handing references off just in
                             // case
-                            for component_kind in world.get_component_kinds(&world_entity) {
+                            for component_kind in world.component_kinds(&world_entity) {
                                 if let Some(component) =
                                     world.remove_component_of_kind(&world_entity, &component_kind)
                                 {
@@ -111,7 +111,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 }
                             }
 
-                            for component_key in entity_record.get_component_keys() {
+                            for component_key in entity_record.component_keys() {
                                 self.component_to_entity_map.remove(&component_key);
                             }
 
@@ -193,7 +193,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     {
                         if let Some(entity_record) = self.entity_records.get(world_entity) {
                             let component_kind =
-                                entity_record.get_kind_from_key(&component_key).unwrap();
+                                entity_record.kind_from_key(&component_key).unwrap();
 
                             let diff_mask: DiffMask = DiffMask::read(reader);
 

@@ -46,7 +46,7 @@ impl<'a, P: Protocolize> Client<'a, P> {
         self.client.auth(auth);
     }
 
-    pub fn connect(&mut self, server_address: SocketAddr) {
+    pub fn connect(&mut self, server_address: &str) {
         self.client.connect(server_address);
     }
 

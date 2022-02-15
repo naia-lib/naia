@@ -39,7 +39,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         }
     }
 
-    pub fn get_outgoing_packet<W: WorldRefType<P, E>>(
+    pub fn outgoing_packet<W: WorldRefType<P, E>>(
         &mut self,
         world: &W,
         world_record: &WorldRecord<E, P::Kind>,
@@ -50,7 +50,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         {
             let mut writer = PacketWriter::new();
 
-            let next_packet_index: u16 = self.get_next_packet_index();
+            let next_packet_index: u16 = self.next_packet_index();
 
             // Write Messages
             while let Some(popped_message) =
@@ -81,7 +81,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
             if writer.has_bytes() {
                 // Get bytes from writer
-                let out_bytes = writer.get_bytes();
+                let out_bytes = writer.bytes();
 
                 // Add header to it
                 let payload =
@@ -125,15 +125,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         self.entity_manager.collect_component_updates(world_record);
     }
 
-    pub fn get_incoming_entity_message(&mut self, server_tick: u16) -> Option<(E, P)> {
+    pub fn incoming_entity_message(&mut self, server_tick: u16) -> Option<(E, P)> {
         if let Some((local_entity, message)) = self
             .entity_message_receiver
             .pop_incoming_entity_message(server_tick)
         {
             // get global entity from the local one
-            if let Some(global_entity) = self
-                .entity_manager
-                .get_global_entity_from_local(local_entity)
+            if let Some(global_entity) = self.entity_manager.global_entity_from_local(local_entity)
             {
                 return Some((*global_entity, message));
             }
@@ -215,8 +213,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             .process_outgoing_header(host_tick, packet_type, payload);
     }
 
-    pub fn get_next_packet_index(&self) -> SequenceNumber {
-        return self.base_connection.get_next_packet_index();
+    pub fn next_packet_index(&self) -> SequenceNumber {
+        return self.base_connection.next_packet_index();
     }
 
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
@@ -225,15 +223,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             .send_message(message, guaranteed_delivery);
     }
 
-    pub fn get_incoming_message(&mut self) -> Option<P> {
-        return self.base_connection.get_incoming_message();
+    pub fn incoming_message(&mut self) -> Option<P> {
+        return self.base_connection.incoming_message();
     }
 
     pub fn address(&self) -> SocketAddr {
-        return self.base_connection.get_address();
+        return self.base_connection.address();
     }
 
-    pub fn get_last_received_tick(&self) -> u16 {
-        return self.base_connection.get_last_received_tick();
+    pub fn last_received_tick(&self) -> u16 {
+        return self.base_connection.last_received_tick();
     }
 }

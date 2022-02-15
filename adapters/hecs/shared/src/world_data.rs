@@ -16,7 +16,7 @@ impl<P: Protocolize> WorldData<P> {
         }
     }
 
-    pub(crate) fn get_component_access(
+    pub(crate) fn component_access(
         &self,
         component_kind: &P::Kind,
     ) -> Option<&Box<dyn ComponentAccess<P>>> {

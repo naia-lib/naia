@@ -43,7 +43,7 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash> UserRef<'s, P, E> {
     }
 
     pub fn address(&self) -> SocketAddr {
-        return self.server.get_user_address(&self.key).unwrap();
+        return self.server.user_address(&self.key).unwrap();
     }
 }
 
@@ -63,7 +63,7 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash> UserMut<'s, P, E> {
     }
 
     pub fn address(&self) -> SocketAddr {
-        return self.server.get_user_address(&self.key).unwrap();
+        return self.server.user_address(&self.key).unwrap();
     }
 
     pub fn disconnect(&mut self) {

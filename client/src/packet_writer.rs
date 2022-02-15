@@ -28,11 +28,11 @@ impl PacketWriter {
     }
 
     /// Gets the bytes to write into an outgoing packet
-    pub fn get_bytes(&mut self) -> Box<[u8]> {
+    pub fn bytes(&mut self) -> Box<[u8]> {
         let mut out_bytes = Vec::<u8>::new();
 
-        self.entity_message_writer.get_bytes(&mut out_bytes);
-        self.message_writer.get_bytes(&mut out_bytes);
+        self.entity_message_writer.bytes(&mut out_bytes);
+        self.message_writer.bytes(&mut out_bytes);
 
         out_bytes.into_boxed_slice()
     }

@@ -40,7 +40,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E,
 
     /// Gets a Ref to a Component associated with the Entity
     pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ReplicaRefWrapper<P, R>> {
-        return self.world.get_component::<R>(&self.entity);
+        return self.world.component::<R>(&self.entity);
     }
 }
 
@@ -75,7 +75,7 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<'
     }
 
     pub fn component<R: ReplicateSafe<P>>(&mut self) -> Option<ReplicaMutWrapper<P, R>> {
-        return self.world.get_component_mut::<R>(&self.entity);
+        return self.world.component_mut::<R>(&self.entity);
     }
 
     pub fn insert_component<R: ReplicateSafe<P>>(&mut self, component_ref: R) -> &mut Self {

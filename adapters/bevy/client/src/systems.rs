@@ -15,7 +15,7 @@ use crate::events::{
 };
 
 use super::{
-    components::{Confirmed, Predicted},
+    components::Confirmed,
     resource::ClientResource,
 };
 
@@ -25,7 +25,6 @@ pub fn before_receive_events<P: Protocolize>(world: &mut World) {
             let event_results = client.receive(world.proxy_mut());
 
             let mut entities_to_spawn: Vec<Entity> = Vec::new();
-            let mut entities_to_own: Vec<Entity> = Vec::new();
 
             unsafe {
                 let mut spawn_entity_event_writer = world
@@ -90,10 +89,6 @@ pub fn before_receive_events<P: Protocolize>(world: &mut World) {
 
             for entity in entities_to_spawn {
                 world.entity_mut(entity).insert(Confirmed);
-            }
-
-            for entity in entities_to_own {
-                world.entity_mut(entity).insert(Predicted);
             }
         });
     });

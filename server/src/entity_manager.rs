@@ -101,18 +101,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 let mut component_list = Vec::new();
                 let mut diff_mask_list: Vec<(ComponentKey, DiffMask)> = Vec::new();
 
-                let global_component_keys = world_record.get_component_keys(&global_entity);
+                let global_component_keys = world_record.component_keys(&global_entity);
 
                 for global_component_key in global_component_keys {
                     let (_, component_kind) = world_record
-                        .get_component_record(&global_component_key)
+                        .component_record(&global_component_key)
                         .expect("component not tracked by server?");
 
                     component_list.push((global_component_key, component_kind));
 
                     let diff_mask = self
                         .diff_handler
-                        .get_diff_mask(&global_component_key)
+                        .diff_mask(&global_component_key)
                         .expect("DiffHandler does not have registered Component..")
                         .clone();
 
@@ -216,7 +216,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             if !world_record.has_entity(global_entity) {
                 panic!("entity nonexistant!");
             }
-            for global_component_key in world_record.get_component_keys(global_entity) {
+            for global_component_key in world_record.component_keys(global_entity) {
                 self.component_init(&global_component_key, LocalityStatus::Creating);
             }
 
@@ -295,7 +295,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         component_key: &ComponentKey,
     ) {
         let (entity, component_kind) = world_record
-            .get_component_record(component_key)
+            .component_record(component_key)
             .expect("component does not exist!");
 
         if !self.entity_records.contains_key(&entity) {
@@ -349,7 +349,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
     // Ect..
 
-    pub fn get_global_entity_from_local(&self, local_entity: NetEntity) -> Option<&E> {
+    pub fn global_entity_from_local(&self, local_entity: NetEntity) -> Option<&E> {
         return self.local_to_global_entity_map.get(&local_entity);
     }
 
@@ -359,12 +359,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 && !self.diff_handler.diff_mask_is_clear(component_key)
             {
                 let (entity, component_kind) = world_record
-                    .get_component_record(component_key)
+                    .component_record(component_key)
                     .expect("component does not exist!");
 
                 let new_diff_mask = self
                     .diff_handler
-                    .get_diff_mask(component_key)
+                    .diff_mask(component_key)
                     .expect("DiffHandler does not have registered Component!")
                     .clone();
                 self.queued_actions.push_back(EntityAction::UpdateComponent(
@@ -418,7 +418,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                     //write component payload
                     let component_ref = world
-                        .get_component_of_kind(global_entity, component_kind)
+                        .component_of_kind(global_entity, component_kind)
                         .expect("Component does not exist in World");
                     let mut component_payload_bytes = Vec::<u8>::new();
                     component_ref.write(&mut component_payload_bytes);
@@ -458,7 +458,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     .unwrap();
 
                 // write message's naia id
-                let message_kind = message_ref.get_kind();
+                let message_kind = message_ref.kind();
                 action_total_bytes
                     .write_u16::<BigEndian>(message_kind.to_u16())
                     .unwrap();
@@ -480,7 +480,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                 //write component payload
                 let component_ref = world
-                    .get_component_of_kind(global_entity, component_kind)
+                    .component_of_kind(global_entity, component_kind)
                     .expect("Component does not exist in World");
 
                 let mut component_payload_bytes = Vec::<u8>::new();
@@ -512,7 +512,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                 //write component payload
                 let component_ref = world
-                    .get_component_of_kind(global_entity, component_kind)
+                    .component_of_kind(global_entity, component_kind)
                     .expect("Component does not exist in World");
 
                 let mut component_payload_bytes = Vec::<u8>::new();
@@ -605,7 +605,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     fn pop_insert_component_diff_mask(&mut self, global_component_key: &ComponentKey) {
         let new_diff_mask = self
             .diff_handler
-            .get_diff_mask(global_component_key)
+            .diff_mask(global_component_key)
             .expect("DiffHandler doesn't have Component registered!")
             .clone();
         self.last_popped_diff_mask = Some(new_diff_mask);
@@ -704,7 +704,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
 
         self.diff_handler
-            .get_diff_mask(global_component_key)
+            .diff_mask(global_component_key)
             .expect("uh oh, we don't have enough info to unpop the action")
             .clone()
     }
@@ -745,7 +745,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 // for any components on this entity that have not yet been created
                                 // initiate that now
                                 for global_component_key in
-                                    world_record.get_component_keys(&global_entity)
+                                    world_record.component_keys(&global_entity)
                                 {
                                     let component_record = self
                                         .component_records
@@ -755,7 +755,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                     // (perhaps through the previous entity_create operation)
                                     if component_record.status == LocalityStatus::Creating {
                                         let (_, component_kind) = world_record
-                                            .get_component_record(&global_component_key)
+                                            .component_record(&global_component_key)
                                             .expect("component does not exist!");
 
                                         self.queued_actions.push_back(
@@ -835,7 +835,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
             // Entity deletion IS Component deletion, so update those component records
             // accordingly
-            for global_component_key in world_record.get_component_keys(entity) {
+            for global_component_key in world_record.component_keys(entity) {
                 self.component_cleanup(&global_component_key);
             }
 

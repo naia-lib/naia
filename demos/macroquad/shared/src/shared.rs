@@ -4,7 +4,7 @@ use naia_shared::{LinkConditionerConfig, SharedConfig};
 
 use super::protocol::Protocol;
 
-pub fn get_shared_config() -> SharedConfig<Protocol> {
+pub fn shared_config() -> SharedConfig<Protocol> {
     // Set tick rate to ~60 FPS
     let tick_interval = Some(Duration::from_millis(16));
 

@@ -1,10 +1,10 @@
-use std::{net::SocketAddr, time::Duration};
+use std::time::Duration;
 
 use naia_shared::{LinkConditionerConfig, SharedConfig};
 
 use super::protocol::Protocol;
 
-pub fn get_shared_config() -> SharedConfig<Protocol> {
+pub fn shared_config() -> SharedConfig<Protocol> {
     let tick_interval = Some(Duration::from_millis(50));
 
     //    let link_condition = None;

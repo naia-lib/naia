@@ -70,7 +70,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
         return self.entities.contains_key(entity);
     }
 
-    pub fn get_component_keys(&self, entity: &E) -> Vec<ComponentKey> {
+    pub fn component_keys(&self, entity: &E) -> Vec<ComponentKey> {
         let mut output = Vec::new();
 
         if let Some(component_key_map) = self.entities.get(entity) {
@@ -78,13 +78,15 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
                 output.push(*component_key);
             }
         } else {
-            warn!("In WorldRecord.get_component_keys(), trying to access an entity that does not exist!");
+            warn!(
+                "In WorldRecord.component_keys(), trying to access an entity that does not exist!"
+            );
         }
 
         output
     }
 
-    pub fn get_key_from_type(&self, entity: &E, component_kind: &K) -> Option<ComponentKey> {
+    pub fn key_from_type(&self, entity: &E, component_kind: &K) -> Option<ComponentKey> {
         if let Some(component_key_map) = self.entities.get(entity) {
             if let Some(component_key) = component_key_map.get(component_kind) {
                 return Some(*component_key);
@@ -93,7 +95,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
         return None;
     }
 
-    pub fn get_component_record(&self, component_key: &ComponentKey) -> Option<(E, K)> {
+    pub fn component_record(&self, component_key: &ComponentKey) -> Option<(E, K)> {
         if let Some(record) = self.components.get(*component_key) {
             return Some(*record);
         }

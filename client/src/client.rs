@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
-use naia_client_socket::{Packet, ServerAddr, Socket};
+use naia_client_socket::{Packet, Socket};
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
     Protocolize, ReplicateSafe, SequenceIterator, SharedConfig, SocketConfig, StandardHeader,
@@ -130,7 +130,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         let client_tick_opt = self.client_tick();
 
         if let Some(connection) = &mut self.server_connection {
-            let disconnect_packet = self.handshake_manager.get_disconnect_packet();
+            let disconnect_packet = self.handshake_manager.disconnect_packet();
             for _ in 0..10 {
                 internal_send_with_connection::<P, E>(
                     client_tick_opt,
@@ -177,18 +177,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     // Connection
 
     /// Get the address currently associated with the Server
-    pub fn server_address(&self) -> ServerAddr {
-        return self.io.server_addr();
+    pub fn server_address(&self) -> SocketAddr {
+        return self.io.server_addr_unwrapped();
     }
 
     /// Gets the average Round Trip Time measured to the Server
     pub fn rtt(&self) -> f32 {
-        return self.server_connection.as_ref().unwrap().get_rtt();
+        return self.server_connection.as_ref().unwrap().rtt();
     }
 
     /// Gets the average Jitter measured in connection to the Server
     pub fn jitter(&self) -> f32 {
-        return self.server_connection.as_ref().unwrap().get_jitter();
+        return self.server_connection.as_ref().unwrap().jitter();
     }
 
     // Ticks
@@ -266,12 +266,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 return events; // exit early, we're disconnected, who cares?
             }
             // receive messages
-            while let Some(message) = self
-                .server_connection
-                .as_mut()
-                .unwrap()
-                .get_incoming_message()
-            {
+            while let Some(message) = self.server_connection.as_mut().unwrap().incoming_message() {
                 events.push_back(Ok(Event::Message(message)));
             }
             // receive entity actions
@@ -279,7 +274,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 .server_connection
                 .as_mut()
                 .unwrap()
-                .get_incoming_entity_action()
+                .incoming_entity_action()
             {
                 let event: Event<P, E> = {
                     match action {
@@ -320,7 +315,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             }
             // send pings
             if self.server_connection.as_ref().unwrap().should_send_ping() {
-                let ping_packet = self.server_connection.as_mut().unwrap().get_ping_packet();
+                let ping_packet = self.server_connection.as_mut().unwrap().ping_packet();
                 internal_send_with_connection::<P, E>(
                     client_tick_opt,
                     &mut self.io,
@@ -337,12 +332,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                         .server_connection
                         .as_mut()
                         .unwrap()
-                        .get_entity_messages(tick_manager.server_receivable_tick());
+                        .entity_messages(tick_manager.server_receivable_tick());
                     while let Some(payload) = self
                         .server_connection
                         .as_mut()
                         .unwrap()
-                        .get_outgoing_packet(client_tick, &mut entity_messages)
+                        .outgoing_packet(client_tick, &mut entity_messages)
                     {
                         self.io.send_packet(Packet::new_raw(payload));
                         sent = true;

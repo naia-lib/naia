@@ -84,9 +84,9 @@ impl<P: Protocolize> BaseConnection<P> {
         // Add header onto message!
         let mut header_bytes = Vec::new();
 
-        let local_packet_index = self.ack_manager.get_local_packet_index();
-        let last_remote_packet_index = self.ack_manager.get_last_remote_packet_index();
-        let bit_field = self.ack_manager.get_ack_bitfield();
+        let local_packet_index = self.ack_manager.local_packet_index();
+        let last_remote_packet_index = self.ack_manager.last_remote_packet_index();
+        let bit_field = self.ack_manager.ack_bitfield();
 
         let header = StandardHeader::new(
             packet_type,
@@ -109,8 +109,8 @@ impl<P: Protocolize> BaseConnection<P> {
     }
 
     /// Get the next outgoing packet's index
-    pub fn get_next_packet_index(&self) -> SequenceNumber {
-        return self.ack_manager.get_local_packet_index();
+    pub fn next_packet_index(&self) -> SequenceNumber {
+        return self.ack_manager.local_packet_index();
     }
 
     /// Queue up a message to be sent to the remote host
@@ -152,17 +152,17 @@ impl<P: Protocolize> BaseConnection<P> {
     }
 
     /// Get the most recent message that has been received from a remote host
-    pub fn get_incoming_message(&mut self) -> Option<P> {
+    pub fn incoming_message(&mut self) -> Option<P> {
         return self.message_manager.pop_incoming_message();
     }
 
     /// Get the address of the remote host
-    pub fn get_address(&self) -> SocketAddr {
+    pub fn address(&self) -> SocketAddr {
         return self.address;
     }
 
     /// Get the latest received tick from the remote host
-    pub fn get_last_received_tick(&self) -> u16 {
+    pub fn last_received_tick(&self) -> u16 {
         return self.last_received_tick;
     }
 }

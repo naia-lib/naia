@@ -23,12 +23,12 @@ pub trait WorldRefType<P: Protocolize, E> {
     /// check whether entity contains component, dynamically
     fn has_component_of_kind(&self, entity: &E, component_kind: &P::Kind) -> bool;
     /// gets an entity's component
-    fn get_component<'a, R: ReplicateSafe<P>>(
+    fn component<'a, R: ReplicateSafe<P>>(
         &'a self,
         entity: &E,
     ) -> Option<ReplicaRefWrapper<'a, P, R>>;
     /// gets an entity's component, dynamically
-    fn get_component_of_kind(
+    fn component_of_kind(
         &self,
         entity: &E,
         component_kind: &P::Kind,
@@ -47,9 +47,9 @@ pub trait WorldMutType<P: Protocolize, E>: WorldRefType<P, E> + ProtocolInserter
 
     // Components
     /// gets all of an Entity's Components as a list of Kinds
-    fn get_component_kinds(&mut self, entity: &E) -> Vec<P::Kind>;
+    fn component_kinds(&mut self, entity: &E) -> Vec<P::Kind>;
     /// gets an entity's component
-    fn get_component_mut<'a, R: ReplicateSafe<P>>(
+    fn component_mut<'a, R: ReplicateSafe<P>>(
         &'a mut self,
         entity: &E,
     ) -> Option<ReplicaMutWrapper<'a, P, R>>;

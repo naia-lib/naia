@@ -39,7 +39,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         };
     }
 
-    pub fn get_outgoing_packet(
+    pub fn outgoing_packet(
         &mut self,
         client_tick: u16,
         entity_messages: &mut VecDeque<(EntityMessageId, Tick, E, P)>,
@@ -47,7 +47,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         if self.base_connection.has_outgoing_messages() || entity_messages.len() > 0 {
             let mut writer = PacketWriter::new();
 
-            let next_packet_index: u16 = self.get_next_packet_index();
+            let next_packet_index: u16 = self.next_packet_index();
 
             // Entity Messages
             while let Some((message_id, client_tick, entity, message)) = entity_messages.pop_front()
@@ -86,7 +86,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             if writer.has_bytes() {
                 // Get bytes from writer
 
-                let out_bytes = writer.get_bytes();
+                let out_bytes = writer.bytes();
 
                 // Add header to it
                 let payload =
@@ -98,13 +98,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         return None;
     }
 
-    pub fn get_entity_messages(
+    pub fn entity_messages(
         &mut self,
         server_receivable_tick: u16,
     ) -> VecDeque<(EntityMessageId, Tick, E, P)> {
-        return self
-            .entity_message_sender
-            .get_messages(server_receivable_tick);
+        return self.entity_message_sender.messages(server_receivable_tick);
     }
 
     pub fn process_incoming_data<W: WorldMutType<P, E>>(
@@ -150,7 +148,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     }
 
     // Pass-through methods to underlying Entity Manager
-    pub fn get_incoming_entity_action(&mut self) -> Option<EntityAction<P, E>> {
+    pub fn incoming_entity_action(&mut self) -> Option<EntityAction<P, E>> {
         return self.entity_manager.pop_incoming_message();
     }
 
@@ -186,7 +184,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         receiving_tick: u16,
     ) {
         while let Some((server_tick, packet_index, data_packet)) =
-            self.get_buffered_data_packet(receiving_tick)
+            self.buffered_data_packet(receiving_tick)
         {
             self.process_incoming_data(world, packet_index, manifest, server_tick, &data_packet);
         }
@@ -218,8 +216,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         if let Some(tick_manager) = tick_manager_opt {
             tick_manager.record_server_tick(
                 header.host_tick(),
-                self.ping_manager.get_ping(),
-                self.ping_manager.get_jitter(),
+                self.ping_manager.ping(),
+                self.ping_manager.jitter(),
             );
         }
         self.base_connection
@@ -237,8 +235,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             .process_outgoing_header(client_tick, packet_type, payload);
     }
 
-    pub fn get_next_packet_index(&self) -> SequenceNumber {
-        return self.base_connection.get_next_packet_index();
+    pub fn next_packet_index(&self) -> SequenceNumber {
+        return self.base_connection.next_packet_index();
     }
 
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
@@ -258,8 +256,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             .send_entity_message(entity, message, client_tick);
     }
 
-    pub fn get_incoming_message(&mut self) -> Option<P> {
-        return self.base_connection.get_incoming_message();
+    pub fn incoming_message(&mut self) -> Option<P> {
+        return self.base_connection.incoming_message();
     }
 
     // Ping related
@@ -267,25 +265,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         return self.ping_manager.should_send_ping();
     }
 
-    pub fn get_ping_packet(&mut self) -> Packet {
-        self.ping_manager.get_ping_packet()
+    pub fn ping_packet(&mut self) -> Packet {
+        self.ping_manager.ping_packet()
     }
 
     pub fn process_pong(&mut self, pong_payload: &[u8]) {
         self.ping_manager.process_pong(pong_payload);
     }
 
-    pub fn get_rtt(&self) -> f32 {
-        return self.ping_manager.get_rtt();
+    pub fn rtt(&self) -> f32 {
+        return self.ping_manager.rtt();
     }
 
-    pub fn get_jitter(&self) -> f32 {
-        return self.ping_manager.get_jitter();
+    pub fn jitter(&self) -> f32 {
+        return self.ping_manager.jitter();
     }
 
     // Private methods
 
-    fn get_buffered_data_packet(&mut self, current_tick: u16) -> Option<(u16, u16, Box<[u8]>)> {
+    fn buffered_data_packet(&mut self, current_tick: u16) -> Option<(u16, u16, Box<[u8]>)> {
         if let Some((tick, (index, payload))) = self.jitter_buffer.pop_item(current_tick) {
             return Some((tick, index, payload));
         }

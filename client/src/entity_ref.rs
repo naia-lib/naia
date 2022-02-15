@@ -29,7 +29,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E,
     }
 
     pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ReplicaRefWrapper<P, R>> {
-        return self.world.get_component::<R>(&self.entity);
+        return self.world.component::<R>(&self.entity);
     }
 }
 

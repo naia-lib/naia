@@ -28,7 +28,7 @@ impl TickManager {
     }
 
     /// Gets the current tick on the host
-    pub fn get_tick(&self) -> u16 {
+    pub fn tick(&self) -> u16 {
         self.current_tick
     }
 }

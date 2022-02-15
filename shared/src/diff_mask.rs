@@ -23,7 +23,7 @@ impl DiffMask {
     }
 
     /// Gets the bit at the specified position within the DiffMask
-    pub fn get_bit(&self, index: u8) -> Option<bool> {
+    pub fn bit(&self, index: u8) -> Option<bool> {
         if let Some(byte) = self.mask.get((index / 8) as usize) {
             let adjusted_index = index % 8;
             return Some(byte & (1 << adjusted_index) != 0);
@@ -66,7 +66,7 @@ impl DiffMask {
     }
 
     /// Gets a byte at the specified index in the DiffMask
-    pub fn get_byte(&self, index: usize) -> u8 {
+    pub fn byte(&self, index: usize) -> u8 {
         return self.mask[index];
     }
 
@@ -79,7 +79,7 @@ impl DiffMask {
 
         for n in 0..self.bytes {
             if let Some(my_byte) = self.mask.get_mut(n as usize) {
-                let other_byte = !other.get_byte(n as usize);
+                let other_byte = !other.byte(n as usize);
                 *my_byte &= other_byte;
             }
         }
@@ -94,7 +94,7 @@ impl DiffMask {
 
         for n in 0..self.bytes {
             if let Some(my_byte) = self.mask.get_mut(n as usize) {
-                let other_byte = other.get_byte(n as usize);
+                let other_byte = other.byte(n as usize);
                 *my_byte |= other_byte;
             }
         }
@@ -127,7 +127,7 @@ impl DiffMask {
 
         for n in 0..self.bytes {
             if let Some(my_byte) = self.mask.get_mut(n as usize) {
-                let other_byte = other.get_byte(n as usize);
+                let other_byte = other.byte(n as usize);
                 *my_byte = other_byte;
             }
         }
@@ -138,7 +138,7 @@ impl fmt::Display for DiffMask {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out_string: String = String::new();
         for y in 0..8 {
-            if let Some(bit) = self.get_bit(y) {
+            if let Some(bit) = self.bit(y) {
                 if bit {
                     out_string.push('1');
                 } else {
@@ -164,11 +164,11 @@ mod single_byte_tests {
         mask.set_bit(6, true);
         mask.set_bit(4, false);
 
-        assert!(mask.get_bit(0).unwrap() == true);
-        assert!(mask.get_bit(1).unwrap() == false);
-        assert!(mask.get_bit(2).unwrap() == true);
-        assert!(mask.get_bit(4).unwrap() == false);
-        assert!(mask.get_bit(6).unwrap() == true);
+        assert!(mask.bit(0).unwrap() == true);
+        assert!(mask.bit(1).unwrap() == false);
+        assert!(mask.bit(2).unwrap() == true);
+        assert!(mask.bit(4).unwrap() == false);
+        assert!(mask.bit(6).unwrap() == true);
     }
 
     #[test]
@@ -182,10 +182,10 @@ mod single_byte_tests {
 
         mask.clear();
 
-        assert!(mask.get_bit(0).unwrap() == false);
-        assert!(mask.get_bit(2).unwrap() == false);
-        assert!(mask.get_bit(4).unwrap() == false);
-        assert!(mask.get_bit(6).unwrap() == false);
+        assert!(mask.bit(0).unwrap() == false);
+        assert!(mask.bit(2).unwrap() == false);
+        assert!(mask.bit(4).unwrap() == false);
+        assert!(mask.bit(6).unwrap() == false);
     }
 
     #[test]
@@ -208,10 +208,10 @@ mod single_byte_tests {
     }
 
     #[test]
-    fn get_byte() {
+    fn byte() {
         let mut mask = DiffMask::new(1);
         mask.set_bit(2, true);
-        let byte = mask.get_byte(0);
+        let byte = mask.byte(0);
         assert!(byte == 4);
     }
 
@@ -226,10 +226,10 @@ mod single_byte_tests {
 
         mask_a.nand(&mask_b);
 
-        assert!(mask_a.get_bit(0).unwrap() == false);
-        assert!(mask_a.get_bit(1).unwrap() == false);
-        assert!(mask_a.get_bit(2).unwrap() == true);
-        assert!(mask_a.get_bit(3).unwrap() == false);
+        assert!(mask_a.bit(0).unwrap() == false);
+        assert!(mask_a.bit(1).unwrap() == false);
+        assert!(mask_a.bit(2).unwrap() == true);
+        assert!(mask_a.bit(3).unwrap() == false);
     }
 
     #[test]
@@ -244,11 +244,11 @@ mod single_byte_tests {
 
         mask_a.or(&mask_b);
 
-        assert!(mask_a.get_bit(0).unwrap() == false);
-        assert!(mask_a.get_bit(1).unwrap() == true);
-        assert!(mask_a.get_bit(2).unwrap() == true);
-        assert!(mask_a.get_bit(3).unwrap() == true);
-        assert!(mask_a.get_bit(4).unwrap() == false);
+        assert!(mask_a.bit(0).unwrap() == false);
+        assert!(mask_a.bit(1).unwrap() == true);
+        assert!(mask_a.bit(2).unwrap() == true);
+        assert!(mask_a.bit(3).unwrap() == true);
+        assert!(mask_a.bit(4).unwrap() == false);
     }
 
     #[test]
@@ -259,9 +259,9 @@ mod single_byte_tests {
 
         let mut mask_b = mask_a.clone();
 
-        assert!(mask_b.get_bit(1).unwrap() == true);
-        assert!(mask_b.get_bit(3).unwrap() == false);
-        assert!(mask_b.get_bit(4).unwrap() == true);
+        assert!(mask_b.bit(1).unwrap() == true);
+        assert!(mask_b.bit(3).unwrap() == false);
+        assert!(mask_b.bit(4).unwrap() == true);
     }
 }
 
@@ -279,11 +279,11 @@ mod double_byte_tests {
         mask.set_bit(12, true);
         mask.set_bit(8, false);
 
-        assert!(mask.get_bit(0).unwrap() == true);
-        assert!(mask.get_bit(4).unwrap() == true);
-        assert!(mask.get_bit(8).unwrap() == false);
-        assert!(mask.get_bit(12).unwrap() == true);
-        assert!(mask.get_bit(13).unwrap() == false);
+        assert!(mask.bit(0).unwrap() == true);
+        assert!(mask.bit(4).unwrap() == true);
+        assert!(mask.bit(8).unwrap() == false);
+        assert!(mask.bit(12).unwrap() == true);
+        assert!(mask.bit(13).unwrap() == false);
     }
 
     #[test]
@@ -297,10 +297,10 @@ mod double_byte_tests {
 
         mask.clear();
 
-        assert!(mask.get_bit(0).unwrap() == false);
-        assert!(mask.get_bit(4).unwrap() == false);
-        assert!(mask.get_bit(8).unwrap() == false);
-        assert!(mask.get_bit(12).unwrap() == false);
+        assert!(mask.bit(0).unwrap() == false);
+        assert!(mask.bit(4).unwrap() == false);
+        assert!(mask.bit(8).unwrap() == false);
+        assert!(mask.bit(12).unwrap() == false);
     }
 
     #[test]
@@ -323,10 +323,10 @@ mod double_byte_tests {
     }
 
     #[test]
-    fn get_byte() {
+    fn byte() {
         let mut mask = DiffMask::new(2);
         mask.set_bit(10, true);
-        let byte = mask.get_byte(1);
+        let byte = mask.byte(1);
         assert!(byte == 4);
     }
 
@@ -344,15 +344,15 @@ mod double_byte_tests {
 
         mask_a.nand(&mask_b);
 
-        assert!(mask_a.get_bit(0).unwrap() == false);
-        assert!(mask_a.get_bit(1).unwrap() == false);
-        assert!(mask_a.get_bit(2).unwrap() == true);
-        assert!(mask_a.get_bit(3).unwrap() == false);
+        assert!(mask_a.bit(0).unwrap() == false);
+        assert!(mask_a.bit(1).unwrap() == false);
+        assert!(mask_a.bit(2).unwrap() == true);
+        assert!(mask_a.bit(3).unwrap() == false);
 
-        assert!(mask_a.get_bit(8).unwrap() == false);
-        assert!(mask_a.get_bit(9).unwrap() == false);
-        assert!(mask_a.get_bit(10).unwrap() == true);
-        assert!(mask_a.get_bit(11).unwrap() == false);
+        assert!(mask_a.bit(8).unwrap() == false);
+        assert!(mask_a.bit(9).unwrap() == false);
+        assert!(mask_a.bit(10).unwrap() == true);
+        assert!(mask_a.bit(11).unwrap() == false);
     }
 
     #[test]
@@ -367,11 +367,11 @@ mod double_byte_tests {
 
         mask_a.or(&mask_b);
 
-        assert!(mask_a.get_bit(0).unwrap() == false);
-        assert!(mask_a.get_bit(4).unwrap() == true);
-        assert!(mask_a.get_bit(8).unwrap() == true);
-        assert!(mask_a.get_bit(12).unwrap() == true);
-        assert!(mask_a.get_bit(15).unwrap() == false);
+        assert!(mask_a.bit(0).unwrap() == false);
+        assert!(mask_a.bit(4).unwrap() == true);
+        assert!(mask_a.bit(8).unwrap() == true);
+        assert!(mask_a.bit(12).unwrap() == true);
+        assert!(mask_a.bit(15).unwrap() == false);
     }
 
     #[test]
@@ -382,9 +382,9 @@ mod double_byte_tests {
 
         let mut mask_b = mask_a.clone();
 
-        assert!(mask_b.get_bit(2).unwrap() == true);
-        assert!(mask_b.get_bit(4).unwrap() == false);
-        assert!(mask_b.get_bit(9).unwrap() == false);
-        assert!(mask_b.get_bit(10).unwrap() == true);
+        assert!(mask_b.bit(2).unwrap() == true);
+        assert!(mask_b.bit(4).unwrap() == false);
+        assert!(mask_b.bit(9).unwrap() == false);
+        assert!(mask_b.bit(10).unwrap() == true);
     }
 }
