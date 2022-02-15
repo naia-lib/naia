@@ -6,7 +6,10 @@ use bevy::{
     prelude::*,
 };
 use naia_bevy_shared::WorldData;
-use naia_server::{shared::{Protocolize, SharedConfig}, Server, ServerConfig, };
+use naia_server::{
+    shared::{Protocolize, SharedConfig},
+    Server, ServerConfig,
+};
 
 use super::{
     events::{

@@ -84,11 +84,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                 let out_bytes = writer.get_bytes();
 
                 // Add header to it
-                let payload = self.process_outgoing_header(
-                    server_tick,
-                    PacketType::Data,
-                    &out_bytes,
-                );
+                let payload =
+                    self.process_outgoing_header(server_tick, PacketType::Data, &out_bytes);
                 return Some(payload);
             }
         }
@@ -213,11 +210,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         packet_type: PacketType,
         payload: &[u8],
     ) -> Box<[u8]> {
-        return self.base_connection.process_outgoing_header(
-            host_tick,
-            packet_type,
-            payload,
-        );
+        return self
+            .base_connection
+            .process_outgoing_header(host_tick, packet_type, payload);
     }
 
     pub fn get_next_packet_index(&self) -> SequenceNumber {

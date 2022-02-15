@@ -77,10 +77,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         /////////////////////////
     }
 
-    fn timestamp_validate(
-        &self,
-        reader: &mut PacketReader,
-    ) -> Option<Timestamp> {
+    fn timestamp_validate(&self, reader: &mut PacketReader) -> Option<Timestamp> {
         let timestamp = Timestamp::read(reader);
         let mut digest_bytes: Vec<u8> = Vec::new();
         for _ in 0..32 {
@@ -192,8 +189,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         io: &mut Io,
         connection: &mut Connection<P, E>,
     ) {
-        let payload =
-            connection.process_outgoing_header(0, PacketType::ServerConnectResponse, &[]);
+        let payload = connection.process_outgoing_header(0, PacketType::ServerConnectResponse, &[]);
         io.send_packet(Packet::new_raw(connection.address(), payload));
         connection.mark_sent();
     }

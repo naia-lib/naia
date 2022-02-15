@@ -110,17 +110,15 @@ impl TickManager {
         self.client_receiving_tick_adjust =
             (jitter_limit / self.tick_interval_millis).ceil() as u16;
 
-        // NOTE: I've struggled multiple times with why rtt_average instead of ping_average exists in
-        // this calculation, figured it out, then returned to struggle later.
-        // This is not a bug!
+        // NOTE: I've struggled multiple times with why rtt_average instead of
+        // ping_average exists in this calculation, figured it out, then
+        // returned to struggle later. This is not a bug!
         // Keep in mind that self.server_tick here is the tick we have RECEIVED from the
         // Server which means that the real current server_tick is likely
         // self.server_tick + ping_average / tick_interval.
         // By using rtt_average here, we are correcting for our late (and
         // lesser) self.server_tick value
-        let client_sending_adjust_millis = self
-            .minimum_latency
-            .max(rtt_average + jitter_limit);
+        let client_sending_adjust_millis = self.minimum_latency.max(rtt_average + jitter_limit);
         self.client_sending_tick_adjust =
             ((client_sending_adjust_millis / self.tick_interval_millis) + 1.0).ceil() as u16;
 

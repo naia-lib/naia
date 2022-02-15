@@ -9,13 +9,8 @@ use bevy::{
     sprite::{Sprite, SpriteBundle},
     transform::components::Transform,
 };
-use naia_bevy_client::{
-    events::SpawnEntityEvent,
-    Client,
-};
-use naia_bevy_demo_shared::{
-    protocol::{Color, ColorValue, Protocol, ProtocolKind},
-};
+use naia_bevy_client::{events::SpawnEntityEvent, Client};
+use naia_bevy_demo_shared::protocol::{Color, ColorValue, Protocol, ProtocolKind};
 
 const SQUARE_SIZE: f32 = 32.0;
 

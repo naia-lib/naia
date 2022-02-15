@@ -2,7 +2,10 @@ use std::marker::PhantomData;
 
 use bevy::ecs::entity::Entity;
 
-use naia_server::{shared::{Protocolize, Replicate}, Server, UserKey};
+use naia_server::{
+    shared::{Protocolize, Replicate},
+    Server, UserKey,
+};
 
 use naia_bevy_shared::WorldMut;
 

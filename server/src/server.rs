@@ -124,10 +124,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Listen at the given addresses
     pub fn listen(&mut self, server_addrs: ServerAddrs) {
         self.socket.listen(server_addrs);
-        self.io.load(
-            self.socket.get_packet_sender(),
-            self.socket.get_packet_receiver(),
-        );
+        self.io
+            .load(self.socket.packet_sender(), self.socket.packet_receiver());
     }
 
     /// Returns whether or not the Server has initialized correctly and is
@@ -605,7 +603,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// All necessary cleanup, when they're actually gone...
     pub(crate) fn delete_user(&mut self, user_key: &UserKey) -> Option<User> {
-
         if let Some(user) = self.users.remove(*user_key) {
             if let Some(_) = self.user_connections.remove(&user.address) {
                 self.entity_scope_map.remove_user(user_key);
@@ -765,11 +762,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 if connection.should_send_heartbeat() {
                     // Don't try to refactor this to self.internal_send, doesn't seem to
                     // work cause of iter_mut()
-                    let payload = connection.process_outgoing_header(
-                        server_tick,
-                        PacketType::Heartbeat,
-                        &[],
-                    );
+                    let payload =
+                        connection.process_outgoing_header(server_tick, PacketType::Heartbeat, &[]);
                     self.io.send_packet(Packet::new_raw(*user_address, payload));
                     connection.mark_sent();
                 }
@@ -831,10 +825,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                         }
                         PacketType::Disconnect => {
                             if let Some(mut connection) = self.user_connections.get_mut(&address) {
-                                if self.handshake_manager.verify_disconnect_request(
-                                    &mut connection,
-                                    &payload,
-                                ) {
+                                if self
+                                    .handshake_manager
+                                    .verify_disconnect_request(&mut connection, &payload)
+                                {
                                     self.outstanding_disconnects.push_back(connection.user_key);
                                 }
                             }

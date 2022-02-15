@@ -6,7 +6,7 @@ use bevy::ecs::{
     world::{Mut, World},
 };
 
-use naia_server::{shared::{Protocolize}, Server as NaiaServer};
+use naia_server::{shared::Protocolize, Server as NaiaServer};
 
 use naia_bevy_shared::WorldProxyMut;
 
