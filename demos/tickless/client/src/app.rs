@@ -2,7 +2,7 @@ use log::info;
 
 use naia_client::{Client as NaiaClient, ClientConfig, Event};
 
-use naia_tickless_demo_shared::{get_server_address, get_shared_config, Protocol, Text};
+use naia_tickless_demo_shared::{get_shared_config, Protocol, Text};
 
 use naia_empty_world::{EmptyEntity, EmptyWorldMut};
 
@@ -17,10 +17,8 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Tickless Client Demo started");
 
-        let server_address = get_server_address();
-
         let mut client = Client::new(ClientConfig::default(), get_shared_config());
-        client.connect(server_address);
+        client.connect("http://127.0.0.1:14191");
 
         App {
             client,

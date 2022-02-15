@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use hecs::World;
 
 use naia_hecs_client::{ClientConfig, SharedConfig, WorldData};
@@ -11,7 +9,7 @@ use crate::app::{App, Client};
 pub fn app_init(
     client_config: ClientConfig,
     shared_config: SharedConfig<Protocol>,
-    server_addr: SocketAddr,
+    server_addr: &str,
     auth: Auth,
 ) -> App {
     let mut client = Client::new(client_config, shared_config);

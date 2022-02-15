@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 use naia_bevy_client::Client;
-use naia_bevy_demo_shared::{
-    get_server_address,
-    protocol::{Auth, Protocol},
-};
+use naia_bevy_demo_shared::protocol::{Auth, Protocol};
 
 use crate::resources::Global;
 
