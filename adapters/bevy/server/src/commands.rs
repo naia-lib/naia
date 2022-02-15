@@ -4,7 +4,7 @@ use bevy::ecs::entity::Entity;
 
 use naia_server::{
     shared::{Protocolize, Replicate},
-    Server, UserKey,
+    Server,
 };
 
 use naia_bevy_shared::WorldMut;

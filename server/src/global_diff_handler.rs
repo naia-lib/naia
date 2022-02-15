@@ -37,11 +37,7 @@ impl GlobalDiffHandler {
         self.mut_receiver_builders.remove(component_key);
     }
 
-    pub fn get_receiver(
-        &self,
-        addr: &SocketAddr,
-        component_key: &ComponentKey,
-    ) -> Option<MutReceiver> {
+    pub fn receiver(&self, addr: &SocketAddr, component_key: &ComponentKey) -> Option<MutReceiver> {
         if let Some(builder) = self.mut_receiver_builders.get(component_key) {
             return builder.build(addr);
         }

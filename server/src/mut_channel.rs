@@ -93,7 +93,7 @@ impl MutReceiver {
         }
     }
 
-    pub fn get_mask(&self) -> Option<RwLockReadGuard<DiffMask>> {
+    pub fn mask(&self) -> Option<RwLockReadGuard<DiffMask>> {
         self.mask.as_ref().read().ok()
     }
 

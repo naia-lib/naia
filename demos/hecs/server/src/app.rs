@@ -4,7 +4,7 @@ use hecs::{Entity, World};
 
 use naia_hecs_server::{RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldData};
 
-use naia_hecs_demo_shared::{get_shared_config, protocol::Protocol};
+use naia_hecs_demo_shared::{protocol::Protocol, shared_config};
 
 use super::systems::{
     events::process_events,
@@ -39,11 +39,7 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        app_init(
-            ServerConfig::default(),
-            get_shared_config(),
-            server_addresses,
-        )
+        app_init(ServerConfig::default(), shared_config(), server_addresses)
     }
 
     pub fn update(&mut self) {

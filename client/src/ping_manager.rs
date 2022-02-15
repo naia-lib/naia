@@ -42,7 +42,7 @@ impl PingManager {
     }
 
     /// Get an outgoing ping payload
-    pub fn get_ping_packet(&mut self) -> Packet {
+    pub fn ping_packet(&mut self) -> Packet {
         self.ping_timer.reset();
 
         self.sent_pings.insert(
@@ -99,19 +99,19 @@ impl PingManager {
 
     /// Gets the current calculated average Round Trip Time to the remote host,
     /// in milliseconds
-    pub fn get_rtt(&self) -> f32 {
+    pub fn rtt(&self) -> f32 {
         return self.ping_average * 2.0;
     }
 
     /// Gets the current calculated average Round Trip Time to the remote host,
     /// in milliseconds
-    pub fn get_ping(&self) -> f32 {
+    pub fn ping(&self) -> f32 {
         return self.ping_average;
     }
 
     /// Gets the current calculated standard deviation of Jitter to the remote
     /// host, in milliseconds
-    pub fn get_jitter(&self) -> f32 {
+    pub fn jitter(&self) -> f32 {
         return self.ping_deviation;
     }
 }

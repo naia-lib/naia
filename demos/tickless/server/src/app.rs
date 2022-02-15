@@ -2,7 +2,7 @@ use std::{thread, time::Duration};
 
 use naia_server::{Event, Server as NaiaServer, ServerAddrs, ServerConfig};
 
-use naia_tickless_demo_shared::{get_shared_config, Protocol, Text};
+use naia_tickless_demo_shared::{shared_config, Protocol, Text};
 
 use naia_empty_world::{EmptyEntity, EmptyWorldRef};
 
@@ -32,7 +32,7 @@ impl App {
         server_config.require_auth = false;
         server_config.disconnection_timeout_duration = Duration::from_secs(30);
 
-        let mut server = Server::new(server_config, get_shared_config());
+        let mut server = Server::new(server_config, shared_config());
         server.listen(server_addresses);
 
         App { server }

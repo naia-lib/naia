@@ -57,14 +57,14 @@ mod inner {
             unimplemented!()
         }
 
-        fn get_component<R: ReplicateSafe<P>>(
+        fn component<R: ReplicateSafe<P>>(
             &self,
             _: &EmptyEntity,
         ) -> Option<ReplicaRefWrapper<P, R>> {
             unimplemented!()
         }
 
-        fn get_component_of_kind(
+        fn component_of_kind(
             &self,
             _: &EmptyEntity,
             _: &P::Kind,
@@ -90,14 +90,14 @@ mod inner {
             unimplemented!()
         }
 
-        fn get_component<R: ReplicateSafe<P>>(
+        fn component<R: ReplicateSafe<P>>(
             &self,
             _: &EmptyEntity,
         ) -> Option<ReplicaRefWrapper<P, R>> {
             unimplemented!()
         }
 
-        fn get_component_of_kind(
+        fn component_of_kind(
             &self,
             _: &EmptyEntity,
             _: &P::Kind,
@@ -107,7 +107,7 @@ mod inner {
     }
 
     impl<P: Protocolize> WorldMutType<P, EmptyEntity> for EmptyWorldMut<P> {
-        fn get_component_mut<R: ReplicateSafe<P>>(
+        fn component_mut<R: ReplicateSafe<P>>(
             &mut self,
             _: &EmptyEntity,
         ) -> Option<ReplicaMutWrapper<P, R>> {
@@ -129,7 +129,7 @@ mod inner {
             unimplemented!()
         }
 
-        fn get_component_kinds(&mut self, _: &EmptyEntity) -> Vec<P::Kind> {
+        fn component_kinds(&mut self, _: &EmptyEntity) -> Vec<P::Kind> {
             unimplemented!()
         }
 

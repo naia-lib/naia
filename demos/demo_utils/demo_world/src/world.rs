@@ -85,19 +85,16 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w, P> {
         return has_component_of_type(self.world, entity, component_type);
     }
 
-    fn get_component<R: ReplicateSafe<P>>(
-        &self,
-        entity: &Entity,
-    ) -> Option<ReplicaRefWrapper<P, R>> {
-        return get_component(self.world, entity);
+    fn component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
+        return component(self.world, entity);
     }
 
-    fn get_component_of_kind(
+    fn component_of_kind(
         &self,
         entity: &Entity,
         component_type: &P::Kind,
     ) -> Option<ReplicaDynRefWrapper<'_, P>> {
-        return get_component_of_kind(self.world, entity, component_type);
+        return component_of_kind(self.world, entity, component_type);
     }
 }
 
@@ -118,24 +115,21 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w, P> {
         return has_component_of_type(self.world, entity, component_type);
     }
 
-    fn get_component<R: ReplicateSafe<P>>(
-        &self,
-        entity: &Entity,
-    ) -> Option<ReplicaRefWrapper<P, R>> {
-        return get_component(self.world, entity);
+    fn component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
+        return component(self.world, entity);
     }
 
-    fn get_component_of_kind(
+    fn component_of_kind(
         &self,
         entity: &Entity,
         component_type: &P::Kind,
     ) -> Option<ReplicaDynRefWrapper<'_, P>> {
-        return get_component_of_kind(self.world, entity, component_type);
+        return component_of_kind(self.world, entity, component_type);
     }
 }
 
 impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
-    fn get_component_mut<R: ReplicateSafe<P>>(
+    fn component_mut<R: ReplicateSafe<P>>(
         &mut self,
         entity: &Entity,
     ) -> Option<ReplicaMutWrapper<P, R>> {
@@ -160,7 +154,7 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         reader: &mut PacketReader,
         packet_index: u16,
     ) {
-        if let Some(mut component) = get_component_mut_of_kind(self.world, entity, component_kind) {
+        if let Some(mut component) = component_mut_of_kind(self.world, entity, component_kind) {
             component.read_partial(diff_mask, reader, packet_index);
         }
     }
@@ -192,7 +186,7 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         }
     }
 
-    fn get_component_kinds(&mut self, entity: &Entity) -> Vec<P::Kind> {
+    fn component_kinds(&mut self, entity: &Entity) -> Vec<P::Kind> {
         let mut output: Vec<P::Kind> = Vec::new();
 
         if let Some(component_map) = self.world.entities.get(*entity) {
@@ -284,7 +278,7 @@ fn has_component_of_type<P: Protocolize>(
     return false;
 }
 
-fn get_component<'a, P: Protocolize, R: ReplicateSafe<P>>(
+fn component<'a, P: Protocolize, R: ReplicateSafe<P>>(
     world: &'a World<P>,
     entity: &Entity,
 ) -> Option<ReplicaRefWrapper<'a, P, R>> {
@@ -301,7 +295,7 @@ fn get_component<'a, P: Protocolize, R: ReplicateSafe<P>>(
     return None;
 }
 
-fn get_component_of_kind<'a, P: Protocolize>(
+fn component_of_kind<'a, P: Protocolize>(
     world: &'a World<P>,
     entity: &Entity,
     component_type: &P::Kind,
@@ -316,7 +310,7 @@ fn get_component_of_kind<'a, P: Protocolize>(
     return None;
 }
 
-fn get_component_mut_of_kind<'a, P: Protocolize>(
+fn component_mut_of_kind<'a, P: Protocolize>(
     world: &'a mut World<P>,
     entity: &Entity,
     component_type: &P::Kind,

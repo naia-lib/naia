@@ -175,13 +175,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         let server_tick_opt = self.server_tick();
         for (_, connection) in self.user_connections.iter_mut() {
             //receive messages from anyone
-            while let Some(message) = connection.get_incoming_message() {
+            while let Some(message) = connection.incoming_message() {
                 events.push_back(Ok(Event::Message(connection.user_key, message)));
             }
             //receive entity messages from anyone
             if let Some(server_tick) = server_tick_opt {
-                while let Some((entity, message)) =
-                    connection.get_incoming_entity_message(server_tick)
+                while let Some((entity, message)) = connection.incoming_entity_message(server_tick)
                 {
                     events.push_back(Ok(Event::MessageEntity(
                         connection.user_key,
@@ -281,7 +280,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             connection.collect_component_updates(&self.world_record);
             let mut sent = false;
             while let Some(payload) =
-                connection.get_outgoing_packet(&world, &self.world_record, server_tick)
+                connection.outgoing_packet(&world, &self.world_record, server_tick)
             {
                 self.io.send_packet(Packet::new_raw(*address, payload));
                 sent = true;
@@ -461,7 +460,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     pub fn client_tick(&self, user_key: &UserKey) -> Option<u16> {
         if let Some(user) = self.users.get(*user_key) {
             if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.get_last_received_tick());
+                return Some(user_connection.last_received_tick());
             }
         }
         return None;
@@ -472,7 +471,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         return self
             .tick_manager
             .as_ref()
-            .map(|tick_manager| tick_manager.get_tick());
+            .map(|tick_manager| tick_manager.tick());
     }
 
     // Crate-Public methods
@@ -496,7 +495,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         }
 
         // Clean up associated components
-        for component_key in self.world_record.get_component_keys(entity) {
+        for component_key in self.world_record.component_keys(entity) {
             self.component_cleanup(&component_key);
         }
 
@@ -535,7 +534,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             panic!("attempted to add component to non-existent entity");
         }
 
-        let component_kind = component_ref.get_kind();
+        let component_kind = component_ref.kind();
 
         if world.has_component_of_kind(entity, &component_kind) {
             panic!(
@@ -569,7 +568,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         let component_kind = P::kind_of::<R>();
         let component_key = self
             .world_record
-            .get_key_from_type(entity, &component_kind)
+            .key_from_type(entity, &component_kind)
             .expect("component does not exist!");
 
         // clean up component on all connections
@@ -590,7 +589,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     //// Users
 
     /// Get a User's Socket Address, given the associated UserKey
-    pub(crate) fn get_user_address(&self, user_key: &UserKey) -> Option<SocketAddr> {
+    pub(crate) fn user_address(&self, user_key: &UserKey) -> Option<SocketAddr> {
         if let Some(user) = self.users.get(*user_key) {
             return Some(user.address);
         }
@@ -974,9 +973,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     ) -> ComponentKey {
         let component_key = self
             .world_record
-            .add_component(entity, &component_ref.get_kind());
+            .add_component(entity, &component_ref.kind());
 
-        let diff_mask_length: u8 = component_ref.get_diff_mask_size();
+        let diff_mask_length: u8 = component_ref.diff_mask_size();
 
         let mut_sender = self
             .diff_handler

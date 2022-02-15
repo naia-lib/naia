@@ -7,12 +7,12 @@ use naia_shared::{Protocolize, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Repli
 use super::component_ref::{ComponentDynMut, ComponentDynRef};
 
 pub trait ComponentAccess<P: Protocolize>: Send + Sync {
-    fn get_component<'w>(
+    fn component<'w>(
         &self,
         world: &'w World,
         entity: &Entity,
     ) -> Option<ReplicaDynRefWrapper<'w, P>>;
-    fn get_component_mut<'w>(
+    fn component_mut<'w>(
         &self,
         world: &'w mut World,
         entity: &Entity,
@@ -42,7 +42,7 @@ impl<P: 'static + Protocolize, R: ReplicateSafe<P>> ComponentAccessor<P, R> {
 }
 
 impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
-    fn get_component<'w>(
+    fn component<'w>(
         &self,
         world: &'w World,
         entity: &Entity,
@@ -55,7 +55,7 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
         return None;
     }
 
-    fn get_component_mut<'w>(
+    fn component_mut<'w>(
         &self,
         world: &'w mut World,
         entity: &Entity,

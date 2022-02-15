@@ -25,7 +25,7 @@ impl EntityMessagePacketWriter {
     }
 
     /// Gets the bytes to write into an outgoing packet
-    pub fn get_bytes(&mut self, out_bytes: &mut Vec<u8>) {
+    pub fn bytes(&mut self, out_bytes: &mut Vec<u8>) {
         //Write manager "header" (manager type & command count)
         if self.message_count != 0 {
             out_bytes
@@ -69,7 +69,7 @@ impl EntityMessagePacketWriter {
                 .unwrap();
 
             // write message kind
-            let message_kind = message_ref.get_kind();
+            let message_kind = message_ref.kind();
             message_total_bytes
                 .write_u16::<BigEndian>(message_kind.to_u16())
                 .unwrap();

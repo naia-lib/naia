@@ -47,14 +47,6 @@ impl Io {
             .receive();
     }
 
-    pub fn server_addr(&self) -> ServerAddr {
-        return self
-            .packet_sender
-            .as_ref()
-            .expect("Cannot call Client.server_addr() until you call Client.connect()!")
-            .server_addr();
-    }
-
     pub fn server_addr_unwrapped(&self) -> SocketAddr {
         if let ServerAddr::Found(server_addr) = self
             .packet_sender

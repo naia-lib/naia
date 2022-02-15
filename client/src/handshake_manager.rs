@@ -77,7 +77,7 @@ impl<P: Protocolize> HandshakeManager<P> {
                 // write auth message if there is one
                 if let Some(auth_message) = &mut self.auth_message {
                     let auth_dyn = auth_message.dyn_ref();
-                    let auth_kind = auth_dyn.get_kind();
+                    let auth_kind = auth_dyn.kind();
                     // write that we have auth
                     payload_bytes.write_u8(1).unwrap();
                     // write auth kind
@@ -100,7 +100,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     /// Get an outgoing Disconnect payload
-    pub fn get_disconnect_packet(&mut self) -> Packet {
+    pub fn disconnect_packet(&mut self) -> Packet {
         let mut out_bytes = Vec::<u8>::new();
 
         // write timestamp & digest into payload

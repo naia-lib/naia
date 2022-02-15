@@ -26,7 +26,7 @@ impl UserDiffHandler {
     pub fn register_component(&mut self, addr: &SocketAddr, component_key: &ComponentKey) {
         if let Ok(global_handler) = self.global_diff_handler.as_ref().read() {
             let receiver = global_handler
-                .get_receiver(addr, component_key)
+                .receiver(addr, component_key)
                 .expect("GlobalDiffHandler has not yet registered this Component");
             self.receivers.insert(*component_key, receiver);
         }
@@ -37,9 +37,9 @@ impl UserDiffHandler {
     }
 
     // Diff masks
-    pub fn get_diff_mask(&self, component_key: &ComponentKey) -> Option<RwLockReadGuard<DiffMask>> {
+    pub fn diff_mask(&self, component_key: &ComponentKey) -> Option<RwLockReadGuard<DiffMask>> {
         if let Some(receiver) = self.receivers.get(component_key) {
-            return receiver.get_mask();
+            return receiver.mask();
         }
         return None;
     }

@@ -27,7 +27,7 @@ impl<P: Protocolize> Manifest<P> {
     /// Message/Component instances
     pub fn register_replica(&mut self, replica_builder: Box<dyn ReplicaBuilder<P>>) {
         self.builder_map
-            .insert(replica_builder.get_kind(), replica_builder);
+            .insert(replica_builder.kind(), replica_builder);
     }
 
     /// Creates a Message/Component instance, given a NaiaId and a

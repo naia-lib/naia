@@ -43,7 +43,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
         }
     }
 
-    pub fn get_messages(&mut self, server_receivable_tick: Tick) -> VecDeque<(MsgId, Tick, E, P)> {
+    pub fn messages(&mut self, server_receivable_tick: Tick) -> VecDeque<(MsgId, Tick, E, P)> {
         let mut outgoing_list = VecDeque::new();
 
         // Remove messages that would never be able to reach the Server

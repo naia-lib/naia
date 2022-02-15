@@ -7,20 +7,20 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 
     let protocol_name = input.ident;
 
-    let variants = get_variants(&input.data);
+    let variants = variants(&input.data);
 
     let kind_enum_name = format_ident!("{}Kind", protocol_name);
-    let kind_enum_def = get_kind_enum(&kind_enum_name, &variants);
-    let kind_of_method = get_kind_of_method();
-    let type_to_kind_method = get_type_to_kind_method(&kind_enum_name, &variants);
-    let load_method = get_load_method(&protocol_name, &input.data);
-    let dyn_ref_method = get_dyn_ref_method(&protocol_name, &input.data);
-    let dyn_mut_method = get_dyn_mut_method(&protocol_name, &input.data);
-    let cast_method = get_cast_method(&protocol_name, &input.data);
-    let clone_method = get_clone_method(&protocol_name, &input.data);
-    let cast_ref_method = get_cast_ref_method(&protocol_name, &input.data);
-    let cast_mut_method = get_cast_mut_method(&protocol_name, &input.data);
-    let extract_and_insert_method = get_extract_and_insert_method(&protocol_name, &input.data);
+    let kind_enum_def = kind_enum(&kind_enum_name, &variants);
+    let kind_of_method = kind_of_method();
+    let type_to_kind_method = type_to_kind_method(&kind_enum_name, &variants);
+    let load_method = load_method(&protocol_name, &input.data);
+    let dyn_ref_method = dyn_ref_method(&protocol_name, &input.data);
+    let dyn_mut_method = dyn_mut_method(&protocol_name, &input.data);
+    let cast_method = cast_method(&protocol_name, &input.data);
+    let clone_method = clone_method(&protocol_name, &input.data);
+    let cast_ref_method = cast_ref_method(&protocol_name, &input.data);
+    let cast_mut_method = cast_mut_method(&protocol_name, &input.data);
+    let extract_and_insert_method = extract_and_insert_method(&protocol_name, &input.data);
 
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}, sync::RwLock, collections::HashMap};
@@ -50,7 +50,7 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     proc_macro::TokenStream::from(gen)
 }
 
-pub fn get_variants(data: &Data) -> Vec<Ident> {
+pub fn variants(data: &Data) -> Vec<Ident> {
     let mut variants = Vec::new();
     if let Data::Enum(ref data) = *data {
         for variant in data.variants.iter() {
@@ -60,7 +60,7 @@ pub fn get_variants(data: &Data) -> Vec<Ident> {
     return variants;
 }
 
-pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
+pub fn kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
     let hashtag = Punct::new('#', Spacing::Alone);
 
     let mut variant_definitions = quote! {};
@@ -139,7 +139,7 @@ pub fn get_kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream 
     };
 }
 
-fn get_kind_of_method() -> TokenStream {
+fn kind_of_method() -> TokenStream {
     return quote! {
         fn kind_of<R: ReplicateSafe<Self>>() -> Self::Kind {
             return Self::type_to_kind(TypeId::of::<R>());
@@ -147,7 +147,7 @@ fn get_kind_of_method() -> TokenStream {
     };
 }
 
-fn get_type_to_kind_method(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
+fn type_to_kind_method(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
     let mut insert_list = quote! {};
 
     {
@@ -190,7 +190,7 @@ fn get_type_to_kind_method(enum_name: &Ident, properties: &Vec<Ident>) -> TokenS
     };
 }
 
-pub fn get_dyn_ref_method(protocol_name: &Ident, data: &Data) -> TokenStream {
+pub fn dyn_ref_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     let variants = match *data {
         Data::Enum(ref data) => {
             let mut output = quote! {};
@@ -222,7 +222,7 @@ pub fn get_dyn_ref_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 }
 
-pub fn get_dyn_mut_method(protocol_name: &Ident, data: &Data) -> TokenStream {
+pub fn dyn_mut_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     let variants = match *data {
         Data::Enum(ref data) => {
             let mut output = quote! {};
@@ -254,7 +254,7 @@ pub fn get_dyn_mut_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 }
 
-pub fn get_cast_ref_method(protocol_name: &Ident, data: &Data) -> TokenStream {
+pub fn cast_ref_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     let variants = match *data {
         Data::Enum(ref data) => {
             let mut output = quote! {};
@@ -287,7 +287,7 @@ pub fn get_cast_ref_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 }
 
-pub fn get_cast_mut_method(protocol_name: &Ident, data: &Data) -> TokenStream {
+pub fn cast_mut_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     let variants = match *data {
         Data::Enum(ref data) => {
             let mut output = quote! {};
@@ -320,7 +320,7 @@ pub fn get_cast_mut_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 }
 
-pub fn get_cast_method(protocol_name: &Ident, data: &Data) -> TokenStream {
+pub fn cast_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     let variants = match *data {
         Data::Enum(ref data) => {
             let mut output = quote! {};
@@ -357,7 +357,7 @@ pub fn get_cast_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 }
 
-pub fn get_clone_method(protocol_name: &Ident, data: &Data) -> TokenStream {
+pub fn clone_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     let variants = match *data {
         Data::Enum(ref data) => {
             let mut output = quote! {};
@@ -389,14 +389,14 @@ pub fn get_clone_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 }
 
-pub fn get_load_method(protocol_name: &Ident, data: &Data) -> TokenStream {
+pub fn load_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     let variants = match *data {
         Data::Enum(ref data) => {
             let mut output = quote! {};
             for variant in data.variants.iter() {
                 let variant_name = &variant.ident;
                 let new_output_right = quote! {
-                    manifest.register_replica(#variant_name::get_builder());
+                    manifest.register_replica(#variant_name::builder());
                 };
                 let new_output_result = quote! {
                     #output
@@ -420,7 +420,7 @@ pub fn get_load_method(protocol_name: &Ident, data: &Data) -> TokenStream {
     };
 }
 
-fn get_extract_and_insert_method(type_name: &Ident, data: &Data) -> TokenStream {
+fn extract_and_insert_method(type_name: &Ident, data: &Data) -> TokenStream {
     let variants = match *data {
         Data::Enum(ref data) => {
             let mut output = quote! {};

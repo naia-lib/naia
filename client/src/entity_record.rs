@@ -20,7 +20,7 @@ impl<K: ProtocolKindType> EntityRecord<K> {
 
     // Components / Kinds //
 
-    pub fn get_kind_from_key(&self, component_key: &LocalComponentKey) -> Option<&K> {
+    pub fn kind_from_key(&self, component_key: &LocalComponentKey) -> Option<&K> {
         return self.key_to_kind_map.get(component_key);
     }
 
@@ -37,7 +37,7 @@ impl<K: ProtocolKindType> EntityRecord<K> {
         return None;
     }
 
-    pub fn get_component_keys(&self) -> Vec<LocalComponentKey> {
+    pub fn component_keys(&self) -> Vec<LocalComponentKey> {
         let mut output = Vec::<LocalComponentKey>::new();
         for (key, _) in self.key_to_kind_map.iter() {
             output.push(*key);

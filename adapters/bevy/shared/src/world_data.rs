@@ -25,7 +25,7 @@ impl<P: Protocolize> WorldData<P> {
 
     // Entities //
 
-    pub(crate) fn get_entities(&self) -> Vec<Entity> {
+    pub(crate) fn entities(&self) -> Vec<Entity> {
         let mut output = Vec::new();
 
         for entity in &self.entities {
@@ -45,7 +45,7 @@ impl<P: Protocolize> WorldData<P> {
 
     // Components
 
-    pub(crate) fn get_component_access(
+    pub(crate) fn component_access(
         &self,
         component_kind: &P::Kind,
     ) -> Option<&Box<dyn ComponentAccess<P>>> {

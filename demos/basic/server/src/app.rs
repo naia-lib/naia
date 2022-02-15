@@ -6,8 +6,8 @@ use naia_server::{
 use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_basic_demo_shared::{
-    get_shared_config,
     protocol::{Character, Protocol, StringMessage},
+    shared_config,
 };
 
 type World = DemoWorld<Protocol>;
@@ -36,7 +36,7 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        let mut server = Server::new(ServerConfig::default(), get_shared_config());
+        let mut server = Server::new(ServerConfig::default(), shared_config());
         server.listen(server_addresses);
 
         let mut world = World::new();
@@ -144,9 +144,7 @@ impl App {
                         let server = &mut self.server;
                         let world = &self.world;
                         for (_, user_key, entity) in server.scope_checks() {
-                            if let Some(character) =
-                                world.proxy().get_component::<Character>(&entity)
-                            {
+                            if let Some(character) = world.proxy().component::<Character>(&entity) {
                                 let x = *character.x.get();
                                 if x >= 5 && x <= 15 {
                                     server.user_scope(&user_key).include(&entity);

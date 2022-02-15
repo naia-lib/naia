@@ -10,7 +10,7 @@ use naia_client::{
 use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
 
 use naia_macroquad_demo_shared::{
-    behavior as shared_behavior, get_shared_config,
+    behavior as shared_behavior, shared_config,
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
 };
 
@@ -47,7 +47,7 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Macroquad Client Demo started");
 
-        let client = Client::new(ClientConfig::default(), get_shared_config());
+        let client = Client::new(ClientConfig::default(), shared_config());
 
         App {
             client,
@@ -142,7 +142,7 @@ impl App {
                                 if let Some(mut square_ref) = self
                                     .world
                                     .proxy_mut()
-                                    .get_component_mut::<Square>(&owned_entity.predicted)
+                                    .component_mut::<Square>(&owned_entity.predicted)
                                 {
                                     shared_behavior::process_command(&command, &mut square_ref);
                                 }
@@ -167,10 +167,10 @@ impl App {
                         let prediction_entity = world_mut.spawn_entity();
 
                         // create copies of components //
-                        for component_kind in world_mut.get_component_kinds(&entity) {
+                        for component_kind in world_mut.component_kinds(&entity) {
                             let mut component_copy_opt: Option<Protocol> = None;
                             if let Some(component) =
-                                world_mut.get_component_of_kind(&entity, &component_kind)
+                                world_mut.component_of_kind(&entity, &component_kind)
                             {
                                 component_copy_opt =
                                     Some(component.deref().deref().protocol_copy());
@@ -211,7 +211,7 @@ impl App {
                             // Set prediction to server authoritative Entity
                             // go through all components to make prediction components = world
                             // components
-                            for component_kind in world_mut.get_component_kinds(&server_entity) {
+                            for component_kind in world_mut.component_kinds(&server_entity) {
                                 world_mut.mirror_components(
                                     &client_entity,
                                     &server_entity,
@@ -229,7 +229,7 @@ impl App {
                             for tick in server_tick_u16..=current_tick {
                                 if let Some(command) = self.command_history.get_mut(tick) {
                                     if let Some(mut square_ref) =
-                                        world_mut.get_component_mut::<Square>(&client_entity)
+                                        world_mut.component_mut::<Square>(&client_entity)
                                     {
                                         shared_behavior::process_command(&command, &mut square_ref);
                                     }
@@ -252,7 +252,7 @@ impl App {
         if self.client.is_connected() {
             // draw unowned squares
             for entity in &self.squares {
-                if let Some(square) = self.world.proxy().get_component::<Square>(entity) {
+                if let Some(square) = self.world.proxy().component::<Square>(entity) {
                     let color = match square.color.get() {
                         Color::Red => RED,
                         Color::Blue => BLUE,
@@ -270,11 +270,7 @@ impl App {
 
             // draw own square
             if let Some(entity) = &self.owned_entity {
-                if let Some(square) = self
-                    .world
-                    .proxy()
-                    .get_component::<Square>(&entity.predicted)
-                {
+                if let Some(square) = self.world.proxy().component::<Square>(&entity.predicted) {
                     draw_rectangle(
                         f32::from(*(square.x.get())),
                         f32::from(*(square.y.get())),

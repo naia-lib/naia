@@ -153,7 +153,7 @@ impl<T> SequenceBuffer<T> {
     }
 
     /// Get a count of entries in the buffer
-    pub fn get_entries_count(&self) -> u8 {
+    pub fn entries_count(&self) -> u8 {
         let mut count = 0;
         let mut seq = self.oldest();
         loop {
