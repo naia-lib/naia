@@ -49,7 +49,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         let mut socket_config = client_config.socket_config.clone();
         socket_config.link_condition_config = shared_config.link_condition_config.clone();
 
-        let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval, connection_config.rtt_initial_estimate);
+        let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval, connection_config.rtt_initial_estimate, connection_config.jitter_initial_estimate);
 
         let tick_manager = {
             if let Some(duration) = shared_config.tick_interval {
@@ -386,27 +386,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                                 }
                             };
 
+                            server_connection.process_incoming_header(&header, tick_manager);
+
                             match header.packet_type() {
                                 PacketType::Data => {
-                                    if server_connection.will_buffer_data_packet(header.host_tick()) {
-                                        server_connection.process_incoming_header(&header, tick_manager);
-                                        server_connection.buffer_data_packet(
-                                            header.host_tick(),
-                                            &payload,
-                                        );
-                                    }
+                                    server_connection.buffer_data_packet(
+                                        header.host_tick(),
+                                        &payload,
+                                    );
                                 }
-                                PacketType::Heartbeat => {
-                                    server_connection.process_incoming_header(&header, tick_manager);
-                                }
+                                PacketType::Heartbeat => {}
                                 PacketType::Pong => {
-                                    server_connection.process_incoming_header(&header, tick_manager);
                                     server_connection.process_pong(&payload);
                                 }
-                                _ => {
-                                    // TODO: explicitly cover these cases
-                                    server_connection.process_incoming_header(&header, tick_manager);
-                                }
+                                _ => {} // TODO: explicitly cover these cases
                             }
                         } else {
                             self.handshake_manager
@@ -436,7 +429,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     fn disconnect_cleanup(&mut self) {
         // this is very similar to the newtype method .. can we coalesce and reduce
         // duplication?
-        let handshake_manager = HandshakeManager::new(self.client_config.send_handshake_interval, self.connection_config.rtt_initial_estimate);
+        let handshake_manager = HandshakeManager::new(self.client_config.send_handshake_interval, self.connection_config.rtt_initial_estimate, self.connection_config.jitter_initial_estimate);
         let tick_manager = {
             if let Some(duration) = self.shared_config.tick_interval {
                 Some(TickManager::new(

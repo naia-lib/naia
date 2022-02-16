@@ -2,7 +2,7 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_client_socket::Packet;
 
-use naia_shared::{SequenceBuffer, BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize, ReplicateSafe, sequence_greater_than, SequenceNumber, StandardHeader, WorldMutType};
+use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType};
 
 use super::{
     entity_action::EntityAction,
@@ -11,16 +11,15 @@ use super::{
     packet_writer::PacketWriter,
     ping_manager::PingManager,
     tick_manager::TickManager,
+    tick_queue::TickQueue,
 };
-
-pub const JITTER_BUFFER_SIZE: u16 = 32;
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
     entity_message_sender: EntityMessageSender<P, E>,
-    jitter_buffer: SequenceBuffer<Box<[u8]>>,
+    jitter_buffer: TickQueue<Box<[u8]>>,
     last_processed_tick: u16,
 }
 
@@ -35,7 +34,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                 connection_config.rtt_smoothing_factor,
             ),
             entity_message_sender: EntityMessageSender::new(),
-            jitter_buffer: SequenceBuffer::with_capacity(JITTER_BUFFER_SIZE),
+            jitter_buffer: TickQueue::new(),
             last_processed_tick: 0,
         };
     }
@@ -134,18 +133,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         }
     }
 
-    pub fn will_buffer_data_packet(&self, incoming_tick: u16) -> bool {
-        sequence_greater_than(incoming_tick, self.last_processed_tick)
-    }
-
     pub fn buffer_data_packet(
         &mut self,
         incoming_tick: u16,
         incoming_payload: &Box<[u8]>,
     ) {
-        self.jitter_buffer.insert(
-            incoming_tick,
-            incoming_payload.clone(),
+        self.jitter_buffer.add_item(
+            incoming_tick, incoming_payload.clone(),
         );
     }
 
@@ -164,7 +158,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         if tick_manager.mark_frame() {
             // then we apply all received updates to components at once
             let receiving_tick = tick_manager.client_receiving_tick();
+
             self.process_buffered_packets(world, manifest, receiving_tick);
+
+            self.last_processed_tick = receiving_tick;
             return true;
         }
         return false;
@@ -186,12 +183,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         receiving_tick: u16,
     ) {
         while let Some((server_tick, data_packet)) =
-            self.buffered_data_packet(receiving_tick)
+        self.buffered_data_packet(receiving_tick)
         {
             self.process_incoming_data(world, manifest, server_tick, &data_packet);
         }
-
-        self.last_processed_tick = receiving_tick;
     }
 
     // Pass-through methods to underlying Connection
@@ -288,14 +283,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     // Private methods
 
     fn buffered_data_packet(&mut self, current_tick: u16) -> Option<(u16, Box<[u8]>)> {
-        self.jitter_buffer.remove_until(current_tick);
-
-        if let Some(oldest_tick) = self.jitter_buffer.oldest() {
-            if oldest_tick == current_tick {
-                if let Some(item) = self.jitter_buffer.remove(oldest_tick) {
-                    return Some((oldest_tick, item));
-                }
-            }
+        if let Some((tick, payload)) = self.jitter_buffer.pop_item(current_tick) {
+            return Some((tick, payload));
         }
         return None;
     }
