@@ -2,7 +2,7 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_client_socket::Packet;
 
-use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType};
+use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType, wrapping_diff};
 
 use super::{
     entity_action::EntityAction,
@@ -20,7 +20,7 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     ping_manager: PingManager,
     entity_message_sender: EntityMessageSender<P, E>,
     jitter_buffer: TickQueue<Box<[u8]>>,
-    last_processed_tick: u16,
+    last_server_tick: u16,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
@@ -35,7 +35,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             ),
             entity_message_sender: EntityMessageSender::new(),
             jitter_buffer: TickQueue::new(),
-            last_processed_tick: 0,
+            last_server_tick: 0,
         };
     }
 
@@ -161,7 +161,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
             self.process_buffered_packets(world, manifest, receiving_tick);
 
-            self.last_processed_tick = receiving_tick;
             return true;
         }
         return false;
@@ -182,9 +181,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         manifest: &Manifest<P>,
         receiving_tick: u16,
     ) {
+        let mut restrictive_tick = receiving_tick;
+
         while let Some((server_tick, data_packet)) =
-        self.buffered_data_packet(receiving_tick)
+        self.buffered_data_packet(restrictive_tick)
         {
+            let ticks_since_last = wrapping_diff(self.last_server_tick, server_tick);
+
+            if ticks_since_last > 0 {
+                restrictive_tick = server_tick;
+                self.last_server_tick = server_tick;
+            }
+            if ticks_since_last == 0 {
+                // packets from the same tick as last
+            }
+            if ticks_since_last < 0 {
+                // processing past ticks now?
+                panic!("Processed ticks backwards, should never happen");
+            }
+
             self.process_incoming_data(world, manifest, server_tick, &data_packet);
         }
     }
@@ -282,8 +297,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
     // Private methods
 
-    fn buffered_data_packet(&mut self, current_tick: u16) -> Option<(u16, Box<[u8]>)> {
-        if let Some((tick, payload)) = self.jitter_buffer.pop_item(current_tick) {
+    fn buffered_data_packet(&mut self, receiving_tick: u16) -> Option<(u16, Box<[u8]>)> {
+        if let Some((tick, payload)) = self.jitter_buffer.pop_item(receiving_tick) {
             return Some((tick, payload));
         }
         return None;
