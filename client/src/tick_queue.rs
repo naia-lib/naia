@@ -28,7 +28,7 @@ impl<T: Eq + PartialEq> TickQueue<T> {
             return false;
         }
         if let Some(item) = self.queue.peek() {
-            return item.tick == current_tick || sequence_greater_than(current_tick, item.tick);
+            return current_tick == item.tick  || sequence_greater_than(current_tick, item.tick);
         }
         return false;
     }
