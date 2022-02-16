@@ -30,11 +30,6 @@ impl<T> SequenceBuffer<T> {
         }
     }
 
-    /// Returns the most recently stored sequence number
-    pub fn sequence_num(&self) -> SequenceNumber {
-        self.sequence_num
-    }
-
     /// Returns a mutable reference to the entry with the given sequence number.
     pub fn get_mut(&mut self, sequence_num: SequenceNumber) -> Option<&mut T> {
         if self.exists(sequence_num) {
@@ -135,27 +130,17 @@ impl<T> SequenceBuffer<T> {
     // Advances the sequence number while removing older entries.
     fn advance_sequence(&mut self, sequence_num: SequenceNumber) {
         if sequence_greater_than(sequence_num.wrapping_add(1), self.sequence_num) {
-            self.remove_entries(u32::from(sequence_num));
+            self.remove_entries(sequence_num);
             self.sequence_num = sequence_num.wrapping_add(1);
         }
     }
 
-    fn remove_entries(&mut self, mut finish_sequence: u32) {
-        let start_sequence = u32::from(self.sequence_num);
-        if finish_sequence < start_sequence {
-            finish_sequence += 65536;
-        }
-
-        if finish_sequence - start_sequence < self.entry_sequences.len() as u32 {
-            for sequence in start_sequence..=finish_sequence {
-                self.remove(sequence as u16);
-            }
-        } else {
-            for index in 0..self.entry_sequences.len() {
-                self.entries[index] = None;
-                self.entry_sequences[index] = None;
-                self.oldest_num = None;
-                self.newest_num = None;
+    fn remove_entries(&mut self, finish_sequence: SequenceNumber) {
+        if let Some(newest_seq) = self.newest_num {
+            let mut current_sequence = newest_seq.wrapping_add(1);
+            while current_sequence <= finish_sequence {
+                self.remove(current_sequence);
+                current_sequence = current_sequence.wrapping_add(1);
             }
         }
     }
@@ -183,8 +168,10 @@ impl<T> SequenceBuffer<T> {
     /// Remove entries up until a specific sequence number
     pub fn remove_until(&mut self, finish_sequence: u16) {
         if let Some(oldest_sequence) = self.oldest_num {
-            for seq in oldest_sequence..finish_sequence {
-                self.remove(seq);
+            let mut current_sequence = oldest_sequence;
+            while current_sequence < finish_sequence {
+                self.remove(current_sequence);
+                current_sequence = current_sequence.wrapping_add(1);
             }
         }
     }
