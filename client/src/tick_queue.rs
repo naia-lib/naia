@@ -55,10 +55,10 @@ impl<T: Eq + PartialEq> Ord for ItemContainer<T> {
         if self.tick == other.tick {
             return Ordering::Equal;
         }
-        if sequence_greater_than(other.tick, self.tick) {
-            return Ordering::Greater;
+        return if sequence_greater_than(other.tick, self.tick) {
+            Ordering::Greater
         } else {
-            return Ordering::Less;
+            Ordering::Less
         }
     }
 }

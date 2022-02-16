@@ -219,21 +219,26 @@ impl App {
                                 );
                             }
 
-                            let server_tick_u16 = server_tick.u16();
+                            let mut update_tick = server_tick.u16();
 
                             // Remove history of commands until current received tick
-                            self.command_history.remove_until(server_tick_u16);
+                            self.command_history.remove_until(update_tick);
 
                             // Replay all existing historical commands until current tick
                             let current_tick = self.command_history.newest();
-                            for tick in server_tick_u16..=current_tick {
-                                if let Some(command) = self.command_history.get_mut(tick) {
+                            loop {
+                                if let Some(command) = self.command_history.get_mut(update_tick) {
                                     if let Some(mut square_ref) =
                                     world_mut.component_mut::<Square>(&client_entity)
                                     {
                                         shared_behavior::process_command(&command, &mut square_ref);
                                     }
                                 }
+
+                                if update_tick == current_tick {
+                                    break;
+                                }
+                                update_tick = update_tick.wrapping_add(1);
                             }
                         }
                     }

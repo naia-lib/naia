@@ -1,6 +1,5 @@
 use std::{collections::HashMap, hash::Hash, marker::PhantomData, net::SocketAddr};
 
-use byteorder::{BigEndian, WriteBytesExt};
 use ring::{hmac, rand};
 
 use naia_server_socket::Packet;
@@ -43,7 +42,6 @@ impl<P: Protocolize> HandshakeManager<P> {
     pub fn receive_challenge_request(
         &mut self,
         io: &mut Io,
-        server_tick: u16,
         address: &SocketAddr,
         incoming_bytes: &Box<[u8]>,
     ) {
@@ -55,8 +53,6 @@ impl<P: Protocolize> HandshakeManager<P> {
         let timestamp_hash: hmac::Tag = hmac::sign(&self.connection_hash_key, &timestamp_bytes);
 
         let mut outgoing_bytes = Vec::new();
-        // write current tick
-        outgoing_bytes.write_u16::<BigEndian>(server_tick).unwrap();
 
         //write timestamp
         outgoing_bytes.append(&mut timestamp_bytes);

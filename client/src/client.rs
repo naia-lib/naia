@@ -403,7 +403,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                             }
                         } else {
                             self.handshake_manager
-                                .receive_packet(&mut self.tick_manager, packet);
+                                .receive_packet(packet);
                             if self.handshake_manager.is_connected() {
                                 let server_connection = Connection::new(
                                     self.server_address_unwrapped(),

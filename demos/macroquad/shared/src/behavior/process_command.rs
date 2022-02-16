@@ -1,6 +1,6 @@
 use crate::protocol::{KeyCommand, Square};
 
-const SQUARE_SPEED: u16 = 2;
+const SQUARE_SPEED: u16 = 3;
 
 pub fn process_command(key_command: &KeyCommand, square: &mut Square) {
     let old_x = *(square.x.get());
