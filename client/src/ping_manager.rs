@@ -6,8 +6,6 @@ use naia_shared::{Instant, PacketReader, SequenceBuffer, SequenceNumber, Timer};
 
 use naia_client_socket::Packet;
 
-pub const JITTER_TO_RTT_RATIO_ESTIMATE: f32 = 0.2;
-
 #[derive(Clone)]
 struct SentPing {
     time_sent: Instant,
@@ -24,16 +22,17 @@ pub struct PingManager {
 }
 
 impl PingManager {
-    pub fn new(ping_interval: Duration, rtt_initial_estimate: Duration, rtt_smoothing_factor: f32) -> Self {
+    pub fn new(ping_interval: Duration, rtt_initial_estimate: Duration, jitter_initial_estimate: Duration, rtt_smoothing_factor: f32) -> Self {
 
         let rtt_average = rtt_initial_estimate.as_secs_f32() * 1000.0;
+        let jitter_average = jitter_initial_estimate.as_secs_f32() * 1000.0;
 
         PingManager {
             ping_index: 0,
             ping_timer: Timer::new(ping_interval),
             sent_pings: SequenceBuffer::with_capacity(100),
             rtt_average,
-            rtt_deviation: rtt_average * JITTER_TO_RTT_RATIO_ESTIMATE,
+            rtt_deviation: jitter_average,
             rtt_smoothing_factor,
             rtt_smoothing_factor_inv: 1.0 - rtt_smoothing_factor,
         }

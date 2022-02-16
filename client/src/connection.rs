@@ -31,6 +31,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             ping_manager: PingManager::new(
                 connection_config.ping_interval,
                 connection_config.rtt_initial_estimate,
+                connection_config.jitter_initial_estimate,
                 connection_config.rtt_smoothing_factor,
             ),
             entity_message_sender: EntityMessageSender::new(),
@@ -181,24 +182,24 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         manifest: &Manifest<P>,
         receiving_tick: u16,
     ) {
-        let mut restrictive_tick = receiving_tick;
+        // let mut restrictive_tick = receiving_tick;
 
         while let Some((server_tick, data_packet)) =
-        self.buffered_data_packet(restrictive_tick)
+        self.buffered_data_packet(receiving_tick)
         {
-            let ticks_since_last = wrapping_diff(self.last_server_tick, server_tick);
-
-            if ticks_since_last > 0 {
-                restrictive_tick = server_tick;
-                self.last_server_tick = server_tick;
-            }
-            if ticks_since_last == 0 {
-                // packets from the same tick as last
-            }
-            if ticks_since_last < 0 {
-                // processing past ticks now?
-                panic!("Processed ticks backwards, should never happen");
-            }
+            // let ticks_since_last = wrapping_diff(self.last_server_tick, server_tick);
+            //
+            // if ticks_since_last > 0 {
+            //     restrictive_tick = server_tick;
+            //     self.last_server_tick = server_tick;
+            // }
+            // if ticks_since_last == 0 {
+            //     // packets from the same tick as last
+            // }
+            // if ticks_since_last < 0 {
+            //     // processing past ticks now?
+            //     panic!("Processed ticks backwards, should never happen");
+            // }
 
             self.process_incoming_data(world, manifest, server_tick, &data_packet);
         }

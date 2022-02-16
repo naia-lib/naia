@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_client_socket::Packet;
 
@@ -10,7 +10,7 @@ pub use naia_shared::{
     WorldMutType, WorldRefType,
 };
 
-use super::{io::Io, tick_manager::TickManager};
+use super::io::Io;
 
 #[derive(Debug, PartialEq)]
 enum HandshakeState {
@@ -117,14 +117,13 @@ impl<P: Protocolize> HandshakeManager<P> {
         return self.connection_state == HandshakeState::Connected;
     }
 
-    pub fn receive_packet(&mut self, tick_manager: &mut Option<TickManager>, packet: Packet) {
+    pub fn receive_packet(&mut self, packet: Packet) {
         let (header, payload) = StandardHeader::read(packet.payload());
         match header.packet_type() {
             PacketType::ServerChallengeResponse => {
                 if self.connection_state == HandshakeState::AwaitingChallengeResponse {
                     if let Some(my_timestamp) = self.pre_connection_timestamp {
                         let mut reader = PacketReader::new(&payload);
-                        let server_tick = reader.cursor().read_u16::<BigEndian>().unwrap();
                         let payload_timestamp = Timestamp::read(&mut reader);
 
                         if my_timestamp == payload_timestamp {
@@ -133,10 +132,6 @@ impl<P: Protocolize> HandshakeManager<P> {
                                 digest_bytes.push(reader.read_u8());
                             }
                             self.pre_connection_digest = Some(digest_bytes.into_boxed_slice());
-
-                            if let Some(tick_manager) = tick_manager {
-                                tick_manager.set_initial_tick(server_tick);
-                            }
 
                             self.connection_state = HandshakeState::AwaitingConnectResponse;
                         }

@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use naia_shared::{wrapping_diff, Instant};
 
+use miniquad::info;
+
 /// Manages the current tick for the host
 pub struct TickManager {
     tick_interval_millis: f32,
@@ -10,7 +12,6 @@ pub struct TickManager {
     tick_offset_speed_avg: f32,
     tick_offset_avg: f32,
     internal_tick: u16,
-    internal_tick_f32: f32,
     client_sending_tick_adjust: f32,
     server_receivable_tick_adjust: f32,
     client_receiving_tick_adjust: f32,
@@ -42,7 +43,6 @@ impl TickManager {
             tick_offset_avg: 0.0,
             tick_offset_speed_avg: 0.0,
             internal_tick: 0,
-            internal_tick_f32: 0.0,
             client_sending_tick_adjust: 0.0,
             client_receiving_tick_adjust: 0.0,
             server_receivable_tick_adjust: 0.0,
@@ -57,13 +57,15 @@ impl TickManager {
 
     pub fn mark_frame(&mut self) -> bool {
         let mut ticked = false;
-        let mut frame_time = self.last_tick_instant.elapsed().as_nanos() as f32 / 1000000000.0;
-        if frame_time > 0.25 {
-            frame_time = 0.25;
-        }
-        self.accumulator += frame_time;
-        self.last_tick_instant = Instant::now();
         let tick_interval_seconds = self.tick_interval_seconds * self.tick_speed_factor;
+
+        let frame_seconds = self.last_tick_instant.elapsed().as_nanos() as f32 / 1000000000.0;
+        if frame_seconds > tick_interval_seconds {
+            info!("big frame delta: {} ms", frame_seconds*1000.0);
+        }
+        self.accumulator += frame_seconds.min(0.25);
+        self.last_tick_instant = Instant::now();
+
         if self.accumulator >= tick_interval_seconds {
             while self.accumulator >= tick_interval_seconds {
                 self.accumulator -= tick_interval_seconds;
@@ -73,21 +75,12 @@ impl TickManager {
             ticked = true;
         }
         self.interpolation = self.accumulator / tick_interval_seconds;
-        self.internal_tick_f32 = (self.internal_tick as f32) + self.interpolation;
         ticked
     }
 
     /// Return the current interpolation of the frame
     pub fn interpolation(&self) -> f32 {
         self.interpolation
-    }
-
-    /// Use tick data from initial server handshake to set the initial tick
-    pub fn set_initial_tick(
-        &mut self,
-        server_tick: u16,
-    ) {
-        self.internal_tick = server_tick;
     }
 
     /// Using information from the Server and RTT/Jitter measurements, determine
@@ -142,33 +135,37 @@ impl TickManager {
         // By using rtt_average here, we are correcting for our late (and
         // lesser) self.server_tick value
         let client_sending_adjust_millis = self.minimum_latency.max(rtt_average + jitter_limit);
-        self.client_sending_tick_adjust = (client_sending_adjust_millis / self.tick_interval_millis) + 1.0;
+        self.client_sending_tick_adjust = (client_sending_adjust_millis / self.tick_interval_millis) + 2.0;
 
         // Calculate estimate of earliest tick Server could receive now
         let server_receivable_adjust_millis = rtt_average - jitter_limit;
-        self.server_receivable_tick_adjust = (server_receivable_adjust_millis / self.tick_interval_millis) + 1.0;
+        self.server_receivable_tick_adjust = (server_receivable_adjust_millis / self.tick_interval_millis) + 2.0;
     }
 
     /// Gets the tick at which the Client is sending updates
     pub fn client_sending_tick(&self) -> u16 {
-        let mut output = self.internal_tick_f32 + self.tick_offset_avg + self.client_sending_tick_adjust;
+        let mut output = self.server_tick_estimate() + self.client_sending_tick_adjust;
         wrap_f32(&mut output);
-        return output.ceil() as u16;
+        return output.round() as u16;
     }
 
     /// Gets the tick at which to receive messages from the Server (after jitter
     /// buffer offset is applied)
     pub fn client_receiving_tick(&self) -> u16 {
-        let mut output = self.internal_tick_f32 + self.tick_offset_avg - self.client_receiving_tick_adjust;
+        let mut output = self.server_tick_estimate() - self.client_receiving_tick_adjust;
         wrap_f32(&mut output);
-        return output.ceil() as u16;
+        return output.round() as u16;
     }
 
     /// Gets the earliest tick the Server may be able to receive Client messages
     pub fn server_receivable_tick(&self) -> u16 {
-        let mut output = self.internal_tick_f32 + self.tick_offset_avg + self.server_receivable_tick_adjust;
+        let mut output = self.server_tick_estimate() + self.server_receivable_tick_adjust;
         wrap_f32(&mut output);
-        return output.ceil() as u16;
+        return output.round() as u16;
+    }
+
+    fn server_tick_estimate(&self) -> f32 {
+        (self.internal_tick as f32) + self.tick_offset_avg
     }
 }
 

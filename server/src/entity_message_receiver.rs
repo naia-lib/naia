@@ -64,7 +64,7 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
                     let map = self.incoming_messages.get_mut(client_tick).unwrap();
                     if !map.contains_key(&owned_entity) {
                         map.insert(owned_entity, new_message);
-                        info!("inserting command at tick: {}", client_tick);
+                        //info!("inserting command at tick: {}", client_tick);
                     }
                 } else {
                     info!("failed command. server: {}, client: {}", server_tick, client_tick);

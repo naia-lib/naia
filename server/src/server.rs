@@ -167,22 +167,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // TODO: have 1 single queue for messages from all users, as it's
         // possible this current technique unfairly favors the 1st users in
         // self.user_connections
-        let server_tick_opt = self.server_tick();
         for (_, connection) in self.user_connections.iter_mut() {
             //receive messages from anyone
             while let Some(message) = connection.incoming_message() {
                 events.push_back(Ok(Event::Message(connection.user_key, message)));
-            }
-            //receive entity messages from anyone
-            if let Some(server_tick) = server_tick_opt {
-                while let Some((entity, message)) = connection.incoming_entity_message(server_tick)
-                {
-                    events.push_back(Ok(Event::MessageEntity(
-                        connection.user_key,
-                        entity,
-                        message,
-                    )));
-                }
             }
         }
 
@@ -194,6 +182,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // tick event
         if let Some(tick_manager) = &mut self.tick_manager {
             if tick_manager.should_tick() {
+
+                if let Some(server_tick) = self.server_tick() {
+                    for (_, connection) in self.user_connections.iter_mut() {
+                        //receive entity messages from anyone
+                        while let Some((entity, message)) = connection.pop_incoming_entity_message(server_tick)
+                        {
+                            events.push_back(Ok(Event::MessageEntity(
+                                connection.user_key,
+                                entity,
+                                message,
+                            )));
+                        }
+                    }
+                }
+
                 events.push_back(Ok(Event::Tick));
             }
         }
@@ -778,10 +781,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
                     match header.packet_type() {
                         PacketType::ClientChallengeRequest => {
-                            let server_tick = self.server_tick().unwrap_or(0);
                             self.handshake_manager.receive_challenge_request(
                                 &mut self.io,
-                                server_tick,
                                 &address,
                                 &payload,
                             )
