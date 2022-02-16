@@ -27,7 +27,6 @@ mod packet_writer;
 mod ping_manager;
 mod tick;
 mod tick_manager;
-mod tick_queue;
 
 pub use naia_shared as shared;
 

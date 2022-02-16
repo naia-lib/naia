@@ -56,8 +56,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             fn kind(&self) -> #protocol_kind_name {
                 return self.kind;
             }
-            fn build(&self, reader: &mut PacketReader, packet_index: u16) -> #protocol_name {
-                return #replica_name::read_to_type(reader, packet_index);
+            fn build(&self, reader: &mut PacketReader) -> #protocol_name {
+                return #replica_name::read_to_type(reader);
             }
         }
         impl #replica_name {
@@ -297,7 +297,7 @@ fn read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> To
 
         let new_output_right = quote! {
             if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
-                Property::read(&mut self.#field_name, reader, packet_index);
+                Property::read(&mut self.#field_name, reader);
             }
         };
         let new_output_result = quote! {
@@ -308,7 +308,7 @@ fn read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> To
     }
 
     return quote! {
-        fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader, packet_index: u16) {
+        fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader) {
             #output
         }
     };
@@ -388,7 +388,7 @@ pub fn new_complete_method(
         );
 
         let new_output_right = quote! {
-            #field_name: Property::<#field_type>::new(#field_name, #enum_name::#uppercase_variant_name as u8, 0)
+            #field_name: Property::<#field_type>::new(#field_name, #enum_name::#uppercase_variant_name as u8)
         };
         let new_output_result = quote! {
             #fields
@@ -432,7 +432,7 @@ pub fn read_to_type_method(
         );
 
         let new_output_right = quote! {
-            let #field_name = Property::<#field_type>::new_read(reader, #enum_name::#uppercase_variant_name as u8, packet_index);
+            let #field_name = Property::<#field_type>::new_read(reader, #enum_name::#uppercase_variant_name as u8);
         };
         let new_output_result = quote! {
             #prop_reads
@@ -442,7 +442,7 @@ pub fn read_to_type_method(
     }
 
     return quote! {
-        fn read_to_type(reader: &mut PacketReader, packet_index: u16) -> #protocol_name {
+        fn read_to_type(reader: &mut PacketReader) -> #protocol_name {
             #prop_reads
 
             return #protocol_name::#replica_name(#replica_name {

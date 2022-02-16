@@ -109,13 +109,12 @@ impl<P: Protocolize> MessageManager<P> {
         &mut self,
         reader: &mut PacketReader,
         manifest: &Manifest<P>,
-        packet_index: u16,
     ) {
         let message_count = reader.read_u8();
         for _x in 0..message_count {
             let component_kind: P::Kind = P::Kind::from_u16(reader.read_u16());
 
-            let new_message = manifest.create_replica(component_kind, reader, packet_index);
+            let new_message = manifest.create_replica(component_kind, reader);
             self.queued_incoming_messages.push_back(new_message);
         }
     }

@@ -2,10 +2,7 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_client_socket::Packet;
 
-use naia_shared::{
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize,
-    ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType,
-};
+use naia_shared::{SequenceBuffer, BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize, ReplicateSafe, sequence_greater_than, SequenceNumber, StandardHeader, WorldMutType};
 
 use super::{
     entity_action::EntityAction,
@@ -14,15 +11,17 @@ use super::{
     packet_writer::PacketWriter,
     ping_manager::PingManager,
     tick_manager::TickManager,
-    tick_queue::TickQueue,
 };
+
+pub const JITTER_BUFFER_SIZE: u16 = 32;
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     base_connection: BaseConnection<P>,
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
     entity_message_sender: EntityMessageSender<P, E>,
-    jitter_buffer: TickQueue<(u16, Box<[u8]>)>,
+    jitter_buffer: SequenceBuffer<Box<[u8]>>,
+    last_processed_tick: u16,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
@@ -36,7 +35,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                 connection_config.rtt_smoothing_factor,
             ),
             entity_message_sender: EntityMessageSender::new(),
-            jitter_buffer: TickQueue::new(),
+            jitter_buffer: SequenceBuffer::with_capacity(JITTER_BUFFER_SIZE),
+            last_processed_tick: 0,
         };
     }
 
@@ -109,7 +109,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     pub fn process_incoming_data<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
-        packet_index: u16,
         manifest: &Manifest<P>,
         server_tick: u16,
         data: &[u8],
@@ -120,13 +119,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             match manager_type {
                 ManagerType::Message => {
                     self.base_connection
-                        .process_message_data(&mut reader, manifest, packet_index);
+                        .process_message_data(&mut reader, manifest);
                 }
                 ManagerType::Entity => {
                     self.entity_manager.process_data(
                         world,
                         manifest,
-                        packet_index,
                         server_tick,
                         &mut reader,
                     );
@@ -136,15 +134,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         }
     }
 
+    pub fn will_buffer_data_packet(&self, incoming_tick: u16) -> bool {
+        sequence_greater_than(incoming_tick, self.last_processed_tick)
+    }
+
     pub fn buffer_data_packet(
         &mut self,
         incoming_tick: u16,
-        incoming_packet_index: u16,
         incoming_payload: &Box<[u8]>,
     ) {
-        self.jitter_buffer.add_item(
+        self.jitter_buffer.insert(
             incoming_tick,
-            (incoming_packet_index, incoming_payload.clone()),
+            incoming_payload.clone(),
         );
     }
 
@@ -184,11 +185,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         manifest: &Manifest<P>,
         receiving_tick: u16,
     ) {
-        while let Some((server_tick, packet_index, data_packet)) =
+        while let Some((server_tick, data_packet)) =
             self.buffered_data_packet(receiving_tick)
         {
-            self.process_incoming_data(world, packet_index, manifest, server_tick, &data_packet);
+            self.process_incoming_data(world, manifest, server_tick, &data_packet);
         }
+
+        self.last_processed_tick = receiving_tick;
     }
 
     // Pass-through methods to underlying Connection
@@ -284,9 +287,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
     // Private methods
 
-    fn buffered_data_packet(&mut self, current_tick: u16) -> Option<(u16, u16, Box<[u8]>)> {
-        if let Some((tick, (index, payload))) = self.jitter_buffer.pop_item(current_tick) {
-            return Some((tick, index, payload));
+    fn buffered_data_packet(&mut self, current_tick: u16) -> Option<(u16, Box<[u8]>)> {
+        self.jitter_buffer.remove_until(current_tick);
+
+        if let Some(oldest_tick) = self.jitter_buffer.oldest() {
+            if oldest_tick == current_tick {
+                if let Some(item) = self.jitter_buffer.remove(oldest_tick) {
+                    return Some((oldest_tick, item));
+                }
+            }
         }
         return None;
     }

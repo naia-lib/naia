@@ -144,11 +144,10 @@ impl<P: Protocolize> BaseConnection<P> {
         &mut self,
         reader: &mut PacketReader,
         manifest: &Manifest<P>,
-        packet_index: u16,
     ) {
         return self
             .message_manager
-            .process_data(reader, manifest, packet_index);
+            .process_data(reader, manifest);
     }
 
     /// Get the most recent message that has been received from a remote host

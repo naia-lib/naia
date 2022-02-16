@@ -36,10 +36,9 @@ impl<P: Protocolize> Manifest<P> {
         &self,
         component_kind: P::Kind,
         reader: &mut PacketReader,
-        packet_index: u16,
     ) -> P {
         if let Some(replica_builder) = self.builder_map.get(&component_kind) {
-            return replica_builder.as_ref().build(reader, packet_index);
+            return replica_builder.as_ref().build(reader);
         }
 
         // TODO: this shouldn't panic .. could crash the server

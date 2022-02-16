@@ -33,7 +33,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
-        packet_index: u16,
         server_tick: u16,
         reader: &mut PacketReader,
     ) {
@@ -54,7 +53,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                         for _ in 0..components_num {
                             let component_kind = P::Kind::from_u16(reader.read_u16());
                             let _component_key = reader.read_u16();
-                            manifest.create_replica(component_kind, reader, packet_index);
+                            manifest.create_replica(component_kind, reader);
                         }
                     } else {
                         // set up entity
@@ -71,7 +70,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
                             let new_component =
-                                manifest.create_replica(component_kind, reader, packet_index);
+                                manifest.create_replica(component_kind, reader);
                             if self.component_to_entity_map.contains_key(&component_key) {
                                 panic!("attempted to insert duplicate component");
                             } else {
@@ -128,7 +127,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     let net_entity = NetEntity::from_u16(reader.read_u16());
                     let message_kind = P::Kind::from_u16(reader.read_u16());
 
-                    let new_message = manifest.create_replica(message_kind, reader, packet_index);
+                    let new_message = manifest.create_replica(message_kind, reader);
 
                     if !self.local_to_world_entity.contains_key(&net_entity) {
                         // received message BEFORE spawn, or AFTER despawn
@@ -150,7 +149,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
                     let new_component =
-                        manifest.create_replica(component_kind, reader, packet_index);
+                        manifest.create_replica(component_kind, reader);
                     if self.component_to_entity_map.contains_key(&component_key) {
                         // its possible we received a very late duplicate message
                         warn!(
@@ -203,7 +202,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 component_kind,
                                 &diff_mask,
                                 reader,
-                                packet_index,
                             );
 
                             self.queued_incoming_messages

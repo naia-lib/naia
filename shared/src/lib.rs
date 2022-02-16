@@ -3,7 +3,6 @@
 
 #![deny(
     trivial_numeric_casts,
-    unsafe_code,
     unstable_features,
     unused_import_braces
 )]
@@ -65,7 +64,7 @@ pub use replica_ref::{
     ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait, ReplicaRefWrapper,
 };
 pub use replicate::{Replicate, ReplicateSafe};
-pub use sequence_buffer::{SequenceBuffer, SequenceIterator, SequenceNumber};
+pub use sequence_buffer::{SequenceBuffer, SequenceNumber};
 pub use shared_config::SharedConfig;
 pub use standard_header::StandardHeader;
 pub use world_type::{WorldMutType, WorldRefType};

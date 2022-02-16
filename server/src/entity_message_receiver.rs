@@ -52,7 +52,7 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
             let owned_entity = NetEntity::from_u16(reader.read_u16());
             let replica_kind: P::Kind = P::Kind::from_u16(reader.read_u16());
 
-            let new_message = manifest.create_replica(replica_kind, reader, 0);
+            let new_message = manifest.create_replica(replica_kind, reader);
 
             if let Some(server_tick) = server_tick_opt {
                 if sequence_greater_than(client_tick, server_tick) {

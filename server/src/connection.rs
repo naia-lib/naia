@@ -114,7 +114,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                     // packet index shouldn't matter here because the server's impl of Property
                     // doesn't use it
                     self.base_connection
-                        .process_message_data(&mut reader, manifest, 0);
+                        .process_message_data(&mut reader, manifest);
                 }
                 _ => {}
             }
