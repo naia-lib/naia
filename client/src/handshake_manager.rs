@@ -6,8 +6,8 @@ use naia_client_socket::Packet;
 
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
-    Protocolize, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
-    WorldMutType, WorldRefType,
+    Protocolize, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType,
+    WorldRefType,
 };
 
 use super::{io::Io, tick_manager::TickManager};
@@ -137,7 +137,8 @@ impl<P: Protocolize> HandshakeManager<P> {
                             self.pre_connection_digest = Some(digest_bytes.into_boxed_slice());
 
                             if let Some(tick_manager) = tick_manager {
-                                tick_manager.set_initial_tick(server_tick, self.rtt_initial_estimate);
+                                tick_manager
+                                    .set_initial_tick(server_tick, self.rtt_initial_estimate);
                             }
 
                             self.connection_state = HandshakeState::AwaitingConnectResponse;

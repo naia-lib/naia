@@ -32,11 +32,7 @@ impl<P: Protocolize> Manifest<P> {
 
     /// Creates a Message/Component instance, given a NaiaId and a
     /// payload, typically from an incoming packet
-    pub fn create_replica(
-        &self,
-        component_kind: P::Kind,
-        reader: &mut PacketReader,
-    ) -> P {
+    pub fn create_replica(&self, component_kind: P::Kind, reader: &mut PacketReader) -> P {
         if let Some(replica_builder) = self.builder_map.get(&component_kind) {
             return replica_builder.as_ref().build(reader);
         }

@@ -2,7 +2,11 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_client_socket::Packet;
 
-use naia_shared::{SequenceBuffer, BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize, ReplicateSafe, sequence_greater_than, SequenceNumber, StandardHeader, WorldMutType};
+use naia_shared::{
+    sequence_greater_than, BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader,
+    PacketType, Protocolize, ReplicateSafe, SequenceBuffer, SequenceNumber, StandardHeader,
+    WorldMutType,
+};
 
 use super::{
     entity_action::EntityAction,
@@ -122,12 +126,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                         .process_message_data(&mut reader, manifest);
                 }
                 ManagerType::Entity => {
-                    self.entity_manager.process_data(
-                        world,
-                        manifest,
-                        server_tick,
-                        &mut reader,
-                    );
+                    self.entity_manager
+                        .process_data(world, manifest, server_tick, &mut reader);
                 }
                 _ => {}
             }
@@ -138,15 +138,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         sequence_greater_than(incoming_tick, self.last_processed_tick)
     }
 
-    pub fn buffer_data_packet(
-        &mut self,
-        incoming_tick: u16,
-        incoming_payload: &Box<[u8]>,
-    ) {
-        self.jitter_buffer.insert(
-            incoming_tick,
-            incoming_payload.clone(),
-        );
+    pub fn buffer_data_packet(&mut self, incoming_tick: u16, incoming_payload: &Box<[u8]>) {
+        self.jitter_buffer
+            .insert(incoming_tick, incoming_payload.clone());
     }
 
     // Pass-through methods to underlying Entity Manager
@@ -185,9 +179,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         manifest: &Manifest<P>,
         receiving_tick: u16,
     ) {
-        while let Some((server_tick, data_packet)) =
-            self.buffered_data_packet(receiving_tick)
-        {
+        while let Some((server_tick, data_packet)) = self.buffered_data_packet(receiving_tick) {
             self.process_incoming_data(world, manifest, server_tick, &data_packet);
         }
 

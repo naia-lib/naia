@@ -1,5 +1,5 @@
-use std::ops::{RangeBounds, Bound};
 use super::wrapping_number::{sequence_greater_than, sequence_less_than};
+use std::ops::{Bound, RangeBounds};
 
 /// Used to index packets that have been sent & received
 pub type SequenceNumber = u16;
@@ -96,14 +96,13 @@ impl<T> SequenceBuffer<T> {
     /// Removes an entry from the sequence buffer
     pub fn remove(&mut self, sequence_num: SequenceNumber) -> Option<T> {
         if self.exists(sequence_num) {
-
             if self.oldest_num.is_some() {
                 if self.oldest_num.unwrap() == sequence_num {
                     self.oldest_num = None;
 
                     for i in 1..self.entry_sequences.len() as u16 {
                         let next_seq = sequence_num.wrapping_add(i);
-                        if self.exists(next_seq){
+                        if self.exists(next_seq) {
                             self.oldest_num = Some(next_seq);
                             break;
                         }
@@ -117,7 +116,7 @@ impl<T> SequenceBuffer<T> {
 
                     for i in 1..self.entry_sequences.len() as u16 {
                         let next_seq = sequence_num.wrapping_sub(i);
-                        if self.exists(next_seq){
+                        if self.exists(next_seq) {
                             self.newest_num = Some(next_seq);
                             break;
                         }
@@ -196,7 +195,10 @@ impl<T> SequenceBuffer<T> {
     }
 
     /// Get a mutable iterator into the SequenceBuffer
-    pub fn iter_mut(&mut self, range: impl RangeBounds<SequenceNumber>) -> SequenceBufferIterMut<'_, T> {
+    pub fn iter_mut(
+        &mut self,
+        range: impl RangeBounds<SequenceNumber>,
+    ) -> SequenceBufferIterMut<'_, T> {
         SequenceBufferIterMut::new(self, range)
     }
 }
@@ -211,7 +213,6 @@ pub struct SequenceBufferIter<'b, T> {
 
 impl<'b, T> SequenceBufferIter<'b, T> {
     pub fn new(buffer: &'b SequenceBuffer<T>, range: impl RangeBounds<SequenceNumber>) -> Self {
-
         let start = get_start(range.start_bound(), buffer.oldest());
         let end = get_end(range.end_bound(), buffer.newest());
 
@@ -261,7 +262,6 @@ pub struct SequenceBufferIterMut<'b, T> {
 
 impl<'b, T> SequenceBufferIterMut<'b, T> {
     pub fn new(buffer: &'b mut SequenceBuffer<T>, range: impl RangeBounds<SequenceNumber>) -> Self {
-
         let start = get_start(range.start_bound(), buffer.oldest());
         let end = get_end(range.end_bound(), buffer.newest());
 
@@ -297,7 +297,7 @@ impl<'b, T> Iterator for SequenceBufferIterMut<'b, T> {
                     let ptr_unwrapped = ptr_opt.as_mut().unwrap();
                     return Some(SequenceBufferItemMut {
                         index: current,
-                        item: ptr_unwrapped
+                        item: ptr_unwrapped,
                     });
                 }
             }
@@ -314,14 +314,13 @@ pub struct SequenceBufferItemMut<'i, T> {
     pub item: &'i mut T,
 }
 
-fn get_start(start_bound: Bound<&SequenceNumber>, oldest: Option<SequenceNumber>) -> SequenceNumber {
+fn get_start(
+    start_bound: Bound<&SequenceNumber>,
+    oldest: Option<SequenceNumber>,
+) -> SequenceNumber {
     match start_bound {
-        Bound::Excluded(seq) => {
-            seq.wrapping_add(1)
-        },
-        Bound::Included(seq) => {
-            *seq
-        },
+        Bound::Excluded(seq) => seq.wrapping_add(1),
+        Bound::Included(seq) => *seq,
         Bound::Unbounded => {
             if let Some(seq) = oldest {
                 seq
@@ -334,12 +333,8 @@ fn get_start(start_bound: Bound<&SequenceNumber>, oldest: Option<SequenceNumber>
 
 fn get_end(end_bound: Bound<&SequenceNumber>, newest: Option<SequenceNumber>) -> SequenceNumber {
     match end_bound {
-        Bound::Excluded(seq) => {
-            seq.wrapping_sub(1)
-        },
-        Bound::Included(seq) => {
-            *seq
-        },
+        Bound::Excluded(seq) => seq.wrapping_sub(1),
+        Bound::Included(seq) => *seq,
         Bound::Unbounded => {
             if let Some(seq) = newest {
                 seq

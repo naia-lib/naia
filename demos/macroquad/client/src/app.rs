@@ -10,8 +10,9 @@ use naia_client::{
 use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
 
 use naia_macroquad_demo_shared::{
-    behavior as shared_behavior, shared_config,
+    behavior as shared_behavior,
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
+    shared_config,
 };
 
 type World = DemoWorld<Protocol>;
@@ -226,9 +227,11 @@ impl App {
 
                             // Replay all existing historical commands until current tick
                             if let Some(newest_tick) = self.command_history.newest() {
-                                for (_tick, command) in self.command_history.iter(server_tick_u16..=newest_tick) {
+                                for (_tick, command) in
+                                    self.command_history.iter(server_tick_u16..=newest_tick)
+                                {
                                     if let Some(mut square_ref) =
-                                    world_mut.component_mut::<Square>(&client_entity)
+                                        world_mut.component_mut::<Square>(&client_entity)
                                     {
                                         shared_behavior::process_command(&command, &mut square_ref);
                                     }

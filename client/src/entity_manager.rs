@@ -69,8 +69,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             let component_kind = P::Kind::from_u16(reader.read_u16());
                             let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                            let new_component =
-                                manifest.create_replica(component_kind, reader);
+                            let new_component = manifest.create_replica(component_kind, reader);
                             if self.component_to_entity_map.contains_key(&component_key) {
                                 panic!("attempted to insert duplicate component");
                             } else {
@@ -148,8 +147,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     let component_kind = P::Kind::from_u16(reader.read_u16());
                     let component_key = LocalComponentKey::from_u16(reader.read_u16());
 
-                    let new_component =
-                        manifest.create_replica(component_kind, reader);
+                    let new_component = manifest.create_replica(component_kind, reader);
                     if self.component_to_entity_map.contains_key(&component_key) {
                         // its possible we received a very late duplicate message
                         warn!(

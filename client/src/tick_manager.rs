@@ -73,11 +73,7 @@ impl TickManager {
     }
 
     /// Use tick data from initial server handshake to set the initial tick
-    pub fn set_initial_tick(
-        &mut self,
-        server_tick: u16,
-        rtt_initial_estimate: Duration,
-    ) {
+    pub fn set_initial_tick(&mut self, server_tick: u16, rtt_initial_estimate: Duration) {
         self.received_server_tick = server_tick;
 
         let rtt_average_f32 = rtt_initial_estimate.as_secs_f32() * 1000.0;
