@@ -79,9 +79,9 @@ impl PingManager {
     }
 
     fn process_new_rtt(&mut self, ping_millis: f32) {
-        let ping_average = self.rtt_average;
-        self.rtt_average = (self.rtt_smoothing_factor_inv * ping_average) + (self.rtt_smoothing_factor * ping_millis);
-        self.rtt_deviation = (self.rtt_smoothing_factor_inv * self.rtt_deviation) + (self.rtt_smoothing_factor * (ping_millis - ping_average).abs());
+        let old_rtt_avg = self.rtt_average;
+        self.rtt_average = (self.rtt_smoothing_factor_inv * old_rtt_avg) + (self.rtt_smoothing_factor * ping_millis);
+        self.rtt_deviation = (self.rtt_smoothing_factor_inv * self.rtt_deviation) + (self.rtt_smoothing_factor * (ping_millis - old_rtt_avg).abs());
     }
 
     /// Gets the current calculated average Round Trip Time to the remote host,

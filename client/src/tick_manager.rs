@@ -2,17 +2,16 @@ use std::time::Duration;
 
 use naia_shared::{wrapping_diff, Instant};
 
-use crate::ping_manager::JITTER_TO_RTT_RATIO_ESTIMATE;
+use miniquad::info;
 
 /// Manages the current tick for the host
 pub struct TickManager {
     tick_interval_millis: f32,
     tick_interval_seconds: f32,
-    received_server_tick: u16,
+    internal_tick: u16,
     client_sending_tick_adjust: u16,
     server_receivable_tick_adjust: u16,
     client_receiving_tick_adjust: u16,
-    server_tick_running_diff: i16,
     last_tick_instant: Instant,
     interpolation: f32,
     accumulator: f32,
@@ -35,8 +34,7 @@ impl TickManager {
         TickManager {
             tick_interval_millis,
             tick_interval_seconds: tick_interval.as_nanos() as f32 / 1000000000.0,
-            received_server_tick: 1,
-            server_tick_running_diff: 0,
+            internal_tick: 0,
             client_sending_tick_adjust: 0,
             client_receiving_tick_adjust: 0,
             server_receivable_tick_adjust: 0,
@@ -61,7 +59,7 @@ impl TickManager {
             }
             // tick has occurred
             ticked = true;
-            self.received_server_tick = self.received_server_tick.wrapping_add(1);
+            self.internal_tick = self.internal_tick.wrapping_add(1);
         }
         self.interpolation = self.accumulator / self.tick_interval_seconds;
         ticked
@@ -77,12 +75,13 @@ impl TickManager {
         &mut self,
         server_tick: u16,
         rtt_initial_estimate: Duration,
+        jitter_initial_estimate: Duration,
     ) {
-        self.received_server_tick = server_tick;
+        self.internal_tick = server_tick;
 
         let rtt_average_f32 = rtt_initial_estimate.as_secs_f32() * 1000.0;
-        let jitter_deviation = rtt_average_f32 * JITTER_TO_RTT_RATIO_ESTIMATE;
-        self.record_server_tick(server_tick, rtt_average_f32, jitter_deviation);
+        let jitter_average_f32 = jitter_initial_estimate.as_secs_f32() * 1000.0;
+        self.record_server_tick(server_tick, rtt_average_f32, jitter_average_f32);
     }
 
     /// Using information from the Server and RTT/Jitter measurements, determine
@@ -93,21 +92,12 @@ impl TickManager {
         rtt_average: f32,
         jitter_deviation: f32,
     ) {
-        self.server_tick_running_diff += wrapping_diff(self.received_server_tick, server_tick);
+        // make sure we only record server_ticks going FORWARD
 
-        // Decay the diff so that small fluctuations are acceptable
-        if self.server_tick_running_diff > 0 {
-            self.server_tick_running_diff = self.server_tick_running_diff.wrapping_sub(1);
-        }
-        if self.server_tick_running_diff < 0 {
-            self.server_tick_running_diff = self.server_tick_running_diff.wrapping_add(1);
-        }
+        // tick diff
+        let tick_diff = wrapping_diff(self.internal_tick, server_tick);
 
-        // If the server tick is far off enough, reset to the received server tick
-        if self.server_tick_running_diff.abs() > 8 {
-            self.received_server_tick = server_tick;
-            self.server_tick_running_diff = 0;
-        }
+        info!("server: {} - client: {} = diff: {}", server_tick, self.internal_tick, tick_diff);
 
         // Calculate incoming & outgoing jitter buffer tick offsets
 
@@ -136,23 +126,20 @@ impl TickManager {
 
     /// Gets the tick at which the Client is sending updates
     pub fn client_sending_tick(&self) -> u16 {
-        return self
-            .received_server_tick
+        return self.internal_tick
             .wrapping_add(self.client_sending_tick_adjust);
     }
 
     /// Gets the tick at which to receive messages from the Server (after jitter
     /// buffer offset is applied)
     pub fn client_receiving_tick(&self) -> u16 {
-        return self
-            .received_server_tick
+        return self.internal_tick
             .wrapping_sub(self.client_receiving_tick_adjust);
     }
 
     /// Gets the earliest tick the Server may be able to receive Client messages
     pub fn server_receivable_tick(&self) -> u16 {
-        return self
-            .received_server_tick
+        return self.internal_tick
             .wrapping_add(self.server_receivable_tick_adjust);
     }
 }

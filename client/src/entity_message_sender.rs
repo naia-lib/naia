@@ -50,10 +50,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
         self.outgoing_messages.remove_until(server_receivable_tick);
 
         // Loop through outstanding messages and add them to the outgoing list
-        for entry in self.outgoing_messages.iter_mut(..) {
-            entry.item.append_messages(&mut outgoing_list, entry.index);
+        let current_tick = self.outgoing_messages.newest();
+        for tick in server_receivable_tick..=current_tick {
+            if let Some(message_list) = self.outgoing_messages.get_mut(tick) {
+                message_list.append_messages(&mut outgoing_list, tick);
+            }
         }
-
         return outgoing_list;
     }
 
