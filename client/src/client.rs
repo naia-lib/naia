@@ -3,7 +3,7 @@ use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAdd
 use naia_client_socket::{Packet, Socket};
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
-    Protocolize, ReplicateSafe, SequenceIterator, SharedConfig, SocketConfig, StandardHeader,
+    Protocolize, ReplicateSafe, SharedConfig, SocketConfig, StandardHeader,
     Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
@@ -254,9 +254,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             // drop connection if necessary
             if self.server_connection.as_ref().unwrap().should_drop() || self.outstanding_disconnect
             {
+                let server_addr = self.server_address_unwrapped();
                 self.disconnect_cleanup();
                 events.clear();
-                let server_addr = self.server_address_unwrapped();
                 events.push_back(Ok(Event::Disconnection(server_addr)));
                 return events; // exit early, we're disconnected, who cares?
             }
@@ -385,21 +385,28 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                                     None
                                 }
                             };
-                            server_connection.process_incoming_header(&header, tick_manager);
 
                             match header.packet_type() {
                                 PacketType::Data => {
-                                    server_connection.buffer_data_packet(
-                                        header.host_tick(),
-                                        header.local_packet_index(),
-                                        &payload,
-                                    );
+                                    if server_connection.will_buffer_data_packet(header.host_tick()) {
+                                        server_connection.process_incoming_header(&header, tick_manager);
+                                        server_connection.buffer_data_packet(
+                                            header.host_tick(),
+                                            &payload,
+                                        );
+                                    }
                                 }
-                                PacketType::Heartbeat => {}
+                                PacketType::Heartbeat => {
+                                    server_connection.process_incoming_header(&header, tick_manager);
+                                }
                                 PacketType::Pong => {
+                                    server_connection.process_incoming_header(&header, tick_manager);
                                     server_connection.process_pong(&payload);
                                 }
-                                _ => {} // TODO: explicitly cover these cases
+                                _ => {
+                                    // TODO: explicitly cover these cases
+                                    server_connection.process_incoming_header(&header, tick_manager);
+                                }
                             }
                         } else {
                             self.handshake_manager

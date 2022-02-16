@@ -152,10 +152,9 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         component_kind: &P::Kind,
         diff_mask: &DiffMask,
         reader: &mut PacketReader,
-        packet_index: u16,
     ) {
         if let Some(mut component) = component_mut_of_kind(self.world, entity, component_kind) {
-            component.read_partial(diff_mask, reader, packet_index);
+            component.read_partial(diff_mask, reader);
         }
     }
 

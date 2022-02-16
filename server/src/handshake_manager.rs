@@ -120,7 +120,7 @@ impl<P: Protocolize> HandshakeManager<P> {
 
             if has_auth {
                 let auth_kind = P::Kind::from_u16(reader.read_u16());
-                let auth_message = manifest.create_replica(auth_kind, &mut reader, 0);
+                let auth_message = manifest.create_replica(auth_kind, &mut reader);
                 return HandshakeResult::AuthUser(auth_message);
             } else {
                 return HandshakeResult::ConnectUser;

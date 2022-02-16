@@ -225,11 +225,10 @@ impl App {
                             self.command_history.remove_until(server_tick_u16);
 
                             // Replay all existing historical commands until current tick
-                            let current_tick = self.command_history.newest();
-                            for tick in server_tick_u16..=current_tick {
-                                if let Some(command) = self.command_history.get_mut(tick) {
+                            if let Some(newest_tick) = self.command_history.newest() {
+                                for (_tick, command) in self.command_history.iter(server_tick_u16..=newest_tick) {
                                     if let Some(mut square_ref) =
-                                        world_mut.component_mut::<Square>(&client_entity)
+                                    world_mut.component_mut::<Square>(&client_entity)
                                     {
                                         shared_behavior::process_command(&command, &mut square_ref);
                                     }

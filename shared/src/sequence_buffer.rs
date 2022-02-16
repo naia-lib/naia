@@ -1,3 +1,4 @@
+use std::ops::{RangeBounds, Bound};
 use super::wrapping_number::{sequence_greater_than, sequence_less_than};
 
 /// Used to index packets that have been sent & received
@@ -9,6 +10,8 @@ pub struct SequenceBuffer<T> {
     sequence_num: SequenceNumber,
     entry_sequences: Box<[Option<SequenceNumber>]>,
     entries: Box<[Option<T>]>,
+    newest_num: Option<SequenceNumber>,
+    oldest_num: Option<SequenceNumber>,
 }
 
 impl<T> SequenceBuffer<T> {
@@ -22,10 +25,12 @@ impl<T> SequenceBuffer<T> {
             sequence_num: 0,
             entry_sequences: vec![None; size as usize].into_boxed_slice(),
             entries: entries.into_boxed_slice(),
+            oldest_num: None,
+            newest_num: None,
         }
     }
 
-    /// Returns the most recently stored sequence number.
+    /// Returns the most recently stored sequence number
     pub fn sequence_num(&self) -> SequenceNumber {
         self.sequence_num
     }
@@ -52,13 +57,15 @@ impl<T> SequenceBuffer<T> {
     /// sequence number is "too old", the entry will not be inserted and will
     /// return false
     pub fn insert(&mut self, sequence_num: SequenceNumber, entry: T) -> bool {
-        // sequence number is too old to insert into the buffer
-        if sequence_less_than(
-            sequence_num,
-            self.sequence_num
-                .wrapping_sub(self.entry_sequences.len() as u16),
-        ) {
-            return false;
+        if !self.is_empty() {
+            // sequence number is too old to insert into the buffer
+            if sequence_less_than(
+                sequence_num,
+                self.sequence_num
+                    .wrapping_sub(self.entry_sequences.len() as u16),
+            ) {
+                return false;
+            }
         }
 
         self.advance_sequence(sequence_num);
@@ -66,6 +73,12 @@ impl<T> SequenceBuffer<T> {
         let index = self.index(sequence_num);
         self.entry_sequences[index] = Some(sequence_num);
         self.entries[index] = Some(entry);
+
+        self.newest_num = Some(sequence_num);
+
+        if self.oldest_num.is_none() {
+            self.oldest_num = Some(sequence_num);
+        }
 
         return true;
     }
@@ -83,6 +96,35 @@ impl<T> SequenceBuffer<T> {
     /// Removes an entry from the sequence buffer
     pub fn remove(&mut self, sequence_num: SequenceNumber) -> Option<T> {
         if self.exists(sequence_num) {
+
+            if self.oldest_num.is_some() {
+                if self.oldest_num.unwrap() == sequence_num {
+                    self.oldest_num = None;
+
+                    for i in 1..self.entry_sequences.len() as u16 {
+                        let next_seq = sequence_num.wrapping_add(i);
+                        if self.exists(next_seq){
+                            self.oldest_num = Some(next_seq);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if self.newest_num.is_some() {
+                if self.newest_num.unwrap() == sequence_num {
+                    self.newest_num = None;
+
+                    for i in 1..self.entry_sequences.len() as u16 {
+                        let next_seq = sequence_num.wrapping_sub(i);
+                        if self.exists(next_seq){
+                            self.newest_num = Some(next_seq);
+                            break;
+                        }
+                    }
+                }
+            }
+
             let index = self.index(sequence_num);
             let value = std::mem::replace(&mut self.entries[index], None);
             self.entry_sequences[index] = None;
@@ -113,117 +155,196 @@ impl<T> SequenceBuffer<T> {
             for index in 0..self.entry_sequences.len() {
                 self.entries[index] = None;
                 self.entry_sequences[index] = None;
+                self.oldest_num = None;
+                self.newest_num = None;
             }
         }
     }
 
     // Generates an index for use in `entry_sequences` and `entries`.
-    fn index(&self, sequence: SequenceNumber) -> usize {
+    pub fn index(&self, sequence: SequenceNumber) -> usize {
         sequence as usize % self.entry_sequences.len()
     }
 
-    /// Gets the oldest stored sequence number
-    pub fn oldest(&self) -> u16 {
-        return self
-            .sequence_num
-            .wrapping_sub(self.entry_sequences.len() as u16);
-    }
-
     /// Gets the newest stored sequence number
-    pub fn newest(&self) -> u16 {
-        return self.sequence_num;
+    pub fn newest(&self) -> Option<SequenceNumber> {
+        self.newest_num
     }
 
-    /// Clear sequence buffer completely
-    pub fn clear(&mut self) {
-        let size = self.entry_sequences.len();
-        self.sequence_num = 0;
-        for i in 0..size {
-            self.entries[i] = None;
-            self.entry_sequences[i] = None;
-        }
+    /// Gets the oldest stored sequence number
+    pub fn oldest(&self) -> Option<SequenceNumber> {
+        self.oldest_num
+    }
+
+    /// Returns whether or not the buffer is empty
+    pub fn is_empty(&self) -> bool {
+        self.oldest_num.is_none() && self.newest_num.is_none()
     }
 
     /// Remove entries up until a specific sequence number
     pub fn remove_until(&mut self, finish_sequence: u16) {
-        let oldest = self.oldest();
-        for seq in oldest..finish_sequence {
-            self.remove(seq);
+        if let Some(oldest_sequence) = self.oldest_num {
+            for seq in oldest_sequence..finish_sequence {
+                self.remove(seq);
+            }
         }
     }
 
-    /// Get a count of entries in the buffer
-    pub fn entries_count(&self) -> u8 {
-        let mut count = 0;
-        let mut seq = self.oldest();
-        loop {
-            if self.exists(seq) {
-                count += 1;
-            }
-            seq = seq.wrapping_add(1);
-            if seq == self.sequence_num {
-                break;
-            }
-        }
-        return count;
+    /// Get a mutable iterator into the SequenceBuffer
+    pub fn iter(&self, range: impl RangeBounds<SequenceNumber>) -> SequenceBufferIter<'_, T> {
+        SequenceBufferIter::new(self, range)
     }
 
-    /// Get an iterator into the sequence
-    pub fn iter(&self, reverse: bool) -> SequenceIterator<T> {
-        let index = {
-            if reverse {
-                self.sequence_num
-            } else {
-                self.oldest()
-            }
-        };
-        return SequenceIterator::new(self, index, self.entry_sequences.len(), reverse);
+    /// Get a mutable iterator into the SequenceBuffer
+    pub fn iter_mut(&mut self, range: impl RangeBounds<SequenceNumber>) -> SequenceBufferIterMut<'_, T> {
+        SequenceBufferIterMut::new(self, range)
     }
 }
 
-/// Iterator for a Sequence
-pub struct SequenceIterator<'s, T>
-where
-    T: 's,
-{
-    buffer: &'s SequenceBuffer<T>,
-    index: u16,
-    count: usize,
-    reverse: bool,
+// Iter
+pub struct SequenceBufferIter<'b, T> {
+    buffer: &'b SequenceBuffer<T>,
+    start: SequenceNumber,
+    end: SequenceNumber,
+    ending: bool,
 }
 
-impl<'s, T> SequenceIterator<'s, T> {
-    /// Create a new iterator for a sequence
-    pub fn new(
-        seq_buf: &'s SequenceBuffer<T>,
-        start: u16,
-        count: usize,
-        reverse: bool,
-    ) -> SequenceIterator<'s, T> {
-        SequenceIterator::<T> {
-            buffer: seq_buf,
-            index: start,
-            count,
-            reverse,
+impl<'b, T> SequenceBufferIter<'b, T> {
+    pub fn new(buffer: &'b SequenceBuffer<T>, range: impl RangeBounds<SequenceNumber>) -> Self {
+
+        let start = get_start(range.start_bound(), buffer.oldest());
+        let end = get_end(range.end_bound(), buffer.newest());
+
+        SequenceBufferIter {
+            buffer,
+            start,
+            end,
+            ending: false,
         }
     }
+}
 
-    /// Get next value in the sequence
-    pub fn next(&mut self) -> Option<(SequenceNumber, &'s T)> {
+impl<'b, T> Iterator for SequenceBufferIter<'b, T> {
+    type Item = (SequenceNumber, &'b T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.buffer.is_empty() {
+            return None;
+        }
+
         loop {
-            if self.count == 0 {
+            if self.start == self.end {
+                self.ending = true;
+            }
+
+            let current = self.start;
+            self.start = self.start.wrapping_add(1);
+
+            if let Some(item_mut) = self.buffer.get(current) {
+                return Some((current, item_mut));
+            }
+
+            if self.ending {
                 return None;
             }
-            let current_item = self.buffer.get(self.index);
-            let current_index = self.index;
-            if self.reverse {
-                self.index = self.index.wrapping_sub(1);
-            } else {
-                self.index = self.index.wrapping_add(1);
+        }
+    }
+}
+
+// IterMut
+pub struct SequenceBufferIterMut<'b, T> {
+    buffer: &'b mut SequenceBuffer<T>,
+    start: SequenceNumber,
+    end: SequenceNumber,
+    ending: bool,
+}
+
+impl<'b, T> SequenceBufferIterMut<'b, T> {
+    pub fn new(buffer: &'b mut SequenceBuffer<T>, range: impl RangeBounds<SequenceNumber>) -> Self {
+
+        let start = get_start(range.start_bound(), buffer.oldest());
+        let end = get_end(range.end_bound(), buffer.newest());
+
+        SequenceBufferIterMut {
+            buffer,
+            start,
+            end,
+            ending: false,
+        }
+    }
+}
+
+impl<'b, T> Iterator for SequenceBufferIterMut<'b, T> {
+    type Item = SequenceBufferItemMut<'b, T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.buffer.is_empty() {
+            return None;
+        }
+
+        loop {
+            if self.start == self.end {
+                self.ending = true;
             }
-            self.count -= 1;
-            if let Some(item) = current_item {
-                return Some((current_index, item));
+            let current = self.start;
+            self.start = self.start.wrapping_add(1);
+
+            let index = self.buffer.index(current);
+            if self.buffer.entries[index].is_some() {
+                let ptr = self.buffer.entries.as_mut_ptr();
+                unsafe {
+                    let ptr_opt = &mut *ptr.add(index);
+                    let ptr_unwrapped = ptr_opt.as_mut().unwrap();
+                    return Some(SequenceBufferItemMut {
+                        index: current,
+                        item: ptr_unwrapped
+                    });
+                }
+            }
+
+            if self.ending {
+                return None;
+            }
+        }
+    }
+}
+
+pub struct SequenceBufferItemMut<'i, T> {
+    pub index: SequenceNumber,
+    pub item: &'i mut T,
+}
+
+fn get_start(start_bound: Bound<&SequenceNumber>, oldest: Option<SequenceNumber>) -> SequenceNumber {
+    match start_bound {
+        Bound::Excluded(seq) => {
+            seq.wrapping_add(1)
+        },
+        Bound::Included(seq) => {
+            *seq
+        },
+        Bound::Unbounded => {
+            if let Some(seq) = oldest {
+                seq
+            } else {
+                0
+            }
+        }
+    }
+}
+
+fn get_end(end_bound: Bound<&SequenceNumber>, newest: Option<SequenceNumber>) -> SequenceNumber {
+    match end_bound {
+        Bound::Excluded(seq) => {
+            seq.wrapping_sub(1)
+        },
+        Bound::Included(seq) => {
+            *seq
+        },
+        Bound::Unbounded => {
+            if let Some(seq) = newest {
+                seq
+            } else {
+                0
             }
         }
     }
