@@ -4,7 +4,7 @@ use naia_client_socket::Packet;
 
 use naia_shared::{
     BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize,
-    ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType,
+    ReplicateSafe, StandardHeader, WorldMutType,
 };
 
 use super::{
@@ -16,6 +16,8 @@ use super::{
     tick_manager::TickManager,
     tick_queue::TickQueue,
 };
+
+pub type PacketIndex = u16;
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     base_connection: BaseConnection<P>,
@@ -49,7 +51,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         if self.base_connection.has_outgoing_messages() || entity_messages.len() > 0 {
             let mut writer = PacketWriter::new();
 
-            let next_packet_index: u16 = self.next_packet_index();
+            let next_packet_index: PacketIndex = self.next_packet_index();
 
             // Entity Messages
             while let Some((message_id, client_tick, entity, message)) = entity_messages.pop_front()
@@ -240,7 +242,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             .process_outgoing_header(client_tick, packet_type, payload);
     }
 
-    pub fn next_packet_index(&self) -> SequenceNumber {
+    pub fn next_packet_index(&self) -> PacketIndex {
         return self.base_connection.next_packet_index();
     }
 
