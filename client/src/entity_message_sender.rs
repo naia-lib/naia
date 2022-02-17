@@ -3,9 +3,9 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{PacketNotifiable, Protocolize, ReplicateSafe, sequence_greater_than, sequence_less_than, SequenceBuffer};
+use naia_shared::{PacketNotifiable, Protocolize, ReplicateSafe, sequence_greater_than, sequence_less_than};
 
-use miniquad::info;
+//use miniquad::info;
 
 const MESSAGE_HISTORY_SIZE: u16 = 64;
 
@@ -15,7 +15,7 @@ pub type Tick = u16;
 
 pub struct EntityMessageSender<P: Protocolize, E: Copy + Eq + Hash> {
     // This SequenceBuffer is indexed by Tick
-    outgoing_messages: SequenceBuffer<MessageMap<P, E>>,
+    outgoing_messages: OutgoingMessages<P, E>,
     // This SequenceBuffer is indexed by PacketIndex
     sent_messages: SentMessages,
 }
@@ -23,7 +23,7 @@ pub struct EntityMessageSender<P: Protocolize, E: Copy + Eq + Hash> {
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
     pub fn new() -> Self {
         EntityMessageSender {
-            outgoing_messages: SequenceBuffer::with_capacity(MESSAGE_HISTORY_SIZE),
+            outgoing_messages: OutgoingMessages::new(),
             sent_messages: SentMessages::new(),
         }
     }
@@ -36,36 +36,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
     ) {
         let message_protocol = message.protocol_copy();
 
-        if !self.outgoing_messages.exists(client_tick) {
-            self.outgoing_messages
-                .insert(client_tick, MessageMap::new());
-        }
-        if let Some(message_map) = self.outgoing_messages.get_mut(client_tick) {
-            message_map.insert(*entity, message_protocol);
-        }
+        self.outgoing_messages.push(client_tick, entity, message_protocol);
     }
 
     pub fn messages(&mut self, server_receivable_tick: Tick) -> VecDeque<(MsgId, Tick, E, P)> {
         let mut outgoing_list = VecDeque::new();
 
         // Remove messages that would never be able to reach the Server
-        self.outgoing_messages.remove_until(server_receivable_tick);
+        self.outgoing_messages.pop_back_until_excluding(server_receivable_tick);
 
         // Loop through outstanding messages and add them to the outgoing list
-        let mut index_tick = server_receivable_tick;
-        let current_tick = self.outgoing_messages.newest();
+        let mut iter = self.outgoing_messages.iter();
+        while let Some((tick, msg_map)) = iter.next() {
+            msg_map.append_messages(&mut outgoing_list, *tick);
+        }
 
-        loop {
-
-            if let Some(message_list) = self.outgoing_messages.get_mut(index_tick) {
-                message_list.append_messages(&mut outgoing_list, index_tick);
-            }
-
-            if index_tick == current_tick {
-                break;
-            }
-
-            index_tick = index_tick.wrapping_add(1);
+        if outgoing_list.len() > 0 {
+            info!("appending {} messages", outgoing_list.len());
         }
 
         return outgoing_list;
@@ -80,48 +67,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> PacketNotifiable for EntityMessageSend
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(delivered_messages) = self.sent_messages.remove(packet_index) {
             for (tick, message_id) in delivered_messages.into_iter() {
-                if let Some(message_map) = self.outgoing_messages.get_mut(tick) {
-                    message_map.remove(&message_id);
-                }
+                self.outgoing_messages.remove_message(tick, message_id);
             }
         }
     }
 
     fn notify_packet_dropped(&mut self, _dropped_packet_index: u16) {}
-}
-
-// MessageMap
-
-struct MessageMap<P: Protocolize, E: Copy + Eq + Hash> {
-    map: HashMap<MsgId, (E, P)>,
-    message_id: MsgId,
-}
-
-impl<P: Protocolize, E: Copy + Eq + Hash> MessageMap<P, E> {
-    pub fn new() -> Self {
-        MessageMap {
-            map: HashMap::new(),
-            message_id: 0,
-        }
-    }
-
-    pub fn insert(&mut self, entity: E, message: P) {
-        let new_message_id = self.message_id;
-
-        self.map.insert(new_message_id, (entity, message));
-
-        self.message_id = self.message_id.wrapping_add(1);
-    }
-
-    pub fn append_messages(&self, list: &mut VecDeque<(MsgId, Tick, E, P)>, tick: Tick) {
-        for (message_id, (entity, message)) in &self.map {
-            list.push_back((*message_id, tick, *entity, message.clone()));
-        }
-    }
-
-    pub fn remove(&mut self, message_id: &MsgId) {
-        self.map.remove(message_id);
-    }
 }
 
 // SentMessages
@@ -161,13 +112,19 @@ impl SentMessages {
         // a good time to prune down this list
         while self.buffer.len() > MESSAGE_HISTORY_SIZE.into() {
             self.buffer.pop_back();
-            info!("pruning sent_messages buffer cause it got too big");
+            //info!("pruning sent_messages buffer cause it got too big");
         }
     }
 
     pub fn remove(&mut self, packet_index: PacketIndex) -> Option<Vec<(Tick, MsgId)>> {
 
         let mut vec_index = self.buffer.len();
+
+        // empty condition
+        if vec_index == 0 {
+            return None;
+        }
+
         let mut found = false;
 
         loop {
@@ -187,12 +144,136 @@ impl SentMessages {
 
             if found {
                 let (_, msg_list) = self.buffer.remove(vec_index).unwrap();
-                info!("found and removed packet: {}", packet_index);
+                //info!("found and removed packet: {}", packet_index);
                 return Some(msg_list);
             }
 
             if vec_index == 0 {
                 return None;
+            }
+        }
+    }
+}
+
+// MessageMap
+struct MessageMap<P: Protocolize, E: Copy + Eq + Hash> {
+    map: HashMap<MsgId, (E, P)>,
+    message_id: MsgId,
+}
+
+impl<P: Protocolize, E: Copy + Eq + Hash> MessageMap<P, E> {
+    pub fn new() -> Self {
+        MessageMap {
+            map: HashMap::new(),
+            message_id: 0,
+        }
+    }
+
+    pub fn insert(&mut self, entity: E, message: P) {
+        let new_message_id = self.message_id;
+
+        self.map.insert(new_message_id, (entity, message));
+
+        self.message_id = self.message_id.wrapping_add(1);
+    }
+
+    pub fn append_messages(&self, list: &mut VecDeque<(MsgId, Tick, E, P)>, tick: Tick) {
+        for (message_id, (entity, message)) in &self.map {
+            list.push_back((*message_id, tick, *entity, message.clone()));
+        }
+    }
+
+    pub fn remove(&mut self, message_id: &MsgId) {
+        self.map.remove(message_id);
+    }
+}
+
+// OutgoingMessages
+struct OutgoingMessages<P: Protocolize, E: Copy + Eq + Hash> {
+    // front big, back small
+    // front recent, back past
+    buffer: VecDeque<(Tick, MessageMap<P, E>)>
+}
+
+impl<P: Protocolize, E: Copy + Eq + Hash> OutgoingMessages<P, E> {
+    pub fn new() -> Self {
+        OutgoingMessages {
+            buffer: VecDeque::new(),
+        }
+    }
+
+    // should only push increasing ticks of messages
+    pub fn push(&mut self, client_tick: Tick, entity: &E, message_protocol: P) {
+        if let Some((front_tick, msg_map)) = self.buffer.front_mut() {
+
+            if client_tick == *front_tick {
+                // been here before, cool
+                msg_map.insert(*entity, message_protocol);
+                return;
+            }
+
+            if sequence_less_than(client_tick, *front_tick) {
+                panic!("this method should always receive increasing or equal ticks!")
+            }
+        } else {
+            // nothing is in here
+        }
+
+        let mut msg_map = MessageMap::new();
+        msg_map.insert(*entity, message_protocol);
+        self.buffer.push_front((client_tick, msg_map));
+
+        // a good time to prune down this list
+        while self.buffer.len() > MESSAGE_HISTORY_SIZE.into() {
+            self.buffer.pop_back();
+            //info!("pruning outgoing_messages buffer cause it got too big");
+        }
+    }
+
+    pub fn pop_back_until_excluding(&mut self, until_tick: Tick) {
+        loop {
+            if let Some((old_tick, _)) = self.buffer.back() {
+                if sequence_less_than(until_tick, *old_tick) {
+                    return;
+                }
+            } else {
+                return;
+            }
+
+            self.buffer.pop_back();
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &(Tick, MessageMap<P, E>)> {
+        self.buffer.iter().rev()
+    }
+
+    pub fn remove_message(&mut self, tick: Tick, msg_id: MsgId) {
+        let mut index = self.buffer.len();
+
+        if index == 0 {
+            // empty condition
+            return;
+        }
+
+        loop {
+            index -= 1;
+
+            if let Some((old_tick, msg_map)) = self.buffer.get_mut(index) {
+                if *old_tick == tick {
+                    // found it!
+                    msg_map.remove(&msg_id);
+                    //info!("removed delivered message! tick: {}, msg_id: {}", tick, msg_id);
+                } else {
+                    // if tick is less than old tick, no sense continuing, only going to get bigger as we go
+                    if sequence_greater_than(*old_tick, tick) {
+                        return;
+                    }
+                }
+            }
+
+            if index == 0 {
+                return;
             }
         }
     }

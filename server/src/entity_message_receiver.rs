@@ -5,8 +5,6 @@ use naia_shared::{
     Protocolize,
 };
 
-use log::info;
-
 /// Handles incoming Entity Messages, buffering them to be received on the
 /// correct tick
 pub struct EntityMessageReceiver<P: Protocolize> {
