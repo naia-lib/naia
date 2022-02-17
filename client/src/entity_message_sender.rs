@@ -7,7 +7,7 @@ use naia_shared::{PacketNotifiable, Protocolize, ReplicateSafe, SequenceBuffer};
 
 const MESSAGE_HISTORY_SIZE: u16 = 64;
 
-pub type MsgId = u8;
+pub type MsgId = u16;
 type PacketIndex = u16;
 pub type Tick = u16;
 
@@ -113,7 +113,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> MessageMap<P, E> {
 
         self.map.insert(new_message_id, (entity, message));
 
-        self.message_id += 1;
+        self.message_id = self.message_id.wrapping_add(1);
     }
 
     pub fn append_messages(&self, list: &mut VecDeque<(MsgId, Tick, E, P)>, tick: Tick) {

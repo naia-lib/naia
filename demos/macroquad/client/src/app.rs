@@ -20,7 +20,6 @@ type World = DemoWorld<Protocol>;
 type Client = NaiaClient<Protocol, Entity>;
 
 const SQUARE_SIZE: f32 = 32.0;
-const COMMAND_HISTORY_SIZE: usize = 256;
 
 struct OwnedEntity {
     pub confirmed: Entity,
@@ -57,7 +56,7 @@ impl App {
             owned_entity: None,
             squares: HashSet::new(),
             queued_command: None,
-            command_history: CommandHistory::new(COMMAND_HISTORY_SIZE),
+            command_history: CommandHistory::new(),
         }
     }
 
@@ -126,7 +125,7 @@ impl App {
                     self.owned_entity = None;
                     self.squares = HashSet::new();
                     self.queued_command = None;
-                    self.command_history = CommandHistory::new(COMMAND_HISTORY_SIZE);
+                    self.command_history = CommandHistory::new();
                 }
                 Ok(Event::Tick) => {
                     if let Some(owned_entity) = &self.owned_entity {
@@ -222,7 +221,7 @@ impl App {
                             }
 
                             // Remove history of commands until current received tick
-                            self.command_history.remove_until(server_tick.u16());
+                            self.command_history.remove_to_and_including(server_tick.u16());
 
                             // Replay all existing historical commands until current tick
                             let mut command_iter = self.command_history.iter_mut();
