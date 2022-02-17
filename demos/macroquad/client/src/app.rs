@@ -3,7 +3,7 @@ use std::{collections::HashSet, ops::Deref};
 use macroquad::prelude::*;
 
 use naia_client::{
-    shared::{Protocolize, Replicate, SequenceBuffer},
+    shared::{Protocolize, Replicate},
     Client as NaiaClient, ClientConfig, Event,
 };
 
@@ -14,11 +14,13 @@ use naia_macroquad_demo_shared::{
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
 };
 
+use crate::command_history::CommandHistory;
+
 type World = DemoWorld<Protocol>;
 type Client = NaiaClient<Protocol, Entity>;
 
 const SQUARE_SIZE: f32 = 32.0;
-const COMMAND_HISTORY_SIZE: u16 = 256;
+const COMMAND_HISTORY_SIZE: usize = 256;
 
 struct OwnedEntity {
     pub confirmed: Entity,
@@ -40,7 +42,7 @@ pub struct App {
     owned_entity: Option<OwnedEntity>,
     squares: HashSet<Entity>,
     queued_command: Option<KeyCommand>,
-    command_history: SequenceBuffer<KeyCommand>,
+    command_history: CommandHistory<KeyCommand>,
 }
 
 impl App {
@@ -55,7 +57,7 @@ impl App {
             owned_entity: None,
             squares: HashSet::new(),
             queued_command: None,
-            command_history: SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE),
+            command_history: CommandHistory::new(COMMAND_HISTORY_SIZE),
         }
     }
 
@@ -124,14 +126,14 @@ impl App {
                     self.owned_entity = None;
                     self.squares = HashSet::new();
                     self.queued_command = None;
-                    self.command_history = SequenceBuffer::with_capacity(COMMAND_HISTORY_SIZE);
+                    self.command_history = CommandHistory::new(COMMAND_HISTORY_SIZE);
                 }
                 Ok(Event::Tick) => {
                     if let Some(owned_entity) = &self.owned_entity {
                         if let Some(command) = self.queued_command.take() {
                             if let Some(client_tick) = self.client.client_tick() {
                                 // Record command
-                                self.command_history.insert(client_tick, command.clone());
+                                self.command_history.push_front(client_tick, command.clone());
 
                                 // Send command
                                 self.client
@@ -219,26 +221,17 @@ impl App {
                                 );
                             }
 
-                            let mut update_tick = server_tick.u16();
-
                             // Remove history of commands until current received tick
-                            self.command_history.remove_until(update_tick);
+                            self.command_history.remove_until(server_tick.u16());
 
                             // Replay all existing historical commands until current tick
-                            let current_tick = self.command_history.newest();
-                            loop {
-                                if let Some(command) = self.command_history.get_mut(update_tick) {
-                                    if let Some(mut square_ref) =
-                                    world_mut.component_mut::<Square>(&client_entity)
-                                    {
-                                        shared_behavior::process_command(&command, &mut square_ref);
-                                    }
+                            let mut command_iter = self.command_history.iter_mut();
+                            while let Some((_, command)) = command_iter.next() {
+                                if let Some(mut square_ref) =
+                                world_mut.component_mut::<Square>(&client_entity)
+                                {
+                                    shared_behavior::process_command(&command, &mut square_ref);
                                 }
-
-                                if update_tick == current_tick {
-                                    break;
-                                }
-                                update_tick = update_tick.wrapping_add(1);
                             }
                         }
                     }
