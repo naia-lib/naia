@@ -14,10 +14,7 @@ use crate::events::{
     DespawnEntityEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent,
 };
 
-use super::{
-    components::Confirmed,
-    resource::ClientResource,
-};
+use super::{components::Confirmed, resource::ClientResource};
 
 pub fn before_receive_events<P: Protocolize>(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<Client<P, Entity>>| {

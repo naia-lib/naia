@@ -22,8 +22,12 @@ pub struct PingManager {
 }
 
 impl PingManager {
-    pub fn new(ping_interval: Duration, rtt_initial_estimate: Duration, jitter_initial_estimate: Duration, rtt_smoothing_factor: f32) -> Self {
-
+    pub fn new(
+        ping_interval: Duration,
+        rtt_initial_estimate: Duration,
+        jitter_initial_estimate: Duration,
+        rtt_smoothing_factor: f32,
+    ) -> Self {
         let rtt_average = rtt_initial_estimate.as_secs_f32() * 1000.0;
         let jitter_average = jitter_initial_estimate.as_secs_f32() * 1000.0;
 
@@ -79,8 +83,10 @@ impl PingManager {
 
     fn process_new_rtt(&mut self, ping_millis: f32) {
         let old_rtt_avg = self.rtt_average;
-        self.rtt_average = (self.rtt_smoothing_factor_inv * old_rtt_avg) + (self.rtt_smoothing_factor * ping_millis);
-        self.rtt_deviation = (self.rtt_smoothing_factor_inv * self.rtt_deviation) + (self.rtt_smoothing_factor * (ping_millis - old_rtt_avg).abs());
+        self.rtt_average = (self.rtt_smoothing_factor_inv * old_rtt_avg)
+            + (self.rtt_smoothing_factor * ping_millis);
+        self.rtt_deviation = (self.rtt_smoothing_factor_inv * self.rtt_deviation)
+            + (self.rtt_smoothing_factor * (ping_millis - old_rtt_avg).abs());
     }
 
     /// Gets the current calculated average Round Trip Time to the remote host,

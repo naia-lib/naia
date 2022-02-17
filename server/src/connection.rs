@@ -126,7 +126,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     }
 
     pub fn pop_incoming_entity_message(&mut self, server_tick: u16) -> Option<(E, P)> {
-
         if let Some((local_entity, message)) = self
             .entity_message_receiver
             .pop_incoming_entity_message(server_tick)

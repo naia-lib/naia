@@ -10,7 +10,6 @@
     unused_import_braces
 )]
 
-mod tick_queue;
 mod client;
 mod client_config;
 mod connection;
@@ -28,6 +27,7 @@ mod packet_writer;
 mod ping_manager;
 mod tick;
 mod tick_manager;
+mod tick_queue;
 
 pub use naia_shared as shared;
 

@@ -41,10 +41,15 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
             let new_message = manifest.create_replica(replica_kind, reader);
 
             if let Some(server_tick) = server_tick_opt {
-                if !self.incoming_messages.push_back(client_tick, server_tick, owned_entity, new_message) {
-                    //info!("failed command. server: {}, client: {}", server_tick, client_tick);
+                if !self.incoming_messages.push_back(
+                    client_tick,
+                    server_tick,
+                    owned_entity,
+                    new_message,
+                ) {
+                    //info!("failed command. server: {}, client: {}",
+                    // server_tick, client_tick);
                 } else {
-
                 }
             }
         }
@@ -57,7 +62,7 @@ type Tick = u16;
 
 struct IncomingMessages<P> {
     // front is small, back is big
-    buffer: VecDeque<(Tick, HashMap<NetEntity, P>)>
+    buffer: VecDeque<(Tick, HashMap<NetEntity, P>)>,
 }
 
 impl<P> IncomingMessages<P> {
@@ -67,7 +72,13 @@ impl<P> IncomingMessages<P> {
         }
     }
 
-    pub fn push_back(&mut self, client_tick: u16, server_tick: u16, owned_entity: NetEntity, new_message: P) -> bool {
+    pub fn push_back(
+        &mut self,
+        client_tick: u16,
+        server_tick: u16,
+        owned_entity: NetEntity,
+        new_message: P,
+    ) -> bool {
         if sequence_greater_than(client_tick, server_tick) {
             let mut index = self.buffer.len();
 
@@ -76,7 +87,8 @@ impl<P> IncomingMessages<P> {
                 let mut map = HashMap::new();
                 map.insert(owned_entity, new_message);
                 self.buffer.push_back((client_tick, map));
-                //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (empty q)", server_tick, client_tick, owned_entity);
+                //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (empty q)",
+                // server_tick, client_tick, owned_entity);
                 return true;
             }
 
@@ -89,14 +101,14 @@ impl<P> IncomingMessages<P> {
                         if !command_map.contains_key(&owned_entity) {
                             command_map.insert(owned_entity, new_message);
                             //info!("inserting command at tick: {}", client_tick);
-                            //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (map xzist)", server_tick, client_tick, owned_entity);
+                            //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (map
+                            // xzist)", server_tick, client_tick, owned_entity);
                             // inserted command into existing tick
                             return true;
                         } else {
                             return false;
                         }
-                    }
-                    else {
+                    } else {
                         if sequence_greater_than(client_tick, *tick) {
                             // incoming client tick is larger than found tick ...
                             insert = true;
@@ -109,7 +121,8 @@ impl<P> IncomingMessages<P> {
                     let mut map = HashMap::new();
                     map.insert(owned_entity, new_message);
                     self.buffer.insert(index + 1, (client_tick, map));
-                    //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (midbck insrt)", server_tick, client_tick, owned_entity);
+                    //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (midbck
+                    // insrt)", server_tick, client_tick, owned_entity);
                     return true;
                 }
 
@@ -118,7 +131,8 @@ impl<P> IncomingMessages<P> {
                     let mut map = HashMap::new();
                     map.insert(owned_entity, new_message);
                     self.buffer.push_front((client_tick, map));
-                    //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (front insrt)", server_tick, client_tick, owned_entity);
+                    //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (front
+                    // insrt)", server_tick, client_tick, owned_entity);
                     return true;
                 }
             }
@@ -158,7 +172,8 @@ impl<P> IncomingMessages<P> {
                 if let Some(any_entity) = any_entity {
                     if let Some(message) = command_map.remove(&any_entity) {
                         output = Some((any_entity, message));
-                        // info!("popping message at tick: {}, for entity: {}", front_tick, any_entity);
+                        // info!("popping message at tick: {}, for entity: {}",
+                        // front_tick, any_entity);
                     }
                     if command_map.len() == 0 {
                         pop = true;

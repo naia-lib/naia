@@ -30,24 +30,6 @@ impl<T> SequenceBuffer<T> {
         self.sequence_num
     }
 
-    /// Returns a mutable reference to the entry with the given sequence number.
-    pub fn get_mut(&mut self, sequence_num: SequenceNumber) -> Option<&mut T> {
-        if self.exists(sequence_num) {
-            let index = self.index(sequence_num);
-            return self.entries[index].as_mut();
-        }
-        None
-    }
-
-    /// Returns a reference to the entry with the given sequence number.
-    pub fn get(&self, sequence_num: SequenceNumber) -> Option<&T> {
-        if self.exists(sequence_num) {
-            let index = self.index(sequence_num);
-            return self.entries[index].as_ref();
-        }
-        None
-    }
-
     /// Inserts the entry data into the sequence buffer. If the requested
     /// sequence number is "too old", the entry will not be inserted and will
     /// return false
@@ -120,58 +102,5 @@ impl<T> SequenceBuffer<T> {
     // Generates an index for use in `entry_sequences` and `entries`.
     fn index(&self, sequence: SequenceNumber) -> usize {
         sequence as usize % self.entry_sequences.len()
-    }
-
-    /// Gets the oldest stored sequence number
-    pub fn oldest(&self) -> u16 {
-        return self
-            .sequence_num
-            .wrapping_sub(self.entry_sequences.len() as u16);
-    }
-
-    /// Gets the newest stored sequence number
-    pub fn newest(&self) -> u16 {
-        return self.sequence_num;
-    }
-
-    /// Clear sequence buffer completely
-    pub fn clear(&mut self) {
-        let size = self.entry_sequences.len();
-        self.sequence_num = 0;
-        for i in 0..size {
-            self.entries[i] = None;
-            self.entry_sequences[i] = None;
-        }
-    }
-
-    /// Remove entries up until a specific sequence number
-    pub fn remove_until(&mut self, finish_sequence: u16) {
-        let mut seq = self.oldest();
-
-        loop {
-            if seq == finish_sequence {
-                break;
-            }
-
-            self.remove(seq);
-
-            seq = seq.wrapping_add(1);
-        }
-    }
-
-    /// Get a count of entries in the buffer
-    pub fn entries_count(&self) -> u8 {
-        let mut count = 0;
-        let mut seq = self.oldest();
-        loop {
-            if self.exists(seq) {
-                count += 1;
-            }
-            seq = seq.wrapping_add(1);
-            if seq == self.sequence_num {
-                break;
-            }
-        }
-        return count;
     }
 }
