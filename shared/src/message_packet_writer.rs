@@ -49,7 +49,7 @@ impl MessagePacketWriter {
 
     /// Writes an Message into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_message<P: Protocolize>(&mut self, total_bytes: usize, message: &P) -> bool {
+    pub fn write_message<P: Protocolize>(&mut self, message: &P) {
         let message_ref = message.dyn_ref();
 
         let mut message_total_bytes = Vec::<u8>::new();
@@ -63,7 +63,21 @@ impl MessagePacketWriter {
         // write payload
         message_ref.write(&mut message_total_bytes);
 
-        let mut hypothetical_next_payload_size = total_bytes + message_total_bytes.len();
+        self.message_count += 1;
+        self.message_working_bytes.append(&mut message_total_bytes);
+    }
+
+    /// Returns whether or not the given message will fit in the outgoing buffer
+    pub fn message_fits<P: Protocolize>(&mut self, total_bytes: usize, message: &P) -> bool {
+        let mut message_total_bytes: usize = 0;
+
+        // write message kind
+        message_total_bytes += 2;
+
+        // write payload
+        message_total_bytes += message.dyn_ref().kind().size();
+
+        let mut hypothetical_next_payload_size = total_bytes + message_total_bytes;
         if self.message_count == 0 {
             hypothetical_next_payload_size += 2;
         }
@@ -71,8 +85,6 @@ impl MessagePacketWriter {
             if self.message_count == 255 {
                 return false;
             }
-            self.message_count += 1;
-            self.message_working_bytes.append(&mut message_total_bytes);
             return true;
         } else {
             return false;

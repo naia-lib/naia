@@ -118,6 +118,14 @@ impl DiffMask {
         DiffMask { bytes, mask }
     }
 
+    /// Return the number of bytes required to encode the DiffMask
+    pub fn size(&self) -> usize {
+        let mut size: usize = 0;
+        size += 1;
+        size += self.bytes as usize;
+        size
+    }
+
     /// Copies the DiffMask into another DiffMask
     pub fn copy_contents(&mut self, other: &DiffMask) {
         //if other diff mask has different capacity, do nothing

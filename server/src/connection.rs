@@ -55,31 +55,49 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             let next_packet_index: PacketIndex = self.next_packet_index();
 
             // Write Messages
-            while let Some(popped_message) =
-                self.base_connection.pop_outgoing_message(next_packet_index)
-            {
-                if !writer.write_message(&popped_message) {
-                    self.base_connection
-                        .unpop_outgoing_message(next_packet_index, popped_message);
+            loop {
+                if let Some(peeked_message) = self.base_connection.peek_outgoing_message() {
+                    if !writer.message_fits(peeked_message) {
+                        break;
+                    }
+                } else {
                     break;
                 }
+
+                let popped_message = self.base_connection.pop_outgoing_message(next_packet_index).unwrap();
+                writer.write_message(&popped_message);
             }
 
             // Write Entity actions
-            while let Some(popped_entity_action) = self
-                .entity_manager
-                .pop_outgoing_action::<W>(world_record, next_packet_index)
-            {
-                if !self.entity_manager.write_entity_action(
-                    world,
-                    &mut writer,
-                    &popped_entity_action,
-                ) {
-                    self.entity_manager
-                        .unpop_outgoing_action(next_packet_index, popped_entity_action);
+            loop {
+
+
+                if !self.entity_manager.peek_action_fits::<W>(world_record, &writer) {
                     break;
                 }
+
+                let popped_entity_action = self
+                    .entity_manager
+                    .pop_outgoing_action::<W>(world_record, next_packet_index).unwrap();
+                self.entity_manager.write_entity_action(world,
+                                                        &mut writer,
+                                                        &popped_entity_action);
             }
+
+            // while let Some(popped_entity_action) = self
+            //     .entity_manager
+            //     .pop_outgoing_action::<W>(world_record, next_packet_index)
+            // {
+            //     if !self.entity_manager.write_entity_action(
+            //         world,
+            //         &mut writer,
+            //         &popped_entity_action,
+            //     ) {
+            //         self.entity_manager
+            //             .unpop_outgoing_action(next_packet_index, popped_entity_action);
+            //         break;
+            //     }
+            // }
 
             if writer.has_bytes() {
                 // Get bytes from writer

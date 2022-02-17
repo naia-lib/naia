@@ -69,10 +69,4 @@ impl UserDiffHandler {
             receiver.clear_mask();
         }
     }
-
-    pub fn set_diff_mask(&mut self, component_key: &ComponentKey, other_mask: &DiffMask) {
-        if let Some(receiver) = self.receivers.get_mut(component_key) {
-            receiver.set_mask(other_mask);
-        }
-    }
 }

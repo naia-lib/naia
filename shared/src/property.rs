@@ -36,6 +36,11 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
         };
     }
 
+    /// Returns the number of bytes used to encode / decode the Property
+    pub fn size() -> usize {
+        std::mem::size_of::<T>() + 1
+    }
+
     /// Given a cursor into incoming packet data, updates the Property with the
     /// synced value
     pub fn read(&mut self, reader: &mut PacketReader) {

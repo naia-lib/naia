@@ -121,12 +121,6 @@ impl MutReceiver {
             mask.clear();
         }
     }
-
-    pub fn set_mask(&self, other_mask: &DiffMask) {
-        if let Ok(mut mask) = self.mask.as_ref().write() {
-            mask.copy_contents(other_mask);
-        }
-    }
 }
 
 // MutSender

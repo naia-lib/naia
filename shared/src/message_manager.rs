@@ -40,6 +40,16 @@ impl<P: Protocolize> MessageManager<P> {
     }
 
     /// Gets the next queued Message to be transmitted
+    pub fn peek_outgoing_message(&self) -> Option<&P> {
+        match self.queued_outgoing_messages.front() {
+            Some((_, message)) => {
+                Some(message)
+            }
+            None => None,
+        }
+    }
+
+    /// Gets the next queued Message to be transmitted
     pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<P> {
         match self.queued_outgoing_messages.pop_front() {
             Some((guaranteed, message)) => {

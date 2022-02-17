@@ -77,136 +77,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
-    pub fn has_outgoing_actions(&self) -> bool {
-        return self.queued_actions.len() != 0;
-    }
-
-    pub fn pop_outgoing_action<W: WorldRefType<P, E>>(
-        &mut self,
-        world_record: &WorldRecord<E, P::Kind>,
-        packet_index: u16,
-    ) -> Option<EntityAction<P, E>> {
-        let queued_action_opt = self.queued_actions.pop_front();
-        if queued_action_opt.is_none() {
-            return None;
-        }
-        let action = {
-            let queued_action = queued_action_opt.unwrap();
-            if let EntityAction::SpawnEntity(global_entity, _) = queued_action {
-                // get the most recent list of components in here ...
-                if !world_record.has_entity(&global_entity) {
-                    panic!("entity does not exist!")
-                }
-
-                let mut component_list = Vec::new();
-                let mut diff_mask_list: Vec<(ComponentKey, DiffMask)> = Vec::new();
-
-                let global_component_keys = world_record.component_keys(&global_entity);
-
-                for global_component_key in global_component_keys {
-                    let (_, component_kind) = world_record
-                        .component_record(&global_component_key)
-                        .expect("component not tracked by server?");
-
-                    component_list.push((global_component_key, component_kind));
-
-                    let diff_mask = self
-                        .diff_handler
-                        .diff_mask(&global_component_key)
-                        .expect("DiffHandler does not have registered Component..")
-                        .clone();
-
-                    diff_mask_list.push((global_component_key, diff_mask));
-
-                    self.diff_handler.clear_diff_mask(&global_component_key);
-                }
-
-                self.last_popped_diff_mask_list = Some(diff_mask_list);
-
-                EntityAction::SpawnEntity(global_entity, component_list)
-            } else {
-                queued_action
-            }
-        };
-
-        if !self.sent_actions.contains_key(&packet_index) {
-            self.sent_actions.insert(packet_index, Vec::new());
-        }
-
-        if let Some(sent_actions_list) = self.sent_actions.get_mut(&packet_index) {
-            sent_actions_list.push(action.clone());
-        }
-
-        //clear diff mask of component if need be
-        match action {
-            EntityAction::InsertComponent(_, global_component_key, _) => {
-                self.pop_insert_component_diff_mask(&global_component_key);
-            }
-            EntityAction::UpdateComponent(
-                global_entity,
-                global_component_key,
-                diff_mask,
-                component_kind,
-            ) => {
-                return Some(self.pop_update_component_diff_mask(
-                    packet_index,
-                    global_entity,
-                    &global_component_key,
-                    &diff_mask,
-                    component_kind,
-                ));
-            }
-            _ => {}
-        }
-
-        return Some(action);
-    }
-
-    pub fn unpop_outgoing_action(&mut self, packet_index: u16, action: EntityAction<P, E>) {
-        info!("unpopping");
-        if let Some(sent_actions_list) = self.sent_actions.get_mut(&packet_index) {
-            sent_actions_list.pop();
-            if sent_actions_list.len() == 0 {
-                self.sent_actions.remove(&packet_index);
-            }
-        }
-
-        match action {
-            EntityAction::SpawnEntity(_, _) => {
-                if let Some(last_popped_diff_mask_list) = &self.last_popped_diff_mask_list {
-                    for (global_component_key, last_popped_diff_mask) in last_popped_diff_mask_list
-                    {
-                        self.diff_handler
-                            .set_diff_mask(global_component_key, &last_popped_diff_mask);
-                    }
-                }
-                self.queued_actions.push_front(action);
-                return;
-            }
-            EntityAction::InsertComponent(_, global_component_key, _) => {
-                self.unpop_insert_component_diff_mask(&global_component_key);
-                self.queued_actions.push_front(action);
-                return;
-            }
-            EntityAction::UpdateComponent(
-                global_entity,
-                global_component_key,
-                _,
-                component_kind,
-            ) => {
-                let cloned_action = self.unpop_update_component_diff_mask(
-                    packet_index,
-                    global_entity,
-                    &global_component_key,
-                    component_kind,
-                );
-                self.queued_actions.push_front(cloned_action);
-                return;
-            }
-            _ => {}
-        }
-    }
-
     // Entities
 
     pub fn spawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, global_entity: &E) {
@@ -375,6 +245,209 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 ));
             }
         }
+    }
+
+    pub fn peek_action_fits<W: WorldRefType<P, E>>(
+        &self,
+        world_record: &WorldRecord<E, P::Kind>,
+        packet_writer: &PacketWriter,
+    ) -> bool {
+        let queued_action_opt = self.queued_actions.front();
+
+        if let Some(&EntityAction::SpawnEntity(global_entity, _)) = queued_action_opt {
+            // get the most recent list of components in here ...
+            if !world_record.has_entity(&global_entity) {
+                panic!("entity does not exist!")
+            }
+
+            let mut component_list = Vec::new();
+
+            let global_component_keys = world_record.component_keys(&global_entity);
+
+            for global_component_key in global_component_keys {
+                let (_, component_kind) = world_record
+                    .component_record(&global_component_key)
+                    .expect("component not tracked by server?");
+
+                component_list.push((global_component_key, component_kind));
+            }
+
+            self.entity_action_fits(packet_writer, &EntityAction::SpawnEntity(global_entity, component_list))
+        } else {
+            return if let Some(entity_action) = queued_action_opt {
+                self.entity_action_fits(packet_writer, entity_action)
+            } else {
+                false
+            }
+        }
+    }
+
+    fn entity_action_fits(
+        &self,
+        packet_writer: &PacketWriter,
+        action: &EntityAction<P, E>,
+    ) -> bool {
+        let mut action_total_bytes: usize = 0;
+
+        //Write EntityAction type
+        action_total_bytes += 1;
+
+        match action {
+            EntityAction::SpawnEntity(_, component_list) => {
+                //write local entity
+                action_total_bytes += 2;
+
+                //write number of components
+                action_total_bytes += 1;
+
+                for (_, component_kind) in component_list {
+                    //write component payload
+                    action_total_bytes += component_kind.size();
+
+                    //Write component "header"
+                    action_total_bytes += 2;
+                    action_total_bytes += 2;
+                }
+            }
+            EntityAction::DespawnEntity(_) => {
+                action_total_bytes += 2;
+            }
+            EntityAction::MessageEntity(_, message) => {
+                //write local entity
+                action_total_bytes += 2;
+
+                // write message's naia id
+                action_total_bytes += 2;
+
+                //Write message payload
+                action_total_bytes += message.dyn_ref().kind().size();
+            }
+            EntityAction::InsertComponent(_, _, component_kind) => {
+                //write component payload
+                action_total_bytes += component_kind.size();
+
+                //Write component "header"
+                action_total_bytes += 2;
+                action_total_bytes += 2;
+                action_total_bytes += 2;
+            }
+            EntityAction::UpdateComponent(
+                _,
+                _,
+                diff_mask,
+                component_kind,
+            ) => {
+                action_total_bytes += component_kind.size_partial(diff_mask);
+
+                //Write component "header"
+                //write local component key
+                action_total_bytes += 2;
+                // write diff mask
+                action_total_bytes += diff_mask.size();
+            }
+            EntityAction::RemoveComponent(_) => {
+                action_total_bytes += 2;
+            }
+        }
+
+        let mut hypothetical_next_payload_size =
+            packet_writer.bytes_number() + action_total_bytes;
+        if packet_writer.entity_action_count == 0 {
+            hypothetical_next_payload_size += 2;
+        }
+        if hypothetical_next_payload_size < MTU_SIZE {
+            if packet_writer.entity_action_count == 255 {
+                return false;
+            }
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    pub fn has_outgoing_actions(&self) -> bool {
+        return self.queued_actions.len() != 0;
+    }
+
+    pub fn pop_outgoing_action<W: WorldRefType<P, E>>(
+        &mut self,
+        world_record: &WorldRecord<E, P::Kind>,
+        packet_index: u16,
+    ) -> Option<EntityAction<P, E>> {
+        let queued_action_opt = self.queued_actions.pop_front();
+        if queued_action_opt.is_none() {
+            return None;
+        }
+        let action = {
+            let queued_action = queued_action_opt.unwrap();
+            if let EntityAction::SpawnEntity(global_entity, _) = queued_action {
+                // get the most recent list of components in here ...
+                if !world_record.has_entity(&global_entity) {
+                    panic!("entity does not exist!")
+                }
+
+                let mut component_list = Vec::new();
+                let mut diff_mask_list: Vec<(ComponentKey, DiffMask)> = Vec::new();
+
+                let global_component_keys = world_record.component_keys(&global_entity);
+
+                for global_component_key in global_component_keys {
+                    let (_, component_kind) = world_record
+                        .component_record(&global_component_key)
+                        .expect("component not tracked by server?");
+
+                    component_list.push((global_component_key, component_kind));
+
+                    let diff_mask = self
+                        .diff_handler
+                        .diff_mask(&global_component_key)
+                        .expect("DiffHandler does not have registered Component..")
+                        .clone();
+
+                    diff_mask_list.push((global_component_key, diff_mask));
+
+                    self.diff_handler.clear_diff_mask(&global_component_key);
+                }
+
+                self.last_popped_diff_mask_list = Some(diff_mask_list);
+
+                EntityAction::SpawnEntity(global_entity, component_list)
+            } else {
+                queued_action
+            }
+        };
+
+        if !self.sent_actions.contains_key(&packet_index) {
+            self.sent_actions.insert(packet_index, Vec::new());
+        }
+
+        if let Some(sent_actions_list) = self.sent_actions.get_mut(&packet_index) {
+            sent_actions_list.push(action.clone());
+        }
+
+        //clear diff mask of component if need be
+        match action {
+            EntityAction::InsertComponent(_, global_component_key, _) => {
+                self.pop_insert_component_diff_mask(&global_component_key);
+            }
+            EntityAction::UpdateComponent(
+                global_entity,
+                global_component_key,
+                diff_mask,
+                component_kind,
+            ) => {
+                return Some(self.pop_update_component_diff_mask(
+                    packet_index,
+                    global_entity,
+                    &global_component_key,
+                    &diff_mask,
+                    component_kind,
+                ));
+            }
+            _ => {}
+        }
+
+        return Some(action);
     }
 
     pub fn write_entity_action<W: WorldRefType<P, E>>(
@@ -612,13 +685,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         self.diff_handler.clear_diff_mask(global_component_key);
     }
 
-    fn unpop_insert_component_diff_mask(&mut self, global_component_key: &ComponentKey) {
-        if let Some(last_popped_diff_mask) = &self.last_popped_diff_mask {
-            self.diff_handler
-                .set_diff_mask(global_component_key, &last_popped_diff_mask);
-        }
-    }
-
     fn pop_update_component_diff_mask(
         &mut self,
         packet_index: u16,
@@ -634,23 +700,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             global_entity,
             *global_component_key,
             locked_diff_mask,
-            component_kind,
-        );
-    }
-
-    fn unpop_update_component_diff_mask(
-        &mut self,
-        packet_index: u16,
-        global_entity: E,
-        global_component_key: &ComponentKey,
-        component_kind: P::Kind,
-    ) -> EntityAction<P, E> {
-        let original_diff_mask = self.undo_component_update(&packet_index, &global_component_key);
-
-        return EntityAction::UpdateComponent(
-            global_entity,
-            *global_component_key,
-            original_diff_mask,
             component_kind,
         );
     }
@@ -683,30 +732,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         self.diff_handler.clear_diff_mask(global_component_key);
 
         locked_diff_mask
-    }
-
-    fn undo_component_update(
-        &mut self,
-        packet_index: &u16,
-        global_component_key: &ComponentKey,
-    ) -> DiffMask {
-        if let Some(sent_updates_map) = self.sent_updates.get_mut(packet_index) {
-            sent_updates_map.remove(global_component_key);
-            if sent_updates_map.len() == 0 {
-                self.sent_updates.remove(&packet_index);
-            }
-        }
-
-        self.last_update_packet_index = self.last_last_update_packet_index;
-        if let Some(last_popped_diff_mask) = &self.last_popped_diff_mask {
-            self.diff_handler
-                .set_diff_mask(global_component_key, &last_popped_diff_mask);
-        }
-
-        self.diff_handler
-            .diff_mask(global_component_key)
-            .expect("uh oh, we don't have enough info to unpop the action")
-            .clone()
     }
 
     pub fn process_delivered_packets(&mut self, world_record: &WorldRecord<E, P::Kind>) {

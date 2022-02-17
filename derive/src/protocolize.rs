@@ -66,6 +66,8 @@ pub fn kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
     let mut variant_definitions = quote! {};
     let mut variants_from_u16 = quote! {};
     let mut variants_to_type_id = quote! {};
+    let mut variants_size = quote! {};
+    let mut variants_size_partial = quote! {};
 
     let mut variant_index: u16 = 0;
 
@@ -108,6 +110,30 @@ pub fn kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
             variants_to_type_id = new_output_result;
         }
 
+        // Variants size() match branch
+        {
+            let new_output_right = quote! {
+                #enum_name::#variant_name => #variant_name::size(),
+            };
+            let new_output_result = quote! {
+                #variants_size
+                #new_output_right
+            };
+            variants_size = new_output_result;
+        }
+
+        // Variants size_partial() match branch
+        {
+            let new_output_right = quote! {
+                #enum_name::#variant_name => #variant_name::size_partial(diff_mask),
+            };
+            let new_output_result = quote! {
+                #variants_size_partial
+                #new_output_right
+            };
+            variants_size_partial = new_output_result;
+        }
+
         variant_index += 1;
     }
 
@@ -133,6 +159,18 @@ pub fn kind_enum(enum_name: &Ident, properties: &Vec<Ident>) -> TokenStream {
                 match self {
                     #variants_to_type_id
                     _ => TypeId::of::<()>()
+                }
+            }
+            fn size(&self) -> usize {
+                match self {
+                    #variants_size
+                    _ => 0
+                }
+            }
+            fn size_partial(&self, diff_mask: &DiffMask) -> usize {
+                match self {
+                    #variants_size_partial
+                    _ => 0
                 }
             }
         }
