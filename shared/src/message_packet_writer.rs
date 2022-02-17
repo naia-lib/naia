@@ -81,13 +81,7 @@ impl MessagePacketWriter {
         if self.message_count == 0 {
             hypothetical_next_payload_size += 2;
         }
-        if hypothetical_next_payload_size < MTU_SIZE {
-            if self.message_count == 255 {
-                return false;
-            }
-            return true;
-        } else {
-            return false;
-        }
+
+        hypothetical_next_payload_size < MTU_SIZE && self.message_count != 255
     }
 }

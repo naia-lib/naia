@@ -76,15 +76,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             }
 
             // Messages
-            while let Some(popped_message) =
-                self.base_connection.pop_outgoing_message(next_packet_index)
-            {
-                if !writer.write_message(&popped_message) {
-                    self.base_connection
-                        .unpop_outgoing_message(next_packet_index, popped_message);
-                    break;
-                }
-            }
+            self.base_connection.write_message_if_fits(writer.bytes_number(), writer.inner_mut(), next_packet_index);
 
             // Add header
             if writer.has_bytes() {
