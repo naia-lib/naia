@@ -1,5 +1,5 @@
-use std::{any::TypeId, hash::Hash};
 use crate::DiffMask;
+use std::{any::TypeId, hash::Hash};
 
 use super::{
     replica_ref::{ReplicaDynMut, ReplicaDynRef},

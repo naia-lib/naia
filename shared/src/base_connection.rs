@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_socket_shared::{PacketReader, Timer};
 
-use crate::{message_manager::MessageManager, MessagePacketWriter, wrapping_number::wrapping_diff};
+use crate::{message_manager::MessageManager, wrapping_number::wrapping_diff, MessagePacketWriter};
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
@@ -121,7 +121,12 @@ impl<P: Protocolize> BaseConnection<P> {
     }
 
     /// something
-    pub fn write_message_if_fits(&mut self, total_bytes: usize, writer: &mut MessagePacketWriter, next_packet_index: u16) {
+    pub fn write_messages(
+        &mut self,
+        total_bytes: usize,
+        writer: &mut MessagePacketWriter,
+        next_packet_index: u16,
+    ) {
         loop {
             if let Some(peeked_message) = self.peek_outgoing_message() {
                 if !writer.message_fits(total_bytes, peeked_message) {

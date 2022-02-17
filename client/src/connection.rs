@@ -76,7 +76,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             }
 
             // Messages
-            self.base_connection.write_message_if_fits(writer.bytes_number(), writer.inner_mut(), next_packet_index);
+            self.base_connection.write_messages(
+                writer.bytes_number(),
+                writer.inner_mut(),
+                next_packet_index,
+            );
 
             // Add header
             if writer.has_bytes() {

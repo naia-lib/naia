@@ -55,20 +55,27 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             let next_packet_index: PacketIndex = self.next_packet_index();
 
             // Write Messages
-            self.base_connection.write_message_if_fits(writer.bytes_number(), writer.inner_mut(), next_packet_index);
+            self.base_connection.write_messages(
+                writer.bytes_number(),
+                writer.inner_mut(),
+                next_packet_index,
+            );
 
             // Write Entity actions
             loop {
-                if !self.entity_manager.peek_action_fits::<W>(world_record, &writer) {
+                if !self
+                    .entity_manager
+                    .peek_action_fits::<W>(world_record, &writer)
+                {
                     break;
                 }
 
                 let popped_entity_action = self
                     .entity_manager
-                    .pop_outgoing_action::<W>(world_record, next_packet_index).unwrap();
-                self.entity_manager.write_entity_action(world,
-                                                        &mut writer,
-                                                        &popped_entity_action);
+                    .pop_outgoing_action::<W>(world_record, next_packet_index)
+                    .unwrap();
+                self.entity_manager
+                    .write_entity_action(world, &mut writer, &popped_entity_action);
             }
 
             if writer.has_bytes() {
