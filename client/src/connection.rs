@@ -2,7 +2,7 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_client_socket::Packet;
 
-use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType, wrapping_diff};
+use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType};
 
 use super::{
     entity_action::EntityAction,
@@ -20,7 +20,6 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     ping_manager: PingManager,
     entity_message_sender: EntityMessageSender<P, E>,
     jitter_buffer: TickQueue<Box<[u8]>>,
-    last_server_tick: u16,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
@@ -36,7 +35,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             ),
             entity_message_sender: EntityMessageSender::new(),
             jitter_buffer: TickQueue::new(),
-            last_server_tick: 0,
         };
     }
 

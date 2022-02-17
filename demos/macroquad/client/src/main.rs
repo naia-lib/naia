@@ -3,6 +3,7 @@ extern crate macroquad;
 
 use macroquad::prelude::*;
 
+mod command_history;
 mod app;
 use app::App;
 
