@@ -6,7 +6,7 @@ use std::{
 
 use naia_shared::{
     BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize,
-    ReplicateSafe, SequenceNumber, StandardHeader, WorldRefType,
+    ReplicateSafe, StandardHeader, WorldRefType,
 };
 
 use super::{
@@ -14,6 +14,8 @@ use super::{
     global_diff_handler::GlobalDiffHandler, keys::ComponentKey, packet_writer::PacketWriter,
     ping_manager::PingManager, user::user_key::UserKey, world_record::WorldRecord,
 };
+
+pub type PacketIndex = u16;
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     pub user_key: UserKey,
@@ -50,7 +52,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         {
             let mut writer = PacketWriter::new();
 
-            let next_packet_index: u16 = self.next_packet_index();
+            let next_packet_index: PacketIndex = self.next_packet_index();
 
             // Write Messages
             while let Some(popped_message) =
@@ -213,7 +215,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             .process_outgoing_header(host_tick, packet_type, payload);
     }
 
-    pub fn next_packet_index(&self) -> SequenceNumber {
+    pub fn next_packet_index(&self) -> PacketIndex {
         return self.base_connection.next_packet_index();
     }
 

@@ -1,20 +1,14 @@
-use std::time::Duration;
+use std::{collections::VecDeque, time::Duration};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use naia_shared::{Instant, PacketReader, SequenceBuffer, SequenceNumber, Timer};
+use naia_shared::{Instant, PacketReader, sequence_greater_than, Timer};
 
 use naia_client_socket::Packet;
 
-#[derive(Clone)]
-struct SentPing {
-    time_sent: Instant,
-}
-
 pub struct PingManager {
     ping_timer: Timer,
-    sent_pings: SequenceBuffer<SentPing>,
-    ping_index: SequenceNumber,
+    sent_pings: SentPings,
     rtt_average: f32,
     rtt_deviation: f32,
     rtt_smoothing_factor: f32,
@@ -32,9 +26,8 @@ impl PingManager {
         let jitter_average = jitter_initial_estimate.as_secs_f32() * 1000.0;
 
         PingManager {
-            ping_index: 0,
             ping_timer: Timer::new(ping_interval),
-            sent_pings: SequenceBuffer::with_capacity(100),
+            sent_pings: SentPings::new(),
             rtt_average,
             rtt_deviation: jitter_average,
             rtt_smoothing_factor,
@@ -51,18 +44,10 @@ impl PingManager {
     pub fn ping_packet(&mut self) -> Packet {
         self.ping_timer.reset();
 
-        self.sent_pings.insert(
-            self.ping_index,
-            SentPing {
-                time_sent: Instant::now(),
-            },
-        );
+        let ping_index = self.sent_pings.push_new();
 
         let mut out_bytes = Vec::<u8>::new();
-        out_bytes.write_u16::<BigEndian>(self.ping_index).unwrap(); // write index
-
-        // increment ping index
-        self.ping_index = self.ping_index.wrapping_add(1);
+        out_bytes.write_u16::<BigEndian>(ping_index).unwrap(); // write index
 
         Packet::new(out_bytes)
     }
@@ -74,8 +59,8 @@ impl PingManager {
 
         match self.sent_pings.remove(ping_index) {
             None => {}
-            Some(ping) => {
-                let rtt_millis = &ping.time_sent.elapsed().as_secs_f32() * 1000.0;
+            Some(ping_instant) => {
+                let rtt_millis = &ping_instant.elapsed().as_secs_f32() * 1000.0;
                 self.process_new_rtt(rtt_millis);
             }
         }
@@ -99,5 +84,73 @@ impl PingManager {
     /// host, in milliseconds
     pub fn jitter(&self) -> f32 {
         return self.rtt_deviation / 2.0;
+    }
+}
+
+type PingIndex = u16;
+const SENT_PINGS_HISTORY_SIZE: u16 = 32;
+
+struct SentPings {
+    ping_index: PingIndex,
+    // front big, back small
+    // front recent, back past
+    buffer: VecDeque<(PingIndex, Instant)>,
+}
+
+impl SentPings {
+    pub fn new() -> Self {
+        SentPings {
+            ping_index: 0,
+            buffer: VecDeque::new()
+        }
+    }
+
+    pub fn push_new(&mut self) -> PingIndex {
+
+        // save current ping index and add a new ping instant associated with it
+        let ping_index = self.ping_index;
+        self.ping_index = self.ping_index.wrapping_add(1);
+        self.buffer.push_front((ping_index, Instant::now()));
+
+        // a good time to prune down the size of this buffer
+        while self.buffer.len() > SENT_PINGS_HISTORY_SIZE.into() {
+            self.buffer.pop_back();
+            //info!("pruning sent_pings buffer cause it got too big");
+        }
+
+        ping_index
+    }
+
+    pub fn remove(&mut self, ping_index: PingIndex) -> Option<Instant> {
+        let mut vec_index = self.buffer.len();
+        let mut found = false;
+
+        loop {
+            vec_index -= 1;
+
+            if let Some((old_index, _)) = self.buffer.get(vec_index) {
+                if *old_index == ping_index {
+                    //found it!
+                    found = true;
+                } else {
+                    // if old_index is bigger than ping_index, give up, it's only getting
+                    // bigger
+                    if sequence_greater_than(*old_index, ping_index) {
+                        return None;
+                    }
+                }
+            }
+
+            if found {
+                let (_, ping_instant) = self.buffer.remove(vec_index).unwrap();
+                //info!("found and removed ping: {}", index);
+                return Some(ping_instant);
+            }
+
+            // made it to the front
+            if vec_index == 0 {
+                return None;
+            }
+        }
     }
 }
