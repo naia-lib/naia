@@ -1,6 +1,6 @@
 use byteorder::WriteBytesExt;
 
-use naia_shared::{ManagerType, MessagePacketWriter, Protocolize};
+use naia_shared::{ManagerType, MessagePacketWriter};
 
 /// Handles writing of Message/Component data into an outgoing packet
 pub struct PacketWriter {
@@ -53,18 +53,8 @@ impl PacketWriter {
         return self.message_writer.bytes_number() + self.entity_working_bytes.len();
     }
 
-    /// Writes an Message into the Writer's internal buffer, which will
-    /// eventually be put into the outgoing packet
-    pub fn write_message<P: Protocolize>(&mut self, message: &P) {
-        return self
-            .message_writer
-            .write_message(message);
-    }
-
-    /// Returns whether or not the given message will fit in the outgoing buffer
-    pub fn message_fits<P: Protocolize>(&mut self, message: &P) -> bool {
-        return self
-            .message_writer
-            .message_fits(self.bytes_number(), message);
+    /// Get a mutable reference to the inner message writer
+    pub fn inner_mut(&mut self) -> &mut MessagePacketWriter {
+        return &mut self.message_writer;
     }
 }

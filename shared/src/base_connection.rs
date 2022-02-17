@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_socket_shared::{PacketReader, Timer};
 
-use crate::{message_manager::MessageManager, wrapping_number::wrapping_diff};
+use crate::{message_manager::MessageManager, MessagePacketWriter, wrapping_number::wrapping_diff};
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
@@ -120,27 +120,25 @@ impl<P: Protocolize> BaseConnection<P> {
             .queue_outgoing_message(message, guaranteed_delivery);
     }
 
+    /// something
+    pub fn write_message_if_fits(&mut self, total_bytes: usize, writer: &mut MessagePacketWriter, next_packet_index: u16) {
+        loop {
+            if let Some(peeked_message) = self.peek_outgoing_message() {
+                if !writer.message_fits(total_bytes, peeked_message) {
+                    break;
+                }
+            } else {
+                break;
+            }
+
+            let popped_message = self.pop_outgoing_message(next_packet_index).unwrap();
+            writer.write_message(&popped_message);
+        }
+    }
+
     /// Returns whether there are messages to be sent to the remote host
     pub fn has_outgoing_messages(&self) -> bool {
         return self.message_manager.has_outgoing_messages();
-    }
-
-    /// Peek at the next outgoing message from the queue
-    pub fn peek_outgoing_message(&self) -> Option<&P> {
-        return self.message_manager.peek_outgoing_message();
-    }
-
-    /// Pop the next outgoing message from the queue
-    pub fn pop_outgoing_message(&mut self, next_packet_index: u16) -> Option<P> {
-        return self.message_manager.pop_outgoing_message(next_packet_index);
-    }
-
-    /// If for some reason the next outgoing message could not be written into a
-    /// message and sent, place it back into the front of the queue
-    pub fn unpop_outgoing_message(&mut self, next_packet_index: u16, message: P) {
-        return self
-            .message_manager
-            .unpop_outgoing_message(next_packet_index, message);
     }
 
     /// Given an incoming packet which has been identified as an message, send
@@ -162,5 +160,17 @@ impl<P: Protocolize> BaseConnection<P> {
     /// Get the latest received tick from the remote host
     pub fn last_received_tick(&self) -> u16 {
         return self.last_received_tick;
+    }
+
+    // private methods
+
+    /// Peek at the next outgoing message from the queue
+    fn peek_outgoing_message(&self) -> Option<&P> {
+        return self.message_manager.peek_outgoing_message();
+    }
+
+    /// Pop the next outgoing message from the queue
+    fn pop_outgoing_message(&mut self, next_packet_index: u16) -> Option<P> {
+        return self.message_manager.pop_outgoing_message(next_packet_index);
     }
 }
