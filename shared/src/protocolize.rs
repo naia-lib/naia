@@ -1,4 +1,5 @@
 use std::{any::TypeId, hash::Hash};
+use crate::DiffMask;
 
 use super::{
     replica_ref::{ReplicaDynMut, ReplicaDynRef},
@@ -37,6 +38,8 @@ pub trait ProtocolKindType: Eq + Hash + Copy + Send + Sync {
     fn to_u16(&self) -> u16;
     fn from_u16(val: u16) -> Self;
     fn to_type_id(&self) -> TypeId;
+    fn size(&self) -> usize;
+    fn size_partial(&self, diff_mask: &DiffMask) -> usize;
 }
 
 pub trait ProtocolInserter<P: Protocolize, N> {

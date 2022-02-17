@@ -125,6 +125,11 @@ impl<P: Protocolize> BaseConnection<P> {
         return self.message_manager.has_outgoing_messages();
     }
 
+    /// Peek at the next outgoing message from the queue
+    pub fn peek_outgoing_message(&self) -> Option<&P> {
+        return self.message_manager.peek_outgoing_message();
+    }
+
     /// Pop the next outgoing message from the queue
     pub fn pop_outgoing_message(&mut self, next_packet_index: u16) -> Option<P> {
         return self.message_manager.pop_outgoing_message(next_packet_index);
