@@ -3,7 +3,9 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{PacketNotifiable, Protocolize, ReplicateSafe, SequenceBuffer};
+use naia_shared::{PacketNotifiable, Protocolize, ReplicateSafe, sequence_greater_than, sequence_less_than, SequenceBuffer};
+
+use miniquad::info;
 
 const MESSAGE_HISTORY_SIZE: u16 = 64;
 
@@ -15,14 +17,14 @@ pub struct EntityMessageSender<P: Protocolize, E: Copy + Eq + Hash> {
     // This SequenceBuffer is indexed by Tick
     outgoing_messages: SequenceBuffer<MessageMap<P, E>>,
     // This SequenceBuffer is indexed by PacketIndex
-    sent_messages: SequenceBuffer<Vec<(Tick, MsgId)>>,
+    sent_messages: SentMessages,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
     pub fn new() -> Self {
         EntityMessageSender {
             outgoing_messages: SequenceBuffer::with_capacity(MESSAGE_HISTORY_SIZE),
-            sent_messages: SequenceBuffer::with_capacity(MESSAGE_HISTORY_SIZE),
+            sent_messages: SentMessages::new(),
         }
     }
 
@@ -70,12 +72,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
     }
 
     pub fn message_written(&mut self, packet_index: PacketIndex, tick: Tick, message_id: MsgId) {
-        if !self.sent_messages.exists(packet_index) {
-            self.sent_messages.insert(packet_index, Vec::new());
-        }
-        if let Some(list) = self.sent_messages.get_mut(packet_index) {
-            list.push((tick, message_id));
-        }
+        self.sent_messages.push_front(packet_index, tick, message_id);
     }
 }
 
@@ -124,5 +121,79 @@ impl<P: Protocolize, E: Copy + Eq + Hash> MessageMap<P, E> {
 
     pub fn remove(&mut self, message_id: &MsgId) {
         self.map.remove(message_id);
+    }
+}
+
+// SentMessages
+struct SentMessages {
+    // front big, back small
+    // front recent, back past
+    buffer: VecDeque<(PacketIndex, Vec<(Tick, MsgId)>)>
+}
+
+impl SentMessages {
+    pub fn new() -> Self {
+        SentMessages {
+            buffer: VecDeque::new()
+        }
+    }
+
+    pub fn push_front(&mut self, packet_index: PacketIndex, tick: Tick, msg_id: MsgId) {
+        if let Some((old_packet_index, msg_list)) = self.buffer.front_mut() {
+
+            if packet_index == *old_packet_index {
+                // been here before, cool
+                msg_list.push((tick, msg_id));
+                return;
+            }
+
+            if sequence_less_than(packet_index, *old_packet_index) {
+                panic!("this method should always receive increasing or equal packet indexes!")
+            }
+        } else {
+            // nothing is in here
+        }
+
+        let mut msg_list = Vec::new();
+        msg_list.push((tick, msg_id));
+        self.buffer.push_front((packet_index, msg_list));
+
+        // a good time to prune down this list
+        while self.buffer.len() > MESSAGE_HISTORY_SIZE.into() {
+            self.buffer.pop_back();
+            info!("pruning sent_messages buffer cause it got too big");
+        }
+    }
+
+    pub fn remove(&mut self, packet_index: PacketIndex) -> Option<Vec<(Tick, MsgId)>> {
+
+        let mut vec_index = self.buffer.len();
+        let mut found = false;
+
+        loop {
+            vec_index -= 1;
+
+            if let Some((old_packet_index, _)) = self.buffer.get(vec_index) {
+                if *old_packet_index == packet_index {
+                    // found it!
+                    found = true;
+                } else {
+                    // if old_packet_index is bigger than packet_index, give up, it's only getting bigger
+                    if sequence_greater_than(*old_packet_index, packet_index) {
+                        return None;
+                    }
+                }
+            }
+
+            if found {
+                let (_, msg_list) = self.buffer.remove(vec_index).unwrap();
+                info!("found and removed packet: {}", packet_index);
+                return Some(msg_list);
+            }
+
+            if vec_index == 0 {
+                return None;
+            }
+        }
     }
 }
