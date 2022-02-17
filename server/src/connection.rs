@@ -21,7 +21,6 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     entity_manager: EntityManager<P, E>,
     ping_manager: PingManager,
     entity_message_receiver: EntityMessageReceiver<P>,
-    last_popped_entity_message_tick: u16,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
@@ -37,7 +36,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             entity_manager: EntityManager::new(user_address, diff_handler),
             ping_manager: PingManager::new(),
             entity_message_receiver: EntityMessageReceiver::new(),
-            last_popped_entity_message_tick: 0,
         }
     }
 
@@ -107,7 +105,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             match manager_type {
                 ManagerType::EntityMessage => {
                     self.entity_message_receiver.process_incoming_messages(
-                        server_tick.map(|_| self.last_popped_entity_message_tick),
+                        server_tick,
                         &mut reader,
                         manifest,
                     );
@@ -128,8 +126,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     }
 
     pub fn pop_incoming_entity_message(&mut self, server_tick: u16) -> Option<(E, P)> {
-
-        self.last_popped_entity_message_tick = server_tick;
 
         if let Some((local_entity, message)) = self
             .entity_message_receiver
