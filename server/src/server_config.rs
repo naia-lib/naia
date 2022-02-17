@@ -1,6 +1,6 @@
 use std::{default::Default, time::Duration};
 
-use naia_shared::{SocketConfig, ConnectionConfig};
+use naia_shared::{ConnectionConfig, SocketConfig};
 
 /// Contains Config properties which will be used by the Server
 #[derive(Clone)]

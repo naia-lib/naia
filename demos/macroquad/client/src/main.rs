@@ -3,8 +3,8 @@ extern crate macroquad;
 
 use macroquad::prelude::*;
 
-mod command_history;
 mod app;
+mod command_history;
 use app::App;
 
 #[macroquad::main("NaiaMacroquadDemo")]

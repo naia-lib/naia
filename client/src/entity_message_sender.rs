@@ -3,7 +3,9 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{PacketNotifiable, Protocolize, ReplicateSafe, sequence_greater_than, sequence_less_than};
+use naia_shared::{
+    sequence_greater_than, sequence_less_than, PacketNotifiable, Protocolize, ReplicateSafe,
+};
 
 //use miniquad::info;
 
@@ -36,14 +38,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
     ) {
         let message_protocol = message.protocol_copy();
 
-        self.outgoing_messages.push(client_tick, entity, message_protocol);
+        self.outgoing_messages
+            .push(client_tick, entity, message_protocol);
     }
 
     pub fn messages(&mut self, server_receivable_tick: Tick) -> VecDeque<(MsgId, Tick, E, P)> {
         let mut outgoing_list = VecDeque::new();
 
         // Remove messages that would never be able to reach the Server
-        self.outgoing_messages.pop_back_until_excluding(server_receivable_tick);
+        self.outgoing_messages
+            .pop_back_until_excluding(server_receivable_tick);
 
         // Loop through outstanding messages and add them to the outgoing list
         let mut iter = self.outgoing_messages.iter();
@@ -51,15 +55,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
             msg_map.append_messages(&mut outgoing_list, *tick);
         }
 
-        if outgoing_list.len() > 0 {
-            info!("appending {} messages", outgoing_list.len());
-        }
+        // if outgoing_list.len() > 0 {
+        //     info!("appending {} messages", outgoing_list.len());
+        // }
 
         return outgoing_list;
     }
 
     pub fn message_written(&mut self, packet_index: PacketIndex, tick: Tick, message_id: MsgId) {
-        self.sent_messages.push_front(packet_index, tick, message_id);
+        self.sent_messages
+            .push_front(packet_index, tick, message_id);
     }
 }
 
@@ -79,19 +84,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash> PacketNotifiable for EntityMessageSend
 struct SentMessages {
     // front big, back small
     // front recent, back past
-    buffer: VecDeque<(PacketIndex, Vec<(Tick, MsgId)>)>
+    buffer: VecDeque<(PacketIndex, Vec<(Tick, MsgId)>)>,
 }
 
 impl SentMessages {
     pub fn new() -> Self {
         SentMessages {
-            buffer: VecDeque::new()
+            buffer: VecDeque::new(),
         }
     }
 
     pub fn push_front(&mut self, packet_index: PacketIndex, tick: Tick, msg_id: MsgId) {
         if let Some((old_packet_index, msg_list)) = self.buffer.front_mut() {
-
             if packet_index == *old_packet_index {
                 // been here before, cool
                 msg_list.push((tick, msg_id));
@@ -117,7 +121,6 @@ impl SentMessages {
     }
 
     pub fn remove(&mut self, packet_index: PacketIndex) -> Option<Vec<(Tick, MsgId)>> {
-
         let mut vec_index = self.buffer.len();
 
         // empty condition
@@ -135,7 +138,8 @@ impl SentMessages {
                     // found it!
                     found = true;
                 } else {
-                    // if old_packet_index is bigger than packet_index, give up, it's only getting bigger
+                    // if old_packet_index is bigger than packet_index, give up, it's only getting
+                    // bigger
                     if sequence_greater_than(*old_packet_index, packet_index) {
                         return None;
                     }
@@ -192,7 +196,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> MessageMap<P, E> {
 struct OutgoingMessages<P: Protocolize, E: Copy + Eq + Hash> {
     // front big, back small
     // front recent, back past
-    buffer: VecDeque<(Tick, MessageMap<P, E>)>
+    buffer: VecDeque<(Tick, MessageMap<P, E>)>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> OutgoingMessages<P, E> {
@@ -205,7 +209,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> OutgoingMessages<P, E> {
     // should only push increasing ticks of messages
     pub fn push(&mut self, client_tick: Tick, entity: &E, message_protocol: P) {
         if let Some((front_tick, msg_map)) = self.buffer.front_mut() {
-
             if client_tick == *front_tick {
                 // been here before, cool
                 msg_map.insert(*entity, message_protocol);
@@ -263,9 +266,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> OutgoingMessages<P, E> {
                 if *old_tick == tick {
                     // found it!
                     msg_map.remove(&msg_id);
-                    //info!("removed delivered message! tick: {}, msg_id: {}", tick, msg_id);
+                    //info!("removed delivered message! tick: {}, msg_id: {}",
+                    // tick, msg_id);
                 } else {
-                    // if tick is less than old tick, no sense continuing, only going to get bigger as we go
+                    // if tick is less than old tick, no sense continuing, only going to get bigger
+                    // as we go
                     if sequence_greater_than(*old_tick, tick) {
                         return;
                     }

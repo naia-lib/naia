@@ -3,8 +3,8 @@ use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAdd
 use naia_client_socket::{Packet, Socket};
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
-    Protocolize, ReplicateSafe, SharedConfig, SocketConfig, StandardHeader,
-    Timer, Timestamp, WorldMutType, WorldRefType,
+    Protocolize, ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Timer, Timestamp,
+    WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -390,10 +390,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
                             match header.packet_type() {
                                 PacketType::Data => {
-                                    server_connection.buffer_data_packet(
-                                        header.host_tick(),
-                                        &payload,
-                                    );
+                                    server_connection
+                                        .buffer_data_packet(header.host_tick(), &payload);
                                 }
                                 PacketType::Heartbeat => {}
                                 PacketType::Pong => {
@@ -402,8 +400,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                                 _ => {} // TODO: explicitly cover these cases
                             }
                         } else {
-                            self.handshake_manager
-                                .receive_packet(packet);
+                            self.handshake_manager.receive_packet(packet);
                             if self.handshake_manager.is_connected() {
                                 let server_connection = Connection::new(
                                     self.server_address_unwrapped(),

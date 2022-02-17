@@ -5,7 +5,7 @@ use naia_client::shared::{sequence_greater_than, sequence_less_than};
 type Index = u16;
 
 pub struct CommandHistory<T> {
-    buffer: VecDeque<(Index, T)>
+    buffer: VecDeque<(Index, T)>,
 }
 
 impl<T> CommandHistory<T> {
@@ -39,7 +39,9 @@ impl<T> CommandHistory<T> {
         loop {
             let back_index = match self.buffer.back() {
                 Some((index, _)) => *index,
-                None => { return; }
+                None => {
+                    return;
+                }
             };
             if sequence_greater_than(back_index, index) {
                 return;

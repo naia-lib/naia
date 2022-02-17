@@ -10,8 +10,9 @@ use naia_client::{
 use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
 
 use naia_macroquad_demo_shared::{
-    behavior as shared_behavior, shared_config,
+    behavior as shared_behavior,
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
+    shared_config,
 };
 
 use crate::command_history::CommandHistory;
@@ -132,7 +133,8 @@ impl App {
                         if let Some(command) = self.queued_command.take() {
                             if let Some(client_tick) = self.client.client_tick() {
                                 // Record command
-                                self.command_history.push_front(client_tick, command.clone());
+                                self.command_history
+                                    .push_front(client_tick, command.clone());
 
                                 // Send command
                                 self.client
@@ -221,13 +223,14 @@ impl App {
                             }
 
                             // Remove history of commands until current received tick
-                            self.command_history.remove_to_and_including(server_tick.u16());
+                            self.command_history
+                                .remove_to_and_including(server_tick.u16());
 
                             // Replay all existing historical commands until current tick
                             let mut command_iter = self.command_history.iter_mut();
                             while let Some((_, command)) = command_iter.next() {
                                 if let Some(mut square_ref) =
-                                world_mut.component_mut::<Square>(&client_entity)
+                                    world_mut.component_mut::<Square>(&client_entity)
                                 {
                                     shared_behavior::process_command(&command, &mut square_ref);
                                 }

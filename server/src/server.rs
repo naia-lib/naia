@@ -182,11 +182,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // tick event
         if let Some(tick_manager) = &mut self.tick_manager {
             if tick_manager.should_tick() {
-
                 if let Some(server_tick) = self.server_tick() {
                     for (_, connection) in self.user_connections.iter_mut() {
                         //receive entity messages from anyone
-                        while let Some((entity, message)) = connection.pop_incoming_entity_message(server_tick)
+                        while let Some((entity, message)) =
+                            connection.pop_incoming_entity_message(server_tick)
                         {
                             events.push_back(Ok(Event::MessageEntity(
                                 connection.user_key,
@@ -780,13 +780,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     let (header, payload) = StandardHeader::read(packet.payload());
 
                     match header.packet_type() {
-                        PacketType::ClientChallengeRequest => {
-                            self.handshake_manager.receive_challenge_request(
-                                &mut self.io,
-                                &address,
-                                &payload,
-                            )
-                        }
+                        PacketType::ClientChallengeRequest => self
+                            .handshake_manager
+                            .receive_challenge_request(&mut self.io, &address, &payload),
                         PacketType::ClientConnectRequest => {
                             if let Some(mut connection) = self.user_connections.get_mut(&address) {
                                 self.handshake_manager.receive_old_connect_request(

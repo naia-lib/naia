@@ -2,7 +2,10 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_client_socket::Packet;
 
-use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize, ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType};
+use naia_shared::{
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize,
+    ReplicateSafe, SequenceNumber, StandardHeader, WorldMutType,
+};
 
 use super::{
     entity_action::EntityAction,
@@ -120,26 +123,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                         .process_message_data(&mut reader, manifest);
                 }
                 ManagerType::Entity => {
-                    self.entity_manager.process_data(
-                        world,
-                        manifest,
-                        server_tick,
-                        &mut reader,
-                    );
+                    self.entity_manager
+                        .process_data(world, manifest, server_tick, &mut reader);
                 }
                 _ => {}
             }
         }
     }
 
-    pub fn buffer_data_packet(
-        &mut self,
-        incoming_tick: u16,
-        incoming_payload: &Box<[u8]>,
-    ) {
-        self.jitter_buffer.add_item(
-            incoming_tick, incoming_payload.clone(),
-        );
+    pub fn buffer_data_packet(&mut self, incoming_tick: u16, incoming_payload: &Box<[u8]>) {
+        self.jitter_buffer
+            .add_item(incoming_tick, incoming_payload.clone());
     }
 
     // Pass-through methods to underlying Entity Manager
@@ -182,9 +176,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     ) {
         // let mut restrictive_tick = receiving_tick;
 
-        while let Some((server_tick, data_packet)) =
-        self.buffered_data_packet(receiving_tick)
-        {
+        while let Some((server_tick, data_packet)) = self.buffered_data_packet(receiving_tick) {
             // let ticks_since_last = wrapping_diff(self.last_server_tick, server_tick);
             //
             // if ticks_since_last > 0 {

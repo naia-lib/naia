@@ -12,10 +12,7 @@ fn main() {
 
     // Plugins
     app.add_plugins(DefaultPlugins)
-        .add_plugin(ClientPlugin::new(
-            ClientConfig::default(),
-            shared_config(),
-        ));
+        .add_plugin(ClientPlugin::new(ClientConfig::default(), shared_config()));
 
     app
     // Startup System

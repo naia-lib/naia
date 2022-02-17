@@ -2,8 +2,6 @@ use std::time::Duration;
 
 use naia_shared::{wrapping_diff, Instant};
 
-use miniquad::info;
-
 /// Manages the current tick for the host
 pub struct TickManager {
     tick_interval_millis: f32,
@@ -60,9 +58,9 @@ impl TickManager {
         let tick_interval_seconds = self.tick_interval_seconds * self.tick_speed_factor;
 
         let frame_seconds = self.last_tick_instant.elapsed().as_nanos() as f32 / 1000000000.0;
-        if frame_seconds > tick_interval_seconds {
-            info!("big frame delta: {} ms", frame_seconds*1000.0);
-        }
+        // if frame_seconds > tick_interval_seconds {
+        //     info!("big frame delta: {} ms", frame_seconds*1000.0);
+        // }
         self.accumulator += frame_seconds.min(0.25);
         self.last_tick_instant = Instant::now();
 
@@ -97,7 +95,6 @@ impl TickManager {
         let tick_offset = wrapping_diff(self.internal_tick, server_tick);
 
         if self.ticks_recorded <= 1 {
-
             if self.ticks_recorded == 1 {
                 self.tick_offset_avg = tick_offset as f32;
             }
@@ -106,7 +103,8 @@ impl TickManager {
         } else {
             self.tick_offset_avg = (0.9 * self.tick_offset_avg) + (0.1 * (tick_offset as f32));
             let tick_offset_speed = (tick_offset - self.last_tick_offset) as f32;
-            self.tick_offset_speed_avg = (0.9 * self.tick_offset_speed_avg) + (0.1 * tick_offset_speed);
+            self.tick_offset_speed_avg =
+                (0.9 * self.tick_offset_speed_avg) + (0.1 * tick_offset_speed);
         }
 
         self.last_tick_offset = tick_offset;
@@ -135,11 +133,13 @@ impl TickManager {
         // By using rtt_average here, we are correcting for our late (and
         // lesser) self.server_tick value
         let client_sending_adjust_millis = self.minimum_latency.max(rtt_average + jitter_limit);
-        self.client_sending_tick_adjust = (client_sending_adjust_millis / self.tick_interval_millis) + 1.0;
+        self.client_sending_tick_adjust =
+            (client_sending_adjust_millis / self.tick_interval_millis) + 1.0;
 
         // Calculate estimate of earliest tick Server could receive now
         let server_receivable_adjust_millis = rtt_average - jitter_limit;
-        self.server_receivable_tick_adjust = (server_receivable_adjust_millis / self.tick_interval_millis) + 1.0;
+        self.server_receivable_tick_adjust =
+            (server_receivable_adjust_millis / self.tick_interval_millis) + 1.0;
     }
 
     /// Gets the tick at which the Client is sending updates

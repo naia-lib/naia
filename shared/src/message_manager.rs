@@ -105,11 +105,7 @@ impl<P: Protocolize> MessageManager<P> {
 
     /// Given incoming packet data, read transmitted Messages and store them to
     /// be returned to the application
-    pub fn process_data(
-        &mut self,
-        reader: &mut PacketReader,
-        manifest: &Manifest<P>,
-    ) {
+    pub fn process_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>) {
         let message_count = reader.read_u8();
         for _x in 0..message_count {
             let component_kind: P::Kind = P::Kind::from_u16(reader.read_u16());

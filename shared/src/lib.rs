@@ -1,11 +1,7 @@
 //! # Naia Shared
 //! Common functionality shared between naia-server & naia-client crates.
 
-#![deny(
-    trivial_numeric_casts,
-    unstable_features,
-    unused_import_braces
-)]
+#![deny(trivial_numeric_casts, unstable_features, unused_import_braces)]
 
 #[macro_use]
 extern crate cfg_if;
