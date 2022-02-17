@@ -74,22 +74,6 @@ impl<P: Protocolize> MessageManager<P> {
         }
     }
 
-    /// If  the last popped Message from the queue somehow wasn't able to be
-    /// written into a packet, put the Message back into the front of the queue
-    pub fn unpop_outgoing_message(&mut self, packet_index: u16, message: P) {
-        if self.last_popped_message_guarantee {
-            if let Some(sent_messages_list) = self.sent_guaranteed_messages.get_mut(&packet_index) {
-                sent_messages_list.pop();
-                if sent_messages_list.len() == 0 {
-                    self.sent_guaranteed_messages.remove(&packet_index);
-                }
-            }
-        }
-
-        self.queued_outgoing_messages
-            .push_front((self.last_popped_message_guarantee, message));
-    }
-
     /// Queues an Message to be transmitted to the remote host
     pub fn queue_outgoing_message<R: ReplicateSafe<P>>(
         &mut self,

@@ -54,25 +54,24 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             let next_packet_index: PacketIndex = self.next_packet_index();
 
             // Entity Messages
-            while let Some((message_id, client_tick, entity, message)) = entity_messages.pop_front()
-            {
-                if writer.write_entity_message(
-                    &self.entity_manager,
-                    &entity,
-                    &message,
-                    &client_tick,
-                ) {
-                    // success!
-                    self.entity_message_sender.message_written(
-                        next_packet_index,
-                        client_tick,
-                        message_id,
-                    );
+
+            loop {
+                if let Some((_, _, entity, message)) = entity_messages.front() {
+                    if !writer.entity_message_fits(&self.entity_manager, &entity, &message) {
+                        break;
+                    }
                 } else {
-                    // not enough space to write into packet
-                    entity_messages.push_front((message_id, client_tick, entity, message));
                     break;
                 }
+
+                let (message_id, client_tick, entity, message) =
+                    entity_messages.pop_front().unwrap();
+                writer.write_entity_message(&self.entity_manager, &entity, &message, &client_tick);
+                self.entity_message_sender.message_written(
+                    next_packet_index,
+                    client_tick,
+                    message_id,
+                );
             }
 
             // Messages

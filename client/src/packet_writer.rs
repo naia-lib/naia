@@ -50,15 +50,30 @@ impl PacketWriter {
 
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
+    pub fn entity_message_fits<P: Protocolize, E: Copy + Eq + Hash>(
+        &self,
+        entity_manager: &EntityManager<P, E>,
+        world_entity: &E,
+        message: &P,
+    ) -> bool {
+        return self.entity_message_writer.entity_message_fits(
+            self.bytes_number(),
+            entity_manager,
+            world_entity,
+            message,
+        );
+    }
+
+    /// Writes a Command into the Writer's internal buffer, which will
+    /// eventually be put into the outgoing packet
     pub fn write_entity_message<P: Protocolize, E: Copy + Eq + Hash>(
         &mut self,
         entity_manager: &EntityManager<P, E>,
         world_entity: &E,
         message: &P,
         client_tick: &u16,
-    ) -> bool {
+    ) {
         return self.entity_message_writer.write_entity_message(
-            self.bytes_number(),
             entity_manager,
             world_entity,
             message,

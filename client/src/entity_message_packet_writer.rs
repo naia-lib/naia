@@ -43,16 +43,47 @@ impl EntityMessagePacketWriter {
         return self.message_working_bytes.len();
     }
 
-    /// Writes a Command into the Writer's internal buffer, which will
-    /// eventually be put into the outgoing packet
-    pub fn write_entity_message<P: Protocolize, E: Copy + Eq + Hash>(
-        &mut self,
+    /// Check if Command can fit into outgoing buffer
+    pub fn entity_message_fits<P: Protocolize, E: Copy + Eq + Hash>(
+        &self,
         total_bytes: usize,
         entity_manager: &EntityManager<P, E>,
         world_entity: &E,
         message: &P,
-        client_tick: &u16,
     ) -> bool {
+        if let Some(_) = entity_manager.world_to_local_entity(&world_entity) {
+            let mut message_total_bytes: usize = 0;
+
+            // write client tick
+            message_total_bytes += 2;
+
+            // write local entity
+            message_total_bytes += 2;
+
+            // write message kind
+            message_total_bytes += 2;
+
+            // write payload
+            message_total_bytes += message.dyn_ref().kind().size();
+
+            let mut hypothetical_next_payload_size = total_bytes + message_total_bytes;
+            if self.message_count == 0 {
+                hypothetical_next_payload_size += 2;
+            }
+            return hypothetical_next_payload_size < MTU_SIZE && self.message_count != 255;
+        }
+        return true;
+    }
+
+    /// Writes a Command into the Writer's internal buffer, which will
+    /// eventually be put into the outgoing packet
+    pub fn write_entity_message<P: Protocolize, E: Copy + Eq + Hash>(
+        &mut self,
+        entity_manager: &EntityManager<P, E>,
+        world_entity: &E,
+        message: &P,
+        client_tick: &u16,
+    ) {
         if let Some(local_entity) = entity_manager.world_to_local_entity(&world_entity) {
             let message_ref = message.dyn_ref();
 
@@ -77,21 +108,8 @@ impl EntityMessagePacketWriter {
             // write payload
             message_ref.write(&mut message_total_bytes);
 
-            let mut hypothetical_next_payload_size = total_bytes + message_total_bytes.len();
-            if self.message_count == 0 {
-                hypothetical_next_payload_size += 2;
-            }
-            if hypothetical_next_payload_size < MTU_SIZE {
-                if self.message_count == 255 {
-                    return false;
-                }
-                self.message_count += 1;
-                self.message_working_bytes.append(&mut message_total_bytes);
-                return true;
-            } else {
-                return false;
-            }
+            self.message_count += 1;
+            self.message_working_bytes.append(&mut message_total_bytes);
         }
-        return true;
     }
 }
