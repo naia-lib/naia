@@ -272,13 +272,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 component_list.push((global_component_key, component_kind));
             }
 
-            self.entity_action_fits(packet_writer, &EntityAction::SpawnEntity(global_entity, component_list))
+            self.entity_action_fits(
+                packet_writer,
+                &EntityAction::SpawnEntity(global_entity, component_list),
+            )
         } else {
             return if let Some(entity_action) = queued_action_opt {
                 self.entity_action_fits(packet_writer, entity_action)
             } else {
                 false
-            }
+            };
         }
     }
 
@@ -331,12 +334,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 action_total_bytes += 2;
                 action_total_bytes += 2;
             }
-            EntityAction::UpdateComponent(
-                _,
-                _,
-                diff_mask,
-                component_kind,
-            ) => {
+            EntityAction::UpdateComponent(_, _, diff_mask, component_kind) => {
                 action_total_bytes += component_kind.size_partial(diff_mask);
 
                 //Write component "header"
@@ -350,8 +348,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             }
         }
 
-        let mut hypothetical_next_payload_size =
-            packet_writer.bytes_number() + action_total_bytes;
+        let mut hypothetical_next_payload_size = packet_writer.bytes_number() + action_total_bytes;
         if packet_writer.entity_action_count == 0 {
             hypothetical_next_payload_size += 2;
         }

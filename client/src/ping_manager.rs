@@ -2,7 +2,7 @@ use std::{collections::VecDeque, time::Duration};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use naia_shared::{Instant, PacketReader, sequence_greater_than, Timer};
+use naia_shared::{sequence_greater_than, Instant, PacketReader, Timer};
 
 use naia_client_socket::Packet;
 
@@ -101,12 +101,11 @@ impl SentPings {
     pub fn new() -> Self {
         SentPings {
             ping_index: 0,
-            buffer: VecDeque::new()
+            buffer: VecDeque::new(),
         }
     }
 
     pub fn push_new(&mut self) -> PingIndex {
-
         // save current ping index and add a new ping instant associated with it
         let ping_index = self.ping_index;
         self.ping_index = self.ping_index.wrapping_add(1);

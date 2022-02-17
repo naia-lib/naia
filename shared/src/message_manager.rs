@@ -42,9 +42,7 @@ impl<P: Protocolize> MessageManager<P> {
     /// Gets the next queued Message to be transmitted
     pub fn peek_outgoing_message(&self) -> Option<&P> {
         match self.queued_outgoing_messages.front() {
-            Some((_, message)) => {
-                Some(message)
-            }
+            Some((_, message)) => Some(message),
             None => None,
         }
     }
