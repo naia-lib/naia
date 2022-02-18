@@ -91,6 +91,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                 let payload =
                     self.process_outgoing_header(client_tick, PacketType::Data, &out_bytes);
                 return Some(payload);
+            } else {
+                panic!("Pending outgoing messages but no bytes were written... Likely trying to transmit a Component/Message larger than 576 bytes!");
             }
         }
 
