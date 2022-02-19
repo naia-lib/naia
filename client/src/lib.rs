@@ -13,6 +13,7 @@
 mod client;
 mod client_config;
 mod connection;
+mod constants;
 mod entity_action;
 mod entity_manager;
 mod entity_message_packet_writer;
@@ -24,10 +25,9 @@ mod event;
 mod handshake_manager;
 mod io;
 mod ping_manager;
-mod types;
-mod constants;
 mod tick_manager;
 mod tick_queue;
+mod types;
 
 pub use naia_shared as shared;
 

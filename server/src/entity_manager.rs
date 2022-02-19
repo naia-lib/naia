@@ -7,14 +7,16 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{DiffMask, KeyGenerator, LocalComponentKey, NetEntity, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType};
+use naia_shared::{
+    DiffMask, KeyGenerator, LocalComponentKey, NetEntity, PacketNotifiable, PacketWriteState,
+    Protocolize, ReplicateSafe, WorldRefType,
+};
 
 use super::{
-    entity_action::EntityAction, global_diff_handler::GlobalDiffHandler, keys::ComponentKey,
+    entity_action::EntityAction, entity_action_packet_writer::EntityActionPacketWriter,
+    global_diff_handler::GlobalDiffHandler, keys::ComponentKey,
     local_component_record::LocalComponentRecord, local_entity_record::LocalEntityRecord,
-    locality_status::LocalityStatus,
-    user_diff_handler::UserDiffHandler, world_record::WorldRecord,
-    entity_action_packet_writer::EntityActionPacketWriter,
+    locality_status::LocalityStatus, user_diff_handler::UserDiffHandler, world_record::WorldRecord,
 };
 
 /// Manages Entities for a given Client connection and keeps them in
@@ -218,42 +220,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     // Action Writer
-
-    pub fn writer_has_bytes(&self) -> bool {
-        self.action_writer.has_bytes()
-    }
-
-    pub fn writer_bytes_number(&self) -> usize {
-        self.action_writer.bytes_number()
-    }
-
-    pub fn writer_bytes(&mut self, out_bytes: &mut Vec<u8>) {
-        self.action_writer.bytes(out_bytes);
-    }
-
-    pub fn write_actions<W: WorldRefType<P, E>>(
-        &mut self,
-        total_bytes: usize,
-        world:&W,
-        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
-        next_packet_index: u16
-    ) {
-        loop {
-            if !self.peek_action_fits::<W>(world_record, total_bytes) {
-                break;
-            }
-
-            let popped_entity_action = self
-                .pop_outgoing_action::<W>(world_record, next_packet_index)
-                .unwrap();
-            self.action_writer.write_entity_action(world, &self.entity_records, &self.component_records, &popped_entity_action);
-        }
-    }
-
     pub fn peek_action_fits<W: WorldRefType<P, E>>(
         &self,
+        write_state: &mut PacketWriteState,
         world_record: &WorldRecord<E, P::Kind>,
-        total_bytes: usize,
     ) -> bool {
         let queued_action_opt = self.queued_actions.front();
 
@@ -275,17 +245,46 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 component_list.push((global_component_key, component_kind));
             }
 
-            self.action_writer.entity_action_fits::<P, E>(
-                total_bytes,
+            self.action_writer.action_fits::<P, E>(
+                write_state,
                 &EntityAction::SpawnEntity(global_entity, component_list),
             )
         } else {
             return if let Some(entity_action) = queued_action_opt {
-                self.action_writer.entity_action_fits::<P, E>(total_bytes, entity_action)
+                self.action_writer
+                    .action_fits::<P, E>(write_state, entity_action)
             } else {
                 false
             };
         }
+    }
+
+    pub fn queue_writes<W: WorldRefType<P, E>>(
+        &mut self,
+        write_state: &mut PacketWriteState,
+        world: &W,
+        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+    ) {
+        loop {
+            if !self.peek_action_fits::<W>(write_state, world_record) {
+                break;
+            }
+
+            let popped_entity_action = self
+                .pop_outgoing_action::<W>(world_record, write_state.packet_index)
+                .unwrap();
+            self.action_writer.queue_write(
+                write_state,
+                world,
+                &self.entity_records,
+                &self.component_records,
+                &popped_entity_action,
+            );
+        }
+    }
+
+    pub fn flush_writes(&mut self, out_bytes: &mut Vec<u8>) {
+        self.action_writer.flush_writes(out_bytes);
     }
 
     // Ect..

@@ -225,7 +225,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         if self.server_connection.is_some() {
-
             let mut did_tick = false;
 
             // update current tick
@@ -235,11 +234,24 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
                     // apply updates on tick boundary
                     let receiving_tick = tick_manager.client_receiving_tick();
-                    self.server_connection.as_mut().unwrap().process_buffered_packets(&mut world, &self.shared_config.manifest, receiving_tick);
-                    self.server_connection.as_mut().unwrap().on_tick(tick_manager.server_receivable_tick());
+                    self.server_connection
+                        .as_mut()
+                        .unwrap()
+                        .process_buffered_packets(
+                            &mut world,
+                            &self.shared_config.manifest,
+                            receiving_tick,
+                        );
+                    self.server_connection
+                        .as_mut()
+                        .unwrap()
+                        .on_tick(tick_manager.server_receivable_tick());
                 }
             } else {
-                self.server_connection.as_mut().unwrap().process_buffered_packets(&mut world, &self.shared_config.manifest, 0);
+                self.server_connection
+                    .as_mut()
+                    .unwrap()
+                    .process_buffered_packets(&mut world, &self.shared_config.manifest, 0);
             }
             // return connect event
             if self.outstanding_connect {

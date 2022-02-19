@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use naia_socket_shared::{PacketReader, Timer};
 
-use crate::{message_manager::MessageManager, sequence_greater_than};
+use crate::{message_manager::MessageManager, sequence_greater_than, PacketWriteState};
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
@@ -138,11 +138,6 @@ impl<P: Protocolize> BaseConnection<P> {
             .queue_outgoing_message(message, guaranteed_delivery);
     }
 
-    /// Write all messages
-    pub fn write_messages(&mut self, total_bytes: usize, next_packet_index: u16) {
-        return self.message_manager.write_messages(total_bytes, next_packet_index);
-    }
-
     /// Returns whether there are messages to be sent to the remote host
     pub fn has_outgoing_messages(&self) -> bool {
         return self.message_manager.has_outgoing_messages();
@@ -159,15 +154,12 @@ impl<P: Protocolize> BaseConnection<P> {
         return self.message_manager.pop_incoming_message();
     }
 
-    pub fn writer_has_bytes(&self) -> bool {
-        self.message_manager.writer_has_bytes()
+    /// Write all messages
+    pub fn queue_writes(&mut self, write_state: &mut PacketWriteState) {
+        return self.message_manager.queue_writes(write_state);
     }
 
-    pub fn writer_bytes_number(&self) -> usize {
-        return self.message_manager.writer_bytes_number();
-    }
-
-    pub fn writer_bytes(&mut self, out_bytes: &mut Vec<u8>) {
-        self.message_manager.writer_bytes(out_bytes);
+    pub fn flush_writes(&mut self, out_bytes: &mut Vec<u8>) {
+        self.message_manager.flush_writes(out_bytes);
     }
 }

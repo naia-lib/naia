@@ -223,8 +223,7 @@ impl App {
                             }
 
                             // Remove history of commands until current received tick
-                            self.command_history
-                                .remove_to_and_including(server_tick);
+                            self.command_history.remove_to_and_including(server_tick);
 
                             // Replay all existing historical commands until current tick
                             let mut command_iter = self.command_history.iter_mut();

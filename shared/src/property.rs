@@ -51,7 +51,8 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
         }
     }
 
-    /// Set value to the value of another Property, queues for update if value changes
+    /// Set value to the value of another Property, queues for update if value
+    /// changes
     pub fn mirror(&mut self, other: &Property<T>) {
         self.set(other.inner.clone());
     }

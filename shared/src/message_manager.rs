@@ -3,14 +3,15 @@ use std::{
     vec::Vec,
 };
 
+use crate::PacketWriteState;
 use naia_socket_shared::PacketReader;
 
 use super::{
     manifest::Manifest,
+    message_packet_writer::MessagePacketWriter,
     packet_notifiable::PacketNotifiable,
     protocolize::{ProtocolKindType, Protocolize},
     replicate::ReplicateSafe,
-    message_packet_writer::MessagePacketWriter,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -104,32 +105,27 @@ impl<P: Protocolize> MessageManager<P> {
     // MessageWriter
 
     /// Write into outgoing packet
-    pub fn write_messages(&mut self, total_bytes: usize, next_packet_index: u16) {
+    pub fn queue_writes(&mut self, write_state: &mut PacketWriteState) {
         loop {
             if let Some((_, peeked_message)) = self.queued_outgoing_messages.front() {
-                if !self.message_writer.message_fits(total_bytes, peeked_message) {
+                if !self
+                    .message_writer
+                    .message_fits(write_state, peeked_message)
+                {
                     break;
                 }
             } else {
                 break;
             }
 
-            let popped_message = self.pop_outgoing_message(next_packet_index).unwrap();
-            self.message_writer.write_message(&popped_message);
+            let popped_message = self.pop_outgoing_message(write_state.packet_index).unwrap();
+            self.message_writer
+                .queue_write(write_state, &popped_message);
         }
     }
 
-    /// Get writer's number of outgoing bytes
-    pub fn writer_bytes_number(&self) -> usize {
-        return self.message_writer.bytes_number();
-    }
-
-    pub fn writer_has_bytes(&self) -> bool {
-        self.message_writer.has_bytes()
-    }
-
-    pub fn writer_bytes(&mut self, out_bytes: &mut Vec<u8>) {
-        self.message_writer.bytes(out_bytes);
+    pub fn flush_writes(&mut self, out_bytes: &mut Vec<u8>) {
+        self.message_writer.flush_writes(out_bytes);
     }
 }
 
