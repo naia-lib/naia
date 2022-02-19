@@ -69,12 +69,12 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
 impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Create a new Server
     pub fn new(mut server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
-        server_config.socket_config.link_condition_config =
+        server_config.socket.link_condition_config =
             shared_config.link_condition_config.clone();
 
-        let connection_config = server_config.connection_config.clone();
+        let connection_config = server_config.connection.clone();
 
-        let socket = Socket::new(server_config.socket_config);
+        let socket = Socket::new(server_config.socket);
 
         let heartbeat_timer = Timer::new(connection_config.heartbeat_interval);
 

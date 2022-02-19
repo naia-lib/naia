@@ -365,20 +365,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 );
             }
             // send packets
-            if let Some(client_tick) = client_tick_opt {
-                let mut sent = false;
-                while let Some(payload) = self
-                    .server_connection
-                    .as_mut()
-                    .unwrap()
-                    .outgoing_packet(client_tick)
-                {
-                    self.io.send_packet(Packet::new_raw(payload));
-                    sent = true;
-                }
-                if sent {
-                    self.server_connection.as_mut().unwrap().base.mark_sent();
-                }
+            let mut sent = false;
+            while let Some(payload) = self
+                .server_connection
+                .as_mut()
+                .unwrap()
+                .outgoing_packet(client_tick_opt.unwrap_or(0))
+            {
+                self.io.send_packet(Packet::new_raw(payload));
+                sent = true;
+            }
+            if sent {
+                self.server_connection.as_mut().unwrap().base.mark_sent();
             }
             // tick event
             if did_tick {
