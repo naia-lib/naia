@@ -144,7 +144,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Queues up an Message to be sent to the Server
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
         if let Some(connection) = &mut self.server_connection {
-            connection.send_message(message, guaranteed_delivery);
+            connection
+                .base
+                .message_manager
+                .send_message(message, guaranteed_delivery);
         }
     }
 
@@ -178,12 +181,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
     /// Gets the average Round Trip Time measured to the Server
     pub fn rtt(&self) -> f32 {
-        return self.server_connection.as_ref().unwrap().rtt();
+        return self.server_connection.as_ref().unwrap().ping_manager.rtt();
     }
 
     /// Gets the average Jitter measured in connection to the Server
     pub fn jitter(&self) -> f32 {
-        return self.server_connection.as_ref().unwrap().jitter();
+        return self
+            .server_connection
+            .as_ref()
+            .unwrap()
+            .ping_manager
+            .jitter();
     }
 
     // Ticks
@@ -245,6 +253,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                     self.server_connection
                         .as_mut()
                         .unwrap()
+                        .entity_manager
+                        .message_sender
                         .on_tick(tick_manager.server_receivable_tick());
                 }
             } else {
@@ -264,7 +274,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 events.push_back(Err(err));
             }
             // drop connection if necessary
-            if self.server_connection.as_ref().unwrap().should_drop() || self.outstanding_disconnect
+            if self.server_connection.as_ref().unwrap().base.should_drop()
+                || self.outstanding_disconnect
             {
                 let server_addr = self.server_address_unwrapped();
                 self.disconnect_cleanup();
@@ -275,7 +286,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 return events;
             }
             // receive messages
-            while let Some(message) = self.server_connection.as_mut().unwrap().incoming_message() {
+            while let Some(message) = self
+                .server_connection
+                .as_mut()
+                .unwrap()
+                .base
+                .message_manager
+                .pop_incoming_message()
+            {
                 events.push_back(Ok(Event::Message(message)));
             }
             // receive entity actions
@@ -283,6 +301,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 .server_connection
                 .as_mut()
                 .unwrap()
+                .entity_manager
                 .incoming_entity_action()
             {
                 let event: Event<P, E> = {
@@ -312,6 +331,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 .server_connection
                 .as_ref()
                 .unwrap()
+                .base
                 .should_send_heartbeat()
             {
                 internal_send_with_connection::<P, E>(
@@ -323,8 +343,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 );
             }
             // send pings
-            if self.server_connection.as_ref().unwrap().should_send_ping() {
-                let ping_packet = self.server_connection.as_mut().unwrap().ping_packet();
+            if self
+                .server_connection
+                .as_ref()
+                .unwrap()
+                .ping_manager
+                .should_send_ping()
+            {
+                let ping_packet = self
+                    .server_connection
+                    .as_mut()
+                    .unwrap()
+                    .ping_manager
+                    .ping_packet();
                 internal_send_with_connection::<P, E>(
                     client_tick_opt,
                     &mut self.io,
@@ -346,7 +377,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                     sent = true;
                 }
                 if sent {
-                    self.server_connection.as_mut().unwrap().mark_sent();
+                    self.server_connection.as_mut().unwrap().base.mark_sent();
                 }
             }
             // tick event
@@ -366,7 +397,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     pub(crate) fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R) {
         if let Some(client_tick) = self.client_tick() {
             if let Some(connection) = self.server_connection.as_mut() {
-                connection.send_entity_message(entity, message, client_tick);
+                connection
+                    .entity_manager
+                    .message_sender
+                    .send_entity_message(entity, message, client_tick);
             }
         }
     }
@@ -382,7 +416,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                         let server_connection_wrapper = self.server_connection.as_mut();
 
                         if let Some(server_connection) = server_connection_wrapper {
-                            server_connection.mark_heard();
+                            server_connection.base.mark_heard();
 
                             let (header, payload) = StandardHeader::read(packet.payload());
                             let tick_manager: Option<&mut TickManager> = {
@@ -402,7 +436,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                                 }
                                 PacketType::Heartbeat => {}
                                 PacketType::Pong => {
-                                    server_connection.process_pong(&payload);
+                                    server_connection.ping_manager.process_pong(&payload);
                                 }
                                 _ => {} // TODO: explicitly cover these cases
                             }
@@ -472,8 +506,11 @@ fn internal_send_with_connection<P: Protocolize, E: Copy + Eq + Hash>(
     packet_type: PacketType,
     packet: Packet,
 ) {
-    let new_payload =
-        connection.process_outgoing_header(client_tick.unwrap_or(0), packet_type, packet.payload());
+    let new_payload = connection.base.process_outgoing_header(
+        client_tick.unwrap_or(0),
+        packet_type,
+        packet.payload(),
+    );
     io.send_packet(Packet::new_raw(new_payload));
-    connection.mark_sent();
+    connection.base.mark_sent();
 }

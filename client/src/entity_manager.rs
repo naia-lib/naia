@@ -8,7 +8,7 @@ use log::warn;
 use crate::entity_message_sender::EntityMessageSender;
 use naia_shared::{
     DiffMask, EntityActionType, LocalComponentKey, Manifest, NaiaKey, NetEntity, PacketReader,
-    PacketWriteState, ProtocolKindType, Protocolize, ReplicateSafe, WorldMutType,
+    PacketWriteState, ProtocolKindType, Protocolize, WorldMutType,
 };
 
 use super::{
@@ -21,7 +21,7 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     local_to_world_entity: HashMap<NetEntity, E>,
     component_to_entity_map: HashMap<LocalComponentKey, E>,
     queued_incoming_messages: VecDeque<EntityAction<P, E>>,
-    pub entity_message_sender: EntityMessageSender<P, E>,
+    pub message_sender: EntityMessageSender<P, E>,
     message_writer: EntityMessagePacketWriter,
 }
 
@@ -32,7 +32,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             entity_records: HashMap::new(),
             component_to_entity_map: HashMap::new(),
             queued_incoming_messages: VecDeque::new(),
-            entity_message_sender: EntityMessageSender::new(),
+            message_sender: EntityMessageSender::new(),
             message_writer: EntityMessagePacketWriter::new(),
         }
     }
@@ -261,23 +261,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
-    pub fn pop_incoming_message(&mut self) -> Option<EntityAction<P, E>> {
+    pub fn incoming_entity_action(&mut self) -> Option<EntityAction<P, E>> {
         return self.queued_incoming_messages.pop_front();
-    }
-
-    // Message Sender
-    pub fn send_entity_message<R: ReplicateSafe<P>>(
-        &mut self,
-        entity: &E,
-        message: &R,
-        client_tick: u16,
-    ) {
-        self.entity_message_sender
-            .send_entity_message(entity, message, client_tick)
-    }
-
-    pub fn has_outgoing_messages(&self) -> bool {
-        self.entity_message_sender.has_outgoing_messages()
     }
 
     // EntityMessagePacketWriter
@@ -287,7 +272,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     pub fn queue_writes(&mut self, write_state: &mut PacketWriteState) {
-        let mut entity_messages = self.entity_message_sender.generate_outgoing_message_list();
+        let mut entity_messages = self.message_sender.generate_outgoing_message_list();
 
         loop {
             if let Some((_, _, entity, message)) = entity_messages.front() {
@@ -311,11 +296,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 &entity,
                 &message,
             );
-            self.entity_message_sender.message_written(
-                write_state.packet_index,
-                client_tick,
-                message_id,
-            );
+            self.message_sender
+                .message_written(write_state.packet_index, client_tick, message_id);
         }
     }
 }

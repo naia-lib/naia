@@ -1,24 +1,24 @@
 use std::net::SocketAddr;
 
-use naia_socket_shared::{PacketReader, Timer};
+use naia_socket_shared::Timer;
 
-use crate::{message_manager::MessageManager, sequence_greater_than, PacketWriteState};
+use crate::{message_manager::MessageManager, sequence_greater_than};
 
 use super::{
-    ack_manager::AckManager, connection_config::ConnectionConfig, manifest::Manifest,
+    ack_manager::AckManager, connection_config::ConnectionConfig,
     packet_notifiable::PacketNotifiable, packet_type::PacketType, protocolize::Protocolize,
-    replicate::ReplicateSafe, sequence_buffer::SequenceNumber, standard_header::StandardHeader,
+    sequence_buffer::SequenceNumber, standard_header::StandardHeader,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
 pub struct BaseConnection<P: Protocolize> {
-    address: SocketAddr,
+    pub address: SocketAddr,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
     ack_manager: AckManager,
-    message_manager: MessageManager<P>,
-    last_received_tick: u16,
+    pub message_manager: MessageManager<P>,
+    pub last_received_tick: u16,
 }
 
 impl<P: Protocolize> BaseConnection<P> {
@@ -32,16 +32,6 @@ impl<P: Protocolize> BaseConnection<P> {
             message_manager: MessageManager::new(),
             last_received_tick: 0,
         };
-    }
-
-    /// Get the address of the remote host
-    pub fn address(&self) -> SocketAddr {
-        return self.address;
-    }
-
-    /// Get the latest received tick from the remote host
-    pub fn last_received_tick(&self) -> u16 {
-        return self.last_received_tick;
     }
 
     // Heartbeats
@@ -127,39 +117,5 @@ impl<P: Protocolize> BaseConnection<P> {
     /// Get the next outgoing packet's index
     pub fn next_packet_index(&self) -> SequenceNumber {
         return self.ack_manager.local_packet_index();
-    }
-
-    // Message Manager
-
-    /// Queue up a message to be sent to the remote host
-    pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
-        return self
-            .message_manager
-            .queue_outgoing_message(message, guaranteed_delivery);
-    }
-
-    /// Returns whether there are messages to be sent to the remote host
-    pub fn has_outgoing_messages(&self) -> bool {
-        return self.message_manager.has_outgoing_messages();
-    }
-
-    /// Given an incoming packet which has been identified as an message, send
-    /// the data to the MessageManager for processing
-    pub fn process_message_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>) {
-        return self.message_manager.process_data(reader, manifest);
-    }
-
-    /// Get the most recent message that has been received from a remote host
-    pub fn incoming_message(&mut self) -> Option<P> {
-        return self.message_manager.pop_incoming_message();
-    }
-
-    /// Write all messages
-    pub fn queue_writes(&mut self, write_state: &mut PacketWriteState) {
-        return self.message_manager.queue_writes(write_state);
-    }
-
-    pub fn flush_writes(&mut self, out_bytes: &mut Vec<u8>) {
-        self.message_manager.flush_writes(out_bytes);
     }
 }

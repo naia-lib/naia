@@ -169,7 +169,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // self.user_connections
         for (_, connection) in self.user_connections.iter_mut() {
             //receive messages from anyone
-            while let Some(message) = connection.incoming_message() {
+            while let Some(message) = connection.base.message_manager.pop_incoming_message() {
                 events.push_back(Ok(Event::Message(connection.user_key, message)));
             }
         }
@@ -237,7 +237,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     ) {
         if let Some(user) = self.users.get(*user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
-                connection.send_message(message, guaranteed_delivery);
+                connection
+                    .base
+                    .message_manager
+                    .send_message(message, guaranteed_delivery);
             }
         }
     }
@@ -282,7 +285,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // TODO: have 1 single outgoing queue so that first users in collection don't
         // get more updates than those in the back
         for (address, connection) in self.user_connections.iter_mut() {
-            connection.collect_component_updates(&self.world_record);
+            connection
+                .entity_manager
+                .collect_component_updates(&self.world_record);
             let mut sent = false;
             while let Some(payload) =
                 connection.outgoing_packet(&world, &self.world_record, server_tick)
@@ -291,7 +296,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 sent = true;
             }
             if sent {
-                connection.mark_sent();
+                connection.base.mark_sent();
             }
         }
     }
@@ -400,7 +405,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     pub fn user_scope_has_entity(&self, user_key: &UserKey, entity: &E) -> bool {
         if let Some(user) = self.users.get(*user_key) {
             if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return user_connection.has_entity(entity);
+                return user_connection.entity_manager.has_entity(entity);
             }
         }
 
@@ -465,7 +470,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     pub fn client_tick(&self, user_key: &UserKey) -> Option<u16> {
         if let Some(user) = self.users.get(*user_key) {
             if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.last_received_tick());
+                return Some(user_connection.base.last_received_tick);
             }
         }
         return None;
@@ -496,7 +501,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // are in each User's scope
         for (_, user_connection) in self.user_connections.iter_mut() {
             //remove entity from user connection
-            user_connection.despawn_entity(&self.world_record, entity);
+            user_connection
+                .entity_manager
+                .despawn_entity(&self.world_record, entity);
         }
 
         // Clean up associated components
@@ -556,9 +563,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
         // add component to connections already tracking entity
         for (_, user_connection) in self.user_connections.iter_mut() {
-            if user_connection.has_entity(entity) {
+            if user_connection.entity_manager.has_entity(entity) {
                 // insert component into user's connection
-                user_connection.insert_component(&self.world_record, &component_key);
+                user_connection
+                    .entity_manager
+                    .insert_component(&self.world_record, &component_key);
             }
         }
     }
@@ -581,7 +590,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // which scopes they are part of
         for (_, user_connection) in self.user_connections.iter_mut() {
             //remove component from user connection
-            user_connection.remove_component(&component_key);
+            user_connection
+                .entity_manager
+                .remove_component(&component_key);
         }
 
         // cleanup all other loose ends
@@ -744,7 +755,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     ) {
         if let Some(user) = self.users.get(*user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
-                connection.send_entity_message(entity, message);
+                connection
+                    .entity_manager
+                    .send_entity_message(entity, message);
             }
         }
     }
@@ -758,18 +771,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
             let server_tick = self.server_tick().unwrap_or(0);
             for (user_address, connection) in self.user_connections.iter_mut() {
-                if connection.should_drop() {
+                if connection.base.should_drop() {
                     self.outstanding_disconnects.push_back(connection.user_key);
                     continue;
                 }
 
-                if connection.should_send_heartbeat() {
+                if connection.base.should_send_heartbeat() {
                     // Don't try to refactor this to self.internal_send, doesn't seem to
                     // work cause of iter_mut()
-                    let payload =
-                        connection.process_outgoing_header(server_tick, PacketType::Heartbeat, &[]);
+                    let payload = connection.base.process_outgoing_header(
+                        server_tick,
+                        PacketType::Heartbeat,
+                        &[],
+                    );
                     self.io.send_packet(Packet::new_raw(*user_address, payload));
-                    connection.mark_sent();
+                    connection.base.mark_sent();
                 }
             }
         }
@@ -781,7 +797,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     let address = packet.address();
 
                     if let Some(user_connection) = self.user_connections.get_mut(&address) {
-                        user_connection.mark_heard();
+                        user_connection.base.mark_heard();
                     }
 
                     let (header, payload) = StandardHeader::read(packet.payload());
@@ -867,17 +883,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                             match self.user_connections.get_mut(&address) {
                                 Some(connection) => {
                                     connection.process_incoming_header(&self.world_record, &header);
-                                    let ping_payload = connection.process_ping(&payload);
-                                    let payload_with_header = connection.process_outgoing_header(
-                                        server_tick,
-                                        PacketType::Pong,
-                                        &ping_payload,
-                                    );
+                                    let ping_payload =
+                                        connection.ping_manager.process_ping(&payload);
+                                    let payload_with_header =
+                                        connection.base.process_outgoing_header(
+                                            server_tick,
+                                            PacketType::Pong,
+                                            &ping_payload,
+                                        );
                                     self.io.send_packet(Packet::new_raw(
-                                        connection.address(),
+                                        connection.base.address,
                                         payload_with_header,
                                     ));
-                                    connection.mark_sent();
+                                    connection.base.mark_sent();
                                 }
                                 None => {
                                     warn!("received ping from unauthenticated client: {}", address);
@@ -920,7 +938,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 if let Some(user) = self.users.get(removed_user) {
                     if let Some(user_connection) = self.user_connections.get_mut(&user.address) {
                         //remove entity from user connection
-                        user_connection.despawn_entity(&self.world_record, &removed_entity);
+                        user_connection
+                            .entity_manager
+                            .despawn_entity(&self.world_record, &removed_entity);
                     }
                 }
             }
@@ -934,7 +954,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                             if let Some(user_connection) =
                                 self.user_connections.get_mut(&user.address)
                             {
-                                let currently_in_scope = user_connection.has_entity(entity);
+                                let currently_in_scope =
+                                    user_connection.entity_manager.has_entity(entity);
 
                                 let should_be_in_scope: bool;
                                 if let Some(in_scope) = self.entity_scope_map.get(user_key, entity)
@@ -947,12 +968,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                 if should_be_in_scope {
                                     if !currently_in_scope {
                                         // add entity to the connections local scope
-                                        user_connection.spawn_entity(&self.world_record, entity);
+                                        user_connection
+                                            .entity_manager
+                                            .spawn_entity(&self.world_record, entity);
                                     }
                                 } else {
                                     if currently_in_scope {
                                         // remove entity from the connections local scope
-                                        user_connection.despawn_entity(&self.world_record, entity);
+                                        user_connection
+                                            .entity_manager
+                                            .despawn_entity(&self.world_record, entity);
                                     }
                                 }
                             }

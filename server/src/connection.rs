@@ -5,21 +5,21 @@ use std::{
 };
 
 use naia_shared::{
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketIndex, PacketReader, PacketType,
-    PacketWriteState, Protocolize, ReplicateSafe, StandardHeader, Tick, WorldRefType,
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
+    PacketWriteState, Protocolize, StandardHeader, Tick, WorldRefType,
 };
 
 use super::{
     entity_manager::EntityManager, entity_message_receiver::EntityMessageReceiver,
-    global_diff_handler::GlobalDiffHandler, keys::ComponentKey, ping_manager::PingManager,
-    user::user_key::UserKey, world_record::WorldRecord,
+    global_diff_handler::GlobalDiffHandler, ping_manager::PingManager, user::user_key::UserKey,
+    world_record::WorldRecord,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     pub user_key: UserKey,
-    base_connection: BaseConnection<P>,
-    entity_manager: EntityManager<P, E>,
-    ping_manager: PingManager,
+    pub base: BaseConnection<P>,
+    pub entity_manager: EntityManager<P, E>,
+    pub ping_manager: PingManager,
     entity_message_receiver: EntityMessageReceiver<P>,
 }
 
@@ -32,51 +32,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     ) -> Self {
         Connection {
             user_key: *user_key,
-            base_connection: BaseConnection::new(user_address, connection_config),
+            base: BaseConnection::new(user_address, connection_config),
             entity_manager: EntityManager::new(user_address, diff_handler),
             ping_manager: PingManager::new(),
             entity_message_receiver: EntityMessageReceiver::new(),
         }
     }
 
-    pub fn outgoing_packet<W: WorldRefType<P, E>>(
+    // Incoming Data
+
+    pub fn process_incoming_header(
         &mut self,
-        world: &W,
         world_record: &WorldRecord<E, P::Kind>,
-        server_tick: Tick,
-    ) -> Option<Box<[u8]>> {
-        if self.base_connection.has_outgoing_messages()
-            || self.entity_manager.has_outgoing_actions()
-        {
-            let mut write_state = PacketWriteState::new(self.next_packet_index());
-
-            // Queue Messages for Write
-            self.base_connection.queue_writes(&mut write_state);
-
-            // Queue Entity Actions for Write
-            self.entity_manager
-                .queue_writes(&mut write_state, world, world_record);
-
-            if write_state.byte_count() > 0 {
-                // Get bytes from writer
-                let mut out_vec = Vec::<u8>::new();
-                self.base_connection.flush_writes(&mut out_vec);
-                self.entity_manager.flush_writes(&mut out_vec);
-
-                // Add header to it
-                let payload = self.process_outgoing_header(
-                    server_tick,
-                    PacketType::Data,
-                    &out_vec.into_boxed_slice(),
-                );
-
-                return Some(payload);
-            } else {
-                panic!("Pending outgoing messages but no bytes were written... Likely trying to transmit a Component/Message larger than 576 bytes!");
-            }
-        }
-
-        return None;
+        header: &StandardHeader,
+    ) {
+        self.base
+            .process_incoming_header(header, &mut Some(&mut self.entity_manager));
+        self.entity_manager.process_delivered_packets(world_record);
     }
 
     pub fn process_incoming_data(
@@ -99,16 +71,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                 ManagerType::Message => {
                     // packet index shouldn't matter here because the server's impl of Property
                     // doesn't use it
-                    self.base_connection
+                    self.base
+                        .message_manager
                         .process_message_data(&mut reader, manifest);
                 }
                 _ => {}
             }
         }
-    }
-
-    pub fn collect_component_updates(&mut self, world_record: &WorldRecord<E, P::Kind>) {
-        self.entity_manager.collect_component_updates(world_record);
     }
 
     pub fn pop_incoming_entity_message(&mut self, server_tick: u16) -> Option<(E, P)> {
@@ -125,99 +94,45 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         return None;
     }
 
-    pub fn process_ping(&self, ping_payload: &[u8]) -> Box<[u8]> {
-        return self.ping_manager.process_ping(ping_payload);
-    }
+    // Outgoing data
 
-    // Entity management
-
-    pub fn has_entity(&self, entity: &E) -> bool {
-        return self.entity_manager.has_entity(entity);
-    }
-
-    pub fn spawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, entity: &E) {
-        self.entity_manager.spawn_entity(world_record, entity);
-    }
-
-    pub fn despawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, entity: &E) {
-        self.entity_manager.despawn_entity(world_record, entity);
-    }
-
-    pub fn insert_component(
+    pub fn outgoing_packet<W: WorldRefType<P, E>>(
         &mut self,
+        world: &W,
         world_record: &WorldRecord<E, P::Kind>,
-        component_key: &ComponentKey,
-    ) {
-        self.entity_manager
-            .insert_component(world_record, component_key);
-    }
+        server_tick: Tick,
+    ) -> Option<Box<[u8]>> {
+        if self.base.message_manager.has_outgoing_messages()
+            || self.entity_manager.has_outgoing_actions()
+        {
+            let mut write_state = PacketWriteState::new(self.base.next_packet_index());
 
-    pub fn remove_component(&mut self, component_key: &ComponentKey) {
-        self.entity_manager.remove_component(component_key);
-    }
+            // Queue Messages for Write
+            self.base.message_manager.queue_writes(&mut write_state);
 
-    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R) {
-        self.entity_manager.send_entity_message(entity, message);
-    }
+            // Queue Entity Actions for Write
+            self.entity_manager
+                .queue_writes(&mut write_state, world, world_record);
 
-    // Pass-through methods to underlying common connection
+            if write_state.byte_count() > 0 {
+                // Get bytes from writer
+                let mut out_vec = Vec::<u8>::new();
+                self.base.message_manager.flush_writes(&mut out_vec);
+                self.entity_manager.flush_writes(&mut out_vec);
 
-    pub fn mark_sent(&mut self) {
-        return self.base_connection.mark_sent();
-    }
+                // Add header to it
+                let payload = self.base.process_outgoing_header(
+                    server_tick,
+                    PacketType::Data,
+                    &out_vec.into_boxed_slice(),
+                );
 
-    pub fn should_send_heartbeat(&self) -> bool {
-        return self.base_connection.should_send_heartbeat();
-    }
+                return Some(payload);
+            } else {
+                panic!("Pending outgoing messages but no bytes were written... Likely trying to transmit a Component/Message larger than 576 bytes!");
+            }
+        }
 
-    pub fn mark_heard(&mut self) {
-        return self.base_connection.mark_heard();
-    }
-
-    pub fn should_drop(&self) -> bool {
-        return self.base_connection.should_drop();
-    }
-
-    pub fn process_incoming_header(
-        &mut self,
-        world_record: &WorldRecord<E, P::Kind>,
-        header: &StandardHeader,
-    ) {
-        self.base_connection
-            .process_incoming_header(header, &mut Some(&mut self.entity_manager));
-        self.entity_manager.process_delivered_packets(world_record);
-    }
-
-    pub fn process_outgoing_header(
-        &mut self,
-        host_tick: u16,
-        packet_type: PacketType,
-        payload: &[u8],
-    ) -> Box<[u8]> {
-        return self
-            .base_connection
-            .process_outgoing_header(host_tick, packet_type, payload);
-    }
-
-    pub fn next_packet_index(&self) -> PacketIndex {
-        return self.base_connection.next_packet_index();
-    }
-
-    pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
-        return self
-            .base_connection
-            .send_message(message, guaranteed_delivery);
-    }
-
-    pub fn incoming_message(&mut self) -> Option<P> {
-        return self.base_connection.incoming_message();
-    }
-
-    pub fn address(&self) -> SocketAddr {
-        return self.base_connection.address();
-    }
-
-    pub fn last_received_tick(&self) -> u16 {
-        return self.base_connection.last_received_tick();
+        return None;
     }
 }
