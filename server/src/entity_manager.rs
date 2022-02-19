@@ -40,9 +40,6 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     sent_actions: HashMap<u16, Vec<EntityAction<P, E>>>,
     sent_updates: HashMap<u16, HashMap<ComponentKey, DiffMask>>,
     last_update_packet_index: u16,
-    last_last_update_packet_index: u16,
-    last_popped_diff_mask: Option<DiffMask>,
-    last_popped_diff_mask_list: Option<Vec<(ComponentKey, DiffMask)>>,
     delivered_packets: VecDeque<u16>,
     // Packet writer
     action_writer: EntityActionPacketWriter,
@@ -70,9 +67,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             sent_actions: HashMap::new(),
             sent_updates: HashMap::<u16, HashMap<ComponentKey, DiffMask>>::new(),
             last_update_packet_index: 0,
-            last_last_update_packet_index: 0,
-            last_popped_diff_mask: None,
-            last_popped_diff_mask_list: None,
             delivered_packets: VecDeque::new(),
             // Packet Writer
             action_writer: EntityActionPacketWriter::new(),
@@ -220,44 +214,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     // Action Writer
-    pub fn peek_action_fits<W: WorldRefType<P, E>>(
-        &self,
-        write_state: &mut PacketWriteState,
-        world_record: &WorldRecord<E, P::Kind>,
-    ) -> bool {
-        let queued_action_opt = self.queued_actions.front();
-
-        if let Some(&EntityAction::SpawnEntity(global_entity, _)) = queued_action_opt {
-            // get the most recent list of components in here ...
-            if !world_record.has_entity(&global_entity) {
-                panic!("entity does not exist!")
-            }
-
-            let mut component_list = Vec::new();
-
-            let global_component_keys = world_record.component_keys(&global_entity);
-
-            for global_component_key in global_component_keys {
-                let (_, component_kind) = world_record
-                    .component_record(&global_component_key)
-                    .expect("component not tracked by server?");
-
-                component_list.push((global_component_key, component_kind));
-            }
-
-            self.action_writer.action_fits::<P, E>(
-                write_state,
-                &EntityAction::SpawnEntity(global_entity, component_list),
-            )
-        } else {
-            return if let Some(entity_action) = queued_action_opt {
-                self.action_writer
-                    .action_fits::<P, E>(write_state, entity_action)
-            } else {
-                false
-            };
-        }
-    }
 
     pub fn queue_writes<W: WorldRefType<P, E>>(
         &mut self,
@@ -321,7 +277,48 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         return self.queued_actions.len() != 0;
     }
 
-    pub fn pop_outgoing_action<W: WorldRefType<P, E>>(
+    // Private methods
+
+    fn peek_action_fits<W: WorldRefType<P, E>>(
+        &self,
+        write_state: &mut PacketWriteState,
+        world_record: &WorldRecord<E, P::Kind>,
+    ) -> bool {
+        let queued_action_opt = self.queued_actions.front();
+
+        if let Some(&EntityAction::SpawnEntity(global_entity, _)) = queued_action_opt {
+            // get the most recent list of components in here ...
+            if !world_record.has_entity(&global_entity) {
+                panic!("entity does not exist!")
+            }
+
+            let mut component_list = Vec::new();
+
+            let global_component_keys = world_record.component_keys(&global_entity);
+
+            for global_component_key in global_component_keys {
+                let (_, component_kind) = world_record
+                    .component_record(&global_component_key)
+                    .expect("component not tracked by server?");
+
+                component_list.push((global_component_key, component_kind));
+            }
+
+            self.action_writer.action_fits::<P, E>(
+                write_state,
+                &EntityAction::SpawnEntity(global_entity, component_list),
+            )
+        } else {
+            return if let Some(entity_action) = queued_action_opt {
+                self.action_writer
+                    .action_fits::<P, E>(write_state, entity_action)
+            } else {
+                false
+            };
+        }
+    }
+
+    fn pop_outgoing_action<W: WorldRefType<P, E>>(
         &mut self,
         world_record: &WorldRecord<E, P::Kind>,
         packet_index: u16,
@@ -361,8 +358,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     self.diff_handler.clear_diff_mask(&global_component_key);
                 }
 
-                self.last_popped_diff_mask_list = Some(diff_mask_list);
-
                 EntityAction::SpawnEntity(global_entity, component_list)
             } else {
                 queued_action
@@ -380,7 +375,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         //clear diff mask of component if need be
         match action {
             EntityAction::InsertComponent(_, global_component_key, _) => {
-                self.pop_insert_component_diff_mask(&global_component_key);
+                self.diff_handler.clear_diff_mask(&global_component_key);
             }
             EntityAction::UpdateComponent(
                 global_entity,
@@ -388,11 +383,30 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 diff_mask,
                 component_kind,
             ) => {
-                return Some(self.pop_update_component_diff_mask(
-                    packet_index,
+                // previously the diff mask was the CURRENT diff mask for the
+                // component, we want to lock that in so we know exactly what we're
+                // writing
+                let locked_diff_mask = diff_mask.clone();
+
+                // place diff mask in a special transmission record - like map
+                if !self.sent_updates.contains_key(&packet_index) {
+                    let sent_updates_map: HashMap<ComponentKey, DiffMask> = HashMap::new();
+                    self.sent_updates.insert(packet_index, sent_updates_map);
+                    self.last_update_packet_index = packet_index;
+                }
+
+                if let Some(sent_updates_map) = self.sent_updates.get_mut(&packet_index) {
+                    sent_updates_map.insert(global_component_key, locked_diff_mask.clone());
+                }
+
+                // having copied the diff mask for this update, clear the component
+                self.diff_handler.clear_diff_mask(&global_component_key);
+
+                // return new Update action to be written
+                return Some(EntityAction::UpdateComponent(
                     global_entity,
-                    &global_component_key,
-                    &diff_mask,
+                    global_component_key,
+                    locked_diff_mask,
                     component_kind,
                 ));
             }
@@ -401,8 +415,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
         return Some(action);
     }
-
-    // Private methods
 
     fn component_init(
         &mut self,
@@ -444,65 +456,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 "attempting to clean up component from connection inside which it is not present"
             );
         }
-    }
-
-    fn pop_insert_component_diff_mask(&mut self, global_component_key: &ComponentKey) {
-        let new_diff_mask = self
-            .diff_handler
-            .diff_mask(global_component_key)
-            .expect("DiffHandler doesn't have Component registered!")
-            .clone();
-        self.last_popped_diff_mask = Some(new_diff_mask);
-        self.diff_handler.clear_diff_mask(global_component_key);
-    }
-
-    fn pop_update_component_diff_mask(
-        &mut self,
-        packet_index: u16,
-        global_entity: E,
-        global_component_key: &ComponentKey,
-        diff_mask: &DiffMask,
-        component_kind: P::Kind,
-    ) -> EntityAction<P, E> {
-        let locked_diff_mask =
-            self.process_component_update(packet_index, global_component_key, diff_mask);
-        // return new Update action to be written
-        return EntityAction::UpdateComponent(
-            global_entity,
-            *global_component_key,
-            locked_diff_mask,
-            component_kind,
-        );
-    }
-
-    fn process_component_update(
-        &mut self,
-        packet_index: u16,
-        global_component_key: &ComponentKey,
-        diff_mask: &DiffMask,
-    ) -> DiffMask {
-        // previously the diff mask was the CURRENT diff mask for the
-        // component, we want to lock that in so we know exactly what we're
-        // writing
-        let locked_diff_mask = diff_mask.clone();
-
-        // place diff mask in a special transmission record - like map
-        if !self.sent_updates.contains_key(&packet_index) {
-            let sent_updates_map: HashMap<ComponentKey, DiffMask> = HashMap::new();
-            self.sent_updates.insert(packet_index, sent_updates_map);
-            self.last_last_update_packet_index = self.last_update_packet_index;
-            self.last_update_packet_index = packet_index;
-        }
-
-        if let Some(sent_updates_map) = self.sent_updates.get_mut(&packet_index) {
-            sent_updates_map.insert(*global_component_key, locked_diff_mask.clone());
-        }
-
-        // having copied the diff mask for this update, clear the component
-        self.last_popped_diff_mask = Some(diff_mask.borrow().clone());
-        self.diff_handler.clear_diff_mask(global_component_key);
-
-        locked_diff_mask
     }
 
     pub fn process_delivered_packets(&mut self, world_record: &WorldRecord<E, P::Kind>) {

@@ -143,7 +143,8 @@ impl<P: Protocolize> HandshakeManager<P> {
         // Verify that timestamp hash has been written by this
         // server instance
         if let Some(new_timestamp) = self.timestamp_validate(&mut reader) {
-            if let Some(old_timestamp) = self.address_to_timestamp_map.get(&connection.address()) {
+            if let Some(old_timestamp) = self.address_to_timestamp_map.get(&connection.base.address)
+            {
                 if *old_timestamp == new_timestamp {
                     connection.process_incoming_header(world_record, &incoming_header);
                     self.send_connect_accept_response(io, connection);
@@ -166,7 +167,8 @@ impl<P: Protocolize> HandshakeManager<P> {
         // Verify that timestamp hash has been written by this
         // server instance
         if let Some(new_timestamp) = self.timestamp_validate(&mut reader) {
-            if let Some(old_timestamp) = self.address_to_timestamp_map.get(&connection.address()) {
+            if let Some(old_timestamp) = self.address_to_timestamp_map.get(&connection.base.address)
+            {
                 if *old_timestamp == new_timestamp {
                     return true;
                 }
@@ -185,8 +187,11 @@ impl<P: Protocolize> HandshakeManager<P> {
         io: &mut Io,
         connection: &mut Connection<P, E>,
     ) {
-        let payload = connection.process_outgoing_header(0, PacketType::ServerConnectResponse, &[]);
-        io.send_packet(Packet::new_raw(connection.address(), payload));
-        connection.mark_sent();
+        let payload =
+            connection
+                .base
+                .process_outgoing_header(0, PacketType::ServerConnectResponse, &[]);
+        io.send_packet(Packet::new_raw(connection.base.address, payload));
+        connection.base.mark_sent();
     }
 }
