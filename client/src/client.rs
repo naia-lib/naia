@@ -225,21 +225,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         if self.server_connection.is_some() {
+
             let mut did_tick = false;
-            // update current tick & apply updates on tick boundary
+
+            // update current tick
             if let Some(tick_manager) = &mut self.tick_manager {
-                if self.server_connection.as_mut().unwrap().frame_begin(
-                    &mut world,
-                    &self.shared_config.manifest,
-                    tick_manager,
-                ) {
+                if tick_manager.receive_tick() {
                     did_tick = true;
+
+                    // apply updates on tick boundary
+                    let receiving_tick = tick_manager.client_receiving_tick();
+                    self.server_connection.as_mut().unwrap().process_buffered_packets(&mut world, &self.shared_config.manifest, receiving_tick);
+                    self.server_connection.as_mut().unwrap().on_tick(tick_manager.server_receivable_tick());
                 }
             } else {
-                self.server_connection
-                    .as_mut()
-                    .unwrap()
-                    .tickless_read_incoming(&mut world, &self.shared_config.manifest);
+                self.server_connection.as_mut().unwrap().process_buffered_packets(&mut world, &self.shared_config.manifest, 0);
             }
             // return connect event
             if self.outstanding_connect {
@@ -258,7 +258,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 self.disconnect_cleanup();
                 events.clear();
                 events.push_back(Ok(Event::Disconnection(server_addr)));
-                return events; // exit early, we're disconnected, who cares?
+
+                // exit early, we're disconnected, who cares?
+                return events;
             }
             // receive messages
             while let Some(message) = self.server_connection.as_mut().unwrap().incoming_message() {
@@ -321,25 +323,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             }
             // send packets
             if let Some(client_tick) = client_tick_opt {
-                if let Some(tick_manager) = &self.tick_manager {
-                    let mut sent = false;
-                    let mut entity_messages = self
-                        .server_connection
-                        .as_mut()
-                        .unwrap()
-                        .entity_messages(tick_manager.server_receivable_tick());
-                    while let Some(payload) = self
-                        .server_connection
-                        .as_mut()
-                        .unwrap()
-                        .outgoing_packet(client_tick, &mut entity_messages)
-                    {
-                        self.io.send_packet(Packet::new_raw(payload));
-                        sent = true;
-                    }
-                    if sent {
-                        self.server_connection.as_mut().unwrap().mark_sent();
-                    }
+                let mut sent = false;
+                while let Some(payload) = self
+                    .server_connection
+                    .as_mut()
+                    .unwrap()
+                    .outgoing_packet(client_tick)
+                {
+                    self.io.send_packet(Packet::new_raw(payload));
+                    sent = true;
+                }
+                if sent {
+                    self.server_connection.as_mut().unwrap().mark_sent();
                 }
             }
             // tick event

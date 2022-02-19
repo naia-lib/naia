@@ -18,7 +18,7 @@ impl TickManager {
     }
 
     /// Whether or not we should emit a tick event
-    pub fn should_tick(&mut self) -> bool {
+    pub fn receive_tick(&mut self) -> bool {
         if self.timer.ringing() {
             self.timer.reset();
             self.current_tick = self.current_tick.wrapping_add(1);

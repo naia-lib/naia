@@ -1,0 +1,1 @@
+pub const MESSAGE_HISTORY_SIZE: u16 = 64;

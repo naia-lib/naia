@@ -10,16 +10,16 @@ use super::{
     packet_notifiable::PacketNotifiable,
     protocolize::{ProtocolKindType, Protocolize},
     replicate::ReplicateSafe,
+    message_packet_writer::MessagePacketWriter,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
-#[derive(Debug)]
 pub struct MessageManager<P: Protocolize> {
     queued_outgoing_messages: VecDeque<(bool, P)>,
     queued_incoming_messages: VecDeque<P>,
     sent_guaranteed_messages: HashMap<u16, Vec<P>>,
-    last_popped_message_guarantee: bool,
+    message_writer: MessagePacketWriter,
 }
 
 impl<P: Protocolize> MessageManager<P> {
@@ -29,22 +29,16 @@ impl<P: Protocolize> MessageManager<P> {
             queued_outgoing_messages: VecDeque::new(),
             queued_incoming_messages: VecDeque::new(),
             sent_guaranteed_messages: HashMap::new(),
-            last_popped_message_guarantee: false,
+            message_writer: MessagePacketWriter::new(),
         }
     }
+
+    // Outgoing Messages
 
     /// Returns whether the Manager has queued Messages that can be transmitted
     /// to the remote host
     pub fn has_outgoing_messages(&self) -> bool {
-        return self.queued_outgoing_messages.len() != 0;
-    }
-
-    /// Gets the next queued Message to be transmitted
-    pub fn peek_outgoing_message(&self) -> Option<&P> {
-        match self.queued_outgoing_messages.front() {
-            Some((_, message)) => Some(message),
-            None => None,
-        }
+        return !self.queued_outgoing_messages.is_empty();
     }
 
     /// Gets the next queued Message to be transmitted
@@ -66,8 +60,6 @@ impl<P: Protocolize> MessageManager<P> {
                     }
                 }
 
-                self.last_popped_message_guarantee = guaranteed;
-
                 Some(message)
             }
             None => None,
@@ -83,6 +75,8 @@ impl<P: Protocolize> MessageManager<P> {
         self.queued_outgoing_messages
             .push_back((guaranteed_delivery, message.protocol_copy()));
     }
+
+    // Incoming Messages
 
     /// Returns whether any Messages have been received that must be handed to
     /// the application
@@ -105,6 +99,37 @@ impl<P: Protocolize> MessageManager<P> {
             let new_message = manifest.create_replica(component_kind, reader);
             self.queued_incoming_messages.push_back(new_message);
         }
+    }
+
+    // MessageWriter
+
+    /// Write into outgoing packet
+    pub fn write_messages(&mut self, total_bytes: usize, next_packet_index: u16) {
+        loop {
+            if let Some((_, peeked_message)) = self.queued_outgoing_messages.front() {
+                if !self.message_writer.message_fits(total_bytes, peeked_message) {
+                    break;
+                }
+            } else {
+                break;
+            }
+
+            let popped_message = self.pop_outgoing_message(next_packet_index).unwrap();
+            self.message_writer.write_message(&popped_message);
+        }
+    }
+
+    /// Get writer's number of outgoing bytes
+    pub fn writer_bytes_number(&self) -> usize {
+        return self.message_writer.bytes_number();
+    }
+
+    pub fn writer_has_bytes(&self) -> bool {
+        self.message_writer.has_bytes()
+    }
+
+    pub fn writer_bytes(&mut self, out_bytes: &mut Vec<u8>) {
+        self.message_writer.bytes(out_bytes);
     }
 }
 

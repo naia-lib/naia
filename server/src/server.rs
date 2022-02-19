@@ -181,10 +181,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
         // tick event
         if let Some(tick_manager) = &mut self.tick_manager {
-            if tick_manager.should_tick() {
+            if tick_manager.receive_tick() {
+
+                // Receive EntityMessages
+
+                // TODO: have 1 single queue for messages from all users, as it's
+                // possible this current technique unfairly favors the 1st users in
+                // self.user_connections
                 if let Some(server_tick) = self.server_tick() {
                     for (_, connection) in self.user_connections.iter_mut() {
-                        //receive entity messages from anyone
                         while let Some((entity, message)) =
                             connection.pop_incoming_entity_message(server_tick)
                         {
@@ -274,6 +279,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
         // loop through all connections, send packet
         let server_tick = self.server_tick().unwrap_or(0);
+
+        // TODO: have 1 single outgoing queue so that first users in collection don't get more updates than those in the back
         for (address, connection) in self.user_connections.iter_mut() {
             connection.collect_component_updates(&self.world_record);
             let mut sent = false;
