@@ -67,6 +67,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
     }
 
     pub fn has_outgoing_messages(&self) -> bool {
+        if self.send_locked {
+            return false;
+        }
         self.outgoing_messages.has_outgoing_messages()
     }
 
