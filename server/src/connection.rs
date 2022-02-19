@@ -11,7 +11,7 @@ use naia_shared::{
 
 use super::{
     entity_manager::EntityManager, entity_message_receiver::EntityMessageReceiver,
-    global_diff_handler::GlobalDiffHandler, ping_manager::PingManager, user::user_key::UserKey,
+    global_diff_handler::GlobalDiffHandler, user::user_key::UserKey,
     world_record::WorldRecord,
 };
 
@@ -19,7 +19,6 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     pub user_key: UserKey,
     pub base: BaseConnection<P>,
     pub entity_manager: EntityManager<P, E>,
-    pub ping_manager: PingManager,
     entity_message_receiver: EntityMessageReceiver<P>,
 }
 
@@ -34,7 +33,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             user_key: *user_key,
             base: BaseConnection::new(user_address, connection_config),
             entity_manager: EntityManager::new(user_address, diff_handler),
-            ping_manager: PingManager::new(),
             entity_message_receiver: EntityMessageReceiver::new(),
         }
     }

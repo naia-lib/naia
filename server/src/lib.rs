@@ -46,7 +46,6 @@ mod local_component_record;
 mod local_entity_record;
 mod locality_status;
 mod mut_channel;
-mod ping_manager;
 mod room;
 mod server;
 mod server_config;

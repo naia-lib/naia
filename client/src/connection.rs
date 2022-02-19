@@ -1,9 +1,6 @@
 use std::{hash::Hash, net::SocketAddr};
 
-use naia_shared::{
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
-    PacketWriteState, Protocolize, StandardHeader, WorldMutType,
-};
+use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, MonitorConfig, PacketReader, PacketType, PacketWriteState, Protocolize, StandardHeader, WorldMutType};
 
 use super::{
     entity_manager::EntityManager, ping_manager::PingManager, tick_manager::TickManager,
@@ -13,21 +10,26 @@ use super::{
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     pub base: BaseConnection<P>,
     pub entity_manager: EntityManager<P, E>,
-    pub ping_manager: PingManager,
+    pub ping_manager: Option<PingManager>,
     jitter_buffer: TickQueue<Box<[u8]>>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
-    pub fn new(address: SocketAddr, connection_config: &ConnectionConfig) -> Self {
+    pub fn new(address: SocketAddr, connection_config: &ConnectionConfig, monitor_config: &Option<MonitorConfig>) -> Self {
+
+        let ping_manager: Option<PingManager> = monitor_config.as_ref().map(|config| {
+            PingManager::new(
+                config.ping_interval,
+                config.rtt_initial_estimate,
+                config.jitter_initial_estimate,
+                config.rtt_smoothing_factor,
+            )
+        });
+
         return Connection {
             base: BaseConnection::new(address, connection_config),
             entity_manager: EntityManager::new(),
-            ping_manager: PingManager::new(
-                connection_config.ping_interval,
-                connection_config.rtt_initial_estimate,
-                connection_config.jitter_initial_estimate,
-                connection_config.rtt_smoothing_factor,
-            ),
+            ping_manager,
             jitter_buffer: TickQueue::new(),
         };
     }
@@ -40,11 +42,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         tick_manager_opt: Option<&mut TickManager>,
     ) {
         if let Some(tick_manager) = tick_manager_opt {
-            tick_manager.record_server_tick(
-                header.host_tick(),
-                self.ping_manager.rtt(),
-                self.ping_manager.jitter(),
-            );
+            if let Some(ping_manager) = &self.ping_manager {
+                tick_manager.record_server_tick(
+                    header.host_tick(),
+                    ping_manager.rtt,
+                    ping_manager.jitter,
+                );
+            }
         }
 
         self.base

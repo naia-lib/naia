@@ -6,6 +6,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+
 use naia_server_socket::{Packet, ServerAddrs, Socket};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
@@ -14,6 +16,7 @@ pub use naia_shared::{
     Timestamp, WorldMutType, WorldRefType,
 };
 use slotmap::DenseSlotMap;
+use naia_shared::MonitorConfig;
 
 use super::{
     connection::Connection,
@@ -42,6 +45,7 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
     manifest: Manifest<P>,
     // Connection
     connection_config: ConnectionConfig,
+    monitor_config: Option<MonitorConfig>,
     socket: Socket,
     io: Io,
     heartbeat_timer: Timer,
@@ -73,6 +77,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             shared_config.link_condition_config.clone();
 
         let connection_config = server_config.connection.clone();
+        let monitor_config = shared_config.monitor_config.clone();
 
         let socket = Socket::new(server_config.socket);
 
@@ -91,6 +96,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             manifest: shared_config.manifest,
             // Connection
             connection_config,
+            monitor_config,
             socket,
             io: Io::new(),
             heartbeat_timer,
@@ -879,27 +885,42 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                             }
                         }
                         PacketType::Ping => {
-                            let server_tick = self.server_tick().unwrap_or(0);
-                            match self.user_connections.get_mut(&address) {
-                                Some(connection) => {
-                                    connection.process_incoming_header(&self.world_record, &header);
-                                    let ping_payload =
-                                        connection.ping_manager.process_ping(&payload);
-                                    let payload_with_header =
-                                        connection.base.process_outgoing_header(
-                                            server_tick,
-                                            PacketType::Pong,
-                                            &ping_payload,
-                                        );
-                                    self.io.send_packet(Packet::new_raw(
-                                        connection.base.address,
-                                        payload_with_header,
-                                    ));
-                                    connection.base.mark_sent();
+                            if self.monitor_config.is_some() {
+                                let server_tick = self.server_tick().unwrap_or(0);
+                                match self.user_connections.get_mut(&address) {
+                                    Some(connection) => {
+                                        connection.process_incoming_header(&self.world_record, &header);
+
+                                        // read incoming ping index
+                                        let mut reader = PacketReader::new(&payload);
+                                        let ping_index = reader.cursor().read_u16::<BigEndian>().unwrap();
+
+                                        // write pong payload
+                                        let mut out_bytes = Vec::<u8>::new();
+
+                                        // write index
+                                        out_bytes.write_u16::<BigEndian>(ping_index).unwrap();
+
+                                        let ping_payload = out_bytes.into_boxed_slice();
+
+                                        let payload_with_header =
+                                            connection.base.process_outgoing_header(
+                                                server_tick,
+                                                PacketType::Pong,
+                                                &ping_payload,
+                                            );
+                                        self.io.send_packet(Packet::new_raw(
+                                            connection.base.address,
+                                            payload_with_header,
+                                        ));
+                                        connection.base.mark_sent();
+                                    }
+                                    None => {
+                                        warn!("received ping from unauthenticated client: {}", address);
+                                    }
                                 }
-                                None => {
-                                    warn!("received ping from unauthenticated client: {}", address);
-                                }
+                            } else {
+                                warn!("received ping address: {}, even though not configured to receive pings", address);
                             }
                         }
                         PacketType::ServerChallengeResponse
