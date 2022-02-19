@@ -1,12 +1,12 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use naia_client_socket::{Packet, Socket};
+use naia_shared::MonitorConfig;
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
     Protocolize, ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };
-use naia_shared::MonitorConfig;
 
 use super::{
     client_config::ClientConfig,
@@ -187,7 +187,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
     /// Gets the average Round Trip Time measured to the Server
     pub fn rtt(&self) -> f32 {
-        return self.server_connection.as_ref().unwrap().ping_manager.as_ref().expect("SharedConfig.monitor_config is set to None! Enable to allow checking RTT.").rtt;
+        return self
+            .server_connection
+            .as_ref()
+            .unwrap()
+            .ping_manager
+            .as_ref()
+            .expect("SharedConfig.monitor_config is set to None! Enable to allow checking RTT.")
+            .rtt;
     }
 
     /// Gets the average Jitter measured in connection to the Server
@@ -351,14 +358,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 );
             }
             // send pings
-            if let Some(ping_manager) = &mut self
-                .server_connection
-                .as_mut()
-                .unwrap()
-                .ping_manager
-            {
-                if ping_manager.should_send_ping()
-                {
+            if let Some(ping_manager) = &mut self.server_connection.as_mut().unwrap().ping_manager {
+                if ping_manager.should_send_ping() {
                     let ping_packet = ping_manager.ping_packet();
                     internal_send_with_connection::<P, E>(
                         client_tick_opt,
@@ -440,7 +441,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                                 }
                                 PacketType::Heartbeat => {}
                                 PacketType::Pong => {
-                                    if let Some(ping_manager) = &mut server_connection.ping_manager {
+                                    if let Some(ping_manager) = &mut server_connection.ping_manager
+                                    {
                                         ping_manager.process_pong(&payload);
                                     }
                                 }

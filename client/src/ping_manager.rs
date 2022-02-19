@@ -70,8 +70,8 @@ impl PingManager {
 
     fn process_new_rtt(&mut self, rtt_millis: f32) {
         let ping_millis = self.rtt / 2.0;
-        self.rtt = (self.rtt_smoothing_factor_inv * self.rtt)
-            + (self.rtt_smoothing_factor * rtt_millis);
+        self.rtt =
+            (self.rtt_smoothing_factor_inv * self.rtt) + (self.rtt_smoothing_factor * rtt_millis);
         self.jitter = (self.rtt_smoothing_factor_inv * self.jitter)
             + (self.rtt_smoothing_factor * (rtt_millis - ping_millis).abs());
     }

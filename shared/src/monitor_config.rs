@@ -16,7 +16,8 @@ pub struct MonitorConfig {
 }
 
 impl MonitorConfig {
-    /// Creates a new MonitorConfig, used to monitor statistics about the network
+    /// Creates a new MonitorConfig, used to monitor statistics about the
+    /// network
     pub fn new(
         ping_interval: Duration,
         rtt_initial_estimate: Duration,

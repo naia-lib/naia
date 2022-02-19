@@ -13,10 +13,7 @@ pub struct ConnectionConfig {
 
 impl ConnectionConfig {
     /// Creates a new ConnectionConfig, used to initialize a Connection
-    pub fn new(
-        disconnection_timeout_duration: Duration,
-        heartbeat_interval: Duration,
-    ) -> Self {
+    pub fn new(disconnection_timeout_duration: Duration, heartbeat_interval: Duration) -> Self {
         ConnectionConfig {
             disconnection_timeout_duration,
             heartbeat_interval,

@@ -18,6 +18,7 @@ mod manager_type;
 mod manifest;
 mod message_manager;
 mod message_packet_writer;
+mod monitor_config;
 mod packet_notifiable;
 mod packet_type;
 mod packet_write_state;
@@ -33,7 +34,6 @@ mod standard_header;
 mod types;
 mod world_type;
 mod wrapping_number;
-mod monitor_config;
 
 /// Commonly used utility methods to be used by naia-server & naia-client
 pub mod utils;
@@ -54,6 +54,7 @@ pub use manager_type::ManagerType;
 pub use manifest::Manifest;
 pub use message_manager::MessageManager;
 pub use message_packet_writer::MessagePacketWriter;
+pub use monitor_config::MonitorConfig;
 pub use packet_notifiable::PacketNotifiable;
 pub use packet_type::PacketType;
 pub use packet_write_state::PacketWriteState;
@@ -71,4 +72,3 @@ pub use standard_header::StandardHeader;
 pub use types::{PacketIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
-pub use monitor_config::MonitorConfig;
