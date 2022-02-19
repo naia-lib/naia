@@ -120,7 +120,6 @@ mod inner {
             _: &P::Kind,
             _: &DiffMask,
             _: &mut PacketReader,
-            _: u16,
         ) {
             unimplemented!()
         }

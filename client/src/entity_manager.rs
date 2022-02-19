@@ -37,6 +37,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
+    pub fn incoming_entity_action(&mut self) -> Option<EntityAction<P, E>> {
+        return self.queued_incoming_messages.pop_front();
+    }
+
     pub fn process_data<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
@@ -261,15 +265,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
-    pub fn incoming_entity_action(&mut self) -> Option<EntityAction<P, E>> {
-        return self.queued_incoming_messages.pop_front();
-    }
-
     // EntityMessagePacketWriter
-
-    pub fn flush_writes(&mut self, out_bytes: &mut Vec<u8>) {
-        self.message_writer.flush_writes(out_bytes);
-    }
 
     pub fn queue_writes(&mut self, write_state: &mut PacketWriteState) {
         let mut entity_messages = self.message_sender.generate_outgoing_message_list();
@@ -299,5 +295,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             self.message_sender
                 .message_written(write_state.packet_index, client_tick, message_id);
         }
+    }
+
+    pub fn flush_writes(&mut self, out_bytes: &mut Vec<u8>) {
+        self.message_writer.flush_writes(out_bytes);
     }
 }

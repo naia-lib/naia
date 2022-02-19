@@ -30,7 +30,7 @@ impl App {
 
         let mut server_config = ServerConfig::default();
         server_config.require_auth = false;
-        server_config.disconnection_timeout_duration = Duration::from_secs(30);
+        server_config.connection.disconnection_timeout_duration = Duration::from_secs(30);
 
         let mut server = Server::new(server_config, shared_config());
         server.listen(server_addresses);
