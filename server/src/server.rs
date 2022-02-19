@@ -9,6 +9,7 @@ use std::{
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use naia_server_socket::{Packet, ServerAddrs, Socket};
+use naia_shared::MonitorConfig;
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
     ManagerType, Manifest, NetEntity, PacketReader, PacketType, PropertyMutate, PropertyMutator,
@@ -16,7 +17,6 @@ pub use naia_shared::{
     Timestamp, WorldMutType, WorldRefType,
 };
 use slotmap::DenseSlotMap;
-use naia_shared::MonitorConfig;
 
 use super::{
     connection::Connection,
@@ -73,8 +73,7 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
 impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Create a new Server
     pub fn new(mut server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
-        server_config.socket.link_condition_config =
-            shared_config.link_condition_config.clone();
+        server_config.socket.link_condition_config = shared_config.link_condition_config.clone();
 
         let connection_config = server_config.connection.clone();
         let monitor_config = shared_config.monitor_config.clone();
@@ -889,11 +888,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                 let server_tick = self.server_tick().unwrap_or(0);
                                 match self.user_connections.get_mut(&address) {
                                     Some(connection) => {
-                                        connection.process_incoming_header(&self.world_record, &header);
+                                        connection
+                                            .process_incoming_header(&self.world_record, &header);
 
                                         // read incoming ping index
                                         let mut reader = PacketReader::new(&payload);
-                                        let ping_index = reader.cursor().read_u16::<BigEndian>().unwrap();
+                                        let ping_index =
+                                            reader.cursor().read_u16::<BigEndian>().unwrap();
 
                                         // write pong payload
                                         let mut out_bytes = Vec::<u8>::new();
@@ -916,7 +917,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                         connection.base.mark_sent();
                                     }
                                     None => {
-                                        warn!("received ping from unauthenticated client: {}", address);
+                                        warn!(
+                                            "received ping from unauthenticated client: {}",
+                                            address
+                                        );
                                     }
                                 }
                             } else {

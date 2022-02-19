@@ -1,6 +1,9 @@
 use std::{hash::Hash, net::SocketAddr};
 
-use naia_shared::{BaseConnection, ConnectionConfig, ManagerType, Manifest, MonitorConfig, PacketReader, PacketType, PacketWriteState, Protocolize, StandardHeader, WorldMutType};
+use naia_shared::{
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, MonitorConfig, PacketReader,
+    PacketType, PacketWriteState, Protocolize, StandardHeader, WorldMutType,
+};
 
 use super::{
     entity_manager::EntityManager, ping_manager::PingManager, tick_manager::TickManager,
@@ -15,8 +18,11 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
-    pub fn new(address: SocketAddr, connection_config: &ConnectionConfig, monitor_config: &Option<MonitorConfig>) -> Self {
-
+    pub fn new(
+        address: SocketAddr,
+        connection_config: &ConnectionConfig,
+        monitor_config: &Option<MonitorConfig>,
+    ) -> Self {
         let ping_manager: Option<PingManager> = monitor_config.as_ref().map(|config| {
             PingManager::new(
                 config.ping_interval,
