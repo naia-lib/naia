@@ -9,8 +9,8 @@ use naia_client_socket::Packet;
 pub struct PingManager {
     ping_timer: Timer,
     sent_pings: SentPings,
-    rtt_average: f32,
-    rtt_deviation: f32,
+    pub rtt: f32,
+    pub jitter: f32,
     rtt_smoothing_factor: f32,
     rtt_smoothing_factor_inv: f32,
 }
@@ -28,8 +28,8 @@ impl PingManager {
         PingManager {
             ping_timer: Timer::new(ping_interval),
             sent_pings: SentPings::new(),
-            rtt_average,
-            rtt_deviation: jitter_average,
+            rtt: rtt_average,
+            jitter: jitter_average,
             rtt_smoothing_factor,
             rtt_smoothing_factor_inv: 1.0 - rtt_smoothing_factor,
         }
@@ -68,24 +68,12 @@ impl PingManager {
         }
     }
 
-    fn process_new_rtt(&mut self, ping_millis: f32) {
-        let old_rtt_avg = self.rtt_average;
-        self.rtt_average = (self.rtt_smoothing_factor_inv * old_rtt_avg)
-            + (self.rtt_smoothing_factor * ping_millis);
-        self.rtt_deviation = (self.rtt_smoothing_factor_inv * self.rtt_deviation)
-            + (self.rtt_smoothing_factor * (ping_millis - old_rtt_avg).abs());
-    }
-
-    /// Gets the current calculated average Round Trip Time to the remote host,
-    /// in milliseconds
-    pub fn rtt(&self) -> f32 {
-        return self.rtt_average;
-    }
-
-    /// Gets the current calculated standard deviation of Jitter to the remote
-    /// host, in milliseconds
-    pub fn jitter(&self) -> f32 {
-        return self.rtt_deviation / 2.0;
+    fn process_new_rtt(&mut self, rtt_millis: f32) {
+        let ping_millis = self.rtt / 2.0;
+        self.rtt = (self.rtt_smoothing_factor_inv * self.rtt)
+            + (self.rtt_smoothing_factor * rtt_millis);
+        self.jitter = (self.rtt_smoothing_factor_inv * self.jitter)
+            + (self.rtt_smoothing_factor * (rtt_millis - ping_millis).abs());
     }
 }
 

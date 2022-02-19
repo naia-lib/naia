@@ -6,6 +6,7 @@ pub use naia_shared::{
     Protocolize, ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };
+use naia_shared::MonitorConfig;
 
 use super::{
     client_config::ClientConfig,
@@ -27,6 +28,7 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
     shared_config: SharedConfig<P>,
     connection_config: ConnectionConfig,
     socket_config: SocketConfig,
+    monitor_config: Option<MonitorConfig>,
     // Connection
     io: Io,
     server_connection: Option<Connection<P, E>>,
@@ -45,6 +47,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Create a new Client
     pub fn new(client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
         let connection_config = client_config.connection_config.clone();
+        let monitor_config = shared_config.monitor_config.clone();
 
         let mut socket_config = client_config.socket_config.clone();
         socket_config.link_condition_config = shared_config.link_condition_config.clone();
@@ -65,6 +68,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             shared_config,
             connection_config,
             socket_config,
+            monitor_config,
             // Connection
             io: Io::new(),
             server_connection: None,
@@ -179,9 +183,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         return self.io.server_addr_unwrapped();
     }
 
+    /// Gets the network
+
     /// Gets the average Round Trip Time measured to the Server
     pub fn rtt(&self) -> f32 {
-        return self.server_connection.as_ref().unwrap().ping_manager.rtt();
+        return self.server_connection.as_ref().unwrap().ping_manager.as_ref().expect("SharedConfig.monitor_config is set to None! Enable to allow checking RTT.").rtt;
     }
 
     /// Gets the average Jitter measured in connection to the Server
@@ -191,7 +197,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             .as_ref()
             .unwrap()
             .ping_manager
-            .jitter();
+            .as_ref()
+            .expect("SharedConfig.monitor_config is set to None! Enable to allow checking RTT.")
+            .jitter;
     }
 
     // Ticks
@@ -343,27 +351,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 );
             }
             // send pings
-            if self
+            if let Some(ping_manager) = &mut self
                 .server_connection
-                .as_ref()
+                .as_mut()
                 .unwrap()
                 .ping_manager
-                .should_send_ping()
             {
-                let ping_packet = self
-                    .server_connection
-                    .as_mut()
-                    .unwrap()
-                    .ping_manager
-                    .ping_packet();
-                internal_send_with_connection::<P, E>(
-                    client_tick_opt,
-                    &mut self.io,
-                    self.server_connection.as_mut().unwrap(),
-                    PacketType::Ping,
-                    ping_packet,
-                );
+                if ping_manager.should_send_ping()
+                {
+                    let ping_packet = ping_manager.ping_packet();
+                    internal_send_with_connection::<P, E>(
+                        client_tick_opt,
+                        &mut self.io,
+                        self.server_connection.as_mut().unwrap(),
+                        PacketType::Ping,
+                        ping_packet,
+                    );
+                }
             }
+
             // send packets
             let mut sent = false;
             while let Some(payload) = self
@@ -434,7 +440,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                                 }
                                 PacketType::Heartbeat => {}
                                 PacketType::Pong => {
-                                    server_connection.ping_manager.process_pong(&payload);
+                                    if let Some(ping_manager) = &mut server_connection.ping_manager {
+                                        ping_manager.process_pong(&payload);
+                                    }
                                 }
                                 _ => {} // TODO: explicitly cover these cases
                             }
@@ -444,6 +452,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                                 let server_connection = Connection::new(
                                     self.server_address_unwrapped(),
                                     &self.connection_config,
+                                    &self.monitor_config,
                                 );
 
                                 self.server_connection = Some(server_connection);
