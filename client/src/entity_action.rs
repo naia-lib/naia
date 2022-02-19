@@ -1,6 +1,4 @@
-use naia_shared::Protocolize;
-
-use crate::types::Tick;
+use naia_shared::{Protocolize, Tick};
 
 #[derive(Debug, Clone)]
 pub enum EntityAction<P: Protocolize, E: Copy> {

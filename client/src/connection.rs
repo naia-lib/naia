@@ -3,18 +3,13 @@ use std::{hash::Hash, net::SocketAddr};
 use naia_client_socket::Packet;
 
 use naia_shared::{
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize,
-    ReplicateSafe, StandardHeader, WorldMutType,
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketIndex, PacketReader, PacketType,
+    PacketWriteState, Protocolize, ReplicateSafe, StandardHeader, Tick, WorldMutType,
 };
-use crate::types::PacketIndex;
 
 use super::{
-    entity_action::EntityAction,
-    entity_manager::EntityManager,
-    ping_manager::PingManager,
-    tick_manager::TickManager,
-    tick_queue::TickQueue,
-    types::Tick,
+    entity_action::EntityAction, entity_manager::EntityManager, ping_manager::PingManager,
+    tick_manager::TickManager, tick_queue::TickQueue,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
@@ -65,36 +60,31 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     }
 
     // Outgoing Data
-    pub fn outgoing_packet(
-        &mut self,
-        client_tick: u16,
-    ) -> Option<Box<[u8]>> {
-        if self.base_connection.has_outgoing_messages() || self.entity_manager.has_outgoing_messages() {
-
-            let next_packet_index: PacketIndex = self.next_packet_index();
+    pub fn outgoing_packet(&mut self, client_tick: u16) -> Option<Box<[u8]>> {
+        if self.base_connection.has_outgoing_messages()
+            || self.entity_manager.has_outgoing_messages()
+        {
+            let mut write_state = PacketWriteState::new(self.next_packet_index());
 
             // Write Entity Messages
-            self.entity_manager.write_messages(
-                self.base_connection.writer_bytes_number() + self.entity_manager.writer_bytes_number(),
-                next_packet_index,
-            );
+            self.entity_manager.queue_writes(&mut write_state);
 
             // Write Messages
-            self.base_connection.write_messages(
-                self.base_connection.writer_bytes_number() + self.entity_manager.writer_bytes_number(),
-                next_packet_index,
-            );
+            self.base_connection.queue_writes(&mut write_state);
 
             // Add header
-            if self.base_connection.writer_has_bytes() || self.entity_manager.writer_has_bytes() {
+            if write_state.byte_count() > 0 {
                 // Get bytes from writer
-                let mut out_vec = Vec::<u8>::new();
-                self.base_connection.writer_bytes(&mut out_vec);
-                self.entity_manager.writer_bytes(&mut out_vec);
+                let mut out_bytes = Vec::<u8>::new();
+                self.base_connection.flush_writes(&mut out_bytes);
+                self.entity_manager.flush_writes(&mut out_bytes);
 
                 // Add header to it
-                let payload =
-                    self.process_outgoing_header(client_tick, PacketType::Data, &out_vec.into_boxed_slice());
+                let payload = self.process_outgoing_header(
+                    client_tick,
+                    PacketType::Data,
+                    &out_bytes.into_boxed_slice(),
+                );
                 return Some(payload);
             } else {
                 panic!("Pending outgoing messages but no bytes were written... Likely trying to transmit a Component/Message larger than 576 bytes!");
@@ -127,7 +117,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     }
 
     pub fn on_tick(&mut self, server_receivable_tick: Tick) {
-        self.entity_manager.entity_message_sender.on_tick(server_receivable_tick);
+        self.entity_manager
+            .entity_message_sender
+            .on_tick(server_receivable_tick);
     }
 
     pub fn process_buffered_packets<W: WorldMutType<P, E>>(
@@ -137,7 +129,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         receiving_tick: u16,
     ) {
         while let Some((server_tick, data_packet)) = self.jitter_buffer.pop_item(receiving_tick) {
-
             self.process_incoming_data(world, manifest, server_tick, &data_packet);
         }
     }
@@ -173,8 +164,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             );
         }
 
-        self.base_connection
-            .process_incoming_header(header, &mut Some(&mut self.entity_manager.entity_message_sender));
+        self.base_connection.process_incoming_header(
+            header,
+            &mut Some(&mut self.entity_manager.entity_message_sender),
+        );
     }
 
     pub fn process_outgoing_header(

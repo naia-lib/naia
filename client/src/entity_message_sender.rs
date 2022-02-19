@@ -3,11 +3,11 @@ use std::{
     hash::Hash,
 };
 
+use crate::{constants::MESSAGE_HISTORY_SIZE, types::MsgId};
 use naia_shared::{
-    sequence_greater_than, sequence_less_than, PacketNotifiable, Protocolize, ReplicateSafe,
+    sequence_greater_than, sequence_less_than, PacketIndex, PacketNotifiable, Protocolize,
+    ReplicateSafe, Tick,
 };
-use crate::constants::MESSAGE_HISTORY_SIZE;
-use crate::types::{MsgId, PacketIndex, Tick};
 
 //use miniquad::info;
 

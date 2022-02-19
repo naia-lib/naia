@@ -5,17 +5,15 @@ use std::{
 };
 
 use naia_shared::{
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, Protocolize,
-    ReplicateSafe, StandardHeader, WorldRefType,
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketIndex, PacketReader, PacketType,
+    PacketWriteState, Protocolize, ReplicateSafe, StandardHeader, Tick, WorldRefType,
 };
 
 use super::{
     entity_manager::EntityManager, entity_message_receiver::EntityMessageReceiver,
-    global_diff_handler::GlobalDiffHandler, keys::ComponentKey,
-    ping_manager::PingManager, user::user_key::UserKey, world_record::WorldRecord,
+    global_diff_handler::GlobalDiffHandler, keys::ComponentKey, ping_manager::PingManager,
+    user::user_key::UserKey, world_record::WorldRecord,
 };
-
-pub type PacketIndex = u16;
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     pub user_key: UserKey,
@@ -45,35 +43,32 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         &mut self,
         world: &W,
         world_record: &WorldRecord<E, P::Kind>,
-        server_tick: u16,
+        server_tick: Tick,
     ) -> Option<Box<[u8]>> {
-        if self.base_connection.has_outgoing_messages() || self.entity_manager.has_outgoing_actions() {
+        if self.base_connection.has_outgoing_messages()
+            || self.entity_manager.has_outgoing_actions()
+        {
+            let mut write_state = PacketWriteState::new(self.next_packet_index());
 
-            let next_packet_index: PacketIndex = self.next_packet_index();
+            // Queue Messages for Write
+            self.base_connection.queue_writes(&mut write_state);
 
-            // Write Messages
-            self.base_connection.write_messages(
-                self.base_connection.writer_bytes_number() + self.entity_manager.writer_bytes_number(),
-                next_packet_index,
-            );
+            // Queue Entity Actions for Write
+            self.entity_manager
+                .queue_writes(&mut write_state, world, world_record);
 
-            // Write Entity Actions
-            self.entity_manager.write_actions(
-                self.base_connection.writer_bytes_number() + self.entity_manager.writer_bytes_number(),
-                world,
-                world_record,
-                next_packet_index,
-            );
-
-            if self.base_connection.writer_has_bytes() || self.entity_manager.writer_has_bytes() {
+            if write_state.byte_count() > 0 {
                 // Get bytes from writer
                 let mut out_vec = Vec::<u8>::new();
-                self.base_connection.writer_bytes(&mut out_vec);
-                self.entity_manager.writer_bytes(&mut out_vec);
+                self.base_connection.flush_writes(&mut out_vec);
+                self.entity_manager.flush_writes(&mut out_vec);
 
                 // Add header to it
-                let payload =
-                    self.process_outgoing_header(server_tick, PacketType::Data, &out_vec.into_boxed_slice());
+                let payload = self.process_outgoing_header(
+                    server_tick,
+                    PacketType::Data,
+                    &out_vec.into_boxed_slice(),
+                );
 
                 return Some(payload);
             } else {
@@ -88,8 +83,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         &mut self,
         server_tick: Option<u16>,
         manifest: &Manifest<P>,
-        data: &[u8])
-    {
+        data: &[u8],
+    ) {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
             let manager_type: ManagerType = reader.read_u8().into();

@@ -5,11 +5,16 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{DiffMask, EntityActionType, LocalComponentKey, Manifest, NaiaKey, NetEntity, PacketReader, ProtocolKindType, Protocolize, WorldMutType, ReplicateSafe};
 use crate::entity_message_sender::EntityMessageSender;
-use crate::types::PacketIndex;
+use naia_shared::{
+    DiffMask, EntityActionType, LocalComponentKey, Manifest, NaiaKey, NetEntity, PacketReader,
+    PacketWriteState, ProtocolKindType, Protocolize, ReplicateSafe, WorldMutType,
+};
 
-use super::{entity_action::EntityAction, entity_record::EntityRecord, entity_message_packet_writer::EntityMessagePacketWriter};
+use super::{
+    entity_action::EntityAction, entity_message_packet_writer::EntityMessagePacketWriter,
+    entity_record::EntityRecord,
+};
 
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
@@ -261,44 +266,53 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     // Message Sender
-    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R, client_tick: u16) {
-        self.entity_message_sender.send_entity_message(entity, message, client_tick)
+    pub fn send_entity_message<R: ReplicateSafe<P>>(
+        &mut self,
+        entity: &E,
+        message: &R,
+        client_tick: u16,
+    ) {
+        self.entity_message_sender
+            .send_entity_message(entity, message, client_tick)
     }
 
     pub fn has_outgoing_messages(&self) -> bool {
         self.entity_message_sender.has_outgoing_messages()
     }
 
-    // EntityMessagePackWriter
-    pub fn writer_has_bytes(&self) -> bool {
-        self.message_writer.has_bytes()
+    // EntityMessagePacketWriter
+
+    pub fn flush_writes(&mut self, out_bytes: &mut Vec<u8>) {
+        self.message_writer.flush_writes(out_bytes);
     }
 
-    pub fn writer_bytes_number(&self) -> usize {
-        self.message_writer.bytes_number()
-    }
-
-    pub fn writer_bytes(&mut self, out_bytes: &mut Vec<u8>) {
-        self.message_writer.bytes(out_bytes);
-    }
-
-    pub fn write_messages(&mut self, total_bytes: usize, next_packet_index: PacketIndex) {
+    pub fn queue_writes(&mut self, write_state: &mut PacketWriteState) {
         let mut entity_messages = self.entity_message_sender.generate_outgoing_message_list();
 
         loop {
             if let Some((_, _, entity, message)) = entity_messages.front() {
-                if !self.message_writer.entity_message_fits::<P, E>(total_bytes, &self.entity_records, &entity, &message) {
+                if !self.message_writer.message_fits::<P, E>(
+                    write_state,
+                    &self.entity_records,
+                    &entity,
+                    &message,
+                ) {
                     break;
                 }
             } else {
                 break;
             }
 
-            let (message_id, client_tick, entity, message) =
-                entity_messages.pop_front().unwrap();
-            self.message_writer.write_entity_message(&self.entity_records, &entity, &message, &client_tick);
+            let (message_id, client_tick, entity, message) = entity_messages.pop_front().unwrap();
+            self.message_writer.queue_write(
+                write_state,
+                &self.entity_records,
+                &client_tick,
+                &entity,
+                &message,
+            );
             self.entity_message_sender.message_written(
-                next_packet_index,
+                write_state.packet_index,
                 client_tick,
                 message_id,
             );

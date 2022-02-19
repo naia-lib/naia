@@ -30,6 +30,7 @@ pub use naia_shared as shared;
 
 mod connection;
 mod entity_action;
+mod entity_action_packet_writer;
 mod entity_manager;
 mod entity_message_receiver;
 mod entity_ref;
@@ -54,7 +55,6 @@ mod user;
 mod user_diff_handler;
 mod user_scope;
 mod world_record;
-mod entity_action_packet_writer;
 
 pub use entity_ref::{EntityMut, EntityRef};
 pub use error::NaiaServerError;
