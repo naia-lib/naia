@@ -53,7 +53,7 @@ impl TickManager {
         }
     }
 
-    pub fn mark_frame(&mut self) -> bool {
+    pub fn receive_tick(&mut self) -> bool {
         let mut ticked = false;
         let tick_interval_seconds = self.tick_interval_seconds * self.tick_speed_factor;
 

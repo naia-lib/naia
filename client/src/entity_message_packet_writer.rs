@@ -1,10 +1,10 @@
+use std::collections::HashMap;
 use std::hash::Hash;
 
 use byteorder::{BigEndian, WriteBytesExt};
 
 use naia_shared::{ManagerType, NaiaKey, ProtocolKindType, Protocolize, MTU_SIZE};
-
-use super::entity_manager::EntityManager;
+use crate::entity_record::EntityRecord;
 
 pub struct EntityMessagePacketWriter {
     message_working_bytes: Vec<u8>,
@@ -47,11 +47,11 @@ impl EntityMessagePacketWriter {
     pub fn entity_message_fits<P: Protocolize, E: Copy + Eq + Hash>(
         &self,
         total_bytes: usize,
-        entity_manager: &EntityManager<P, E>,
+        entity_records: &HashMap<E, EntityRecord<P::Kind>>,
         world_entity: &E,
         message: &P,
     ) -> bool {
-        if let Some(_) = entity_manager.world_to_local_entity(&world_entity) {
+        if entity_records.get(world_entity).is_some() {
             let mut message_total_bytes: usize = 0;
 
             // write client tick
@@ -79,12 +79,12 @@ impl EntityMessagePacketWriter {
     /// eventually be put into the outgoing packet
     pub fn write_entity_message<P: Protocolize, E: Copy + Eq + Hash>(
         &mut self,
-        entity_manager: &EntityManager<P, E>,
+        entity_records: &HashMap<E, EntityRecord<P::Kind>>,
         world_entity: &E,
         message: &P,
         client_tick: &u16,
     ) {
-        if let Some(local_entity) = entity_manager.world_to_local_entity(&world_entity) {
+        if let Some(entity_record) = entity_records.get(world_entity) {
             let message_ref = message.dyn_ref();
 
             let mut message_total_bytes = Vec::<u8>::new();
@@ -96,7 +96,7 @@ impl EntityMessagePacketWriter {
 
             // write local entity
             message_total_bytes
-                .write_u16::<BigEndian>(local_entity.to_u16())
+                .write_u16::<BigEndian>(entity_record.entity_net_id.to_u16())
                 .unwrap();
 
             // write message kind

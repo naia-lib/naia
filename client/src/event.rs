@@ -1,8 +1,7 @@
 use std::net::SocketAddr;
 
 use naia_shared::Protocolize;
-
-use super::tick::Tick;
+use crate::types::Tick;
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server

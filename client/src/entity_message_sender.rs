@@ -6,20 +6,18 @@ use std::{
 use naia_shared::{
     sequence_greater_than, sequence_less_than, PacketNotifiable, Protocolize, ReplicateSafe,
 };
+use crate::constants::MESSAGE_HISTORY_SIZE;
+use crate::types::{MsgId, PacketIndex, Tick};
 
 //use miniquad::info;
-
-const MESSAGE_HISTORY_SIZE: u16 = 64;
-
-pub type MsgId = u16;
-type PacketIndex = u16;
-pub type Tick = u16;
 
 pub struct EntityMessageSender<P: Protocolize, E: Copy + Eq + Hash> {
     // This SequenceBuffer is indexed by Tick
     outgoing_messages: OutgoingMessages<P, E>,
     // This SequenceBuffer is indexed by PacketIndex
     sent_messages: SentMessages,
+    // Whether currently sending this tick
+    send_locked: bool,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
@@ -27,6 +25,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
         EntityMessageSender {
             outgoing_messages: OutgoingMessages::new(),
             sent_messages: SentMessages::new(),
+            send_locked: false,
         }
     }
 
@@ -40,14 +39,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
 
         self.outgoing_messages
             .push(client_tick, entity, message_protocol);
+
+        self.send_locked = false;
     }
 
-    pub fn messages(&mut self, server_receivable_tick: Tick) -> VecDeque<(MsgId, Tick, E, P)> {
+    pub fn generate_outgoing_message_list(&mut self) -> VecDeque<(MsgId, Tick, E, P)> {
         let mut outgoing_list = VecDeque::new();
-
-        // Remove messages that would never be able to reach the Server
-        self.outgoing_messages
-            .pop_back_until_excluding(server_receivable_tick);
 
         // Loop through outstanding messages and add them to the outgoing list
         let mut iter = self.outgoing_messages.iter();
@@ -59,12 +56,26 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
         //     info!("appending {} messages", outgoing_list.len());
         // }
 
+        self.send_locked = true;
+
         return outgoing_list;
     }
 
     pub fn message_written(&mut self, packet_index: PacketIndex, tick: Tick, message_id: MsgId) {
         self.sent_messages
             .push_front(packet_index, tick, message_id);
+    }
+
+    pub fn has_outgoing_messages(&self) -> bool {
+        self.outgoing_messages.has_outgoing_messages()
+    }
+
+    pub fn on_tick(&mut self, server_receivable_tick: Tick) {
+        self.send_locked = false;
+
+        // Remove messages that would never be able to reach the Server
+        self.outgoing_messages
+            .pop_back_until_excluding(server_receivable_tick);
     }
 }
 
@@ -281,5 +292,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> OutgoingMessages<P, E> {
                 return;
             }
         }
+    }
+
+    pub fn has_outgoing_messages(&self) -> bool {
+        !self.buffer.is_empty()
     }
 }

@@ -23,9 +23,9 @@ mod error;
 mod event;
 mod handshake_manager;
 mod io;
-mod packet_writer;
 mod ping_manager;
-mod tick;
+mod types;
+mod constants;
 mod tick_manager;
 mod tick_queue;
 

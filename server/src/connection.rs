@@ -11,7 +11,7 @@ use naia_shared::{
 
 use super::{
     entity_manager::EntityManager, entity_message_receiver::EntityMessageReceiver,
-    global_diff_handler::GlobalDiffHandler, keys::ComponentKey, packet_writer::PacketWriter,
+    global_diff_handler::GlobalDiffHandler, keys::ComponentKey,
     ping_manager::PingManager, user::user_key::UserKey, world_record::WorldRecord,
 };
 
@@ -47,44 +47,34 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         world_record: &WorldRecord<E, P::Kind>,
         server_tick: u16,
     ) -> Option<Box<[u8]>> {
-        if self.base_connection.has_outgoing_messages()
-            || self.entity_manager.has_outgoing_actions()
-        {
-            let mut writer = PacketWriter::new();
+        if self.base_connection.has_outgoing_messages() || self.entity_manager.has_outgoing_actions() {
 
             let next_packet_index: PacketIndex = self.next_packet_index();
 
             // Write Messages
             self.base_connection.write_messages(
-                writer.bytes_number(),
-                writer.inner_mut(),
+                self.base_connection.writer_bytes_number() + self.entity_manager.writer_bytes_number(),
                 next_packet_index,
             );
 
-            // Write Entity actions
-            loop {
-                if !self
-                    .entity_manager
-                    .peek_action_fits::<W>(world_record, &writer)
-                {
-                    break;
-                }
+            // Write Entity Actions
+            self.entity_manager.write_actions(
+                self.base_connection.writer_bytes_number() + self.entity_manager.writer_bytes_number(),
+                world,
+                world_record,
+                next_packet_index,
+            );
 
-                let popped_entity_action = self
-                    .entity_manager
-                    .pop_outgoing_action::<W>(world_record, next_packet_index)
-                    .unwrap();
-                self.entity_manager
-                    .write_entity_action(world, &mut writer, &popped_entity_action);
-            }
-
-            if writer.has_bytes() {
+            if self.base_connection.writer_has_bytes() || self.entity_manager.writer_has_bytes() {
                 // Get bytes from writer
-                let out_bytes = writer.bytes();
+                let mut out_vec = Vec::<u8>::new();
+                self.base_connection.writer_bytes(&mut out_vec);
+                self.entity_manager.writer_bytes(&mut out_vec);
 
                 // Add header to it
                 let payload =
-                    self.process_outgoing_header(server_tick, PacketType::Data, &out_bytes);
+                    self.process_outgoing_header(server_tick, PacketType::Data, &out_vec.into_boxed_slice());
+
                 return Some(payload);
             } else {
                 panic!("Pending outgoing messages but no bytes were written... Likely trying to transmit a Component/Message larger than 576 bytes!");
@@ -98,8 +88,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         &mut self,
         server_tick: Option<u16>,
         manifest: &Manifest<P>,
-        data: &[u8],
-    ) {
+        data: &[u8])
+    {
         let mut reader = PacketReader::new(data);
         while reader.has_more() {
             let manager_type: ManagerType = reader.read_u8().into();

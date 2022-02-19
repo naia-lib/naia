@@ -45,7 +45,6 @@ mod local_component_record;
 mod local_entity_record;
 mod locality_status;
 mod mut_channel;
-mod packet_writer;
 mod ping_manager;
 mod room;
 mod server;
@@ -55,6 +54,7 @@ mod user;
 mod user_diff_handler;
 mod user_scope;
 mod world_record;
+mod entity_action_packet_writer;
 
 pub use entity_ref::{EntityMut, EntityRef};
 pub use error::NaiaServerError;

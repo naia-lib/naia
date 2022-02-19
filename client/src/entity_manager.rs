@@ -5,18 +5,19 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{
-    DiffMask, EntityActionType, LocalComponentKey, Manifest, NaiaKey, NetEntity, PacketReader,
-    ProtocolKindType, Protocolize, WorldMutType,
-};
+use naia_shared::{DiffMask, EntityActionType, LocalComponentKey, Manifest, NaiaKey, NetEntity, PacketReader, ProtocolKindType, Protocolize, WorldMutType, ReplicateSafe};
+use crate::entity_message_sender::EntityMessageSender;
+use crate::types::PacketIndex;
 
-use super::{entity_action::EntityAction, entity_record::EntityRecord, tick::Tick};
+use super::{entity_action::EntityAction, entity_record::EntityRecord, entity_message_packet_writer::EntityMessagePacketWriter};
 
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
     local_to_world_entity: HashMap<NetEntity, E>,
     component_to_entity_map: HashMap<LocalComponentKey, E>,
     queued_incoming_messages: VecDeque<EntityAction<P, E>>,
+    pub entity_message_sender: EntityMessageSender<P, E>,
+    message_writer: EntityMessagePacketWriter,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
@@ -26,6 +27,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             entity_records: HashMap::new(),
             component_to_entity_map: HashMap::new(),
             queued_incoming_messages: VecDeque::new(),
+            entity_message_sender: EntityMessageSender::new(),
+            message_writer: EntityMessagePacketWriter::new(),
         }
     }
 
@@ -204,7 +207,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                             self.queued_incoming_messages
                                 .push_back(EntityAction::UpdateComponent(
-                                    Tick(server_tick),
+                                    server_tick,
                                     *world_entity,
                                     *component_kind,
                                 ));
@@ -253,14 +256,52 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
-    pub fn world_to_local_entity(&self, world_entity: &E) -> Option<NetEntity> {
-        if let Some(entity_record) = self.entity_records.get(world_entity) {
-            return Some(entity_record.entity_net_id);
-        }
-        return None;
-    }
-
     pub fn pop_incoming_message(&mut self) -> Option<EntityAction<P, E>> {
         return self.queued_incoming_messages.pop_front();
+    }
+
+    // Message Sender
+    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R, client_tick: u16) {
+        self.entity_message_sender.send_entity_message(entity, message, client_tick)
+    }
+
+    pub fn has_outgoing_messages(&self) -> bool {
+        self.entity_message_sender.has_outgoing_messages()
+    }
+
+    // EntityMessagePackWriter
+    pub fn writer_has_bytes(&self) -> bool {
+        self.message_writer.has_bytes()
+    }
+
+    pub fn writer_bytes_number(&self) -> usize {
+        self.message_writer.bytes_number()
+    }
+
+    pub fn writer_bytes(&mut self, out_bytes: &mut Vec<u8>) {
+        self.message_writer.bytes(out_bytes);
+    }
+
+    pub fn write_messages(&mut self, total_bytes: usize, next_packet_index: PacketIndex) {
+        let mut entity_messages = self.entity_message_sender.generate_outgoing_message_list();
+
+        loop {
+            if let Some((_, _, entity, message)) = entity_messages.front() {
+                if !self.message_writer.entity_message_fits::<P, E>(total_bytes, &self.entity_records, &entity, &message) {
+                    break;
+                }
+            } else {
+                break;
+            }
+
+            let (message_id, client_tick, entity, message) =
+                entity_messages.pop_front().unwrap();
+            self.message_writer.write_entity_message(&self.entity_records, &entity, &message, &client_tick);
+            self.entity_message_sender.message_written(
+                next_packet_index,
+                client_tick,
+                message_id,
+            );
+        }
     }
 }

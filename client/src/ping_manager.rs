@@ -47,7 +47,9 @@ impl PingManager {
         let ping_index = self.sent_pings.push_new();
 
         let mut out_bytes = Vec::<u8>::new();
-        out_bytes.write_u16::<BigEndian>(ping_index).unwrap(); // write index
+
+        // write index
+        out_bytes.write_u16::<BigEndian>(ping_index).unwrap();
 
         Packet::new(out_bytes)
     }
