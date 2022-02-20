@@ -88,19 +88,19 @@ impl Io {
         self.download_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").delete_client(address);
     }
 
-    pub fn upload_bandwidth_total(&self) -> f32 {
-        return self.upload_bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").total_bandwidth();
+    pub fn upload_bandwidth_total(&mut self) -> f32 {
+        return self.upload_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").total_bandwidth();
     }
 
-    pub fn download_bandwidth_total(&self) -> f32 {
-        return self.download_bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").total_bandwidth();
+    pub fn download_bandwidth_total(&mut self) -> f32 {
+        return self.download_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").total_bandwidth();
     }
 
-    pub fn upload_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
-        return self.upload_bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").client_bandwidth(address);
+    pub fn upload_bandwidth_to_client(&mut self, address: &SocketAddr) -> f32 {
+        return self.upload_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").client_bandwidth(address);
     }
 
-    pub fn download_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
-        return self.download_bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").client_bandwidth(address);
+    pub fn download_bandwidth_from_client(&mut self, address: &SocketAddr) -> f32 {
+        return self.download_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").client_bandwidth(address);
     }
 }
