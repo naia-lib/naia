@@ -14,6 +14,7 @@ mod client;
 mod client_config;
 mod connection;
 mod constants;
+mod bandwidth_monitor;
 mod entity_manager;
 mod entity_message_packet_writer;
 mod entity_message_sender;
