@@ -480,19 +480,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     }
 
     // Bandwidth monitoring
-    pub fn upload_bandwidth_total(&self) -> f32 {
+    pub fn upload_bandwidth_total(&mut self) -> f32 {
         return self.io.upload_bandwidth_total();
     }
 
-    pub fn download_bandwidth_total(&self) -> f32 {
+    pub fn download_bandwidth_total(&mut self) -> f32 {
         return self.io.download_bandwidth_total();
     }
 
-    pub fn upload_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
+    pub fn upload_bandwidth_to_client(&mut self, address: &SocketAddr) -> f32 {
         return self.io.upload_bandwidth_to_client(address);
     }
 
-    pub fn download_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
+    pub fn download_bandwidth_from_client(&mut self, address: &SocketAddr) -> f32 {
         return self.io.download_bandwidth_from_client(address);
     }
 

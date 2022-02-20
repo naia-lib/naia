@@ -84,16 +84,16 @@ impl Io {
         self.download_bandwidth_monitor = Some(BandwidthMonitor::new(bandwidth_measure_duration));
     }
 
-    pub fn upload_bandwidth(&self) -> f32 {
+    pub fn upload_bandwidth(&mut self) -> f32 {
         return self.upload_bandwidth_monitor
-            .as_ref()
+            .as_mut()
             .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
             .bandwidth();
     }
 
-    pub fn download_bandwidth(&self) -> f32 {
+    pub fn download_bandwidth(&mut self) -> f32 {
         return self.download_bandwidth_monitor
-            .as_ref()
+            .as_mut()
             .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
             .bandwidth();
     }

@@ -311,12 +311,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     }
 
     // Bandwidth monitoring
-    pub fn upload_bandwidth(&self) -> f32 {
+    pub fn upload_bandwidth(&mut self) -> f32 {
         return self.io
             .upload_bandwidth();
     }
 
-    pub fn download_bandwidth(&self) -> f32 {
+    pub fn download_bandwidth(&mut self) -> f32 {
         return self.io
             .download_bandwidth();
     }

@@ -84,10 +84,12 @@ impl App {
             }
         }
 
-        if self.bandwidth_timer.ringing() {
-            self.bandwidth_timer.reset();
+        if self.client.is_connected() {
+            if self.bandwidth_timer.ringing() {
+                self.bandwidth_timer.reset();
 
-            info!("Bandwidth: {} kbps down, {} kbps up", self.client.download_bandwidth(), self.client.upload_bandwidth());
+                info!("Bandwidth: {} kbps down, {} kbps up", self.client.download_bandwidth(), self.client.upload_bandwidth());
+            }
         }
 
         self.input();

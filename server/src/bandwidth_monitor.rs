@@ -33,11 +33,11 @@ impl BandwidthMonitor {
         }
     }
 
-    pub fn total_bandwidth(&self) -> f32 {
+    pub fn total_bandwidth(&mut self) -> f32 {
         self.total_monitor.bandwidth()
     }
 
-    pub fn client_bandwidth(&self, address: &SocketAddr) -> f32 {
-        self.client_monitors.get(address).expect("client associated with address does not exist").bandwidth()
+    pub fn client_bandwidth(&mut self, address: &SocketAddr) -> f32 {
+        self.client_monitors.get_mut(address).expect("client associated with address does not exist").bandwidth()
     }
 }
