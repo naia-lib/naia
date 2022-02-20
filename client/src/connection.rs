@@ -1,13 +1,13 @@
-use std::{hash::Hash, net::SocketAddr};
+use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_shared::{
     BaseConnection, ConnectionConfig, ManagerType, Manifest, MonitorConfig, PacketReader,
-    PacketType, PacketWriteState, Protocolize, StandardHeader, WorldMutType,
+    PacketType, PacketWriteState, Protocolize, StandardHeader, Tick, WorldMutType,
 };
 
 use super::{
-    entity_manager::EntityManager, ping_manager::PingManager, tick_manager::TickManager,
-    tick_queue::TickQueue,
+    entity_manager::EntityManager, error::NaiaClientError, event::Event, ping_manager::PingManager,
+    tick_manager::TickManager, tick_queue::TickQueue,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
@@ -70,7 +70,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
-        receiving_tick: u16,
+        receiving_tick: Tick,
+        incoming_events: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
     ) {
         while let Some((server_tick, data_packet)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = PacketReader::new(&data_packet);
@@ -83,8 +84,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                             .process_message_data(&mut reader, manifest);
                     }
                     ManagerType::Entity => {
-                        self.entity_manager
-                            .process_data(world, manifest, server_tick, &mut reader);
+                        self.entity_manager.process_data(
+                            world,
+                            manifest,
+                            server_tick,
+                            &mut reader,
+                            incoming_events,
+                        );
                     }
                     _ => {}
                 }

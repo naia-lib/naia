@@ -2,15 +2,14 @@ use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAdd
 
 use naia_client_socket::{Packet, Socket};
 pub use naia_shared::{
-    ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
-    Protocolize, ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Timer, Timestamp,
-    WorldMutType, WorldRefType, MonitorConfig, Tick
+    ConnectionConfig, ManagerType, Manifest, MonitorConfig, PacketReader, PacketType,
+    ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick,
+    Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{
     client_config::ClientConfig,
     connection::Connection,
-    entity_action::EntityAction,
     entity_ref::{EntityMut, EntityRef},
     error::NaiaClientError,
     event::Event,
@@ -33,9 +32,7 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
     server_connection: Option<Connection<P, E>>,
     handshake_manager: HandshakeManager<P>,
     // Events
-    outstanding_connect: bool,
-    outstanding_disconnect: bool,
-    outstanding_errors: VecDeque<NaiaClientError>,
+    incoming_events: VecDeque<Result<Event<P, E>, NaiaClientError>>,
     // Ticks
     tick_manager: Option<TickManager>,
     // Phantom
@@ -73,9 +70,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             server_connection: None,
             handshake_manager,
             // Events
-            outstanding_connect: false,
-            outstanding_disconnect: false,
-            outstanding_errors: VecDeque::new(),
+            incoming_events: VecDeque::new(),
             // Ticks
             tick_manager,
             // Phantom
@@ -138,8 +133,93 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                     disconnect_packet.clone(),
                 );
             }
-            self.outstanding_disconnect = true;
         }
+
+        self.disconnect_internal();
+    }
+
+    // Receive Data from Server! Very important!
+
+    /// Must call this regularly (preferably at the beginning of every draw
+    /// frame), in a loop until it returns None.
+    /// Retrieves incoming update data, and maintains the connection.
+    pub fn receive<W: WorldMutType<P, E>>(
+        &mut self,
+        mut world: W,
+    ) -> VecDeque<Result<Event<P, E>, NaiaClientError>> {
+        // Need to run this to maintain connection with server, and receive packets
+        // until none left
+        self.maintain_socket();
+
+        let client_tick = self.client_tick().unwrap_or(0);
+
+        // drop connection if necessary
+        if self.server_connection.is_some() {
+            if self.server_connection.as_ref().unwrap().base.should_drop() {
+                self.disconnect_internal();
+                return std::mem::take(&mut self.incoming_events);
+            }
+        }
+
+        // all other operations
+        if let Some(server_connection) = self.server_connection.as_mut() {
+            let mut did_tick = false;
+
+            // update current tick
+            if let Some(tick_manager) = &mut self.tick_manager {
+                if tick_manager.receive_tick() {
+                    did_tick = true;
+
+                    // apply updates on tick boundary
+                    let receiving_tick = tick_manager.client_receiving_tick();
+                    server_connection.process_buffered_packets(
+                        &mut world,
+                        &self.shared_config.manifest,
+                        receiving_tick,
+                        &mut self.incoming_events,
+                    );
+                    server_connection
+                        .entity_manager
+                        .message_sender
+                        .on_tick(tick_manager.server_receivable_tick());
+                }
+            } else {
+                server_connection.process_buffered_packets(
+                    &mut world,
+                    &self.shared_config.manifest,
+                    0,
+                    &mut self.incoming_events,
+                );
+            }
+
+            // receive messages
+            while let Some(message) = server_connection
+                .base
+                .message_manager
+                .pop_incoming_message()
+            {
+                self.incoming_events.push_back(Ok(Event::Message(message)));
+            }
+
+            // send outgoing packets
+            let mut sent = false;
+            while let Some(payload) = server_connection.outgoing_packet(client_tick) {
+                self.io.send_packet(Packet::new_raw(payload));
+                sent = true;
+            }
+            if sent {
+                server_connection.base.mark_sent();
+            }
+
+            // tick event
+            if did_tick {
+                self.incoming_events.push_back(Ok(Event::Tick));
+            }
+        } else {
+            self.handshake_manager.send_packet(&mut self.io);
+        }
+
+        return std::mem::take(&mut self.incoming_events);
     }
 
     // Messages
@@ -227,125 +307,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             .map(|tick_manager| tick_manager.interpolation())
     }
 
-    // Receive Data from Server! Very important!
-
-    /// Must call this regularly (preferably at the beginning of every draw
-    /// frame), in a loop until it returns None.
-    /// Retrieves incoming update data, and maintains the connection.
-    pub fn receive<W: WorldMutType<P, E>>(
-        &mut self,
-        mut world: W,
-    ) -> VecDeque<Result<Event<P, E>, NaiaClientError>> {
-        let mut events = VecDeque::new();
-
-        // Need to run this to maintain connection with server, and receive packets
-        // until none left
-        self.maintain_socket();
-
-        let server_addr = self.server_address_unwrapped();
-        let client_tick = self.client_tick().unwrap_or(0);
-
-        // send ticks, handshakes, heartbeats, pings, timeout if need be
-        if let Some(server_connection) = self.server_connection.as_mut() {
-            let mut did_tick = false;
-
-            // update current tick
-            if let Some(tick_manager) = &mut self.tick_manager {
-                if tick_manager.receive_tick() {
-                    did_tick = true;
-
-                    // apply updates on tick boundary
-                    let receiving_tick = tick_manager.client_receiving_tick();
-                    server_connection.process_buffered_packets(
-                        &mut world,
-                        &self.shared_config.manifest,
-                        receiving_tick,
-                    );
-                    server_connection
-                        .entity_manager
-                        .message_sender
-                        .on_tick(tick_manager.server_receivable_tick());
-                }
-            } else {
-                server_connection.process_buffered_packets(
-                    &mut world,
-                    &self.shared_config.manifest,
-                    0,
-                );
-            }
-            // return connect event
-            if self.outstanding_connect {
-                events.push_back(Ok(Event::Connection(server_addr)));
-                self.outstanding_connect = false;
-            }
-            // new errors
-            while let Some(err) = self.outstanding_errors.pop_front() {
-                events.push_back(Err(err));
-            }
-            // drop connection if necessary
-            if server_connection.base.should_drop() || self.outstanding_disconnect {
-                let server_addr = self.server_address_unwrapped();
-                self.disconnect_cleanup();
-                events.clear();
-                events.push_back(Ok(Event::Disconnection(server_addr)));
-
-                // exit early, we're disconnected, who cares?
-                return events;
-            }
-            // receive messages
-            while let Some(message) = server_connection
-                .base
-                .message_manager
-                .pop_incoming_message()
-            {
-                events.push_back(Ok(Event::Message(message)));
-            }
-            // receive entity actions
-            while let Some(action) = server_connection.entity_manager.incoming_entity_action() {
-                let event: Event<P, E> = {
-                    match action {
-                        EntityAction::SpawnEntity(entity, component_list) => {
-                            Event::SpawnEntity(entity, component_list)
-                        }
-                        EntityAction::DespawnEntity(entity) => Event::DespawnEntity(entity),
-                        EntityAction::MessageEntity(entity, message) => {
-                            Event::MessageEntity(entity, message.clone())
-                        }
-                        EntityAction::InsertComponent(entity, component_key) => {
-                            Event::InsertComponent(entity, component_key)
-                        }
-                        EntityAction::UpdateComponent(tick, entity, component_key) => {
-                            Event::UpdateComponent(tick, entity, component_key)
-                        }
-                        EntityAction::RemoveComponent(entity, component) => {
-                            Event::RemoveComponent(entity, component.clone())
-                        }
-                    }
-                };
-                events.push_back(Ok(event));
-            }
-
-            // send outgoing packets
-            let mut sent = false;
-            while let Some(payload) = server_connection.outgoing_packet(client_tick) {
-                self.io.send_packet(Packet::new_raw(payload));
-                sent = true;
-            }
-            if sent {
-                server_connection.base.mark_sent();
-            }
-
-            // tick event
-            if did_tick {
-                events.push_back(Ok(Event::Tick));
-            }
-        } else {
-            self.handshake_manager.send_packet(&mut self.io);
-        }
-
-        events
-    }
-
     // Crate-public functions
 
     /// Sends a Message to the Server, associated with a given Entity
@@ -423,8 +384,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                         break;
                     }
                     Err(error) => {
-                        self.outstanding_errors
-                            .push_back(NaiaClientError::Wrapped(Box::new(error)));
+                        self.incoming_events
+                            .push_back(Err(NaiaClientError::Wrapped(Box::new(error))));
                     }
                 }
             }
@@ -436,24 +397,36 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 match self.io.receive_packet() {
                     Ok(Some(packet)) => {
                         if self.handshake_manager.receive_packet(packet) {
+                            let server_addr = self.server_address_unwrapped();
                             self.server_connection = Some(Connection::new(
-                                self.server_address_unwrapped(),
+                                server_addr,
                                 &self.connection_config,
                                 &self.monitor_config,
                             ));
-                            self.outstanding_connect = true;
+                            self.incoming_events
+                                .push_back(Ok(Event::Connection(server_addr)));
                         }
                     }
                     Ok(None) => {
                         break;
                     }
                     Err(error) => {
-                        self.outstanding_errors
-                            .push_back(NaiaClientError::Wrapped(Box::new(error)));
+                        self.incoming_events
+                            .push_back(Err(NaiaClientError::Wrapped(Box::new(error))));
                     }
                 }
             }
         }
+    }
+
+    fn disconnect_internal(&mut self) {
+        let server_addr = self.server_address_unwrapped();
+        self.disconnect_cleanup();
+
+        // exit early, we're disconnected, who cares?
+        self.incoming_events.clear();
+        self.incoming_events
+            .push_back(Ok(Event::Disconnection(server_addr)));
     }
 
     fn disconnect_cleanup(&mut self) {
@@ -474,9 +447,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         self.io = Io::new();
         self.server_connection = None;
         self.handshake_manager = handshake_manager;
-        self.outstanding_connect = false;
-        self.outstanding_disconnect = false;
-        self.outstanding_errors = VecDeque::new();
         self.tick_manager = tick_manager;
     }
 

@@ -75,12 +75,6 @@ impl<P: Protocolize> MessageManager<P> {
 
     // Incoming Messages
 
-    /// Returns whether any Messages have been received that must be handed to
-    /// the application
-    pub fn has_incoming_messages(&self) -> bool {
-        return self.queued_incoming_messages.len() != 0;
-    }
-
     /// Get the most recently received Message
     pub fn pop_incoming_message(&mut self) -> Option<P> {
         return self.queued_incoming_messages.pop_front();
