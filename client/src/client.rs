@@ -1,11 +1,10 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use naia_client_socket::{Packet, Socket};
-use naia_shared::MonitorConfig;
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
     Protocolize, ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Timer, Timestamp,
-    WorldMutType, WorldRefType,
+    WorldMutType, WorldRefType, MonitorConfig, Tick
 };
 
 use super::{
@@ -126,13 +125,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         }
 
         // get current tick
-        let client_tick_opt = self.client_tick();
+        let client_tick = self.client_tick().unwrap_or(0);
 
         if let Some(connection) = &mut self.server_connection {
             let disconnect_packet = self.handshake_manager.disconnect_packet();
             for _ in 0..10 {
                 internal_send_with_connection::<P, E>(
-                    client_tick_opt,
+                    client_tick,
                     &mut self.io,
                     connection,
                     PacketType::Disconnect,
@@ -212,7 +211,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     // Ticks
 
     /// Gets the current tick of the Client
-    pub fn client_tick(&self) -> Option<u16> {
+    pub fn client_tick(&self) -> Option<Tick> {
         return self
             .tick_manager
             .as_ref()
@@ -243,8 +242,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         // until none left
         self.maintain_socket();
 
+        let server_addr = self.server_address_unwrapped();
+        let client_tick = self.client_tick().unwrap_or(0);
+
         // send ticks, handshakes, heartbeats, pings, timeout if need be
-        if self.server_connection.is_some() {
+        if let Some(server_connection) = self.server_connection.as_mut() {
             let mut did_tick = false;
 
             // update current tick
@@ -254,30 +256,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
                     // apply updates on tick boundary
                     let receiving_tick = tick_manager.client_receiving_tick();
-                    self.server_connection
-                        .as_mut()
-                        .unwrap()
-                        .process_buffered_packets(
-                            &mut world,
-                            &self.shared_config.manifest,
-                            receiving_tick,
-                        );
-                    self.server_connection
-                        .as_mut()
-                        .unwrap()
+                    server_connection.process_buffered_packets(
+                        &mut world,
+                        &self.shared_config.manifest,
+                        receiving_tick,
+                    );
+                    server_connection
                         .entity_manager
                         .message_sender
                         .on_tick(tick_manager.server_receivable_tick());
                 }
             } else {
-                self.server_connection
-                    .as_mut()
-                    .unwrap()
-                    .process_buffered_packets(&mut world, &self.shared_config.manifest, 0);
+                server_connection.process_buffered_packets(
+                    &mut world,
+                    &self.shared_config.manifest,
+                    0,
+                );
             }
             // return connect event
             if self.outstanding_connect {
-                let server_addr = self.server_address_unwrapped_mut();
                 events.push_back(Ok(Event::Connection(server_addr)));
                 self.outstanding_connect = false;
             }
@@ -286,9 +283,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 events.push_back(Err(err));
             }
             // drop connection if necessary
-            if self.server_connection.as_ref().unwrap().base.should_drop()
-                || self.outstanding_disconnect
-            {
+            if server_connection.base.should_drop() || self.outstanding_disconnect {
                 let server_addr = self.server_address_unwrapped();
                 self.disconnect_cleanup();
                 events.clear();
@@ -298,10 +293,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 return events;
             }
             // receive messages
-            while let Some(message) = self
-                .server_connection
-                .as_mut()
-                .unwrap()
+            while let Some(message) = server_connection
                 .base
                 .message_manager
                 .pop_incoming_message()
@@ -309,40 +301,38 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 events.push_back(Ok(Event::Message(message)));
             }
             // receive entity actions
-            while let Some(action) = self
-                .server_connection
-                .as_mut()
-                .unwrap()
-                .entity_manager
-                .incoming_entity_action()
-            {
+            while let Some(action) = server_connection.entity_manager.incoming_entity_action() {
                 let event: Event<P, E> = {
                     match action {
-                        EntityAction::SpawnEntity(entity, component_list) => Event::SpawnEntity(entity, component_list),
+                        EntityAction::SpawnEntity(entity, component_list) => {
+                            Event::SpawnEntity(entity, component_list)
+                        }
                         EntityAction::DespawnEntity(entity) => Event::DespawnEntity(entity),
-                        EntityAction::MessageEntity(entity, message) => Event::MessageEntity(entity, message.clone()),
-                        EntityAction::InsertComponent(entity, component_key) => Event::InsertComponent(entity, component_key),
-                        EntityAction::UpdateComponent(tick, entity, component_key) => Event::UpdateComponent(tick, entity, component_key),
-                        EntityAction::RemoveComponent(entity, component) => Event::RemoveComponent(entity, component.clone()),
+                        EntityAction::MessageEntity(entity, message) => {
+                            Event::MessageEntity(entity, message.clone())
+                        }
+                        EntityAction::InsertComponent(entity, component_key) => {
+                            Event::InsertComponent(entity, component_key)
+                        }
+                        EntityAction::UpdateComponent(tick, entity, component_key) => {
+                            Event::UpdateComponent(tick, entity, component_key)
+                        }
+                        EntityAction::RemoveComponent(entity, component) => {
+                            Event::RemoveComponent(entity, component.clone())
+                        }
                     }
                 };
                 events.push_back(Ok(event));
             }
 
             // send outgoing packets
-            let client_tick = self.client_tick().unwrap_or(0);
             let mut sent = false;
-            while let Some(payload) = self
-                .server_connection
-                .as_mut()
-                .unwrap()
-                .outgoing_packet(client_tick)
-            {
+            while let Some(payload) = server_connection.outgoing_packet(client_tick) {
                 self.io.send_packet(Packet::new_raw(payload));
                 sent = true;
             }
             if sent {
-                self.server_connection.as_mut().unwrap().base.mark_sent();
+                server_connection.base.mark_sent();
             }
 
             // tick event
@@ -373,96 +363,94 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     // internal functions
 
     fn maintain_socket(&mut self) {
-
         // get current tick
-        let client_tick_opt = self.client_tick();
+        let client_tick = self.client_tick().unwrap_or(0);
 
-        // send heartbeats
-        if self
-            .server_connection
-            .as_ref()
-            .unwrap()
-            .base
-            .should_send_heartbeat()
-        {
-            internal_send_with_connection::<P, E>(
-                client_tick_opt,
-                &mut self.io,
-                self.server_connection.as_mut().unwrap(),
-                PacketType::Heartbeat,
-                Packet::empty(),
-            );
-        }
-        // send pings
-        if let Some(ping_manager) = &mut self.server_connection.as_mut().unwrap().ping_manager {
-            if ping_manager.should_send_ping() {
-                let ping_packet = ping_manager.ping_packet();
+        if let Some(server_connection) = self.server_connection.as_mut() {
+            // connection already established
+
+            // send heartbeats
+            if server_connection.base.should_send_heartbeat() {
                 internal_send_with_connection::<P, E>(
-                    client_tick_opt,
+                    client_tick,
                     &mut self.io,
-                    self.server_connection.as_mut().unwrap(),
-                    PacketType::Ping,
-                    ping_packet,
+                    server_connection,
+                    PacketType::Heartbeat,
+                    Packet::empty(),
                 );
             }
-        }
 
-        // receive from socket
-        loop {
-            match self.io.receive_packet() {
-                Ok(event) => {
-                    if let Some(packet) = event {
-                        let server_connection_wrapper = self.server_connection.as_mut();
+            // send pings
+            if let Some(ping_manager) = &mut server_connection.ping_manager {
+                if ping_manager.should_send_ping() {
+                    let ping_packet = ping_manager.ping_packet();
+                    internal_send_with_connection::<P, E>(
+                        client_tick,
+                        &mut self.io,
+                        server_connection,
+                        PacketType::Ping,
+                        ping_packet,
+                    );
+                }
+            }
 
-                        if let Some(server_connection) = server_connection_wrapper {
-                            server_connection.base.mark_heard();
+            // receive from socket
+            loop {
+                match self.io.receive_packet() {
+                    Ok(Some(packet)) => {
+                        server_connection.base.mark_heard();
 
-                            let (header, payload) = StandardHeader::read(packet.payload());
-                            let tick_manager: Option<&mut TickManager> = {
-                                if let Some(tick_manager) = &mut self.tick_manager {
-                                    Some(tick_manager)
-                                } else {
-                                    None
-                                }
-                            };
+                        let (header, payload) = StandardHeader::read(packet.payload());
 
-                            server_connection.process_incoming_header(&header, tick_manager);
+                        server_connection
+                            .process_incoming_header(&header, self.tick_manager.as_mut());
 
-                            match header.packet_type() {
-                                PacketType::Data => {
-                                    server_connection
-                                        .buffer_data_packet(header.host_tick(), &payload);
-                                }
-                                PacketType::Heartbeat => {}
-                                PacketType::Pong => {
-                                    if let Some(ping_manager) = &mut server_connection.ping_manager
-                                    {
-                                        ping_manager.process_pong(&payload);
-                                    }
-                                }
-                                // TODO: explicitly cover these cases
-                                _ => {}
+                        match header.packet_type() {
+                            PacketType::Data => {
+                                server_connection.buffer_data_packet(header.host_tick(), &payload);
                             }
-                        } else {
-                            self.handshake_manager.receive_packet(packet);
-                            if self.handshake_manager.is_connected() {
-                                let server_connection = Connection::new(
-                                    self.server_address_unwrapped(),
-                                    &self.connection_config,
-                                    &self.monitor_config,
-                                );
-
-                                self.server_connection = Some(server_connection);
-                                self.outstanding_connect = true;
+                            PacketType::Heartbeat => {}
+                            PacketType::Pong => {
+                                if let Some(ping_manager) = &mut server_connection.ping_manager {
+                                    ping_manager.process_pong(&payload);
+                                }
                             }
+                            // TODO: explicitly cover these cases
+                            _ => {}
                         }
-                    } else {
+                    }
+                    Ok(None) => {
                         break;
                     }
+                    Err(error) => {
+                        self.outstanding_errors
+                            .push_back(NaiaClientError::Wrapped(Box::new(error)));
+                    }
                 }
-                Err(error) => {
-                    self.outstanding_errors
-                        .push_back(NaiaClientError::Wrapped(Box::new(error)));
+            }
+        } else {
+            // No connection established yet
+
+            // receive from socket
+            loop {
+                match self.io.receive_packet() {
+                    Ok(Some(packet)) => {
+                        if self.handshake_manager.receive_packet(packet) {
+                            self.server_connection = Some(Connection::new(
+                                self.server_address_unwrapped(),
+                                &self.connection_config,
+                                &self.monitor_config,
+                            ));
+                            self.outstanding_connect = true;
+                        }
+                    }
+                    Ok(None) => {
+                        break;
+                    }
+                    Err(error) => {
+                        self.outstanding_errors
+                            .push_back(NaiaClientError::Wrapped(Box::new(error)));
+                    }
                 }
             }
         }
@@ -496,25 +484,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         // NOTE: may panic if the connection is not yet established!
         return self.io.server_addr_unwrapped();
     }
-
-    fn server_address_unwrapped_mut(&mut self) -> SocketAddr {
-        // NOTE: may panic if the connection is not yet established!
-        return self.io.server_addr_unwrapped();
-    }
 }
 
 fn internal_send_with_connection<P: Protocolize, E: Copy + Eq + Hash>(
-    client_tick: Option<u16>,
+    client_tick: Tick,
     io: &mut Io,
     connection: &mut Connection<P, E>,
     packet_type: PacketType,
     packet: Packet,
 ) {
-    let new_payload = connection.base.process_outgoing_header(
-        client_tick.unwrap_or(0),
-        packet_type,
-        packet.payload(),
-    );
+    let new_payload =
+        connection
+            .base
+            .process_outgoing_header(client_tick, packet_type, packet.payload());
     io.send_packet(Packet::new_raw(new_payload));
     connection.base.mark_sent();
 }

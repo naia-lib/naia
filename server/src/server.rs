@@ -6,17 +6,16 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use slotmap::DenseSlotMap;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use naia_server_socket::{Packet, ServerAddrs, Socket};
-use naia_shared::MonitorConfig;
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
     ManagerType, Manifest, NetEntity, PacketReader, PacketType, PropertyMutate, PropertyMutator,
     ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
-    Timestamp, WorldMutType, WorldRefType,
+    Timestamp, WorldMutType, WorldRefType, MonitorConfig
 };
-use slotmap::DenseSlotMap;
 
 use super::{
     connection::Connection,
@@ -174,30 +173,36 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             events.push_back(Err(err));
         }
 
+        // tick event
+        let mut did_tick = false;
+        if let Some(tick_manager) = &mut self.tick_manager {
+            if tick_manager.receive_tick() {
+                did_tick = true;
+            }
+        }
+
         // loop through all connections, receive Messages
-        let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().map(|addr| *addr).collect();
+        let mut user_addresses: Vec<SocketAddr> =
+            self.user_connections.keys().map(|addr| *addr).collect();
         fastrand::shuffle(&mut user_addresses);
 
         for user_address in &user_addresses {
             let connection = self.user_connections.get_mut(user_address).unwrap();
 
-            //receive messages from anyone
+            // receive messages from anyone
             while let Some(message) = connection.base.message_manager.pop_incoming_message() {
                 events.push_back(Ok(Event::Message(connection.user_key, message)));
             }
-        }
 
-        // tick event
-        if let Some(tick_manager) = &mut self.tick_manager {
-            if tick_manager.receive_tick() {
-
+            // receive entity messages on tick
+            if did_tick {
                 // Receive EntityMessages
                 for user_address in &user_addresses {
                     let connection = self.user_connections.get_mut(user_address).unwrap();
 
-                    while let Some((entity, message)) =
-                        connection.pop_incoming_entity_message(tick_manager.server_tick())
-                    {
+                    while let Some((entity, message)) = connection.pop_incoming_entity_message(
+                        self.tick_manager.as_ref().unwrap().server_tick(),
+                    ) {
                         events.push_back(Ok(Event::MessageEntity(
                             connection.user_key,
                             entity,
@@ -208,6 +213,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
                 events.push_back(Ok(Event::Tick));
             }
+        }
+
+        // tick event
+        if did_tick {
+            events.push_back(Ok(Event::Tick));
         }
 
         events
@@ -287,7 +297,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         let server_tick = self.server_tick().unwrap_or(0);
 
         // loop through all connections, send packet
-        let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().map(|addr| *addr).collect();
+        let mut user_addresses: Vec<SocketAddr> =
+            self.user_connections.keys().map(|addr| *addr).collect();
         fastrand::shuffle(&mut user_addresses);
 
         for user_address in user_addresses {
@@ -297,7 +308,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 .collect_component_updates(&self.world_record);
             let mut sent = false;
             while let Some(payload) =
-            connection.outgoing_packet(&world, &self.world_record, server_tick)
+                connection.outgoing_packet(&world, &self.world_record, server_tick)
             {
                 self.io.send_packet(Packet::new_raw(user_address, payload));
                 sent = true;

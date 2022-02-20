@@ -113,11 +113,8 @@ impl<P: Protocolize> HandshakeManager<P> {
         self.auth_message = Some(auth);
     }
 
-    pub fn is_connected(&self) -> bool {
-        return self.connection_state == HandshakeState::Connected;
-    }
-
-    pub fn receive_packet(&mut self, packet: Packet) {
+    // Returns whether connection was successful
+    pub fn receive_packet(&mut self, packet: Packet) -> bool {
         let (header, payload) = StandardHeader::read(packet.payload());
         match header.packet_type() {
             PacketType::ServerChallengeResponse => {
@@ -140,9 +137,12 @@ impl<P: Protocolize> HandshakeManager<P> {
             }
             PacketType::ServerConnectResponse => {
                 self.connection_state = HandshakeState::Connected;
+                return true;
             }
             _ => {}
         }
+
+        return false;
     }
 
     fn write_signed_timestamp(&self, payload_bytes: &mut Vec<u8>) {
