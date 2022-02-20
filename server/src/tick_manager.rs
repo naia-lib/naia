@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use naia_shared::Timer;
+use naia_shared::{Tick, Timer};
 
 /// Manages the current tick for the host
 pub struct TickManager {
-    current_tick: u16,
+    current_tick: Tick,
     timer: Timer,
 }
 
@@ -28,7 +28,7 @@ impl TickManager {
     }
 
     /// Gets the current tick on the host
-    pub fn tick(&self) -> u16 {
+    pub fn server_tick(&self) -> Tick {
         self.current_tick
     }
 }

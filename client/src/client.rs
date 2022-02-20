@@ -243,9 +243,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         // until none left
         self.maintain_socket();
 
-        // get current tick
-        let client_tick_opt = self.client_tick();
-
         // send ticks, handshakes, heartbeats, pings, timeout if need be
         if self.server_connection.is_some() {
             let mut did_tick = false;
@@ -321,63 +318,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             {
                 let event: Event<P, E> = {
                     match action {
-                        EntityAction::SpawnEntity(entity, component_list) => {
-                            Event::SpawnEntity(entity, component_list)
-                        }
+                        EntityAction::SpawnEntity(entity, component_list) => Event::SpawnEntity(entity, component_list),
                         EntityAction::DespawnEntity(entity) => Event::DespawnEntity(entity),
-                        EntityAction::MessageEntity(entity, message) => {
-                            Event::MessageEntity(entity, message.clone())
-                        }
-                        EntityAction::InsertComponent(entity, component_key) => {
-                            Event::InsertComponent(entity, component_key)
-                        }
-                        EntityAction::UpdateComponent(tick, entity, component_key) => {
-                            Event::UpdateComponent(tick, entity, component_key)
-                        }
-                        EntityAction::RemoveComponent(entity, component) => {
-                            Event::RemoveComponent(entity, component.clone())
-                        }
+                        EntityAction::MessageEntity(entity, message) => Event::MessageEntity(entity, message.clone()),
+                        EntityAction::InsertComponent(entity, component_key) => Event::InsertComponent(entity, component_key),
+                        EntityAction::UpdateComponent(tick, entity, component_key) => Event::UpdateComponent(tick, entity, component_key),
+                        EntityAction::RemoveComponent(entity, component) => Event::RemoveComponent(entity, component.clone()),
                     }
                 };
                 events.push_back(Ok(event));
             }
-            // send heartbeats
-            if self
-                .server_connection
-                .as_ref()
-                .unwrap()
-                .base
-                .should_send_heartbeat()
-            {
-                internal_send_with_connection::<P, E>(
-                    client_tick_opt,
-                    &mut self.io,
-                    self.server_connection.as_mut().unwrap(),
-                    PacketType::Heartbeat,
-                    Packet::empty(),
-                );
-            }
-            // send pings
-            if let Some(ping_manager) = &mut self.server_connection.as_mut().unwrap().ping_manager {
-                if ping_manager.should_send_ping() {
-                    let ping_packet = ping_manager.ping_packet();
-                    internal_send_with_connection::<P, E>(
-                        client_tick_opt,
-                        &mut self.io,
-                        self.server_connection.as_mut().unwrap(),
-                        PacketType::Ping,
-                        ping_packet,
-                    );
-                }
-            }
 
-            // send packets
+            // send outgoing packets
+            let client_tick = self.client_tick().unwrap_or(0);
             let mut sent = false;
             while let Some(payload) = self
                 .server_connection
                 .as_mut()
                 .unwrap()
-                .outgoing_packet(client_tick_opt.unwrap_or(0))
+                .outgoing_packet(client_tick)
             {
                 self.io.send_packet(Packet::new_raw(payload));
                 sent = true;
@@ -385,6 +344,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             if sent {
                 self.server_connection.as_mut().unwrap().base.mark_sent();
             }
+
             // tick event
             if did_tick {
                 events.push_back(Ok(Event::Tick));
@@ -413,6 +373,40 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     // internal functions
 
     fn maintain_socket(&mut self) {
+
+        // get current tick
+        let client_tick_opt = self.client_tick();
+
+        // send heartbeats
+        if self
+            .server_connection
+            .as_ref()
+            .unwrap()
+            .base
+            .should_send_heartbeat()
+        {
+            internal_send_with_connection::<P, E>(
+                client_tick_opt,
+                &mut self.io,
+                self.server_connection.as_mut().unwrap(),
+                PacketType::Heartbeat,
+                Packet::empty(),
+            );
+        }
+        // send pings
+        if let Some(ping_manager) = &mut self.server_connection.as_mut().unwrap().ping_manager {
+            if ping_manager.should_send_ping() {
+                let ping_packet = ping_manager.ping_packet();
+                internal_send_with_connection::<P, E>(
+                    client_tick_opt,
+                    &mut self.io,
+                    self.server_connection.as_mut().unwrap(),
+                    PacketType::Ping,
+                    ping_packet,
+                );
+            }
+        }
+
         // receive from socket
         loop {
             match self.io.receive_packet() {
@@ -446,7 +440,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                                         ping_manager.process_pong(&payload);
                                     }
                                 }
-                                _ => {} // TODO: explicitly cover these cases
+                                // TODO: explicitly cover these cases
+                                _ => {}
                             }
                         } else {
                             self.handshake_manager.receive_packet(packet);
