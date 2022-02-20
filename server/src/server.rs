@@ -174,8 +174,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             events.push_back(Err(err));
         }
 
-        // TODO: have 1 single queue here
-        for (_, connection) in self.user_connections.iter_mut() {
+        // loop through all connections, receive Messages
+        let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().map(|addr| *addr).collect();
+        fastrand::shuffle(&mut user_addresses);
+
+        for user_address in &user_addresses {
+            let connection = self.user_connections.get_mut(user_address).unwrap();
+
             //receive messages from anyone
             while let Some(message) = connection.base.message_manager.pop_incoming_message() {
                 events.push_back(Ok(Event::Message(connection.user_key, message)));
@@ -185,20 +190,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // tick event
         if let Some(tick_manager) = &mut self.tick_manager {
             if tick_manager.receive_tick() {
-                // Receive EntityMessages
 
-                // TODO: have 1 single queue here
-                if let Some(server_tick) = self.server_tick() {
-                    for (_, connection) in self.user_connections.iter_mut() {
-                        while let Some((entity, message)) =
-                            connection.pop_incoming_entity_message(server_tick)
-                        {
-                            events.push_back(Ok(Event::MessageEntity(
-                                connection.user_key,
-                                entity,
-                                message,
-                            )));
-                        }
+                // Receive EntityMessages
+                for user_address in &user_addresses {
+                    let connection = self.user_connections.get_mut(user_address).unwrap();
+
+                    while let Some((entity, message)) =
+                        connection.pop_incoming_entity_message(tick_manager.server_tick())
+                    {
+                        events.push_back(Ok(Event::MessageEntity(
+                            connection.user_key,
+                            entity,
+                            message,
+                        )));
                     }
                 }
 
@@ -484,7 +488,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         return self
             .tick_manager
             .as_ref()
-            .map(|tick_manager| tick_manager.tick());
+            .map(|tick_manager| tick_manager.server_tick());
     }
 
     // Crate-Public methods
