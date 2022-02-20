@@ -107,7 +107,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             self.base.message_manager.queue_writes(&mut write_state);
 
             // Add header
-            if write_state.byte_count() > 0 {
+            if write_state.has_bytes() {
                 // Get bytes from writer
                 let mut out_bytes = Vec::<u8>::new();
                 self.base.message_manager.flush_writes(&mut out_bytes);
