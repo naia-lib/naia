@@ -5,22 +5,21 @@ use std::{
 
 use log::warn;
 
-use crate::entity_message_sender::EntityMessageSender;
 use naia_shared::{
     DiffMask, EntityActionType, LocalComponentKey, Manifest, NaiaKey, NetEntity, PacketReader,
-    PacketWriteState, ProtocolKindType, Protocolize, WorldMutType,
+    PacketWriteState, ProtocolKindType, Protocolize, Tick, WorldMutType,
 };
 
 use super::{
-    entity_action::EntityAction, entity_message_packet_writer::EntityMessagePacketWriter,
-    entity_record::EntityRecord,
+    entity_message_packet_writer::EntityMessagePacketWriter,
+    entity_message_sender::EntityMessageSender, entity_record::EntityRecord,
+    error::NaiaClientError, event::Event,
 };
 
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
     local_to_world_entity: HashMap<NetEntity, E>,
     component_to_entity_map: HashMap<LocalComponentKey, E>,
-    queued_incoming_messages: VecDeque<EntityAction<P, E>>,
     pub message_sender: EntityMessageSender<P, E>,
     message_writer: EntityMessagePacketWriter,
 }
@@ -31,22 +30,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             local_to_world_entity: HashMap::new(),
             entity_records: HashMap::new(),
             component_to_entity_map: HashMap::new(),
-            queued_incoming_messages: VecDeque::new(),
             message_sender: EntityMessageSender::new(),
             message_writer: EntityMessagePacketWriter::new(),
         }
-    }
-
-    pub fn incoming_entity_action(&mut self) -> Option<EntityAction<P, E>> {
-        return self.queued_incoming_messages.pop_front();
     }
 
     pub fn process_data<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
-        server_tick: u16,
+        server_tick: Tick,
         reader: &mut PacketReader,
+        event_stream: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
     ) {
         let entity_action_count = reader.read_u8();
 
@@ -99,8 +94,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             ////////////////////////
                         }
 
-                        self.queued_incoming_messages
-                            .push_back(EntityAction::SpawnEntity(world_entity, component_list));
+                        event_stream
+                            .push_back(Ok(Event::SpawnEntity(world_entity, component_list)));
                         continue;
                     }
                 }
@@ -115,9 +110,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 if let Some(component) =
                                     world.remove_component_of_kind(&world_entity, &component_kind)
                                 {
-                                    self.queued_incoming_messages.push_back(
-                                        EntityAction::RemoveComponent(world_entity, component),
-                                    );
+                                    event_stream.push_back(Ok(Event::RemoveComponent(
+                                        world_entity,
+                                        component,
+                                    )));
                                 }
                             }
 
@@ -127,8 +123,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                             world.despawn_entity(&world_entity);
 
-                            self.queued_incoming_messages
-                                .push_back(EntityAction::DespawnEntity(world_entity));
+                            event_stream.push_back(Ok(Event::DespawnEntity(world_entity)));
                             continue;
                         }
                     }
@@ -149,8 +144,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     } else {
                         let world_entity = self.local_to_world_entity.get(&net_entity).unwrap();
 
-                        self.queued_incoming_messages
-                            .push_back(EntityAction::MessageEntity(*world_entity, new_message));
+                        event_stream
+                            .push_back(Ok(Event::MessageEntity(*world_entity, new_message)));
                     }
                 }
                 EntityActionType::InsertComponent => {
@@ -186,11 +181,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                             new_component.extract_and_insert(world_entity, world);
 
-                            self.queued_incoming_messages
-                                .push_back(EntityAction::InsertComponent(
-                                    *world_entity,
-                                    component_kind,
-                                ));
+                            event_stream.push_back(Ok(Event::InsertComponent(
+                                *world_entity,
+                                component_kind,
+                            )));
                         }
                     }
                 }
@@ -214,12 +208,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 reader,
                             );
 
-                            self.queued_incoming_messages
-                                .push_back(EntityAction::UpdateComponent(
-                                    server_tick,
-                                    *world_entity,
-                                    *component_kind,
-                                ));
+                            event_stream.push_back(Ok(Event::UpdateComponent(
+                                server_tick,
+                                *world_entity,
+                                *component_kind,
+                            )));
                         }
                     }
                 }
@@ -254,8 +247,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             .expect("Component already removed?");
 
                         // Generate event
-                        self.queued_incoming_messages
-                            .push_back(EntityAction::RemoveComponent(world_entity, component));
+                        event_stream.push_back(Ok(Event::RemoveComponent(world_entity, component)));
                     }
                 }
                 EntityActionType::Unknown => {
