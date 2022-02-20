@@ -1,5 +1,7 @@
 use std::{net::SocketAddr, time::Duration};
 
+use snap::raw::{decompress_len, max_compress_len, Decoder as SnapDecoder, Encoder as SnapEncoder};
+
 use naia_client_socket::{NaiaClientSocketError, Packet, PacketReceiver, PacketSender, ServerAddr};
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
@@ -12,6 +14,8 @@ pub struct Io {
     packet_receiver: Option<PacketReceiver>,
     upload_bandwidth_monitor: Option<BandwidthMonitor>,
     download_bandwidth_monitor: Option<BandwidthMonitor>,
+    encoder: SnapEncoder,
+    decoder: SnapDecoder,
 }
 
 impl Io {
@@ -21,6 +25,8 @@ impl Io {
             packet_receiver: None,
             upload_bandwidth_monitor: None,
             download_bandwidth_monitor: None,
+            encoder: SnapEncoder::new(),
+            decoder: SnapDecoder::new(),
         }
     }
 
@@ -39,14 +45,19 @@ impl Io {
 
     pub fn send_packet(&mut self, packet: Packet) {
 
+        // TODO: only use compressed packet if the resulting size would be less!
+        let mut compressed_packet: Vec<u8> = Vec::with_capacity(packet.payload().len());
+        self.encoder.compress(packet.payload(), &mut compressed_packet);
+        let new_packet = Packet::new(compressed_packet);
+
         if let Some(monitor) = &mut self.upload_bandwidth_monitor {
-            monitor.record_packet(packet.payload().len());
+            monitor.record_packet(new_packet.payload().len());
         }
 
         self.packet_sender
             .as_mut()
             .expect("Cannot call Client.send_packet() until you call Client.connect()!")
-            .send(packet);
+            .send(new_packet);
     }
 
     pub fn receive_packet(&mut self) -> Result<Option<Packet>, NaiaClientSocketError> {
@@ -57,13 +68,20 @@ impl Io {
             .expect("Cannot call Client.receive_packet() until you call Client.connect()!")
             .receive();
 
-        if let Some(monitor) = &mut self.download_bandwidth_monitor {
-            if let Ok(Some(packet)) = &receive_result {
-                monitor.record_packet(packet.payload().len());
-            }
-        }
+        if let Ok(Some(packet)) = receive_result  {
 
-        return receive_result;
+            let mut decompressed_packet: Vec<u8> = Vec::with_capacity(packet.payload().len());
+            self.decoder.decompress(packet.payload(), &mut decompressed_packet);
+            let new_packet = Packet::new(decompressed_packet);
+
+            if let Some(monitor) = &mut self.download_bandwidth_monitor {
+                monitor.record_packet(new_packet.payload().len());
+            }
+
+            return Ok(Some(new_packet));
+        } else {
+            return receive_result;
+        }
     }
 
     pub fn server_addr_unwrapped(&self) -> SocketAddr {
