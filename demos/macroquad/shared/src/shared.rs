@@ -15,5 +15,10 @@ pub fn shared_config() -> SharedConfig<Protocol> {
         incoming_jitter: 1,
         incoming_loss: 0.0,
     });
-    return SharedConfig::new(Protocol::load(), tick_interval, link_condition, Some(MonitorConfig::default()));
+    return SharedConfig::new(
+        Protocol::load(),
+        tick_interval,
+        link_condition,
+        Some(MonitorConfig::default()),
+    );
 }

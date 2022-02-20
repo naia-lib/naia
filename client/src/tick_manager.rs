@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use naia_shared::{wrapping_diff, Instant};
+use naia_shared::{wrapping_diff, Instant, Tick};
 
 /// Manages the current tick for the host
 pub struct TickManager {
@@ -9,7 +9,7 @@ pub struct TickManager {
     tick_speed_factor: f32,
     tick_offset_speed_avg: f32,
     tick_offset_avg: f32,
-    internal_tick: u16,
+    internal_tick: Tick,
     client_sending_tick_adjust: f32,
     server_receivable_tick_adjust: f32,
     client_receiving_tick_adjust: f32,
@@ -85,7 +85,7 @@ impl TickManager {
     /// the appropriate future intended tick
     pub fn record_server_tick(
         &mut self,
-        server_tick: u16,
+        server_tick: Tick,
         rtt_average: f32,
         jitter_deviation: f32,
     ) {
@@ -143,25 +143,25 @@ impl TickManager {
     }
 
     /// Gets the tick at which the Client is sending updates
-    pub fn client_sending_tick(&self) -> u16 {
+    pub fn client_sending_tick(&self) -> Tick {
         let mut output = self.server_tick_estimate() + self.client_sending_tick_adjust;
         wrap_f32(&mut output);
-        return output.round() as u16;
+        return output.round() as Tick;
     }
 
     /// Gets the tick at which to receive messages from the Server (after jitter
     /// buffer offset is applied)
-    pub fn client_receiving_tick(&self) -> u16 {
+    pub fn client_receiving_tick(&self) -> Tick {
         let mut output = self.server_tick_estimate() - self.client_receiving_tick_adjust;
         wrap_f32(&mut output);
-        return output.round() as u16;
+        return output.round() as Tick;
     }
 
     /// Gets the earliest tick the Server may be able to receive Client messages
-    pub fn server_receivable_tick(&self) -> u16 {
+    pub fn server_receivable_tick(&self) -> Tick {
         let mut output = self.server_tick_estimate() + self.server_receivable_tick_adjust;
         wrap_f32(&mut output);
-        return output.round() as u16;
+        return output.round() as Tick;
     }
 
     fn server_tick_estimate(&self) -> f32 {
