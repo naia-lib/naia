@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_shared::{
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, MonitorConfig, PacketReader,
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, PingConfig, PacketReader,
     PacketType, PacketWriteState, Protocolize, StandardHeader, Tick, WorldMutType,
 };
 
@@ -21,9 +21,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
-        monitor_config: &Option<MonitorConfig>,
+        ping_config: &Option<PingConfig>,
     ) -> Self {
-        let ping_manager: Option<PingManager> = monitor_config.as_ref().map(|config| {
+        let ping_manager: Option<PingManager> = ping_config.as_ref().map(|config| {
             PingManager::new(
                 config.ping_interval,
                 config.rtt_initial_estimate,

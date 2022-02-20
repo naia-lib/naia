@@ -6,9 +6,9 @@ use naia_shared::{ConnectionConfig, SocketConfig};
 #[derive(Clone)]
 pub struct ClientConfig {
     /// Used to configure the Server's underlying socket
-    pub socket_config: SocketConfig,
+    pub socket: SocketConfig,
     /// Used to configure the connection with the Server
-    pub connection_config: ConnectionConfig,
+    pub connection: ConnectionConfig,
     /// The duration between the resend of certain connection handshake messages
     pub send_handshake_interval: Duration,
     /// The minimum of measured latency to the Server that the Client use to
@@ -23,8 +23,8 @@ pub struct ClientConfig {
 impl Default for ClientConfig {
     fn default() -> Self {
         Self {
-            socket_config: SocketConfig::default(),
-            connection_config: ConnectionConfig::default(),
+            socket: SocketConfig::default(),
+            connection: ConnectionConfig::default(),
             send_handshake_interval: Duration::from_secs(1),
             minimum_latency: None,
         }

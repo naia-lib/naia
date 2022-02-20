@@ -1,18 +1,17 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 
 use naia_client_socket::{NaiaClientSocketError, Packet, PacketReceiver, PacketSender, ServerAddr};
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
     Protocolize, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType,
-    WorldRefType,
+    WorldRefType, BandwidthMonitor
 };
-
-use crate::bandwidth_monitor::BandwidthMonitor;
 
 pub struct Io {
     packet_sender: Option<PacketSender>,
     packet_receiver: Option<PacketReceiver>,
-    bandwidth_monitor: Option<BandwidthMonitor>,
+    upload_bandwidth_monitor: Option<BandwidthMonitor>,
+    download_bandwidth_monitor: Option<BandwidthMonitor>,
 }
 
 impl Io {
@@ -20,7 +19,8 @@ impl Io {
         Io {
             packet_sender: None,
             packet_receiver: None,
-            bandwidth_monitor: None,
+            upload_bandwidth_monitor: None,
+            download_bandwidth_monitor: None,
         }
     }
 
@@ -39,8 +39,8 @@ impl Io {
 
     pub fn send_packet(&mut self, packet: Packet) {
 
-        if let Some(monitor) = &mut self.bandwidth_monitor {
-            monitor.send_packet(&packet.address(), packet.payload().len());
+        if let Some(monitor) = &mut self.upload_bandwidth_monitor {
+            monitor.record_packet(packet.payload().len());
         }
 
         self.packet_sender
@@ -57,9 +57,9 @@ impl Io {
             .expect("Cannot call Client.receive_packet() until you call Client.connect()!")
             .receive();
 
-        if let Some(monitor) = &mut self.bandwidth_monitor {
+        if let Some(monitor) = &mut self.download_bandwidth_monitor {
             if let Ok(Some(packet)) = &receive_result {
-                monitor.receive_packet(packet.payload().len());
+                monitor.record_packet(packet.payload().len());
             }
         }
 
@@ -80,14 +80,21 @@ impl Io {
     }
 
     pub fn enable_bandwidth_monitor(&mut self, bandwidth_measure_duration: Duration) {
-        self.bandwidth_monitor = Some(BandwidthMonitor::new(bandwidth_measure_duration));
+        self.upload_bandwidth_monitor = Some(BandwidthMonitor::new(bandwidth_measure_duration));
+        self.download_bandwidth_monitor = Some(BandwidthMonitor::new(bandwidth_measure_duration));
     }
 
     pub fn upload_bandwidth(&self) -> f32 {
-        return self.bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").upload_bandwidth();
+        return self.upload_bandwidth_monitor
+            .as_ref()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .bandwidth();
     }
 
     pub fn download_bandwidth(&self) -> f32 {
-        return self.bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").download_bandwidth();
+        return self.download_bandwidth_monitor
+            .as_ref()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .bandwidth();
     }
 }

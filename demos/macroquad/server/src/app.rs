@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::{time::Duration, collections::HashMap};
 
 use naia_server::{
-    shared::Random, Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
+    shared::Random, Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey, shared::Timer
 };
 
 use naia_demo_world::{Entity, World as DemoWorld};
@@ -20,6 +20,7 @@ pub struct App {
     world: World,
     main_room_key: RoomKey,
     user_to_prediction_map: HashMap<UserKey, Entity>,
+    bandwidth_timer: Timer,
 }
 
 impl App {
@@ -38,7 +39,11 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        let mut server = Server::new(ServerConfig::default(), shared_config());
+        let mut server_config = ServerConfig::default();
+
+        server_config.connection.bandwidth_measure_duration = Some(Duration::from_secs(1));
+
+        let mut server = Server::new(server_config, shared_config());
         server.listen(server_addresses);
 
         let world = World::new();
@@ -52,10 +57,18 @@ impl App {
             world,
             main_room_key,
             user_to_prediction_map: HashMap::<UserKey, Entity>::new(),
+            bandwidth_timer: Timer::new(Duration::from_secs(1)),
         }
     }
 
     pub fn update(&mut self) {
+
+        if self.bandwidth_timer.ringing() {
+            self.bandwidth_timer.reset();
+
+            info!("Bandwidth: {} kbps down, {} kbps up", self.server.download_bandwidth_total(), self.server.upload_bandwidth_total());
+        }
+
         for event in self.server.receive() {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {

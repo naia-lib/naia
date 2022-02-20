@@ -9,14 +9,17 @@ pub struct ConnectionConfig {
     /// The duration to wait before sending a heartbeat message to a remote
     /// host, if the host has not already sent another message within that time
     pub heartbeat_interval: Duration,
+    /// The duration over which to measure bandwidth. Set to None to avoid measure bandwidth at all.
+    pub bandwidth_measure_duration: Option<Duration>,
 }
 
 impl ConnectionConfig {
     /// Creates a new ConnectionConfig, used to initialize a Connection
-    pub fn new(disconnection_timeout_duration: Duration, heartbeat_interval: Duration) -> Self {
+    pub fn new(disconnection_timeout_duration: Duration, heartbeat_interval: Duration, bandwidth_measure_duration: Option<Duration>) -> Self {
         ConnectionConfig {
             disconnection_timeout_duration,
             heartbeat_interval,
+            bandwidth_measure_duration,
         }
     }
 }
@@ -26,6 +29,7 @@ impl Default for ConnectionConfig {
         Self {
             disconnection_timeout_duration: Duration::from_secs(10),
             heartbeat_interval: Duration::from_secs(4),
+            bandwidth_measure_duration: None,
         }
     }
 }

@@ -12,7 +12,7 @@ use slotmap::DenseSlotMap;
 use naia_server_socket::{Packet, ServerAddrs, Socket};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
-    ManagerType, Manifest, MonitorConfig, NetEntity, PacketReader, PacketType, PropertyMutate,
+    ManagerType, Manifest, PingConfig, NetEntity, PacketReader, PacketType, PropertyMutate,
     PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig,
     StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
@@ -44,7 +44,7 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
     manifest: Manifest<P>,
     // Connection
     connection_config: ConnectionConfig,
-    monitor_config: Option<MonitorConfig>,
+    ping_config: Option<PingConfig>,
     socket: Socket,
     io: Io,
     heartbeat_timer: Timer,
@@ -72,7 +72,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         server_config.socket.link_condition_config = shared_config.link_condition_config.clone();
 
         let connection_config = server_config.connection.clone();
-        let monitor_config = shared_config.monitor_config.clone();
+        let ping_config = shared_config.ping_config.clone();
 
         let socket = Socket::new(server_config.socket);
 
@@ -91,7 +91,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             manifest: shared_config.manifest,
             // Connection
             connection_config,
-            monitor_config,
+            ping_config,
             socket,
             io: Io::new(),
             heartbeat_timer,
@@ -119,6 +119,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         self.socket.listen(server_addrs);
         self.io
             .load(self.socket.packet_sender(), self.socket.packet_receiver());
+        if let Some(bandwidth_measure_duration) = self.connection_config.bandwidth_measure_duration {
+            self.io.enable_bandwidth_monitor(bandwidth_measure_duration);
+        }
     }
 
     /// Returns whether or not the Server has initialized correctly and is
@@ -200,6 +203,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             self.handshake_manager
                 .send_connect_accept_response(&mut self.io, &mut new_connection);
             self.user_connections.insert(user.address, new_connection);
+            if self.io.bandwidth_monitor_enabled() {
+                self.io.register_client(&user.address);
+            }
             self.incoming_events
                 .push_back(Ok(Event::Connection(*user_key)));
         }
@@ -473,6 +479,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             .map(|tick_manager| tick_manager.server_tick());
     }
 
+    // Bandwidth monitoring
+    pub fn upload_bandwidth_total(&self) -> f32 {
+        return self.io.upload_bandwidth_total();
+    }
+
+    pub fn download_bandwidth_total(&self) -> f32 {
+        return self.io.download_bandwidth_total();
+    }
+
+    pub fn upload_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
+        return self.io.upload_bandwidth_to_client(address);
+    }
+
+    pub fn download_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
+        return self.io.download_bandwidth_from_client(address);
+    }
+
     // Crate-Public methods
 
     //// Entities
@@ -612,6 +635,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 // Clean up all user data
                 for (_, room) in self.rooms.iter_mut() {
                     room.unsubscribe_user(&user_key);
+                }
+
+                if self.io.bandwidth_monitor_enabled() {
+                    self.io.deregister_client(&user.address);
                 }
 
                 return Some(user);
@@ -880,7 +907,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                             }
                         }
                         PacketType::Ping => {
-                            if self.monitor_config.is_some() {
+                            if self.ping_config.is_some() {
                                 let server_tick = self.server_tick().unwrap_or(0);
                                 match self.user_connections.get_mut(&address) {
                                     Some(connection) => {

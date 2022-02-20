@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use naia_socket_shared::LinkConditionerConfig;
 
-use crate::{Manifest, MonitorConfig, Protocolize};
+use crate::{Manifest, PingConfig, Protocolize};
 
 /// Contains Config properties which will be shared by Server and Client
 pub struct SharedConfig<P: Protocolize> {
@@ -12,8 +12,8 @@ pub struct SharedConfig<P: Protocolize> {
     pub tick_interval: Option<Duration>,
     /// Configuration used to simulate network conditions
     pub link_condition_config: Option<LinkConditionerConfig>,
-    /// Configuration used to monitor the state of the network
-    pub monitor_config: Option<MonitorConfig>,
+    /// Configuration used to monitor the ping & jitter on the network
+    pub ping_config: Option<PingConfig>,
 }
 
 impl<P: Protocolize> SharedConfig<P> {
@@ -22,13 +22,13 @@ impl<P: Protocolize> SharedConfig<P> {
         manifest: Manifest<P>,
         tick_interval: Option<Duration>,
         link_condition_config: Option<LinkConditionerConfig>,
-        monitor_config: Option<MonitorConfig>,
+        ping_config: Option<PingConfig>,
     ) -> Self {
         SharedConfig {
             manifest,
             tick_interval,
             link_condition_config,
-            monitor_config,
+            ping_config,
         }
     }
 }
