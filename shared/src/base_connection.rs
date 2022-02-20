@@ -2,12 +2,11 @@ use std::net::SocketAddr;
 
 use naia_socket_shared::Timer;
 
-use crate::{message_manager::MessageManager, sequence_greater_than};
-
 use super::{
-    ack_manager::AckManager, connection_config::ConnectionConfig,
+    ack_manager::AckManager, connection_config::ConnectionConfig, message_manager::MessageManager,
     packet_notifiable::PacketNotifiable, packet_type::PacketType, protocolize::Protocolize,
     sequence_buffer::SequenceNumber, standard_header::StandardHeader,
+    wrapping_number::sequence_greater_than,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
