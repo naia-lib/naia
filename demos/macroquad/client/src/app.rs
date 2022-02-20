@@ -1,10 +1,11 @@
-use std::{collections::HashSet, ops::Deref};
+use std::{collections::HashSet, ops::Deref, time::Duration};
 
 use macroquad::prelude::*;
 
 use naia_client::{
     shared::{Protocolize, Replicate},
     Client as NaiaClient, ClientConfig, Event,
+    shared::Timer
 };
 
 use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
@@ -43,13 +44,18 @@ pub struct App {
     squares: HashSet<Entity>,
     queued_command: Option<KeyCommand>,
     command_history: CommandHistory<KeyCommand>,
+    bandwidth_timer: Timer,
 }
 
 impl App {
     pub fn new() -> Self {
         info!("Naia Macroquad Client Demo started");
 
-        let client = Client::new(ClientConfig::default(), shared_config());
+        let mut client_config = ClientConfig::default();
+
+        client_config.connection.bandwidth_measure_duration = Some(Duration::from_secs(1));
+
+        let client = Client::new(client_config, shared_config());
 
         App {
             client,
@@ -58,6 +64,7 @@ impl App {
             squares: HashSet::new(),
             queued_command: None,
             command_history: CommandHistory::new(),
+            bandwidth_timer: Timer::new(Duration::from_secs(1)),
         }
     }
 
@@ -75,6 +82,12 @@ impl App {
                 self.client.auth(auth);
                 return self.client.connect("http://127.0.0.1:14191");
             }
+        }
+
+        if self.bandwidth_timer.ringing() {
+            self.bandwidth_timer.reset();
+
+            info!("Bandwidth: {} kbps down, {} kbps up", self.client.download_bandwidth(), self.client.upload_bandwidth());
         }
 
         self.input();

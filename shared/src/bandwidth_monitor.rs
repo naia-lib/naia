@@ -11,19 +11,11 @@ impl BandwidthMonitor {
         }
     }
 
-    pub fn send_packet(&self, bytes: usize) {
+    pub fn record_packet(&mut self, bytes: usize) {
         todo!()
     }
 
-    pub fn receive_packet(&self, bytes: usize) {
-        todo!()
-    }
-
-    pub fn upload_bandwidth(&self) -> f32 {
-        todo!()
-    }
-
-    pub fn download_bandwidth(&self) -> f32 {
+    pub fn bandwidth(&self) -> f32 {
         todo!()
     }
 }

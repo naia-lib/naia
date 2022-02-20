@@ -13,7 +13,8 @@ use crate::bandwidth_monitor::BandwidthMonitor;
 pub struct Io {
     packet_sender: Option<PacketSender>,
     packet_receiver: Option<PacketReceiver>,
-    bandwidth_monitor: Option<BandwidthMonitor>,
+    upload_bandwidth_monitor: Option<BandwidthMonitor>,
+    download_bandwidth_monitor: Option<BandwidthMonitor>,
 }
 
 impl Io {
@@ -21,7 +22,8 @@ impl Io {
         Io {
             packet_sender: None,
             packet_receiver: None,
-            bandwidth_monitor: None,
+            upload_bandwidth_monitor: None,
+            download_bandwidth_monitor: None,
         }
     }
 
@@ -40,8 +42,8 @@ impl Io {
 
     pub fn send_packet(&mut self, packet: Packet) {
 
-        if let Some(monitor) = &mut self.bandwidth_monitor {
-            monitor.send_packet(&packet.address(), packet.payload().len());
+        if let Some(monitor) = &mut self.upload_bandwidth_monitor {
+            monitor.record_packet(&packet.address(), packet.payload().len());
         }
 
         self.packet_sender
@@ -58,9 +60,9 @@ impl Io {
             .expect("Cannot call Server.receive_packet() until you call Server.listen()!")
             .receive();
 
-        if let Some(monitor) = &mut self.bandwidth_monitor {
+        if let Some(monitor) = &mut self.download_bandwidth_monitor {
             if let Ok(Some(packet)) = &receive_result {
-                monitor.receive_packet(&packet.address(), packet.payload().len());
+                monitor.record_packet(&packet.address(), packet.payload().len());
             }
         }
 
@@ -68,22 +70,37 @@ impl Io {
     }
 
     pub fn enable_bandwidth_monitor(&mut self, bandwidth_measure_duration: Duration) {
-        self.bandwidth_monitor = Some(BandwidthMonitor::new(bandwidth_measure_duration));
+        self.upload_bandwidth_monitor = Some(BandwidthMonitor::new(bandwidth_measure_duration));
+        self.download_bandwidth_monitor = Some(BandwidthMonitor::new(bandwidth_measure_duration));
+    }
+
+    pub fn bandwidth_monitor_enabled(&self) -> bool {
+        self.upload_bandwidth_monitor.is_some() && self.download_bandwidth_monitor.is_some()
+    }
+
+    pub fn register_client(&mut self, address: &SocketAddr) {
+        self.upload_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").create_client(address);
+        self.download_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").create_client(address);
+    }
+
+    pub fn deregister_client(&mut self, address: &SocketAddr) {
+        self.upload_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").delete_client(address);
+        self.download_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").delete_client(address);
     }
 
     pub fn upload_bandwidth_total(&self) -> f32 {
-        return self.bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").upload_bandwidth_total();
+        return self.upload_bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").total_bandwidth();
     }
 
     pub fn download_bandwidth_total(&self) -> f32 {
-        return self.bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").download_bandwidth_total();
+        return self.download_bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").total_bandwidth();
     }
 
     pub fn upload_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
-        return self.bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").upload_bandwidth_to_client(address);
+        return self.upload_bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").client_bandwidth(address);
     }
 
     pub fn download_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
-        return self.bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").download_bandwidth_from_client(address);
+        return self.download_bandwidth_monitor.as_ref().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").client_bandwidth(address);
     }
 }

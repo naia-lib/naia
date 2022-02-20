@@ -2,7 +2,7 @@ use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAdd
 
 use naia_client_socket::{Packet, Socket};
 pub use naia_shared::{
-    ConnectionConfig, ManagerType, Manifest, MonitorConfig, PacketReader, PacketType,
+    ConnectionConfig, ManagerType, Manifest, PingConfig, PacketReader, PacketType,
     ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick,
     Timer, Timestamp, WorldMutType, WorldRefType,
 };
@@ -26,7 +26,7 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
     shared_config: SharedConfig<P>,
     connection_config: ConnectionConfig,
     socket_config: SocketConfig,
-    monitor_config: Option<MonitorConfig>,
+    ping_config: Option<PingConfig>,
     // Connection
     io: Io,
     server_connection: Option<Connection<P, E>>,
@@ -42,10 +42,10 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
 impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Create a new Client
     pub fn new(client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
-        let connection_config = client_config.connection_config.clone();
-        let monitor_config = shared_config.monitor_config.clone();
+        let connection_config = client_config.connection.clone();
+        let ping_config = shared_config.ping_config.clone();
 
-        let mut socket_config = client_config.socket_config.clone();
+        let mut socket_config = client_config.socket.clone();
         socket_config.link_condition_config = shared_config.link_condition_config.clone();
 
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
@@ -64,7 +64,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             shared_config,
             connection_config,
             socket_config,
-            monitor_config,
+            ping_config,
             // Connection
             io: Io::new(),
             server_connection: None,
@@ -96,6 +96,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         socket.connect(server_session_url);
         self.io
             .load(socket.packet_sender(), socket.packet_receiver());
+        if let Some(bandwidth_measure_duration) = self.connection_config.bandwidth_measure_duration {
+            self.io.enable_bandwidth_monitor(bandwidth_measure_duration);
+        }
     }
 
     /// Returns whether or not the client is disconnected
@@ -272,7 +275,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             .unwrap()
             .ping_manager
             .as_ref()
-            .expect("SharedConfig.monitor_config is set to None! Enable to allow checking RTT.")
+            .expect("SharedConfig.ping_config is set to None! Enable to allow checking RTT.")
             .rtt;
     }
 
@@ -284,7 +287,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             .unwrap()
             .ping_manager
             .as_ref()
-            .expect("SharedConfig.monitor_config is set to None! Enable to allow checking RTT.")
+            .expect("SharedConfig.ping_config is set to None! Enable to allow checking Jitter.")
             .jitter;
     }
 
@@ -305,6 +308,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         self.tick_manager
             .as_ref()
             .map(|tick_manager| tick_manager.interpolation())
+    }
+
+    // Bandwidth monitoring
+    pub fn upload_bandwidth(&self) -> f32 {
+        return self.io
+            .upload_bandwidth();
+    }
+
+    pub fn download_bandwidth(&self) -> f32 {
+        return self.io
+            .download_bandwidth();
     }
 
     // Crate-public functions
@@ -401,7 +415,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                             self.server_connection = Some(Connection::new(
                                 server_addr,
                                 &self.connection_config,
-                                &self.monitor_config,
+                                &self.ping_config,
                             ));
                             self.incoming_events
                                 .push_back(Ok(Event::Connection(server_addr)));
