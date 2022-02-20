@@ -46,6 +46,8 @@ impl EntityMessagePacketWriter {
             if self.queue_count == 0 {
                 hypothetical_next_payload_size += 2;
             }
+        } else {
+            panic!("Cannot find the entity record to serialize entity message!");
         }
 
         hypothetical_next_payload_size < MTU_SIZE && self.queue_count != 255
@@ -86,26 +88,31 @@ impl EntityMessagePacketWriter {
             write_state.add_bytes(self.queue_count == 0, 2, byte_buffer.len());
             self.queue_count += 1;
             self.queued_bytes.append(&mut byte_buffer);
+        } else {
+            panic!("Cannot find the entity record to serialize entity message!");
         }
     }
 
     /// Write bytes into an outgoing packet
     pub fn flush_writes(&mut self, out_bytes: &mut Vec<u8>) {
-        //Write manager "header" (manager type & message count)
-        if self.queue_count != 0 {
-            // write manager type
-            out_bytes
-                .write_u8(ManagerType::EntityMessage as u8)
-                .unwrap();
-
-            // write number of messages
-            out_bytes.write_u8(self.queue_count).unwrap();
-
-            // write payload
-            out_bytes.append(&mut self.queued_bytes);
-
-            self.queue_count = 0;
-            self.queued_bytes = Vec::<u8>::new();
+        if self.queue_count == 0 {
+            panic!("Should not call this method if self.queue_count is 0");
         }
+
+        //Write manager "header" (manager type & message count)
+
+        // write manager type
+        out_bytes
+            .write_u8(ManagerType::EntityMessage as u8)
+            .unwrap();
+
+        // write number of messages
+        out_bytes.write_u8(self.queue_count).unwrap();
+
+        // write payload
+        out_bytes.append(&mut self.queued_bytes);
+
+        self.queue_count = 0;
+        self.queued_bytes = Vec::<u8>::new();
     }
 }

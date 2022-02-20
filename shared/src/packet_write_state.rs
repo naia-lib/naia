@@ -13,6 +13,10 @@ impl PacketWriteState {
         }
     }
 
+    pub fn has_bytes(&self) -> bool {
+        self.bytes > 0
+    }
+
     pub fn byte_count(&self) -> usize {
         self.bytes
     }

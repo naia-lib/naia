@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use naia_shared::{LinkConditionerConfig, SharedConfig};
+use naia_shared::{LinkConditionerConfig, MonitorConfig, SharedConfig};
 
 use super::protocol::Protocol;
 
@@ -15,5 +15,5 @@ pub fn shared_config() -> SharedConfig<Protocol> {
         incoming_jitter: 1,
         incoming_loss: 0.0,
     });
-    return SharedConfig::new(Protocol::load(), tick_interval, link_condition);
+    return SharedConfig::new(Protocol::load(), tick_interval, link_condition, Some(MonitorConfig::default()));
 }

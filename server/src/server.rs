@@ -169,9 +169,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             }
         }
 
-        // TODO: have 1 single queue for messages from all users, as it's
-        // possible this current technique unfairly favors the 1st users in
-        // self.user_connections
+        // new errors
+        while let Some(err) = self.outstanding_errors.pop_front() {
+            events.push_back(Err(err));
+        }
+
+        // TODO: have 1 single queue here
         for (_, connection) in self.user_connections.iter_mut() {
             //receive messages from anyone
             while let Some(message) = connection.base.message_manager.pop_incoming_message() {
@@ -179,19 +182,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             }
         }
 
-        // new errors
-        while let Some(err) = self.outstanding_errors.pop_front() {
-            events.push_back(Err(err));
-        }
-
         // tick event
         if let Some(tick_manager) = &mut self.tick_manager {
             if tick_manager.receive_tick() {
                 // Receive EntityMessages
 
-                // TODO: have 1 single queue for messages from all users, as it's
-                // possible this current technique unfairly favors the 1st users in
-                // self.user_connections
+                // TODO: have 1 single queue here
                 if let Some(server_tick) = self.server_tick() {
                     for (_, connection) in self.user_connections.iter_mut() {
                         while let Some((entity, message)) =
@@ -284,20 +280,22 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // update entity scopes
         self.update_entity_scopes(&world);
 
-        // loop through all connections, send packet
         let server_tick = self.server_tick().unwrap_or(0);
 
-        // TODO: have 1 single outgoing queue so that first users in collection don't
-        // get more updates than those in the back
-        for (address, connection) in self.user_connections.iter_mut() {
+        // loop through all connections, send packet
+        let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().map(|addr| *addr).collect();
+        fastrand::shuffle(&mut user_addresses);
+
+        for user_address in user_addresses {
+            let connection = self.user_connections.get_mut(&user_address).unwrap();
             connection
                 .entity_manager
                 .collect_component_updates(&self.world_record);
             let mut sent = false;
             while let Some(payload) =
-                connection.outgoing_packet(&world, &self.world_record, server_tick)
+            connection.outgoing_packet(&world, &self.world_record, server_tick)
             {
-                self.io.send_packet(Packet::new_raw(*address, payload));
+                self.io.send_packet(Packet::new_raw(user_address, payload));
                 sent = true;
             }
             if sent {

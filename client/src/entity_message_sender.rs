@@ -9,8 +9,6 @@ use naia_shared::{
     ReplicateSafe, Tick,
 };
 
-//use miniquad::info;
-
 pub struct EntityMessageSender<P: Protocolize, E: Copy + Eq + Hash> {
     // This SequenceBuffer is indexed by Tick
     outgoing_messages: OutgoingMessages<P, E>,
@@ -44,6 +42,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityMessageSender<P, E> {
     }
 
     pub fn generate_outgoing_message_list(&mut self) -> VecDeque<(MsgId, Tick, E, P)> {
+        if self.send_locked {
+            panic!("Should not call this method when send_locked");
+        }
         let mut outgoing_list = VecDeque::new();
 
         // Loop through outstanding messages and add them to the outgoing list
@@ -204,6 +205,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> MessageMap<P, E> {
     pub fn remove(&mut self, message_id: &MsgId) {
         self.map.remove(message_id);
     }
+
+    pub fn len(&self) -> usize {
+        return self.map.len();
+    }
 }
 
 // OutgoingMessages
@@ -276,12 +281,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> OutgoingMessages<P, E> {
         loop {
             index -= 1;
 
+            let mut remove = false;
+
             if let Some((old_tick, msg_map)) = self.buffer.get_mut(index) {
                 if *old_tick == tick {
                     // found it!
                     msg_map.remove(&msg_id);
                     //info!("removed delivered message! tick: {}, msg_id: {}",
                     // tick, msg_id);
+                    if msg_map.len() == 0 {
+                        remove = true;
+                    }
                 } else {
                     // if tick is less than old tick, no sense continuing, only going to get bigger
                     // as we go
@@ -289,6 +299,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> OutgoingMessages<P, E> {
                         return;
                     }
                 }
+            }
+
+            if remove {
+                self.buffer.remove(index);
             }
 
             if index == 0 {
