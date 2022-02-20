@@ -66,7 +66,7 @@ impl App {
         if self.bandwidth_timer.ringing() {
             self.bandwidth_timer.reset();
 
-            info!("Bandwidth: {} kbps down, {} kbps up", self.server.download_bandwidth_total(), self.server.upload_bandwidth_total());
+            info!("Bandwidth: {} kbps incoming (Free! :)), {} kbps outgoing (COST!)", self.server.download_bandwidth_total(), self.server.upload_bandwidth_total());
         }
 
         for event in self.server.receive() {
