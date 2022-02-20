@@ -61,10 +61,7 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
     // Components
     diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     // Events
-    outstanding_connects: VecDeque<(SocketAddr, UserKey)>,
-    outstanding_disconnects: VecDeque<UserKey>,
-    outstanding_auths: VecDeque<(UserKey, P)>,
-    outstanding_errors: VecDeque<NaiaServerError>,
+    incoming_events: VecDeque<Result<Event<P, E>, NaiaServerError>>,
     // Ticks
     tick_manager: Option<TickManager>,
 }
@@ -111,10 +108,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             // Components
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
             // Events
-            outstanding_auths: VecDeque::new(),
-            outstanding_connects: VecDeque::new(),
-            outstanding_disconnects: VecDeque::new(),
-            outstanding_errors: VecDeque::new(),
+            incoming_events: VecDeque::new(),
             // Ticks
             tick_manager,
         }
@@ -136,42 +130,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
     pub fn receive(&mut self) -> VecDeque<Result<Event<P, E>, NaiaServerError>> {
-        let mut events = VecDeque::new();
-
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
         self.maintain_socket();
-
-        // new authorizations
-        while let Some((user_key, auth_message)) = self.outstanding_auths.pop_front() {
-            events.push_back(Ok(Event::Authorization(user_key, auth_message)));
-        }
-
-        // new connections
-        while let Some((user_address, user_key)) = self.outstanding_connects.pop_front() {
-            let mut new_connection = Connection::new(
-                &self.connection_config,
-                user_address,
-                &user_key,
-                &self.diff_handler,
-            );
-            self.handshake_manager
-                .send_connect_accept_response(&mut self.io, &mut new_connection);
-            self.user_connections.insert(user_address, new_connection);
-            events.push_back(Ok(Event::Connection(user_key)));
-        }
-
-        // new disconnections
-        while let Some(user_key) = self.outstanding_disconnects.pop_front() {
-            if let Some(user) = self.delete_user(&user_key) {
-                events.push_back(Ok(Event::Disconnection(user_key, user)));
-            }
-        }
-
-        // new errors
-        while let Some(err) = self.outstanding_errors.pop_front() {
-            events.push_back(Err(err));
-        }
 
         // tick event
         let mut did_tick = false;
@@ -191,7 +152,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
             // receive messages from anyone
             while let Some(message) = connection.base.message_manager.pop_incoming_message() {
-                events.push_back(Ok(Event::Message(connection.user_key, message)));
+                self.incoming_events
+                    .push_back(Ok(Event::Message(connection.user_key, message)));
             }
 
             // receive entity messages on tick
@@ -203,7 +165,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     while let Some((entity, message)) = connection.pop_incoming_entity_message(
                         self.tick_manager.as_ref().unwrap().server_tick(),
                     ) {
-                        events.push_back(Ok(Event::MessageEntity(
+                        self.incoming_events.push_back(Ok(Event::MessageEntity(
                             connection.user_key,
                             entity,
                             message,
@@ -211,16 +173,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     }
                 }
 
-                events.push_back(Ok(Event::Tick));
+                self.incoming_events.push_back(Ok(Event::Tick));
             }
         }
 
         // tick event
         if did_tick {
-            events.push_back(Ok(Event::Tick));
+            self.incoming_events.push_back(Ok(Event::Tick));
         }
 
-        events
+        return std::mem::take(&mut self.incoming_events);
     }
 
     // Connections
@@ -229,8 +191,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// with the Server
     pub fn accept_connection(&mut self, user_key: &UserKey) {
         if let Some(user) = self.users.get(*user_key) {
-            self.outstanding_connects
-                .push_back((user.address, *user_key));
+            let mut new_connection = Connection::new(
+                &self.connection_config,
+                user.address,
+                &user_key,
+                &self.diff_handler,
+            );
+            self.handshake_manager
+                .send_connect_accept_response(&mut self.io, &mut new_connection);
+            self.user_connections.insert(user.address, new_connection);
+            self.incoming_events
+                .push_back(Ok(Event::Connection(*user_key)));
         }
     }
 
@@ -630,10 +601,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         return None;
     }
 
-    pub(crate) fn user_force_disconnect(&mut self, user_key: &UserKey) {
-        self.outstanding_disconnects.push_back(*user_key);
-    }
-
     /// All necessary cleanup, when they're actually gone...
     pub(crate) fn delete_user(&mut self, user_key: &UserKey) -> Option<User> {
         if let Some(user) = self.users.remove(*user_key) {
@@ -783,14 +750,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     // Private methods
 
     fn maintain_socket(&mut self) {
-        // heartbeats
+        // heartbeats & disconnects
         if self.heartbeat_timer.ringing() {
             self.heartbeat_timer.reset();
 
             let server_tick = self.server_tick().unwrap_or(0);
-            for (user_address, connection) in self.user_connections.iter_mut() {
+            let mut user_disconnects: Vec<UserKey> = Vec::new();
+
+            for (user_address, connection) in &mut self.user_connections.iter_mut() {
                 if connection.base.should_drop() {
-                    self.outstanding_disconnects.push_back(connection.user_key);
+                    user_disconnects.push(connection.user_key);
                     continue;
                 }
 
@@ -805,6 +774,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     self.io.send_packet(Packet::new_raw(*user_address, payload));
                     connection.base.mark_sent();
                 }
+            }
+
+            for user_key in user_disconnects {
+                self.disconnect_user(&user_key);
             }
         }
 
@@ -842,7 +815,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                     HandshakeResult::AuthUser(auth_message) => {
                                         let user = User::new(address);
                                         let user_key = self.users.insert(user);
-                                        self.outstanding_auths.push_back((user_key, auth_message));
+                                        self.incoming_events.push_back(Ok(Event::Authorization(
+                                            user_key,
+                                            auth_message,
+                                        )));
                                     }
                                     HandshakeResult::ConnectUser => {
                                         let user = User::new(address);
@@ -856,13 +832,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                             }
                         }
                         PacketType::Disconnect => {
-                            if let Some(mut connection) = self.user_connections.get_mut(&address) {
-                                if self
-                                    .handshake_manager
-                                    .verify_disconnect_request(&mut connection, &payload)
+                            if let Some(user_key) = loop {
+                                if let Some(mut connection) =
+                                    self.user_connections.get_mut(&address)
                                 {
-                                    self.outstanding_disconnects.push_back(connection.user_key);
+                                    if self
+                                        .handshake_manager
+                                        .verify_disconnect_request(&mut connection, &payload)
+                                    {
+                                        break Some(connection.user_key);
+                                    }
                                 }
+                                break None;
+                            } {
+                                self.disconnect_user(&user_key);
                             }
                         }
                         PacketType::Data => {
@@ -953,10 +936,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     break;
                 }
                 Err(error) => {
-                    self.outstanding_errors
-                        .push_back(NaiaServerError::Wrapped(Box::new(error)));
+                    self.incoming_events
+                        .push_back(Err(NaiaServerError::Wrapped(Box::new(error))));
                 }
             }
+        }
+    }
+
+    pub(crate) fn disconnect_user(&mut self, user_key: &UserKey) {
+        if let Some(user) = self.delete_user(user_key) {
+            self.incoming_events
+                .push_back(Ok(Event::Disconnection(*user_key, user)));
         }
     }
 

@@ -67,7 +67,7 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash> UserMut<'s, P, E> {
     }
 
     pub fn disconnect(&mut self) {
-        self.server.user_force_disconnect(&self.key);
+        self.server.disconnect_user(&self.key);
     }
 
     // Rooms
