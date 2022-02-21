@@ -49,9 +49,10 @@ impl Io {
     pub fn send_packet(&mut self, packet: Packet) {
 
         // TODO: only use compressed packet if the resulting size would be less!
-        let mut compressed_packet: Vec<u8> = Vec::with_capacity(packet.payload().len());
-        self.encoder.compress(packet.payload(), &mut compressed_packet);
-        let new_packet = Packet::new(packet.address(), compressed_packet);
+        let mut compressed_payload: Vec<u8> = Vec::new();
+        compressed_payload.resize(max_compress_len(packet.payload().len()), 0);
+        self.encoder.compress(packet.payload(), &mut compressed_payload[..]);
+        let new_packet = Packet::new(packet.address(), compressed_payload);
 
         if let Some(monitor) = &mut self.upload_bandwidth_monitor {
             monitor.record_packet(&new_packet.address(), new_packet.payload().len());
@@ -73,9 +74,10 @@ impl Io {
 
         if let Ok(Some(packet)) = receive_result {
 
-            let mut decompressed_packet: Vec<u8> = Vec::with_capacity(packet.payload().len());
-            self.decoder.decompress(packet.payload(), &mut decompressed_packet);
-            let new_packet = Packet::new(packet.address(), decompressed_packet);
+            let mut decompressed_payload: Vec<u8> = Vec::new();
+            decompressed_payload.resize(decompress_len(packet.payload()).unwrap(), 0);
+            self.decoder.decompress(packet.payload(), &mut decompressed_payload);
+            let new_packet = Packet::new(packet.address(), decompressed_payload);
 
             if let Some(monitor) = &mut self.download_bandwidth_monitor {
                 monitor.record_packet(&new_packet.address(), new_packet.payload().len());
