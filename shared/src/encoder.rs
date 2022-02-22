@@ -1,22 +1,21 @@
-use snap::raw::{max_compress_len, Encoder as SnapEncoder};
+use zstd::bulk::Compressor;
 
 pub struct Encoder {
-    buffer: Vec<u8>,
-    encoder: SnapEncoder,
+    result: Vec<u8>,
+    encoder: Compressor<'static>,
 }
 
 impl Encoder {
     pub fn new() -> Self {
         Self {
-            buffer: Vec::new(),
-            encoder: SnapEncoder::new(),
+            result: Vec::new(),
+            encoder: Compressor::new(3).expect("error creating Compressor"),
         }
     }
 
-    pub fn compress(&mut self, payload: &[u8]) -> &[u8] {
+    pub fn encode(&mut self, payload: &[u8]) -> &[u8] {
         // TODO: only use compressed packet if the resulting size would be less!
-        self.buffer.resize(max_compress_len(payload.len()), 0);
-        self.encoder.compress(payload, &mut self.buffer[..]);
-        &self.buffer
+        self.result = self.encoder.compress(payload).expect("encode error");
+        &self.result
     }
 }
