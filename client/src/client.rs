@@ -55,7 +55,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             client_config: client_config.clone(),
             shared_config: shared_config.clone(),
             // Connection
-            io: Io::new(),
+            io: Io::new(&client_config.connection.bandwidth_measure_duration, &shared_config.compression),
             server_connection: None,
             handshake_manager,
             // Events
@@ -85,9 +85,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         socket.connect(server_session_url);
         self.io
             .load(socket.packet_sender(), socket.packet_receiver());
-        if let Some(bandwidth_measure_duration) = self.client_config.connection.bandwidth_measure_duration {
-            self.io.enable_bandwidth_monitor(bandwidth_measure_duration);
-        }
     }
 
     /// Returns whether or not the client is disconnected
@@ -447,7 +444,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             }
         };
 
-        self.io = Io::new();
+        self.io = Io::new(&self.client_config.connection.bandwidth_measure_duration, &self.shared_config.compression);
         self.server_connection = None;
         self.handshake_manager = handshake_manager;
         self.tick_manager = tick_manager;

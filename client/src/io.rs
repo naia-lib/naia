@@ -4,7 +4,7 @@ use naia_client_socket::{NaiaClientSocketError, Packet, PacketReceiver, PacketSe
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
     Protocolize, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType,
-    WorldRefType, BandwidthMonitor, CompressionManager
+    WorldRefType, BandwidthMonitor, CompressionManager, CompressionConfig
 };
 
 pub struct Io {
@@ -17,14 +17,21 @@ pub struct Io {
 }
 
 impl Io {
-    pub fn new() -> Self {
+    pub fn new(bandwidth_measure_duration: &Option<Duration>, compression_config: &Option<CompressionConfig>) -> Self {
+
+        let upload_bandwidth_monitor = bandwidth_measure_duration.map(|duration| BandwidthMonitor::new(duration));
+        let download_bandwidth_monitor = bandwidth_measure_duration.map(|duration| BandwidthMonitor::new(duration));
+
+        let upload_compression_manager = compression_config.as_ref().map(|config| config.client_to_server.map(|_| CompressionManager::new())).flatten();
+        let download_compression_manager = compression_config.as_ref().map(|config| config.server_to_client.map(|_| CompressionManager::new())).flatten();
+
         Io {
             packet_sender: None,
             packet_receiver: None,
-            upload_bandwidth_monitor: None,
-            download_bandwidth_monitor: None,
-            upload_compression_manager: Some(CompressionManager::new()),
-            download_compression_manager: Some(CompressionManager::new()),
+            upload_bandwidth_monitor,
+            download_bandwidth_monitor,
+            upload_compression_manager,
+            download_compression_manager,
         }
     }
 
@@ -96,11 +103,6 @@ impl Io {
         } else {
             panic!("Connection has not yet been established! Call server_addr() instead when unsure about the connection status.")
         }
-    }
-
-    pub fn enable_bandwidth_monitor(&mut self, bandwidth_measure_duration: Duration) {
-        self.upload_bandwidth_monitor = Some(BandwidthMonitor::new(bandwidth_measure_duration));
-        self.download_bandwidth_monitor = Some(BandwidthMonitor::new(bandwidth_measure_duration));
     }
 
     pub fn upload_bandwidth(&mut self) -> f32 {
