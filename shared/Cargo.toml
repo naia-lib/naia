@@ -28,3 +28,4 @@ log = "0.4"
 nanoserde = "0.1.29"
 cfg-if = "0.1.10"
 bevy = { version = "0.6", default_features = false, optional = true }
+snap = "1.0"

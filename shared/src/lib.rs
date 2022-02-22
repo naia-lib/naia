@@ -35,6 +35,7 @@ mod types;
 mod world_type;
 mod wrapping_number;
 mod bandwidth_monitor;
+mod compression_manager;
 
 /// Commonly used utility methods to be used by naia-server & naia-client
 pub mod utils;
@@ -74,3 +75,4 @@ pub use types::{PacketIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
 pub use bandwidth_monitor::BandwidthMonitor;
+pub use compression_manager::CompressionManager;
