@@ -80,15 +80,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             }
         };
 
-        let some_config: SharedConfig<P> = Clone::clone(&shared_config);
-
         Server {
             // Config
             server_config: server_config.clone(),
-            shared_config: some_config,
+            shared_config: shared_config.clone(),
             // Connection
             socket,
-            io: Io::new(),
+            io: Io::new(&server_config.connection.bandwidth_measure_duration, &shared_config.compression),
             heartbeat_timer,
             handshake_manager: HandshakeManager::new(server_config.require_auth),
             // Users
@@ -114,9 +112,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         self.socket.listen(server_addrs);
         self.io
             .load(self.socket.packet_sender(), self.socket.packet_receiver());
-        if let Some(bandwidth_measure_duration) = self.server_config.connection.bandwidth_measure_duration {
-            self.io.enable_bandwidth_monitor(bandwidth_measure_duration);
-        }
     }
 
     /// Returns whether or not the Server has initialized correctly and is

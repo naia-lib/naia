@@ -1,8 +1,8 @@
 
 #[derive(Clone)]
 pub struct CompressionConfig {
-    server_to_client: Option<()>,
-    client_to_server: Option<()>,
+    pub server_to_client: Option<()>,
+    pub client_to_server: Option<()>,
 }
 
 impl CompressionConfig {
