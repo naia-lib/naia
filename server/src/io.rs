@@ -1,13 +1,11 @@
 use std::{net::SocketAddr, panic, time::Duration};
 
-use snap::raw::{decompress_len, max_compress_len, Decoder as SnapDecoder, Encoder as SnapEncoder};
-
 use naia_server_socket::{NaiaServerSocketError, Packet, PacketReceiver, PacketSender};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
     ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
     ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
-    Timestamp, WorldMutType, WorldRefType,
+    Timestamp, WorldMutType, WorldRefType, CompressionManager
 };
 
 use crate::bandwidth_monitor::BandwidthMonitor;
@@ -17,8 +15,8 @@ pub struct Io {
     packet_receiver: Option<PacketReceiver>,
     upload_bandwidth_monitor: Option<BandwidthMonitor>,
     download_bandwidth_monitor: Option<BandwidthMonitor>,
-    encoder: SnapEncoder,
-    decoder: SnapDecoder,
+    upload_compression_manager: Option<CompressionManager>,
+    download_compression_manager: Option<CompressionManager>,
 }
 
 impl Io {
@@ -28,8 +26,8 @@ impl Io {
             packet_receiver: None,
             upload_bandwidth_monitor: None,
             download_bandwidth_monitor: None,
-            encoder: SnapEncoder::new(),
-            decoder: SnapDecoder::new(),
+            upload_compression_manager: Some(CompressionManager::new()),
+            download_compression_manager: Some(CompressionManager::new()),
         }
     }
 
@@ -46,22 +44,22 @@ impl Io {
         self.packet_sender.is_some()
     }
 
-    pub fn send_packet(&mut self, packet: Packet) {
+    pub fn send_packet(&mut self, mut packet: Packet) {
 
-        // TODO: only use compressed packet if the resulting size would be less!
-        let mut compressed_payload: Vec<u8> = Vec::new();
-        compressed_payload.resize(max_compress_len(packet.payload().len()), 0);
-        self.encoder.compress(packet.payload(), &mut compressed_payload[..]);
-        let new_packet = Packet::new(packet.address(), compressed_payload);
+        // Compression
+        if let Some(compression_manager) = &mut self.upload_compression_manager {
+            packet = Packet::new_raw(packet.address(), compression_manager.compress(packet.payload()).into());
+        }
 
+        // Bandwidth monitoring
         if let Some(monitor) = &mut self.upload_bandwidth_monitor {
-            monitor.record_packet(&new_packet.address(), new_packet.payload().len());
+            monitor.record_packet(&packet.address(), packet.payload().len());
         }
 
         self.packet_sender
             .as_ref()
             .expect("Cannot call Server.send_packet() until you call Server.listen()!")
-            .send(new_packet);
+            .send(packet);
     }
 
     pub fn receive_packet(&mut self) -> Result<Option<Packet>, NaiaServerSocketError> {
@@ -72,18 +70,19 @@ impl Io {
             .expect("Cannot call Server.receive_packet() until you call Server.listen()!")
             .receive();
 
-        if let Ok(Some(packet)) = receive_result {
+        if let Ok(Some(mut packet)) = receive_result {
 
-            let mut decompressed_payload: Vec<u8> = Vec::new();
-            decompressed_payload.resize(decompress_len(packet.payload()).unwrap(), 0);
-            self.decoder.decompress(packet.payload(), &mut decompressed_payload);
-            let new_packet = Packet::new(packet.address(), decompressed_payload);
-
-            if let Some(monitor) = &mut self.download_bandwidth_monitor {
-                monitor.record_packet(&new_packet.address(), new_packet.payload().len());
+            // Compression
+            if let Some(compression_manager) = &mut self.download_compression_manager {
+                packet = Packet::new_raw(packet.address(), compression_manager.decompress(packet.payload()).into());
             }
 
-            return Ok(Some(new_packet));
+            // Bandwidth monitoring
+            if let Some(monitor) = &mut self.download_bandwidth_monitor {
+                monitor.record_packet(&packet.address(), packet.payload().len());
+            }
+
+            return Ok(Some(packet));
         } else {
             return receive_result;
         }
