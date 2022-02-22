@@ -43,10 +43,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Create a new Client
     pub fn new(client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
         let connection_config = client_config.connection.clone();
-        let ping_config = shared_config.ping_config.clone();
+        let ping_config = shared_config.ping.clone();
 
         let mut socket_config = client_config.socket.clone();
-        socket_config.link_condition_config = shared_config.link_condition_config.clone();
+        socket_config.link_condition = shared_config.link_condition.clone();
 
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
 
