@@ -2,40 +2,49 @@ use std::{net::SocketAddr, panic, time::Duration};
 
 use naia_server_socket::{NaiaServerSocketError, Packet, PacketReceiver, PacketSender};
 pub use naia_shared::{
-    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
-    ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
-    ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
-    Timestamp, WorldMutType, WorldRefType, CompressionManager
+    wrapping_diff, BaseConnection, CompressionConfig, ConnectionConfig, Decoder, Encoder, Instant,
+    KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType,
+    PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe,
+    SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
-use naia_shared::CompressionConfig;
 
 use crate::bandwidth_monitor::BandwidthMonitor;
 
 pub struct Io {
     packet_sender: Option<PacketSender>,
     packet_receiver: Option<PacketReceiver>,
-    upload_bandwidth_monitor: Option<BandwidthMonitor>,
-    download_bandwidth_monitor: Option<BandwidthMonitor>,
-    upload_compression_manager: Option<CompressionManager>,
-    download_compression_manager: Option<CompressionManager>,
+    outgoing_bandwidth_monitor: Option<BandwidthMonitor>,
+    incoming_bandwidth_monitor: Option<BandwidthMonitor>,
+    outgoing_encoder: Option<Encoder>,
+    incoming_decoder: Option<Decoder>,
 }
 
 impl Io {
-    pub fn new(bandwidth_measure_duration: &Option<Duration>, compression_config: &Option<CompressionConfig>) -> Self {
+    pub fn new(
+        bandwidth_measure_duration: &Option<Duration>,
+        compression_config: &Option<CompressionConfig>,
+    ) -> Self {
+        let outgoing_bandwidth_monitor =
+            bandwidth_measure_duration.map(|duration| BandwidthMonitor::new(duration));
+        let incoming_bandwidth_monitor =
+            bandwidth_measure_duration.map(|duration| BandwidthMonitor::new(duration));
 
-        let upload_bandwidth_monitor = bandwidth_measure_duration.map(|duration| BandwidthMonitor::new(duration));
-        let download_bandwidth_monitor = bandwidth_measure_duration.map(|duration| BandwidthMonitor::new(duration));
-
-        let upload_compression_manager = compression_config.as_ref().map(|config| config.server_to_client.map(|_| CompressionManager::new())).flatten();
-        let download_compression_manager = compression_config.as_ref().map(|config| config.client_to_server.map(|_| CompressionManager::new())).flatten();
+        let outgoing_encoder = compression_config
+            .as_ref()
+            .map(|config| config.server_to_client.map(|_| Encoder::new()))
+            .flatten();
+        let incoming_decoder = compression_config
+            .as_ref()
+            .map(|config| config.client_to_server.map(|_| Decoder::new()))
+            .flatten();
 
         Io {
             packet_sender: None,
             packet_receiver: None,
-            upload_bandwidth_monitor,
-            download_bandwidth_monitor,
-            upload_compression_manager,
-            download_compression_manager,
+            outgoing_bandwidth_monitor,
+            incoming_bandwidth_monitor,
+            outgoing_encoder,
+            incoming_decoder,
         }
     }
 
@@ -53,14 +62,16 @@ impl Io {
     }
 
     pub fn send_packet(&mut self, mut packet: Packet) {
-
         // Compression
-        if let Some(compression_manager) = &mut self.upload_compression_manager {
-            packet = Packet::new_raw(packet.address(), compression_manager.compress(packet.payload()).into());
+        if let Some(compression_manager) = &mut self.outgoing_encoder {
+            packet = Packet::new_raw(
+                packet.address(),
+                compression_manager.compress(packet.payload()).into(),
+            );
         }
 
         // Bandwidth monitoring
-        if let Some(monitor) = &mut self.upload_bandwidth_monitor {
+        if let Some(monitor) = &mut self.outgoing_bandwidth_monitor {
             monitor.record_packet(&packet.address(), packet.payload().len());
         }
 
@@ -71,7 +82,6 @@ impl Io {
     }
 
     pub fn receive_packet(&mut self) -> Result<Option<Packet>, NaiaServerSocketError> {
-
         let receive_result = self
             .packet_receiver
             .as_mut()
@@ -79,14 +89,16 @@ impl Io {
             .receive();
 
         if let Ok(Some(mut packet)) = receive_result {
-
             // Compression
-            if let Some(compression_manager) = &mut self.download_compression_manager {
-                packet = Packet::new_raw(packet.address(), compression_manager.decompress(packet.payload()).into());
+            if let Some(compression_manager) = &mut self.incoming_decoder {
+                packet = Packet::new_raw(
+                    packet.address(),
+                    compression_manager.decompress(packet.payload()).into(),
+                );
             }
 
             // Bandwidth monitoring
-            if let Some(monitor) = &mut self.download_bandwidth_monitor {
+            if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
                 monitor.record_packet(&packet.address(), packet.payload().len());
             }
 
@@ -97,32 +109,60 @@ impl Io {
     }
 
     pub fn bandwidth_monitor_enabled(&self) -> bool {
-        self.upload_bandwidth_monitor.is_some() && self.download_bandwidth_monitor.is_some()
+        self.outgoing_bandwidth_monitor.is_some() && self.incoming_bandwidth_monitor.is_some()
     }
 
     pub fn register_client(&mut self, address: &SocketAddr) {
-        self.upload_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").create_client(address);
-        self.download_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").create_client(address);
+        self.outgoing_bandwidth_monitor
+            .as_mut()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .create_client(address);
+        self.incoming_bandwidth_monitor
+            .as_mut()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .create_client(address);
     }
 
     pub fn deregister_client(&mut self, address: &SocketAddr) {
-        self.upload_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").delete_client(address);
-        self.download_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").delete_client(address);
+        self.outgoing_bandwidth_monitor
+            .as_mut()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .delete_client(address);
+        self.incoming_bandwidth_monitor
+            .as_mut()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .delete_client(address);
     }
 
-    pub fn upload_bandwidth_total(&mut self) -> f32 {
-        return self.upload_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").total_bandwidth();
+    pub fn outgoing_bandwidth_total(&mut self) -> f32 {
+        return self
+            .outgoing_bandwidth_monitor
+            .as_mut()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .total_bandwidth();
     }
 
-    pub fn download_bandwidth_total(&mut self) -> f32 {
-        return self.download_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").total_bandwidth();
+    pub fn incoming_bandwidth_total(&mut self) -> f32 {
+        return self
+            .incoming_bandwidth_monitor
+            .as_mut()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .total_bandwidth();
     }
 
-    pub fn upload_bandwidth_to_client(&mut self, address: &SocketAddr) -> f32 {
-        return self.upload_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").client_bandwidth(address);
+    pub fn outgoing_bandwidth_to_client(&mut self, address: &SocketAddr) -> f32 {
+        return self
+            .outgoing_bandwidth_monitor
+            .as_mut()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .client_bandwidth(address);
     }
 
-    pub fn download_bandwidth_from_client(&mut self, address: &SocketAddr) -> f32 {
-        return self.download_bandwidth_monitor.as_mut().expect("Need to call `enable_bandwidth_monitor()` on Io before calling this").client_bandwidth(address);
+    pub fn incoming_bandwidth_from_client(&mut self, address: &SocketAddr) -> f32 {
+        return self
+            .incoming_bandwidth_monitor
+            .as_mut()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .client_bandwidth(address);
     }
 }

@@ -15,8 +15,8 @@ pub trait ReplicaBuilderClone<P: Protocolize> {
 }
 
 impl<P: Protocolize, T> ReplicaBuilderClone<P> for T
-    where
-        T: 'static + ReplicaBuilder<P> + Clone,
+where
+    T: 'static + ReplicaBuilder<P> + Clone,
 {
     fn clone_box(&self) -> Box<dyn ReplicaBuilder<P>> {
         Box::new(self.clone())

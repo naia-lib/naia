@@ -1,4 +1,3 @@
-
 #[derive(Clone)]
 pub struct CompressionConfig {
     pub server_to_client: Option<()>,

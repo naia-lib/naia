@@ -1,8 +1,11 @@
-use std::{time::Duration, default::Default};
+use std::{default::Default, time::Duration};
 
-use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
+use naia_socket_shared::SocketConfig;
 
-use super::{manifest::Manifest, ping_config::PingConfig, protocolize::Protocolize, compression_config::CompressionConfig};
+use super::{
+    compression_config::CompressionConfig, manifest::Manifest, ping_config::PingConfig,
+    protocolize::Protocolize,
+};
 
 /// Contains Config properties which will be shared by Server and Client
 #[derive(Clone)]
@@ -16,7 +19,7 @@ pub struct SharedConfig<P: Protocolize> {
     /// Configuration used to monitor the ping & jitter on the network
     pub ping: Option<PingConfig>,
     /// Configuration used to control compression parameters
-    pub compression: Option<CompressionConfig>
+    pub compression: Option<CompressionConfig>,
 }
 
 impl<P: Protocolize> SharedConfig<P> {
@@ -38,9 +41,7 @@ impl<P: Protocolize> SharedConfig<P> {
     }
 
     /// Creates a new with Default parameters
-    pub fn default(
-        manifest: Manifest<P>,
-    ) -> Self {
+    pub fn default(manifest: Manifest<P>) -> Self {
         Self {
             manifest,
             socket: SocketConfig::default(),

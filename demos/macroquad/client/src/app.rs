@@ -3,9 +3,8 @@ use std::{collections::HashSet, ops::Deref, time::Duration};
 use macroquad::prelude::*;
 
 use naia_client::{
-    shared::{Protocolize, Replicate},
+    shared::{Protocolize, Replicate, Timer},
     Client as NaiaClient, ClientConfig, Event,
-    shared::Timer
 };
 
 use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
@@ -88,7 +87,11 @@ impl App {
             if self.bandwidth_timer.ringing() {
                 self.bandwidth_timer.reset();
 
-                info!("Bandwidth: {} kbps incoming, {} kbps outgoing", self.client.download_bandwidth(), self.client.upload_bandwidth());
+                info!(
+                    "Bandwidth: {} kbps incoming, {} kbps outgoing",
+                    self.client.incoming_bandwidth(),
+                    self.client.outgoing_bandwidth()
+                );
             }
         }
 
