@@ -11,9 +11,9 @@ pub struct SharedConfig<P: Protocolize> {
     /// The duration between each tick
     pub tick_interval: Option<Duration>,
     /// Configuration used to simulate network conditions
-    pub link_condition_config: Option<LinkConditionerConfig>,
+    pub link_condition: Option<LinkConditionerConfig>,
     /// Configuration used to monitor the ping & jitter on the network
-    pub ping_config: Option<PingConfig>,
+    pub ping: Option<PingConfig>,
 }
 
 impl<P: Protocolize> SharedConfig<P> {
@@ -21,14 +21,14 @@ impl<P: Protocolize> SharedConfig<P> {
     pub fn new(
         manifest: Manifest<P>,
         tick_interval: Option<Duration>,
-        link_condition_config: Option<LinkConditionerConfig>,
-        ping_config: Option<PingConfig>,
+        link_condition: Option<LinkConditionerConfig>,
+        ping: Option<PingConfig>,
     ) -> Self {
         SharedConfig {
             manifest,
             tick_interval,
-            link_condition_config,
-            ping_config,
+            link_condition,
+            ping: ping,
         }
     }
 }

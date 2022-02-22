@@ -22,7 +22,7 @@ mquad = [ "naia-socket-shared/mquad" ]
 bevy_support = [ "bevy" ]
 
 [dependencies]
-naia-socket-shared = { version = "=0.7.4" }
+naia-socket-shared = { path = "../../naia-socket/shared" }
 byteorder = "1.3"
 log = "0.4"
 nanoserde = "0.1.29"

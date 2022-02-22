@@ -69,10 +69,10 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
 impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Create a new Server
     pub fn new(mut server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
-        server_config.socket.link_condition_config = shared_config.link_condition_config.clone();
+        server_config.socket.link_condition = shared_config.link_condition.clone();
 
         let connection_config = server_config.connection.clone();
-        let ping_config = shared_config.ping_config.clone();
+        let ping_config = shared_config.ping.clone();
 
         let socket = Socket::new(server_config.socket);
 
