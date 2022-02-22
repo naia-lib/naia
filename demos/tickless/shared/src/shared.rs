@@ -7,5 +7,5 @@ pub fn shared_config() -> SharedConfig<Protocol> {
 
     let link_condition = None;
 
-    return SharedConfig::new(Protocol::load(), tick_interval, link_condition, None);
+    return SharedConfig::new(Protocol::load(), tick_interval, link_condition, None, None);
 }

@@ -1,12 +1,10 @@
 use std::{default::Default, time::Duration};
 
-use naia_shared::{ConnectionConfig, SocketConfig};
+use naia_shared::ConnectionConfig;
 
 /// Contains Config properties which will be used by a Server or Client
 #[derive(Clone)]
 pub struct ClientConfig {
-    /// Used to configure the Server's underlying socket
-    pub socket: SocketConfig,
     /// Used to configure the connection with the Server
     pub connection: ConnectionConfig,
     /// The duration between the resend of certain connection handshake messages
@@ -23,7 +21,6 @@ pub struct ClientConfig {
 impl Default for ClientConfig {
     fn default() -> Self {
         Self {
-            socket: SocketConfig::default(),
             connection: ConnectionConfig::default(),
             send_handshake_interval: Duration::from_secs(1),
             minimum_latency: None,

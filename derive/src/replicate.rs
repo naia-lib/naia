@@ -8,6 +8,8 @@ use syn::{
 pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
+    let hashtag = Punct::new('#', Spacing::Alone);
+
     // Helper Properties
     let properties = properties(&input);
 
@@ -50,7 +52,10 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         use std::{rc::Rc, cell::RefCell, io::Cursor};
         use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, PacketReader, Replicate, ReplicateSafe, PropertyMutator, Protocolize, ReplicaDynRef, ReplicaDynMut};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
+
         #property_enum_definition
+
+        #hashtag[derive(Clone)]
         pub struct #replica_builder_name {
             kind: #protocol_kind_name,
         }

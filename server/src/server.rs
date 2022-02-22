@@ -41,10 +41,8 @@ use super::{
 /// clients to whom they are in-scope
 pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
     // Config
-    manifest: Manifest<P>,
-    // Connection
-    connection_config: ConnectionConfig,
-    ping_config: Option<PingConfig>,
+    server_config: ServerConfig,
+    shared_config: SharedConfig<P>,
     socket: Socket,
     io: Io,
     heartbeat_timer: Timer,
@@ -68,15 +66,11 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Create a new Server
-    pub fn new(mut server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
-        server_config.socket.link_condition = shared_config.link_condition.clone();
+    pub fn new(mut server_config: &ServerConfig, shared_config: &SharedConfig<P>) -> Self {
 
-        let connection_config = server_config.connection.clone();
-        let ping_config = shared_config.ping.clone();
+        let socket = Socket::new(&shared_config.socket);
 
-        let socket = Socket::new(server_config.socket);
-
-        let heartbeat_timer = Timer::new(connection_config.heartbeat_interval);
+        let heartbeat_timer = Timer::new(server_config.connection.heartbeat_interval);
 
         let tick_manager = {
             if let Some(duration) = shared_config.tick_interval {
@@ -86,12 +80,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             }
         };
 
+        let some_config: SharedConfig<P> = Clone::clone(&shared_config);
+
         Server {
             // Config
-            manifest: shared_config.manifest,
+            server_config: server_config.clone(),
+            shared_config: some_config,
             // Connection
-            connection_config,
-            ping_config,
             socket,
             io: Io::new(),
             heartbeat_timer,
@@ -115,11 +110,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     }
 
     /// Listen at the given addresses
-    pub fn listen(&mut self, server_addrs: ServerAddrs) {
+    pub fn listen(&mut self, server_addrs: &ServerAddrs) {
         self.socket.listen(server_addrs);
         self.io
             .load(self.socket.packet_sender(), self.socket.packet_receiver());
-        if let Some(bandwidth_measure_duration) = self.connection_config.bandwidth_measure_duration {
+        if let Some(bandwidth_measure_duration) = self.server_config.connection.bandwidth_measure_duration {
             self.io.enable_bandwidth_monitor(bandwidth_measure_duration);
         }
     }
@@ -195,7 +190,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     pub fn accept_connection(&mut self, user_key: &UserKey) {
         if let Some(user) = self.users.get(*user_key) {
             let mut new_connection = Connection::new(
-                &self.connection_config,
+                &self.server_config.connection,
                 user.address,
                 &user_key,
                 &self.diff_handler,
@@ -835,7 +830,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                 );
                             } else {
                                 match self.handshake_manager.receive_new_connect_request(
-                                    &self.manifest,
+                                    &self.shared_config.manifest,
                                     &address,
                                     &payload,
                                 ) {
@@ -882,7 +877,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                     connection.process_incoming_header(&self.world_record, &header);
                                     connection.process_incoming_data(
                                         server_tick_opt,
-                                        &self.manifest,
+                                        &self.shared_config.manifest,
                                         &payload,
                                     );
                                 }
@@ -907,7 +902,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                             }
                         }
                         PacketType::Ping => {
-                            if self.ping_config.is_some() {
+                            if self.shared_config.ping.is_some() {
                                 let server_tick = self.server_tick().unwrap_or(0);
                                 match self.user_connections.get_mut(&address) {
                                     Some(connection) => {
