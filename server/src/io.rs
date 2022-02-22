@@ -63,11 +63,8 @@ impl Io {
 
     pub fn send_packet(&mut self, mut packet: Packet) {
         // Compression
-        if let Some(compression_manager) = &mut self.outgoing_encoder {
-            packet = Packet::new_raw(
-                packet.address(),
-                compression_manager.compress(packet.payload()).into(),
-            );
+        if let Some(encoder) = &mut self.outgoing_encoder {
+            packet = Packet::new_raw(packet.address(), encoder.encode(packet.payload()).into());
         }
 
         // Bandwidth monitoring
@@ -89,17 +86,14 @@ impl Io {
             .receive();
 
         if let Ok(Some(mut packet)) = receive_result {
-            // Compression
-            if let Some(compression_manager) = &mut self.incoming_decoder {
-                packet = Packet::new_raw(
-                    packet.address(),
-                    compression_manager.decompress(packet.payload()).into(),
-                );
-            }
-
             // Bandwidth monitoring
             if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
                 monitor.record_packet(&packet.address(), packet.payload().len());
+            }
+
+            // Decompression
+            if let Some(decoder) = &mut self.incoming_decoder {
+                packet = Packet::new_raw(packet.address(), decoder.decode(packet.payload()).into());
             }
 
             return Ok(Some(packet));

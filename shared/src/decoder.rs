@@ -1,22 +1,26 @@
-use snap::raw::{decompress_len, Decoder as SnapDecoder};
+use zstd::bulk::Decompressor;
 
 pub struct Decoder {
-    buffer: Vec<u8>,
-    decoder: SnapDecoder,
+    result: Vec<u8>,
+    decoder: Decompressor<'static>,
 }
 
 impl Decoder {
     pub fn new() -> Self {
         Self {
-            buffer: Vec::new(),
-            decoder: SnapDecoder::new(),
+            decoder: Decompressor::new().expect("error creating Decompressor"),
+            result: Vec::new(),
         }
     }
 
-    pub fn decompress(&mut self, payload: &[u8]) -> &[u8] {
-        // TODO: only use compressed packet if the resulting size would be less!
-        self.buffer.resize(decompress_len(payload).unwrap(), 0);
-        self.decoder.decompress(payload, &mut self.buffer);
-        &self.buffer
+    pub fn decode(&mut self, payload: &[u8]) -> &[u8] {
+        self.result = self
+            .decoder
+            .decompress(
+                payload,
+                Decompressor::<'static>::upper_bound(payload).expect("upper bound decode error"),
+            )
+            .expect("decode error");
+        &self.result
     }
 }
