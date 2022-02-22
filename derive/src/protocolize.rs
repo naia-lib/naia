@@ -43,6 +43,9 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
             #cast_ref_method
             #cast_mut_method
             #extract_and_insert_method
+        }
+
+        impl Clone for #protocol_name {
             #clone_method
         }
     };

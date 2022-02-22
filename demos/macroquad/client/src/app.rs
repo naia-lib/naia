@@ -55,7 +55,7 @@ impl App {
 
         client_config.connection.bandwidth_measure_duration = Some(Duration::from_secs(1));
 
-        let client = Client::new(client_config, shared_config());
+        let client = Client::new(&client_config, &shared_config());
 
         App {
             client,

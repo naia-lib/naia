@@ -24,9 +24,6 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
     // Config
     client_config: ClientConfig,
     shared_config: SharedConfig<P>,
-    connection_config: ConnectionConfig,
-    socket_config: SocketConfig,
-    ping_config: Option<PingConfig>,
     // Connection
     io: Io,
     server_connection: Option<Connection<P, E>>,
@@ -41,12 +38,7 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Create a new Client
-    pub fn new(client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
-        let connection_config = client_config.connection.clone();
-        let ping_config = shared_config.ping.clone();
-
-        let mut socket_config = client_config.socket.clone();
-        socket_config.link_condition = shared_config.link_condition.clone();
+    pub fn new(client_config: &ClientConfig, shared_config: &SharedConfig<P>) -> Self {
 
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
 
@@ -60,11 +52,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
         Client {
             // Config
-            client_config,
-            shared_config,
-            connection_config,
-            socket_config,
-            ping_config,
+            client_config: client_config.clone(),
+            shared_config: shared_config.clone(),
             // Connection
             io: Io::new(),
             server_connection: None,
@@ -92,11 +81,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         if !self.is_disconnected() {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
         }
-        let mut socket = Socket::new(self.socket_config.clone());
+        let mut socket = Socket::new(&self.shared_config.socket);
         socket.connect(server_session_url);
         self.io
             .load(socket.packet_sender(), socket.packet_receiver());
-        if let Some(bandwidth_measure_duration) = self.connection_config.bandwidth_measure_duration {
+        if let Some(bandwidth_measure_duration) = self.client_config.connection.bandwidth_measure_duration {
             self.io.enable_bandwidth_monitor(bandwidth_measure_duration);
         }
     }
@@ -414,8 +403,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                             let server_addr = self.server_address_unwrapped();
                             self.server_connection = Some(Connection::new(
                                 server_addr,
-                                &self.connection_config,
-                                &self.ping_config,
+                                &self.client_config.connection,
+                                &self.shared_config.ping,
                             ));
                             self.incoming_events
                                 .push_back(Ok(Event::Connection(server_addr)));

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use naia_shared::{LinkConditionerConfig, PingConfig, SharedConfig};
+use naia_shared::{LinkConditionerConfig, PingConfig, SharedConfig, SocketConfig};
 
 use super::protocol::Protocol;
 
@@ -17,8 +17,9 @@ pub fn shared_config() -> SharedConfig<Protocol> {
     });
     return SharedConfig::new(
         Protocol::load(),
+        SocketConfig::new(link_condition, None),
         tick_interval,
-        link_condition,
         Some(PingConfig::default()),
+        None,
     );
 }

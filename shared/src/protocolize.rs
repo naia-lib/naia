@@ -8,7 +8,7 @@ use super::{
 
 /// An Enum with a variant for every Component/Message that can be sent
 /// between Client/Host
-pub trait Protocolize: Sized + Sync + Send + 'static {
+pub trait Protocolize: Sized + Sync + Send + 'static + Clone {
     type Kind: ProtocolKindType;
 
     /// Get kind of Replicate type
@@ -30,8 +30,6 @@ pub trait Protocolize: Sized + Sync + Send + 'static {
     /// Extract an inner Replicate impl from the Protocolize into a
     /// ProtocolInserter impl
     fn extract_and_insert<N, X: ProtocolInserter<Self, N>>(&self, entity: &N, inserter: &mut X);
-    /// Returns a clone of self
-    fn clone(&self) -> Self;
 }
 
 pub trait ProtocolKindType: Eq + Hash + Copy + Send + Sync {

@@ -43,8 +43,8 @@ impl App {
 
         server_config.connection.bandwidth_measure_duration = Some(Duration::from_secs(1));
 
-        let mut server = Server::new(server_config, shared_config());
-        server.listen(server_addresses);
+        let mut server = Server::new(&server_config, &shared_config());
+        server.listen(&server_addresses);
 
         let world = World::new();
 
