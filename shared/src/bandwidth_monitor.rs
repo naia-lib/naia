@@ -11,7 +11,7 @@ impl BandwidthMonitor {
         BandwidthMonitor {
             time_queue: TimeQueue::new(bandwidth_measure_duration),
             total_bytes: 0,
-            to_kbps_factor: 0.008 / bandwidth_measure_duration.as_secs_f32()
+            to_kbps_factor: 0.008 / bandwidth_measure_duration.as_secs_f32(),
         }
     }
 
@@ -48,7 +48,6 @@ pub struct TimeQueue<T: Eq + PartialEq> {
 }
 
 impl<T: Eq + PartialEq> TimeQueue<T> {
-
     pub fn new(duration: Duration) -> Self {
         TimeQueue {
             queue: BinaryHeap::new(),
@@ -57,7 +56,10 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
     }
 
     pub fn add_item(&mut self, item: T) {
-        self.queue.push(ItemContainer { instant: Instant::now(), item });
+        self.queue.push(ItemContainer {
+            instant: Instant::now(),
+            item,
+        });
     }
 
     pub fn has_item(&self) -> bool {

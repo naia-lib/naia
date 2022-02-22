@@ -1,11 +1,11 @@
-use std::{net::SocketAddr, time::Duration, collections::HashMap};
+use std::{collections::HashMap, net::SocketAddr, time::Duration};
 
 use naia_shared::BandwidthMonitor as SingleBandwidthMonitor;
 
 pub struct BandwidthMonitor {
     total_monitor: SingleBandwidthMonitor,
     client_monitors: HashMap<SocketAddr, SingleBandwidthMonitor>,
-    bandwidth_measure_duration: Duration
+    bandwidth_measure_duration: Duration,
 }
 
 impl BandwidthMonitor {
@@ -18,7 +18,10 @@ impl BandwidthMonitor {
     }
 
     pub fn create_client(&mut self, address: &SocketAddr) {
-        self.client_monitors.insert(*address, SingleBandwidthMonitor::new(self.bandwidth_measure_duration));
+        self.client_monitors.insert(
+            *address,
+            SingleBandwidthMonitor::new(self.bandwidth_measure_duration),
+        );
     }
 
     pub fn delete_client(&mut self, address: &SocketAddr) {
@@ -38,6 +41,9 @@ impl BandwidthMonitor {
     }
 
     pub fn client_bandwidth(&mut self, address: &SocketAddr) -> f32 {
-        self.client_monitors.get_mut(address).expect("client associated with address does not exist").bandwidth()
+        self.client_monitors
+            .get_mut(address)
+            .expect("client associated with address does not exist")
+            .bandwidth()
     }
 }

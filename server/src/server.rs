@@ -12,7 +12,7 @@ use slotmap::DenseSlotMap;
 use naia_server_socket::{Packet, ServerAddrs, Socket};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
-    ManagerType, Manifest, PingConfig, NetEntity, PacketReader, PacketType, PropertyMutate,
+    ManagerType, Manifest, NetEntity, PacketReader, PacketType, PingConfig, PropertyMutate,
     PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig,
     StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
@@ -66,8 +66,7 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Create a new Server
-    pub fn new(mut server_config: &ServerConfig, shared_config: &SharedConfig<P>) -> Self {
-
+    pub fn new(server_config: &ServerConfig, shared_config: &SharedConfig<P>) -> Self {
         let socket = Socket::new(&shared_config.socket);
 
         let heartbeat_timer = Timer::new(server_config.connection.heartbeat_interval);
@@ -86,7 +85,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             shared_config: shared_config.clone(),
             // Connection
             socket,
-            io: Io::new(&server_config.connection.bandwidth_measure_duration, &shared_config.compression),
+            io: Io::new(
+                &server_config.connection.bandwidth_measure_duration,
+                &shared_config.compression,
+            ),
             heartbeat_timer,
             handshake_manager: HandshakeManager::new(server_config.require_auth),
             // Users
@@ -470,20 +472,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     }
 
     // Bandwidth monitoring
-    pub fn upload_bandwidth_total(&mut self) -> f32 {
-        return self.io.upload_bandwidth_total();
+    pub fn outgoing_bandwidth_total(&mut self) -> f32 {
+        return self.io.outgoing_bandwidth_total();
     }
 
-    pub fn download_bandwidth_total(&mut self) -> f32 {
-        return self.io.download_bandwidth_total();
+    pub fn incoming_bandwidth_total(&mut self) -> f32 {
+        return self.io.incoming_bandwidth_total();
     }
 
-    pub fn upload_bandwidth_to_client(&mut self, address: &SocketAddr) -> f32 {
-        return self.io.upload_bandwidth_to_client(address);
+    pub fn outgoing_bandwidth_to_client(&mut self, address: &SocketAddr) -> f32 {
+        return self.io.outgoing_bandwidth_to_client(address);
     }
 
-    pub fn download_bandwidth_from_client(&mut self, address: &SocketAddr) -> f32 {
-        return self.io.download_bandwidth_from_client(address);
+    pub fn incoming_bandwidth_from_client(&mut self, address: &SocketAddr) -> f32 {
+        return self.io.incoming_bandwidth_from_client(address);
     }
 
     // Crate-Public methods

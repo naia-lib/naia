@@ -1,7 +1,8 @@
-use std::{time::Duration, collections::HashMap};
+use std::{collections::HashMap, time::Duration};
 
 use naia_server::{
-    shared::Random, Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey, shared::Timer
+    shared::{Random, Timer},
+    Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
 };
 
 use naia_demo_world::{Entity, World as DemoWorld};
@@ -62,11 +63,14 @@ impl App {
     }
 
     pub fn update(&mut self) {
-
         if self.bandwidth_timer.ringing() {
             self.bandwidth_timer.reset();
 
-            info!("Bandwidth: {} kbps incoming (Free! :)), {} kbps outgoing (COST!)", self.server.download_bandwidth_total(), self.server.upload_bandwidth_total());
+            info!(
+                "Bandwidth: {} kbps incoming (Free! :)), {} kbps outgoing (COST!)",
+                self.server.incoming_bandwidth_total(),
+                self.server.outgoing_bandwidth_total()
+            );
         }
 
         for event in self.server.receive() {

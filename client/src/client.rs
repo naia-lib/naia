@@ -2,7 +2,7 @@ use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAdd
 
 use naia_client_socket::{Packet, Socket};
 pub use naia_shared::{
-    ConnectionConfig, ManagerType, Manifest, PingConfig, PacketReader, PacketType,
+    ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, PingConfig,
     ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick,
     Timer, Timestamp, WorldMutType, WorldRefType,
 };
@@ -39,7 +39,6 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
 impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Create a new Client
     pub fn new(client_config: &ClientConfig, shared_config: &SharedConfig<P>) -> Self {
-
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
 
         let tick_manager = {
@@ -55,7 +54,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             client_config: client_config.clone(),
             shared_config: shared_config.clone(),
             // Connection
-            io: Io::new(&client_config.connection.bandwidth_measure_duration, &shared_config.compression),
+            io: Io::new(
+                &client_config.connection.bandwidth_measure_duration,
+                &shared_config.compression,
+            ),
             server_connection: None,
             handshake_manager,
             // Events
@@ -297,14 +299,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     }
 
     // Bandwidth monitoring
-    pub fn upload_bandwidth(&mut self) -> f32 {
-        return self.io
-            .upload_bandwidth();
+    pub fn outgoing_bandwidth(&mut self) -> f32 {
+        return self.io.outgoing_bandwidth();
     }
 
-    pub fn download_bandwidth(&mut self) -> f32 {
-        return self.io
-            .download_bandwidth();
+    pub fn incoming_bandwidth(&mut self) -> f32 {
+        return self.io.incoming_bandwidth();
     }
 
     // Crate-public functions
@@ -444,7 +444,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             }
         };
 
-        self.io = Io::new(&self.client_config.connection.bandwidth_measure_duration, &self.shared_config.compression);
+        self.io = Io::new(
+            &self.client_config.connection.bandwidth_measure_duration,
+            &self.shared_config.compression,
+        );
         self.server_connection = None;
         self.handshake_manager = handshake_manager;
         self.tick_manager = tick_manager;

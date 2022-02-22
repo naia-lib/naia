@@ -1,6 +1,6 @@
 use std::default::Default;
 
-use naia_shared::{ConnectionConfig, SocketConfig};
+use naia_shared::ConnectionConfig;
 
 /// Contains Config properties which will be used by the Server
 #[derive(Clone)]

@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use naia_shared::{CompressionConfig, LinkConditionerConfig, PingConfig, SharedConfig, SocketConfig};
+use naia_shared::{
+    CompressionConfig, LinkConditionerConfig, PingConfig, SharedConfig, SocketConfig,
+};
 
 use super::protocol::Protocol;
 
