@@ -90,7 +90,7 @@ impl DictionaryTrainer {
                 ((self.next_alert_size as f32) / (self.target_sample_size as f32)) * 100.0;
             info!("Dictionary training: {}% complete", percent);
 
-            self.next_alert_size += (self.target_sample_size / 20);
+            self.next_alert_size += self.target_sample_size / 20;
         }
 
         if current_sample_size >= self.target_sample_size {

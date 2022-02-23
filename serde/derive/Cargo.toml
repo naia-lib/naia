@@ -20,4 +20,4 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 log = "0.4"
-cfg-if = "0.1.10"
+cfg-if = "=1.0.0"

@@ -14,7 +14,7 @@ naia-hecs-client = { path = "../../../adapters/hecs/client", features = [ "wbind
 naia-hecs-demo-shared = { path = "../shared" }
 hecs = { version = "=0.5.2" }
 log = "0.4"
-cfg-if = "0.1.10"
+cfg-if = "=1.0.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 simple_logger = { version = "=2.0.0" }
