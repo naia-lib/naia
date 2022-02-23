@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use naia_shared::{
-    CompressionConfig, LinkConditionerConfig, PingConfig, SharedConfig, SocketConfig,
+    CompressionConfig, CompressionMode, DirectionalCompressionConfig, LinkConditionerConfig,
+    PingConfig, SharedConfig, SocketConfig,
 };
 
 use super::protocol::Protocol;
@@ -22,6 +23,9 @@ pub fn shared_config() -> SharedConfig<Protocol> {
         SocketConfig::new(link_condition, None),
         tick_interval,
         Some(PingConfig::default()),
-        Some(CompressionConfig::new(Some(()), None)),
+        Some(CompressionConfig::new(
+            Some(DirectionalCompressionConfig::new(CompressionMode::Training(1))),
+            None,
+        )),
     );
 }
