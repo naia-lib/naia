@@ -19,14 +19,16 @@ impl CompressionConfig {
 #[derive(Clone, Eq, PartialEq)]
 pub enum CompressionMode {
     /// Compression mode using default zstd dictionary.
-    /// 1st i32 parameter here is the compression level from -7 (fastest) to 22 (smallest).
+    /// 1st i32 parameter here is the compression level from -7 (fastest) to 22
+    /// (smallest).
     Default(i32),
     /// Compression mode using custom dictionary.
-    /// 1st i32 parameter here is the compression level from -7 (fastest) to 22 (smallest).
-    /// 2nd Vec<u8> parameter here is the dictionary itself.
+    /// 1st i32 parameter here is the compression level from -7 (fastest) to 22
+    /// (smallest). 2nd Vec<u8> parameter here is the dictionary itself.
     Dictionary(i32, Vec<u8>),
     /// Dictionary training mode.
-    /// 1st usize parameter here describes the desired number of samples (packets) to train on.
-    /// Obviously, the more samples trained on, the better theoretical compression.
+    /// 1st usize parameter here describes the desired number of samples
+    /// (packets) to train on. Obviously, the more samples trained on, the
+    /// better theoretical compression.
     Training(usize),
 }
