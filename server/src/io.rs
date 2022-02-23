@@ -35,7 +35,7 @@ impl Io {
                 config
                     .server_to_client
                     .as_ref()
-                    .map(|config| Encoder::new(config.mode))
+                    .map(|mode| Encoder::new(mode.clone()))
             })
             .flatten();
         let incoming_decoder = compression_config
@@ -44,7 +44,7 @@ impl Io {
                 config
                     .client_to_server
                     .as_ref()
-                    .map(|config| Decoder::new(config.mode))
+                    .map(|mode| Decoder::new(mode.clone()))
             })
             .flatten();
 

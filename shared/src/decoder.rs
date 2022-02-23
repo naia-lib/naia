@@ -4,33 +4,43 @@ use super::compression_config::CompressionMode;
 
 pub struct Decoder {
     result: Vec<u8>,
-    decoder: Decompressor<'static>,
-    training: bool,
+    decoder: Option<Decompressor<'static>>,
 }
 
 impl Decoder {
     pub fn new(compression_mode: CompressionMode) -> Self {
+
+        let decoder = match compression_mode {
+            CompressionMode::Training(_) => {
+                None
+            },
+            CompressionMode::Default(_) => {
+                Some(Decompressor::new().expect("error creating Decompressor"))
+            },
+            CompressionMode::Dictionary(_, dictionary) => {
+                Some(Decompressor::with_dictionary(&dictionary).expect("error creating Decompressor"))
+            }
+        };
+
         Self {
-            decoder: Decompressor::new().expect("error creating Decompressor"),
+            decoder,
             result: Vec::new(),
-            training: compression_mode.is_training(),
         }
     }
 
     pub fn decode(&mut self, payload: &[u8]) -> &[u8] {
-        if self.training {
-            self.result = payload.to_vec();
-            &self.result
-        } else {
-            self.result = self
-                .decoder
+        if let Some(decoder) = &mut self.decoder {
+            self.result = decoder
                 .decompress(
                     payload,
                     Decompressor::<'static>::upper_bound(payload)
                         .expect("upper bound decode error"),
                 )
                 .expect("decode error");
-            &self.result
+            return &self.result;
+        } else {
+            self.result = payload.to_vec();
+            return &self.result;
         }
     }
 }
