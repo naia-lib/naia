@@ -34,5 +34,5 @@ ring = "0.16.15"
 futures-util = { version = "0.3", features = ["sink"] }
 async-io = { version = "1.1" }
 futures-core = { version = "0.3" }
-cfg-if = "0.1.10"
+cfg-if = "=1.0.0"
 fastrand = "1.7.0"
