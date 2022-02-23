@@ -26,7 +26,7 @@ pub enum CompressionMode {
     /// 2nd Vec<u8> parameter here is the dictionary itself.
     Dictionary(i32, Vec<u8>),
     /// Dictionary training mode.
-    /// 1st usize parameter here describes the desired size of the dictionary (in Kilobytes).
-    /// Obviously, the bigger the dictionary the better theoretical compression.
+    /// 1st usize parameter here describes the desired number of samples (packets) to train on.
+    /// Obviously, the more samples trained on, the better theoretical compression.
     Training(usize),
 }

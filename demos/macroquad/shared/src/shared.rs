@@ -29,7 +29,7 @@ pub fn shared_config() -> SharedConfig<Protocol> {
         Some(CompressionConfig::new(
             None,
             //Some(CompressionMode::Dictionary(22, compression_dictionary)),
-            //Some(CompressionMode::Training(10)),
+            //Some(CompressionMode::Training(1000)),
             None,
         )),
     );
