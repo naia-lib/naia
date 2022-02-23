@@ -28,11 +28,19 @@ impl Io {
 
         let outgoing_encoder = compression_config
             .as_ref()
-            .map(|config| config.client_to_server.map(|_| Encoder::new()))
+            .map(|config| {
+                config
+                    .client_to_server
+                    .map(|config| Encoder::new(config.mode))
+            })
             .flatten();
         let incoming_decoder = compression_config
             .as_ref()
-            .map(|config| config.server_to_client.map(|_| Decoder::new()))
+            .map(|config| {
+                config
+                    .server_to_client
+                    .map(|config| Decoder::new(config.mode))
+            })
             .flatten();
 
         Io {

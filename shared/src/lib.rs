@@ -49,7 +49,7 @@ pub use naia_socket_shared::{
 pub use ack_manager::AckManager;
 pub use bandwidth_monitor::BandwidthMonitor;
 pub use base_connection::BaseConnection;
-pub use compression_config::CompressionConfig;
+pub use compression_config::{CompressionConfig, CompressionMode, DirectionalCompressionConfig};
 pub use connection_config::ConnectionConfig;
 pub use constants::MTU_SIZE;
 pub use decoder::Decoder;
