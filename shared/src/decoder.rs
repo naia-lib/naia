@@ -9,17 +9,14 @@ pub struct Decoder {
 
 impl Decoder {
     pub fn new(compression_mode: CompressionMode) -> Self {
-
         let decoder = match compression_mode {
-            CompressionMode::Training(_) => {
-                None
-            },
+            CompressionMode::Training(_) => None,
             CompressionMode::Default(_) => {
                 Some(Decompressor::new().expect("error creating Decompressor"))
-            },
-            CompressionMode::Dictionary(_, dictionary) => {
-                Some(Decompressor::with_dictionary(&dictionary).expect("error creating Decompressor"))
             }
+            CompressionMode::Dictionary(_, dictionary) => Some(
+                Decompressor::with_dictionary(&dictionary).expect("error creating Decompressor"),
+            ),
         };
 
         Self {

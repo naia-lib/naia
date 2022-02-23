@@ -5,6 +5,8 @@ members = [
     "server",
     "shared",
     "derive",
+    "serde",
+    "serde/derive",
     "adapters/hecs/client",
     "adapters/hecs/server",
     "adapters/hecs/shared",

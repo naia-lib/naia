@@ -1,0 +1,23 @@
+[package]
+name = "naia-serde-derive"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../.."
+description = "Derive methods for naia-serde"
+documentation = "https://docs.rs/naia-serde-derive"
+homepage = "https://github.com/naia-rs/naia"
+repository = "https://github.com/naia-rs/naia"
+readme = "../README.md"
+keywords = ["serialization", "bit", "binary", "networking", "gamedev"]
+categories = ["network-programming", "game-development", "wasm", "web-programming"]
+license = "MIT OR Apache-2.0"
+edition = "2021"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[features]
+
+[dependencies]
+log = "0.4"
+cfg-if = "0.1.10"
