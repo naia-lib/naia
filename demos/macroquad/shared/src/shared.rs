@@ -1,7 +1,7 @@
-use std::time::Duration;
+use std::{time::Duration, fs};
 
 use naia_shared::{
-    CompressionConfig, CompressionMode, DirectionalCompressionConfig, LinkConditionerConfig,
+    CompressionConfig, CompressionMode, LinkConditionerConfig,
     PingConfig, SharedConfig, SocketConfig,
 };
 
@@ -18,13 +18,18 @@ pub fn shared_config() -> SharedConfig<Protocol> {
         incoming_jitter: 1,
         incoming_loss: 0.0,
     });
+
+    //let compression_dictionary = fs::read("dictionary.txt").expect("Error reading compression dictionary");
+
     return SharedConfig::new(
         Protocol::load(),
         SocketConfig::new(link_condition, None),
         tick_interval,
         Some(PingConfig::default()),
         Some(CompressionConfig::new(
-            Some(DirectionalCompressionConfig::new(CompressionMode::Training(1))),
+            None,
+            //Some(CompressionMode::Dictionary(22, compression_dictionary)),
+            //Some(CompressionMode::Training(10)),
             None,
         )),
     );

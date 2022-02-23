@@ -1,13 +1,13 @@
 #[derive(Clone)]
 pub struct CompressionConfig {
-    pub server_to_client: Option<DirectionalCompressionConfig>,
-    pub client_to_server: Option<DirectionalCompressionConfig>,
+    pub server_to_client: Option<CompressionMode>,
+    pub client_to_server: Option<CompressionMode>,
 }
 
 impl CompressionConfig {
     pub fn new(
-        server_to_client: Option<DirectionalCompressionConfig>,
-        client_to_server: Option<DirectionalCompressionConfig>,
+        server_to_client: Option<CompressionMode>,
+        client_to_server: Option<CompressionMode>,
     ) -> Self {
         Self {
             server_to_client,
@@ -16,32 +16,17 @@ impl CompressionConfig {
     }
 }
 
-#[derive(Copy, Clone)]
-pub struct DirectionalCompressionConfig {
-    pub mode: CompressionMode,
-}
-
-impl DirectionalCompressionConfig {
-    pub fn new(mode: CompressionMode) -> Self {
-        Self { mode }
-    }
-}
-
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum CompressionMode {
-    /// Regular compression mode
-    Regular,
+    /// Compression mode using default zstd dictionary.
+    /// 1st i32 parameter here is the compression level from -7 (fastest) to 22 (smallest).
+    Default(i32),
+    /// Compression mode using custom dictionary.
+    /// 1st i32 parameter here is the compression level from -7 (fastest) to 22 (smallest).
+    /// 2nd Vec<u8> parameter here is the dictionary itself.
+    Dictionary(i32, Vec<u8>),
     /// Dictionary training mode.
-    /// The usize parameter here describes the desired size of the dictionary (in Kilobytes).
+    /// 1st usize parameter here describes the desired size of the dictionary (in Kilobytes).
     /// Obviously, the bigger the dictionary the better theoretical compression.
     Training(usize),
-}
-
-impl CompressionMode {
-    pub fn is_training(&self) -> bool {
-        match self {
-            CompressionMode::Regular => false,
-            CompressionMode::Training(_) => true,
-        }
-    }
 }

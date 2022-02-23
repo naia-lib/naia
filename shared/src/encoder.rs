@@ -8,35 +8,49 @@ use super::compression_config::CompressionMode;
 
 pub struct Encoder {
     result: Vec<u8>,
-    encoder: Compressor<'static>,
-    dictionary_trainer: Option<DictionaryTrainer>,
+    encoder: EncoderType,
 }
 
 impl Encoder {
     pub fn new(compression_mode: CompressionMode) -> Self {
-        let dictionary_trainer = match compression_mode {
-            CompressionMode::Training(dict_size) => Some(DictionaryTrainer::new(dict_size)),
-            CompressionMode::Regular => None,
+
+        let encoder = match compression_mode {
+            CompressionMode::Training(dict_size) => {
+                EncoderType::DictionaryTrainer(DictionaryTrainer::new(dict_size))
+            },
+            CompressionMode::Default(compression_level) => {
+                EncoderType::Compressor(Compressor::new(compression_level).expect("error creating Compressor"))
+            },
+            CompressionMode::Dictionary(compression_level, dictionary) => {
+                EncoderType::Compressor(Compressor::with_dictionary(compression_level, &dictionary).expect("error creating Compressor with dictionary"))
+            }
         };
 
         Self {
             result: Vec::new(),
-            encoder: Compressor::new(3).expect("error creating Compressor"),
-            dictionary_trainer,
+            encoder,
         }
     }
 
     pub fn encode(&mut self, payload: &[u8]) -> &[u8] {
         // TODO: only use compressed packet if the resulting size would be less!
-        if let Some(trainer) = &mut self.dictionary_trainer {
-            trainer.record_bytes(payload);
-            self.result = payload.to_vec();
-            &self.result
-        } else {
-            self.result = self.encoder.compress(payload).expect("encode error");
-            &self.result
+        match &mut self.encoder {
+            EncoderType::DictionaryTrainer(trainer) => {
+                trainer.record_bytes(payload);
+                self.result = payload.to_vec();
+                return &self.result;
+            },
+            EncoderType::Compressor(encoder) => {
+                self.result = encoder.compress(payload).expect("encode error");
+                return &self.result;
+            }
         }
     }
+}
+
+pub enum EncoderType {
+    Compressor(Compressor<'static>),
+    DictionaryTrainer(DictionaryTrainer),
 }
 
 pub struct DictionaryTrainer {
@@ -74,7 +88,7 @@ impl DictionaryTrainer {
         let current_sample_size = self.sample_data.len();
 
         if current_sample_size >= self.next_alert_length {
-            let percent = ((current_sample_size as f32) / (self.target_sample_size as f32)) * 100.0;
+            let percent = ((self.next_alert_length as f32) / (self.target_sample_size as f32)) * 100.0;
             info!("Dictionary training: {}% complete", percent);
 
             self.next_alert_length += self.target_dict_size * 5;
@@ -92,6 +106,8 @@ impl DictionaryTrainer {
             fs::write("dictionary.txt", dictionary).expect("Error while writing dictionary to file");
 
             info!("Dictionary written to `dictionary.txt`!");
+
+            self.training_complete = true;
         }
     }
 }
