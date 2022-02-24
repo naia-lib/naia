@@ -39,11 +39,9 @@ macro_rules! impl_ser_de_for {
 impl_ser_de_for!(u16);
 impl_ser_de_for!(u32);
 impl_ser_de_for!(u64);
-impl_ser_de_for!(u128);
 impl_ser_de_for!(i16);
 impl_ser_de_for!(i32);
 impl_ser_de_for!(i64);
-impl_ser_de_for!(i128);
 impl_ser_de_for!(f32);
 impl_ser_de_for!(f64);
 
@@ -177,13 +175,11 @@ mod tests {
     test_ser_de_for!(u16,  test_u16);
     test_ser_de_for!(u32,  test_u32);
     test_ser_de_for!(u64,  test_u64);
-    test_ser_de_for!(u128, test_u128);
     test_ser_de_for!(usize, test_usize);
     test_ser_de_for!(i8,   test_i8);
     test_ser_de_for!(i16,  test_i16);
     test_ser_de_for!(i32,  test_i32);
     test_ser_de_for!(i64,  test_i64);
-    test_ser_de_for!(i128, test_i128);
     test_ser_de_for!(isize, test_isize);
     test_ser_de_for!(f32,  test_f32);
     test_ser_de_for!(f64,  test_f64);
