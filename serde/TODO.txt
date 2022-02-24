@@ -9,11 +9,11 @@ Implement De/Ser traits on:
 - Box
 - Structs with De/Ser fields
 - Enums with De/Ser fields
-- Custom Signed/Unsigned integers with specific ranges using const generics
+- Bounded integers with specific ranges using const generics (define min & max w/ i64s)
 
 Completed:
 - Boolean
 - Unit Type: ()
-- Unsigned integers: u8, u16, u32, u64, u128, usize
-- Signed integers: i8, i16, i32, i64, i128, isize
+- Unsigned integers: u8, u16, u32, u64, usize
+- Signed integers: i8, i16, i32, i64, isize
 - Floating point: f32, f64
