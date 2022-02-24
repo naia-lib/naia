@@ -1,4 +1,9 @@
-use crate::{bit_reader::BitReader, bit_writer::BitWriter, error::DeErr, traits::{De, Ser}};
+use crate::{
+    bit_reader::BitReader,
+    bit_writer::BitWriter,
+    error::DeErr,
+    traits::{De, Ser},
+};
 
 impl Ser for bool {
     fn ser(&self, bit_writer: &mut BitWriter) {
@@ -20,7 +25,6 @@ mod tests {
 
     #[test]
     fn read_write() {
-
         // Write
         let mut writer = BitWriter::new();
 

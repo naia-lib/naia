@@ -5,7 +5,6 @@ Implement De/Ser traits on:
 - String
 - HashMap / HashSet
 - Vec / VecDeque
-- Option
 - Box
 - Structs with De/Ser fields
 - Enums with De/Ser fields
@@ -17,3 +16,4 @@ Completed:
 - Unsigned integers: u8, u16, u32, u64, usize
 - Signed integers: i8, i16, i32, i64, isize
 - Floating point: f32, f64
+- Option

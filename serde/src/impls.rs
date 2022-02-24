@@ -1,4 +1,4 @@
 mod bool;
-mod unit;
 mod integer;
 mod option;
+mod unit;
