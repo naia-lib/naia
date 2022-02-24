@@ -47,4 +47,18 @@ impl BitReader {
 
         value != 0
     }
+
+    pub fn read_byte(&mut self) -> u8 {
+        let mut output = 0;
+        for _ in 0..7 {
+            if self.read_bit() {
+                output = output | 128;
+            }
+            output = output >> 1;
+        }
+        if self.read_bit() {
+            output = output | 128;
+        }
+        output
+    }
 }
