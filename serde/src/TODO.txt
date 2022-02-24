@@ -1,6 +1,4 @@
 Implement De/Ser traits on:
-- Unsigned integers: u8, usize
-- Signed integers: i8, isize
 - char
 - Arrays (use const-generics to handle [T; N])
 - Tuples (up to 8 parameters)
@@ -16,6 +14,6 @@ Implement De/Ser traits on:
 Completed:
 - Boolean
 - Unit Type: ()
-- Unsigned integers: u16, u32, u64, u128
-- Signed integers: i16, i32, i64, i128
+- Unsigned integers: u8, u16, u32, u64, u128, usize
+- Signed integers: i8, i16, i32, i64, i128, isize
 - Floating point: f32, f64
