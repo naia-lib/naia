@@ -1,4 +1,6 @@
 use crate::consts::MAX_BUFFER_SIZE;
+use crate::error::DeErr;
+use crate::traits::De;
 
 pub struct BitReader {
     scratch: u8,
@@ -17,6 +19,10 @@ impl BitReader {
             buffer_index: 0,
             buffer_length
         }
+    }
+
+    pub fn read<T: De>(&mut self) -> Result<T, DeErr> {
+        T::de(self)
     }
 
     pub fn read_bit(&mut self) -> bool {

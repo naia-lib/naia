@@ -1,4 +1,4 @@
-
+use crate::traits::Ser;
 use super::consts::MAX_BUFFER_SIZE;
 
 pub struct BitWriter {
@@ -16,6 +16,10 @@ impl BitWriter {
             buffer: [0; MAX_BUFFER_SIZE],
             buffer_index: 0,
         }
+    }
+
+    pub fn write(&mut self, target: &impl Ser) {
+        target.ser(self);
     }
 
     pub fn write_bit(&mut self, bit: bool) {
