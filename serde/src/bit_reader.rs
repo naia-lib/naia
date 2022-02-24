@@ -1,6 +1,4 @@
-use crate::consts::MAX_BUFFER_SIZE;
-use crate::error::DeErr;
-use crate::traits::De;
+use crate::{consts::MAX_BUFFER_SIZE, error::DeErr, traits::De};
 
 pub struct BitReader {
     scratch: u8,
@@ -17,7 +15,7 @@ impl BitReader {
             scratch_index: 0,
             buffer,
             buffer_index: 0,
-            buffer_length
+            buffer_length,
         }
     }
 
@@ -26,9 +24,7 @@ impl BitReader {
     }
 
     pub fn read_bit(&mut self) -> bool {
-
         if self.scratch_index <= 0 {
-
             if self.buffer_index == self.buffer_length {
                 panic!("no more bytes to read");
             }

@@ -1,8 +1,4 @@
-use super::{
-    error::DeErr,
-    bit_reader::BitReader,
-    bit_writer::BitWriter,
-};
+use super::{bit_reader::BitReader, bit_writer::BitWriter, error::DeErr};
 
 /// A trait for objects that can be serialized to a bitstream.
 pub trait Ser {
@@ -12,7 +8,6 @@ pub trait Ser {
 
 /// A trait for objects that can be deserialized from a bitstream.
 pub trait De: Sized {
-
     /// Parse Self from a BitReader
     fn de(bit_reader: &mut BitReader) -> Result<Self, DeErr>;
 }

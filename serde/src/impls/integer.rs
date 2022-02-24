@@ -1,12 +1,18 @@
-
-use crate::{bit_reader::BitReader, bit_writer::BitWriter, error::DeErr, traits::{De, Ser}};
+use crate::{
+    bit_reader::BitReader,
+    bit_writer::BitWriter,
+    error::DeErr,
+    traits::{De, Ser},
+};
 
 macro_rules! impl_ser_de_for {
     ($impl_type:ident) => {
         impl Ser for $impl_type {
             fn ser(&self, writer: &mut BitWriter) {
                 let du8 = unsafe {
-                    std::mem::transmute::<&$impl_type, &[u8; std::mem::size_of::<$impl_type>()]>(&self)
+                    std::mem::transmute::<&$impl_type, &[u8; std::mem::size_of::<$impl_type>()]>(
+                        &self,
+                    )
                 };
                 for byte in du8 {
                     writer.write_byte(*byte);
@@ -61,9 +67,7 @@ impl De for u8 {
 // i8
 impl Ser for i8 {
     fn ser(&self, writer: &mut BitWriter) {
-        let du8 = unsafe {
-            std::mem::transmute::<&i8, &u8>(&self)
-        };
+        let du8 = unsafe { std::mem::transmute::<&i8, &u8>(&self) };
         writer.write_byte(*du8);
     }
 }
@@ -87,8 +91,7 @@ impl De for i8 {
 impl Ser for usize {
     fn ser(&self, writer: &mut BitWriter) {
         let u64usize = *self as u64;
-        let du8 =
-            unsafe { std::mem::transmute::<&u64, &[u8; 8]>(&u64usize) };
+        let du8 = unsafe { std::mem::transmute::<&u64, &[u8; 8]>(&u64usize) };
         for byte in du8 {
             writer.write_byte(*byte);
         }
@@ -117,8 +120,7 @@ impl De for usize {
 impl Ser for isize {
     fn ser(&self, writer: &mut BitWriter) {
         let u64usize = *self as u64;
-        let du8 =
-            unsafe { std::mem::transmute::<&u64, &[u8; 8]>(&u64usize) };
+        let du8 = unsafe { std::mem::transmute::<&u64, &[u8; 8]>(&u64usize) };
         for byte in du8 {
             writer.write_byte(*byte);
         }
@@ -167,20 +169,20 @@ macro_rules! test_ser_de_for {
 
             assert_eq!(first, last);
         }
-    }
+    };
 }
 
 mod tests {
-    test_ser_de_for!(u8,   test_u8);
-    test_ser_de_for!(u16,  test_u16);
-    test_ser_de_for!(u32,  test_u32);
-    test_ser_de_for!(u64,  test_u64);
+    test_ser_de_for!(u8, test_u8);
+    test_ser_de_for!(u16, test_u16);
+    test_ser_de_for!(u32, test_u32);
+    test_ser_de_for!(u64, test_u64);
     test_ser_de_for!(usize, test_usize);
-    test_ser_de_for!(i8,   test_i8);
-    test_ser_de_for!(i16,  test_i16);
-    test_ser_de_for!(i32,  test_i32);
-    test_ser_de_for!(i64,  test_i64);
+    test_ser_de_for!(i8, test_i8);
+    test_ser_de_for!(i16, test_i16);
+    test_ser_de_for!(i32, test_i32);
+    test_ser_de_for!(i64, test_i64);
     test_ser_de_for!(isize, test_isize);
-    test_ser_de_for!(f32,  test_f32);
-    test_ser_de_for!(f64,  test_f64);
+    test_ser_de_for!(f32, test_f32);
+    test_ser_de_for!(f64, test_f64);
 }

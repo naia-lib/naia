@@ -1,5 +1,5 @@
-use crate::traits::Ser;
 use super::consts::MAX_BUFFER_SIZE;
+use crate::traits::Ser;
 
 pub struct BitWriter {
     scratch: u8,
@@ -32,7 +32,6 @@ impl BitWriter {
         self.scratch_index += 1;
 
         if self.scratch_index >= 8 {
-
             self.buffer[self.buffer_index] = self.scratch.reverse_bits();
 
             self.buffer_index += 1;
@@ -50,9 +49,9 @@ impl BitWriter {
     }
 
     pub fn flush(&mut self) -> (usize, [u8; MAX_BUFFER_SIZE]) {
-
         if self.scratch_index > 0 {
-            self.buffer[self.buffer_index] = (self.scratch << (8 - self.scratch_index)).reverse_bits();
+            self.buffer[self.buffer_index] =
+                (self.scratch << (8 - self.scratch_index)).reverse_bits();
             self.buffer_index += 1;
         }
 
