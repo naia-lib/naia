@@ -39,9 +39,12 @@ impl BitWriter {
 
     pub fn flush(&mut self) -> (usize, [u8; MAX_BUFFER_SIZE]) {
 
-        self.buffer[self.buffer_index] = (self.scratch << (8 - self.scratch_index)).reverse_bits();
+        if self.scratch_index > 0 {
+            self.buffer[self.buffer_index] = (self.scratch << (8 - self.scratch_index)).reverse_bits();
+            self.buffer_index += 1;
+        }
 
-        let output_length = self.buffer_index + 1;
+        let output_length = self.buffer_index;
 
         self.buffer_index = 0;
         self.scratch_index = 0;
