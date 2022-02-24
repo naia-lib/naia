@@ -1,11 +1,9 @@
 Implement De/Ser traits on:
-- char
 - Arrays (use const-generics to handle [T; N])
-- Tuples (up to 8 parameters)
+- Tuples (up to 12 parameters)
 - String
 - HashMap / HashSet
 - Vec / VecDeque
-- Box
 - Structs with De/Ser fields
 - Enums with De/Ser fields
 - Bounded integers with specific ranges using const generics (define min & max w/ i64s)
@@ -16,4 +14,6 @@ Completed:
 - Unsigned integers: u8, u16, u32, u64, usize
 - Signed integers: i8, i16, i32, i64, isize
 - Floating point: f32, f64
+- char
 - Option
+- Box
