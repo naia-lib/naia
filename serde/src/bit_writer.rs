@@ -41,6 +41,14 @@ impl BitWriter {
         }
     }
 
+    pub fn write_byte(&mut self, byte: u8) {
+        let mut temp = byte;
+        for _ in 0..8 {
+            self.write_bit(temp & 1 != 0);
+            temp = temp >> 1;
+        }
+    }
+
     pub fn flush(&mut self) -> (usize, [u8; MAX_BUFFER_SIZE]) {
 
         if self.scratch_index > 0 {

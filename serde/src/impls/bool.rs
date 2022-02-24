@@ -12,6 +12,8 @@ impl De for bool {
     }
 }
 
+// Tests
+
 #[cfg(test)]
 mod tests {
     use crate::{BitReader, BitWriter};

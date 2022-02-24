@@ -1,18 +1,21 @@
 Implement De/Ser traits on:
-- Unsigned integers: u8, u16, u32, u64, u128, usize
-- Signed integers: i8, i16, i32, i64, i128, isize
-- Floating point: f32, f64
+- Unsigned integers: u8, usize
+- Signed integers: i8, isize
 - char
-- Unit Type: ()
-- Arrays
-- Tuples
+- Arrays (use const-generics to handle [T; N])
+- Tuples (up to 8 parameters)
 - String
 - HashMap / HashSet
 - Vec / VecDeque
 - Option
+- Box
 - Structs with De/Ser fields
 - Enums with De/Ser fields
 - Custom Signed/Unsigned integers with specific ranges using const generics
 
 Completed:
 - Boolean
+- Unit Type: ()
+- Unsigned integers: u16, u32, u64, u128
+- Signed integers: i16, i32, i64, i128
+- Floating point: f32, f64
