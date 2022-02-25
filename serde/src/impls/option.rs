@@ -42,11 +42,11 @@ mod tests {
         // Write
         let mut writer = BitWriter::new();
 
-        let in_some_option = Some(123);
-        let in_none_option: Option<f32> = None;
+        let in_1 = Some(123);
+        let in_2: Option<f32> = None;
 
-        writer.write(&in_some_option);
-        writer.write(&in_none_option);
+        writer.write(&in_1);
+        writer.write(&in_2);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -54,10 +54,10 @@ mod tests {
 
         let mut reader = BitReader::new(buffer_length, buffer);
 
-        let out_some_option = reader.read().unwrap();
-        let out_none_option = reader.read().unwrap();
+        let out_1 = reader.read().unwrap();
+        let out_2 = reader.read().unwrap();
 
-        assert_eq!(in_some_option, out_some_option);
-        assert_eq!(in_none_option, out_none_option);
+        assert_eq!(in_1, out_1);
+        assert_eq!(in_2, out_2);
     }
 }

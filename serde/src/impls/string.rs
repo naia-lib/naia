@@ -14,8 +14,8 @@ impl Ser for String {
 impl De for String {
     fn de(reader: &mut BitReader) -> Result<Self, DeErr> {
         let length_int: UnsignedInteger<9> = reader.read().unwrap();
-        let length_usize: u64 = length_int.get() as u64;
-        let mut bytes: Vec<u8> = Vec::with_capacity(length_usize as usize);
+        let length_usize= length_int.get() as usize;
+        let mut bytes: Vec<u8> = Vec::with_capacity(length_usize);
         for _ in 0..length_usize {
             bytes.push(reader.read_byte());
         }

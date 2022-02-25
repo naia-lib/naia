@@ -33,11 +33,11 @@ mod tests {
         // Write
         let mut writer = BitWriter::new();
 
-        let in_boxed_int = Box::new(123);
-        let in_boxed_bool = Box::new(true);
+        let in_1 = Box::new(123);
+        let in_2 = Box::new(true);
 
-        writer.write(&in_boxed_int);
-        writer.write(&in_boxed_bool);
+        writer.write(&in_1);
+        writer.write(&in_2);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -45,10 +45,10 @@ mod tests {
 
         let mut reader = BitReader::new(buffer_length, buffer);
 
-        let out_boxed_int = reader.read().unwrap();
-        let out_boxed_bool = reader.read().unwrap();
+        let out_1 = reader.read().unwrap();
+        let out_2 = reader.read().unwrap();
 
-        assert_eq!(in_boxed_int, out_boxed_int);
-        assert_eq!(in_boxed_bool, out_boxed_bool);
+        assert_eq!(in_1, out_1);
+        assert_eq!(in_2, out_2);
     }
 }
