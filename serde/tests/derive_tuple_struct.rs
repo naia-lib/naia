@@ -2,27 +2,15 @@
 use naia_serde::{BitReader, BitWriter, De, Ser};
 
 #[derive(Debug, Eq, PartialEq, De, Ser)]
-pub struct SomeStruct {
-    some_string: String,
-    some_int: i16,
-    some_bool: bool,
-}
+pub struct SomeStruct(String, i16, bool);
 
 #[test]
 fn read_write_struct() {
     // Write
     let mut writer = BitWriter::new();
 
-    let in_1 = SomeStruct {
-        some_string: "Hello world!".to_string(),
-        some_int: 42,
-        some_bool: true,
-    };
-    let in_2 = SomeStruct {
-        some_string: "Goodbye world!".to_string(),
-        some_int: -42,
-        some_bool: false,
-    };
+    let in_1 = SomeStruct("Hello world!".to_string(), 42, true);
+    let in_2 = SomeStruct("Goodbye world!".to_string(), -42, false);
 
     writer.write(&in_1);
     writer.write(&in_2);

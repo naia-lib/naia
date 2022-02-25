@@ -2,11 +2,11 @@ use crate::parse::Struct;
 
 use proc_macro::TokenStream;
 
-pub fn derive_ser_struct_unnamed(struct_: &Struct) -> TokenStream {
+pub fn derive_ser_tuple_struct(struct_: &Struct) -> TokenStream {
     let mut body = String::new();
 
     for (n, _) in struct_.fields.iter().enumerate() {
-        l!(body, "self.{}.ser(s);", n);
+        l!(body, "writer.write(&self.{});", n);
     }
     format!(
         "impl Ser for {} {{
@@ -20,11 +20,11 @@ pub fn derive_ser_struct_unnamed(struct_: &Struct) -> TokenStream {
         .unwrap()
 }
 
-pub fn derive_de_struct_unnamed(struct_: &Struct) -> TokenStream {
+pub fn derive_de_tuple_struct(struct_: &Struct) -> TokenStream {
     let mut body = String::new();
 
     for (n, _) in struct_.fields.iter().enumerate() {
-        l!(body, "{}: De::de(o, d)?,", n);
+        l!(body, "{}: reader.read()?,", n);
     }
 
     format!(
