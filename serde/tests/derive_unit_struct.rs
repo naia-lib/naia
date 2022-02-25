@@ -5,7 +5,7 @@ use naia_serde::{BitReader, BitWriter, De, Ser};
 pub struct SomeStruct;
 
 #[test]
-fn read_write_struct() {
+fn read_write_unit_struct() {
     // Write
     let mut writer = BitWriter::new();
 

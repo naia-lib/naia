@@ -47,7 +47,7 @@ pub struct Struct {
 #[derive(Debug)]
 pub struct EnumVariant {
     pub name: String,
-    pub named: bool,
+    pub tuple: bool,
     pub fields: Vec<Field>,
 }
 
@@ -272,69 +272,63 @@ fn next_struct(mut source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> St
     }
 }
 
-// fn next_enum(mut source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Enum {
-//     let enum_name = next_ident(&mut source).expect("Unnamed enums are not supported");
-//
-//     let group = next_group(&mut source);
-//     // unit enum
-//     if group.is_none() {
-//         return Enum {
-//             name: enum_name,
-//             variants: vec![],
-//             attributes: vec![],
-//         };
-//     };
-//     let group = group.unwrap();
-//     let mut body = group.stream().into_iter().peekable();
-//
-//     let mut variants = vec![];
-//     loop {
-//         if next_eof(&mut body).is_some() {
-//             break;
-//         }
-//
-//         let attributes = next_attributes_list(&mut body);
-//
-//         let variant_name = next_ident(&mut body).expect("Unnamed variants are not supported");
-//         let group = next_group(&mut body);
-//         if group.is_none() {
-//             variants.push(EnumVariant {
-//                 name: variant_name,
-//                 named: false,
-//                 fields: vec![],
-//                 attributes,
-//             });
-//             let _maybe_comma = next_exact_punct(&mut body, ",");
-//             continue;
-//         }
-//         let group = group.unwrap();
-//         let delimiter = group.delimiter();
-//         let named = match delimiter {
-//             Delimiter::Parenthesis => false,
-//             Delimiter::Brace => true,
-//
-//             _ => panic!("Enum with unsupported delimiter"),
-//         };
-//         {
-//             let mut body = group.stream().into_iter().peekable();
-//             let fields = next_fields(&mut body, named);
-//             variants.push(EnumVariant {
-//                 name: variant_name,
-//                 named,
-//                 fields,
-//                 attributes,
-//             });
-//         }
-//         let _maybe_semicolon = next_exact_punct(&mut body, ";");
-//         let _maybe_coma = next_exact_punct(&mut body, ",");
-//     }
-//
-//     Enum {
-//         name: enum_name,
-//         variants,
-//         attributes: vec![],
-//     }
-// }
+fn next_enum(mut source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Enum {
+    let enum_name = next_ident(&mut source).expect("Unnamed enums are not supported");
+
+    let group = next_group(&mut source);
+    // unit enum
+    if group.is_none() {
+        return Enum {
+            name: enum_name,
+            variants: vec![],
+        };
+    };
+    let group = group.unwrap();
+    let mut body = group.stream().into_iter().peekable();
+
+    let mut variants = vec![];
+    loop {
+        if next_eof(&mut body).is_some() {
+            break;
+        }
+
+        let variant_name = next_ident(&mut body).expect("Unnamed variants are not supported");
+        let group = next_group(&mut body);
+        if group.is_none() {
+            variants.push(EnumVariant {
+                name: variant_name,
+                tuple: true,
+                fields: vec![],
+            });
+            let _maybe_comma = next_exact_punct(&mut body, ",");
+            continue;
+        }
+        let group = group.unwrap();
+        let delimiter = group.delimiter();
+        let tuple = match delimiter {
+            Delimiter::Parenthesis => true,
+            Delimiter::Brace => false,
+
+            _ => panic!("Enum with unsupported delimiter"),
+        };
+        {
+            let mut body = group.stream().into_iter().peekable();
+            let fields = next_fields(&mut body, !tuple);
+            variants.push(EnumVariant {
+                name: variant_name,
+                tuple,
+                fields,
+            });
+        }
+        let _maybe_semicolon = next_exact_punct(&mut body, ";");
+        let _maybe_coma = next_exact_punct(&mut body, ",");
+    }
+
+    Enum {
+        name: enum_name,
+        variants,
+    }
+}
 
 pub fn parse_data(input: TokenStream) -> Data {
     let mut source = input.into_iter().peekable();
@@ -354,9 +348,8 @@ pub fn parse_data(input: TokenStream) -> Data {
             res = Data::Struct(next_struct(&mut source));
         }
         "enum" => {
-            unimplemented!("Enums are not supported");
-            // let enum_ = next_enum(&mut source);
-            // res = Data::Enum(enum_);
+            let enum_ = next_enum(&mut source);
+            res = Data::Enum(enum_);
         }
         "union" => unimplemented!("Unions are not supported"),
         unexpected => panic!("Unexpected keyword: {}", unexpected),

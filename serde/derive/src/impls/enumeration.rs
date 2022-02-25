@@ -8,33 +8,33 @@ pub fn derive_ser_enum(enum_: &Enum) -> TokenStream {
     for (index, variant) in enum_.variants.iter().enumerate() {
         let lit = format!("{}u16", index);
         let ident = &variant.name;
-        // Unit
+        // Unit Variant
         if variant.fields.len() == 0 {
-            l!(r, "Self::{} => {}.ser(s),", ident, lit);
+            l!(r, "Self::{} => writer.write(&{}),", ident, lit);
         }
-        // Named
-        else if variant.named {
+        // Struct Variant
+        else if variant.tuple == false {
             l!(r, "Self::{} {{", variant.name);
             for field in &variant.fields {
                 l!(r, "{}, ", field.field_name.as_ref().unwrap());
             }
             l!(r, "} => {");
-            l!(r, "{}.ser(s);", lit);
+            l!(r, "writer.write(&{});", lit);
             for field in &variant.fields {
-                l!(r, "{}.ser(s);", field.field_name.as_ref().unwrap());
+                l!(r, "writer.write({});", field.field_name.as_ref().unwrap());
             }
             l!(r, "}");
         }
-        // Unnamed
-        else if variant.named == false {
+        // Tuple Variant
+        else if variant.tuple == true {
             l!(r, "Self::{} (", variant.name);
             for (n, _) in variant.fields.iter().enumerate() {
                 l!(r, "f{}, ", n);
             }
             l!(r, ") => {");
-            l!(r, "{}.ser(s);", lit);
+            l!(r, "writer.write(&{});", lit);
             for (n, _) in variant.fields.iter().enumerate() {
-                l!(r, "f{}.ser(s);", n);
+                l!(r, "writer.write(f{});", n);
             }
             l!(r, "}");
         }
@@ -60,27 +60,27 @@ pub fn derive_de_enum(enum_: &Enum) -> TokenStream {
     for (index, variant) in enum_.variants.iter().enumerate() {
         let lit = format!("{}u16", index);
 
-        // Unit
+        // Unit Variant
         if variant.fields.len() == 0 {
             l!(r, "{} => Self::{},", lit, variant.name);
         }
-        // Named
-        else if variant.named {
+        // Struct Variant
+        else if variant.tuple == false {
             l!(r, "{} => Self::{} {{", lit, variant.name);
             for field in &variant.fields {
                 l!(
                     r,
-                    "{}: De::de(o, d)?,",
+                    "{}: reader.read()?,",
                     field.field_name.as_ref().unwrap()
                 );
             }
             l!(r, "},");
         }
-        // Unnamed
-        else if variant.named == false {
+        // Tuple Variant
+        else if variant.tuple == true {
             l!(r, "{} => Self::{} (", lit, variant.name);
             for _ in &variant.fields {
-                l!(r, "De::de(o, d)?,");
+                l!(r, "reader.read()?,");
             }
             l!(r, "),");
         }
@@ -89,10 +89,10 @@ pub fn derive_de_enum(enum_: &Enum) -> TokenStream {
     format!(
         "impl  De for {} {{
             fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::DeErr> {{
-                let id: u16 = De::de(o,d)?;
+                let id: u16 = reader.read()?;
                 Ok(match id {{
                     {}
-                    _ => return std::result::Result::Err(naia_serde::DeErr{{o:*o, l:0, s:d.len()}})
+                    _ => return std::result::Result::Err(naia_serde::DeErr{{}})
                 }})
             }}
         }}", enum_.name, r)

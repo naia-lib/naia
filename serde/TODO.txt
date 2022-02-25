@@ -1,6 +1,5 @@
 Implement De/Ser traits on:
 - Tuples (up to 12 parameters)
-- Enums
 - Bounded integers which wrap our new SerdeInteger type
 
 Completed:
@@ -19,3 +18,4 @@ Completed:
 - Structs
 - Tuple Structs
 - Unit Structs
+- Enums
