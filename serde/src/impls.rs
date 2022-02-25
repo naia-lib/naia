@@ -1,6 +1,4 @@
-mod bool;
-mod integer;
+mod scalars;
 mod option;
-mod unit;
 mod boxed;
-mod char;
+mod string;
