@@ -1,7 +1,7 @@
 [package]
 name = "naia-serde"
 version = "0.1.0"
-authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+authors = ["connorcarpenter <connorcarpenter@gmail.com>", "Fedor <not.fl3@gmail.com>", "makepad <info@makepad.nl>"]
 workspace = ".."
 description = "Bit-level de/serialization for naia"
 documentation = "https://docs.rs/naia-serde"

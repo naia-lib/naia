@@ -1,3 +1,5 @@
+pub use naia_serde_derive::*;
+
 mod reader_writer;
 mod consts;
 mod error;

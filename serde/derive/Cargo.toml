@@ -1,7 +1,7 @@
 [package]
 name = "naia-serde-derive"
 version = "0.1.0"
-authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+authors = ["connorcarpenter <connorcarpenter@gmail.com>", "Fedor <not.fl3@gmail.com>", "makepad <info@makepad.nl>"]
 workspace = "../.."
 description = "Derive methods for naia-serde"
 documentation = "https://docs.rs/naia-serde-derive"
@@ -15,6 +15,9 @@ edition = "2021"
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[lib]
+proc-macro = true
 
 [features]
 
