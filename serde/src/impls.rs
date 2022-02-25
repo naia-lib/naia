@@ -4,3 +4,4 @@ mod boxed;
 mod string;
 mod array;
 mod vector;
+mod hash;

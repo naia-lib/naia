@@ -1,11 +1,10 @@
 Implement De/Ser traits on:
 - Tuples (up to 12 parameters)
-- HashMap / HashSet
 - Structs
 - Tuple Structs
 - Unit Structs
 - Enums
-- Bounded integers with specific ranges using const generics (define min & max w/ i64s)
+- Bounded integers which wrap our new SerdeInteger type
 
 Completed:
 - Boolean
@@ -19,3 +18,4 @@ Completed:
 - String
 - Arrays (use const-generics to handle [T; N])
 - Vec / VecDeque
+- HashMap / HashSet
