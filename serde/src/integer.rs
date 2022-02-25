@@ -13,6 +13,10 @@ pub struct SerdeInteger<const SIGNED: bool, const VARIABLE: bool, const BITS: u8
 }
 
 impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> SerdeInteger<SIGNED, VARIABLE, BITS> {
+    pub fn get(&self) -> i128 {
+        self.inner
+    }
+
     pub fn new<T: Into<i128>>(value: T) -> Self {
 
         let inner = Into::<i128>::into(value);
@@ -170,6 +174,15 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> De for SerdeInteg
 #[cfg(test)]
 mod tests {
     use crate::{BitReader, BitWriter, SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger};
+
+    #[test]
+    fn in_and_out() {
+        let in_u16: u16 = 123;
+        let middle = UnsignedInteger::<9>::new(in_u16);
+        let out_u16: u16 = middle.get() as u16;
+
+        assert_eq!(in_u16, out_u16);
+    }
 
     #[test]
     fn read_write_unsigned() {
