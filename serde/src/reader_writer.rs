@@ -80,7 +80,7 @@ impl BitWriter {
         }
     }
 
-    pub fn write(&mut self, target: &impl Ser) {
+    pub fn write<T: Ser>(&mut self, target: &T) {
         target.ser(self);
     }
 
