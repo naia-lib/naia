@@ -1,7 +1,7 @@
 mod enumeration;
 mod structure;
-mod structure_unnamed;
+mod tuple_structure;
 
 pub use enumeration::*;
 pub use structure::*;
-pub use structure_unnamed::*;
+pub use tuple_structure::*;

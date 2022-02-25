@@ -8,7 +8,7 @@ pub fn derive_ser_struct(struct_: &Struct) -> TokenStream {
     for field in &struct_.fields {
         l!(
             body,
-            "self.{}.ser(s);",
+            "writer.write(&self.{});",
             field.field_name.as_ref().unwrap()
         );
     }
@@ -30,7 +30,7 @@ pub fn derive_de_struct(struct_: &Struct) -> TokenStream {
     for field in &struct_.fields {
         l!(
             body,
-            "{}: De::de(o, d)?,",
+            "{}: reader.read()?,",
             field.field_name.as_ref().unwrap()
         );
     }
