@@ -231,7 +231,7 @@ fn clone_method(replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenS
 
     for (field_name, _) in properties.iter() {
         let new_output_right = quote! {
-            self.#field_name.get().clone(),
+            (*self.#field_name).clone(),
         };
         let new_output_result = quote! {
             #output

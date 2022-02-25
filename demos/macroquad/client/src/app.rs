@@ -110,16 +110,16 @@ impl App {
             if w || s || a || d {
                 if let Some(command) = &mut self.queued_command {
                     if w {
-                        command.w.set(true);
+                        *command.w = true;
                     }
                     if s {
-                        command.s.set(true);
+                        *command.s = true;
                     }
                     if a {
-                        command.a.set(true);
+                        *command.a = true;
                     }
                     if d {
-                        command.d.set(true);
+                        *command.d = true;
                     }
                 } else {
                     self.queued_command = Some(KeyCommand::new(w, s, a, d));
@@ -178,7 +178,7 @@ impl App {
                     self.squares.remove(&entity);
                 }
                 Ok(Event::MessageEntity(entity, Protocol::EntityAssignment(entity_assignment))) => {
-                    let assign = *entity_assignment.assign.get();
+                    let assign = *entity_assignment.assign;
 
                     if assign {
                         info!("gave ownership of entity");
@@ -270,14 +270,14 @@ impl App {
             // draw unowned squares
             for entity in &self.squares {
                 if let Some(square) = self.world.proxy().component::<Square>(entity) {
-                    let color = match square.color.get() {
+                    let color = match *square.color {
                         Color::Red => RED,
                         Color::Blue => BLUE,
                         Color::Yellow => YELLOW,
                     };
                     draw_rectangle(
-                        f32::from(*(square.x.get())),
-                        f32::from(*(square.y.get())),
+                        f32::from(*square.x),
+                        f32::from(*square.y),
                         SQUARE_SIZE,
                         SQUARE_SIZE,
                         color,
@@ -289,8 +289,8 @@ impl App {
             if let Some(entity) = &self.owned_entity {
                 if let Some(square) = self.world.proxy().component::<Square>(&entity.predicted) {
                     draw_rectangle(
-                        f32::from(*(square.x.get())),
-                        f32::from(*(square.y.get())),
+                        f32::from(*square.x),
+                        f32::from(*square.y),
                         SQUARE_SIZE,
                         SQUARE_SIZE,
                         WHITE,

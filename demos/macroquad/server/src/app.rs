@@ -76,8 +76,8 @@ impl App {
         for event in self.server.receive() {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {
-                    let username = auth.username.get();
-                    let password = auth.password.get();
+                    let ref username = *auth.username;
+                    let ref password = *auth.password;
                     if username == "charlie" && password == "12345" {
                         // Accept incoming connection
                         self.server.accept_connection(&user_key);

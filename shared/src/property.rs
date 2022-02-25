@@ -1,3 +1,4 @@
+use std::ops::{Deref, DerefMut};
 use nanoserde::{DeBin, SerBin};
 
 use naia_socket_shared::PacketReader;
@@ -24,37 +25,10 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
         };
     }
 
-    // Getter / setter
-
-    /// Gets a reference to the value contained by the Property
-    pub fn get(&self) -> &T {
-        return &self.inner;
-    }
-
-    /// Gets a mutable reference to the value contained by the Property, queues
-    /// to update
-    pub fn get_mut(&mut self) -> &mut T {
-        // Just assume inner value will be changed, queue for update
-        if let Some(mutator) = &mut self.mutator {
-            mutator.mutate(self.mutator_index);
-        }
-        return &mut self.inner;
-    }
-
-    /// Set the Property's contained value, queues for update if value changes
-    pub fn set(&mut self, value: T) {
-        if self.inner != value {
-            if let Some(mutator) = &mut self.mutator {
-                mutator.mutate(self.mutator_index);
-            }
-            self.inner = value;
-        }
-    }
-
     /// Set value to the value of another Property, queues for update if value
     /// changes
     pub fn mirror(&mut self, other: &Property<T>) {
-        self.set(other.inner.clone());
+        **self = (**other).clone();
     }
 
     // Serialization / deserialization
@@ -118,5 +92,25 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
     /// Set an PropertyMutator to track changes to the Property
     pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
         self.mutator = Some(mutator.clone_new());
+    }
+}
+
+// It could be argued that Property here is a type of smart-pointer,
+// but honestly this is mainly for the convenience of type coercion
+impl<T: Clone + DeBin + SerBin + PartialEq> Deref for Property<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T: Clone + DeBin + SerBin + PartialEq> DerefMut for Property<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        // Just assume inner value will be changed, queue for update
+        if let Some(mutator) = &mut self.mutator {
+            mutator.mutate(self.mutator_index);
+        }
+        return &mut self.inner;
     }
 }
