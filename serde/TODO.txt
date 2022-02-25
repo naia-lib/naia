@@ -1,7 +1,6 @@
 Implement De/Ser traits on:
 - Tuples (up to 12 parameters)
 - HashMap / HashSet
-- Vec / VecDeque
 - Structs
 - Tuple Structs
 - Unit Structs
@@ -19,3 +18,4 @@ Completed:
 - Box
 - String
 - Arrays (use const-generics to handle [T; N])
+- Vec / VecDeque

@@ -3,3 +3,4 @@ mod option;
 mod boxed;
 mod string;
 mod array;
+mod vector;
