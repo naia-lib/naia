@@ -1,4 +1,4 @@
-use super::{bit_reader::BitReader, bit_writer::BitWriter, error::DeErr};
+use super::{reader_writer::{BitReader, BitWriter}, error::DeErr};
 
 /// A trait for objects that can be serialized to a bitstream.
 pub trait Ser {

@@ -1,6 +1,5 @@
 use crate::{
-    bit_reader::BitReader,
-    bit_writer::BitWriter,
+    reader_writer::{BitReader, BitWriter},
     error::DeErr,
     traits::{De, Ser},
 };
