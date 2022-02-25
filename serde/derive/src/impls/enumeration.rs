@@ -88,11 +88,11 @@ pub fn derive_de_enum(enum_: &Enum) -> TokenStream {
 
     format!(
         "impl  De for {} {{
-            fn de(reader: &mut BitReader) -> std::result::Result<Self, DeErr> {{
+            fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::DeErr> {{
                 let id: u16 = De::de(o,d)?;
                 Ok(match id {{
                     {}
-                    _ => return std::result::Result::Err(DeErr{{o:*o, l:0, s:d.len()}})
+                    _ => return std::result::Result::Err(naia_serde::DeErr{{o:*o, l:0, s:d.len()}})
                 }})
             }}
         }}", enum_.name, r)

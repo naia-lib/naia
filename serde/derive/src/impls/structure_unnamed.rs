@@ -29,7 +29,7 @@ pub fn derive_de_struct_unnamed(struct_: &Struct) -> TokenStream {
 
     format!(
         "impl De for {} {{
-            fn de(reader: &mut BitReader) -> std::result::Result<Self, DeErr> {{
+            fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::DeErr> {{
                 std::result::Result::Ok(Self {{
                     {}
                 }})
