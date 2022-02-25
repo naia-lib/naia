@@ -2,40 +2,31 @@ use crate::parse::Struct;
 
 use proc_macro::TokenStream;
 
-pub fn derive_ser_tuple_struct(struct_: &Struct) -> TokenStream {
-    let mut body = String::new();
+pub fn derive_serde_tuple_struct(struct_: &Struct) -> TokenStream {
+    let mut ser_body = String::new();
 
     for (n, _) in struct_.fields.iter().enumerate() {
-        l!(body, "writer.write(&self.{});", n);
+        l!(ser_body, "writer.write(&self.{});", n);
     }
+
+    let mut de_body = String::new();
+
+    for (n, _) in struct_.fields.iter().enumerate() {
+        l!(de_body, "{}: reader.read()?,", n);
+    }
+
     format!(
-        "impl Ser for {} {{
+        "impl Serde for {} {{
             fn ser(&self, writer: &mut BitWriter) {{
                 {}
             }}
-        }}",
-        struct_.name, body
-    )
-        .parse()
-        .unwrap()
-}
-
-pub fn derive_de_tuple_struct(struct_: &Struct) -> TokenStream {
-    let mut body = String::new();
-
-    for (n, _) in struct_.fields.iter().enumerate() {
-        l!(body, "{}: reader.read()?,", n);
-    }
-
-    format!(
-        "impl De for {} {{
-            fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::DeErr> {{
+            fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::SerdeErr> {{
                 std::result::Result::Ok(Self {{
                     {}
                 }})
             }}
         }}",
-        struct_.name, body
+        struct_.name, ser_body, de_body,
     )
         .parse()
         .unwrap()

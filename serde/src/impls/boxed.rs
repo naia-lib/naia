@@ -1,24 +1,16 @@
 use crate::{
     reader_writer::{BitReader, BitWriter},
-    error::DeErr,
-    traits::{De, Ser},
+    error::SerdeErr,
+    serde::Serde,
 };
 
-impl<T> Ser for Box<T>
-    where
-        T: Ser,
+impl<T: Serde> Serde for Box<T>
 {
     fn ser(&self, writer: &mut BitWriter) {
         (**self).ser(writer)
     }
-}
-
-impl<T> De for Box<T>
-    where
-        T: De,
-{
-    fn de(reader: &mut BitReader) -> Result<Box<T>, DeErr> {
-        Ok(Box::new(De::de(reader)?))
+    fn de(reader: &mut BitReader) -> Result<Box<T>, SerdeErr> {
+        Ok(Box::new(Serde::de(reader)?))
     }
 }
 

@@ -1,17 +1,14 @@
 use crate::{
     reader_writer::{BitReader, BitWriter},
-    error::DeErr,
-    traits::{De, Ser},
+    error::SerdeErr,
+    serde::Serde,
 };
 
 // Unit //
 
-impl Ser for () {
+impl Serde for () {
     fn ser(&self, _: &mut BitWriter) {}
-}
-
-impl De for () {
-    fn de(_: &mut BitReader) -> Result<Self, DeErr> {
+    fn de(_: &mut BitReader) -> Result<Self, SerdeErr> {
         Ok(())
     }
 }
@@ -44,14 +41,11 @@ mod unit_tests {
 
 // Boolean //
 
-impl Ser for bool {
+impl Serde for bool {
     fn ser(&self, writer: &mut BitWriter) {
         writer.write_bit(*self);
     }
-}
-
-impl De for bool {
-    fn de(reader: &mut BitReader) -> Result<Self, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         Ok(reader.read_bit())
     }
 }
@@ -89,7 +83,7 @@ mod bool_tests {
 
 // Characters //
 
-impl Ser for char {
+impl Serde for char {
     fn ser(&self, writer: &mut BitWriter) {
         let u32char = *self as u32;
         let bytes = unsafe { std::mem::transmute::<&u32, &[u8; 4]>(&u32char) };
@@ -97,10 +91,8 @@ impl Ser for char {
             writer.write_byte(*byte);
         }
     }
-}
 
-impl De for char {
-    fn de(reader: &mut BitReader) -> Result<Self, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let mut bytes = [0_u8; 4];
         for index in 0..4 {
             bytes[index] = reader.read_byte();
@@ -117,7 +109,7 @@ impl De for char {
         return if let Some(inner_char) = char::from_u32(container[0]) {
             Ok(inner_char)
         } else {
-            Err(DeErr {})
+            Err(SerdeErr {})
         }
     }
 }
@@ -157,7 +149,7 @@ mod char_tests {
 
 macro_rules! impl_ser_de_for {
     ($impl_type:ident) => {
-        impl Ser for $impl_type {
+        impl Serde for $impl_type {
             fn ser(&self, writer: &mut BitWriter) {
                 let du8 = unsafe {
                     std::mem::transmute::<&$impl_type, &[u8; std::mem::size_of::<$impl_type>()]>(
@@ -168,10 +160,7 @@ macro_rules! impl_ser_de_for {
                     writer.write_byte(*byte);
                 }
             }
-        }
-
-        impl De for $impl_type {
-            fn de(reader: &mut BitReader) -> Result<$impl_type, DeErr> {
+            fn de(reader: &mut BitReader) -> Result<$impl_type, SerdeErr> {
                 const BYTES_LENGTH: usize = std::mem::size_of::<$impl_type>();
                 let mut byte_array = [0_u8; BYTES_LENGTH];
                 for index in 0..BYTES_LENGTH {
@@ -202,28 +191,22 @@ impl_ser_de_for!(f32);
 impl_ser_de_for!(f64);
 
 // u8
-impl Ser for u8 {
+impl Serde for u8 {
     fn ser(&self, writer: &mut BitWriter) {
         writer.write_byte(*self);
     }
-}
-
-impl De for u8 {
-    fn de(reader: &mut BitReader) -> Result<u8, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<u8, SerdeErr> {
         Ok(reader.read_byte())
     }
 }
 
 // i8
-impl Ser for i8 {
+impl Serde for i8 {
     fn ser(&self, writer: &mut BitWriter) {
         let du8 = unsafe { std::mem::transmute::<&i8, &u8>(&self) };
         writer.write_byte(*du8);
     }
-}
-
-impl De for i8 {
-    fn de(reader: &mut BitReader) -> Result<i8, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<i8, SerdeErr> {
         let byte = [reader.read_byte()];
         let mut container = [0 as i8];
         unsafe {
@@ -238,7 +221,7 @@ impl De for i8 {
 }
 
 // usize
-impl Ser for usize {
+impl Serde for usize {
     fn ser(&self, writer: &mut BitWriter) {
         let u64usize = *self as u64;
         let du8 = unsafe { std::mem::transmute::<&u64, &[u8; 8]>(&u64usize) };
@@ -246,10 +229,7 @@ impl Ser for usize {
             writer.write_byte(*byte);
         }
     }
-}
-
-impl De for usize {
-    fn de(reader: &mut BitReader) -> Result<usize, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<usize, SerdeErr> {
         let mut byte_array = [0_u8; 8];
         for index in 0..8 {
             byte_array[index] = reader.read_byte();
@@ -267,7 +247,7 @@ impl De for usize {
 }
 
 // isize
-impl Ser for isize {
+impl Serde for isize {
     fn ser(&self, writer: &mut BitWriter) {
         let u64usize = *self as u64;
         let du8 = unsafe { std::mem::transmute::<&u64, &[u8; 8]>(&u64usize) };
@@ -275,10 +255,7 @@ impl Ser for isize {
             writer.write_byte(*byte);
         }
     }
-}
-
-impl De for isize {
-    fn de(reader: &mut BitReader) -> Result<isize, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<isize, SerdeErr> {
         let mut byte_array = [0_u8; 8];
         for index in 0..8 {
             byte_array[index] = reader.read_byte();
