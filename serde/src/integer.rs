@@ -1,6 +1,6 @@
 use crate::{BitReader, BitWriter};
-use crate::error::DeErr;
-use crate::traits::{De, Ser};
+use crate::error::SerdeErr;
+use crate::serde::Serde;
 
 pub type UnsignedInteger<const BITS: u8> = SerdeInteger<false, false, BITS>;
 pub type SignedInteger<const BITS: u8> = SerdeInteger<true, false, BITS>;
@@ -57,7 +57,7 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> SerdeInteger<SIGN
     }
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Ser for SerdeInteger<SIGNED, VARIABLE, BITS> {
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde for SerdeInteger<SIGNED, VARIABLE, BITS> {
     fn ser(&self, writer: &mut BitWriter) {
 
         let mut value: u128;
@@ -102,10 +102,8 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Ser for SerdeInte
             return;
         }
     }
-}
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> De for SerdeInteger<SIGNED, VARIABLE, BITS> {
-    fn de(reader: &mut BitReader) -> Result<Self, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
 
         let mut negative: bool = false;
         if SIGNED {

@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
-use crate::{reader_writer::{BitReader, BitWriter}, error::DeErr, traits::{De, Ser}, UnsignedVariableInteger};
+use crate::{reader_writer::{BitReader, BitWriter}, error::SerdeErr, serde::Serde, UnsignedVariableInteger};
 
-impl<K: Ser> Ser for HashSet<K>
+impl<K: Serde + Eq + Hash> Serde for HashSet<K>
 {
     fn ser(&self, writer: &mut BitWriter) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
@@ -11,11 +11,8 @@ impl<K: Ser> Ser for HashSet<K>
             writer.write(value);
         }
     }
-}
 
-impl<K: De + Eq + Hash> De for HashSet<K>
-{
-    fn de(reader: &mut BitReader) -> Result<Self, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let length_int: UnsignedVariableInteger<5> = reader.read().unwrap();
         let length_usize = length_int.get() as usize;
         let mut output: HashSet<K> = HashSet::new();
@@ -27,7 +24,7 @@ impl<K: De + Eq + Hash> De for HashSet<K>
     }
 }
 
-impl<K: Ser, V: Ser> Ser for HashMap<K, V>
+impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V>
 {
     fn ser(&self, writer: &mut BitWriter) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
@@ -37,11 +34,8 @@ impl<K: Ser, V: Ser> Ser for HashMap<K, V>
             writer.write(value);
         }
     }
-}
 
-impl<K: De + Eq + Hash, V: De> De for HashMap<K, V>
-{
-    fn de(reader: &mut BitReader) -> Result<Self, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let length_int: UnsignedVariableInteger<5> = reader.read().unwrap();
         let length_usize = length_int.get() as usize;
         let mut output: HashMap<K, V> = HashMap::new();

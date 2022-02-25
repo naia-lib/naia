@@ -1,28 +1,18 @@
-use crate::{reader_writer::{BitReader, BitWriter}, error::DeErr, traits::{De, Ser}};
+use crate::{reader_writer::{BitReader, BitWriter}, error::SerdeErr, serde::Serde};
 
-impl<T: Ser> Ser for [T] {
+impl<T: Serde, const N: usize> Serde for [T; N] {
     fn ser(&self, writer: &mut BitWriter) {
         for item in self {
             writer.write(item);
         }
     }
-}
 
-impl<T: Ser, const N: usize> Ser for [T; N] {
-    fn ser(&self, writer: &mut BitWriter) {
-        for item in self {
-            writer.write(item);
-        }
-    }
-}
-
-impl<T: De, const N: usize> De for [T; N] {
-    fn de(reader: &mut BitReader) -> Result<Self, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         unsafe{
             let mut to = std::mem::MaybeUninit::<[T; N]>::uninit();
             let top: *mut T = std::mem::transmute(&mut to);
             for c in 0..N {
-                top.add(c).write(De::de(reader)?);
+                top.add(c).write(Serde::de(reader)?);
             }
             Ok(to.assume_init())
         }

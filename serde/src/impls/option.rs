@@ -1,12 +1,10 @@
 use crate::{
     reader_writer::{BitReader, BitWriter},
-    error::DeErr,
-    traits::{De, Ser},
+    error::SerdeErr,
+    serde::Serde,
 };
 
-impl<T> Ser for Option<T>
-where
-    T: Ser,
+impl<T: Serde> Serde for Option<T>
 {
     fn ser(&self, writer: &mut BitWriter) {
         if let Some(value) = self {
@@ -16,15 +14,10 @@ where
             writer.write_bit(false);
         }
     }
-}
 
-impl<T> De for Option<T>
-where
-    T: De,
-{
-    fn de(reader: &mut BitReader) -> Result<Option<T>, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<Option<T>, SerdeErr> {
         if reader.read_bit() {
-            Ok(Some(De::de(reader)?))
+            Ok(Some(Serde::de(reader)?))
         } else {
             Ok(None)
         }

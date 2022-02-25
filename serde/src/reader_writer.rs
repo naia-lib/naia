@@ -1,4 +1,4 @@
-use crate::{consts::MAX_BUFFER_SIZE, error::DeErr, traits::{De, Ser}};
+use crate::{consts::MAX_BUFFER_SIZE, error::SerdeErr, serde::Serde};
 
 // Reader
 
@@ -21,7 +21,7 @@ impl BitReader {
         }
     }
 
-    pub fn read<T: De>(&mut self) -> Result<T, DeErr> {
+    pub fn read<T: Serde>(&mut self) -> Result<T, SerdeErr> {
         T::de(self)
     }
 
@@ -80,7 +80,7 @@ impl BitWriter {
         }
     }
 
-    pub fn write<T: Ser>(&mut self, target: &T) {
+    pub fn write<T: Serde>(&mut self, target: &T) {
         target.ser(self);
     }
 

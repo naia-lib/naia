@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
-use crate::{reader_writer::{BitReader, BitWriter}, error::DeErr, traits::{De, Ser}, UnsignedVariableInteger};
+use crate::{reader_writer::{BitReader, BitWriter}, error::SerdeErr, serde::Serde, UnsignedVariableInteger};
 
-impl<T: Ser> Ser for Vec<T>
+impl<T: Serde> Serde for Vec<T>
 {
     fn ser(&self, writer: &mut BitWriter) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
@@ -10,11 +10,8 @@ impl<T: Ser> Ser for Vec<T>
             writer.write(item);
         }
     }
-}
 
-impl<T: De> De for Vec<T>
-{
-    fn de(reader: &mut BitReader) -> Result<Self, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let length_int: UnsignedVariableInteger<5> = reader.read().unwrap();
         let length_usize = length_int.get() as usize;
         let mut output: Vec<T> = Vec::with_capacity(length_usize);
@@ -25,7 +22,7 @@ impl<T: De> De for Vec<T>
     }
 }
 
-impl<T: Ser> Ser for VecDeque<T>
+impl<T: Serde> Serde for VecDeque<T>
 {
     fn ser(&self, writer: &mut BitWriter) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
@@ -34,11 +31,8 @@ impl<T: Ser> Ser for VecDeque<T>
             writer.write(item);
         }
     }
-}
 
-impl<T: De> De for VecDeque<T>
-{
-    fn de(reader: &mut BitReader) -> Result<Self, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let length_int: UnsignedVariableInteger<5> = reader.read().unwrap();
         let length_usize = length_int.get() as usize;
         let mut output: VecDeque<T> = VecDeque::with_capacity(length_usize);

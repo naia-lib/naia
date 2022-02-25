@@ -1,6 +1,6 @@
-use crate::{reader_writer::{BitReader, BitWriter}, error::DeErr, traits::{De, Ser}, UnsignedInteger};
+use crate::{reader_writer::{BitReader, BitWriter}, error::SerdeErr, serde::Serde, UnsignedInteger};
 
-impl Ser for String {
+impl Serde for String {
     fn ser(&self, writer: &mut BitWriter) {
         let length = UnsignedInteger::<9>::new(self.len() as u64);
         writer.write(&length);
@@ -9,10 +9,8 @@ impl Ser for String {
             writer.write_byte(*byte);
         }
     }
-}
 
-impl De for String {
-    fn de(reader: &mut BitReader) -> Result<Self, DeErr> {
+    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let length_int: UnsignedInteger<9> = reader.read().unwrap();
         let length_usize= length_int.get() as usize;
         let mut bytes: Vec<u8> = Vec::with_capacity(length_usize);

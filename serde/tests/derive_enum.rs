@@ -1,7 +1,7 @@
 
-use naia_serde::{BitReader, BitWriter, De, Ser};
+use naia_serde::{BitReader, BitWriter, Serde};
 
-#[derive(Debug, Eq, PartialEq, De, Ser)]
+#[derive(Debug, Eq, PartialEq, Serde)]
 pub enum SomeEnum {
     Variant1,
     Variant2(bool),
