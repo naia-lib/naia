@@ -5,6 +5,157 @@ use crate::{
     traits::{De, Ser},
 };
 
+// Unit //
+
+impl Ser for () {
+    fn ser(&self, _: &mut BitWriter) {}
+}
+
+impl De for () {
+    fn de(_: &mut BitReader) -> Result<Self, DeErr> {
+        Ok(())
+    }
+}
+
+// tests
+
+#[cfg(test)]
+mod unit_tests {
+    use crate::{BitReader, BitWriter};
+
+    #[test]
+    fn read_write() {
+        // Write
+        let mut writer = BitWriter::new();
+
+        let in_unit = ();
+
+        writer.write(&in_unit);
+
+        let (buffer_length, buffer) = writer.flush();
+
+        // Read
+        let mut reader = BitReader::new(buffer_length, buffer);
+
+        let out_unit = reader.read().unwrap();
+
+        assert_eq!(in_unit, out_unit);
+    }
+}
+
+// Boolean //
+
+impl Ser for bool {
+    fn ser(&self, writer: &mut BitWriter) {
+        writer.write_bit(*self);
+    }
+}
+
+impl De for bool {
+    fn de(reader: &mut BitReader) -> Result<Self, DeErr> {
+        Ok(reader.read_bit())
+    }
+}
+
+// tests
+
+#[cfg(test)]
+mod bool_tests {
+    use crate::{BitReader, BitWriter};
+
+    #[test]
+    fn read_write() {
+        // Write
+        let mut writer = BitWriter::new();
+
+        let in_true_bool = true;
+        let in_false_bool = false;
+
+        writer.write(&in_true_bool);
+        writer.write(&in_false_bool);
+
+        let (buffer_length, buffer) = writer.flush();
+
+        // Read
+
+        let mut reader = BitReader::new(buffer_length, buffer);
+
+        let out_true_bool = reader.read().unwrap();
+        let out_false_bool = reader.read().unwrap();
+
+        assert_eq!(in_true_bool, out_true_bool);
+        assert_eq!(in_false_bool, out_false_bool);
+    }
+}
+
+// Characters //
+
+impl Ser for char {
+    fn ser(&self, writer: &mut BitWriter) {
+        let u32char = *self as u32;
+        let bytes = unsafe { std::mem::transmute::<&u32, &[u8; 4]>(&u32char) };
+        for byte in bytes {
+            writer.write_byte(*byte);
+        }
+    }
+}
+
+impl De for char {
+    fn de(reader: &mut BitReader) -> Result<Self, DeErr> {
+        let mut bytes = [0_u8; 4];
+        for index in 0..4 {
+            bytes[index] = reader.read_byte();
+        }
+        let mut container = [0 as u32];
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                bytes.as_ptr().offset(0 as isize) as *const u32,
+                container.as_mut_ptr() as *mut u32,
+                1,
+            )
+        }
+
+        return if let Some(inner_char) = char::from_u32(container[0]) {
+            Ok(inner_char)
+        } else {
+            Err(DeErr {})
+        }
+    }
+}
+
+// tests
+
+#[cfg(test)]
+mod char_tests {
+    use crate::{BitReader, BitWriter};
+
+    #[test]
+    fn read_write() {
+        // Write
+        let mut writer = BitWriter::new();
+
+        let in_oh_char = 'O';
+        let in_bang_char = '!';
+
+        writer.write(&in_oh_char);
+        writer.write(&in_bang_char);
+
+        let (buffer_length, buffer) = writer.flush();
+
+        // Read
+
+        let mut reader = BitReader::new(buffer_length, buffer);
+
+        let out_oh_char = reader.read().unwrap();
+        let out_bang_char = reader.read().unwrap();
+
+        assert_eq!(in_oh_char, out_oh_char);
+        assert_eq!(in_bang_char, out_bang_char);
+    }
+}
+
+// Integers & Floating-point Numbers //
+
 macro_rules! impl_ser_de_for {
     ($impl_type:ident) => {
         impl Ser for $impl_type {
@@ -145,7 +296,7 @@ impl De for isize {
     }
 }
 
-// Tests
+// tests
 
 macro_rules! test_ser_de_for {
     ($impl_type:ident, $test_name:ident) => {
@@ -172,7 +323,7 @@ macro_rules! test_ser_de_for {
     };
 }
 
-mod tests {
+mod number_tests {
     test_ser_de_for!(u8, test_u8);
     test_ser_de_for!(u16, test_u16);
     test_ser_de_for!(u32, test_u32);

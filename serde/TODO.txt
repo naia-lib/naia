@@ -4,8 +4,10 @@ Implement De/Ser traits on:
 - String
 - HashMap / HashSet
 - Vec / VecDeque
-- Structs with De/Ser fields
-- Enums with De/Ser fields
+- Structs
+- Tuple Structs
+- Unit Structs
+- Enums
 - Bounded integers with specific ranges using const generics (define min & max w/ i64s)
 
 Completed:
