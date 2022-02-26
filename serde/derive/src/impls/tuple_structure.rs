@@ -1,8 +1,6 @@
 use crate::parse::Struct;
 
-use proc_macro::TokenStream;
-
-pub fn derive_serde_tuple_struct(struct_: &Struct) -> TokenStream {
+pub fn derive_serde_tuple_struct(struct_: &Struct) -> String {
     let mut ser_body = String::new();
 
     for (n, _) in struct_.fields.iter().enumerate() {
@@ -28,6 +26,4 @@ pub fn derive_serde_tuple_struct(struct_: &Struct) -> TokenStream {
         }}",
         struct_.name, ser_body, de_body,
     )
-        .parse()
-        .unwrap()
 }

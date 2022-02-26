@@ -1,7 +1,5 @@
 use crate::parse::Enum;
 
-use proc_macro::TokenStream;
-
 fn bits_needed_for(max_value: usize) -> u8 {
     let mut bits = 1;
     while (2 as usize).pow(bits) <= max_value {
@@ -13,7 +11,7 @@ fn bits_needed_for(max_value: usize) -> u8 {
     return bits as u8;
 }
 
-pub fn derive_serde_enum(enum_: &Enum) -> TokenStream {
+pub fn derive_serde_enum(enum_: &Enum) -> String {
 
     let variant_number = enum_.variants.len();
     let bits_needed = bits_needed_for(variant_number);
@@ -105,23 +103,19 @@ pub fn derive_serde_enum(enum_: &Enum) -> TokenStream {
 
     format!(
         "
-        mod {name}_serde {{
-            use naia_serde::{{UnsignedInteger, Serde, BitWriter, BitReader}};
-            use super::{name};
-            impl Serde for {name} {{
-                fn ser(&self, writer: &mut BitWriter) {{
-                    match self {{
-                      {ser_variants}
-                    }}
+        impl Serde for {name} {{
+            fn ser(&self, writer: &mut BitWriter) {{
+                match self {{
+                  {ser_variants}
                 }}
-                fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::SerdeErr> {{
-                    let index: UnsignedInteger<{bits_needed}> = reader.read().unwrap();
-                    let index_u16: u16 = index.get() as u16;
-                    Ok(match index_u16 {{
-                        {de_variants}
-                        _ => return std::result::Result::Err(naia_serde::SerdeErr{{}})
-                    }})
-                }}
+            }}
+            fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::SerdeErr> {{
+                let index: UnsignedInteger<{bits_needed}> = reader.read().unwrap();
+                let index_u16: u16 = index.get() as u16;
+                Ok(match index_u16 {{
+                    {de_variants}
+                    _ => return std::result::Result::Err(naia_serde::SerdeErr{{}})
+                }})
             }}
         }}
         "

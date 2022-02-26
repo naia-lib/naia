@@ -211,7 +211,7 @@ mod single_byte_tests {
 
     #[test]
     fn bytes() {
-        let mut mask = DiffMask::new(1);
+        let mask = DiffMask::new(1);
         assert!(mask.byte_number() == 1);
     }
 
@@ -265,7 +265,7 @@ mod single_byte_tests {
         mask_a.set_bit(1, true);
         mask_a.set_bit(4, true);
 
-        let mut mask_b = mask_a.clone();
+        let mask_b = mask_a.clone();
 
         assert!(mask_b.bit(1).unwrap() == true);
         assert!(mask_b.bit(3).unwrap() == false);
@@ -326,7 +326,7 @@ mod double_byte_tests {
 
     #[test]
     fn bytes() {
-        let mut mask = DiffMask::new(2);
+        let mask = DiffMask::new(2);
         assert!(mask.byte_number() == 2);
     }
 
@@ -388,7 +388,7 @@ mod double_byte_tests {
         mask_a.set_bit(2, true);
         mask_a.set_bit(10, true);
 
-        let mut mask_b = mask_a.clone();
+        let mask_b = mask_a.clone();
 
         assert!(mask_b.bit(2).unwrap() == true);
         assert!(mask_b.bit(4).unwrap() == false);
