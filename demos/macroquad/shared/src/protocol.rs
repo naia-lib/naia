@@ -1,4 +1,4 @@
-use naia_derive::Protocolize;
+use naia_shared::Protocolize;
 
 mod auth;
 mod entity_assignment;

@@ -12,7 +12,6 @@ publish = false
 [dependencies]
 bevy_ecs = { version="=0.6.0", default-features=false}
 naia-shared = { path = "../../../shared" }
-naia-derive = { path = "../../../derive" }
 cfg-if = "=1.0.0"
 log = "0.4"
 nanoserde = "0.1.17"

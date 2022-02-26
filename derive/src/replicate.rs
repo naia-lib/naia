@@ -50,7 +50,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, PacketReader, Replicate, ReplicateSafe, PropertyMutator, Protocolize, ReplicaDynRef, ReplicaDynMut};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, PacketReader, ReplicateSafe, PropertyMutator, Protocolize, ReplicaDynRef, ReplicaDynMut};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
 
         #property_enum_definition

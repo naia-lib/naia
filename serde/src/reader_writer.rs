@@ -23,7 +23,7 @@ impl BitWriter {
         target.ser(self);
     }
 
-    pub fn write_bit(&mut self, bit: bool) {
+    pub(crate) fn write_bit(&mut self, bit: bool) {
         self.scratch = self.scratch << 1;
 
         if bit {
@@ -41,7 +41,7 @@ impl BitWriter {
         }
     }
 
-    pub fn write_byte(&mut self, byte: u8) {
+    pub(crate) fn write_byte(&mut self, byte: u8) {
         let mut temp = byte;
         for _ in 0..8 {
             self.write_bit(temp & 1 != 0);
@@ -94,7 +94,7 @@ impl BitReader {
         T::de(self)
     }
 
-    pub fn read_bit(&mut self) -> bool {
+    pub(crate) fn read_bit(&mut self) -> bool {
         if self.scratch_index <= 0 {
             if self.buffer_index == self.buffer_length {
                 panic!("no more bytes to read");
@@ -115,7 +115,7 @@ impl BitReader {
         value != 0
     }
 
-    pub fn read_byte(&mut self) -> u8 {
+    pub(crate) fn read_byte(&mut self) -> u8 {
         let mut output = 0;
         for _ in 0..7 {
             if self.read_bit() {
