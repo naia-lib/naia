@@ -147,7 +147,7 @@ mod char_tests {
 
 // Integers & Floating-point Numbers //
 
-macro_rules! impl_ser_de_for {
+macro_rules! impl_serde_for {
     ($impl_type:ident) => {
         impl Serde for $impl_type {
             fn ser(&self, writer: &mut BitWriter) {
@@ -181,14 +181,14 @@ macro_rules! impl_ser_de_for {
 }
 
 // number primitives
-impl_ser_de_for!(u16);
-impl_ser_de_for!(u32);
-impl_ser_de_for!(u64);
-impl_ser_de_for!(i16);
-impl_ser_de_for!(i32);
-impl_ser_de_for!(i64);
-impl_ser_de_for!(f32);
-impl_ser_de_for!(f64);
+impl_serde_for!(u16);
+impl_serde_for!(u32);
+impl_serde_for!(u64);
+impl_serde_for!(i16);
+impl_serde_for!(i32);
+impl_serde_for!(i64);
+impl_serde_for!(f32);
+impl_serde_for!(f64);
 
 // u8
 impl Serde for u8 {
@@ -274,7 +274,7 @@ impl Serde for isize {
 
 // tests
 
-macro_rules! test_ser_de_for {
+macro_rules! test_serde_for {
     ($impl_type:ident, $test_name:ident) => {
         #[test]
         fn $test_name() {
@@ -300,16 +300,16 @@ macro_rules! test_ser_de_for {
 }
 
 mod number_tests {
-    test_ser_de_for!(u8, test_u8);
-    test_ser_de_for!(u16, test_u16);
-    test_ser_de_for!(u32, test_u32);
-    test_ser_de_for!(u64, test_u64);
-    test_ser_de_for!(usize, test_usize);
-    test_ser_de_for!(i8, test_i8);
-    test_ser_de_for!(i16, test_i16);
-    test_ser_de_for!(i32, test_i32);
-    test_ser_de_for!(i64, test_i64);
-    test_ser_de_for!(isize, test_isize);
-    test_ser_de_for!(f32, test_f32);
-    test_ser_de_for!(f64, test_f64);
+    test_serde_for!(u8, test_u8);
+    test_serde_for!(u16, test_u16);
+    test_serde_for!(u32, test_u32);
+    test_serde_for!(u64, test_u64);
+    test_serde_for!(usize, test_usize);
+    test_serde_for!(i8, test_i8);
+    test_serde_for!(i16, test_i16);
+    test_serde_for!(i32, test_i32);
+    test_serde_for!(i64, test_i64);
+    test_serde_for!(isize, test_isize);
+    test_serde_for!(f32, test_f32);
+    test_serde_for!(f64, test_f64);
 }

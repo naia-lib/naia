@@ -13,11 +13,11 @@ impl<K: Serde + Eq + Hash> Serde for HashSet<K>
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let length_int: UnsignedVariableInteger<5> = reader.read().unwrap();
+        let length_int: UnsignedVariableInteger<5> = reader.read()?;
         let length_usize = length_int.get() as usize;
         let mut output: HashSet<K> = HashSet::new();
         for _ in 0..length_usize {
-            let value = reader.read().unwrap();
+            let value = reader.read()?;
             output.insert(value);
         }
         Ok(output)
@@ -36,12 +36,12 @@ impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V>
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let length_int: UnsignedVariableInteger<5> = reader.read().unwrap();
+        let length_int: UnsignedVariableInteger<5> = reader.read()?;
         let length_usize = length_int.get() as usize;
         let mut output: HashMap<K, V> = HashMap::new();
         for _ in 0..length_usize {
-            let key = reader.read().unwrap();
-            let value = reader.read().unwrap();
+            let key = reader.read()?;
+            let value = reader.read()?;
             output.insert(key, value);
         }
         Ok(output)
