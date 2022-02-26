@@ -7,7 +7,10 @@
 extern crate cfg_if;
 
 pub use naia_derive::*;
-pub use naia_serde::{derive_serde, BitReader, BitWriter, Serde, UnsignedInteger};
+pub use naia_serde::{
+    derive_serde, BitReader, BitWriter, Serde, SignedInteger, SignedVariableInteger,
+    UnsignedInteger, UnsignedVariableInteger,
+};
 
 mod ack_manager;
 mod bandwidth_monitor;

@@ -227,7 +227,7 @@ fn next_fields(
 
         fields.push(Field {
             vis: Visibility::Public,
-            field_name: field_name,
+            field_name,
             ty,
         });
     }

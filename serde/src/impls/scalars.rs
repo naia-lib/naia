@@ -1,6 +1,6 @@
 use crate::{
-    reader_writer::{BitReader, BitWriter},
     error::SerdeErr,
+    reader_writer::{BitReader, BitWriter},
     serde::Serde,
 };
 
@@ -8,6 +8,7 @@ use crate::{
 
 impl Serde for () {
     fn ser(&self, _: &mut BitWriter) {}
+
     fn de(_: &mut BitReader) -> Result<Self, SerdeErr> {
         Ok(())
     }
@@ -45,6 +46,7 @@ impl Serde for bool {
     fn ser(&self, writer: &mut BitWriter) {
         writer.write_bit(*self);
     }
+
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         Ok(reader.read_bit())
     }
@@ -110,7 +112,7 @@ impl Serde for char {
             Ok(inner_char)
         } else {
             Err(SerdeErr {})
-        }
+        };
     }
 }
 
@@ -160,6 +162,7 @@ macro_rules! impl_serde_for {
                     writer.write_byte(*byte);
                 }
             }
+
             fn de(reader: &mut BitReader) -> Result<$impl_type, SerdeErr> {
                 const BYTES_LENGTH: usize = std::mem::size_of::<$impl_type>();
                 let mut byte_array = [0_u8; BYTES_LENGTH];
@@ -195,6 +198,7 @@ impl Serde for u8 {
     fn ser(&self, writer: &mut BitWriter) {
         writer.write_byte(*self);
     }
+
     fn de(reader: &mut BitReader) -> Result<u8, SerdeErr> {
         Ok(reader.read_byte())
     }
@@ -206,6 +210,7 @@ impl Serde for i8 {
         let du8 = unsafe { std::mem::transmute::<&i8, &u8>(&self) };
         writer.write_byte(*du8);
     }
+
     fn de(reader: &mut BitReader) -> Result<i8, SerdeErr> {
         let byte = [reader.read_byte()];
         let mut container = [0 as i8];
@@ -229,6 +234,7 @@ impl Serde for usize {
             writer.write_byte(*byte);
         }
     }
+
     fn de(reader: &mut BitReader) -> Result<usize, SerdeErr> {
         let mut byte_array = [0_u8; 8];
         for index in 0..8 {
@@ -255,6 +261,7 @@ impl Serde for isize {
             writer.write_byte(*byte);
         }
     }
+
     fn de(reader: &mut BitReader) -> Result<isize, SerdeErr> {
         let mut byte_array = [0_u8; 8];
         for index in 0..8 {

@@ -1,4 +1,3 @@
-
 mod some_enum {
     use naia_shared::derive_serde;
     #[derive(Debug)]
@@ -7,8 +6,12 @@ mod some_enum {
         Variant1,
         Variant2(bool),
         Variant3(u16, String),
-        Variant4 { some_bool: bool, some_number: i8, some_string: String },
-        Variant5
+        Variant4 {
+            some_bool: bool,
+            some_number: i8,
+            some_string: String,
+        },
+        Variant5,
     }
 }
 

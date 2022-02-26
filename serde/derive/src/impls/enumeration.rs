@@ -12,14 +12,12 @@ fn bits_needed_for(max_value: usize) -> u8 {
 }
 
 pub fn derive_serde_enum(enum_: &Enum) -> String {
-
     let variant_number = enum_.variants.len();
     let bits_needed = bits_needed_for(variant_number);
 
     let mut ser_variants = String::new();
 
     for (index, variant) in enum_.variants.iter().enumerate() {
-
         let variant_name = &variant.name;
 
         // Unit Variant
@@ -27,7 +25,12 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
             l!(ser_variants, "Self::{} => {{", variant_name);
 
             // INDEX
-            l!(ser_variants, "let index = UnsignedInteger::<{}>::new({});", bits_needed, index);
+            l!(
+                ser_variants,
+                "let index = UnsignedInteger::<{}>::new({});",
+                bits_needed,
+                index
+            );
             l!(ser_variants, "writer.write(&index);");
 
             l!(ser_variants, "},");
@@ -41,11 +44,20 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
             l!(ser_variants, "} => {");
 
             // INDEX
-            l!(ser_variants, "let index = UnsignedInteger::<{}>::new({});", bits_needed, index);
+            l!(
+                ser_variants,
+                "let index = UnsignedInteger::<{}>::new({});",
+                bits_needed,
+                index
+            );
             l!(ser_variants, "writer.write(&index);");
 
             for field in &variant.fields {
-                l!(ser_variants, "writer.write({});", field.field_name.as_ref().unwrap());
+                l!(
+                    ser_variants,
+                    "writer.write({});",
+                    field.field_name.as_ref().unwrap()
+                );
             }
             l!(ser_variants, "}");
         }
@@ -58,7 +70,12 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
             l!(ser_variants, ") => {");
 
             // INDEX
-            l!(ser_variants, "let index = UnsignedInteger::<{}>::new({});", bits_needed, index);
+            l!(
+                ser_variants,
+                "let index = UnsignedInteger::<{}>::new({});",
+                bits_needed,
+                index
+            );
             l!(ser_variants, "writer.write(&index);");
 
             for (n, _) in variant.fields.iter().enumerate() {
@@ -79,7 +96,12 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
         }
         // Struct Variant
         else if variant.tuple == false {
-            l!(de_variants, "{} => Self::{} {{", variant_index, variant.name);
+            l!(
+                de_variants,
+                "{} => Self::{} {{",
+                variant_index,
+                variant.name
+            );
             for field in &variant.fields {
                 l!(
                     de_variants,
@@ -120,6 +142,6 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
         }}
         "
     )
-        .parse()
-        .unwrap()
+    .parse()
+    .unwrap()
 }

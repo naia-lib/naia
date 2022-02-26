@@ -1,4 +1,8 @@
-use crate::{reader_writer::{BitReader, BitWriter}, error::SerdeErr, serde::Serde};
+use crate::{
+    error::SerdeErr,
+    reader_writer::{BitReader, BitWriter},
+    serde::Serde,
+};
 
 impl<T: Serde, const N: usize> Serde for [T; N] {
     fn ser(&self, writer: &mut BitWriter) {
@@ -8,7 +12,7 @@ impl<T: Serde, const N: usize> Serde for [T; N] {
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        unsafe{
+        unsafe {
             let mut to = std::mem::MaybeUninit::<[T; N]>::uninit();
             let top: *mut T = std::mem::transmute(&mut to);
             for c in 0..N {

@@ -1,9 +1,15 @@
-use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
-use crate::{reader_writer::{BitReader, BitWriter}, error::SerdeErr, serde::Serde, UnsignedVariableInteger};
+use crate::{
+    error::SerdeErr,
+    reader_writer::{BitReader, BitWriter},
+    serde::Serde,
+    UnsignedVariableInteger,
+};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
-impl<K: Serde + Eq + Hash> Serde for HashSet<K>
-{
+impl<K: Serde + Eq + Hash> Serde for HashSet<K> {
     fn ser(&self, writer: &mut BitWriter) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
         writer.write(&length);
@@ -24,8 +30,7 @@ impl<K: Serde + Eq + Hash> Serde for HashSet<K>
     }
 }
 
-impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V>
-{
+impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
     fn ser(&self, writer: &mut BitWriter) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
         writer.write(&length);
@@ -52,8 +57,8 @@ impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V>
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
     use crate::{BitReader, BitWriter};
+    use std::collections::{HashMap, HashSet};
 
     #[test]
     fn read_write_hash_map() {

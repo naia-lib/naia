@@ -1,6 +1,6 @@
 use crate::{
-    reader_writer::{BitReader, BitWriter},
     error::SerdeErr,
+    reader_writer::{BitReader, BitWriter},
     serde::Serde,
 };
 macro_rules! impl_reflect_tuple {
@@ -68,5 +68,3 @@ mod tests {
         assert_eq!(in_4, out_4);
     }
 }
-
-

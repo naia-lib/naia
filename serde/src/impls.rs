@@ -1,8 +1,8 @@
-mod scalars;
-mod option;
-mod boxed;
-mod string;
 mod array;
-mod vector;
+mod boxed;
 mod hash;
+mod option;
+mod scalars;
+mod string;
 mod tuple;
+mod vector;

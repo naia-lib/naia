@@ -1,24 +1,23 @@
-use crate::{BitReader, BitWriter};
-use crate::error::SerdeErr;
-use crate::serde::Serde;
+use crate::{error::SerdeErr, serde::Serde, BitReader, BitWriter};
 
 pub type UnsignedInteger<const BITS: u8> = SerdeInteger<false, false, BITS>;
 pub type SignedInteger<const BITS: u8> = SerdeInteger<true, false, BITS>;
 pub type UnsignedVariableInteger<const BITS: u8> = SerdeInteger<false, true, BITS>;
-pub type SignedVariableInteger<const BITS: u8>  = SerdeInteger<true, true, BITS>;
+pub type SignedVariableInteger<const BITS: u8> = SerdeInteger<true, true, BITS>;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct SerdeInteger<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> {
-    inner: i128
+    inner: i128,
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> SerdeInteger<SIGNED, VARIABLE, BITS> {
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8>
+    SerdeInteger<SIGNED, VARIABLE, BITS>
+{
     pub fn get(&self) -> i128 {
         self.inner
     }
 
     pub fn new<T: Into<i128>>(value: T) -> Self {
-
         let inner = Into::<i128>::into(value);
 
         if inner < 0 && !SIGNED {
@@ -35,31 +34,34 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> SerdeInteger<SIGN
         if !VARIABLE {
             let max_value: i128 = 2_i128.pow(BITS as u32);
             if inner >= max_value {
-                panic!("with {} bits, can't encode number greater than {}", BITS, max_value);
+                panic!(
+                    "with {} bits, can't encode number greater than {}",
+                    BITS, max_value
+                );
             }
             if inner < 0 && SIGNED {
                 let min_value: i128 = (2_i128.pow(BITS as u32)) * -1;
                 if inner <= min_value {
-                    panic!("with {} bits, can't encode number less than {}", BITS, min_value);
+                    panic!(
+                        "with {} bits, can't encode number less than {}",
+                        BITS, min_value
+                    );
                 }
             }
         }
 
-        Self {
-            inner,
-        }
+        Self { inner }
     }
 
     fn new_unchecked(value: i128) -> Self {
-        Self {
-            inner: value,
-        }
+        Self { inner: value }
     }
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde for SerdeInteger<SIGNED, VARIABLE, BITS> {
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
+    for SerdeInteger<SIGNED, VARIABLE, BITS>
+{
     fn ser(&self, writer: &mut BitWriter) {
-
         let mut value: u128;
         let negative = self.inner < 0;
 
@@ -71,7 +73,6 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde for SerdeIn
             } else {
                 value = self.inner as u128;
             }
-
         } else {
             value = self.inner as u128;
         }
@@ -104,14 +105,12 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde for SerdeIn
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-
         let mut negative: bool = false;
         if SIGNED {
             negative = reader.read_bit();
         }
 
         if VARIABLE {
-
             let mut total_bits: usize = 0;
             let mut output: u128 = 0;
 
@@ -129,7 +128,6 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde for SerdeIn
                 }
 
                 if !proceed {
-
                     output = output << (128 - total_bits);
                     output = output.reverse_bits();
 
@@ -142,11 +140,9 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde for SerdeIn
                 }
             }
         } else {
-
             let mut output: u128 = 0;
 
             for _ in 0..BITS {
-
                 output = output << 1;
 
                 if reader.read_bit() {
@@ -171,7 +167,10 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde for SerdeIn
 
 #[cfg(test)]
 mod tests {
-    use crate::{BitReader, BitWriter, SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger};
+    use crate::{
+        BitReader, BitWriter, SignedInteger, SignedVariableInteger, UnsignedInteger,
+        UnsignedVariableInteger,
+    };
 
     #[test]
     fn in_and_out() {

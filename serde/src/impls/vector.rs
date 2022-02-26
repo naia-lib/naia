@@ -1,8 +1,12 @@
+use crate::{
+    error::SerdeErr,
+    reader_writer::{BitReader, BitWriter},
+    serde::Serde,
+    UnsignedVariableInteger,
+};
 use std::collections::VecDeque;
-use crate::{reader_writer::{BitReader, BitWriter}, error::SerdeErr, serde::Serde, UnsignedVariableInteger};
 
-impl<T: Serde> Serde for Vec<T>
-{
+impl<T: Serde> Serde for Vec<T> {
     fn ser(&self, writer: &mut BitWriter) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
         writer.write(&length);
@@ -22,8 +26,7 @@ impl<T: Serde> Serde for Vec<T>
     }
 }
 
-impl<T: Serde> Serde for VecDeque<T>
-{
+impl<T: Serde> Serde for VecDeque<T> {
     fn ser(&self, writer: &mut BitWriter) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
         writer.write(&length);
@@ -47,16 +50,16 @@ impl<T: Serde> Serde for VecDeque<T>
 
 #[cfg(test)]
 mod tests {
-    use std::collections::VecDeque;
     use crate::{BitReader, BitWriter};
+    use std::collections::VecDeque;
 
     #[test]
     fn read_write_vec() {
         // Write
         let mut writer = BitWriter::new();
 
-        let in_1 = vec!(5, 3, 2, 7);
-        let in_2 = vec!(false, false, true, false, true, true, false, true);
+        let in_1 = vec![5, 3, 2, 7];
+        let in_2 = vec![false, false, true, false, true, true, false, true];
 
         writer.write(&in_1);
         writer.write(&in_2);
