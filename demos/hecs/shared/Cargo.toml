@@ -11,7 +11,6 @@ publish = false
 
 [dependencies]
 naia-shared = { path = "../../../shared" }
-naia-derive = { path = "../../../derive" }
 cfg-if = "=1.0.0"
 log = "0.4"
 nanoserde = "0.1.29"

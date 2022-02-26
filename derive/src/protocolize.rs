@@ -24,7 +24,7 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}, sync::RwLock, collections::HashMap};
-        use naia_shared::{Protocolize, ProtocolInserter, ProtocolKindType, ReplicateSafe,
+        use naia_shared::{ProtocolInserter, ProtocolKindType, ReplicateSafe,
             DiffMask, PacketReader, ReplicaDynRef, ReplicaDynMut, Replicate, Manifest};
 
         #kind_enum_def

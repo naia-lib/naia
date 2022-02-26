@@ -6,6 +6,8 @@
 #[macro_use]
 extern crate cfg_if;
 
+pub use naia_derive::*;
+
 mod ack_manager;
 mod bandwidth_monitor;
 mod base_connection;

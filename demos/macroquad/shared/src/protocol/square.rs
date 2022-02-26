@@ -1,7 +1,6 @@
 use nanoserde::{DeBin, SerBin};
 
-use naia_derive::Replicate;
-use naia_shared::Property;
+use naia_shared::{Property, Replicate};
 
 #[derive(Clone, PartialEq, DeBin, SerBin)]
 pub enum Color {

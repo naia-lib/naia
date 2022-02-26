@@ -1,4 +1,4 @@
-use naia_derive::Protocolize;
+use naia_shared::Protocolize;
 
 use crate::text::Text;
 
