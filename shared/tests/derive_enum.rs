@@ -1,14 +1,19 @@
 
-use naia_serde::{BitReader, BitWriter, Serde};
-
-#[derive(Debug, Eq, PartialEq, Serde)]
-pub enum SomeEnum {
-    Variant1,
-    Variant2(bool),
-    Variant3(u16, String),
-    Variant4 { some_bool: bool, some_number: i8, some_string: String },
-    Variant5
+mod some_enum {
+    use naia_shared::derive_serde;
+    #[derive(Debug)]
+    #[derive_serde]
+    pub enum SomeEnum {
+        Variant1,
+        Variant2(bool),
+        Variant3(u16, String),
+        Variant4 { some_bool: bool, some_number: i8, some_string: String },
+        Variant5
+    }
 }
+
+use naia_shared::{BitReader, BitWriter};
+use some_enum::SomeEnum;
 
 #[test]
 fn read_write_enum() {

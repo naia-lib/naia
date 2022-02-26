@@ -146,7 +146,7 @@ mod wrapping_diff_tests {
 
     #[test]
     fn medium_max_wrap_backwards() {
-        let diff: u16 = (std::u16::MAX / 2);
+        let diff: u16 = std::u16::MAX / 2;
         let a: u16 = std::u16::MAX;
         let b: u16 = a.wrapping_add(diff);
 

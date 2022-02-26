@@ -1,8 +1,14 @@
 
-use naia_serde::{BitReader, BitWriter, Serde};
+mod some_struct {
+    use naia_shared::derive_serde;
 
-#[derive(Debug, Eq, PartialEq, Serde)]
-pub struct SomeStruct(String, i16, bool);
+    #[derive(Debug)]
+    #[derive_serde]
+    pub struct SomeStruct(pub String, pub i16, pub bool);
+}
+
+use naia_shared::{BitReader, BitWriter};
+use some_struct::SomeStruct;
 
 #[test]
 fn read_write_tuple_struct() {
