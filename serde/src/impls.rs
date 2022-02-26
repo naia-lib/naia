@@ -5,3 +5,4 @@ mod string;
 mod array;
 mod vector;
 mod hash;
+mod tuple;

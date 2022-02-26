@@ -9,7 +9,7 @@ impl<T: Serde> Serde for Option<T>
     fn ser(&self, writer: &mut BitWriter) {
         if let Some(value) = self {
             writer.write_bit(true);
-            value.ser(writer);
+            writer.write(value);
         } else {
             writer.write_bit(false);
         }
@@ -17,7 +17,7 @@ impl<T: Serde> Serde for Option<T>
 
     fn de(reader: &mut BitReader) -> Result<Option<T>, SerdeErr> {
         if reader.read_bit() {
-            Ok(Some(Serde::de(reader)?))
+            Ok(Some(reader.read()?))
         } else {
             Ok(None)
         }
