@@ -1,4 +1,7 @@
-use super::{reader_writer::{BitReader, BitWriter}, error::SerdeErr};
+use super::{
+    error::SerdeErr,
+    reader_writer::{BitReader, BitWriter},
+};
 
 /// A trait for objects that can be serialized to a bitstream.
 pub trait Serde: Sized {

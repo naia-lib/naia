@@ -1,4 +1,3 @@
-
 mod some_struct {
     use naia_shared::derive_serde;
 

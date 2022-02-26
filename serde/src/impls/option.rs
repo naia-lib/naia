@@ -1,11 +1,10 @@
 use crate::{
-    reader_writer::{BitReader, BitWriter},
     error::SerdeErr,
+    reader_writer::{BitReader, BitWriter},
     serde::Serde,
 };
 
-impl<T: Serde> Serde for Option<T>
-{
+impl<T: Serde> Serde for Option<T> {
     fn ser(&self, writer: &mut BitWriter) {
         if let Some(value) = self {
             writer.write_bit(true);

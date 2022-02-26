@@ -1,4 +1,5 @@
-/// The error message when failing to serialize/deserialize to/from the bit stream.
+/// The error message when failing to serialize/deserialize to/from the bit
+/// stream.
 #[derive(Clone)]
 pub struct SerdeErr {}
 

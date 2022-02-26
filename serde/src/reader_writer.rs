@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn read_write_1_bit() {
-        use crate::{reader_writer::{BitReader, BitWriter}};
+        use crate::reader_writer::{BitReader, BitWriter};
 
         let mut writer = BitWriter::new();
 
@@ -149,7 +149,7 @@ mod tests {
 
     #[test]
     fn read_write_3_bits() {
-        use crate::{reader_writer::{BitReader, BitWriter}};
+        use crate::reader_writer::{BitReader, BitWriter};
 
         let mut writer = BitWriter::new();
 
@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn read_write_8_bits() {
-        use crate::{reader_writer::{BitReader, BitWriter}};
+        use crate::reader_writer::{BitReader, BitWriter};
 
         let mut writer = BitWriter::new();
 
@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn read_write_13_bits() {
-        use crate::{reader_writer::{BitReader, BitWriter}};
+        use crate::reader_writer::{BitReader, BitWriter};
 
         let mut writer = BitWriter::new();
 
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn read_write_16_bits() {
-        use crate::{reader_writer::{BitReader, BitWriter}};
+        use crate::reader_writer::{BitReader, BitWriter};
 
         let mut writer = BitWriter::new();
 
@@ -295,7 +295,7 @@ mod tests {
 
     #[test]
     fn read_write_1_byte() {
-        use crate::{reader_writer::{BitReader, BitWriter}};
+        use crate::reader_writer::{BitReader, BitWriter};
 
         let mut writer = BitWriter::new();
 
@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn read_write_5_bytes() {
-        use crate::{reader_writer::{BitReader, BitWriter}};
+        use crate::reader_writer::{BitReader, BitWriter};
 
         let mut writer = BitWriter::new();
 

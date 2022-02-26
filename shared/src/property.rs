@@ -1,5 +1,5 @@
-use std::ops::{Deref, DerefMut};
 use nanoserde::{DeBin, SerBin};
+use std::ops::{Deref, DerefMut};
 
 use naia_socket_shared::PacketReader;
 

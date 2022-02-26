@@ -2,13 +2,16 @@ extern crate proc_macro;
 
 #[macro_use]
 mod shared;
-mod parse;
 mod impls;
+mod parse;
 
 use impls::*;
 
 #[proc_macro_attribute]
-pub fn derive_serde(_: proc_macro::TokenStream, input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn derive_serde(
+    _: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let define_string = input.to_string();
 
     let input = parse::parse_data(input);
@@ -29,8 +32,8 @@ pub fn derive_serde(_: proc_macro::TokenStream, input: proc_macro::TokenStream) 
         {impl_string}
         "
     )
-        .parse()
-        .unwrap();
+    .parse()
+    .unwrap();
 
     output
 }
