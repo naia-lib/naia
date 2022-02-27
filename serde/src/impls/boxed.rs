@@ -1,11 +1,11 @@
 use crate::{
     error::SerdeErr,
-    reader_writer::{BitReader, BitWriter},
+    reader_writer::{BitReader, BitWrite},
     serde::Serde,
 };
 
 impl<T: Serde> Serde for Box<T> {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         (**self).ser(writer)
     }
 
@@ -18,7 +18,7 @@ impl<T: Serde> Serde for Box<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{BitReader, BitWriter};
+    use crate::reader_writer::{BitWrite, BitReader, BitWriter};
 
     #[test]
     fn read_write() {

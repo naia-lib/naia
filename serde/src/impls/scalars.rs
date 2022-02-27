@@ -1,13 +1,13 @@
 use crate::{
     error::SerdeErr,
-    reader_writer::{BitReader, BitWriter},
+    reader_writer::{BitReader, BitWrite},
     serde::Serde,
 };
 
 // Unit //
 
 impl Serde for () {
-    fn ser(&self, _: &mut BitWriter) {}
+    fn ser<S: BitWrite>(&self, _: &mut S) {}
 
     fn de(_: &mut BitReader) -> Result<Self, SerdeErr> {
         Ok(())
@@ -18,7 +18,7 @@ impl Serde for () {
 
 #[cfg(test)]
 mod unit_tests {
-    use crate::{BitReader, BitWriter};
+    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
     #[test]
     fn read_write() {
@@ -43,7 +43,7 @@ mod unit_tests {
 // Boolean //
 
 impl Serde for bool {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         writer.write_bit(*self);
     }
 
@@ -56,7 +56,7 @@ impl Serde for bool {
 
 #[cfg(test)]
 mod bool_tests {
-    use crate::{BitReader, BitWriter};
+    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
     #[test]
     fn read_write() {
@@ -86,7 +86,7 @@ mod bool_tests {
 // Characters //
 
 impl Serde for char {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         let u32char = *self as u32;
         let bytes = unsafe { std::mem::transmute::<&u32, &[u8; 4]>(&u32char) };
         for byte in bytes {
@@ -120,7 +120,7 @@ impl Serde for char {
 
 #[cfg(test)]
 mod char_tests {
-    use crate::{BitReader, BitWriter};
+    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
     #[test]
     fn read_write() {
@@ -152,7 +152,7 @@ mod char_tests {
 macro_rules! impl_serde_for {
     ($impl_type:ident) => {
         impl Serde for $impl_type {
-            fn ser(&self, writer: &mut BitWriter) {
+            fn ser<S: BitWrite>(&self, writer: &mut S) {
                 let du8 = unsafe {
                     std::mem::transmute::<&$impl_type, &[u8; std::mem::size_of::<$impl_type>()]>(
                         &self,
@@ -195,7 +195,7 @@ impl_serde_for!(f64);
 
 // u8
 impl Serde for u8 {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         writer.write_byte(*self);
     }
 
@@ -206,7 +206,7 @@ impl Serde for u8 {
 
 // i8
 impl Serde for i8 {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         let du8 = unsafe { std::mem::transmute::<&i8, &u8>(&self) };
         writer.write_byte(*du8);
     }
@@ -227,7 +227,7 @@ impl Serde for i8 {
 
 // usize
 impl Serde for usize {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         let u64usize = *self as u64;
         let du8 = unsafe { std::mem::transmute::<&u64, &[u8; 8]>(&u64usize) };
         for byte in du8 {
@@ -254,7 +254,7 @@ impl Serde for usize {
 
 // isize
 impl Serde for isize {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         let u64usize = *self as u64;
         let du8 = unsafe { std::mem::transmute::<&u64, &[u8; 8]>(&u64usize) };
         for byte in du8 {
@@ -285,7 +285,7 @@ macro_rules! test_serde_for {
     ($impl_type:ident, $test_name:ident) => {
         #[test]
         fn $test_name() {
-            use crate::{BitReader, BitWriter};
+            use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
             // Write
             let mut writer = BitWriter::new();

@@ -1,6 +1,6 @@
 use crate::{
     error::SerdeErr,
-    reader_writer::{BitReader, BitWriter},
+    reader_writer::{BitReader, BitWrite},
     serde::Serde,
     UnsignedVariableInteger,
 };
@@ -10,7 +10,7 @@ use std::{
 };
 
 impl<K: Serde + Eq + Hash> Serde for HashSet<K> {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
         writer.write(&length);
         for value in self {
@@ -31,7 +31,7 @@ impl<K: Serde + Eq + Hash> Serde for HashSet<K> {
 }
 
 impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
         writer.write(&length);
         for (key, value) in self {
@@ -57,7 +57,7 @@ impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{BitReader, BitWriter};
+    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
     use std::collections::{HashMap, HashSet};
 
     #[test]

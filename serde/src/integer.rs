@@ -1,4 +1,4 @@
-use crate::{error::SerdeErr, serde::Serde, BitReader, BitWriter};
+use crate::{error::SerdeErr, serde::Serde, reader_writer::{BitReader, BitWrite}};
 
 pub type UnsignedInteger<const BITS: u8> = SerdeInteger<false, false, BITS>;
 pub type SignedInteger<const BITS: u8> = SerdeInteger<true, false, BITS>;
@@ -61,7 +61,7 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8>
 impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
     for SerdeInteger<SIGNED, VARIABLE, BITS>
 {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         let mut value: u128;
         let negative = self.inner < 0;
 
@@ -168,8 +168,9 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
 #[cfg(test)]
 mod tests {
     use crate::{
-        BitReader, BitWriter, SignedInteger, SignedVariableInteger, UnsignedInteger,
-        UnsignedVariableInteger,
+        reader_writer::{BitReader, BitWriter, BitWrite},
+        integer::{SignedInteger, SignedVariableInteger, UnsignedInteger,
+        UnsignedVariableInteger}
     };
 
     #[test]

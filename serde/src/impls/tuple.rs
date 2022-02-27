@@ -1,12 +1,12 @@
 use crate::{
     error::SerdeErr,
-    reader_writer::{BitReader, BitWriter},
+    reader_writer::{BitReader, BitWrite},
     serde::Serde,
 };
 macro_rules! impl_reflect_tuple {
     {$($index:tt : $name:tt),*} => {
         impl<$($name : Serde,)*> Serde for ($($name,)*) {
-            fn ser(&self, writer: &mut BitWriter) {
+            fn ser<S: BitWrite>(&self, writer: &mut S) {
                 $(writer.write(&self.$index);)*
             }
             fn de(reader: &mut BitReader) -> Result<($($name,)*), SerdeErr> {
@@ -33,7 +33,7 @@ impl_reflect_tuple! {0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J,
 
 #[cfg(test)]
 mod tests {
-    use crate::{BitReader, BitWriter};
+    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
     #[test]
     fn read_write() {

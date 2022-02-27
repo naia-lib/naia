@@ -1,13 +1,13 @@
 use super::{
     error::SerdeErr,
-    reader_writer::{BitReader, BitWriter},
+    reader_writer::{BitReader, BitWrite},
 };
 
 /// A trait for objects that can be serialized to a bitstream.
 pub trait Serde: Sized {
     /// Serialize Self to a BitWriter
-    fn ser(&self, bit_writer: &mut BitWriter);
+    fn ser<S: BitWrite>(&self, writer: &mut S);
 
     /// Parse Self from a BitReader
-    fn de(bit_reader: &mut BitReader) -> Result<Self, SerdeErr>;
+    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr>;
 }
