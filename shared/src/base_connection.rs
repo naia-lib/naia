@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use naia_socket_shared::Timer;
+use naia_serde::BitWrite;
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, message_manager::MessageManager,
@@ -80,15 +81,13 @@ impl<P: Protocolize> BaseConnection<P> {
     /// Given a packet payload, start tracking the packet via it's index, attach
     /// the appropriate header, and return the packet's resulting underlying
     /// bytes
-    pub fn process_outgoing_header(
+    pub fn process_outgoing_header<S: BitWrite>(
         &mut self,
         host_tick: u16,
         packet_type: PacketType,
-        payload: &[u8],
-    ) -> Box<[u8]> {
+        writer: &mut S,
+    ) {
         // Add header onto message!
-        let mut header_bytes = Vec::new();
-
         let local_packet_index = self.ack_manager.local_packet_index();
         let last_remote_packet_index = self.ack_manager.last_remote_packet_index();
         let bit_field = self.ack_manager.ack_bitfield();
@@ -100,7 +99,6 @@ impl<P: Protocolize> BaseConnection<P> {
             bit_field,
             host_tick,
         );
-        header.write(&mut header_bytes);
 
         // Ack stuff //
         self.ack_manager
@@ -108,9 +106,8 @@ impl<P: Protocolize> BaseConnection<P> {
         self.ack_manager.increment_local_packet_index();
         ///////////////
 
-        [header_bytes.as_slice(), &payload]
-            .concat()
-            .into_boxed_slice()
+        //Outback
+        //header.ser(writer);
     }
 
     /// Get the next outgoing packet's index

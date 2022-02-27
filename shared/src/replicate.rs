@@ -1,4 +1,5 @@
 use naia_socket_shared::PacketReader;
+use naia_serde::{BitReader, BitWrite};
 
 use crate::{
     diff_mask::DiffMask,
@@ -41,13 +42,7 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     fn set_mutator(&mut self, mutator: &PropertyMutator);
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
-    fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader);
-    /// Writes data into an outgoing byte stream, sufficient to completely
-    /// recreate the Message/Component on the client
-    fn write(&self, out_bytes: &mut Vec<u8>);
-    /// Write data into an outgoing byte stream, sufficient only to update the
-    /// mutated Properties of the Message/Component on the client
-    fn write_partial(&self, diff_mask: &DiffMask, out_bytes: &mut Vec<u8>);
+    fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut BitReader);
 }
 
 cfg_if! {

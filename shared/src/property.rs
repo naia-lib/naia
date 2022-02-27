@@ -1,7 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use naia_socket_shared::PacketReader;
-use naia_serde::{BitReader, Serde, SerdeErr};
+use naia_serde::{BitReader, Serde, BitWrite};
 
 use crate::property_mutate::PropertyMutator;
 
@@ -12,16 +11,6 @@ pub struct Property<T: Serde> {
     inner: T,
     mutator: Option<PropertyMutator>,
     mutator_index: u8,
-}
-
-impl<T: Serde> Serde for Property<T> {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
-        self.inner.ser(writer);
-    }
-
-    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        todo!()
-    }
 }
 
 // should be shared
@@ -44,10 +33,8 @@ impl<T: Serde> Property<T> {
     // Serialization / deserialization
 
     /// Writes contained value into outgoing byte stream
-    pub fn write(&self, buffer: &mut Vec<u8>) {
-        let encoded = &mut SerBin::serialize_bin(&self.inner);
-        buffer.push(encoded.len() as u8);
-        buffer.append(encoded);
+    fn write<S: BitWrite>(&self, writer: &mut S) {
+        self.inner.ser(writer);
     }
 
     /// Returns the number of bytes used to encode / decode the Property
@@ -57,7 +44,7 @@ impl<T: Serde> Property<T> {
 
     /// Given a cursor into incoming packet data, initializes the Property with
     /// the synced value
-    pub fn new_read(reader: &mut PacketReader, mutator_index: u8) -> Self {
+    pub fn new_read(reader: &mut BitReader, mutator_index: u8) -> Self {
         let inner = Self::read_inner(reader);
 
         return Property::<T> {
@@ -69,25 +56,12 @@ impl<T: Serde> Property<T> {
 
     /// Given a cursor into incoming packet data, updates the Property with the
     /// synced value
-    pub fn read(&mut self, reader: &mut PacketReader) {
+    pub fn read(&mut self, reader: &mut BitReader) {
         self.inner = Self::read_inner(reader);
     }
 
-    fn read_inner(reader: &mut PacketReader) -> T {
-        let length = reader.read_u8();
-
-        let buffer = reader.buffer();
-        let cursor = reader.cursor();
-
-        let start: usize = cursor.position() as usize;
-        let end: usize = start + (length as usize);
-
-        let inner =
-            DeBin::deserialize_bin(&buffer[start..end]).expect("error deserializing property");
-
-        cursor.set_position(end as u64);
-
-        return inner;
+    fn read_inner(reader: &mut BitReader) -> T {
+        return T::de(reader).expect("Property read error.");
     }
 
     // Comparison

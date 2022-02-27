@@ -1,8 +1,10 @@
 use std::io::Read;
 
+use naia_serde::derive_serde;
+
 use crate::packet_type::PacketType;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 /// This header provides reliability information.
 pub struct StandardHeader {
     p_type: PacketType,
@@ -68,41 +70,5 @@ impl StandardHeader {
     /// Returns the current tick of the sending Host
     pub fn host_tick(&self) -> u16 {
         self.host_tick
-    }
-
-    /// Writes the header to an outgoing byte buffer
-    pub fn write(&self, buffer: &mut Vec<u8>) {
-        buffer.write_u8(self.p_type as u8).unwrap();
-        buffer
-            .write_u16::<BigEndian>(self.local_packet_index)
-            .unwrap();
-        buffer
-            .write_u16::<BigEndian>(self.last_remote_packet_index)
-            .unwrap();
-        buffer.write_u32::<BigEndian>(self.ack_field).unwrap();
-        buffer.write_u16::<BigEndian>(self.host_tick).unwrap();
-    }
-
-    /// Reads the header from an incoming byte slice
-    pub fn read(mut msg: &[u8]) -> (Self, Box<[u8]>) {
-        let p_type: PacketType = msg.read_u8().unwrap().into();
-        let seq = msg.read_u16::<BigEndian>().unwrap();
-        let ack_seq = msg.read_u16::<BigEndian>().unwrap();
-        let ack_field = msg.read_u32::<BigEndian>().unwrap();
-        let host_tick = msg.read_u16::<BigEndian>().unwrap();
-
-        let mut buffer = Vec::new();
-        msg.read_to_end(&mut buffer).unwrap();
-
-        (
-            StandardHeader {
-                p_type,
-                local_packet_index: seq,
-                last_remote_packet_index: ack_seq,
-                ack_field,
-                host_tick,
-            },
-            buffer.into_boxed_slice(),
-        )
     }
 }

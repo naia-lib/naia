@@ -1,5 +1,6 @@
 mod some_enum {
     use naia_shared::derive_serde;
+
     #[derive(Debug)]
     #[derive_serde]
     pub enum SomeEnum {
@@ -15,8 +16,21 @@ mod some_enum {
     }
 }
 
-use naia_shared::{BitReader, BitWriter};
+mod some_enum_2 {
+    use naia_shared::derive_serde;
+
+    #[derive(Debug)]
+    #[derive_serde]
+    pub enum SomeEnum2 {
+        Variant1,
+        Variant2,
+        Variant3,
+    }
+}
+
+use naia_shared::{BitReader, BitWriter, Serde};
 use some_enum::SomeEnum;
+use some_enum_2::SomeEnum2;
 
 #[test]
 fn read_write_enum() {
@@ -43,13 +57,41 @@ fn read_write_enum() {
 
     let mut reader = BitReader::new(buffer_length, buffer);
 
-    let out_1 = reader.read().unwrap();
-    let out_2 = reader.read().unwrap();
-    let out_3 = reader.read().unwrap();
-    let out_4 = reader.read().unwrap();
+    let out_1 = Serde::de(&mut reader).unwrap();
+    let out_2 = Serde::de(&mut reader).unwrap();
+    let out_3 = Serde::de(&mut reader).unwrap();
+    let out_4 = Serde::de(&mut reader).unwrap();
 
     assert_eq!(in_1, out_1);
     assert_eq!(in_2, out_2);
     assert_eq!(in_3, out_3);
     assert_eq!(in_4, out_4);
+}
+
+#[test]
+fn read_write_enum_2() {
+    // Write
+    let mut writer = BitWriter::new();
+
+    let in_1 = SomeEnum2::Variant2;
+    let in_2 = SomeEnum2::Variant1;
+    let in_3 = SomeEnum2::Variant3;
+
+    in_1.ser(&mut writer);
+    in_2.ser(&mut writer);
+    in_3.ser(&mut writer);
+
+    let (buffer_length, buffer) = writer.flush();
+
+    // Read
+
+    let mut reader = BitReader::new(buffer_length, buffer);
+
+    let out_1 = Serde::de(&mut reader).unwrap();
+    let out_2 = Serde::de(&mut reader).unwrap();
+    let out_3 = Serde::de(&mut reader).unwrap();
+
+    assert_eq!(in_1, out_1);
+    assert_eq!(in_2, out_2);
+    assert_eq!(in_3, out_3);
 }

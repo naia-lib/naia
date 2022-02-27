@@ -6,7 +6,7 @@ mod some_struct {
     pub struct SomeStruct(pub String, pub i16, pub bool);
 }
 
-use naia_shared::{BitReader, BitWriter};
+use naia_shared::{Serde, BitReader, BitWriter};
 use some_struct::SomeStruct;
 
 #[test]
@@ -26,8 +26,8 @@ fn read_write_tuple_struct() {
 
     let mut reader = BitReader::new(buffer_length, buffer);
 
-    let out_1 = reader.read().unwrap();
-    let out_2 = reader.read().unwrap();
+    let out_1 = Serde::de(&mut reader).unwrap();
+    let out_2 = Serde::de(&mut reader).unwrap();
 
     assert_eq!(in_1, out_1);
     assert_eq!(in_2, out_2);

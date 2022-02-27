@@ -7,7 +7,7 @@ pub fn derive_serde_struct(struct_: &Struct) -> String {
     for field in &struct_.fields {
         l!(
             ser_body,
-            "writer.write(&self.{});",
+            "self.{}.ser(writer);",
             field.field_name.as_ref().unwrap()
         );
     }
@@ -15,14 +15,14 @@ pub fn derive_serde_struct(struct_: &Struct) -> String {
     for field in &struct_.fields {
         l!(
             de_body,
-            "{}: reader.read()?,",
+            "{}: Serde::de(reader)?,",
             field.field_name.as_ref().unwrap()
         );
     }
 
     format!(
         "impl Serde for {} {{
-            fn ser(&self, writer: &mut BitWriter) {{
+            fn ser<S: BitWrite>(&self, writer: &mut S) {{
                 {}
             }}
             fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::SerdeErr> {{
