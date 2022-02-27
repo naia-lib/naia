@@ -16,7 +16,7 @@ impl Serde for String {
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let length_int: UnsignedInteger<9> = reader.read().unwrap();
+        let length_int = UnsignedInteger::<9>::de(reader)?;
         let length_usize = length_int.get() as usize;
         let mut bytes: Vec<u8> = Vec::with_capacity(length_usize);
         for _ in 0..length_usize {
@@ -51,8 +51,8 @@ mod tests {
 
         let mut reader = BitReader::new(buffer_length, buffer);
 
-        let out_1: String = reader.read().unwrap();
-        let out_2: String = reader.read().unwrap();
+        let out_1: String = Serde::de(&mut reader).unwrap();
+        let out_2: String = Serde::de(&mut reader).unwrap();
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);

@@ -16,7 +16,7 @@ impl<T: Serde> Serde for Option<T> {
 
     fn de(reader: &mut BitReader) -> Result<Option<T>, SerdeErr> {
         if reader.read_bit() {
-            Ok(Some(reader.read()?))
+            Ok(Some(T::de(reader)?))
         } else {
             Ok(None)
         }
@@ -46,8 +46,8 @@ mod tests {
 
         let mut reader = BitReader::new(buffer_length, buffer);
 
-        let out_1 = reader.read().unwrap();
-        let out_2 = reader.read().unwrap();
+        let out_1 = Option::<u8>::de(&mut reader).unwrap();
+        let out_2 = Option::<f32>::de(&mut reader).unwrap();
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);
