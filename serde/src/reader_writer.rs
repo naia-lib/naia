@@ -1,6 +1,42 @@
 use crate::{consts::MAX_BUFFER_SIZE, error::SerdeErr, serde::Serde};
 
-// Writer
+// BitWrite
+
+pub trait BitWrite {
+    fn write<T: Serde>(&mut self, target: &T);
+    fn write_bit(&mut self, bit: bool);
+    fn write_byte(&mut self, byte: u8);
+}
+
+// BitCounter
+
+pub struct BitCounter {
+    count: u16,
+}
+
+impl BitCounter {
+    pub fn new() -> Self {
+        Self {
+            count: 0,
+        }
+    }
+}
+
+impl BitWrite for BitCounter {
+    fn write<T: Serde>(&mut self, target: &T) {
+        target.ser(self);
+    }
+
+    fn write_bit(&mut self, _: bool) {
+        self.count += 1;
+    }
+
+    fn write_byte(&mut self, _: u8) {
+        self.count += 8;
+    }
+}
+
+// BitWriter
 
 pub struct BitWriter {
     scratch: u8,
@@ -16,36 +52,6 @@ impl BitWriter {
             scratch_index: 0,
             buffer: [0; MAX_BUFFER_SIZE],
             buffer_index: 0,
-        }
-    }
-
-    pub fn write<T: Serde>(&mut self, target: &T) {
-        target.ser(self);
-    }
-
-    pub(crate) fn write_bit(&mut self, bit: bool) {
-        self.scratch = self.scratch << 1;
-
-        if bit {
-            self.scratch |= 1;
-        }
-
-        self.scratch_index += 1;
-
-        if self.scratch_index >= 8 {
-            self.buffer[self.buffer_index] = self.scratch.reverse_bits();
-
-            self.buffer_index += 1;
-            self.scratch_index -= 8;
-            self.scratch = 0;
-        }
-    }
-
-    pub(crate) fn write_byte(&mut self, byte: u8) {
-        let mut temp = byte;
-        for _ in 0..8 {
-            self.write_bit(temp & 1 != 0);
-            temp = temp >> 1;
         }
     }
 
@@ -69,7 +75,39 @@ impl BitWriter {
     }
 }
 
-// Reader
+impl BitWrite for BitWriter {
+    fn write<T: Serde>(&mut self, target: &T) {
+        target.ser(self);
+    }
+
+    fn write_bit(&mut self, bit: bool) {
+        self.scratch = self.scratch << 1;
+
+        if bit {
+            self.scratch |= 1;
+        }
+
+        self.scratch_index += 1;
+
+        if self.scratch_index >= 8 {
+            self.buffer[self.buffer_index] = self.scratch.reverse_bits();
+
+            self.buffer_index += 1;
+            self.scratch_index -= 8;
+            self.scratch = 0;
+        }
+    }
+
+    fn write_byte(&mut self, byte: u8) {
+        let mut temp = byte;
+        for _ in 0..8 {
+            self.write_bit(temp & 1 != 0);
+            temp = temp >> 1;
+        }
+    }
+}
+
+// BitReader
 
 pub struct BitReader {
     scratch: u8,
@@ -134,7 +172,7 @@ mod tests {
 
     #[test]
     fn read_write_1_bit() {
-        use crate::reader_writer::{BitReader, BitWriter};
+        use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
         let mut writer = BitWriter::new();
 
@@ -149,7 +187,7 @@ mod tests {
 
     #[test]
     fn read_write_3_bits() {
-        use crate::reader_writer::{BitReader, BitWriter};
+        use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
         let mut writer = BitWriter::new();
 
@@ -168,7 +206,7 @@ mod tests {
 
     #[test]
     fn read_write_8_bits() {
-        use crate::reader_writer::{BitReader, BitWriter};
+        use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
         let mut writer = BitWriter::new();
 
@@ -199,7 +237,7 @@ mod tests {
 
     #[test]
     fn read_write_13_bits() {
-        use crate::reader_writer::{BitReader, BitWriter};
+        use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
         let mut writer = BitWriter::new();
 
@@ -244,7 +282,7 @@ mod tests {
 
     #[test]
     fn read_write_16_bits() {
-        use crate::reader_writer::{BitReader, BitWriter};
+        use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
         let mut writer = BitWriter::new();
 
@@ -295,7 +333,7 @@ mod tests {
 
     #[test]
     fn read_write_1_byte() {
-        use crate::reader_writer::{BitReader, BitWriter};
+        use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
         let mut writer = BitWriter::new();
 
@@ -310,7 +348,7 @@ mod tests {
 
     #[test]
     fn read_write_5_bytes() {
-        use crate::reader_writer::{BitReader, BitWriter};
+        use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
         let mut writer = BitWriter::new();
 

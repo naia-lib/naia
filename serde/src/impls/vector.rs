@@ -1,13 +1,14 @@
+use std::collections::VecDeque;
+
 use crate::{
     error::SerdeErr,
-    reader_writer::{BitReader, BitWriter},
+    reader_writer::{BitReader, BitWrite},
     serde::Serde,
     UnsignedVariableInteger,
 };
-use std::collections::VecDeque;
 
 impl<T: Serde> Serde for Vec<T> {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
         writer.write(&length);
         for item in self {
@@ -27,7 +28,7 @@ impl<T: Serde> Serde for Vec<T> {
 }
 
 impl<T: Serde> Serde for VecDeque<T> {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
         writer.write(&length);
         for item in self {
@@ -50,7 +51,7 @@ impl<T: Serde> Serde for VecDeque<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{BitReader, BitWriter};
+    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
     use std::collections::VecDeque;
 
     #[test]

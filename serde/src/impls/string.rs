@@ -1,12 +1,12 @@
 use crate::{
     error::SerdeErr,
-    reader_writer::{BitReader, BitWriter},
+    reader_writer::{BitReader, BitWrite},
     serde::Serde,
     UnsignedInteger,
 };
 
 impl Serde for String {
-    fn ser(&self, writer: &mut BitWriter) {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
         let length = UnsignedInteger::<9>::new(self.len() as u64);
         writer.write(&length);
         let bytes = self.as_bytes();
@@ -32,7 +32,7 @@ impl Serde for String {
 
 #[cfg(test)]
 mod tests {
-    use crate::{BitReader, BitWriter};
+    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
 
     #[test]
     fn read_write() {
