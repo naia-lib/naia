@@ -125,19 +125,23 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
 
     format!(
         "
-        impl Serde for {name} {{
-            fn ser<S: BitWrite>(&self, writer: &mut S) {{
-                match self {{
-                  {ser_variants}
+        mod impl_serde_{name} {{
+            use super::serde::*;
+            use super::{name};
+            impl Serde for {name} {{
+                fn ser<S: BitWrite>(&self, writer: &mut S) {{
+                    match self {{
+                      {ser_variants}
+                    }}
                 }}
-            }}
-            fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::SerdeErr> {{
-                let index: UnsignedInteger<{bits_needed}> = Serde::de(reader)?;
-                let index_u16: u16 = index.get() as u16;
-                Ok(match index_u16 {{
-                    {de_variants}
-                    _ => return std::result::Result::Err(naia_serde::SerdeErr{{}})
-                }})
+                fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::SerdeErr> {{
+                    let index: UnsignedInteger<{bits_needed}> = Serde::de(reader)?;
+                    let index_u16: u16 = index.get() as u16;
+                    Ok(match index_u16 {{
+                        {de_variants}
+                        _ => return std::result::Result::Err(naia_serde::SerdeErr{{}})
+                    }})
+                }}
             }}
         }}
         "

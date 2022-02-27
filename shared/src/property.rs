@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use naia_serde::{BitReader, Serde, BitWrite};
+use naia_serde::{BitReader, BitWrite, Serde};
 
 use crate::property_mutate::PropertyMutator;
 
@@ -33,13 +33,8 @@ impl<T: Serde> Property<T> {
     // Serialization / deserialization
 
     /// Writes contained value into outgoing byte stream
-    fn write<S: BitWrite>(&self, writer: &mut S) {
+    pub fn write<S: BitWrite>(&self, writer: &mut S) {
         self.inner.ser(writer);
-    }
-
-    /// Returns the number of bytes used to encode / decode the Property
-    pub fn size() -> usize {
-        std::mem::size_of::<T>() + 1
     }
 
     /// Given a cursor into incoming packet data, initializes the Property with

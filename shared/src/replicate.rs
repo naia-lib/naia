@@ -1,5 +1,4 @@
-use naia_socket_shared::PacketReader;
-use naia_serde::{BitReader, BitWrite};
+use naia_serde::BitReader;
 
 use crate::{
     diff_mask::DiffMask,

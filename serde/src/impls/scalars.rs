@@ -18,7 +18,10 @@ impl Serde for () {
 
 #[cfg(test)]
 mod unit_tests {
-    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
+    use crate::{
+        reader_writer::{BitReader, BitWriter},
+        serde::Serde,
+    };
 
     #[test]
     fn read_write() {
@@ -56,7 +59,10 @@ impl Serde for bool {
 
 #[cfg(test)]
 mod bool_tests {
-    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
+    use crate::{
+        reader_writer::{BitReader, BitWriter},
+        serde::Serde,
+    };
 
     #[test]
     fn read_write() {
@@ -120,7 +126,10 @@ impl Serde for char {
 
 #[cfg(test)]
 mod char_tests {
-    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
+    use crate::{
+        reader_writer::{BitReader, BitWriter},
+        serde::Serde,
+    };
 
     #[test]
     fn read_write() {
@@ -285,7 +294,10 @@ macro_rules! test_serde_for {
     ($impl_type:ident, $test_name:ident) => {
         #[test]
         fn $test_name() {
-            use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
+            use crate::{
+                reader_writer::{BitReader, BitWriter},
+                serde::Serde,
+            };
 
             // Write
             let mut writer = BitWriter::new();

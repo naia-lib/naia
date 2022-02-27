@@ -1,12 +1,12 @@
 mod some_struct {
-    use naia_shared::derive_serde;
+    use naia_shared::{derive_serde, serde};
 
     #[derive(Debug)]
     #[derive_serde]
     pub struct SomeStruct;
 }
 
-use naia_shared::{BitReader, BitWriter, Serde};
+use naia_shared::serde::{BitReader, BitWriter, Serde};
 use some_struct::SomeStruct;
 
 #[test]

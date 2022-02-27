@@ -1,12 +1,13 @@
 use std::fmt;
 
-use naia_socket_shared::PacketReader;
+use crate::{derive_serde, serde};
 
-/// The DiffMask is a variable-length byte array, where each bit represents
-/// the current state of a Property owned by a Replica.
-/// The Property tracks whether it has been updated and needs to be synced
-/// with the remote Client
-#[derive(Debug, Clone)]
+// The DiffMask is a variable-length byte array, where each bit represents
+// the current state of a Property owned by a Replica.
+// The Property tracks whether it has been updated and needs to be synced
+// with the remote Client
+#[derive(Debug)]
+#[derive_serde]
 pub struct DiffMask {
     mask: Vec<u8>,
     bytes: u8,
@@ -97,25 +98,6 @@ impl DiffMask {
                 *my_byte |= other_byte;
             }
         }
-    }
-
-    /// Writes the DiffMask into an outgoing byte stream
-    pub fn write(&self, out_bytes: &mut Vec<u8>) {
-
-    }
-
-    /// Reads the DiffMask from an incoming packet
-    pub fn read(reader: &mut PacketReader) -> DiffMask {
-        let mut mask: Vec<u8> = Vec::new();
-        DiffMask { bytes: 0, mask }
-    }
-
-    /// Return the number of bytes required to encode the DiffMask
-    pub fn size(&self) -> usize {
-        let mut size: usize = 0;
-        size += 1;
-        size += self.bytes as usize;
-        size
     }
 
     /// Copies the DiffMask into another DiffMask
