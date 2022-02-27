@@ -1,5 +1,3 @@
-use nanoserde::{DeBin, SerBin};
-
 use naia_shared::{Property, Replicate};
 
 // Here's an example of a Custom Property

@@ -18,7 +18,7 @@ impl<T: Serde> Serde for Box<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::reader_writer::{BitWrite, BitReader, BitWriter};
+    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
 
     #[test]
     fn read_write() {
@@ -28,8 +28,8 @@ mod tests {
         let in_1 = Box::new(123);
         let in_2 = Box::new(true);
 
-        writer.write(&in_1);
-        writer.write(&in_2);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 

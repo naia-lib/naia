@@ -13,4 +13,3 @@ publish = false
 naia-shared = { path = "../../../shared" }
 cfg-if = "=1.0.0"
 log = "0.4"
-nanoserde = "0.1.29"

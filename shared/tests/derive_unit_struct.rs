@@ -16,7 +16,7 @@ fn read_write_unit_struct() {
 
     let in_1 = SomeStruct;
 
-    writer.write(&in_1);
+    in_1.ser(&mut writer);
 
     let (buffer_length, buffer) = writer.flush();
 

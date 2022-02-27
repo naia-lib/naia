@@ -1,5 +1,3 @@
-use nanoserde::{DeBin, SerBin};
-
 use naia_shared::{Property, Replicate};
 
 #[derive(Clone, PartialEq, DeBin, SerBin)]

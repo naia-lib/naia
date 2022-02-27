@@ -1,7 +1,5 @@
 use std::time::Duration;
 
-use byteorder::{BigEndian, WriteBytesExt};
-
 use naia_client_socket::Packet;
 
 pub use naia_shared::{

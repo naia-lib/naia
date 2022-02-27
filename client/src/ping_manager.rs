@@ -1,7 +1,5 @@
 use std::{collections::VecDeque, time::Duration};
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
 use naia_shared::{sequence_greater_than, Instant, PacketReader, Timer};
 
 use naia_client_socket::Packet;

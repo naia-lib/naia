@@ -7,7 +7,7 @@ use crate::{
 impl<T: Serde, const N: usize> Serde for [T; N] {
     fn ser<S: BitWrite>(&self, writer: &mut S) {
         for item in self {
-            writer.write(item);
+            item.ser(writer);
         }
     }
 
@@ -27,7 +27,7 @@ impl<T: Serde, const N: usize> Serde for [T; N] {
 
 #[cfg(test)]
 mod tests {
-    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
+    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
 
     #[test]
     fn read_write() {
@@ -37,8 +37,8 @@ mod tests {
         let in_1: [i32; 4] = [5, 11, 52, 8];
         let in_2: [bool; 3] = [true, false, true];
 
-        writer.write(&in_1);
-        writer.write(&in_2);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 

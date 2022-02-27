@@ -1,7 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
 
-use byteorder::{BigEndian, WriteBytesExt};
-
 use naia_shared::{
     ManagerType, NaiaKey, PacketWriteState, ProtocolKindType, Protocolize, WorldRefType, MTU_SIZE,
 };

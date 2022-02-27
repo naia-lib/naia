@@ -1,5 +1,4 @@
 use crate::{PacketWriteState, MTU_SIZE};
-use byteorder::{BigEndian, WriteBytesExt};
 
 use super::{
     manager_type::ManagerType,

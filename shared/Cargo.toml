@@ -25,9 +25,7 @@ bevy_support = [ "bevy" ]
 naia-socket-shared = { path = "../../naia-socket/shared" }
 naia-derive = { version = "=0.7.4", path = "../derive" }
 naia-serde = { version = "=0.1.0", path = "../serde" }
-byteorder = "1.3"
 log = "0.4"
-nanoserde = "0.1.29"
 cfg-if = "=1.0.0"
 bevy = { version = "0.6", default_features = false, optional = true }
 zstd = { git = "https://github.com/gyscos/zstd-rs", features = ["experimental"] }

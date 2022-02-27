@@ -6,7 +6,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use slotmap::DenseSlotMap;
 
 use naia_server_socket::{Packet, ServerAddrs, Socket};

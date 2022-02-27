@@ -12,9 +12,9 @@ use std::{
 impl<K: Serde + Eq + Hash> Serde for HashSet<K> {
     fn ser<S: BitWrite>(&self, writer: &mut S) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
-        writer.write(&length);
+        length.ser(writer);
         for value in self {
-            writer.write(value);
+            value.ser(writer);
         }
     }
 
@@ -33,10 +33,10 @@ impl<K: Serde + Eq + Hash> Serde for HashSet<K> {
 impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
     fn ser<S: BitWrite>(&self, writer: &mut S) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
-        writer.write(&length);
+        length.ser(writer);
         for (key, value) in self {
-            writer.write(key);
-            writer.write(value);
+            key.ser(writer);
+            value.ser(writer);
         }
     }
 
@@ -57,7 +57,7 @@ impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
 
 #[cfg(test)]
 mod tests {
-    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
+    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
     use std::collections::{HashMap, HashSet};
 
     #[test]
@@ -76,8 +76,8 @@ mod tests {
         in_2.insert(21, true);
         in_2.insert(67, false);
 
-        writer.write(&in_1);
-        writer.write(&in_2);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -108,8 +108,8 @@ mod tests {
         in_2.insert(21);
         in_2.insert(67);
 
-        writer.write(&in_1);
-        writer.write(&in_2);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 

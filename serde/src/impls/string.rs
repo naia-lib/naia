@@ -8,7 +8,7 @@ use crate::{
 impl Serde for String {
     fn ser<S: BitWrite>(&self, writer: &mut S) {
         let length = UnsignedInteger::<9>::new(self.len() as u64);
-        writer.write(&length);
+        length.ser(writer);
         let bytes = self.as_bytes();
         for byte in bytes {
             writer.write_byte(*byte);
@@ -32,7 +32,7 @@ impl Serde for String {
 
 #[cfg(test)]
 mod tests {
-    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
+    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
 
     #[test]
     fn read_write() {
@@ -42,8 +42,8 @@ mod tests {
         let in_1 = "Hello world!".to_string();
         let in_2 = "This is a string.".to_string();
 
-        writer.write(&in_1);
-        writer.write(&in_2);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 

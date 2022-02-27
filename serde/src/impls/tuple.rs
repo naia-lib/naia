@@ -7,7 +7,7 @@ macro_rules! impl_reflect_tuple {
     {$($index:tt : $name:tt),*} => {
         impl<$($name : Serde,)*> Serde for ($($name,)*) {
             fn ser<S: BitWrite>(&self, writer: &mut S) {
-                $(writer.write(&self.$index);)*
+                $(self.$index.ser(writer);)*
             }
             fn de(reader: &mut BitReader) -> Result<($($name,)*), SerdeErr> {
                 Ok(($(reader.read::<$name>()?, )*))
@@ -33,7 +33,7 @@ impl_reflect_tuple! {0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J,
 
 #[cfg(test)]
 mod tests {
-    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
+    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
 
     #[test]
     fn read_write() {
@@ -46,10 +46,10 @@ mod tests {
         let in_3 = (true, false, true, None, 4815, "Tuples tuples..".to_string());
         let in_4 = (332, "Goodbye tuple...".to_string());
 
-        writer.write(&in_1);
-        writer.write(&in_2);
-        writer.write(&in_3);
-        writer.write(&in_4);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
+        in_3.ser(&mut writer);
+        in_4.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
