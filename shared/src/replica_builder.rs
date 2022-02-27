@@ -1,11 +1,10 @@
-use naia_socket_shared::PacketReader;
-
+use naia_serde::BitReader;
 use super::protocolize::Protocolize;
 
 /// Handles the creation of new Replica (Message/Component) instances
 pub trait ReplicaBuilder<P: Protocolize>: Send + Sync + ReplicaBuilderClone<P> {
     /// Create a new Replica instance
-    fn build(&self, reader: &mut PacketReader) -> P;
+    fn build(&self, reader: &mut BitReader) -> P;
     /// Gets the ProtocolKind of the Replica the builder is able to build
     fn kind(&self) -> P::Kind;
 }

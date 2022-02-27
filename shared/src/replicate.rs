@@ -1,4 +1,4 @@
-use naia_serde::BitReader;
+use naia_serde::{BitReader, BitWrite};
 
 use crate::{
     diff_mask::DiffMask,
@@ -13,6 +13,12 @@ use crate::{
 pub trait Replicate<P: Protocolize>: ReplicateSafe<P> {
     /// Returns a clone of self
     fn clone(&self) -> Self;
+    /// Writes data into an outgoing byte stream, sufficient to completely
+    /// recreate the Message/Component on the client
+    fn write<S: BitWrite>(&self, writer: &mut S);
+    /// Write data into an outgoing byte stream, sufficient only to update the
+    /// mutated Properties of the Message/Component on the client
+    fn write_partial<S: BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S);
 }
 
 /// The part of Replicate which is object-safe

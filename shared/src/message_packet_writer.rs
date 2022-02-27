@@ -2,7 +2,7 @@ use naia_serde::{BitWrite, Serde};
 
 use super::{
     manager_type::ManagerType,
-    protocolize::{ProtocolKindType, Protocolize},
+    protocolize::Protocolize,
 };
 
 /// Handles writing of Message data into an outgoing packet
@@ -21,7 +21,7 @@ impl MessagePacketWriter {
     /// eventually be put into the outgoing packet
     pub fn write_message<P: Protocolize, S: BitWrite>(&mut self, writer: &mut S, message: &P) {
         // write message kind
-        message.dyn_ref().kind().to_u16().ser(writer);
+        message.dyn_ref().kind().ser(writer);
 
         // write payload
         message.write(writer);

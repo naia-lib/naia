@@ -1,5 +1,4 @@
-use naia_socket_shared::PacketReader;
-
+use naia_serde::BitReader;
 use super::{
     diff_mask::DiffMask,
     protocolize::{ProtocolInserter, Protocolize},
@@ -59,7 +58,7 @@ pub trait WorldMutType<P: Protocolize, E>: WorldRefType<P, E> + ProtocolInserter
         entity: &E,
         component_kind: &P::Kind,
         diff_mask: &DiffMask,
-        reader: &mut PacketReader,
+        reader: &mut BitReader,
     );
     /// mirrors the state of the same component of two different entities
     /// (setting 1st entity's component to 2nd entity's component's state)

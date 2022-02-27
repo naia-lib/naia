@@ -4,14 +4,13 @@ use std::{
 };
 
 use crate::PacketIndex;
-use naia_serde::BitWrite;
-use naia_socket_shared::PacketReader;
+use naia_serde::{BitReader, BitWrite, Serde};
 
 use super::{
     manifest::Manifest,
     message_packet_writer::MessagePacketWriter,
     packet_notifiable::PacketNotifiable,
-    protocolize::{ProtocolKindType, Protocolize},
+    protocolize::Protocolize,
     replicate::ReplicateSafe,
 };
 
@@ -83,10 +82,10 @@ impl<P: Protocolize> MessageManager<P> {
 
     /// Given incoming packet data, read transmitted Messages and store them to
     /// be returned to the application
-    pub fn process_message_data(&mut self, reader: &mut PacketReader, manifest: &Manifest<P>) {
-        let message_count = reader.read_u8();
+    pub fn process_message_data(&mut self, reader: &mut BitReader, manifest: &Manifest<P>) {
+        let message_count = u8::de(reader).unwrap();
         for _x in 0..message_count {
-            let component_kind: P::Kind = P::Kind::from_u16(reader.read_u16());
+            let component_kind: P::Kind = P::Kind::de(reader).unwrap();
 
             let new_message = manifest.create_replica(component_kind, reader);
             self.queued_incoming_messages.push_back(new_message);

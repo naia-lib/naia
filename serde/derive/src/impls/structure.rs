@@ -31,7 +31,7 @@ pub fn derive_serde_struct(struct_: &Struct) -> String {
                 fn ser<S: BitWrite>(&self, writer: &mut S) {{
                     {ser_body}
                 }}
-                fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::SerdeErr> {{
+                fn de(reader: &mut BitReader) -> std::result::Result<Self, SerdeErr> {{
                     std::result::Result::Ok(Self {{
                         {de_body}
                     }})
