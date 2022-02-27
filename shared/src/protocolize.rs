@@ -1,6 +1,6 @@
 use crate::DiffMask;
-use std::{any::TypeId, hash::Hash};
 use naia_serde::BitWrite;
+use std::{any::TypeId, hash::Hash};
 
 use super::{
     replica_ref::{ReplicaDynMut, ReplicaDynRef},

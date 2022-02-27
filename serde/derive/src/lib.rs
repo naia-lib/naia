@@ -29,7 +29,6 @@ pub fn derive_serde(
         #[derive(PartialEq, Clone)]
         {define_string}
         {impl_string}
-        use naia_shared::{{Serde, BitWrite, BitWriter, BitReader, UnsignedInteger}};
         "
     )
     .parse()

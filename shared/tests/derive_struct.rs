@@ -1,5 +1,5 @@
 mod some_struct {
-    use naia_shared::derive_serde;
+    use naia_shared::{derive_serde, serde};
 
     #[derive(Debug)]
     #[derive_serde]
@@ -10,7 +10,7 @@ mod some_struct {
     }
 }
 
-use naia_shared::{Serde, BitReader, BitWriter};
+use naia_shared::serde::{BitReader, BitWriter, Serde};
 use some_struct::SomeStruct;
 
 #[test]

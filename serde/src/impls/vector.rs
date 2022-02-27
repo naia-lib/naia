@@ -51,7 +51,10 @@ impl<T: Serde> Serde for VecDeque<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
+    use crate::{
+        reader_writer::{BitReader, BitWriter},
+        serde::Serde,
+    };
     use std::collections::VecDeque;
 
     #[test]

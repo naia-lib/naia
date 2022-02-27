@@ -33,7 +33,10 @@ impl_reflect_tuple! {0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J,
 
 #[cfg(test)]
 mod tests {
-    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
+    use crate::{
+        reader_writer::{BitReader, BitWriter},
+        serde::Serde,
+    };
 
     #[test]
     fn read_write() {
@@ -59,7 +62,8 @@ mod tests {
 
         let out_1 = Serde::de(&mut reader).unwrap();
         let out_2 = Serde::de(&mut reader).unwrap();
-        let out_3: (bool, bool, bool, Option<String>, u16, String) = Serde::de(&mut reader).unwrap();
+        let out_3: (bool, bool, bool, Option<String>, u16, String) =
+            Serde::de(&mut reader).unwrap();
         let out_4 = Serde::de(&mut reader).unwrap();
 
         assert_eq!(in_1, out_1);

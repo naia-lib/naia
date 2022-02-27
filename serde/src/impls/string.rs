@@ -32,7 +32,10 @@ impl Serde for String {
 
 #[cfg(test)]
 mod tests {
-    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
+    use crate::{
+        reader_writer::{BitReader, BitWriter},
+        serde::Serde,
+    };
 
     #[test]
     fn read_write() {

@@ -1,11 +1,10 @@
-use std::io::Read;
-
-use naia_serde::derive_serde;
+use crate::{derive_serde, serde};
 
 use crate::packet_type::PacketType;
 
-#[derive(Clone, Copy, Debug)]
-/// This header provides reliability information.
+// This header provides reliability information.
+#[derive(Copy, Debug)]
+#[derive_serde]
 pub struct StandardHeader {
     p_type: PacketType,
     // This is the sequence number so that we can know where in the sequence of packages this

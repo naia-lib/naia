@@ -13,17 +13,24 @@ pub fn derive_serde_tuple_struct(struct_: &Struct) -> String {
         l!(de_body, "{}: Serde::de(reader)?,", n);
     }
 
+    let name = &struct_.name;
+
     format!(
-        "impl Serde for {} {{
-            fn ser<S: BitWrite>(&self, writer: &mut S) {{
-                {}
+        "
+        mod impl_serde_{name} {{
+            use super::serde::*;
+            use super::{name};
+            impl Serde for {name} {{
+                fn ser<S: BitWrite>(&self, writer: &mut S) {{
+                    {ser_body}
+                }}
+                fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::SerdeErr> {{
+                    std::result::Result::Ok(Self {{
+                        {de_body}
+                    }})
+                }}
             }}
-            fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::SerdeErr> {{
-                std::result::Result::Ok(Self {{
-                    {}
-                }})
-            }}
-        }}",
-        struct_.name, ser_body, de_body,
+        }}
+        "
     )
 }

@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
+use naia_serde::{BitWrite, Serde};
 use naia_socket_shared::Timer;
-use naia_serde::BitWrite;
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, message_manager::MessageManager,
@@ -92,22 +92,20 @@ impl<P: Protocolize> BaseConnection<P> {
         let last_remote_packet_index = self.ack_manager.last_remote_packet_index();
         let bit_field = self.ack_manager.ack_bitfield();
 
-        let header = StandardHeader::new(
+        StandardHeader::new(
             packet_type,
             local_packet_index,
             last_remote_packet_index,
             bit_field,
             host_tick,
-        );
+        )
+        .ser(writer);
 
         // Ack stuff //
         self.ack_manager
             .track_packet(packet_type, local_packet_index);
         self.ack_manager.increment_local_packet_index();
         ///////////////
-
-        //Outback
-        //header.ser(writer);
     }
 
     /// Get the next outgoing packet's index

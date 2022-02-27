@@ -1,5 +1,6 @@
 mod some_enum {
-    use naia_shared::derive_serde;
+    use naia_serde as serde;
+    use serde::derive_serde;
 
     #[derive(Debug)]
     #[derive_serde]
@@ -17,7 +18,7 @@ mod some_enum {
 }
 
 mod some_enum_2 {
-    use naia_shared::derive_serde;
+    use naia_shared::{derive_serde, serde};
 
     #[derive(Debug)]
     #[derive_serde]
@@ -28,7 +29,7 @@ mod some_enum_2 {
     }
 }
 
-use naia_shared::{BitReader, BitWriter, Serde};
+use naia_shared::serde::{BitReader, BitWriter, Serde};
 use some_enum::SomeEnum;
 use some_enum_2::SomeEnum2;
 

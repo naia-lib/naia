@@ -3,9 +3,9 @@ use std::{
     vec::Vec,
 };
 
-use crate::{PacketIndex, PacketWriteState};
-use naia_socket_shared::PacketReader;
+use crate::PacketIndex;
 use naia_serde::BitWrite;
+use naia_socket_shared::PacketReader;
 
 use super::{
     manifest::Manifest,
@@ -111,13 +111,12 @@ impl<P: Protocolize> MessageManager<P> {
             // }
 
             let popped_message = self.pop_outgoing_message(packet_index).unwrap();
-            self.message_writer
-                .queue_write(writer, &popped_message);
+            self.message_writer.write_message(writer, &popped_message);
         }
     }
 
     pub fn flush_writes<S: BitWrite>(&mut self, writer: &mut S) {
-        self.message_writer.flush_writes(writer);
+        self.message_writer.write_header(writer);
     }
 }
 
