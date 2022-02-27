@@ -1,5 +1,5 @@
 use crate::DiffMask;
-use naia_serde::BitWrite;
+use naia_serde::{BitWrite, Serde};
 use std::{any::TypeId, hash::Hash};
 
 use super::{
@@ -9,7 +9,7 @@ use super::{
 
 /// An Enum with a variant for every Component/Message that can be sent
 /// between Client/Host
-pub trait Protocolize: Sized + Sync + Send + 'static + Clone {
+pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
     type Kind: ProtocolKindType;
 
     /// Get kind of Replicate type
@@ -39,12 +39,8 @@ pub trait Protocolize: Sized + Sync + Send + 'static + Clone {
     fn write_partial<S: BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S);
 }
 
-pub trait ProtocolKindType: Eq + Hash + Copy + Send + Sync {
-    fn to_u16(&self) -> u16;
-    fn from_u16(val: u16) -> Self;
+pub trait ProtocolKindType: Eq + Hash + Copy + Send + Sync + Serde {
     fn to_type_id(&self) -> TypeId;
-    fn size(&self) -> usize;
-    fn size_partial(&self, diff_mask: &DiffMask) -> usize;
 }
 
 pub trait ProtocolInserter<P: Protocolize, N> {

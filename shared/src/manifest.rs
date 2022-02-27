@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-
-use naia_socket_shared::PacketReader;
+use naia_serde::BitReader;
 
 use super::{
-    protocolize::{ProtocolKindType, Protocolize},
+    protocolize::Protocolize,
     replica_builder::ReplicaBuilder,
 };
 
@@ -33,15 +32,11 @@ impl<P: Protocolize> Manifest<P> {
 
     /// Creates a Message/Component instance, given a NaiaId and a
     /// payload, typically from an incoming packet
-    pub fn create_replica(&self, component_kind: P::Kind, reader: &mut PacketReader) -> P {
-        if let Some(replica_builder) = self.builder_map.get(&component_kind) {
-            return replica_builder.as_ref().build(reader);
-        }
-
-        // TODO: this shouldn't panic .. could crash the server
-        panic!(
-            "No ReplicaBuilder registered for NaiaId: {}",
-            component_kind.to_u16()
-        );
+    pub fn create_replica(&self, component_kind: P::Kind, reader: &mut BitReader) -> P {
+        let replica_builder =
+            self.builder_map
+            .get(&component_kind)
+            .expect("No ReplicaBuilder registered for given NaiaId!");
+        return replica_builder.as_ref().build(reader);
     }
 }

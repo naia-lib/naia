@@ -45,12 +45,11 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let read_partial_method = read_partial_method(&enum_name, &properties);
     let write_method = write_method(&properties);
     let write_partial_method = write_partial_method(&enum_name, &properties);
-    let size_method = size_method(&properties);
-    let size_partial_method = size_partial_method(&enum_name, &properties);
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, PacketReader, ReplicateSafe, PropertyMutator, Protocolize, ReplicaDynRef, ReplicaDynMut};
+        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateSafe, PropertyMutator,
+            Protocolize, ReplicaDynRef, ReplicaDynMut, serde::{BitReader, BitWrite}};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
 
         #property_enum_definition
@@ -63,7 +62,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             fn kind(&self) -> #protocol_kind_name {
                 return self.kind;
             }
-            fn build(&self, reader: &mut PacketReader) -> #protocol_name {
+            fn build(&self, reader: &mut BitReader) -> #protocol_name {
                 return #replica_name::read_to_type(reader);
             }
         }
@@ -75,8 +74,6 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             }
             #new_complete_method
             #read_to_type_method
-            #size_method
-            #size_partial_method
         }
         impl ReplicateSafe<#protocol_name> for #replica_name {
             fn diff_mask_size(&self) -> u8 { #diff_mask_size }
@@ -90,11 +87,13 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #mirror_method
             #set_mutator_method
             #read_partial_method
-            #write_method
-            #write_partial_method
+            //#write_method
+            //#write_partial_method
         }
         impl Replicate<#protocol_name> for #replica_name {
             #clone_method
+            #write_method
+            #write_partial_method
         }
     };
 
@@ -373,7 +372,7 @@ pub fn read_to_type_method(
     }
 
     return quote! {
-        fn read_to_type(reader: &mut PacketReader) -> #protocol_name {
+        fn read_to_type(reader: &mut BitReader) -> #protocol_name {
             #prop_reads
 
             return #protocol_name::#replica_name(#replica_name {
@@ -405,7 +404,7 @@ fn read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> To
     }
 
     return quote! {
-        fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut PacketReader) {
+        fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut BitReader) {
             #output
         }
     };
@@ -416,7 +415,7 @@ fn write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
 
     for (field_name, _) in properties.iter() {
         let new_output_right = quote! {
-            Property::write(&self.#field_name, buffer);
+            Property::write(&self.#field_name, writer);
         };
         let new_output_result = quote! {
             #output
@@ -426,7 +425,7 @@ fn write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     }
 
     return quote! {
-        fn write(&self, buffer: &mut Vec<u8>) {
+        fn write<S: BitWrite>(&self, writer: &mut S) {
             #output
         }
     };
@@ -443,7 +442,7 @@ fn write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> T
 
         let new_output_right = quote! {
             if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
-                Property::write(&self.#field_name, buffer);
+                Property::write(&self.#field_name, writer);
             }
         };
         let new_output_result = quote! {
@@ -454,62 +453,61 @@ fn write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> T
     }
 
     return quote! {
-        fn write_partial(&self, diff_mask: &DiffMask, buffer: &mut Vec<u8>) {
-
+        fn write_partial<S: BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S) {
             #output
         }
     };
 }
 
-fn size_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
-    let mut output = quote! {};
-
-    for (_, field_type) in properties.iter() {
-        let new_output_right = quote! {
-            size += Property::<#field_type>::size();
-        };
-        let new_output_result = quote! {
-            #output
-            #new_output_right
-        };
-        output = new_output_result;
-    }
-
-    return quote! {
-        pub fn size() -> usize {
-            let mut size = 0;
-            #output
-            size
-        }
-    };
-}
-
-fn size_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
-    let mut output = quote! {};
-
-    for (field_name, field_type) in properties.iter() {
-        let uppercase_variant_name = Ident::new(
-            field_name.to_string().to_uppercase().as_str(),
-            Span::call_site(),
-        );
-
-        let new_output_right = quote! {
-            if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
-                size += Property::<#field_type>::size();
-            }
-        };
-        let new_output_result = quote! {
-            #output
-            #new_output_right
-        };
-        output = new_output_result;
-    }
-
-    return quote! {
-        pub fn size_partial(diff_mask: &DiffMask) -> usize {
-            let mut size = 0;
-            #output
-            size
-        }
-    };
-}
+// fn size_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
+//     let mut output = quote! {};
+//
+//     for (_, field_type) in properties.iter() {
+//         let new_output_right = quote! {
+//             size += Property::<#field_type>::size();
+//         };
+//         let new_output_result = quote! {
+//             #output
+//             #new_output_right
+//         };
+//         output = new_output_result;
+//     }
+//
+//     return quote! {
+//         pub fn size() -> usize {
+//             let mut size = 0;
+//             #output
+//             size
+//         }
+//     };
+// }
+//
+// fn size_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+//     let mut output = quote! {};
+//
+//     for (field_name, field_type) in properties.iter() {
+//         let uppercase_variant_name = Ident::new(
+//             field_name.to_string().to_uppercase().as_str(),
+//             Span::call_site(),
+//         );
+//
+//         let new_output_right = quote! {
+//             if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
+//                 size += Property::<#field_type>::size();
+//             }
+//         };
+//         let new_output_result = quote! {
+//             #output
+//             #new_output_right
+//         };
+//         output = new_output_result;
+//     }
+//
+//     return quote! {
+//         pub fn size_partial(diff_mask: &DiffMask) -> usize {
+//             let mut size = 0;
+//             #output
+//             size
+//         }
+//     };
+// }

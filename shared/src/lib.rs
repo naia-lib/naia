@@ -47,7 +47,7 @@ mod wrapping_number;
 pub mod utils;
 
 pub use naia_socket_shared::{
-    Instant, LinkConditionerConfig, PacketReader, Random, SocketConfig, Timer, Timestamp,
+    Instant, LinkConditionerConfig, Random, SocketConfig, Timer, Timestamp,
 };
 
 pub use ack_manager::AckManager;
