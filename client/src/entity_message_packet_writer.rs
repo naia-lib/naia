@@ -1,7 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
 
-use byteorder::{BigEndian, WriteBytesExt};
-
 use crate::entity_record::EntityRecord;
 use naia_shared::{
     ManagerType, NaiaKey, PacketWriteState, ProtocolKindType, Protocolize, MTU_SIZE,

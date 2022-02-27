@@ -1,7 +1,5 @@
 use std::fmt;
 
-use nanoserde::{DeBin, SerBin};
-
 /// Standard Naia Key trait
 pub trait NaiaKey<Impl = Self>: Eq + PartialEq + Clone + Copy + fmt::Display {
     /// Create new Key from a u16
@@ -14,7 +12,7 @@ pub trait NaiaKey<Impl = Self>: Eq + PartialEq + Clone + Copy + fmt::Display {
 
 /// An Entity in the Client's scope, that is being
 /// synced to the Client
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, DeBin, SerBin)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct NetEntity(u16);
 
 impl NaiaKey for NetEntity {

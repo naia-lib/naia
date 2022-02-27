@@ -18,7 +18,7 @@ impl Serde for () {
 
 #[cfg(test)]
 mod unit_tests {
-    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
+    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
 
     #[test]
     fn read_write() {
@@ -27,7 +27,7 @@ mod unit_tests {
 
         let in_unit = ();
 
-        writer.write(&in_unit);
+        in_unit.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -56,18 +56,18 @@ impl Serde for bool {
 
 #[cfg(test)]
 mod bool_tests {
-    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
+    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
 
     #[test]
     fn read_write() {
         // Write
         let mut writer = BitWriter::new();
 
-        let in_true_bool = true;
-        let in_false_bool = false;
+        let in_1 = true;
+        let in_2 = false;
 
-        writer.write(&in_true_bool);
-        writer.write(&in_false_bool);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -75,11 +75,11 @@ mod bool_tests {
 
         let mut reader = BitReader::new(buffer_length, buffer);
 
-        let out_true_bool = reader.read().unwrap();
-        let out_false_bool = reader.read().unwrap();
+        let out_1 = reader.read().unwrap();
+        let out_2 = reader.read().unwrap();
 
-        assert_eq!(in_true_bool, out_true_bool);
-        assert_eq!(in_false_bool, out_false_bool);
+        assert_eq!(in_1, out_1);
+        assert_eq!(in_2, out_2);
     }
 }
 
@@ -120,18 +120,18 @@ impl Serde for char {
 
 #[cfg(test)]
 mod char_tests {
-    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
+    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
 
     #[test]
     fn read_write() {
         // Write
         let mut writer = BitWriter::new();
 
-        let in_oh_char = 'O';
-        let in_bang_char = '!';
+        let in_1 = 'O';
+        let in_2 = '!';
 
-        writer.write(&in_oh_char);
-        writer.write(&in_bang_char);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -139,11 +139,11 @@ mod char_tests {
 
         let mut reader = BitReader::new(buffer_length, buffer);
 
-        let out_oh_char = reader.read().unwrap();
-        let out_bang_char = reader.read().unwrap();
+        let out_1 = reader.read().unwrap();
+        let out_2 = reader.read().unwrap();
 
-        assert_eq!(in_oh_char, out_oh_char);
-        assert_eq!(in_bang_char, out_bang_char);
+        assert_eq!(in_1, out_1);
+        assert_eq!(in_2, out_2);
     }
 }
 
@@ -285,23 +285,23 @@ macro_rules! test_serde_for {
     ($impl_type:ident, $test_name:ident) => {
         #[test]
         fn $test_name() {
-            use crate::reader_writer::{BitReader, BitWriter, BitWrite};
+            use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
 
             // Write
             let mut writer = BitWriter::new();
 
-            let first: $impl_type = 123 as $impl_type;
+            let in_1: $impl_type = 123 as $impl_type;
 
-            writer.write(&first);
+            in_1.ser(&mut writer);
 
             let (buffer_length, buffer) = writer.flush();
 
             // Read
             let mut reader = BitReader::new(buffer_length, buffer);
 
-            let last = reader.read().unwrap();
+            let out_1 = reader.read().unwrap();
 
-            assert_eq!(first, last);
+            assert_eq!(in_1, out_1);
         }
     };
 }

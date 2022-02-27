@@ -8,7 +8,7 @@ impl<T: Serde> Serde for Option<T> {
     fn ser<S: BitWrite>(&self, writer: &mut S) {
         if let Some(value) = self {
             writer.write_bit(true);
-            writer.write(value);
+            value.ser(writer);
         } else {
             writer.write_bit(false);
         }
@@ -27,7 +27,7 @@ impl<T: Serde> Serde for Option<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::reader_writer::{BitReader, BitWriter, BitWrite};
+    use crate::{serde::Serde, reader_writer::{BitReader, BitWriter}};
 
     #[test]
     fn read_write() {
@@ -37,8 +37,8 @@ mod tests {
         let in_1 = Some(123);
         let in_2: Option<f32> = None;
 
-        writer.write(&in_1);
-        writer.write(&in_2);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 

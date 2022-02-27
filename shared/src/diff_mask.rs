@@ -1,4 +1,3 @@
-use byteorder::WriteBytesExt;
 use std::fmt;
 
 use naia_socket_shared::PacketReader;

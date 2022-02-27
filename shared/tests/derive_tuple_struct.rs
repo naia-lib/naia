@@ -17,8 +17,8 @@ fn read_write_tuple_struct() {
     let in_1 = SomeStruct("Hello world!".to_string(), 42, true);
     let in_2 = SomeStruct("Goodbye world!".to_string(), -42, false);
 
-    writer.write(&in_1);
-    writer.write(&in_2);
+    in_1.ser(&mut writer);
+    in_2.ser(&mut writer);
 
     let (buffer_length, buffer) = writer.flush();
 

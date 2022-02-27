@@ -32,10 +32,10 @@ fn read_write_enum() {
         some_string: "Heya there enum".to_string(),
     };
 
-    writer.write(&in_1);
-    writer.write(&in_2);
-    writer.write(&in_3);
-    writer.write(&in_4);
+    in_1.ser(&mut writer);
+    in_2.ser(&mut writer);
+    in_3.ser(&mut writer);
+    in_4.ser(&mut writer);
 
     let (buffer_length, buffer) = writer.flush();
 

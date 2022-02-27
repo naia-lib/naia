@@ -29,8 +29,8 @@ fn read_write_struct() {
         some_bool: false,
     };
 
-    writer.write(&in_1);
-    writer.write(&in_2);
+    in_1.ser(&mut writer);
+    in_2.ser(&mut writer);
 
     let (buffer_length, buffer) = writer.flush();
 

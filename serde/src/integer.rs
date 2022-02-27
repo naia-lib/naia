@@ -168,7 +168,8 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
 #[cfg(test)]
 mod tests {
     use crate::{
-        reader_writer::{BitReader, BitWriter, BitWrite},
+        serde::Serde,
+        reader_writer::{BitReader, BitWriter},
         integer::{SignedInteger, SignedVariableInteger, UnsignedInteger,
         UnsignedVariableInteger}
     };
@@ -191,9 +192,9 @@ mod tests {
         let in_2 = UnsignedInteger::<20>::new(535221);
         let in_3 = UnsignedInteger::<2>::new(3);
 
-        writer.write(&in_1);
-        writer.write(&in_2);
-        writer.write(&in_3);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
+        in_3.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -219,9 +220,9 @@ mod tests {
         let in_2 = SignedInteger::<20>::new(53);
         let in_3 = SignedInteger::<2>::new(-3);
 
-        writer.write(&in_1);
-        writer.write(&in_2);
-        writer.write(&in_3);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
+        in_3.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -247,9 +248,9 @@ mod tests {
         let in_2 = UnsignedVariableInteger::<5>::new(153);
         let in_3 = UnsignedVariableInteger::<2>::new(3);
 
-        writer.write(&in_1);
-        writer.write(&in_2);
-        writer.write(&in_3);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
+        in_3.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -275,9 +276,9 @@ mod tests {
         let in_2 = SignedVariableInteger::<6>::new(53735);
         let in_3 = SignedVariableInteger::<2>::new(-3);
 
-        writer.write(&in_1);
-        writer.write(&in_2);
-        writer.write(&in_3);
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
+        in_3.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 

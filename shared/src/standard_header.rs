@@ -1,5 +1,3 @@
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
 use std::io::Read;
 
 use crate::packet_type::PacketType;
