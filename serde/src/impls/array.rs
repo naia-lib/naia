@@ -46,8 +46,8 @@ mod tests {
 
         let mut reader = BitReader::new(buffer_length, buffer);
 
-        let out_1: [i32; 4] = reader.read().unwrap();
-        let out_2: [bool; 3] = reader.read().unwrap();
+        let out_1: [i32; 4] = Serde::de(&mut reader).unwrap();
+        let out_2: [bool; 3] = Serde::de(&mut reader).unwrap();
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);

@@ -10,7 +10,7 @@ macro_rules! impl_reflect_tuple {
                 $(self.$index.ser(writer);)*
             }
             fn de(reader: &mut BitReader) -> Result<($($name,)*), SerdeErr> {
-                Ok(($(reader.read::<$name>()?, )*))
+                Ok(($($name::de(reader)?, )*))
             }
         }
     }
@@ -57,10 +57,10 @@ mod tests {
 
         let mut reader = BitReader::new(buffer_length, buffer);
 
-        let out_1 = reader.read().unwrap();
-        let out_2 = reader.read().unwrap();
-        let out_3: (bool, bool, bool, Option<String>, u16, String) = reader.read().unwrap();
-        let out_4 = reader.read().unwrap();
+        let out_1 = Serde::de(&mut reader).unwrap();
+        let out_2 = Serde::de(&mut reader).unwrap();
+        let out_3: (bool, bool, bool, Option<String>, u16, String) = Serde::de(&mut reader).unwrap();
+        let out_4 = Serde::de(&mut reader).unwrap();
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);

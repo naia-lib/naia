@@ -1,4 +1,4 @@
-use crate::{consts::MAX_BUFFER_SIZE, error::SerdeErr, serde::Serde};
+use crate::consts::MAX_BUFFER_SIZE;
 
 // BitWrite
 
@@ -118,10 +118,6 @@ impl BitReader {
             buffer_index: 0,
             buffer_length,
         }
-    }
-
-    pub fn read<T: Serde>(&mut self) -> Result<T, SerdeErr> {
-        T::de(self)
     }
 
     pub(crate) fn read_bit(&mut self) -> bool {

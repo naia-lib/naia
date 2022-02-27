@@ -17,11 +17,11 @@ impl<T: Serde> Serde for Vec<T> {
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let length_int: UnsignedVariableInteger<5> = reader.read().unwrap();
+        let length_int = UnsignedVariableInteger::<5>::de(reader)?;
         let length_usize = length_int.get() as usize;
         let mut output: Vec<T> = Vec::with_capacity(length_usize);
         for _ in 0..length_usize {
-            output.push(reader.read().unwrap())
+            output.push(T::de(reader)?)
         }
         Ok(output)
     }
@@ -37,11 +37,11 @@ impl<T: Serde> Serde for VecDeque<T> {
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let length_int: UnsignedVariableInteger<5> = reader.read().unwrap();
+        let length_int = UnsignedVariableInteger::<5>::de(reader)?;
         let length_usize = length_int.get() as usize;
         let mut output: VecDeque<T> = VecDeque::with_capacity(length_usize);
         for _ in 0..length_usize {
-            output.push_back(reader.read().unwrap())
+            output.push_back(T::de(reader)?)
         }
         Ok(output)
     }
@@ -71,8 +71,8 @@ mod tests {
 
         let mut reader = BitReader::new(buffer_length, buffer);
 
-        let out_1: Vec<i32> = reader.read().unwrap();
-        let out_2: Vec<bool> = reader.read().unwrap();
+        let out_1: Vec<i32> = Serde::de(&mut reader).unwrap();
+        let out_2: Vec<bool> = Serde::de(&mut reader).unwrap();
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);
@@ -108,8 +108,8 @@ mod tests {
 
         let mut reader = BitReader::new(buffer_length, buffer);
 
-        let out_1: VecDeque<i32> = reader.read().unwrap();
-        let out_2: VecDeque<bool> = reader.read().unwrap();
+        let out_1: VecDeque<i32> = Serde::de(&mut reader).unwrap();
+        let out_2: VecDeque<bool> = Serde::de(&mut reader).unwrap();
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);

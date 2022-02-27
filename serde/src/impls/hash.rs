@@ -19,11 +19,11 @@ impl<K: Serde + Eq + Hash> Serde for HashSet<K> {
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let length_int: UnsignedVariableInteger<5> = reader.read()?;
+        let length_int = UnsignedVariableInteger::<5>::de(reader)?;
         let length_usize = length_int.get() as usize;
         let mut output: HashSet<K> = HashSet::new();
         for _ in 0..length_usize {
-            let value = reader.read()?;
+            let value = K::de(reader)?;
             output.insert(value);
         }
         Ok(output)
@@ -41,12 +41,12 @@ impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let length_int: UnsignedVariableInteger<5> = reader.read()?;
+        let length_int = UnsignedVariableInteger::<5>::de(reader)?;
         let length_usize = length_int.get() as usize;
         let mut output: HashMap<K, V> = HashMap::new();
         for _ in 0..length_usize {
-            let key = reader.read()?;
-            let value = reader.read()?;
+            let key = K::de(reader)?;
+            let value = V::de(reader)?;
             output.insert(key, value);
         }
         Ok(output)
@@ -85,8 +85,8 @@ mod tests {
 
         let mut reader = BitReader::new(buffer_length, buffer);
 
-        let out_1: HashMap<i32, String> = reader.read().unwrap();
-        let out_2: HashMap<u16, bool> = reader.read().unwrap();
+        let out_1 = HashMap::<i32, String>::de(&mut reader).unwrap();
+        let out_2 = HashMap::<u16, bool>::de(&mut reader).unwrap();
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);
@@ -117,8 +117,8 @@ mod tests {
 
         let mut reader = BitReader::new(buffer_length, buffer);
 
-        let out_1: HashSet<i32> = reader.read().unwrap();
-        let out_2: HashSet<u16> = reader.read().unwrap();
+        let out_1 = HashSet::<i32>::de(&mut reader).unwrap();
+        let out_2 = HashSet::<u16>::de(&mut reader).unwrap();
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);
