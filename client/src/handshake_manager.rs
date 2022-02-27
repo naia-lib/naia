@@ -156,6 +156,6 @@ impl<P: Protocolize> HandshakeManager<P> {
 
 fn internal_send_connectionless(io: &mut Io, packet_type: PacketType, packet: Packet) {
     let new_payload =
-        naia_shared::utils::write_connectionless_payload(packet_type, packet.payload());
+        naia_shared::utils::write_connectionless_header(packet_type, packet.payload());
     io.send_packet(Packet::new_raw(new_payload));
 }

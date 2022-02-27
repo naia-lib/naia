@@ -4,7 +4,7 @@ use super::{
 };
 
 /// A trait for objects that can be serialized to a bitstream.
-pub trait Serde: Sized {
+pub trait Serde: Sized + Clone + PartialEq {
     /// Serialize Self to a BitWriter
     fn ser<S: BitWrite>(&self, writer: &mut S);
 

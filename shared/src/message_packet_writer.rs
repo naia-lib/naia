@@ -1,3 +1,4 @@
+use naia_serde::{BitWrite, Serde};
 use crate::{PacketWriteState, MTU_SIZE};
 
 use super::{
@@ -7,7 +8,6 @@ use super::{
 
 /// Handles writing of Message data into an outgoing packet
 pub struct MessagePacketWriter {
-    queued_bytes: Vec<u8>,
     queue_count: u8,
 }
 
@@ -16,68 +16,35 @@ impl MessagePacketWriter {
     /// will be used to read information from.
     pub fn new() -> MessagePacketWriter {
         MessagePacketWriter {
-            queued_bytes: Vec::<u8>::new(),
             queue_count: 0,
         }
     }
 
-    /// Returns whether or not the given message will fit in the outgoing buffer
-    pub fn message_fits<P: Protocolize>(
-        &self,
-        write_state: &mut PacketWriteState,
-        message: &P,
-    ) -> bool {
-        let mut hypothetical_next_payload_size: usize = write_state.byte_count();
-
-        // write message kind
-        hypothetical_next_payload_size += 2;
-
-        // write payload
-        hypothetical_next_payload_size += message.dyn_ref().kind().size();
-
-        if self.queue_count == 0 {
-            hypothetical_next_payload_size += 2;
-        }
-
-        hypothetical_next_payload_size < MTU_SIZE && self.queue_count != 255
-    }
-
     /// Writes an Message into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn queue_write<P: Protocolize>(&mut self, write_state: &mut PacketWriteState, message: &P) {
-        let message_ref = message.dyn_ref();
-
-        let mut byte_buffer = Vec::<u8>::new();
+    pub fn queue_write<P: Protocolize, S: BitWrite>(&mut self, writer: &mut S, message: &P) {
 
         // write message kind
-        let message_kind = message_ref.kind();
-        byte_buffer
-            .write_u16::<BigEndian>(message_kind.to_u16())
-            .unwrap();
+        message.dyn_ref().kind().to_u16().ser(writer);
 
         // write payload
-        message_ref.write(&mut byte_buffer);
+        message.write(writer);
 
-        write_state.add_bytes(self.queue_count == 0, 2, byte_buffer.len());
         self.queue_count += 1;
-        self.queued_bytes.append(&mut byte_buffer);
     }
 
     /// Write bytes into an outgoing packet
-    pub fn flush_writes(&mut self, out_bytes: &mut Vec<u8>) {
+    pub fn flush_writes<S: BitWrite>(&mut self, writer: &mut S) {
         //Write manager "header" (manager type & message count)
-        if self.queue_count != 0 {
-            // write manager type
-            out_bytes.write_u8(ManagerType::Message as u8).unwrap();
 
-            // write number of messages
-            out_bytes.write_u8(self.queue_count).unwrap();
+        // write manager type
+        //Outback
+        //ManagerType::Message.ser(writer);
 
-            // write payload
-            out_bytes.append(&mut self.queued_bytes);
+        // write number of messages
+        //Outback
+        self.queue_count.ser(writer);
 
-            self.queue_count = 0;
-            self.queued_bytes = Vec::<u8>::new();
-        }
+        self.queue_count = 0;
     }
 }

@@ -1,5 +1,6 @@
 use crate::DiffMask;
 use std::{any::TypeId, hash::Hash};
+use naia_serde::BitWrite;
 
 use super::{
     replica_ref::{ReplicaDynMut, ReplicaDynRef},
@@ -30,6 +31,12 @@ pub trait Protocolize: Sized + Sync + Send + 'static + Clone {
     /// Extract an inner Replicate impl from the Protocolize into a
     /// ProtocolInserter impl
     fn extract_and_insert<N, X: ProtocolInserter<Self, N>>(&self, entity: &N, inserter: &mut X);
+    /// Writes data into an outgoing byte stream, sufficient to completely
+    /// recreate the Message/Component on the client
+    fn write<S: BitWrite>(&self, writer: &mut S);
+    /// Write data into an outgoing byte stream, sufficient only to update the
+    /// mutated Properties of the Message/Component on the client
+    fn write_partial<S: BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S);
 }
 
 pub trait ProtocolKindType: Eq + Hash + Copy + Send + Sync {

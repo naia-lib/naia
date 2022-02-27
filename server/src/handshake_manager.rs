@@ -65,7 +65,7 @@ impl<P: Protocolize> HandshakeManager<P> {
 
         // Send connectionless //
         let outgoing_packet = Packet::new(*address, outgoing_bytes);
-        let new_payload = naia_shared::utils::write_connectionless_payload(
+        let new_payload = naia_shared::utils::write_connectionless_header(
             PacketType::ServerChallengeResponse,
             outgoing_packet.payload(),
         );

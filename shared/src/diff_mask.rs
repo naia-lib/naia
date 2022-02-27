@@ -101,20 +101,13 @@ impl DiffMask {
 
     /// Writes the DiffMask into an outgoing byte stream
     pub fn write(&self, out_bytes: &mut Vec<u8>) {
-        out_bytes.write_u8(self.bytes).unwrap();
-        for x in 0..self.bytes {
-            out_bytes.write_u8(self.mask[x as usize]).unwrap();
-        }
+
     }
 
     /// Reads the DiffMask from an incoming packet
     pub fn read(reader: &mut PacketReader) -> DiffMask {
-        let bytes: u8 = reader.read_u8();
         let mut mask: Vec<u8> = Vec::new();
-        for _ in 0..bytes {
-            mask.push(reader.read_u8());
-        }
-        DiffMask { bytes, mask }
+        DiffMask { bytes: 0, mask }
     }
 
     /// Return the number of bytes required to encode the DiffMask

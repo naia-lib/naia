@@ -3,8 +3,9 @@ use std::{
     vec::Vec,
 };
 
-use crate::PacketWriteState;
+use crate::{PacketIndex, PacketWriteState};
 use naia_socket_shared::PacketReader;
+use naia_serde::BitWrite;
 
 use super::{
     manifest::Manifest,
@@ -95,27 +96,28 @@ impl<P: Protocolize> MessageManager<P> {
     // MessageWriter
 
     /// Write into outgoing packet
-    pub fn queue_writes(&mut self, write_state: &mut PacketWriteState) {
+    pub fn queue_writes<S: BitWrite>(&mut self, writer: &mut S, packet_index: PacketIndex) {
         loop {
-            if let Some((_, peeked_message)) = self.queued_outgoing_messages.front() {
-                if !self
-                    .message_writer
-                    .message_fits(write_state, peeked_message)
-                {
-                    break;
-                }
-            } else {
-                break;
-            }
+            //Outback
+            // if let Some((_, peeked_message)) = self.queued_outgoing_messages.front() {
+            //     if !self
+            //         .message_writer
+            //         .message_fits(write_state, peeked_message)
+            //     {
+            //         break;
+            //     }
+            // } else {
+            //     break;
+            // }
 
-            let popped_message = self.pop_outgoing_message(write_state.packet_index).unwrap();
+            let popped_message = self.pop_outgoing_message(packet_index).unwrap();
             self.message_writer
-                .queue_write(write_state, &popped_message);
+                .queue_write(writer, &popped_message);
         }
     }
 
-    pub fn flush_writes(&mut self, out_bytes: &mut Vec<u8>) {
-        self.message_writer.flush_writes(out_bytes);
+    pub fn flush_writes<S: BitWrite>(&mut self, writer: &mut S) {
+        self.message_writer.flush_writes(writer);
     }
 }
 

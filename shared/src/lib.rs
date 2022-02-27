@@ -9,7 +9,7 @@ extern crate cfg_if;
 pub use naia_derive::*;
 pub use naia_serde::{
     derive_serde, BitReader, BitWriter, Serde, SignedInteger, SignedVariableInteger,
-    UnsignedInteger, UnsignedVariableInteger,
+    UnsignedInteger, UnsignedVariableInteger, BitWrite
 };
 
 mod ack_manager;

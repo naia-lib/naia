@@ -31,7 +31,7 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
                 bits_needed,
                 index
             );
-            l!(ser_variants, "writer.write(&index);");
+            l!(ser_variants, "index.ser(writer);");
 
             l!(ser_variants, "},");
         }
@@ -50,12 +50,12 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
                 bits_needed,
                 index
             );
-            l!(ser_variants, "writer.write(&index);");
+            l!(ser_variants, "index.ser(writer);");
 
             for field in &variant.fields {
                 l!(
                     ser_variants,
-                    "writer.write({});",
+                    "{}.ser(writer);",
                     field.field_name.as_ref().unwrap()
                 );
             }
@@ -76,10 +76,10 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
                 bits_needed,
                 index
             );
-            l!(ser_variants, "writer.write(&index);");
+            l!(ser_variants, "index.ser(writer);");
 
             for (n, _) in variant.fields.iter().enumerate() {
-                l!(ser_variants, "writer.write(f{});", n);
+                l!(ser_variants, "f{}.ser(writer);", n);
             }
             l!(ser_variants, "}");
         }
@@ -105,7 +105,7 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
             for field in &variant.fields {
                 l!(
                     de_variants,
-                    "{}: reader.read()?,",
+                    "{}: Serde::de(reader)?,",
                     field.field_name.as_ref().unwrap()
                 );
             }
@@ -115,7 +115,7 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
         else if variant.tuple == true {
             l!(de_variants, "{} => Self::{} (", variant_index, variant.name);
             for _ in &variant.fields {
-                l!(de_variants, "reader.read()?,");
+                l!(de_variants, "Serde::de(reader)?,");
             }
             l!(de_variants, "),");
         }
@@ -126,13 +126,13 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
     format!(
         "
         impl Serde for {name} {{
-            fn ser(&self, writer: &mut BitWriter) {{
+            fn ser<S: BitWrite>(&self, writer: &mut S) {{
                 match self {{
                   {ser_variants}
                 }}
             }}
             fn de(reader: &mut BitReader) -> std::result::Result<Self, naia_serde::SerdeErr> {{
-                let index: UnsignedInteger<{bits_needed}> = reader.read().unwrap();
+                let index: UnsignedInteger<{bits_needed}> = Serde::de(reader)?;
                 let index_u16: u16 = index.get() as u16;
                 Ok(match index_u16 {{
                     {de_variants}
