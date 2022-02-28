@@ -63,6 +63,8 @@ impl<P: Protocolize> HandshakeManager<P> {
                     .unwrap()
                     .to_u64()
                     .ser(&mut writer);
+
+                io.send_packet(&mut writer);
             }
             HandshakeState::AwaitingConnectResponse => {
                 let mut writer = BitWriter::new();

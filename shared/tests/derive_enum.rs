@@ -56,7 +56,7 @@ fn read_write_enum() {
 
     // Read
 
-    let mut reader = BitReader::new(buffer_length, buffer);
+    let mut reader = BitReader::new(&buffer[..buffer_length]);
 
     let out_1 = Serde::de(&mut reader).unwrap();
     let out_2 = Serde::de(&mut reader).unwrap();
@@ -86,7 +86,7 @@ fn read_write_enum_2() {
 
     // Read
 
-    let mut reader = BitReader::new(buffer_length, buffer);
+    let mut reader = BitReader::new(&buffer[..buffer_length]);
 
     let out_1 = Serde::de(&mut reader).unwrap();
     let out_2 = Serde::de(&mut reader).unwrap();
