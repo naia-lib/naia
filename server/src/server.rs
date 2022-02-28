@@ -821,7 +821,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     match header.packet_type() {
                         PacketType::ClientChallengeRequest => self
                             .handshake_manager
-                            .receive_challenge_request(&mut self.io, &address, &mut reader),
+                            .recv_challenge_request(&mut self.io, &address, &mut reader),
                         PacketType::ClientConnectRequest => {
                             if let Some(mut connection) = self.user_connections.get_mut(&address) {
                                 self.handshake_manager.receive_old_connect_request(

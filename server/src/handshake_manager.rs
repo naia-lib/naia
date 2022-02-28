@@ -1,6 +1,7 @@
 use std::{collections::HashMap, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use ring::{hmac, rand};
+use ring::hmac::Tag;
 
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
@@ -9,6 +10,7 @@ pub use naia_shared::{
     Timestamp, WorldMutType, WorldRefType, serde::{BitReader, Serde}
 };
 use naia_shared::serde::BitWriter;
+use crate::cache_map::CacheMap;
 
 use super::{connection::Connection, io::Io, world_record::WorldRecord};
 
@@ -22,6 +24,7 @@ pub struct HandshakeManager<P: Protocolize> {
     connection_hash_key: hmac::Key,
     require_auth: bool,
     address_to_timestamp_map: HashMap<SocketAddr, Timestamp>,
+    timestamp_digest_map: CacheMap<u64, Tag>,
     phantom: PhantomData<P>,
 }
 
@@ -34,11 +37,13 @@ impl<P: Protocolize> HandshakeManager<P> {
             connection_hash_key,
             require_auth,
             address_to_timestamp_map: HashMap::new(),
+            timestamp_digest_map: CacheMap::with_capacity(64),
             phantom: PhantomData,
         }
     }
 
-    pub fn receive_challenge_request(
+    // Step 1 of Handshake
+    pub fn recv_challenge_request(
         &mut self,
         io: &mut Io,
         address: &SocketAddr,
@@ -46,42 +51,32 @@ impl<P: Protocolize> HandshakeManager<P> {
     ) {
         let timestamp = u64::de(reader).unwrap();
 
+        self.send_challenge_response(io, address, &timestamp);
+    }
+
+    // Step 2 of Handshake
+    pub fn send_challenge_response(&mut self, io: &mut Io, address: &SocketAddr, timestamp: &u64) {
         let mut writer = BitWriter::new();
-        let mut timestamp_writer = BitWriter::new();
         StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0, 0)
             .ser(&mut writer);
         timestamp.ser(&mut writer);
-        timestamp.ser(&mut timestamp_writer);
-        let (timestamp_length, timestamp_bytes) = timestamp_writer.flush();
-        let timestamp_tag = hmac::sign(&self.connection_hash_key, &timestamp_bytes[..timestamp_length]);
-        let timestamp_hash: &[u8] = timestamp_tag.as_ref();
+
+        let timestamp_tag: Tag = {
+            if self.timestamp_digest_map.contains_key(timestamp) {
+                self.timestamp_digest_map.get_unchecked(timestamp).clone()
+            }
+            else {
+                let bytes: [u8; 8] = timestamp.to_le_bytes();
+                let tag = hmac::sign(&self.connection_hash_key, &bytes);
+                self.timestamp_digest_map.insert(timestamp, &tag);
+                tag
+            }
+        };
 
         //write timestamp digest
-        timestamp_hash.ser(&mut writer);
+        timestamp_tag.as_ref().ser(&mut writer);
 
         io.send_writer(address, &mut writer);
-    }
-
-    fn timestamp_validate(&self, reader: &mut BitReader) -> Option<Timestamp> {
-        let timestamp = u64::de(reader).unwrap();
-        let mut digest_bytes: Vec<u8> = Vec::new();
-        for _ in 0..32 {
-            digest_bytes.push(u8::de(reader).unwrap());
-        }
-
-        // Verify that timestamp hash has been written by this
-        // server instance
-        let mut timestamp_writer = BitWriter::new();
-        timestamp.ser(&mut timestamp_writer);
-        let (timestamp_length, timestamp_bytes) = timestamp_writer.flush();
-
-        let validation_result =
-            hmac::verify(&self.connection_hash_key, &timestamp_bytes[..timestamp_length], &digest_bytes);
-        if validation_result.is_err() {
-            return None;
-        } else {
-            return Some(Timestamp::from_u64(&timestamp));
-        }
     }
 
     pub fn receive_new_connect_request(
@@ -168,5 +163,27 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     pub fn delete_user(&mut self, address: &SocketAddr) {
         self.address_to_timestamp_map.remove(address);
+    }
+
+    fn timestamp_validate(&self, reader: &mut BitReader) -> Option<Timestamp> {
+        let timestamp = u64::de(reader).unwrap();
+        let mut digest_bytes: Vec<u8> = Vec::new();
+        for _ in 0..32 {
+            digest_bytes.push(u8::de(reader).unwrap());
+        }
+
+        // Verify that timestamp hash has been written by this
+        // server instance
+        let mut timestamp_writer = BitWriter::new();
+        timestamp.ser(&mut timestamp_writer);
+        let (timestamp_length, timestamp_bytes) = timestamp_writer.flush();
+
+        let validation_result =
+            hmac::verify(&self.connection_hash_key, &timestamp_bytes[..timestamp_length], &digest_bytes);
+        if validation_result.is_err() {
+            return None;
+        } else {
+            return Some(Timestamp::from_u64(&timestamp));
+        }
     }
 }
