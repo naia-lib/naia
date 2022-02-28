@@ -1,0 +1,17 @@
+[package]
+name = "naia-test"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = ".."
+license = "MIT OR Apache-2.0"
+edition = "2021"
+publish = false
+
+[features]
+
+
+[dependencies]
+naia-server = { path = "../server", features = ["use-udp"] }
+naia-client = { path = "../client" }
+naia-shared = { path = "../shared" }
+

@@ -8,14 +8,14 @@ use std::{
 
 use slotmap::DenseSlotMap;
 
-use naia_server_socket::{Packet, ServerAddrs, Socket};
+use naia_server_socket::{ServerAddrs, Socket};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
     ManagerType, Manifest, NetEntity, PacketType, PingConfig, PropertyMutate,
     PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig,
     StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
-use naia_shared::serde::{BitReader, BitWriter, Serde};
+use naia_shared::serde::{BitWriter, Serde};
 
 use super::{
     connection::Connection,
@@ -810,7 +810,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         //receive socket events
         loop {
             match self.io.recv_reader() {
-                Ok(Some((address, mut owned_reader))) => {
+                Ok(Some((address, owned_reader))) => {
                     let mut reader = owned_reader.borrow();
                     if let Some(user_connection) = self.user_connections.get_mut(&address) {
                         user_connection.base.mark_heard();

@@ -1,7 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    sequence_greater_than, Manifest, NetEntity, ProtocolKindType,
+    sequence_greater_than, Manifest, NetEntity,
     Protocolize,
 };
 use naia_shared::serde::{BitReader, Serde};
