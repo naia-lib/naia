@@ -11,10 +11,11 @@ use slotmap::DenseSlotMap;
 use naia_server_socket::{Packet, ServerAddrs, Socket};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
-    ManagerType, Manifest, NetEntity, PacketReader, PacketType, PingConfig, PropertyMutate,
+    ManagerType, Manifest, NetEntity, PacketType, PingConfig, PropertyMutate,
     PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig,
     StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
+use naia_shared::serde::{BitReader, BitWriter, Serde};
 
 use super::{
     connection::Connection,
@@ -191,8 +192,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 &user_key,
                 &self.diff_handler,
             );
-            self.handshake_manager
-                .send_connect_accept_response(&mut self.io, &mut new_connection);
+            // send connectaccept response
+            let mut writer = BitWriter::new();
+            new_connection
+                    .base
+                    .write_outgoing_header(0, PacketType::ServerConnectResponse, &mut writer);
+            self.io.send_packet(&new_connection.base.address, &mut writer);
+            new_connection.base.mark_sent();
+            //
             self.user_connections.insert(user.address, new_connection);
             if self.io.bandwidth_monitor_enabled() {
                 self.io.register_client(&user.address);
@@ -275,10 +282,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 .entity_manager
                 .collect_component_updates(&self.world_record);
             let mut sent = false;
-            while let Some(payload) =
+            while let Some(mut writer) =
                 connection.outgoing_packet(&world, &self.world_record, server_tick)
             {
-                self.io.send_packet(Packet::new_raw(user_address, payload));
+                self.io.send_packet(&user_address, &mut writer);
                 sent = true;
             }
             if sent {
@@ -784,12 +791,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 if connection.base.should_send_heartbeat() {
                     // Don't try to refactor this to self.internal_send, doesn't seem to
                     // work cause of iter_mut()
-                    let payload = connection.base.write_outgoing_header(
+                    let mut writer = BitWriter::new();
+                    connection.base.write_outgoing_header(
                         server_tick,
                         PacketType::Heartbeat,
-                        &[],
+                        &mut writer,
                     );
-                    self.io.send_packet(Packet::new_raw(*user_address, payload));
+                    self.io.send_packet(user_address, &mut writer);
                     connection.base.mark_sent();
                 }
             }
@@ -803,35 +811,35 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         loop {
             match self.io.receive_packet() {
                 Ok(Some(packet)) => {
-                    let address = packet.address();
+                    let mut reader = BitReader::new(&packet.payload);
 
-                    if let Some(user_connection) = self.user_connections.get_mut(&address) {
+                    if let Some(user_connection) = self.user_connections.get_mut(&packet.address) {
                         user_connection.base.mark_heard();
                     }
 
-                    let (header, payload) = StandardHeader::read(packet.payload());
+                    let header = StandardHeader::de(&mut reader).unwrap();
 
                     match header.packet_type() {
                         PacketType::ClientChallengeRequest => self
                             .handshake_manager
-                            .receive_challenge_request(&mut self.io, &address, &payload),
+                            .receive_challenge_request(&mut self.io, &packet.address, &mut reader),
                         PacketType::ClientConnectRequest => {
-                            if let Some(mut connection) = self.user_connections.get_mut(&address) {
+                            if let Some(mut connection) = self.user_connections.get_mut(&packet.address) {
                                 self.handshake_manager.receive_old_connect_request(
                                     &mut self.io,
                                     &self.world_record,
                                     &mut connection,
                                     &header,
-                                    &payload,
+                                    &mut reader,
                                 );
                             } else {
                                 match self.handshake_manager.receive_new_connect_request(
                                     &self.shared_config.manifest,
-                                    &address,
-                                    &payload,
+                                    &packet.address,
+                                    &mut reader,
                                 ) {
                                     HandshakeResult::AuthUser(auth_message) => {
-                                        let user = User::new(address);
+                                        let user = User::new(packet.address);
                                         let user_key = self.users.insert(user);
                                         self.incoming_events.push_back(Ok(Event::Authorization(
                                             user_key,
@@ -839,7 +847,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                         )));
                                     }
                                     HandshakeResult::ConnectUser => {
-                                        let user = User::new(address);
+                                        let user = User::new(packet.address);
                                         let user_key = self.users.insert(user);
                                         self.accept_connection(&user_key);
                                     }
@@ -852,11 +860,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                         PacketType::Disconnect => {
                             if let Some(user_key) = loop {
                                 if let Some(mut connection) =
-                                    self.user_connections.get_mut(&address)
+                                    self.user_connections.get_mut(&packet.address)
                                 {
                                     if self
                                         .handshake_manager
-                                        .verify_disconnect_request(&mut connection, &payload)
+                                        .verify_disconnect_request(&mut connection, &mut reader)
                                     {
                                         break Some(connection.user_key);
                                     }
@@ -868,22 +876,22 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                         }
                         PacketType::Data => {
                             let server_tick_opt = self.server_tick();
-                            match self.user_connections.get_mut(&address) {
+                            match self.user_connections.get_mut(&packet.address) {
                                 Some(connection) => {
                                     connection.process_incoming_header(&self.world_record, &header);
                                     connection.process_incoming_data(
                                         server_tick_opt,
                                         &self.shared_config.manifest,
-                                        &payload,
+                                        &mut reader,
                                     );
                                 }
                                 None => {
-                                    warn!("received data from unauthenticated client: {}", address);
+                                    warn!("received data from unauthenticated client: {}", packet.address);
                                 }
                             }
                         }
                         PacketType::Heartbeat => {
-                            match self.user_connections.get_mut(&address) {
+                            match self.user_connections.get_mut(&packet.address) {
                                 Some(connection) => {
                                     // Still need to do this so that proper notify
                                     // events fire based on the heartbeat header
@@ -892,7 +900,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                 None => {
                                     warn!(
                                         "received heartbeat from unauthenticated client: {}",
-                                        address
+                                        packet.address
                                     );
                                 }
                             }
@@ -900,51 +908,47 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                         PacketType::Ping => {
                             if self.shared_config.ping.is_some() {
                                 let server_tick = self.server_tick().unwrap_or(0);
-                                match self.user_connections.get_mut(&address) {
+                                match self.user_connections.get_mut(&packet.address) {
                                     Some(connection) => {
                                         connection
                                             .process_incoming_header(&self.world_record, &header);
 
                                         // read incoming ping index
-                                        let mut reader = PacketReader::new(&payload);
-                                        let ping_index =
-                                            reader.cursor().read_u16::<BigEndian>().unwrap();
+                                        let ping_index = u16::de(&mut reader).unwrap();
 
                                         // write pong payload
-                                        let mut out_bytes = Vec::<u8>::new();
+                                        let mut writer = BitWriter::new();
+
+                                        // write header
+                                        connection.base.write_outgoing_header(
+                                            server_tick,
+                                            PacketType::Pong,
+                                            &mut writer,
+                                        );
 
                                         // write index
-                                        out_bytes.write_u16::<BigEndian>(ping_index).unwrap();
+                                        ping_index.ser(&mut writer);
 
-                                        let ping_payload = out_bytes.into_boxed_slice();
-
-                                        let payload_with_header =
-                                            connection.base.write_outgoing_header(
-                                                server_tick,
-                                                PacketType::Pong,
-                                                &ping_payload,
-                                            );
-                                        self.io.send_packet(Packet::new_raw(
-                                            connection.base.address,
-                                            payload_with_header,
-                                        ));
+                                        // send packet
+                                        self.io.send_packet(
+                                            &packet.address,
+                                            &mut writer);
                                         connection.base.mark_sent();
                                     }
                                     None => {
                                         warn!(
                                             "received ping from unauthenticated client: {}",
-                                            address
+                                            packet.address
                                         );
                                     }
                                 }
                             } else {
-                                warn!("received ping address: {}, even though not configured to receive pings", address);
+                                warn!("received ping address: {}, even though not configured to receive pings", packet.address);
                             }
                         }
                         PacketType::ServerChallengeResponse
                         | PacketType::ServerConnectResponse
-                        | PacketType::Pong
-                        | PacketType::Unknown => {
+                        | PacketType::Pong => {
                             // do nothing
                         }
                     }

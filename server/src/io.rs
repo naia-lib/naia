@@ -3,10 +3,11 @@ use std::{net::SocketAddr, panic, time::Duration};
 use naia_server_socket::{NaiaServerSocketError, Packet, PacketReceiver, PacketSender};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, CompressionConfig, ConnectionConfig, Decoder, Encoder, Instant,
-    KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketReader, PacketType,
+    KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketType,
     PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe,
     SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
+use naia_shared::serde::BitWriter;
 
 use crate::bandwidth_monitor::BandwidthMonitor;
 
@@ -71,21 +72,26 @@ impl Io {
         self.packet_sender.is_some()
     }
 
-    pub fn send_packet(&mut self, mut packet: Packet) {
+    pub fn send_packet(&mut self, address: &SocketAddr, writer: &mut BitWriter) {
+
+        // get payload
+        let (length, buffer) = writer.flush();
+        let mut payload = &buffer[0..length];
+
         // Compression
         if let Some(encoder) = &mut self.outgoing_encoder {
-            packet = Packet::new_raw(packet.address(), encoder.encode(packet.payload()).into());
+            payload = encoder.encode(&payload);
         }
 
         // Bandwidth monitoring
         if let Some(monitor) = &mut self.outgoing_bandwidth_monitor {
-            monitor.record_packet(&packet.address(), packet.payload().len());
+            monitor.record_packet(address, payload.len());
         }
 
         self.packet_sender
             .as_ref()
             .expect("Cannot call Server.send_packet() until you call Server.listen()!")
-            .send(packet);
+            .send(Packet::new(*address, payload.into()));
     }
 
     pub fn receive_packet(&mut self) -> Result<Option<Packet>, NaiaServerSocketError> {
@@ -98,12 +104,12 @@ impl Io {
         if let Ok(Some(mut packet)) = receive_result {
             // Bandwidth monitoring
             if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
-                monitor.record_packet(&packet.address(), packet.payload().len());
+                monitor.record_packet(&packet.address, packet.payload.len());
             }
 
             // Decompression
             if let Some(decoder) = &mut self.incoming_decoder {
-                packet = Packet::new_raw(packet.address(), decoder.decode(packet.payload()).into());
+                packet = Packet::new(packet.address, decoder.decode(&packet.payload).into());
             }
 
             return Ok(Some(packet));

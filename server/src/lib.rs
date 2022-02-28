@@ -31,7 +31,6 @@ pub use naia_shared as shared;
 mod bandwidth_monitor;
 mod connection;
 mod entity_action;
-mod entity_action_packet_writer;
 mod entity_manager;
 mod entity_message_receiver;
 mod entity_ref;

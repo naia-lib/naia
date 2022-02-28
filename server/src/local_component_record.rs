@@ -2,7 +2,6 @@ use naia_shared::LocalComponentKey;
 
 use super::locality_status::LocalityStatus;
 
-#[derive(Debug)]
 pub struct LocalComponentRecord {
     pub local_key: LocalComponentKey,
     pub status: LocalityStatus,

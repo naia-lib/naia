@@ -2,7 +2,6 @@ use naia_shared::NetEntity;
 
 use super::locality_status::LocalityStatus;
 
-#[derive(Debug)]
 pub struct LocalEntityRecord {
     pub entity_net_id: NetEntity,
     pub status: LocalityStatus,

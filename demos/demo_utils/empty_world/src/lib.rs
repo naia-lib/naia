@@ -68,7 +68,7 @@ mod inner {
             &self,
             _: &EmptyEntity,
             _: &P::Kind,
-        ) -> Option<ReplicaDynRefWrapper<'_, P>> {
+        ) -> Option<&P> {
             unimplemented!()
         }
     }
@@ -101,7 +101,7 @@ mod inner {
             &self,
             _: &EmptyEntity,
             _: &P::Kind,
-        ) -> Option<ReplicaDynRefWrapper<'_, P>> {
+        ) -> Option<&P> {
             unimplemented!()
         }
     }
