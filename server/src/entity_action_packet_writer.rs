@@ -1,7 +1,7 @@
 use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{
-    ManagerType, NaiaKey, PacketWriteState, ProtocolKindType, Protocolize, WorldRefType, MTU_SIZE,
+    ManagerType, NaiaKey, PacketWriteState, ProtocolKindType, Protocolize, WorldRefType, MTU_SIZE_BYTES,
 };
 
 use crate::{
@@ -90,7 +90,7 @@ impl EntityActionPacketWriter {
             hypothetical_next_payload_size += 2;
         }
 
-        hypothetical_next_payload_size < MTU_SIZE && self.queue_count != 255
+        hypothetical_next_payload_size < MTU_SIZE_BYTES && self.queue_count != 255
     }
 
     pub fn queue_write<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>>(

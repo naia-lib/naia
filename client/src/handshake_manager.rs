@@ -1,12 +1,11 @@
 use std::time::Duration;
 
-use naia_client_socket::Packet;
-
 pub use naia_shared::{
-    ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
+    ConnectionConfig, ManagerType, Manifest, PacketType, ProtocolKindType,
     Protocolize, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType,
     WorldRefType,
 };
+use naia_shared::serde::{BitReader, BitWriter, Serde};
 
 use super::io::Io;
 
@@ -51,60 +50,50 @@ impl<P: Protocolize> HandshakeManager<P> {
                 // do nothing, not necessary
             }
             HandshakeState::AwaitingChallengeResponse => {
+                let mut writer = BitWriter::new();
+                StandardHeader::new(PacketType::ClientChallengeRequest, 0, 0, 0, 0)
+                    .ser(writer);
+
                 if self.pre_connection_timestamp.is_none() {
                     self.pre_connection_timestamp = Some(Timestamp::now());
                 }
 
-                let mut timestamp_bytes = Vec::new();
                 self.pre_connection_timestamp
                     .as_mut()
                     .unwrap()
-                    .write(&mut timestamp_bytes);
-                internal_send_connectionless(
-                    io,
-                    PacketType::ClientChallengeRequest,
-                    Packet::new(timestamp_bytes),
-                );
+                    .ser(&mut writer);
             }
             HandshakeState::AwaitingConnectResponse => {
-                let mut payload_bytes = Vec::new();
+                let mut writer = BitWriter::new();
+
+                StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0, 0)
+                    .ser(writer);
 
                 // write timestamp & digest into payload
-                self.write_signed_timestamp(&mut payload_bytes);
+                self.write_signed_timestamp(&mut writer);
 
                 // write auth message if there is one
                 if let Some(auth_message) = &mut self.auth_message {
                     let auth_dyn = auth_message.dyn_ref();
-                    let auth_kind = auth_dyn.kind();
                     // write that we have auth
-                    payload_bytes.write_u8(1).unwrap();
+                    1.ser(&mut writer);
                     // write auth kind
-                    payload_bytes
-                        .write_u16::<BigEndian>(auth_kind.to_u16())
-                        .unwrap();
+                    auth_dyn.kind().ser(&mut writer);
                     // write payload
-                    auth_dyn.write(&mut payload_bytes);
+                    auth_dyn.write(&mut writer);
                 } else {
                     // write that we do not have auth
-                    payload_bytes.write_u8(0).unwrap();
+                    0.ser(&mut writer);
                 }
-                internal_send_connectionless(
-                    io,
-                    PacketType::ClientConnectRequest,
-                    Packet::new(payload_bytes),
-                );
+
+                io.send_packet(&mut writer);
             }
         }
     }
 
     /// Get an outgoing Disconnect payload
-    pub fn disconnect_packet(&mut self) -> Packet {
-        let mut out_bytes = Vec::<u8>::new();
-
-        // write timestamp & digest into payload
-        self.write_signed_timestamp(&mut out_bytes);
-
-        Packet::new(out_bytes)
+    pub fn write_disconnect_packet(&self, writer: &mut BitWriter) {
+        self.write_signed_timestamp(writer);
     }
 
     pub fn set_auth_message(&mut self, auth: P) {
@@ -112,19 +101,20 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Returns whether connection was successful
-    pub fn receive_packet(&mut self, packet: Packet) -> bool {
-        let (header, payload) = StandardHeader::read(packet.payload());
+    pub fn receive_packet(&mut self, payload: &[u8]) -> bool {
+        let mut reader = BitReader::new(payload);
+        let header = StandardHeader::de(&mut reader).unwrap();
         match header.packet_type() {
             PacketType::ServerChallengeResponse => {
                 if self.connection_state == HandshakeState::AwaitingChallengeResponse {
                     if let Some(my_timestamp) = self.pre_connection_timestamp {
-                        let mut reader = PacketReader::new(&payload);
-                        let payload_timestamp = Timestamp::read(&mut reader);
+
+                        let payload_timestamp = Timestamp::de(&mut reader).unwrap();
 
                         if my_timestamp == payload_timestamp {
                             let mut digest_bytes: Vec<u8> = Vec::new();
                             for _ in 0..32 {
-                                digest_bytes.push(reader.read_u8());
+                                digest_bytes.push(u8::de(&mut reader).unwrap());
                             }
                             self.pre_connection_digest = Some(digest_bytes.into_boxed_slice());
 
@@ -143,19 +133,13 @@ impl<P: Protocolize> HandshakeManager<P> {
         return false;
     }
 
-    fn write_signed_timestamp(&self, payload_bytes: &mut Vec<u8>) {
+    fn write_signed_timestamp(&self, writer: &mut BitWriter) {
         self.pre_connection_timestamp
             .as_ref()
             .unwrap()
-            .write(payload_bytes);
+            .ser(writer);
         for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref() {
-            payload_bytes.push(*digest_byte);
+            digest_byte.ser(writer);
         }
     }
-}
-
-fn internal_send_connectionless(io: &mut Io, packet_type: PacketType, packet: Packet) {
-    let new_payload =
-        naia_shared::utils::write_connectionless_header(packet_type, packet.payload());
-    io.send_packet(Packet::new_raw(new_payload));
 }

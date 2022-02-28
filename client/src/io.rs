@@ -1,11 +1,12 @@
 use std::{net::SocketAddr, time::Duration};
 
-use naia_client_socket::{NaiaClientSocketError, Packet, PacketReceiver, PacketSender, ServerAddr};
+use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, ServerAddr};
 pub use naia_shared::{
     BandwidthMonitor, CompressionConfig, ConnectionConfig, Decoder, Encoder, ManagerType, Manifest,
-    PacketReader, PacketType, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig,
+    PacketType, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig,
     StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
+use naia_shared::serde::BitWriter;
 
 pub struct Io {
     packet_sender: Option<PacketSender>,
@@ -68,42 +69,47 @@ impl Io {
         self.packet_sender.is_some()
     }
 
-    pub fn send_packet(&mut self, mut packet: Packet) {
+    pub fn send_packet(&mut self, writer: &mut BitWriter) {
+
+        // get payload
+        let (length, buffer) = writer.flush();
+        let mut payload = &buffer[0..length];
+
         // Compression
         if let Some(encoder) = &mut self.outgoing_encoder {
-            packet = Packet::new_raw(encoder.encode(packet.payload()).into());
+            payload = encoder.encode(&payload);
         }
 
         // Bandwidth monitoring
         if let Some(monitor) = &mut self.outgoing_bandwidth_monitor {
-            monitor.record_packet(packet.payload().len());
+            monitor.record_packet(payload.len());
         }
 
         self.packet_sender
             .as_mut()
             .expect("Cannot call Client.send_packet() until you call Client.connect()!")
-            .send(packet);
+            .send(payload);
     }
 
-    pub fn receive_packet(&mut self) -> Result<Option<Packet>, NaiaClientSocketError> {
+    pub fn receive_packet(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         let receive_result = self
             .packet_receiver
             .as_mut()
             .expect("Cannot call Client.receive_packet() until you call Client.connect()!")
             .receive();
 
-        if let Ok(Some(mut packet)) = receive_result {
+        if let Ok(Some(mut payload)) = receive_result {
             // Bandwidth monitoring
             if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
-                monitor.record_packet(packet.payload().len());
+                monitor.record_packet(payload.len());
             }
 
             // Decompression
             if let Some(decoder) = &mut self.incoming_decoder {
-                packet = Packet::new_raw(decoder.decode(packet.payload()).into());
+                payload = decoder.decode(payload);
             }
 
-            return Ok(Some(packet));
+            return Ok(Some(payload));
         } else {
             return receive_result;
         }

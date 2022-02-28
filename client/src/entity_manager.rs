@@ -5,13 +5,10 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{
-    DiffMask, EntityActionType, LocalComponentKey, Manifest, NaiaKey, NetEntity, PacketReader,
-    PacketWriteState, ProtocolKindType, Protocolize, Tick, WorldMutType,
-};
+use naia_shared::{DiffMask, EntityActionType, LocalComponentKey, Manifest, NetEntity, PacketWriteState, ProtocolKindType, Protocolize, Tick, WorldMutType, ManagerType};
+use naia_shared::serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
 
 use super::{
-    entity_message_packet_writer::EntityMessagePacketWriter,
     entity_message_sender::EntityMessageSender, entity_record::EntityRecord,
     error::NaiaClientError, event::Event,
 };
@@ -21,7 +18,6 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     local_to_world_entity: HashMap<NetEntity, E>,
     component_to_entity_map: HashMap<LocalComponentKey, E>,
     pub message_sender: EntityMessageSender<P, E>,
-    message_writer: EntityMessagePacketWriter,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
@@ -31,7 +27,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             entity_records: HashMap::new(),
             component_to_entity_map: HashMap::new(),
             message_sender: EntityMessageSender::new(),
-            message_writer: EntityMessagePacketWriter::new(),
         }
     }
 
@@ -40,7 +35,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         world: &mut W,
         manifest: &Manifest<P>,
         server_tick: Tick,
-        reader: &mut PacketReader,
+        reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
     ) {
         let entity_action_count = reader.read_u8();
@@ -259,8 +254,48 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
     // EntityMessagePacketWriter
 
-    pub fn queue_writes(&mut self, write_state: &mut PacketWriteState) {
+    pub fn write_messages(&mut self, writer: &mut BitWriter) {
         let mut entity_messages = self.message_sender.generate_outgoing_message_list();
+
+        let mut message_count = 0;
+
+        // Header
+        {
+            // Measure
+            let current_packet_size = writer.bit_count();
+            if current_packet_size > MTU_SIZE_BITS {
+                return;
+            }
+
+            let mut counter = BitCounter::new();
+            Self::<P, E>::write_header(&mut counter, 123);
+
+            // Check for overflow
+            if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
+                return;
+            }
+
+            // Find how many messages will fit into the packet
+            for (_, message) in entity_messages.iter() {
+                Self::<P, E>::write_message(&mut counter, message);
+                if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
+                    message_count += 1;
+                    if message_count == u8::MAX {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            // If no messages will fit, abort
+            if message_count == 0 {
+                return;
+            }
+
+            // Write header
+            Self::<P, E>::write_header(writer, message_count);
+        }
 
         loop {
             if let Some((_, _, entity, message)) = entity_messages.front() {
@@ -277,7 +312,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             }
 
             let (message_id, client_tick, entity, message) = entity_messages.pop_front().unwrap();
-            self.message_writer.queue_write(
+            self.message_writer.write_message(
                 write_state,
                 &self.entity_records,
                 &client_tick,
@@ -289,7 +324,41 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
-    pub fn flush_writes(&mut self, out_bytes: &mut Vec<u8>) {
-        self.message_writer.flush_writes(out_bytes);
+    /// Write bytes into an outgoing packet
+    pub fn write_header<S: BitWrite>(writer: &mut S, message_count: u8) {
+        //Write manager "header" (manager type & message count)
+
+        // write manager type
+        ManagerType::EntityMessage.ser(writer);
+
+        // write number of messages
+        message_count.ser(writer);
+    }
+
+    /// Writes a Command into the Writer's internal buffer, which will
+    /// eventually be put into the outgoing packet
+    pub fn write_message<S: BitWrite> (
+        writer: &mut S,
+        entity_records: &HashMap<E, EntityRecord<P::Kind>>,
+        client_tick: &Tick,
+        world_entity: &E,
+        message: &P,
+    ) {
+        if let Some(entity_record) = entity_records.get(world_entity) {
+            // write client tick
+            client_tick.ser(writer);
+
+            // write local entity
+            entity_record.entity_net_id.into().ser(writer);
+
+            // write message kind
+            message.dyn_ref().kind().ser(writer);
+
+            // write payload
+            message.write(writer);
+
+        } else {
+            panic!("Cannot find the entity record to serialize entity message!");
+        }
     }
 }

@@ -1,8 +1,7 @@
 use std::{collections::VecDeque, time::Duration};
 
-use naia_shared::{sequence_greater_than, Instant, PacketReader, Timer};
-
-use naia_client_socket::Packet;
+use naia_shared::{sequence_greater_than, Instant, Timer, serde::{BitWriter, Serde}};
+use naia_shared::serde::BitReader;
 
 pub struct PingManager {
     ping_timer: Timer,
@@ -39,23 +38,18 @@ impl PingManager {
     }
 
     /// Get an outgoing ping payload
-    pub fn ping_packet(&mut self) -> Packet {
+    pub fn write_ping(&mut self, writer: &mut BitWriter) {
         self.ping_timer.reset();
 
         let ping_index = self.sent_pings.push_new();
 
-        let mut out_bytes = Vec::<u8>::new();
-
         // write index
-        out_bytes.write_u16::<BigEndian>(ping_index).unwrap();
-
-        Packet::new(out_bytes)
+        ping_index.ser(writer);
     }
 
     /// Process an incoming pong payload
-    pub fn process_pong(&mut self, pong_payload: &[u8]) {
-        let mut reader = PacketReader::new(&pong_payload);
-        let ping_index = reader.cursor().read_u16::<BigEndian>().unwrap();
+    pub fn process_pong(&mut self, reader: &mut BitReader) {
+        let ping_index = u16::de(reader).unwrap();
 
         match self.sent_pings.remove(ping_index) {
             None => {}

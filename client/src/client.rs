@@ -1,10 +1,10 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
-use naia_client_socket::{Packet, Socket};
+use naia_client_socket::Socket;
 pub use naia_shared::{
-    ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, PingConfig,
+    ConnectionConfig, ManagerType, Manifest, PacketType, PingConfig,
     ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick,
-    Timer, Timestamp, WorldMutType, WorldRefType,
+    Timer, Timestamp, WorldMutType, WorldRefType, serde::{BitReader, BitWriter, Serde}
 };
 
 use super::{
@@ -114,16 +114,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         let client_tick = self.client_tick().unwrap_or(0);
 
         if let Some(connection) = &mut self.server_connection {
-            let disconnect_packet = self.handshake_manager.disconnect_packet();
+
+            let mut writer = BitWriter::new();
+            connection
+                .base
+                .write_outgoing_header(client_tick, PacketType::Disconnect, &mut writer);
+            self.handshake_manager.write_disconnect_packet(&mut writer);
             for _ in 0..10 {
-                internal_send_with_connection::<P, E>(
-                    client_tick,
-                    &mut self.io,
-                    connection,
-                    PacketType::Disconnect,
-                    disconnect_packet.clone(),
-                );
+                self.io.send_packet(&mut writer);
             }
+
+            connection.base.mark_sent();
         }
 
         self.disconnect_internal();
@@ -194,8 +195,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
             // send outgoing packets
             let mut sent = false;
-            while let Some(payload) = server_connection.outgoing_packet(client_tick) {
-                self.io.send_packet(Packet::new_raw(payload));
+            while let Some(mut writer) = server_connection.outgoing_packet(client_tick) {
+                self.io.send_packet(&mut writer);
                 sent = true;
             }
             if sent {
@@ -332,26 +333,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
             // send heartbeats
             if server_connection.base.should_send_heartbeat() {
-                internal_send_with_connection::<P, E>(
-                    client_tick,
-                    &mut self.io,
-                    server_connection,
-                    PacketType::Heartbeat,
-                    Packet::empty(),
-                );
+                let mut writer = BitWriter::new();
+                server_connection.base.write_outgoing_header(client_tick, PacketType::Heartbeat, &mut writer);
+                self.io.send_packet(&mut writer);
+                server_connection.base.mark_sent();
             }
 
             // send pings
             if let Some(ping_manager) = &mut server_connection.ping_manager {
                 if ping_manager.should_send_ping() {
-                    let ping_packet = ping_manager.ping_packet();
-                    internal_send_with_connection::<P, E>(
-                        client_tick,
-                        &mut self.io,
-                        server_connection,
-                        PacketType::Ping,
-                        ping_packet,
-                    );
+                    let mut writer = BitWriter::new();
+                    server_connection.base.write_outgoing_header(client_tick, PacketType::Ping, &mut writer);
+                    ping_manager.write_ping(&mut writer);
+                    self.io.send_packet(&mut writer);
+                    server_connection.base.mark_sent();
                 }
             }
 
@@ -361,19 +356,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                     Ok(Some(packet)) => {
                         server_connection.base.mark_heard();
 
-                        let (header, payload) = StandardHeader::read(packet.payload());
+                        let mut reader = BitReader::new(packet);
+
+                        let header = StandardHeader::de(&mut reader).unwrap();
 
                         server_connection
                             .process_incoming_header(&header, self.tick_manager.as_mut());
 
                         match header.packet_type() {
                             PacketType::Data => {
-                                server_connection.buffer_data_packet(header.host_tick(), &payload);
+                                server_connection.buffer_data_packet(header.host_tick(), &mut reader);
                             }
                             PacketType::Heartbeat => {}
                             PacketType::Pong => {
                                 if let Some(ping_manager) = &mut server_connection.ping_manager {
-                                    ping_manager.process_pong(&payload);
+                                    ping_manager.process_pong(&mut reader);
                                 }
                             }
                             // TODO: explicitly cover these cases
@@ -395,8 +392,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             // receive from socket
             loop {
                 match self.io.receive_packet() {
-                    Ok(Some(packet)) => {
-                        if self.handshake_manager.receive_packet(packet) {
+                    Ok(Some(payload)) => {
+                        if self.handshake_manager.receive_packet(payload) {
                             let server_addr = self.server_address_unwrapped();
                             self.server_connection = Some(Connection::new(
                                 server_addr,
@@ -457,19 +454,4 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         // NOTE: may panic if the connection is not yet established!
         return self.io.server_addr_unwrapped();
     }
-}
-
-fn internal_send_with_connection<P: Protocolize, E: Copy + Eq + Hash>(
-    client_tick: Tick,
-    io: &mut Io,
-    connection: &mut Connection<P, E>,
-    packet_type: PacketType,
-    packet: Packet,
-) {
-    let new_payload =
-        connection
-            .base
-            .process_outgoing_header(client_tick, packet_type, packet.payload());
-    io.send_packet(Packet::new_raw(new_payload));
-    connection.base.mark_sent();
 }

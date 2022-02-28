@@ -784,7 +784,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 if connection.base.should_send_heartbeat() {
                     // Don't try to refactor this to self.internal_send, doesn't seem to
                     // work cause of iter_mut()
-                    let payload = connection.base.process_outgoing_header(
+                    let payload = connection.base.write_outgoing_header(
                         server_tick,
                         PacketType::Heartbeat,
                         &[],
@@ -919,7 +919,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                         let ping_payload = out_bytes.into_boxed_slice();
 
                                         let payload_with_header =
-                                            connection.base.process_outgoing_header(
+                                            connection.base.write_outgoing_header(
                                                 server_tick,
                                                 PacketType::Pong,
                                                 &ping_payload,

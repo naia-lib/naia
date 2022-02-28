@@ -1,8 +1,8 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_shared::{
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
-    PacketWriteState, PingConfig, Protocolize, StandardHeader, Tick, WorldMutType,
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketType,
+    PacketWriteState, PingConfig, Protocolize, StandardHeader, Tick, WorldMutType, serde::{Serde, BitReader, BitWriter, FrozenBitReader}
 };
 
 use super::{
@@ -14,7 +14,7 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     pub base: BaseConnection<P>,
     pub entity_manager: EntityManager<P, E>,
     pub ping_manager: Option<PingManager>,
-    jitter_buffer: TickQueue<Box<[u8]>>,
+    jitter_buffer: TickQueue<FrozenBitReader>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
@@ -61,9 +61,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             .process_incoming_header(header, &mut Some(&mut self.entity_manager.message_sender));
     }
 
-    pub fn buffer_data_packet(&mut self, incoming_tick: u16, incoming_payload: &Box<[u8]>) {
+    pub fn buffer_data_packet(&mut self, incoming_tick: u16, reader: &mut BitReader) {
         self.jitter_buffer
-            .add_item(incoming_tick, incoming_payload.clone());
+            .add_item(incoming_tick, reader.freeze());
     }
 
     pub fn process_buffered_packets<W: WorldMutType<P, E>>(
@@ -73,10 +73,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         receiving_tick: Tick,
         incoming_events: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
     ) {
-        while let Some((server_tick, data_packet)) = self.jitter_buffer.pop_item(receiving_tick) {
-            let mut reader = PacketReader::new(&data_packet);
+        while let Some((server_tick, frozen_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
+            let mut reader = frozen_reader.unfreeze();
             while reader.has_more() {
-                let manager_type: ManagerType = reader.read_u8().into();
+                let manager_type = ManagerType::de(&mut reader).unwrap();
                 match manager_type {
                     ManagerType::Message => {
                         self.base
@@ -100,35 +100,29 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
     // Outgoing data
 
-    pub fn outgoing_packet(&mut self, client_tick: u16) -> Option<Box<[u8]>> {
+    pub fn outgoing_packet(&mut self, client_tick: u16) -> Option<BitWriter> {
         if self.base.message_manager.has_outgoing_messages()
             || self.entity_manager.message_sender.has_outgoing_messages()
         {
-            let mut write_state = PacketWriteState::new(self.base.next_packet_index());
+            let next_packet_index = self.base.next_packet_index();
 
-            // Write Entity Messages
-            self.entity_manager.queue_writes(&mut write_state);
-
-            // Write Messages
-            self.base.message_manager.queue_writes(&mut write_state);
+            let mut writer = BitWriter::new();
 
             // Add header
-            if write_state.has_bytes() {
-                // Get bytes from writer
-                let mut out_bytes = Vec::<u8>::new();
-                self.base.message_manager.flush_writes(&mut out_bytes);
-                self.entity_manager.flush_writes(&mut out_bytes);
+            self.base.write_outgoing_header(
+                client_tick,
+                PacketType::Data,
+                &mut writer,
+            );
 
-                // Add header to it
-                let payload = self.base.process_outgoing_header(
-                    client_tick,
-                    PacketType::Data,
-                    &out_bytes.into_boxed_slice(),
-                );
-                return Some(payload);
-            } else {
-                panic!("Pending outgoing messages but no bytes were written... Likely trying to transmit a Component/Message larger than 576 bytes!");
-            }
+            // Write Entity Messages
+            self.entity_manager.write_messages(&mut writer);
+
+            // Write Messages
+            self.base.message_manager.write_messages(&mut writer, next_packet_index);
+
+            // Return Writer
+            return Some(writer);
         }
 
         return None;
