@@ -29,6 +29,7 @@ pub use naia_server_socket::ServerAddrs;
 pub use naia_shared as shared;
 
 mod bandwidth_monitor;
+mod cache_map;
 mod connection;
 mod entity_action;
 mod entity_manager;

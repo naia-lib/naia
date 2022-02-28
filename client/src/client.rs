@@ -110,22 +110,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             panic!("Trying to disconnect Client which is not connected yet!")
         }
 
-        // get current tick
-        let client_tick = self.client_tick().unwrap_or(0);
-
-        if let Some(connection) = &mut self.server_connection {
-
-            let mut writer = BitWriter::new();
-            connection
-                .base
-                .write_outgoing_header(client_tick, PacketType::Disconnect, &mut writer);
-            self.handshake_manager.write_disconnect_packet(&mut writer);
-            for _ in 0..10 {
-                self.io.send_writer(&mut writer);
-            }
-
-            connection.base.mark_sent();
-        }
+        self.handshake_manager.send_disconnect(&mut self.io);
 
         self.disconnect_internal();
     }
@@ -208,7 +193,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 self.incoming_events.push_back(Ok(Event::Tick));
             }
         } else {
-            self.handshake_manager.send_packet(&mut self.io);
+            self.handshake_manager.send(&mut self.io);
         }
 
         return std::mem::take(&mut self.incoming_events);
@@ -391,7 +376,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             loop {
                 match self.io.recv_reader() {
                     Ok(Some(mut reader)) => {
-                        if self.handshake_manager.receive_packet(&mut reader) {
+                        self.handshake_manager.recv(&mut reader);
+                        if self.handshake_manager.is_connected() {
                             let server_addr = self.server_address_unwrapped();
                             self.server_connection = Some(Connection::new(
                                 server_addr,
