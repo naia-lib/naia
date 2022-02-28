@@ -4,6 +4,18 @@ use crate::{
     serde::Serde,
 };
 
+impl<T: Serde> Serde for &[T] {
+    fn ser<S: BitWrite>(&self, writer: &mut S) {
+        for item in *self {
+            item.ser(writer);
+        }
+    }
+
+    fn de(_: &mut BitReader) -> Result<Self, SerdeErr> {
+        Err(SerdeErr {})
+    }
+}
+
 impl<T: Serde, const N: usize> Serde for [T; N] {
     fn ser<S: BitWrite>(&self, writer: &mut S) {
         for item in self {

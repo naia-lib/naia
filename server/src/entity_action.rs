@@ -4,7 +4,7 @@ use super::keys::ComponentKey;
 
 #[derive(Debug)]
 pub enum EntityAction<P: Protocolize, E: Copy> {
-    SpawnEntity(E, Vec<(ComponentKey, P::Kind)>),
+    SpawnEntity { entity: E, sent_components: Option<Vec<(ComponentKey, P::Kind)>> },
     DespawnEntity(E),
     MessageEntity(E, P),
     InsertComponent(E, ComponentKey, P::Kind),
@@ -15,7 +15,7 @@ pub enum EntityAction<P: Protocolize, E: Copy> {
 impl<P: Protocolize, E: Copy> EntityAction<P, E> {
     pub fn as_type(&self) -> EntityActionType {
         match self {
-            EntityAction::SpawnEntity(_, _) => EntityActionType::SpawnEntity,
+            EntityAction::SpawnEntity { .. } => EntityActionType::SpawnEntity,
             EntityAction::DespawnEntity(_) => EntityActionType::DespawnEntity,
             EntityAction::MessageEntity(_, _) => EntityActionType::MessageEntity,
             EntityAction::InsertComponent(_, _, _) => EntityActionType::InsertComponent,
@@ -28,7 +28,12 @@ impl<P: Protocolize, E: Copy> EntityAction<P, E> {
 impl<P: Protocolize, E: Copy> Clone for EntityAction<P, E> {
     fn clone(&self) -> Self {
         match self {
-            EntityAction::SpawnEntity(a, b) => EntityAction::SpawnEntity(*a, b.clone()),
+            EntityAction::SpawnEntity { entity, sent_components } => {
+                EntityAction::SpawnEntity {
+                    entity: *entity,
+                    sent_components: sent_components.clone(),
+                }
+            },
             EntityAction::DespawnEntity(a) => EntityAction::DespawnEntity(*a),
             EntityAction::MessageEntity(a, b) => EntityAction::MessageEntity(*a, b.clone()),
             EntityAction::InsertComponent(a, b, c) => EntityAction::InsertComponent(*a, *b, *c),

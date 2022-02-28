@@ -6,10 +6,11 @@ use naia_server_socket::Packet;
 
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
-    ManagerType, Manifest, PacketReader, PacketType, PropertyMutate, PropertyMutator,
+    ManagerType, Manifest, PacketType, PropertyMutate, PropertyMutator,
     ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
-    Timestamp, WorldMutType, WorldRefType,
+    Timestamp, WorldMutType, WorldRefType, serde::{BitReader, Serde}
 };
+use naia_shared::serde::BitWriter;
 
 use super::{connection::Connection, io::Io, world_record::WorldRecord};
 
@@ -43,56 +44,45 @@ impl<P: Protocolize> HandshakeManager<P> {
         &mut self,
         io: &mut Io,
         address: &SocketAddr,
-        incoming_bytes: &Box<[u8]>,
+        reader: &mut BitReader
     ) {
-        let mut reader = PacketReader::new(incoming_bytes);
-        let timestamp = Timestamp::read(&mut reader);
+        let timestamp = u64::de(reader).unwrap();
 
-        let mut timestamp_bytes = Vec::new();
-        timestamp.write(&mut timestamp_bytes);
-        let timestamp_hash: hmac::Tag = hmac::sign(&self.connection_hash_key, &timestamp_bytes);
-
-        let mut outgoing_bytes = Vec::new();
-
-        //write timestamp
-        outgoing_bytes.append(&mut timestamp_bytes);
+        let mut writer = BitWriter::new();
+        let mut timestamp_writer = BitWriter::new();
+        StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0, 0)
+            .ser(&mut writer);
+        timestamp.ser(&mut writer);
+        timestamp.ser(&mut timestamp_writer);
+        let (timestamp_length, timestamp_bytes) = timestamp_writer.flush();
+        let timestamp_tag = hmac::sign(&self.connection_hash_key, &timestamp_bytes[..timestamp_length]);
+        let timestamp_hash: &[u8] = timestamp_tag.as_ref();
 
         //write timestamp digest
-        let hash_bytes: &[u8] = timestamp_hash.as_ref();
-        for hash_byte in hash_bytes {
-            outgoing_bytes.push(*hash_byte);
-        }
+        timestamp_hash.ser(&mut writer);
 
-        // Send connectionless //
-        let outgoing_packet = Packet::new(*address, outgoing_bytes);
-        let new_payload = naia_shared::utils::write_connectionless_header(
-            PacketType::ServerChallengeResponse,
-            outgoing_packet.payload(),
-        );
-        StandardHeader::new(packet_type, 0, 0, 0, 0)
-            .ser(writer);
-        io.send_packet(Packet::new_raw(outgoing_packet.address(), new_payload));
-        /////////////////////////
+        io.send_packet(address, &mut writer);
     }
 
-    fn timestamp_validate(&self, reader: &mut PacketReader) -> Option<Timestamp> {
-        let timestamp = Timestamp::read(reader);
+    fn timestamp_validate(&self, reader: &mut BitReader) -> Option<Timestamp> {
+        let timestamp = u64::de(reader).unwrap();
         let mut digest_bytes: Vec<u8> = Vec::new();
         for _ in 0..32 {
-            digest_bytes.push(reader.read_u8());
+            digest_bytes.push(u8::de(reader).unwrap());
         }
 
         // Verify that timestamp hash has been written by this
         // server instance
-        let mut timestamp_bytes: Vec<u8> = Vec::new();
-        timestamp.write(&mut timestamp_bytes);
+        let mut timestamp_writer = BitWriter::new();
+        timestamp.ser(&mut timestamp_writer);
+        let (timestamp_length, timestamp_bytes) = timestamp_writer.flush();
 
         let validation_result =
-            hmac::verify(&self.connection_hash_key, &timestamp_bytes, &digest_bytes);
+            hmac::verify(&self.connection_hash_key, &timestamp_bytes[..timestamp_length], &digest_bytes);
         if validation_result.is_err() {
             return None;
         } else {
-            return Some(timestamp);
+            return Some(Timestamp::from_u64(&timestamp));
         }
     }
 
@@ -100,15 +90,13 @@ impl<P: Protocolize> HandshakeManager<P> {
         &mut self,
         manifest: &Manifest<P>,
         address: &SocketAddr,
-        incoming_bytes: &Box<[u8]>,
+        reader: &mut BitReader,
     ) -> HandshakeResult<P> {
-        let mut reader = PacketReader::new(incoming_bytes);
-
         // Verify that timestamp hash has been written by this
         // server instance
-        if let Some(timestamp) = self.timestamp_validate(&mut reader) {
+        if let Some(timestamp) = self.timestamp_validate(reader) {
             // Timestamp hash is validated, now start configured auth process
-            let has_auth = reader.read_u8() == 1;
+            let has_auth = u8::de(reader).unwrap() == 1;
 
             if has_auth != self.require_auth {
                 return HandshakeResult::Invalid;
@@ -117,8 +105,8 @@ impl<P: Protocolize> HandshakeManager<P> {
             self.address_to_timestamp_map.insert(*address, timestamp);
 
             if has_auth {
-                let auth_kind = P::Kind::from_u16(reader.read_u16());
-                let auth_message = manifest.create_replica(auth_kind, &mut reader);
+                let auth_kind = P::Kind::de(reader).unwrap();
+                let auth_message = manifest.create_replica(auth_kind, reader);
                 return HandshakeResult::AuthUser(auth_message);
             } else {
                 return HandshakeResult::ConnectUser;
@@ -134,22 +122,27 @@ impl<P: Protocolize> HandshakeManager<P> {
         world_record: &WorldRecord<E, P::Kind>,
         connection: &mut Connection<P, E>,
         incoming_header: &StandardHeader,
-        incoming_payload: &Box<[u8]>,
+        reader: &mut BitReader,
     ) {
         // At this point, we have already sent the ServerConnectResponse
         // message, but we continue to send the message till the Client
         // stops sending the ClientConnectRequest
 
-        let mut reader = PacketReader::new(incoming_payload);
-
         // Verify that timestamp hash has been written by this
         // server instance
-        if let Some(new_timestamp) = self.timestamp_validate(&mut reader) {
+        if let Some(new_timestamp) = self.timestamp_validate(reader) {
             if let Some(old_timestamp) = self.address_to_timestamp_map.get(&connection.base.address)
             {
                 if *old_timestamp == new_timestamp {
                     connection.process_incoming_header(world_record, &incoming_header);
-                    self.send_connect_accept_response(io, connection);
+
+                    // send connect accept response
+                    let mut writer = BitWriter::new();
+                    connection
+                            .base
+                            .write_outgoing_header(0, PacketType::ServerConnectResponse, &mut writer);
+                    io.send_packet(&connection.base.address, &mut writer);
+                    connection.base.mark_sent();
                 }
             }
         }
@@ -158,17 +151,12 @@ impl<P: Protocolize> HandshakeManager<P> {
     pub fn verify_disconnect_request<E: Copy + Eq + Hash>(
         &mut self,
         connection: &mut Connection<P, E>,
-        incoming_payload: &Box<[u8]>,
+        reader: &mut BitReader,
     ) -> bool {
-        // At this point, we have already sent the ServerConnectResponse
-        // message, but we continue to send the message till the Client
-        // stops sending the ClientConnectRequest
-
-        let mut reader = PacketReader::new(incoming_payload);
 
         // Verify that timestamp hash has been written by this
         // server instance
-        if let Some(new_timestamp) = self.timestamp_validate(&mut reader) {
+        if let Some(new_timestamp) = self.timestamp_validate(reader) {
             if let Some(old_timestamp) = self.address_to_timestamp_map.get(&connection.base.address)
             {
                 if *old_timestamp == new_timestamp {
@@ -182,18 +170,5 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     pub fn delete_user(&mut self, address: &SocketAddr) {
         self.address_to_timestamp_map.remove(address);
-    }
-
-    pub fn send_connect_accept_response<E: Copy + Eq + Hash>(
-        &mut self,
-        io: &mut Io,
-        connection: &mut Connection<P, E>,
-    ) {
-        let payload =
-            connection
-                .base
-                .write_outgoing_header(0, PacketType::ServerConnectResponse, &[]);
-        io.send_packet(Packet::new_raw(connection.base.address, payload));
-        connection.base.mark_sent();
     }
 }

@@ -31,7 +31,7 @@ pub trait WorldRefType<P: Protocolize, E> {
         &self,
         entity: &E,
         component_kind: &P::Kind,
-    ) -> Option<ReplicaDynRefWrapper<'_, P>>;
+    ) -> Option<&P>;
 }
 
 /// Structures that implement the WorldMutType trait will be able to be loaded

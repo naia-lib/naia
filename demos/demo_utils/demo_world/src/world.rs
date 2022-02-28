@@ -93,7 +93,7 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w, P> {
         &self,
         entity: &Entity,
         component_type: &P::Kind,
-    ) -> Option<ReplicaDynRefWrapper<'_, P>> {
+    ) -> Option<&P> {
         return component_of_kind(self.world, entity, component_type);
     }
 }
@@ -123,7 +123,7 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w, P> {
         &self,
         entity: &Entity,
         component_type: &P::Kind,
-    ) -> Option<ReplicaDynRefWrapper<'_, P>> {
+    ) -> Option<&P> {
         return component_of_kind(self.world, entity, component_type);
     }
 }
@@ -298,12 +298,9 @@ fn component_of_kind<'a, P: Protocolize>(
     world: &'a World<P>,
     entity: &Entity,
     component_type: &P::Kind,
-) -> Option<ReplicaDynRefWrapper<'a, P>> {
+) -> Option<&P> {
     if let Some(component_map) = world.entities.get(*entity) {
-        if let Some(raw_ref) = component_map.get(component_type) {
-            let wrapped_ref = ReplicaDynRefWrapper::new(raw_ref.dyn_ref());
-            return Some(wrapped_ref);
-        }
+        return component_map.get(component_type);
     }
 
     return None;

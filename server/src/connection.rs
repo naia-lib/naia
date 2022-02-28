@@ -5,8 +5,8 @@ use std::{
 };
 
 use naia_shared::{
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType,
-    PacketWriteState, Protocolize, StandardHeader, Tick, WorldRefType,
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketType,
+    Protocolize, StandardHeader, Tick, WorldRefType, serde::{Serde, BitReader, BitWriter}
 };
 
 use super::{
@@ -50,18 +50,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
     pub fn process_incoming_data(
         &mut self,
-        server_tick: Option<u16>,
+        server_tick: Option<Tick>,
         manifest: &Manifest<P>,
-        data: &[u8],
+        reader: &mut BitReader,
     ) {
-        let mut reader = PacketReader::new(data);
         while reader.has_more() {
-            let manager_type: ManagerType = reader.read_u8().into();
+            let manager_type = ManagerType::de(reader).unwrap();
             match manager_type {
                 ManagerType::EntityMessage => {
                     self.entity_message_receiver.process_incoming_messages(
                         server_tick,
-                        &mut reader,
+                        reader,
                         manifest,
                     );
                 }
@@ -70,9 +69,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                     // doesn't use it
                     self.base
                         .message_manager
-                        .process_message_data(&mut reader, manifest);
+                        .process_message_data(reader, manifest);
                 }
-                _ => {}
+                ManagerType::Entity => {
+                    panic!("not yet allowed!");
+                }
             }
         }
     }
@@ -98,36 +99,29 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         world: &W,
         world_record: &WorldRecord<E, P::Kind>,
         server_tick: Tick,
-    ) -> Option<Box<[u8]>> {
+    ) -> Option<BitWriter> {
         if self.base.message_manager.has_outgoing_messages()
             || self.entity_manager.has_outgoing_actions()
         {
-            let mut write_state = PacketWriteState::new(self.base.next_packet_index());
+            let next_packet_index = self.base.next_packet_index();
 
-            // Queue Messages for Write
-            self.base.message_manager.write_messages(&mut write_state);
+            let mut writer = BitWriter::new();
 
-            // Queue Entity Actions for Write
+            // Add header
+            self.base.write_outgoing_header(
+                server_tick,
+                PacketType::Data,
+                &mut writer,
+            );
+
+            // Write Messages
+            self.base.message_manager.write_messages(&mut writer, next_packet_index);
+
+            // Write Entity Actions
             self.entity_manager
-                .queue_writes(&mut write_state, world, world_record);
+                .write_actions(&mut writer, next_packet_index, world, world_record);
 
-            if write_state.has_bytes() {
-                // Get bytes from writer
-                let mut out_vec = Vec::<u8>::new();
-                self.base.message_manager.flush_writes(&mut out_vec);
-                self.entity_manager.flush_writes(&mut out_vec);
-
-                // Add header to it
-                let payload = self.base.write_outgoing_header(
-                    server_tick,
-                    PacketType::Data,
-                    &out_vec.into_boxed_slice(),
-                );
-
-                return Some(payload);
-            } else {
-                panic!("Pending outgoing messages but no bytes were written... Likely trying to transmit a Component/Message larger than 576 bytes!");
-            }
+            return Some(writer);
         }
 
         return None;

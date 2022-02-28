@@ -74,7 +74,7 @@ impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldRef<'w> {
         &self,
         entity: &Entity,
         component_kind: &P::Kind,
-    ) -> Option<ReplicaDynRefWrapper<P>> {
+    ) -> Option<&P> {
         return component_of_kind::<P>(self.world, entity, component_kind);
     }
 }
@@ -116,7 +116,7 @@ impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
         &self,
         entity: &Entity,
         component_kind: &P::Kind,
-    ) -> Option<ReplicaDynRefWrapper<P>> {
+    ) -> Option<&P> {
         return component_of_kind(self.world, entity, component_kind);
     }
 }
