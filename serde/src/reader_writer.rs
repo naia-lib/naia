@@ -120,7 +120,7 @@ impl<'b> BitReader<'b> {
         }
     }
 
-    pub fn freeze(self) -> FrozenBitReader {
+    pub fn freeze(&self) -> FrozenBitReader {
         FrozenBitReader {
             state: self.state,
             buffer: self.buffer.into(),

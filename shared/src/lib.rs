@@ -54,7 +54,7 @@ pub use bandwidth_monitor::BandwidthMonitor;
 pub use base_connection::BaseConnection;
 pub use compression_config::{CompressionConfig, CompressionMode};
 pub use connection_config::ConnectionConfig;
-pub use constants::MTU_SIZE_BYTES;
+pub use constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
 pub use decoder::Decoder;
 pub use diff_mask::DiffMask;
 pub use encoder::Encoder;

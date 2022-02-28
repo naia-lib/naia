@@ -1,11 +1,11 @@
+use crate::{serde, derive_serde};
 
 // Local Entity
 
-use std::ops::Deref;
-
-/// An Entity in the Client's scope, that is being
-/// synced to the Client
-#[derive(Copy, Clone)]
+// An Entity in the Client's scope, that is being
+// synced to the Client
+#[derive(Copy, Eq, Hash)]
+#[derive_serde]
 pub struct NetEntity(u16);
 
 impl From<u16> for NetEntity {
@@ -22,9 +22,10 @@ impl Into<u16> for NetEntity {
 
 // Local Component Key
 
-/// The key that represents a Component in the Client's scope, that is
-/// being synced to the Client
-#[derive(Copy, Clone)]
+// The key that represents a Component in the Client's scope, that is
+// being synced to the Client
+#[derive(Copy, Eq, Hash)]
+#[derive_serde]
 pub struct LocalComponentKey(u16);
 
 impl From<u16> for LocalComponentKey {
