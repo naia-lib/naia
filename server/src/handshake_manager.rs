@@ -61,7 +61,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         //write timestamp digest
         timestamp_hash.ser(&mut writer);
 
-        io.send_packet(address, &mut writer);
+        io.send_writer(address, &mut writer);
     }
 
     fn timestamp_validate(&self, reader: &mut BitReader) -> Option<Timestamp> {
@@ -141,7 +141,7 @@ impl<P: Protocolize> HandshakeManager<P> {
                     connection
                             .base
                             .write_outgoing_header(0, PacketType::ServerConnectResponse, &mut writer);
-                    io.send_packet(&connection.base.address, &mut writer);
+                    io.send_writer(&connection.base.address, &mut writer);
                     connection.base.mark_sent();
                 }
             }

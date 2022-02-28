@@ -4,9 +4,8 @@ use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, Se
 pub use naia_shared::{
     BandwidthMonitor, CompressionConfig, ConnectionConfig, Decoder, Encoder, ManagerType, Manifest,
     PacketType, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig,
-    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType, serde::{BitReader, BitWriter}
 };
-use naia_shared::serde::BitWriter;
 
 pub struct Io {
     packet_sender: Option<PacketSender>,
@@ -69,7 +68,7 @@ impl Io {
         self.packet_sender.is_some()
     }
 
-    pub fn send_packet(&mut self, writer: &mut BitWriter) {
+    pub fn send_writer(&mut self, writer: &mut BitWriter) {
 
         // get payload
         let (length, buffer) = writer.flush();
@@ -91,7 +90,7 @@ impl Io {
             .send(payload);
     }
 
-    pub fn receive_packet(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
+    pub fn recv_reader(&mut self) -> Result<Option<BitReader>, NaiaClientSocketError> {
         let receive_result = self
             .packet_receiver
             .as_mut()
@@ -109,9 +108,9 @@ impl Io {
                 payload = decoder.decode(payload);
             }
 
-            return Ok(Some(payload));
+            return Ok(Some(BitReader::new(payload)));
         } else {
-            return receive_result;
+            return receive_result.map(|payload_opt| payload_opt.map(|payload| BitReader::new(payload)));
         }
     }
 

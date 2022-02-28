@@ -9,5 +9,5 @@ mod serde;
 
 pub use error::SerdeErr;
 pub use integer::{SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger};
-pub use reader_writer::{BitCounter, BitReader, BitWrite, BitWriter, FrozenBitReader};
+pub use reader_writer::{BitCounter, BitReader, BitWrite, BitWriter, OwnedBitReader};
 pub use serde::Serde;

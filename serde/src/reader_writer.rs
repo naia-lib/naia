@@ -120,8 +120,8 @@ impl<'b> BitReader<'b> {
         }
     }
 
-    pub fn freeze(&self) -> FrozenBitReader {
-        FrozenBitReader {
+    pub fn to_owned(&self) -> OwnedBitReader {
+        OwnedBitReader {
             state: self.state,
             buffer: self.buffer.into(),
         }
@@ -167,15 +167,25 @@ impl<'b> BitReader<'b> {
     }
 }
 
-// Frozen BitReader
+// OwnedBitReader
 
-pub struct FrozenBitReader {
+pub struct OwnedBitReader {
     state: BitReaderState,
     buffer: Box<[u8]>,
 }
 
-impl FrozenBitReader {
-    pub fn unfreeze<'b>(&'b self) -> BitReader<'b> {
+impl OwnedBitReader {
+    pub fn new(buffer: Box<[u8]>) -> Self {
+        Self {
+            state: BitReaderState {
+                scratch: 0,
+                scratch_index: 0,
+                buffer_index: 0,
+            },
+            buffer,
+        }
+    }
+    pub fn borrow(&self) -> BitReader {
         BitReader {
             state: self.state,
             buffer: &self.buffer,
