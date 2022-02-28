@@ -2,7 +2,7 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_shared::{
     BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketType,
-    PacketWriteState, PingConfig, Protocolize, StandardHeader, Tick, WorldMutType, serde::{Serde, BitReader, BitWriter, FrozenBitReader}
+    PingConfig, Protocolize, StandardHeader, Tick, WorldMutType, serde::{Serde, BitReader, BitWriter, FrozenBitReader}
 };
 
 use super::{
@@ -116,7 +116,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             );
 
             // Write Entity Messages
-            self.entity_manager.write_messages(&mut writer);
+            self.entity_manager.write_messages(&mut writer, next_packet_index);
 
             // Write Messages
             self.base.message_manager.write_messages(&mut writer, next_packet_index);

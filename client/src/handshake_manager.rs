@@ -52,7 +52,7 @@ impl<P: Protocolize> HandshakeManager<P> {
             HandshakeState::AwaitingChallengeResponse => {
                 let mut writer = BitWriter::new();
                 StandardHeader::new(PacketType::ClientChallengeRequest, 0, 0, 0, 0)
-                    .ser(writer);
+                    .ser(&mut writer);
 
                 if self.pre_connection_timestamp.is_none() {
                     self.pre_connection_timestamp = Some(Timestamp::now());
@@ -61,26 +61,26 @@ impl<P: Protocolize> HandshakeManager<P> {
                 self.pre_connection_timestamp
                     .as_mut()
                     .unwrap()
+                    .to_u64()
                     .ser(&mut writer);
             }
             HandshakeState::AwaitingConnectResponse => {
                 let mut writer = BitWriter::new();
 
                 StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0, 0)
-                    .ser(writer);
+                    .ser(&mut writer);
 
                 // write timestamp & digest into payload
                 self.write_signed_timestamp(&mut writer);
 
                 // write auth message if there is one
                 if let Some(auth_message) = &mut self.auth_message {
-                    let auth_dyn = auth_message.dyn_ref();
                     // write that we have auth
                     1.ser(&mut writer);
                     // write auth kind
-                    auth_dyn.kind().ser(&mut writer);
+                    auth_message.dyn_ref().kind().ser(&mut writer);
                     // write payload
-                    auth_dyn.write(&mut writer);
+                    auth_message.write(&mut writer);
                 } else {
                     // write that we do not have auth
                     0.ser(&mut writer);
@@ -109,7 +109,7 @@ impl<P: Protocolize> HandshakeManager<P> {
                 if self.connection_state == HandshakeState::AwaitingChallengeResponse {
                     if let Some(my_timestamp) = self.pre_connection_timestamp {
 
-                        let payload_timestamp = Timestamp::de(&mut reader).unwrap();
+                        let payload_timestamp = Timestamp::from_u64(&u64::de(&mut reader).unwrap());
 
                         if my_timestamp == payload_timestamp {
                             let mut digest_bytes: Vec<u8> = Vec::new();
@@ -137,6 +137,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         self.pre_connection_timestamp
             .as_ref()
             .unwrap()
+            .to_u64()
             .ser(writer);
         for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref() {
             digest_byte.ser(writer);

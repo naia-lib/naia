@@ -1,37 +1,20 @@
-/// Enum used as a shared network protocol, representing various message types
-/// related to Entities/Components
-#[derive(Copy, Clone)]
-#[repr(u8)]
+use crate::{serde, derive_serde};
+
+// Enum used as a shared network protocol, representing various message types
+// related to Entities/Components
+#[derive(Copy)]
+#[derive_serde]
 pub enum EntityActionType {
-    /// Action indicating a Component to be updated
-    UpdateComponent = 0,
-    /// Action indicating a Component to be deleted
+    // Action indicating a Component to be updated
+    UpdateComponent,
+    // Action indicating a Component to be deleted
     RemoveComponent,
-    /// Action indicating an Entity to be created
+    // Action indicating an Entity to be created
     SpawnEntity,
-    /// Action indicating an Entity to be deleted
+    // Action indicating an Entity to be deleted
     DespawnEntity,
-    /// Action indicating a Message to be sent to an Entity
+    // Action indicating a Message to be sent to an Entity
     MessageEntity,
-    /// Action indicating a Component to be added to an Entity
+    // Action indicating a Component to be added to an Entity
     InsertComponent,
-    /// Unknown / Undefined message, should always be last variant in this list
-    Unknown,
-}
-
-impl EntityActionType {
-    /// Converts the action type to u8
-    pub fn to_u8(&self) -> u8 {
-        *self as u8
-    }
-
-    /// Gets an EntityActionType from a u8
-    #[allow(unsafe_code)]
-    pub fn from_u8(v: u8) -> Self {
-        if v >= EntityActionType::Unknown as u8 {
-            return EntityActionType::Unknown;
-        }
-        let z: EntityActionType = unsafe { ::std::mem::transmute(v) };
-        z
-    }
 }
