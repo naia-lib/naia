@@ -59,7 +59,7 @@ mod tests {
 
         // Read
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         let out_1: [i32; 4] = Serde::de(&mut reader).unwrap();
         let out_2: [bool; 3] = Serde::de(&mut reader).unwrap();

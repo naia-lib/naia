@@ -36,7 +36,7 @@ fn read_write_struct() {
 
     // Read
 
-    let mut reader = BitReader::new(buffer_length, buffer);
+    let mut reader = BitReader::new(&buffer[..buffer_length]);
 
     let out_1 = Serde::de(&mut reader).unwrap();
     let out_2 = Serde::de(&mut reader).unwrap();

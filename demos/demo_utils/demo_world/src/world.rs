@@ -298,7 +298,7 @@ fn component_of_kind<'a, P: Protocolize>(
     world: &'a World<P>,
     entity: &Entity,
     component_type: &P::Kind,
-) -> Option<&P> {
+) -> Option<&'a P> {
     if let Some(component_map) = world.entities.get(*entity) {
         return component_map.get(component_type);
     }

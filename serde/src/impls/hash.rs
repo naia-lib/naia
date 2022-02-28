@@ -86,7 +86,7 @@ mod tests {
 
         // Read
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         let out_1 = HashMap::<i32, String>::de(&mut reader).unwrap();
         let out_2 = HashMap::<u16, bool>::de(&mut reader).unwrap();
@@ -118,7 +118,7 @@ mod tests {
 
         // Read
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         let out_1 = HashSet::<i32>::de(&mut reader).unwrap();
         let out_2 = HashSet::<u16>::de(&mut reader).unwrap();

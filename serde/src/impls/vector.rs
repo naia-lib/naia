@@ -72,7 +72,7 @@ mod tests {
 
         // Read
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         let out_1: Vec<i32> = Serde::de(&mut reader).unwrap();
         let out_2: Vec<bool> = Serde::de(&mut reader).unwrap();
@@ -109,7 +109,7 @@ mod tests {
 
         // Read
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         let out_1: VecDeque<i32> = Serde::de(&mut reader).unwrap();
         let out_2: VecDeque<bool> = Serde::de(&mut reader).unwrap();

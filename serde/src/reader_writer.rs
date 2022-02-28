@@ -203,7 +203,7 @@ mod tests {
 
         let (buffer_length, buffer) = writer.flush();
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         assert_eq!(true, reader.read_bit());
     }
@@ -220,7 +220,7 @@ mod tests {
 
         let (buffer_length, buffer) = writer.flush();
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         assert_eq!(false, reader.read_bit());
         assert_eq!(true, reader.read_bit());
@@ -245,7 +245,7 @@ mod tests {
 
         let (buffer_length, buffer) = writer.flush();
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         assert_eq!(false, reader.read_bit());
         assert_eq!(true, reader.read_bit());
@@ -283,7 +283,7 @@ mod tests {
 
         let (buffer_length, buffer) = writer.flush();
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         assert_eq!(false, reader.read_bit());
         assert_eq!(true, reader.read_bit());
@@ -331,7 +331,7 @@ mod tests {
 
         let (buffer_length, buffer) = writer.flush();
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         assert_eq!(false, reader.read_bit());
         assert_eq!(true, reader.read_bit());
@@ -364,7 +364,7 @@ mod tests {
 
         let (buffer_length, buffer) = writer.flush();
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         assert_eq!(123, reader.read_byte());
     }
@@ -383,7 +383,7 @@ mod tests {
 
         let (buffer_length, buffer) = writer.flush();
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         assert_eq!(48, reader.read_byte());
         assert_eq!(151, reader.read_byte());

@@ -35,7 +35,7 @@ mod unit_tests {
         let (buffer_length, buffer) = writer.flush();
 
         // Read
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         let out_unit = Serde::de(&mut reader).unwrap();
 
@@ -79,7 +79,7 @@ mod bool_tests {
 
         // Read
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         let out_1 = Serde::de(&mut reader).unwrap();
         let out_2 = Serde::de(&mut reader).unwrap();
@@ -146,7 +146,7 @@ mod char_tests {
 
         // Read
 
-        let mut reader = BitReader::new(buffer_length, buffer);
+        let mut reader = BitReader::new(&buffer[..buffer_length]);
 
         let out_1 = Serde::de(&mut reader).unwrap();
         let out_2 = Serde::de(&mut reader).unwrap();
@@ -309,7 +309,7 @@ macro_rules! test_serde_for {
             let (buffer_length, buffer) = writer.flush();
 
             // Read
-            let mut reader = BitReader::new(buffer_length, buffer);
+            let mut reader = BitReader::new(&buffer[..buffer_length]);
 
             let out_1 = Serde::de(&mut reader).unwrap();
 
