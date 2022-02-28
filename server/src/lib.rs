@@ -65,3 +65,7 @@ pub use server::Server;
 pub use server_config::ServerConfig;
 pub use user::{user_key::UserKey, User, UserMut, UserRef};
 pub use user_scope::UserScopeMut;
+
+pub mod internal {
+    pub use crate::handshake_manager::HandshakeManager;
+}
