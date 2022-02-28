@@ -2,7 +2,7 @@ use naia_serde::BitReader;
 use super::{
     diff_mask::DiffMask,
     protocolize::{ProtocolInserter, Protocolize},
-    replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
+    replica_ref::{ReplicaMutWrapper, ReplicaRefWrapper},
     replicate::{Replicate, ReplicateSafe},
 };
 

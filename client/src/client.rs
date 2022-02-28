@@ -121,7 +121,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 .write_outgoing_header(client_tick, PacketType::Disconnect, &mut writer);
             self.handshake_manager.write_disconnect_packet(&mut writer);
             for _ in 0..10 {
-                self.io.send_packet(&mut writer);
+                self.io.send_writer(&mut writer);
             }
 
             connection.base.mark_sent();
@@ -196,7 +196,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             // send outgoing packets
             let mut sent = false;
             while let Some(mut writer) = server_connection.outgoing_packet(client_tick) {
-                self.io.send_packet(&mut writer);
+                self.io.send_writer(&mut writer);
                 sent = true;
             }
             if sent {
@@ -335,7 +335,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             if server_connection.base.should_send_heartbeat() {
                 let mut writer = BitWriter::new();
                 server_connection.base.write_outgoing_header(client_tick, PacketType::Heartbeat, &mut writer);
-                self.io.send_packet(&mut writer);
+                self.io.send_writer(&mut writer);
                 server_connection.base.mark_sent();
             }
 
@@ -345,18 +345,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                     let mut writer = BitWriter::new();
                     server_connection.base.write_outgoing_header(client_tick, PacketType::Ping, &mut writer);
                     ping_manager.write_ping(&mut writer);
-                    self.io.send_packet(&mut writer);
+                    self.io.send_writer(&mut writer);
                     server_connection.base.mark_sent();
                 }
             }
 
             // receive from socket
             loop {
-                match self.io.receive_packet() {
-                    Ok(Some(packet)) => {
+                match self.io.recv_reader() {
+                    Ok(Some(mut reader)) => {
                         server_connection.base.mark_heard();
-
-                        let mut reader = BitReader::new(packet);
 
                         let header = StandardHeader::de(&mut reader).unwrap();
 
@@ -391,9 +389,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
             // receive from socket
             loop {
-                match self.io.receive_packet() {
-                    Ok(Some(payload)) => {
-                        if self.handshake_manager.receive_packet(payload) {
+                match self.io.recv_reader() {
+                    Ok(Some(mut reader)) => {
+                        if self.handshake_manager.receive_packet(&mut reader) {
                             let server_addr = self.server_address_unwrapped();
                             self.server_connection = Some(Connection::new(
                                 server_addr,

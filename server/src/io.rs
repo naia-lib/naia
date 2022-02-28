@@ -7,7 +7,7 @@ pub use naia_shared::{
     PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe,
     SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
-use naia_shared::serde::BitWriter;
+use naia_shared::serde::{BitReader, BitWriter, OwnedBitReader};
 
 use crate::bandwidth_monitor::BandwidthMonitor;
 
@@ -72,7 +72,7 @@ impl Io {
         self.packet_sender.is_some()
     }
 
-    pub fn send_packet(&mut self, address: &SocketAddr, writer: &mut BitWriter) {
+    pub fn send_writer(&mut self, address: &SocketAddr, writer: &mut BitWriter) {
 
         // get payload
         let (length, buffer) = writer.flush();
@@ -94,7 +94,7 @@ impl Io {
             .send(Packet::new(*address, payload.into()));
     }
 
-    pub fn receive_packet(&mut self) -> Result<Option<Packet>, NaiaServerSocketError> {
+    pub fn recv_reader(&mut self) -> Result<Option<(SocketAddr, OwnedBitReader)>, NaiaServerSocketError> {
         let receive_result = self
             .packet_receiver
             .as_mut()
@@ -112,9 +112,9 @@ impl Io {
                 packet = Packet::new(packet.address, decoder.decode(&packet.payload).into());
             }
 
-            return Ok(Some(packet));
+            return Ok(Some((packet.address.clone(), OwnedBitReader::new(packet.payload))));
         } else {
-            return receive_result;
+            return receive_result.map(|packet_opt| packet_opt.map(|packet| (packet.address.clone(), OwnedBitReader::new(packet.payload))));
         }
     }
 

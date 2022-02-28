@@ -64,7 +64,7 @@ impl<P: Protocolize> HandshakeManager<P> {
                     .to_u64()
                     .ser(&mut writer);
 
-                io.send_packet(&mut writer);
+                io.send_writer(&mut writer);
             }
             HandshakeState::AwaitingConnectResponse => {
                 let mut writer = BitWriter::new();
@@ -88,7 +88,7 @@ impl<P: Protocolize> HandshakeManager<P> {
                     0.ser(&mut writer);
                 }
 
-                io.send_packet(&mut writer);
+                io.send_writer(&mut writer);
             }
         }
     }
@@ -103,20 +103,19 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Returns whether connection was successful
-    pub fn receive_packet(&mut self, payload: &[u8]) -> bool {
-        let mut reader = BitReader::new(payload);
-        let header = StandardHeader::de(&mut reader).unwrap();
+    pub fn receive_packet(&mut self, reader: &mut BitReader) -> bool {
+        let header = StandardHeader::de(reader).unwrap();
         match header.packet_type() {
             PacketType::ServerChallengeResponse => {
                 if self.connection_state == HandshakeState::AwaitingChallengeResponse {
                     if let Some(my_timestamp) = self.pre_connection_timestamp {
 
-                        let payload_timestamp = Timestamp::from_u64(&u64::de(&mut reader).unwrap());
+                        let payload_timestamp = Timestamp::from_u64(&u64::de(reader).unwrap());
 
                         if my_timestamp == payload_timestamp {
                             let mut digest_bytes: Vec<u8> = Vec::new();
                             for _ in 0..32 {
-                                digest_bytes.push(u8::de(&mut reader).unwrap());
+                                digest_bytes.push(u8::de(reader).unwrap());
                             }
                             self.pre_connection_digest = Some(digest_bytes.into_boxed_slice());
 

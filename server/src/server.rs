@@ -197,7 +197,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             new_connection
                     .base
                     .write_outgoing_header(0, PacketType::ServerConnectResponse, &mut writer);
-            self.io.send_packet(&new_connection.base.address, &mut writer);
+            self.io.send_writer(&new_connection.base.address, &mut writer);
             new_connection.base.mark_sent();
             //
             self.user_connections.insert(user.address, new_connection);
@@ -285,7 +285,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             while let Some(mut writer) =
                 connection.outgoing_packet(&world, &self.world_record, server_tick)
             {
-                self.io.send_packet(&user_address, &mut writer);
+                self.io.send_writer(&user_address, &mut writer);
                 sent = true;
             }
             if sent {
@@ -797,7 +797,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                         PacketType::Heartbeat,
                         &mut writer,
                     );
-                    self.io.send_packet(user_address, &mut writer);
+                    self.io.send_writer(user_address, &mut writer);
                     connection.base.mark_sent();
                 }
             }
@@ -809,11 +809,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
         //receive socket events
         loop {
-            match self.io.receive_packet() {
-                Ok(Some(packet)) => {
-                    let mut reader = BitReader::new(&packet.payload);
-
-                    if let Some(user_connection) = self.user_connections.get_mut(&packet.address) {
+            match self.io.recv_reader() {
+                Ok(Some((address, mut owned_reader))) => {
+                    let mut reader = owned_reader.borrow();
+                    if let Some(user_connection) = self.user_connections.get_mut(&address) {
                         user_connection.base.mark_heard();
                     }
 
@@ -822,9 +821,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     match header.packet_type() {
                         PacketType::ClientChallengeRequest => self
                             .handshake_manager
-                            .receive_challenge_request(&mut self.io, &packet.address, &mut reader),
+                            .receive_challenge_request(&mut self.io, &address, &mut reader),
                         PacketType::ClientConnectRequest => {
-                            if let Some(mut connection) = self.user_connections.get_mut(&packet.address) {
+                            if let Some(mut connection) = self.user_connections.get_mut(&address) {
                                 self.handshake_manager.receive_old_connect_request(
                                     &mut self.io,
                                     &self.world_record,
@@ -835,11 +834,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                             } else {
                                 match self.handshake_manager.receive_new_connect_request(
                                     &self.shared_config.manifest,
-                                    &packet.address,
+                                    &address,
                                     &mut reader,
                                 ) {
                                     HandshakeResult::AuthUser(auth_message) => {
-                                        let user = User::new(packet.address);
+                                        let user = User::new(address);
                                         let user_key = self.users.insert(user);
                                         self.incoming_events.push_back(Ok(Event::Authorization(
                                             user_key,
@@ -847,7 +846,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                         )));
                                     }
                                     HandshakeResult::ConnectUser => {
-                                        let user = User::new(packet.address);
+                                        let user = User::new(address);
                                         let user_key = self.users.insert(user);
                                         self.accept_connection(&user_key);
                                     }
@@ -860,7 +859,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                         PacketType::Disconnect => {
                             if let Some(user_key) = loop {
                                 if let Some(mut connection) =
-                                    self.user_connections.get_mut(&packet.address)
+                                    self.user_connections.get_mut(&address)
                                 {
                                     if self
                                         .handshake_manager
@@ -876,7 +875,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                         }
                         PacketType::Data => {
                             let server_tick_opt = self.server_tick();
-                            match self.user_connections.get_mut(&packet.address) {
+                            match self.user_connections.get_mut(&address) {
                                 Some(connection) => {
                                     connection.process_incoming_header(&self.world_record, &header);
                                     connection.process_incoming_data(
@@ -886,12 +885,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                     );
                                 }
                                 None => {
-                                    warn!("received data from unauthenticated client: {}", packet.address);
+                                    warn!("received data from unauthenticated client: {}", address);
                                 }
                             }
                         }
                         PacketType::Heartbeat => {
-                            match self.user_connections.get_mut(&packet.address) {
+                            match self.user_connections.get_mut(&address) {
                                 Some(connection) => {
                                     // Still need to do this so that proper notify
                                     // events fire based on the heartbeat header
@@ -900,7 +899,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                 None => {
                                     warn!(
                                         "received heartbeat from unauthenticated client: {}",
-                                        packet.address
+                                        address
                                     );
                                 }
                             }
@@ -908,7 +907,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                         PacketType::Ping => {
                             if self.shared_config.ping.is_some() {
                                 let server_tick = self.server_tick().unwrap_or(0);
-                                match self.user_connections.get_mut(&packet.address) {
+                                match self.user_connections.get_mut(&address) {
                                     Some(connection) => {
                                         connection
                                             .process_incoming_header(&self.world_record, &header);
@@ -930,20 +929,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                         ping_index.ser(&mut writer);
 
                                         // send packet
-                                        self.io.send_packet(
-                                            &packet.address,
+                                        self.io.send_writer(
+                                            &address,
                                             &mut writer);
                                         connection.base.mark_sent();
                                     }
                                     None => {
                                         warn!(
                                             "received ping from unauthenticated client: {}",
-                                            packet.address
+                                            address
                                         );
                                     }
                                 }
                             } else {
-                                warn!("received ping address: {}, even though not configured to receive pings", packet.address);
+                                warn!("received ping address: {}, even though not configured to receive pings", address);
                             }
                         }
                         PacketType::ServerChallengeResponse

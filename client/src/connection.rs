@@ -2,7 +2,7 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_shared::{
     BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketType,
-    PingConfig, Protocolize, StandardHeader, Tick, WorldMutType, serde::{Serde, BitReader, BitWriter, FrozenBitReader}
+    PingConfig, Protocolize, StandardHeader, Tick, WorldMutType, serde::{Serde, BitReader, BitWriter, OwnedBitReader}
 };
 
 use super::{
@@ -14,7 +14,7 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     pub base: BaseConnection<P>,
     pub entity_manager: EntityManager<P, E>,
     pub ping_manager: Option<PingManager>,
-    jitter_buffer: TickQueue<FrozenBitReader>,
+    jitter_buffer: TickQueue<OwnedBitReader>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
@@ -63,7 +63,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
     pub fn buffer_data_packet(&mut self, incoming_tick: u16, reader: &mut BitReader) {
         self.jitter_buffer
-            .add_item(incoming_tick, reader.freeze());
+            .add_item(incoming_tick, reader.to_owned());
     }
 
     pub fn process_buffered_packets<W: WorldMutType<P, E>>(
@@ -74,7 +74,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         incoming_events: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
     ) {
         while let Some((server_tick, frozen_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
-            let mut reader = frozen_reader.unfreeze();
+            let mut reader = frozen_reader.borrow();
             while reader.has_more() {
                 let manager_type = ManagerType::de(&mut reader).unwrap();
                 match manager_type {
