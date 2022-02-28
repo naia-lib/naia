@@ -3,14 +3,11 @@ use std::{
     vec::Vec,
 };
 
-use crate::{ManagerType, PacketIndex};
+use crate::{constants::MTU_SIZE_BITS, ManagerType, PacketIndex};
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
-use crate::constants::MTU_SIZE_BITS;
 
 use super::{
-    manifest::Manifest,
-    packet_notifiable::PacketNotifiable,
-    protocolize::Protocolize,
+    manifest::Manifest, packet_notifiable::PacketNotifiable, protocolize::Protocolize,
     replicate::ReplicateSafe,
 };
 
@@ -94,7 +91,6 @@ impl<P: Protocolize> MessageManager<P> {
 
     /// Write into outgoing packet
     pub fn write_messages(&mut self, writer: &mut BitWriter, packet_index: PacketIndex) {
-
         let mut message_count = 0;
 
         // Header

@@ -1,4 +1,7 @@
-use std::{hash::Hash, collections::{HashMap, VecDeque}};
+use std::{
+    collections::{HashMap, VecDeque},
+    hash::Hash,
+};
 
 pub struct CacheMap<K: Eq + Hash + Clone, V: Clone> {
     map: HashMap<K, V>,
@@ -18,7 +21,9 @@ impl<K: Eq + Hash + Clone, V: Clone> CacheMap<K, V> {
     }
 
     pub fn get_unchecked(&self, key: &K) -> &V {
-        self.map.get(key).expect("need to call contains_key() first to make sure this panic won't happen!")
+        self.map
+            .get(key)
+            .expect("need to call contains_key() first to make sure this panic won't happen!")
     }
 
     pub fn insert(&mut self, key: &K, value: &V) {

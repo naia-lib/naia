@@ -1,15 +1,10 @@
-use std::collections::HashMap;
 use crate::Tick;
+use std::collections::HashMap;
 
 use super::{
-    message_manager::MessageManager,
-    packet_notifiable::PacketNotifiable,
-    packet_type::PacketType,
-    protocolize::Protocolize,
-    sequence_buffer::SequenceBuffer,
-    standard_header::StandardHeader,
-    wrapping_number::sequence_greater_than,
-    types::PacketIndex,
+    message_manager::MessageManager, packet_notifiable::PacketNotifiable, packet_type::PacketType,
+    protocolize::Protocolize, sequence_buffer::SequenceBuffer, standard_header::StandardHeader,
+    types::PacketIndex, wrapping_number::sequence_greater_than,
 };
 
 pub const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
@@ -77,8 +72,8 @@ impl AckManager {
             self.sent_packets.remove(&sender_ack_index);
         }
 
-        // The `sender_ack_bitfield` is going to include whether or not the past 32 packets
-        // have been received successfully.
+        // The `sender_ack_bitfield` is going to include whether or not the past 32
+        // packets have been received successfully.
         // If so, we have no need to resend old packets.
         for i in 1..=REDUNDANT_PACKET_ACKS_SIZE {
             let sent_packet_index = sender_ack_index.wrapping_sub(i);
@@ -111,12 +106,8 @@ impl AckManager {
 
     /// Records the packet with the given packet index
     fn track_packet(&mut self, packet_type: PacketType, packet_index: PacketIndex) {
-        self.sent_packets.insert(
-            packet_index,
-            SentPacket {
-                packet_type,
-            },
-        );
+        self.sent_packets
+            .insert(packet_index, SentPacket { packet_type });
     }
 
     /// Bumps the local packet index
@@ -124,7 +115,11 @@ impl AckManager {
         self.next_packet_index = self.next_packet_index.wrapping_add(1);
     }
 
-    pub fn next_outgoing_packet_header(&mut self, host_tick: Tick, packet_type: PacketType) -> StandardHeader {
+    pub fn next_outgoing_packet_header(
+        &mut self,
+        host_tick: Tick,
+        packet_type: PacketType,
+    ) -> StandardHeader {
         let next_packet_index = self.next_sender_packet_index();
 
         let outgoing = StandardHeader::new(

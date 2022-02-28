@@ -1,6 +1,6 @@
 mod some_protocol {
-    use naia_shared::Protocolize;
     use super::some_replica::StringHolder;
+    use naia_shared::Protocolize;
 
     #[derive(Protocolize)]
     pub enum SomeProtocol {
@@ -25,7 +25,10 @@ mod some_replica {
     }
 }
 
-use naia_shared::{serde::{BitReader, BitWriter, Serde}, Protocolize, Replicate};
+use naia_shared::{
+    serde::{BitReader, BitWriter, Serde},
+    Protocolize, Replicate,
+};
 
 use some_protocol::{SomeProtocol, SomeProtocolKind};
 use some_replica::StringHolder;

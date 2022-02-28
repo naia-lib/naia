@@ -1,10 +1,7 @@
-use std::collections::HashMap;
 use naia_serde::BitReader;
+use std::collections::HashMap;
 
-use super::{
-    protocolize::Protocolize,
-    replica_builder::ReplicaBuilder,
-};
+use super::{protocolize::Protocolize, replica_builder::ReplicaBuilder};
 
 /// Contains the shared protocol between Client & Server, with a data that is
 /// able to map Message/Component TypeIds to their representation within
@@ -33,8 +30,8 @@ impl<P: Protocolize> Manifest<P> {
     /// Creates a Message/Component instance, given a NaiaId and a
     /// payload, typically from an incoming packet
     pub fn create_replica(&self, component_kind: P::Kind, reader: &mut BitReader) -> P {
-        let replica_builder =
-            self.builder_map
+        let replica_builder = self
+            .builder_map
             .get(&component_kind)
             .expect("No ReplicaBuilder registered for given NaiaId!");
         return replica_builder.as_ref().build(reader);

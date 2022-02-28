@@ -1,4 +1,4 @@
-use crate::{serde, derive_serde};
+use crate::{derive_serde, serde};
 
 // Enum used as a shared network protocol, representing various message types
 // related to Entities/Components

@@ -1,12 +1,10 @@
 use std::time::Duration;
 
-pub use naia_shared::{
-    ConnectionConfig, ManagerType, Manifest, PacketType, ProtocolKindType,
-    Protocolize, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType,
-    WorldRefType,
-};
 use naia_shared::serde::{BitReader, BitWriter, Serde};
-use naia_shared::Tick;
+pub use naia_shared::{
+    ConnectionConfig, ManagerType, Manifest, PacketType, ProtocolKindType, Protocolize,
+    ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+};
 
 use super::io::Io;
 
@@ -76,7 +74,7 @@ impl<P: Protocolize> HandshakeManager<P> {
                 self.recv_challenge_response(reader);
             }
             PacketType::ServerConnectResponse => {
-                self.connection_state = HandshakeState::Connected;
+                self.recv_connect_response();
             }
             _ => {}
         }
@@ -85,8 +83,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     // Step 1 of Handshake
     pub fn send_challenge_request(&mut self, io: &mut Io) {
         let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::ClientChallengeRequest, 0, 0, 0, 0)
-            .ser(&mut writer);
+        StandardHeader::new(PacketType::ClientChallengeRequest, 0, 0, 0, 0).ser(&mut writer);
 
         if self.pre_connection_timestamp.is_none() {
             self.pre_connection_timestamp = Some(Timestamp::now());
@@ -124,8 +121,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     pub fn send_connect_request(&mut self, io: &mut Io) {
         let mut writer = BitWriter::new();
 
-        StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0, 0)
-            .ser(&mut writer);
+        StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0, 0).ser(&mut writer);
 
         // write timestamp & digest into payload
         self.write_signed_timestamp(&mut writer);
@@ -146,11 +142,15 @@ impl<P: Protocolize> HandshakeManager<P> {
         io.send_writer(&mut writer);
     }
 
+    // Step 4 of Handshake
+    pub fn recv_connect_response(&mut self) {
+        self.connection_state = HandshakeState::Connected;
+    }
+
     // Send 10 disconnect packets
     pub fn send_disconnect(&self, io: &mut Io) {
         let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::Disconnect, 0, 0, 0, 0)
-            .ser(&mut writer);
+        StandardHeader::new(PacketType::Disconnect, 0, 0, 0, 0).ser(&mut writer);
         self.write_signed_timestamp(&mut writer);
         for _ in 0..10 {
             io.send_writer(&mut writer);

@@ -5,8 +5,9 @@ use std::{
 };
 
 use naia_shared::{
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketType,
-    Protocolize, StandardHeader, Tick, WorldRefType, serde::{Serde, BitReader, BitWriter}
+    serde::{BitReader, BitWriter, Serde},
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketType, Protocolize,
+    StandardHeader, Tick, WorldRefType,
 };
 
 use super::{
@@ -108,14 +109,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             let mut writer = BitWriter::new();
 
             // Add header
-            self.base.write_outgoing_header(
-                server_tick,
-                PacketType::Data,
-                &mut writer,
-            );
+            self.base
+                .write_outgoing_header(server_tick, PacketType::Data, &mut writer);
 
             // Write Messages
-            self.base.message_manager.write_messages(&mut writer, next_packet_index);
+            self.base
+                .message_manager
+                .write_messages(&mut writer, next_packet_index);
 
             // Write Entity Actions
             self.entity_manager

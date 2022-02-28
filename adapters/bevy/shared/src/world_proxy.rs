@@ -70,11 +70,7 @@ impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldRef<'w> {
         return component(self.world, entity);
     }
 
-    fn component_of_kind(
-        &self,
-        entity: &Entity,
-        component_kind: &P::Kind,
-    ) -> Option<&P> {
+    fn component_of_kind(&self, entity: &Entity, component_kind: &P::Kind) -> Option<&P> {
         return component_of_kind::<P>(self.world, entity, component_kind);
     }
 }
@@ -112,11 +108,7 @@ impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
         return component(self.world, entity);
     }
 
-    fn component_of_kind(
-        &self,
-        entity: &Entity,
-        component_kind: &P::Kind,
-    ) -> Option<&P> {
+    fn component_of_kind(&self, entity: &Entity, component_kind: &P::Kind) -> Option<&P> {
         return component_of_kind(self.world, entity, component_kind);
     }
 }

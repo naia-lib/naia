@@ -1,4 +1,4 @@
-use crate::{derive_serde, PacketIndex, serde, Tick};
+use crate::{derive_serde, serde, PacketIndex, Tick};
 
 use crate::packet_type::PacketType;
 

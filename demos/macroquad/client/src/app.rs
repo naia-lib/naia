@@ -193,8 +193,7 @@ impl App {
                             if let Some(component) =
                                 world_mut.component_of_kind(&entity, &component_kind)
                             {
-                                component_copy_opt =
-                                    Some(component.clone());
+                                component_copy_opt = Some(component.clone());
                             }
                             if let Some(component_copy) = component_copy_opt {
                                 component_copy

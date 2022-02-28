@@ -1,8 +1,9 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_shared::{
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketType,
-    PingConfig, Protocolize, StandardHeader, Tick, WorldMutType, serde::{Serde, BitReader, BitWriter, OwnedBitReader}
+    serde::{BitReader, BitWriter, OwnedBitReader, Serde},
+    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketType, PingConfig, Protocolize,
+    StandardHeader, Tick, WorldMutType,
 };
 
 use super::{
@@ -109,17 +110,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             let mut writer = BitWriter::new();
 
             // Add header
-            self.base.write_outgoing_header(
-                client_tick,
-                PacketType::Data,
-                &mut writer,
-            );
+            self.base
+                .write_outgoing_header(client_tick, PacketType::Data, &mut writer);
 
             // Write Entity Messages
-            self.entity_manager.write_messages(&mut writer, next_packet_index);
+            self.entity_manager
+                .write_messages(&mut writer, next_packet_index);
 
             // Write Messages
-            self.base.message_manager.write_messages(&mut writer, next_packet_index);
+            self.base
+                .message_manager
+                .write_messages(&mut writer, next_packet_index);
 
             // Return Writer
             return Some(writer);

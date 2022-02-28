@@ -24,10 +24,14 @@ impl BitWrite for BitCounter {
     fn write_bit(&mut self, _: bool) {
         self.count += 1;
     }
+
     fn write_byte(&mut self, _: u8) {
         self.count += 8;
     }
-    fn bit_count(&self) -> u16 { self.count }
+
+    fn bit_count(&self) -> u16 {
+        self.count
+    }
 }
 
 // BitWriter
@@ -185,6 +189,7 @@ impl OwnedBitReader {
             buffer,
         }
     }
+
     pub fn borrow(&self) -> BitReader {
         BitReader {
             state: self.state,

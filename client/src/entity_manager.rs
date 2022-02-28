@@ -5,8 +5,11 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{DiffMask, EntityActionType, LocalComponentKey, Manifest, NetEntity, Protocolize, Tick, WorldMutType, ManagerType, PacketIndex, MTU_SIZE_BITS};
-use naia_shared::serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
+use naia_shared::{
+    serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde},
+    DiffMask, EntityActionType, LocalComponentKey, ManagerType, Manifest, NetEntity, PacketIndex,
+    Protocolize, Tick, WorldMutType, MTU_SIZE_BITS,
+};
 
 use super::{
     entity_message_sender::EntityMessageSender, entity_record::EntityRecord,
@@ -274,7 +277,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
             // Find how many messages will fit into the packet
             for (_, client_tick, entity, message) in entity_messages.iter() {
-                Self::write_message(&mut counter, &self.entity_records, &client_tick, &entity, &message);
+                Self::write_message(
+                    &mut counter,
+                    &self.entity_records,
+                    &client_tick,
+                    &entity,
+                    &message,
+                );
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
                     if message_count == u8::MAX {
@@ -298,7 +307,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         {
             for _ in 0..message_count {
                 // Pop message
-                let (message_id, client_tick, entity, message) = entity_messages.pop_front().unwrap();
+                let (message_id, client_tick, entity, message) =
+                    entity_messages.pop_front().unwrap();
 
                 // Write message
                 Self::write_message(
@@ -327,7 +337,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_message<S: BitWrite> (
+    pub fn write_message<S: BitWrite>(
         writer: &mut S,
         entity_records: &HashMap<E, EntityRecord<P::Kind>>,
         client_tick: &Tick,
@@ -346,7 +356,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
             // write payload
             message.write(writer);
-
         } else {
             panic!("Cannot find the entity record to serialize entity message!");
         }

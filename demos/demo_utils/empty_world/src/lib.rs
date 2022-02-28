@@ -64,11 +64,7 @@ mod inner {
             unimplemented!()
         }
 
-        fn component_of_kind(
-            &self,
-            _: &EmptyEntity,
-            _: &P::Kind,
-        ) -> Option<&P> {
+        fn component_of_kind(&self, _: &EmptyEntity, _: &P::Kind) -> Option<&P> {
             unimplemented!()
         }
     }
@@ -97,11 +93,7 @@ mod inner {
             unimplemented!()
         }
 
-        fn component_of_kind(
-            &self,
-            _: &EmptyEntity,
-            _: &P::Kind,
-        ) -> Option<&P> {
+        fn component_of_kind(&self, _: &EmptyEntity, _: &P::Kind) -> Option<&P> {
             unimplemented!()
         }
     }

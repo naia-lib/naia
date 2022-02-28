@@ -2,9 +2,10 @@ use std::{net::SocketAddr, time::Duration};
 
 use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, ServerAddr};
 pub use naia_shared::{
+    serde::{BitReader, BitWriter},
     BandwidthMonitor, CompressionConfig, ConnectionConfig, Decoder, Encoder, ManagerType, Manifest,
-    PacketType, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig,
-    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType, serde::{BitReader, BitWriter}
+    PacketType, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, StandardHeader, Timer,
+    Timestamp, WorldMutType, WorldRefType,
 };
 
 pub struct Io {
@@ -69,7 +70,6 @@ impl Io {
     }
 
     pub fn send_writer(&mut self, writer: &mut BitWriter) {
-
         // get payload
         let (length, buffer) = writer.flush();
         let mut payload = &buffer[0..length];
@@ -110,7 +110,8 @@ impl Io {
 
             return Ok(Some(BitReader::new(payload)));
         } else {
-            return receive_result.map(|payload_opt| payload_opt.map(|payload| BitReader::new(payload)));
+            return receive_result
+                .map(|payload_opt| payload_opt.map(|payload| BitReader::new(payload)));
         }
     }
 

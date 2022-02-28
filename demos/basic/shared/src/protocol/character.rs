@@ -1,4 +1,4 @@
-use naia_shared::{Property, Replicate, derive_serde, serde};
+use naia_shared::{derive_serde, serde, Property, Replicate};
 
 // Here's an example of a Custom Property
 #[derive_serde]

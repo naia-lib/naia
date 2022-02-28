@@ -131,7 +131,6 @@ fn type_to_kind_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
 
     {
         for variant_name in variants {
-
             let new_output_right = quote! {
                 map.insert(TypeId::of::<#variant_name>(), #enum_name::#variant_name);
             };
@@ -169,7 +168,6 @@ fn type_to_kind_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
 }
 
 pub fn dyn_ref_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
-
     let mut variant_definitions = quote! {};
 
     for variant_name in variants {
@@ -208,7 +206,7 @@ pub fn dyn_mut_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStre
             #new_output_right
         };
         variant_definitions = new_output_result;
-    };
+    }
 
     return quote! {
         fn dyn_mut(&mut self) -> ReplicaDynMut<'_, Self> {
@@ -234,7 +232,7 @@ pub fn cast_ref_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStr
             #new_output_right
         };
         variant_definitions = new_output_result;
-    };
+    }
 
     return quote! {
         fn cast_ref<R: ReplicateSafe<Self>>(&self) -> Option<&R> {
@@ -260,7 +258,7 @@ pub fn cast_mut_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStr
             #new_output_right
         };
         variant_definitions = new_output_result;
-    };
+    }
 
     return quote! {
         fn cast_mut<R: ReplicateSafe<Self>>(&mut self) -> Option<&mut R> {
@@ -288,7 +286,7 @@ pub fn cast_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
             #new_output_right
         };
         variant_definitions = new_output_result;
-    };
+    }
 
     return quote! {
         fn cast<R: Replicate<Self>>(self) -> Option<R> {
@@ -315,7 +313,7 @@ pub fn clone_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream
             #new_output_right
         };
         variant_definitions = new_output_result;
-    };
+    }
 
     return quote! {
         fn clone(&self) -> Self {
@@ -392,8 +390,8 @@ fn write_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
             #new_output_right
         };
         variant_definitions = new_output_result;
-    };
-    
+    }
+
     return quote! {
         fn write<S: serde::BitWrite>(&self, writer: &mut S) {
             match self {
@@ -417,7 +415,7 @@ fn write_partial_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenSt
             #new_output_right
         };
         variant_definitions = new_output_result;
-    };
+    }
 
     return quote! {
         fn write_partial<S: serde::BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S) {
