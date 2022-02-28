@@ -1,7 +1,10 @@
 use std::{collections::VecDeque, time::Duration};
 
-use naia_shared::{sequence_greater_than, Instant, Timer, serde::{BitWriter, Serde}};
-use naia_shared::serde::BitReader;
+use naia_shared::{
+    sequence_greater_than,
+    serde::{BitReader, BitWriter, Serde},
+    Instant, Timer,
+};
 
 pub struct PingManager {
     ping_timer: Timer,

@@ -7,12 +7,14 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{DiffMask, KeyGenerator, LocalComponentKey, ManagerType, MTU_SIZE_BITS, NetEntity, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType};
-use naia_shared::serde::{BitCounter, BitWrite, BitWriter, Serde};
+use naia_shared::{
+    serde::{BitCounter, BitWrite, BitWriter, Serde},
+    DiffMask, KeyGenerator, LocalComponentKey, ManagerType, NetEntity, PacketIndex,
+    PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
+};
 
 use super::{
-    entity_action::EntityAction,
-    global_diff_handler::GlobalDiffHandler, keys::ComponentKey,
+    entity_action::EntityAction, global_diff_handler::GlobalDiffHandler, keys::ComponentKey,
     local_component_record::LocalComponentRecord, local_entity_record::LocalEntityRecord,
     locality_status::LocalityStatus, user_diff_handler::UserDiffHandler, world_record::WorldRecord,
 };
@@ -87,11 +89,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             let local_entity_record = LocalEntityRecord::new(local_id);
             self.entity_records
                 .insert(*global_entity, local_entity_record);
-            self.queued_actions
-                .push_back(EntityAction::SpawnEntity {
-                    entity: *global_entity,
-                    sent_components: None
-                });
+            self.queued_actions.push_back(EntityAction::SpawnEntity {
+                entity: *global_entity,
+                sent_components: None,
+            });
         } else {
             panic!("added entity twice");
         }
@@ -239,14 +240,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
             // Find how many messages will fit into the packet
             for entity_action in self.queued_actions.iter() {
+                let processed_entity_action =
+                    self.peek_outgoing_action::<W>(world_record, packet_index, entity_action);
 
-                let processed_entity_action = self.peek_outgoing_action::<W>(
-                    world_record,
-                    packet_index,
-                    entity_action,
+                Self::write_action(
+                    &mut counter,
+                    world,
+                    &self.entity_records,
+                    &self.component_records,
+                    &processed_entity_action,
                 );
-
-                Self::write_action(&mut counter, world, &self.entity_records, &self.component_records, &processed_entity_action);
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
                     if message_count == u8::MAX {
@@ -271,11 +274,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             for _ in 0..message_count {
                 // Pop message
                 let action = self.queued_actions.pop_front().unwrap();
-                let processed_entity_action = self.process_outgoing_action::<W>(
-                    world_record,
-                    packet_index,
-                    action,
-                );
+                let processed_entity_action =
+                    self.process_outgoing_action::<W>(world_record, packet_index, action);
 
                 // Write message
                 Self::write_action(
@@ -313,10 +313,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         match action {
             EntityAction::SpawnEntity {
                 entity,
-                sent_components
+                sent_components,
             } => {
                 let local_id = entity_records.get(entity).unwrap().entity_net_id;
-                let component_list = sent_components.as_ref().expect("did not initialize the sent component list correcly");
+                let component_list = sent_components
+                    .as_ref()
+                    .expect("did not initialize the sent component list correcly");
 
                 //write local entity
                 local_id.ser(writer);
@@ -465,9 +467,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         packet_index: u16,
         action: &EntityAction<P, E>,
     ) -> EntityAction<P, E> {
-
         let next_action: EntityAction<P, E> = {
-            if let EntityAction::SpawnEntity { entity, sent_components } = action {
+            if let EntityAction::SpawnEntity {
+                entity,
+                sent_components,
+            } = action
+            {
                 // get the most recent list of components in here ...
                 if !world_record.has_entity(entity) {
                     panic!("entity does not exist!")
@@ -485,7 +490,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     component_list.push((global_component_key, component_kind));
                 }
 
-                EntityAction::SpawnEntity { entity: *entity, sent_components: Some(component_list) }
+                EntityAction::SpawnEntity {
+                    entity: *entity,
+                    sent_components: Some(component_list),
+                }
             } else {
                 action.clone()
             }
@@ -500,9 +508,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         packet_index: u16,
         action: EntityAction<P, E>,
     ) -> EntityAction<P, E> {
-
         let next_action = {
-            if let EntityAction::SpawnEntity{entity, sent_components} = action {
+            if let EntityAction::SpawnEntity {
+                entity,
+                sent_components,
+            } = action
+            {
                 // get the most recent list of components in here ...
                 if !world_record.has_entity(&entity) {
                     panic!("entity does not exist!")
@@ -531,7 +542,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     self.diff_handler.clear_diff_mask(&global_component_key);
                 }
 
-                EntityAction::SpawnEntity { entity, sent_components: Some(component_list) }
+                EntityAction::SpawnEntity {
+                    entity,
+                    sent_components: Some(component_list),
+                }
             } else {
                 action
             }
@@ -644,8 +658,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                         EntityAction::UpdateComponent(_, _, _, _) => {
                             self.sent_updates.remove(&packet_index);
                         }
-                        EntityAction::SpawnEntity { entity, sent_components } => {
-                            let mut component_list = sent_components.expect("sent components not initialized correctly");
+                        EntityAction::SpawnEntity {
+                            entity,
+                            sent_components,
+                        } => {
+                            let mut component_list =
+                                sent_components.expect("sent components not initialized correctly");
                             let entity_record = self.entity_records.get_mut(&entity)
                                 .expect("created entity does not have a entity_record ... initialization error?");
 
@@ -667,9 +685,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                                 // for any components on this entity that have not yet been created
                                 // initiate that now
-                                for global_component_key in
-                                    world_record.component_keys(&entity)
-                                {
+                                for global_component_key in world_record.component_keys(&entity) {
                                     let component_record = self
                                         .component_records
                                         .get(&global_component_key)
@@ -697,8 +713,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 {
                                     while let Some(message) = message_queue.pop_front() {
                                         self.queued_actions.push_back(EntityAction::MessageEntity(
-                                            entity,
-                                            message,
+                                            entity, message,
                                         ));
                                     }
                                 }

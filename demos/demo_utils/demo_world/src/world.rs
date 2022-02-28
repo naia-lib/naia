@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use slotmap::DenseSlotMap;
 
 use naia_shared::{
-    DiffMask, ProtocolInserter, Protocolize, ReplicaDynMutWrapper,
+    serde::BitReader, DiffMask, ProtocolInserter, Protocolize, ReplicaDynMutWrapper,
     ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
-    WorldMutType, WorldRefType, serde::BitReader
+    WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -89,11 +89,7 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w, P> {
         return component(self.world, entity);
     }
 
-    fn component_of_kind(
-        &self,
-        entity: &Entity,
-        component_type: &P::Kind,
-    ) -> Option<&P> {
+    fn component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> Option<&P> {
         return component_of_kind(self.world, entity, component_type);
     }
 }
@@ -119,11 +115,7 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w, P> {
         return component(self.world, entity);
     }
 
-    fn component_of_kind(
-        &self,
-        entity: &Entity,
-        component_type: &P::Kind,
-    ) -> Option<&P> {
+    fn component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> Option<&P> {
         return component_of_kind(self.world, entity, component_type);
     }
 }

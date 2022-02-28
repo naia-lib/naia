@@ -9,13 +9,13 @@ use std::{
 use slotmap::DenseSlotMap;
 
 use naia_server_socket::{ServerAddrs, Socket};
+use naia_shared::serde::{BitWriter, Serde};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
-    ManagerType, Manifest, NetEntity, PacketType, PingConfig, PropertyMutate,
-    PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig,
-    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    ManagerType, Manifest, NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator,
+    ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
+    Timestamp, WorldMutType, WorldRefType,
 };
-use naia_shared::serde::{BitWriter, Serde};
 
 use super::{
     connection::Connection,
@@ -193,12 +193,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 &self.diff_handler,
             );
             // send connectaccept response
-            let mut writer = BitWriter::new();
-            new_connection
-                    .base
-                    .write_outgoing_header(0, PacketType::ServerConnectResponse, &mut writer);
-            self.io.send_writer(&new_connection.base.address, &mut writer);
-            new_connection.base.mark_sent();
+            self.handshake_manager
+                .send_connect_response(&mut self.io, &mut new_connection);
             //
             self.user_connections.insert(user.address, new_connection);
             if self.io.bandwidth_monitor_enabled() {
@@ -824,7 +820,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                             .recv_challenge_request(&mut self.io, &address, &mut reader),
                         PacketType::ClientConnectRequest => {
                             if let Some(mut connection) = self.user_connections.get_mut(&address) {
-                                self.handshake_manager.receive_old_connect_request(
+                                self.handshake_manager.recv_old_connect_request(
                                     &mut self.io,
                                     &self.world_record,
                                     &mut connection,
@@ -832,7 +828,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                     &mut reader,
                                 );
                             } else {
-                                match self.handshake_manager.receive_new_connect_request(
+                                match self.handshake_manager.recv_new_connect_request(
                                     &self.shared_config.manifest,
                                     &address,
                                     &mut reader,
@@ -929,9 +925,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                         ping_index.ser(&mut writer);
 
                                         // send packet
-                                        self.io.send_writer(
-                                            &address,
-                                            &mut writer);
+                                        self.io.send_writer(&address, &mut writer);
                                         connection.base.mark_sent();
                                     }
                                     None => {

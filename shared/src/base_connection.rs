@@ -4,11 +4,15 @@ use naia_serde::{BitWriter, Serde};
 use naia_socket_shared::Timer;
 
 use super::{
-    ack_manager::AckManager, connection_config::ConnectionConfig, message_manager::MessageManager,
-    packet_notifiable::PacketNotifiable, packet_type::PacketType, protocolize::Protocolize,
+    ack_manager::AckManager,
+    connection_config::ConnectionConfig,
+    message_manager::MessageManager,
+    packet_notifiable::PacketNotifiable,
+    packet_type::PacketType,
+    protocolize::Protocolize,
     standard_header::StandardHeader,
+    types::{PacketIndex, Tick},
     wrapping_number::sequence_greater_than,
-    types::{PacketIndex, Tick}
 };
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -75,8 +79,11 @@ impl<P: Protocolize> BaseConnection<P> {
         if sequence_greater_than(header.host_tick(), self.last_received_tick) {
             self.last_received_tick = header.host_tick();
         }
-        self.ack_manager
-            .process_incoming_header(&header, &mut self.message_manager, packet_notifiable);
+        self.ack_manager.process_incoming_header(
+            &header,
+            &mut self.message_manager,
+            packet_notifiable,
+        );
     }
 
     /// Given a packet payload, start tracking the packet via it's index, attach

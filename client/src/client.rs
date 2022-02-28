@@ -2,9 +2,10 @@ use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAdd
 
 use naia_client_socket::Socket;
 pub use naia_shared::{
-    ConnectionConfig, ManagerType, Manifest, PacketType, PingConfig,
-    ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick,
-    Timer, Timestamp, WorldMutType, WorldRefType, serde::{BitReader, BitWriter, Serde}
+    serde::{BitReader, BitWriter, Serde},
+    ConnectionConfig, ManagerType, Manifest, PacketType, PingConfig, ProtocolKindType, Protocolize,
+    ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
+    WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -319,7 +320,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             // send heartbeats
             if server_connection.base.should_send_heartbeat() {
                 let mut writer = BitWriter::new();
-                server_connection.base.write_outgoing_header(client_tick, PacketType::Heartbeat, &mut writer);
+                server_connection.base.write_outgoing_header(
+                    client_tick,
+                    PacketType::Heartbeat,
+                    &mut writer,
+                );
                 self.io.send_writer(&mut writer);
                 server_connection.base.mark_sent();
             }
@@ -328,7 +333,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             if let Some(ping_manager) = &mut server_connection.ping_manager {
                 if ping_manager.should_send_ping() {
                     let mut writer = BitWriter::new();
-                    server_connection.base.write_outgoing_header(client_tick, PacketType::Ping, &mut writer);
+                    server_connection.base.write_outgoing_header(
+                        client_tick,
+                        PacketType::Ping,
+                        &mut writer,
+                    );
                     ping_manager.write_ping(&mut writer);
                     self.io.send_writer(&mut writer);
                     server_connection.base.mark_sent();
@@ -348,7 +357,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
                         match header.packet_type() {
                             PacketType::Data => {
-                                server_connection.buffer_data_packet(header.host_tick(), &mut reader);
+                                server_connection
+                                    .buffer_data_packet(header.host_tick(), &mut reader);
                             }
                             PacketType::Heartbeat => {}
                             PacketType::Pong => {

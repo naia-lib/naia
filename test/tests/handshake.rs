@@ -1,14 +1,13 @@
+use naia_shared::{
+    serde::{BitReader, BitWriter, Serde},
+    Protocolize,
+};
 
-use naia_shared::{serde::{BitReader, BitWriter, Serde}, Protocolize};
-
-use naia_test::{Protocol, ProtocolKind, Auth};
+use naia_test::{Auth, Protocol, ProtocolKind};
 
 #[test]
 fn connect_request_flow() {
-
     // Client send request
-
-
 
     // Write
     let mut writer = BitWriter::new();

@@ -1,13 +1,13 @@
 use std::{net::SocketAddr, panic, time::Duration};
 
 use naia_server_socket::{NaiaServerSocketError, Packet, PacketReceiver, PacketSender};
+use naia_shared::serde::{BitWriter, OwnedBitReader};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, CompressionConfig, ConnectionConfig, Decoder, Encoder, Instant,
-    KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketType,
-    PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe,
-    SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    KeyGenerator, LocalComponentKey, ManagerType, Manifest, PacketType, PropertyMutate,
+    PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig,
+    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
-use naia_shared::serde::{BitWriter, OwnedBitReader};
 
 use crate::bandwidth_monitor::BandwidthMonitor;
 
@@ -73,7 +73,6 @@ impl Io {
     }
 
     pub fn send_writer(&mut self, address: &SocketAddr, writer: &mut BitWriter) {
-
         // get payload
         let (length, buffer) = writer.flush();
         let mut payload = &buffer[0..length];
@@ -94,7 +93,9 @@ impl Io {
             .send(Packet::new(*address, payload.into()));
     }
 
-    pub fn recv_reader(&mut self) -> Result<Option<(SocketAddr, OwnedBitReader)>, NaiaServerSocketError> {
+    pub fn recv_reader(
+        &mut self,
+    ) -> Result<Option<(SocketAddr, OwnedBitReader)>, NaiaServerSocketError> {
         let receive_result = self
             .packet_receiver
             .as_mut()
@@ -112,9 +113,15 @@ impl Io {
                 packet = Packet::new(packet.address, decoder.decode(&packet.payload).into());
             }
 
-            return Ok(Some((packet.address.clone(), OwnedBitReader::new(packet.payload))));
+            return Ok(Some((
+                packet.address.clone(),
+                OwnedBitReader::new(packet.payload),
+            )));
         } else {
-            return receive_result.map(|packet_opt| packet_opt.map(|packet| (packet.address.clone(), OwnedBitReader::new(packet.payload))));
+            return receive_result.map(|packet_opt| {
+                packet_opt
+                    .map(|packet| (packet.address.clone(), OwnedBitReader::new(packet.payload)))
+            });
         }
     }
 

@@ -482,8 +482,8 @@ fn write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> T
 //     };
 // }
 //
-// fn size_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
-//     let mut output = quote! {};
+// fn size_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) ->
+// TokenStream {     let mut output = quote! {};
 //
 //     for (field_name, field_type) in properties.iter() {
 //         let uppercase_variant_name = Ident::new(
@@ -492,9 +492,9 @@ fn write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> T
 //         );
 //
 //         let new_output_right = quote! {
-//             if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
-//                 size += Property::<#field_type>::size();
-//             }
+//             if let Some(true) =
+// diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {                 
+// size += Property::<#field_type>::size();             }
 //         };
 //         let new_output_result = quote! {
 //             #output
