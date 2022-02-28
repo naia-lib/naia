@@ -5,6 +5,7 @@ use crate::consts::MAX_BUFFER_SIZE;
 pub trait BitWrite {
     fn write_bit(&mut self, bit: bool);
     fn write_byte(&mut self, byte: u8);
+    fn bit_count(&self) -> u16;
 }
 
 // BitCounter
@@ -23,10 +24,10 @@ impl BitWrite for BitCounter {
     fn write_bit(&mut self, _: bool) {
         self.count += 1;
     }
-
     fn write_byte(&mut self, _: u8) {
         self.count += 8;
     }
+    fn bit_count(&self) -> u16 { self.count }
 }
 
 // BitWriter
@@ -94,46 +95,59 @@ impl BitWrite for BitWriter {
             temp = temp >> 1;
         }
     }
+
+    fn bit_count(&self) -> u16 {
+        return ((self.buffer_index * 8) + (self.scratch_index as usize)) as u16;
+    }
 }
 
 // BitReader
 
-pub struct BitReader {
-    scratch: u8,
-    scratch_index: u8,
-    buffer: [u8; MAX_BUFFER_SIZE],
-    buffer_index: usize,
-    buffer_length: usize,
+pub struct BitReader<'b> {
+    state: BitReaderState,
+    buffer: &'b [u8],
 }
 
-impl BitReader {
-    pub fn new(buffer_length: usize, buffer: [u8; MAX_BUFFER_SIZE]) -> Self {
+impl<'b> BitReader<'b> {
+    pub fn new(buffer: &'b [u8]) -> Self {
         Self {
-            scratch: 0,
-            scratch_index: 0,
+            state: BitReaderState {
+                scratch: 0,
+                scratch_index: 0,
+                buffer_index: 0,
+            },
             buffer,
-            buffer_index: 0,
-            buffer_length,
         }
     }
 
+    pub fn freeze(self) -> FrozenBitReader {
+        FrozenBitReader {
+            state: self.state,
+            buffer: self.buffer.into(),
+        }
+    }
+
+    pub fn has_more(&self) -> bool {
+        self.state.buffer_index <= self.buffer.len()
+    }
+
     pub(crate) fn read_bit(&mut self) -> bool {
-        if self.scratch_index <= 0 {
-            if self.buffer_index == self.buffer_length {
+        if self.state.scratch_index <= 0 {
+            if self.state.buffer_index == self.buffer.len() {
                 panic!("no more bytes to read");
             }
 
-            self.scratch = self.buffer[self.buffer_index];
+            self.state.scratch = self.buffer[self.state.buffer_index];
 
-            self.buffer_index += 1;
-            self.scratch_index += 8;
+            self.state.buffer_index += 1;
+            self.state.scratch_index += 8;
         }
 
-        let value = self.scratch & 1;
+        let value = self.state.scratch & 1;
 
-        self.scratch = self.scratch >> 1;
+        self.state.scratch = self.state.scratch >> 1;
 
-        self.scratch_index -= 1;
+        self.state.scratch_index -= 1;
 
         value != 0
     }
@@ -151,6 +165,30 @@ impl BitReader {
         }
         output
     }
+}
+
+// Frozen BitReader
+
+pub struct FrozenBitReader {
+    state: BitReaderState,
+    buffer: Box<[u8]>,
+}
+
+impl FrozenBitReader {
+    pub fn unfreeze<'b>(&'b self) -> BitReader<'b> {
+        BitReader {
+            state: self.state,
+            buffer: &self.buffer,
+        }
+    }
+}
+
+// BitReaderState
+#[derive(Copy, Clone)]
+struct BitReaderState {
+    scratch: u8,
+    scratch_index: u8,
+    buffer_index: usize,
 }
 
 mod tests {

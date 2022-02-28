@@ -1,13 +1,14 @@
 use std::net::SocketAddr;
 
-use naia_serde::{BitWrite, Serde};
+use naia_serde::{BitWriter, Serde};
 use naia_socket_shared::Timer;
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, message_manager::MessageManager,
     packet_notifiable::PacketNotifiable, packet_type::PacketType, protocolize::Protocolize,
-    sequence_buffer::SequenceNumber, standard_header::StandardHeader,
+    standard_header::StandardHeader,
     wrapping_number::sequence_greater_than,
+    types::{PacketIndex, Tick}
 };
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -75,41 +76,26 @@ impl<P: Protocolize> BaseConnection<P> {
             self.last_received_tick = header.host_tick();
         }
         self.ack_manager
-            .process_incoming(&header, &mut self.message_manager, packet_notifiable);
+            .process_incoming_header(&header, &mut self.message_manager, packet_notifiable);
     }
 
     /// Given a packet payload, start tracking the packet via it's index, attach
     /// the appropriate header, and return the packet's resulting underlying
     /// bytes
-    pub fn process_outgoing_header<S: BitWrite>(
+    pub fn write_outgoing_header(
         &mut self,
-        host_tick: u16,
+        host_tick: Tick,
         packet_type: PacketType,
-        writer: &mut S,
+        writer: &mut BitWriter,
     ) {
         // Add header onto message!
-        let local_packet_index = self.ack_manager.local_packet_index();
-        let last_remote_packet_index = self.ack_manager.last_remote_packet_index();
-        let bit_field = self.ack_manager.ack_bitfield();
-
-        StandardHeader::new(
-            packet_type,
-            local_packet_index,
-            last_remote_packet_index,
-            bit_field,
-            host_tick,
-        )
-        .ser(writer);
-
-        // Ack stuff //
         self.ack_manager
-            .track_packet(packet_type, local_packet_index);
-        self.ack_manager.increment_local_packet_index();
-        ///////////////
+            .next_outgoing_packet_header(host_tick, packet_type)
+            .ser(writer);
     }
 
     /// Get the next outgoing packet's index
-    pub fn next_packet_index(&self) -> SequenceNumber {
-        return self.ack_manager.local_packet_index();
+    pub fn next_packet_index(&self) -> PacketIndex {
+        return self.ack_manager.next_sender_packet_index();
     }
 }

@@ -105,7 +105,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             let mut write_state = PacketWriteState::new(self.base.next_packet_index());
 
             // Queue Messages for Write
-            self.base.message_manager.queue_writes(&mut write_state);
+            self.base.message_manager.write_messages(&mut write_state);
 
             // Queue Entity Actions for Write
             self.entity_manager
@@ -118,7 +118,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                 self.entity_manager.flush_writes(&mut out_vec);
 
                 // Add header to it
-                let payload = self.base.process_outgoing_header(
+                let payload = self.base.write_outgoing_header(
                     server_tick,
                     PacketType::Data,
                     &out_vec.into_boxed_slice(),

@@ -1,13 +1,15 @@
 use std::collections::HashMap;
+use crate::Tick;
 
 use super::{
     message_manager::MessageManager,
     packet_notifiable::PacketNotifiable,
     packet_type::PacketType,
     protocolize::Protocolize,
-    sequence_buffer::{SequenceBuffer, SequenceNumber},
+    sequence_buffer::SequenceBuffer,
     standard_header::StandardHeader,
     wrapping_number::sequence_greater_than,
+    types::PacketIndex,
 };
 
 pub const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
@@ -17,13 +19,13 @@ const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
 /// copied into the standard header on each outgoing packet
 #[derive(Debug)]
 pub struct AckManager {
-    // Local sequence number which we'll bump each time we send a new packet over the network.
-    sequence_number: SequenceNumber,
-    // The last acked sequence number of the packets we've sent to the remote host.
-    remote_ack_sequence_num: SequenceNumber,
+    // Local packet index which we'll bump each time we send a new packet over the network.
+    next_packet_index: PacketIndex,
+    // The last acked packet index of the packets we've sent to the remote host.
+    last_recv_packet_index: PacketIndex,
     // Using a `Hashmap` to track every packet we send out so we can ensure that we can resend when
     // dropped.
-    sent_packets: HashMap<u16, SentPacket>,
+    sent_packets: HashMap<PacketIndex, SentPacket>,
     // However, we can only reasonably ack up to `REDUNDANT_PACKET_ACKS_SIZE + 1` packets on each
     // message we send so this should be that large.
     received_packets: SequenceBuffer<ReceivedPacket>,
@@ -33,134 +35,150 @@ impl AckManager {
     /// Create a new AckManager
     pub fn new() -> Self {
         AckManager {
-            sequence_number: 0,
-            remote_ack_sequence_num: u16::max_value(),
+            next_packet_index: 0,
+            last_recv_packet_index: u16::MAX,
             sent_packets: HashMap::with_capacity(DEFAULT_SEND_PACKETS_SIZE),
             received_packets: SequenceBuffer::with_capacity(REDUNDANT_PACKET_ACKS_SIZE + 1),
         }
     }
 
     /// Get the index of the next outgoing packet
-    pub fn local_packet_index(&self) -> SequenceNumber {
-        self.sequence_number
+    pub fn next_sender_packet_index(&self) -> PacketIndex {
+        self.next_packet_index
     }
 
     /// Process an incoming packet, handle notifications of delivered / dropped
     /// packets
-    pub fn process_incoming<P: Protocolize>(
+    pub fn process_incoming_header<P: Protocolize>(
         &mut self,
         header: &StandardHeader,
         message_manager: &mut MessageManager<P>,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
-        let remote_seq_num = header.local_packet_index();
-        let remote_ack_seq = header.last_remote_packet_index();
-        let mut remote_ack_field = header.ack_field();
+        let sender_packet_index = header.sender_packet_index();
+        let sender_ack_index = header.sender_ack_index();
+        let mut sender_ack_bitfield = header.sender_ack_bitfield();
 
         self.received_packets
-            .insert(remote_seq_num, ReceivedPacket {});
+            .insert(sender_packet_index, ReceivedPacket {});
 
-        // ensure that `self.remote_ack_sequence_num` is always increasing (with
+        // ensure that `self.sender_ack_index` is always increasing (with
         // wrapping)
-        if sequence_greater_than(remote_ack_seq, self.remote_ack_sequence_num) {
-            self.remote_ack_sequence_num = remote_ack_seq;
+        if sequence_greater_than(sender_ack_index, self.last_recv_packet_index) {
+            self.last_recv_packet_index = sender_ack_index;
         }
 
-        // the current `remote_ack_seq` was (clearly) received so we should remove it
-        if let Some(sent_packet) = self.sent_packets.get(&remote_ack_seq) {
+        // the current `sender_ack_index` was (clearly) received so we should remove it
+        if let Some(sent_packet) = self.sent_packets.get(&sender_ack_index) {
             if sent_packet.packet_type == PacketType::Data {
-                self.notify_packet_delivered(remote_ack_seq, message_manager, packet_notifiable);
+                self.notify_packet_delivered(sender_ack_index, message_manager, packet_notifiable);
             }
 
-            self.sent_packets.remove(&remote_ack_seq);
+            self.sent_packets.remove(&sender_ack_index);
         }
 
-        // The `remote_ack_field` is going to include whether or not the past 32 packets
-        // have been received successfully. If so, we have no need to resend old
-        // packets.
+        // The `sender_ack_bitfield` is going to include whether or not the past 32 packets
+        // have been received successfully.
+        // If so, we have no need to resend old packets.
         for i in 1..=REDUNDANT_PACKET_ACKS_SIZE {
-            let ack_sequence = remote_ack_seq.wrapping_sub(i);
-            if let Some(sent_packet) = self.sent_packets.get(&ack_sequence) {
-                if remote_ack_field & 1 == 1 {
+            let sent_packet_index = sender_ack_index.wrapping_sub(i);
+            if let Some(sent_packet) = self.sent_packets.get(&sent_packet_index) {
+                if sender_ack_bitfield & 1 == 1 {
                     if sent_packet.packet_type == PacketType::Data {
                         self.notify_packet_delivered(
-                            ack_sequence,
+                            sent_packet_index,
                             message_manager,
                             packet_notifiable,
                         );
                     }
 
-                    self.sent_packets.remove(&ack_sequence);
+                    self.sent_packets.remove(&sent_packet_index);
                 } else {
                     if sent_packet.packet_type == PacketType::Data {
                         self.notify_packet_dropped(
-                            ack_sequence,
+                            sent_packet_index,
                             message_manager,
                             packet_notifiable,
                         );
                     }
-                    self.sent_packets.remove(&ack_sequence);
+                    self.sent_packets.remove(&sent_packet_index);
                 }
             }
 
-            remote_ack_field >>= 1;
+            sender_ack_bitfield >>= 1;
         }
     }
 
     /// Records the packet with the given packet index
-    pub fn track_packet(&mut self, packet_type: PacketType, sequence_number: SequenceNumber) {
+    fn track_packet(&mut self, packet_type: PacketType, packet_index: PacketIndex) {
         self.sent_packets.insert(
-            sequence_number,
+            packet_index,
             SentPacket {
-                id: sequence_number as u32,
                 packet_type,
             },
         );
     }
 
     /// Bumps the local packet index
-    pub fn increment_local_packet_index(&mut self) {
-        self.sequence_number = self.sequence_number.wrapping_add(1);
+    fn increment_local_packet_index(&mut self) {
+        self.next_packet_index = self.next_packet_index.wrapping_add(1);
+    }
+
+    pub fn next_outgoing_packet_header(&mut self, host_tick: Tick, packet_type: PacketType) -> StandardHeader {
+        let next_packet_index = self.next_sender_packet_index();
+
+        let outgoing = StandardHeader::new(
+            packet_type,
+            next_packet_index,
+            self.last_received_packet_index(),
+            self.ack_bitfield(),
+            host_tick,
+        );
+
+        self.track_packet(packet_type, next_packet_index);
+        self.increment_local_packet_index();
+
+        outgoing
     }
 
     fn notify_packet_delivered<P: Protocolize>(
         &self,
-        packet_sequence_number: u16,
+        sent_packet_index: PacketIndex,
         message_manager: &mut MessageManager<P>,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
-        message_manager.notify_packet_delivered(packet_sequence_number);
+        message_manager.notify_packet_delivered(sent_packet_index);
         if let Some(notifiable) = packet_notifiable {
-            notifiable.notify_packet_delivered(packet_sequence_number);
+            notifiable.notify_packet_delivered(sent_packet_index);
         }
     }
 
     fn notify_packet_dropped<P: Protocolize>(
         &self,
-        packet_sequence_number: u16,
+        sent_packet_index: PacketIndex,
         message_manager: &mut MessageManager<P>,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
-        message_manager.notify_packet_dropped(packet_sequence_number);
+        message_manager.notify_packet_dropped(sent_packet_index);
         if let Some(notifiable) = packet_notifiable {
-            notifiable.notify_packet_dropped(packet_sequence_number);
+            notifiable.notify_packet_dropped(sent_packet_index);
         }
     }
 
-    pub(crate) fn last_remote_packet_index(&self) -> SequenceNumber {
+    fn last_received_packet_index(&self) -> PacketIndex {
         self.received_packets.sequence_num().wrapping_sub(1)
     }
 
-    pub(crate) fn ack_bitfield(&self) -> u32 {
-        let most_recent_remote_seq_num: u16 = self.last_remote_packet_index();
+    fn ack_bitfield(&self) -> u32 {
+        let last_received_remote_packet_index: u16 = self.last_received_packet_index();
         let mut ack_bitfield: u32 = 0;
         let mut mask: u32 = 1;
 
         // iterate the past `REDUNDANT_PACKET_ACKS_SIZE` received packets and set the
         // corresponding bit for each packet which exists in the buffer.
         for i in 1..=REDUNDANT_PACKET_ACKS_SIZE {
-            let sequence = most_recent_remote_seq_num.wrapping_sub(i);
-            if self.received_packets.exists(sequence) {
+            let received_packet_index = last_received_remote_packet_index.wrapping_sub(i);
+            if self.received_packets.exists(received_packet_index) {
                 ack_bitfield |= mask;
             }
             mask <<= 1;
@@ -172,7 +190,6 @@ impl AckManager {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SentPacket {
-    pub id: u32,
     pub packet_type: PacketType,
 }
 

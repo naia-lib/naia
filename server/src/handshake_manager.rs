@@ -69,6 +69,8 @@ impl<P: Protocolize> HandshakeManager<P> {
             PacketType::ServerChallengeResponse,
             outgoing_packet.payload(),
         );
+        StandardHeader::new(packet_type, 0, 0, 0, 0)
+            .ser(writer);
         io.send_packet(Packet::new_raw(outgoing_packet.address(), new_payload));
         /////////////////////////
     }
@@ -190,7 +192,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         let payload =
             connection
                 .base
-                .process_outgoing_header(0, PacketType::ServerConnectResponse, &[]);
+                .write_outgoing_header(0, PacketType::ServerConnectResponse, &[]);
         io.send_packet(Packet::new_raw(connection.base.address, payload));
         connection.base.mark_sent();
     }

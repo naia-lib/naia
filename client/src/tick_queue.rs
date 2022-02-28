@@ -5,11 +5,11 @@ use naia_shared::sequence_greater_than;
 /// A queue for items marked by tick, will only ever pop items from the queue if
 /// the tick has elapsed
 #[derive(Debug)]
-pub struct TickQueue<T: Eq + PartialEq> {
+pub struct TickQueue<T> {
     queue: BinaryHeap<ItemContainer<T>>,
 }
 
-impl<T: Eq + PartialEq> TickQueue<T> {
+impl<T> TickQueue<T> {
     /// Create a new TimeQueue
     pub fn new() -> Self {
         TickQueue {
@@ -44,13 +44,21 @@ impl<T: Eq + PartialEq> TickQueue<T> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct ItemContainer<T: Eq + PartialEq> {
+#[derive(Debug)]
+pub struct ItemContainer<T> {
     pub tick: u16,
     pub item: T,
 }
 
-impl<T: Eq + PartialEq> Ord for ItemContainer<T> {
+impl<T> PartialEq for ItemContainer<T> {
+    fn eq(&self, other: &Self) -> bool {
+        return self.tick == other.tick;
+    }
+}
+
+impl<T> Eq for ItemContainer<T> {}
+
+impl<T> Ord for ItemContainer<T> {
     fn cmp(&self, other: &ItemContainer<T>) -> Ordering {
         if self.tick == other.tick {
             return Ordering::Equal;
@@ -63,7 +71,7 @@ impl<T: Eq + PartialEq> Ord for ItemContainer<T> {
     }
 }
 
-impl<T: Eq + PartialEq> PartialOrd for ItemContainer<T> {
+impl<T> PartialOrd for ItemContainer<T> {
     fn partial_cmp(&self, other: &ItemContainer<T>) -> Option<Ordering> {
         Some(self.cmp(other))
     }

@@ -3,12 +3,12 @@ use std::{
     vec::Vec,
 };
 
-use crate::PacketIndex;
-use naia_serde::{BitReader, BitWrite, Serde};
+use crate::{ManagerType, PacketIndex};
+use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
+use crate::constants::MTU_SIZE_BITS;
 
 use super::{
     manifest::Manifest,
-    message_packet_writer::MessagePacketWriter,
     packet_notifiable::PacketNotifiable,
     protocolize::Protocolize,
     replicate::ReplicateSafe,
@@ -20,7 +20,6 @@ pub struct MessageManager<P: Protocolize> {
     queued_outgoing_messages: VecDeque<(bool, P)>,
     queued_incoming_messages: VecDeque<P>,
     sent_guaranteed_messages: HashMap<u16, Vec<P>>,
-    message_writer: MessagePacketWriter,
 }
 
 impl<P: Protocolize> MessageManager<P> {
@@ -30,7 +29,6 @@ impl<P: Protocolize> MessageManager<P> {
             queued_outgoing_messages: VecDeque::new(),
             queued_incoming_messages: VecDeque::new(),
             sent_guaranteed_messages: HashMap::new(),
-            message_writer: MessagePacketWriter::new(),
         }
     }
 
@@ -95,27 +93,79 @@ impl<P: Protocolize> MessageManager<P> {
     // MessageWriter
 
     /// Write into outgoing packet
-    pub fn queue_writes<S: BitWrite>(&mut self, writer: &mut S, packet_index: PacketIndex) {
-        loop {
-            //Outback
-            // if let Some((_, peeked_message)) = self.queued_outgoing_messages.front() {
-            //     if !self
-            //         .message_writer
-            //         .message_fits(write_state, peeked_message)
-            //     {
-            //         break;
-            //     }
-            // } else {
-            //     break;
-            // }
+    pub fn write_messages(&mut self, writer: &mut BitWriter, packet_index: PacketIndex) {
 
-            let popped_message = self.pop_outgoing_message(packet_index).unwrap();
-            self.message_writer.write_message(writer, &popped_message);
+        let mut message_count = 0;
+
+        // Header
+        {
+            // Measure
+            let current_packet_size = writer.bit_count();
+            if current_packet_size > MTU_SIZE_BITS {
+                return;
+            }
+
+            let mut counter = BitCounter::new();
+            MessageManager::<P>::write_header(&mut counter, 123);
+
+            // Check for overflow
+            if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
+                return;
+            }
+
+            // Find how many messages will fit into the packet
+            for (_, message) in self.queued_outgoing_messages.iter() {
+                MessageManager::<P>::write_message(&mut counter, message);
+                if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
+                    message_count += 1;
+                    if message_count == u8::MAX {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            // If no messages will fit, abort
+            if message_count == 0 {
+                return;
+            }
+
+            // Write header
+            MessageManager::<P>::write_header(writer, message_count);
+        }
+
+        // Messages
+        {
+            for _ in 0..message_count {
+                // Pop message
+                let popped_message = self.pop_outgoing_message(packet_index).unwrap();
+
+                // Write message
+                MessageManager::<P>::write_message(writer, &popped_message);
+            }
         }
     }
 
-    pub fn flush_writes<S: BitWrite>(&mut self, writer: &mut S) {
-        self.message_writer.write_header(writer);
+    /// Write bytes into an outgoing packet
+    pub fn write_header<S: BitWrite>(writer: &mut S, message_count: u8) {
+        //Write manager "header" (manager type & message count)
+
+        // write manager type
+        ManagerType::Message.ser(writer);
+
+        // write number of messages
+        message_count.ser(writer);
+    }
+
+    /// Writes an Message into the Writer's internal buffer, which will
+    /// eventually be put into the outgoing packet
+    pub fn write_message<S: BitWrite>(writer: &mut S, message: &P) {
+        // write message kind
+        message.dyn_ref().kind().ser(writer);
+
+        // write payload
+        message.write(writer);
     }
 }
 
