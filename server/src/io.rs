@@ -7,7 +7,7 @@ pub use naia_shared::{
     PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe,
     SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
-use naia_shared::serde::{BitReader, BitWriter, OwnedBitReader};
+use naia_shared::serde::{BitWriter, OwnedBitReader};
 
 use crate::bandwidth_monitor::BandwidthMonitor;
 
