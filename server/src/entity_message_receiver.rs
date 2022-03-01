@@ -1,10 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
-use naia_shared::{
-    sequence_greater_than,
-    serde::{BitReader, Serde},
-    Manifest, NetEntity, Protocolize,
-};
+use naia_shared::{sequence_greater_than, serde::{BitReader, Serde}, Manifest, NetEntity, Protocolize, read_list_header};
 
 /// Handles incoming Entity Messages, buffering them to be received on the
 /// correct tick
@@ -31,13 +27,11 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
         reader: &mut BitReader,
         manifest: &Manifest<P>,
     ) {
-        let has_messages: bool = bool::de(reader).unwrap();
-        if !has_messages {
-            return;
-        }
+        let message_count = read_list_header(reader);
         self.process_incoming_messages(server_tick,
                                        reader,
-                                       manifest,);
+                                       manifest,
+                                        message_count);
     }
 
     /// Given incoming packet data, read transmitted Entity Message and store
@@ -47,8 +41,8 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
         server_tick_opt: Option<Tick>,
         reader: &mut BitReader,
         manifest: &Manifest<P>,
+        message_count: u16
     ) {
-        let message_count = u8::de(reader).unwrap();
         for _x in 0..message_count {
             let client_tick = u16::de(reader).unwrap();
             let owned_entity = NetEntity::de(reader).unwrap();

@@ -3,7 +3,7 @@ use std::{
     vec::Vec,
 };
 
-use crate::{constants::MTU_SIZE_BITS, ManagerType, PacketIndex};
+use crate::{constants::MTU_SIZE_BITS, PacketIndex, read_list_header, write_list_header};
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
 
 use super::{
@@ -79,7 +79,7 @@ impl<P: Protocolize> MessageManager<P> {
 
     /// Write into outgoing packet
     pub fn write_messages(&mut self, writer: &mut BitWriter, packet_index: PacketIndex) {
-        let mut message_count = 0;
+        let mut message_count: u16 = 0;
 
         // Header
         {
@@ -90,7 +90,7 @@ impl<P: Protocolize> MessageManager<P> {
             }
 
             let mut counter = BitCounter::new();
-            MessageManager::<P>::write_header(&mut counter, 123);
+            write_list_header(&mut counter, &123);
 
             // Check for overflow
             if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
@@ -102,9 +102,6 @@ impl<P: Protocolize> MessageManager<P> {
                 MessageManager::<P>::write_message(&mut counter, message);
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
-                    if message_count == u8::MAX {
-                        break;
-                    }
                 } else {
                     break;
                 }
@@ -112,7 +109,7 @@ impl<P: Protocolize> MessageManager<P> {
         }
 
         // Write header
-        MessageManager::<P>::write_header(writer, message_count);
+        write_list_header(writer, &message_count);
 
         // Messages
         {
@@ -123,20 +120,6 @@ impl<P: Protocolize> MessageManager<P> {
                 // Write message
                 MessageManager::<P>::write_message(writer, &popped_message);
             }
-        }
-    }
-
-    /// Write bytes into an outgoing packet
-    pub fn write_header<S: BitWrite>(writer: &mut S, message_count: u8) {
-        //Write manager "header"
-
-        // write manager type
-        let has_messages: bool = message_count > 0;
-        has_messages.ser(writer);
-
-        // write number of messages
-        if has_messages {
-            message_count.ser(writer);
         }
     }
 
@@ -152,17 +135,13 @@ impl<P: Protocolize> MessageManager<P> {
 
     // MessageReader
     pub fn read_messages(&mut self, reader: &mut BitReader, manifest: &Manifest<P>) {
-        let has_messages: bool = bool::de(reader).unwrap();
-        if !has_messages {
-            return;
-        }
-        self.process_message_data(reader, manifest);
+        let message_count = read_list_header(reader);
+        self.process_message_data(reader, manifest, message_count);
     }
 
     /// Given incoming packet data, read transmitted Messages and store them to
     /// be returned to the application
-    fn process_message_data(&mut self, reader: &mut BitReader, manifest: &Manifest<P>) {
-        let message_count = u8::de(reader).unwrap();
+    fn process_message_data(&mut self, reader: &mut BitReader, manifest: &Manifest<P>, message_count: u16) {
         for _x in 0..message_count {
             let component_kind: P::Kind = P::Kind::de(reader).unwrap();
 

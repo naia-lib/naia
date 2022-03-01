@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use naia_shared::serde::{BitReader, BitWriter, Serde};
 pub use naia_shared::{
-    ConnectionConfig, ManagerType, Manifest, PacketType, ProtocolKindType, Protocolize,
+    ConnectionConfig, Manifest, PacketType, ProtocolKindType, Protocolize,
     ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
