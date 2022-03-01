@@ -42,14 +42,14 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let clone_method = clone_method(&replica_name, &properties);
     let mirror_method = mirror_method(&protocol_name, &replica_name, &properties);
     let set_mutator_method = set_mutator_method(&properties);
-    let read_partial_method = read_partial_method(&enum_name, &properties);
+    let read_partial_method = read_partial_method(&properties);
     let write_method = write_method(&properties);
     let write_partial_method = write_partial_method(&enum_name, &properties);
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
         use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateSafe, PropertyMutator,
-            Protocolize, ReplicaDynRef, ReplicaDynMut, serde::{BitReader, BitWrite}};
+            Protocolize, ReplicaDynRef, ReplicaDynMut, serde::{BitReader, BitWrite, Serde}};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
 
         #property_enum_definition
@@ -382,17 +382,13 @@ pub fn read_to_type_method(
     };
 }
 
-fn read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn read_partial_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
-        let uppercase_variant_name = Ident::new(
-            field_name.to_string().to_uppercase().as_str(),
-            Span::call_site(),
-        );
 
         let new_output_right = quote! {
-            if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
+            if bool::de(reader).unwrap() {
                 Property::read(&mut self.#field_name, reader);
             }
         };
@@ -404,7 +400,7 @@ fn read_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> To
     }
 
     return quote! {
-        fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut BitReader) {
+        fn read_partial(&mut self, reader: &mut BitReader) {
             #output
         }
     };
@@ -442,7 +438,10 @@ fn write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> T
 
         let new_output_right = quote! {
             if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
+                true.ser(writer);
                 Property::write(&self.#field_name, writer);
+            } else {
+                false.ser(writer);
             }
         };
         let new_output_result = quote! {

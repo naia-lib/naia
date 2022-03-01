@@ -47,7 +47,7 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     fn set_mutator(&mut self, mutator: &PropertyMutator);
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
-    fn read_partial(&mut self, diff_mask: &DiffMask, reader: &mut BitReader);
+    fn read_partial(&mut self, reader: &mut BitReader);
 }
 
 cfg_if! {

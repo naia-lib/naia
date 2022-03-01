@@ -1,5 +1,4 @@
 use super::{
-    diff_mask::DiffMask,
     protocolize::{ProtocolInserter, Protocolize},
     replica_ref::{ReplicaMutWrapper, ReplicaRefWrapper},
     replicate::{Replicate, ReplicateSafe},
@@ -53,7 +52,6 @@ pub trait WorldMutType<P: Protocolize, E>: WorldRefType<P, E> + ProtocolInserter
         &mut self,
         entity: &E,
         component_kind: &P::Kind,
-        diff_mask: &DiffMask,
         reader: &mut BitReader,
     );
     /// mirrors the state of the same component of two different entities

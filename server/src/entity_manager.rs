@@ -381,8 +381,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 // Write Component Header
                 // write local component key
                 local_component_key.ser(writer);
-                // write diff mask
-                diff_mask.ser(writer);
 
                 // Write Component Payload
                 world

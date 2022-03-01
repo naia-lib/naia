@@ -5,7 +5,7 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde}, DiffMask, EntityActionType, LocalComponentKey, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, write_list_header, read_list_header};
+use naia_shared::{serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde}, EntityActionType, LocalComponentKey, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, write_list_header, read_list_header};
 
 use super::{
     entity_message_sender::EntityMessageSender, entity_record::EntityRecord,
@@ -209,13 +209,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             let component_kind =
                                 entity_record.kind_from_key(&component_key).unwrap();
 
-                            let diff_mask: DiffMask = DiffMask::de(reader).unwrap();
-
                             // read incoming delta
                             world.component_read_partial(
                                 world_entity,
                                 component_kind,
-                                &diff_mask,
                                 reader,
                             );
 
