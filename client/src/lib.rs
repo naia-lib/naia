@@ -36,5 +36,5 @@ pub use error::NaiaClientError;
 pub use event::Event;
 
 pub mod internal {
-    pub use crate::handshake_manager::HandshakeManager;
+    pub use crate::handshake_manager::{HandshakeManager, HandshakeState};
 }
