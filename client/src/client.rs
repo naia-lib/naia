@@ -3,7 +3,7 @@ use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAdd
 use naia_client_socket::Socket;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
-    ConnectionConfig, ManagerType, Manifest, PacketType, PingConfig, ProtocolKindType, Protocolize,
+    ConnectionConfig, Manifest, PacketType, PingConfig, ProtocolKindType, Protocolize,
     ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };

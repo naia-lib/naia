@@ -7,7 +7,7 @@ use naia_shared::serde::BitWriter;
 pub use naia_shared::{
     serde::{BitReader, Serde},
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
-    ManagerType, Manifest, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType,
+    Manifest, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType,
     Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };
@@ -49,7 +49,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     ) -> BitWriter {
         let timestamp = u64::de(reader).unwrap();
 
-        let mut writer = self.write_challenge_response(&timestamp);
+        let writer = self.write_challenge_response(&timestamp);
         writer
     }
 

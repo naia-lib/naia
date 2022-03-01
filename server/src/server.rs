@@ -12,7 +12,7 @@ use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::serde::{BitWriter, Serde};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
-    ManagerType, Manifest, NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator,
+    Manifest, NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator,
     ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
     Timestamp, WorldMutType, WorldRefType,
 };

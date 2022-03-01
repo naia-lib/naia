@@ -1,8 +1,8 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_shared::{
-    serde::{BitReader, BitWriter, OwnedBitReader, Serde},
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketType, PingConfig, Protocolize,
+    serde::{BitReader, BitWriter, OwnedBitReader},
+    BaseConnection, ConnectionConfig, Manifest, PacketType, PingConfig, Protocolize,
     StandardHeader, Tick, WorldMutType,
 };
 

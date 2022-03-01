@@ -5,8 +5,8 @@ use std::{
 };
 
 use naia_shared::{
-    serde::{BitReader, BitWriter, Serde},
-    BaseConnection, ConnectionConfig, ManagerType, Manifest, PacketType, Protocolize,
+    serde::{BitReader, BitWriter},
+    BaseConnection, ConnectionConfig, Manifest, PacketType, Protocolize,
     StandardHeader, Tick, WorldRefType,
 };
 

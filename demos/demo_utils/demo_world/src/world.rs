@@ -4,7 +4,7 @@ use slotmap::DenseSlotMap;
 
 use naia_shared::{
     serde::BitReader, DiffMask, ProtocolInserter, Protocolize, ReplicaDynMutWrapper,
-    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
     WorldMutType, WorldRefType,
 };
 

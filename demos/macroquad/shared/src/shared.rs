@@ -1,7 +1,7 @@
-use std::{fs, time::Duration};
+use std::{time::Duration};
 
 use naia_shared::{
-    CompressionConfig, CompressionMode, LinkConditionerConfig, PingConfig, SharedConfig,
+    CompressionConfig, LinkConditionerConfig, PingConfig, SharedConfig,
     SocketConfig,
 };
 

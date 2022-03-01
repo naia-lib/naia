@@ -7,11 +7,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    serde::{BitCounter, BitWrite, BitWriter, Serde},
-    DiffMask, KeyGenerator, LocalComponentKey, ManagerType, NetEntity, PacketIndex,
-    PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
-};
+use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde}, DiffMask, KeyGenerator, LocalComponentKey, NetEntity, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, write_list_header};
 
 use super::{
     entity_action::EntityAction, global_diff_handler::GlobalDiffHandler, keys::ComponentKey,
@@ -220,7 +216,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
     ) {
-        let mut message_count = 0;
+        let mut message_count: u16 = 0;
 
         // Header
         {
@@ -231,7 +227,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             }
 
             let mut counter = BitCounter::new();
-            Self::write_header(&mut counter, 123);
+            write_list_header(&mut counter, &123);
 
             // Check for overflow
             if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
@@ -241,7 +237,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             // Find how many messages will fit into the packet
             for entity_action in self.queued_actions.iter() {
                 let processed_entity_action =
-                    self.peek_outgoing_action::<W>(world_record, packet_index, entity_action);
+                    self.peek_outgoing_action::<W>(world_record, entity_action);
 
                 Self::write_action(
                     &mut counter,
@@ -252,9 +248,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 );
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
-                    if message_count == u8::MAX {
-                        break;
-                    }
                 } else {
                     break;
                 }
@@ -262,7 +255,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
 
         // Write header
-        Self::write_header(writer, message_count);
+        write_list_header(writer, &message_count);
 
         // Actions
         {
@@ -281,20 +274,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     &processed_entity_action,
                 );
             }
-        }
-    }
-
-    /// Write bytes into an outgoing packet
-    pub fn write_header<S: BitWrite>(writer: &mut S, message_count: u8) {
-        //Write manager "header"
-
-        // write whether has messages
-        let has_messages: bool = message_count > 0;
-        has_messages.ser(writer);
-
-        // write number of messages
-        if has_messages {
-            message_count.ser(writer);
         }
     }
 
@@ -462,7 +441,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     fn peek_outgoing_action<W: WorldRefType<P, E>>(
         &self,
         world_record: &WorldRecord<E, P::Kind>,
-        packet_index: u16,
         action: &EntityAction<P, E>,
     ) -> EntityAction<P, E> {
         let next_action: EntityAction<P, E> = {
@@ -503,7 +481,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     fn process_outgoing_action<W: WorldRefType<P, E>>(
         &mut self,
         world_record: &WorldRecord<E, P::Kind>,
-        packet_index: u16,
+        packet_index: PacketIndex,
         action: EntityAction<P, E>,
     ) -> EntityAction<P, E> {
         let next_action = {

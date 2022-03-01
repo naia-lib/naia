@@ -5,11 +5,7 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{
-    serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde},
-    DiffMask, EntityActionType, LocalComponentKey, ManagerType, Manifest, NetEntity, PacketIndex,
-    Protocolize, Tick, WorldMutType, MTU_SIZE_BITS,
-};
+use naia_shared::{serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde}, DiffMask, EntityActionType, LocalComponentKey, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, write_list_header, read_list_header};
 
 use super::{
     entity_message_sender::EntityMessageSender, entity_record::EntityRecord,
@@ -42,15 +38,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
     ) {
-        let has_messages: bool = bool::de(reader).unwrap();
-        if !has_messages {
-            return;
-        }
+        let action_count = read_list_header(reader);
         self.process_actions(world,
                              manifest,
                              server_tick,
                              reader,
-                             event_stream);
+                             event_stream,
+                             action_count);
     }
 
     fn process_actions<W: WorldMutType<P, E>>(
@@ -60,10 +54,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         server_tick: Tick,
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
+        action_count: u16,
     ) {
-        let entity_action_count = u8::de(reader).unwrap();
-
-        for _ in 0..entity_action_count {
+        for _ in 0..action_count {
             let message_type = EntityActionType::de(reader).unwrap();
 
             match message_type {
@@ -277,7 +270,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     pub fn write_messages(&mut self, writer: &mut BitWriter, packet_index: PacketIndex) {
         let mut entity_messages = self.message_sender.generate_outgoing_message_list();
 
-        let mut message_count = 0;
+        let mut message_count: u16 = 0;
 
         // Header
         {
@@ -288,7 +281,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             }
 
             let mut counter = BitCounter::new();
-            Self::write_header(&mut counter, 123);
+            write_list_header(&mut counter, &123);
 
             // Check for overflow
             if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
@@ -306,9 +299,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 );
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
-                    if message_count == u8::MAX {
-                        break;
-                    }
                 } else {
                     break;
                 }
@@ -316,7 +306,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
 
         // Write header
-        Self::write_header(writer, message_count);
+        write_list_header(writer, &message_count);
 
         // Messages
         {
@@ -336,20 +326,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 self.message_sender
                     .message_written(packet_index, client_tick, message_id);
             }
-        }
-    }
-
-    /// Write bytes into an outgoing packet
-    pub fn write_header<S: BitWrite>(writer: &mut S, message_count: u8) {
-        //Write manager "header"
-
-        // write whether has messages
-        let has_messages: bool = message_count > 0;
-        has_messages.ser(writer);
-
-        // write number of messages
-        if has_messages {
-            message_count.ser(writer);
         }
     }
 

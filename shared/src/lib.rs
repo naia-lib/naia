@@ -22,7 +22,6 @@ mod encoder;
 mod entity_action_type;
 mod key_store;
 mod keys;
-mod manager_type;
 mod manifest;
 mod message_manager;
 mod packet_notifiable;
@@ -40,6 +39,7 @@ mod standard_header;
 mod types;
 mod world_type;
 mod wrapping_number;
+mod message_list_header;
 
 /// Commonly used utility methods to be used by naia-server & naia-client
 pub mod utils;
@@ -60,7 +60,6 @@ pub use encoder::Encoder;
 pub use entity_action_type::EntityActionType;
 pub use key_store::KeyGenerator;
 pub use keys::{LocalComponentKey, NetEntity};
-pub use manager_type::ManagerType;
 pub use manifest::Manifest;
 pub use message_manager::MessageManager;
 pub use packet_notifiable::PacketNotifiable;
@@ -80,3 +79,4 @@ pub use standard_header::StandardHeader;
 pub use types::{PacketIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
+pub use message_list_header::{write_list_header, read_list_header};
