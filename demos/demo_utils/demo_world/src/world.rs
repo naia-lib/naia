@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use slotmap::DenseSlotMap;
 
 use naia_shared::{
-    serde::BitReader, DiffMask, ProtocolInserter, Protocolize, ReplicaDynMutWrapper,
+    serde::BitReader, ProtocolInserter, Protocolize, ReplicaDynMutWrapper,
     ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
     WorldMutType, WorldRefType,
 };
@@ -142,11 +142,10 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         &mut self,
         entity: &Entity,
         component_kind: &P::Kind,
-        diff_mask: &DiffMask,
         reader: &mut BitReader,
     ) {
         if let Some(mut component) = component_mut_of_kind(self.world, entity, component_kind) {
-            component.read_partial(diff_mask, reader);
+            component.read_partial(reader);
         }
     }
 

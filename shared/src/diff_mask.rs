@@ -1,23 +1,18 @@
 use std::fmt;
 
-use crate::{derive_serde, serde};
-
 // The DiffMask is a variable-length byte array, where each bit represents
 // the current state of a Property owned by a Replica.
 // The Property tracks whether it has been updated and needs to be synced
 // with the remote Client
-#[derive(Debug)]
-#[derive_serde]
+#[derive(PartialEq, Clone, Debug)]
 pub struct DiffMask {
     mask: Vec<u8>,
-    bytes: u8,
 }
 
 impl DiffMask {
     /// Create a new DiffMask with a given number of bytes
     pub fn new(bytes: u8) -> DiffMask {
         DiffMask {
-            bytes,
             mask: vec![0; bytes as usize],
         }
     }
@@ -47,7 +42,8 @@ impl DiffMask {
 
     /// Clears the whole DiffMask
     pub fn clear(&mut self) {
-        self.mask = vec![0; self.bytes as usize];
+        let size = self.mask.len();
+        self.mask = vec![0; size];
     }
 
     /// Returns whether any bit has been set in the DiffMask
@@ -62,7 +58,7 @@ impl DiffMask {
 
     /// Get the number of bytes required to represent the DiffMask
     pub fn byte_number(&self) -> u8 {
-        return self.bytes;
+        return self.mask.len() as u8;
     }
 
     /// Gets a byte at the specified index in the DiffMask
@@ -77,9 +73,9 @@ impl DiffMask {
             return;
         }
 
-        for n in 0..self.bytes {
-            if let Some(my_byte) = self.mask.get_mut(n as usize) {
-                let other_byte = !other.byte(n as usize);
+        for n in 0..self.mask.len() {
+            if let Some(my_byte) = self.mask.get_mut(n) {
+                let other_byte = !other.byte(n);
                 *my_byte &= other_byte;
             }
         }
@@ -92,9 +88,9 @@ impl DiffMask {
             return;
         }
 
-        for n in 0..self.bytes {
-            if let Some(my_byte) = self.mask.get_mut(n as usize) {
-                let other_byte = other.byte(n as usize);
+        for n in 0..self.mask.len() {
+            if let Some(my_byte) = self.mask.get_mut(n) {
+                let other_byte = other.byte(n);
                 *my_byte |= other_byte;
             }
         }
@@ -107,9 +103,9 @@ impl DiffMask {
             return;
         }
 
-        for n in 0..self.bytes {
-            if let Some(my_byte) = self.mask.get_mut(n as usize) {
-                let other_byte = other.byte(n as usize);
+        for n in 0..self.mask.len() {
+            if let Some(my_byte) = self.mask.get_mut(n) {
+                let other_byte = other.byte(n);
                 *my_byte = other_byte;
             }
         }
