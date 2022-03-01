@@ -74,34 +74,27 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         receiving_tick: Tick,
         incoming_events: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
     ) {
-        while let Some((server_tick, frozen_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
-            let mut reader = frozen_reader.borrow();
-            while reader.has_more() {
-                let manager_type = ManagerType::de(&mut reader).unwrap();
-                match manager_type {
-                    ManagerType::Message => {
-                        self.base
-                            .message_manager
-                            .process_message_data(&mut reader, manifest);
-                    }
-                    ManagerType::Entity => {
-                        self.entity_manager.process_data(
-                            world,
-                            manifest,
-                            server_tick,
-                            &mut reader,
-                            incoming_events,
-                        );
-                    }
-                    _ => {}
-                }
-            }
+        while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
+            let mut reader = owned_reader.borrow();
+
+            // Read Messages
+            self.base
+                .message_manager
+                .read_messages(&mut reader, manifest);
+
+            // Read Entity Actions
+            self.entity_manager
+                .read_actions(world,
+                              manifest,
+                              server_tick,
+                              &mut reader,
+                              incoming_events);
         }
     }
 
     // Outgoing data
 
-    pub fn outgoing_packet(&mut self, client_tick: u16) -> Option<BitWriter> {
+    pub fn outgoing_packet(&mut self, client_tick: Tick) -> Option<BitWriter> {
         if self.base.message_manager.has_outgoing_messages()
             || self.entity_manager.message_sender.has_outgoing_messages()
         {

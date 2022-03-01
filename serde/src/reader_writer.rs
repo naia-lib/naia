@@ -131,10 +131,6 @@ impl<'b> BitReader<'b> {
         }
     }
 
-    pub fn has_more(&self) -> bool {
-        self.state.buffer_index <= self.buffer.len()
-    }
-
     pub(crate) fn read_bit(&mut self) -> bool {
         if self.state.scratch_index <= 0 {
             if self.state.buffer_index == self.buffer.len() {

@@ -33,7 +33,27 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
-    pub fn process_data<W: WorldMutType<P, E>>(
+    // Action Reader
+    pub fn read_actions<W: WorldMutType<P, E>>(
+        &mut self,
+        world: &mut W,
+        manifest: &Manifest<P>,
+        server_tick: Tick,
+        reader: &mut BitReader,
+        event_stream: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
+    ) {
+        let has_messages: bool = bool::de(reader).unwrap();
+        if !has_messages {
+            return;
+        }
+        self.process_actions(world,
+                             manifest,
+                             server_tick,
+                             reader,
+                             event_stream);
+    }
+
+    fn process_actions<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
@@ -293,15 +313,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     break;
                 }
             }
-
-            // If no messages will fit, abort
-            if message_count == 0 {
-                return;
-            }
-
-            // Write header
-            Self::write_header(writer, message_count);
         }
+
+        // Write header
+        Self::write_header(writer, message_count);
 
         // Messages
         {
@@ -326,13 +341,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
     /// Write bytes into an outgoing packet
     pub fn write_header<S: BitWrite>(writer: &mut S, message_count: u8) {
-        //Write manager "header" (manager type & message count)
+        //Write manager "header"
 
-        // write manager type
-        ManagerType::EntityMessage.ser(writer);
+        // write whether has messages
+        let has_messages: bool = message_count > 0;
+        has_messages.ser(writer);
 
         // write number of messages
-        message_count.ser(writer);
+        if has_messages {
+            message_count.ser(writer);
+        }
     }
 
     /// Writes a Command into the Writer's internal buffer, which will

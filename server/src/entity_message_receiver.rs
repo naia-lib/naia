@@ -25,9 +25,24 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
         return self.incoming_messages.pop_front(server_tick);
     }
 
+    pub fn read_messages(
+        &mut self,
+        server_tick: Option<Tick>,
+        reader: &mut BitReader,
+        manifest: &Manifest<P>,
+    ) {
+        let has_messages: bool = bool::de(reader).unwrap();
+        if !has_messages {
+            return;
+        }
+        self.process_incoming_messages(server_tick,
+                                       reader,
+                                       manifest,);
+    }
+
     /// Given incoming packet data, read transmitted Entity Message and store
     /// them to be returned to the application
-    pub fn process_incoming_messages(
+    fn process_incoming_messages(
         &mut self,
         server_tick_opt: Option<Tick>,
         reader: &mut BitReader,

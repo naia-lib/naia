@@ -259,15 +259,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     break;
                 }
             }
-
-            // If no messages will fit, abort
-            if message_count == 0 {
-                return;
-            }
-
-            // Write header
-            Self::write_header(writer, message_count);
         }
+
+        // Write header
+        Self::write_header(writer, message_count);
 
         // Actions
         {
@@ -291,13 +286,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
     /// Write bytes into an outgoing packet
     pub fn write_header<S: BitWrite>(writer: &mut S, message_count: u8) {
-        //Write manager "header" (manager type & action count)
+        //Write manager "header"
 
-        // write manager type
-        ManagerType::Entity.ser(writer);
+        // write whether has messages
+        let has_messages: bool = message_count > 0;
+        has_messages.ser(writer);
 
         // write number of messages
-        message_count.ser(writer);
+        if has_messages {
+            message_count.ser(writer);
+        }
     }
 
     pub fn write_action<W: WorldRefType<P, E>, S: BitWrite>(
