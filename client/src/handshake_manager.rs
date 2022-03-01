@@ -17,7 +17,7 @@ enum HandshakeState {
 
 pub struct HandshakeManager<P: Protocolize> {
     handshake_timer: Timer,
-    pre_connection_timestamp: Option<Timestamp>,
+    pre_connection_timestamp: Timestamp,
     pre_connection_digest: Option<Box<[u8]>>,
     connection_state: HandshakeState,
     auth_message: Option<P>,
@@ -30,7 +30,7 @@ impl<P: Protocolize> HandshakeManager<P> {
 
         Self {
             handshake_timer,
-            pre_connection_timestamp: None,
+            pre_connection_timestamp: Timestamp::now(),
             pre_connection_digest: None,
             connection_state: HandshakeState::AwaitingChallengeResponse,
             auth_message: None,
@@ -58,10 +58,12 @@ impl<P: Protocolize> HandshakeManager<P> {
                 // do nothing, not necessary
             }
             HandshakeState::AwaitingChallengeResponse => {
-                self.send_challenge_request(io);
+                let mut writer = self.write_challenge_request();
+                io.send_writer(&mut writer);
             }
             HandshakeState::AwaitingConnectResponse => {
-                self.send_connect_request(io);
+                let mut writer = self.write_connect_request();
+                io.send_writer(&mut writer);
             }
         }
     }
@@ -81,44 +83,36 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 1 of Handshake
-    pub fn send_challenge_request(&mut self, io: &mut Io) {
+    pub fn write_challenge_request(&self) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ClientChallengeRequest, 0, 0, 0, 0).ser(&mut writer);
 
-        if self.pre_connection_timestamp.is_none() {
-            self.pre_connection_timestamp = Some(Timestamp::now());
-        }
-
         self.pre_connection_timestamp
-            .as_mut()
-            .unwrap()
             .to_u64()
             .ser(&mut writer);
 
-        io.send_writer(&mut writer);
+        writer
     }
 
     // Step 2 of Handshake
     pub fn recv_challenge_response(&mut self, reader: &mut BitReader) {
         if self.connection_state == HandshakeState::AwaitingChallengeResponse {
-            if let Some(my_timestamp) = self.pre_connection_timestamp {
-                let payload_timestamp = Timestamp::from_u64(&u64::de(reader).unwrap());
+            let payload_timestamp = Timestamp::from_u64(&u64::de(reader).unwrap());
 
-                if my_timestamp == payload_timestamp {
-                    let mut digest_bytes: Vec<u8> = Vec::new();
-                    for _ in 0..32 {
-                        digest_bytes.push(u8::de(reader).unwrap());
-                    }
-                    self.pre_connection_digest = Some(digest_bytes.into_boxed_slice());
-
-                    self.connection_state = HandshakeState::AwaitingConnectResponse;
+            if self.pre_connection_timestamp == payload_timestamp {
+                let mut digest_bytes: Vec<u8> = Vec::new();
+                for _ in 0..32 {
+                    digest_bytes.push(u8::de(reader).unwrap());
                 }
+                self.pre_connection_digest = Some(digest_bytes.into_boxed_slice());
+
+                self.connection_state = HandshakeState::AwaitingConnectResponse;
             }
         }
     }
 
     // Step 3 of Handshake
-    pub fn send_connect_request(&mut self, io: &mut Io) {
+    pub fn write_connect_request(&self) -> BitWriter {
         let mut writer = BitWriter::new();
 
         StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0, 0).ser(&mut writer);
@@ -127,7 +121,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         self.write_signed_timestamp(&mut writer);
 
         // write auth message if there is one
-        if let Some(auth_message) = &mut self.auth_message {
+        if let Some(auth_message) = &self.auth_message {
             // write that we have auth
             1.ser(&mut writer);
             // write auth kind
@@ -139,7 +133,7 @@ impl<P: Protocolize> HandshakeManager<P> {
             0.ser(&mut writer);
         }
 
-        io.send_writer(&mut writer);
+        writer
     }
 
     // Step 4 of Handshake
@@ -148,21 +142,17 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Send 10 disconnect packets
-    pub fn send_disconnect(&self, io: &mut Io) {
+    pub fn write_disconnect(&self) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Disconnect, 0, 0, 0, 0).ser(&mut writer);
         self.write_signed_timestamp(&mut writer);
-        for _ in 0..10 {
-            io.send_writer(&mut writer);
-        }
+        writer
     }
 
     // Private methods
 
     fn write_signed_timestamp(&self, writer: &mut BitWriter) {
         self.pre_connection_timestamp
-            .as_ref()
-            .unwrap()
             .to_u64()
             .ser(writer);
         for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref() {
