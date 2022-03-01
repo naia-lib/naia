@@ -75,18 +75,6 @@ impl<P: Protocolize> MessageManager<P> {
         return self.queued_incoming_messages.pop_front();
     }
 
-    /// Given incoming packet data, read transmitted Messages and store them to
-    /// be returned to the application
-    pub fn process_message_data(&mut self, reader: &mut BitReader, manifest: &Manifest<P>) {
-        let message_count = u8::de(reader).unwrap();
-        for _x in 0..message_count {
-            let component_kind: P::Kind = P::Kind::de(reader).unwrap();
-
-            let new_message = manifest.create_replica(component_kind, reader);
-            self.queued_incoming_messages.push_back(new_message);
-        }
-    }
-
     // MessageWriter
 
     /// Write into outgoing packet
@@ -121,15 +109,10 @@ impl<P: Protocolize> MessageManager<P> {
                     break;
                 }
             }
-
-            // If no messages will fit, abort
-            if message_count == 0 {
-                return;
-            }
-
-            // Write header
-            MessageManager::<P>::write_header(writer, message_count);
         }
+
+        // Write header
+        MessageManager::<P>::write_header(writer, message_count);
 
         // Messages
         {
@@ -145,13 +128,16 @@ impl<P: Protocolize> MessageManager<P> {
 
     /// Write bytes into an outgoing packet
     pub fn write_header<S: BitWrite>(writer: &mut S, message_count: u8) {
-        //Write manager "header" (manager type & message count)
+        //Write manager "header"
 
         // write manager type
-        ManagerType::Message.ser(writer);
+        let has_messages: bool = message_count > 0;
+        has_messages.ser(writer);
 
         // write number of messages
-        message_count.ser(writer);
+        if has_messages {
+            message_count.ser(writer);
+        }
     }
 
     /// Writes an Message into the Writer's internal buffer, which will
@@ -162,6 +148,27 @@ impl<P: Protocolize> MessageManager<P> {
 
         // write payload
         message.write(writer);
+    }
+
+    // MessageReader
+    pub fn read_messages(&mut self, reader: &mut BitReader, manifest: &Manifest<P>) {
+        let has_messages: bool = bool::de(reader).unwrap();
+        if !has_messages {
+            return;
+        }
+        self.process_message_data(reader, manifest);
+    }
+
+    /// Given incoming packet data, read transmitted Messages and store them to
+    /// be returned to the application
+    fn process_message_data(&mut self, reader: &mut BitReader, manifest: &Manifest<P>) {
+        let message_count = u8::de(reader).unwrap();
+        for _x in 0..message_count {
+            let component_kind: P::Kind = P::Kind::de(reader).unwrap();
+
+            let new_message = manifest.create_replica(component_kind, reader);
+            self.queued_incoming_messages.push_back(new_message);
+        }
     }
 }
 

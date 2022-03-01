@@ -55,28 +55,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         manifest: &Manifest<P>,
         reader: &mut BitReader,
     ) {
-        while reader.has_more() {
-            let manager_type = ManagerType::de(reader).unwrap();
-            match manager_type {
-                ManagerType::EntityMessage => {
-                    self.entity_message_receiver.process_incoming_messages(
-                        server_tick,
-                        reader,
-                        manifest,
-                    );
-                }
-                ManagerType::Message => {
-                    // packet index shouldn't matter here because the server's impl of Property
-                    // doesn't use it
-                    self.base
-                        .message_manager
-                        .process_message_data(reader, manifest);
-                }
-                ManagerType::Entity => {
-                    panic!("not yet allowed!");
-                }
-            }
-        }
+        // Read Entity Messages
+        self.entity_message_receiver.read_messages(
+            server_tick,
+            reader,
+            manifest,
+        );
+
+        // Read Messages
+        self.base
+            .message_manager
+            .read_messages(reader, manifest);
     }
 
     pub fn pop_incoming_entity_message(&mut self, server_tick: u16) -> Option<(E, P)> {
