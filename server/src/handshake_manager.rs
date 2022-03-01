@@ -56,7 +56,8 @@ impl<P: Protocolize> HandshakeManager<P> {
     // Step 2 of Handshake
     pub fn write_challenge_response(&mut self, timestamp: &u64) -> BitWriter {
         let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0, 0).ser(&mut writer);
+        StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0, 0)
+            .ser(&mut writer);
         timestamp.ser(&mut writer);
 
         let timestamp_tag: Tag = {
@@ -173,6 +174,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     fn timestamp_validate(&self, reader: &mut BitReader) -> Option<Timestamp> {
+        // Read timestamp
         let timestamp = u64::de(reader).unwrap();
         let mut digest_bytes: Vec<u8> = Vec::new();
         for _ in 0..32 {

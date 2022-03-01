@@ -9,7 +9,7 @@ pub use naia_shared::{
 use super::io::Io;
 
 #[derive(Debug, PartialEq)]
-enum HandshakeState {
+pub enum HandshakeState {
     AwaitingChallengeResponse,
     AwaitingConnectResponse,
     Connected,
@@ -19,7 +19,7 @@ pub struct HandshakeManager<P: Protocolize> {
     handshake_timer: Timer,
     pre_connection_timestamp: Timestamp,
     pre_connection_digest: Option<Box<[u8]>>,
-    connection_state: HandshakeState,
+    pub connection_state: HandshakeState,
     auth_message: Option<P>,
 }
 
@@ -115,7 +115,8 @@ impl<P: Protocolize> HandshakeManager<P> {
     pub fn write_connect_request(&self) -> BitWriter {
         let mut writer = BitWriter::new();
 
-        StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0, 0).ser(&mut writer);
+        StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0, 0)
+            .ser(&mut writer);
 
         // write timestamp & digest into payload
         self.write_signed_timestamp(&mut writer);
