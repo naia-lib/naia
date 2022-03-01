@@ -193,8 +193,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 &self.diff_handler,
             );
             // send connectaccept response
-            self.handshake_manager
-                .send_connect_response(&mut self.io, &mut new_connection);
+            let mut writer = self.handshake_manager
+                .write_connect_response(&mut new_connection);
+            self.io.send_writer(&user.address, &mut writer);
             //
             self.user_connections.insert(user.address, new_connection);
             if self.io.bandwidth_monitor_enabled() {
@@ -815,9 +816,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     let header = StandardHeader::de(&mut reader).unwrap();
 
                     match header.packet_type() {
-                        PacketType::ClientChallengeRequest => self
+                        PacketType::ClientChallengeRequest => {
+                            let mut writer = self
                             .handshake_manager
-                            .recv_challenge_request(&mut self.io, &address, &mut reader),
+                            .recv_challenge_request(&mut reader);
+                            self.io.send_writer(&address, &mut writer);
+                        },
                         PacketType::ClientConnectRequest => {
                             if let Some(mut connection) = self.user_connections.get_mut(&address) {
                                 self.handshake_manager.recv_old_connect_request(

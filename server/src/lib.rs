@@ -67,5 +67,5 @@ pub use user::{user_key::UserKey, User, UserMut, UserRef};
 pub use user_scope::UserScopeMut;
 
 pub mod internal {
-    pub use crate::handshake_manager::HandshakeManager;
+    pub use crate::handshake_manager::{HandshakeManager, HandshakeResult};
 }

@@ -111,7 +111,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             panic!("Trying to disconnect Client which is not connected yet!")
         }
 
-        self.handshake_manager.send_disconnect(&mut self.io);
+        for _ in 0..10 {
+            let mut writer = self.handshake_manager.write_disconnect();
+            self.io.send_writer(&mut writer);
+        }
 
         self.disconnect_internal();
     }

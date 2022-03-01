@@ -45,17 +45,16 @@ impl<P: Protocolize> HandshakeManager<P> {
     // Step 1 of Handshake
     pub fn recv_challenge_request(
         &mut self,
-        io: &mut Io,
-        address: &SocketAddr,
         reader: &mut BitReader,
-    ) {
+    ) -> BitWriter {
         let timestamp = u64::de(reader).unwrap();
 
-        self.send_challenge_response(io, address, &timestamp);
+        let mut writer = self.write_challenge_response(&timestamp);
+        writer
     }
 
     // Step 2 of Handshake
-    pub fn send_challenge_response(&mut self, io: &mut Io, address: &SocketAddr, timestamp: &u64) {
+    pub fn write_challenge_response(&mut self, timestamp: &u64) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0, 0).ser(&mut writer);
         timestamp.ser(&mut writer);
@@ -74,7 +73,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         //write timestamp digest
         timestamp_tag.as_ref().ser(&mut writer);
 
-        io.send_writer(address, &mut writer);
+        writer
     }
 
     // Step 3 of Handshake
@@ -130,24 +129,24 @@ impl<P: Protocolize> HandshakeManager<P> {
                     connection.process_incoming_header(world_record, &incoming_header);
 
                     // send connect accept response
-                    self.send_connect_response(io, connection);
+                    let mut writer = self.write_connect_response(connection);
+                    io.send_writer(&connection.base.address, &mut writer);
+                    connection.base.mark_sent();
                 }
             }
         }
     }
 
     // Step 4 of Handshake
-    pub fn send_connect_response<E: Copy + Eq + Hash>(
+    pub fn write_connect_response<E: Copy + Eq + Hash>(
         &self,
-        io: &mut Io,
         connection: &mut Connection<P, E>,
-    ) {
+    ) -> BitWriter {
         let mut writer = BitWriter::new();
         connection
             .base
             .write_outgoing_header(0, PacketType::ServerConnectResponse, &mut writer);
-        io.send_writer(&connection.base.address, &mut writer);
-        connection.base.mark_sent();
+        writer
     }
 
     pub fn verify_disconnect_request<E: Copy + Eq + Hash>(
