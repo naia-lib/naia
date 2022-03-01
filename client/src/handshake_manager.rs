@@ -124,14 +124,14 @@ impl<P: Protocolize> HandshakeManager<P> {
         // write auth message if there is one
         if let Some(auth_message) = &self.auth_message {
             // write that we have auth
-            1.ser(&mut writer);
+            true.ser(&mut writer);
             // write auth kind
             auth_message.dyn_ref().kind().ser(&mut writer);
             // write payload
             auth_message.write(&mut writer);
         } else {
             // write that we do not have auth
-            0.ser(&mut writer);
+            false.ser(&mut writer);
         }
 
         writer

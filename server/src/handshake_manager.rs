@@ -88,7 +88,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         // server instance
         if let Some(timestamp) = self.timestamp_validate(reader) {
             // Timestamp hash is validated, now start configured auth process
-            let has_auth = u8::de(reader).unwrap() == 1;
+            let has_auth = bool::de(reader).unwrap();
 
             if has_auth != self.require_auth {
                 return HandshakeResult::Invalid;
