@@ -6,7 +6,7 @@ use crate::cache_map::CacheMap;
 use naia_shared::serde::BitWriter;
 pub use naia_shared::{
     serde::{BitReader, Serde},
-    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
+    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator,
     Manifest, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType,
     Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
     WorldMutType, WorldRefType,
