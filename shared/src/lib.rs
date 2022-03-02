@@ -59,7 +59,7 @@ pub use diff_mask::DiffMask;
 pub use encoder::Encoder;
 pub use entity_action_type::EntityActionType;
 pub use key_store::KeyGenerator;
-pub use keys::{LocalComponentKey, NetEntity};
+pub use keys::NetEntity;
 pub use manifest::Manifest;
 pub use message_manager::MessageManager;
 pub use packet_notifiable::PacketNotifiable;

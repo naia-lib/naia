@@ -6,6 +6,7 @@ use std::{
 use log::warn;
 
 use naia_shared::{serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde}, EntityActionType, LocalComponentKey, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, write_list_header, read_list_header};
+use naia_shared::serde::UnsignedVariableInteger;
 
 use super::{
     entity_message_sender::EntityMessageSender, entity_record::EntityRecord,
@@ -15,7 +16,6 @@ use super::{
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
     local_to_world_entity: HashMap<NetEntity, E>,
-    component_to_entity_map: HashMap<LocalComponentKey, E>,
     pub message_sender: EntityMessageSender<P, E>,
 }
 
@@ -24,7 +24,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         EntityManager {
             local_to_world_entity: HashMap::new(),
             entity_records: HashMap::new(),
-            component_to_entity_map: HashMap::new(),
             message_sender: EntityMessageSender::new(),
         }
     }
@@ -60,17 +59,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             let message_type = EntityActionType::de(reader).unwrap();
 
             match message_type {
+                // Entity Creation
                 EntityActionType::SpawnEntity => {
-                    // Entity Creation
                     let local_id = NetEntity::de(reader).unwrap();
-                    let components_num = u8::de(reader).unwrap();
+                    let components_num = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
                     if self.local_to_world_entity.contains_key(&local_id) {
                         // its possible we received a very late duplicate message
                         warn!("attempted to insert duplicate entity");
                         // continue reading, just don't do anything with the data
                         for _ in 0..components_num {
                             let component_kind = P::Kind::de(reader).unwrap();
-                            let _component_key = LocalComponentKey::de(reader).unwrap();
                             manifest.create_replica(component_kind, reader);
                         }
                     } else {
@@ -83,25 +81,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                         let mut component_list: Vec<P::Kind> = Vec::new();
                         for _ in 0..components_num {
+
                             // Component Creation //
                             let component_kind = P::Kind::de(reader).unwrap();
-                            let component_key = LocalComponentKey::de(reader).unwrap();
 
                             let new_component = manifest.create_replica(component_kind, reader);
-                            if self.component_to_entity_map.contains_key(&component_key) {
-                                panic!("attempted to insert duplicate component");
-                            } else {
-                                {
-                                    let new_component_kind = new_component.dyn_ref().kind();
-                                    entity_record
-                                        .insert_component(&component_key, &new_component_kind);
-                                    component_list.push(new_component_kind);
-                                }
 
-                                self.component_to_entity_map
-                                    .insert(component_key, world_entity);
-                                new_component.extract_and_insert(&world_entity, world);
-                            }
+                            entity_record.component_kinds.insert(component_kind);
+                            component_list.push(component_kind);
+
+                            new_component.extract_and_insert(&world_entity, world);
                             ////////////////////////
                         }
 
@@ -110,10 +99,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                         continue;
                     }
                 }
+                // Entity Deletion
                 EntityActionType::DespawnEntity => {
-                    // Entity Deletion
-                    let local_id = NetEntity::de(reader).unwrap();
-                    if let Some(world_entity) = self.local_to_world_entity.remove(&local_id) {
+                    let net_entity = NetEntity::de(reader).unwrap();
+                    if let Some(world_entity) = self.local_to_world_entity.remove(&net_entity) {
                         if let Some(entity_record) = self.entity_records.remove(&world_entity) {
                             // Generate event for each component, handing references off just in
                             // case
@@ -128,10 +117,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 }
                             }
 
-                            for component_key in entity_record.component_keys() {
-                                self.component_to_entity_map.remove(&component_key);
-                            }
-
                             world.despawn_entity(&world_entity);
 
                             event_stream.push_back(Ok(Event::DespawnEntity(world_entity)));
@@ -140,6 +125,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     }
                     warn!("received message attempting to delete nonexistent entity");
                 }
+                // Receive special Entity Message
                 EntityActionType::MessageEntity => {
                     let net_entity = NetEntity::de(reader).unwrap();
                     let message_kind = P::Kind::de(reader).unwrap();
@@ -159,55 +145,44 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             .push_back(Ok(Event::MessageEntity(*world_entity, new_message)));
                     }
                 }
+                // Add Component to Entity
                 EntityActionType::InsertComponent => {
-                    // Add Component to Entity
                     let net_entity = NetEntity::de(reader).unwrap();
                     let component_kind = P::Kind::de(reader).unwrap();
-                    let component_key = LocalComponentKey::de(reader).unwrap();
 
                     let new_component = manifest.create_replica(component_kind, reader);
-                    if self.component_to_entity_map.contains_key(&component_key) {
+
+                    if !self.local_to_world_entity.contains_key(&net_entity) {
                         // its possible we received a very late duplicate message
                         warn!(
-                            "attempting to add duplicate local component key: {}, into entity: {}",
-                            Into::<u16>::into(component_key),
+                            "attempting to add a component: {}, to nonexistent entity: {}",
+                            Into::<u16>::into(component_kind),
                             Into::<u16>::into(net_entity)
                         );
                     } else {
-                        if !self.local_to_world_entity.contains_key(&net_entity) {
-                            // its possible we received a very late duplicate message
-                            warn!(
-                                "attempting to add a component: {}, to nonexistent entity: {}",
-                                Into::<u16>::into(component_key),
-                                Into::<u16>::into(net_entity)
-                            );
-                        } else {
-                            let world_entity = self.local_to_world_entity.get(&net_entity).unwrap();
-                            self.component_to_entity_map
-                                .insert(component_key, *world_entity);
+                        let world_entity = self.local_to_world_entity.get(&net_entity).unwrap();
 
-                            let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
+                        let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
 
-                            entity_record.insert_component(&component_key, &component_kind);
+                        entity_record.component_kinds.insert(&component_kind);
 
-                            new_component.extract_and_insert(world_entity, world);
+                        new_component.extract_and_insert(world_entity, world);
 
-                            event_stream.push_back(Ok(Event::InsertComponent(
-                                *world_entity,
-                                component_kind,
-                            )));
-                        }
+                        event_stream.push_back(Ok(Event::InsertComponent(
+                            *world_entity,
+                            component_kind,
+                        )));
                     }
-                }
-                EntityActionType::UpdateComponent => {
-                    // Component Update
-                    let component_key = LocalComponentKey::de(reader).unwrap();
 
-                    if let Some(world_entity) = self.component_to_entity_map.get_mut(&component_key)
+                }
+                // Component Update
+                EntityActionType::UpdateComponent => {
+                    let net_entity = NetEntity::de(reader).unwrap();
+                    let component_kind = P::Kind::de(reader).unwrap();
+
+                    if let Some(world_entity) = self.local_to_world_entity.get_mut(&net_entity)
                     {
                         if let Some(entity_record) = self.entity_records.get(world_entity) {
-                            let component_kind =
-                                entity_record.kind_from_key(&component_key).unwrap();
 
                             // read incoming delta
                             world.component_read_partial(
@@ -221,41 +196,41 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 *world_entity,
                                 *component_kind,
                             )));
+                        } else {
+                            panic!("attempting to update component for nonexistent entity");
                         }
+                    } else {
+                        panic!("attempting to update component for nonexistent entity");
                     }
                 }
+                // Component Removal
                 EntityActionType::RemoveComponent => {
-                    // Component Removal
-                    let component_key = LocalComponentKey::de(reader).unwrap();
 
-                    if !self.component_to_entity_map.contains_key(&component_key) {
-                        // This could happen due to a duplicated unreliable message
-                        // (i.e. server re-sends "remove component" message because it believes it
-                        // hasn't been delivered and then it does get
-                        // delivered after, but then a duplicate message gets delivered too..)
-                        warn!(
-                            "attempting to remove a non-existent component: {}",
-                            Into::<u16>::into(component_key),
-                        );
+                    let net_entity = NetEntity::de(reader).unwrap();
+                    let component_kind = P::Kind::de(reader).unwrap();
+
+                    if let Some(world_entity) = self.local_to_world_entity.get_mut(&net_entity)
+                    {
+                        if let Some(entity_record) = self.entity_records.get_mut(world_entity) {
+                            if entity_record.component_kinds.contains(component_kind) {
+                                entity_record.component_kinds.remove(component_kind);
+
+                                // Get component for last change
+                                let component = world
+                                    .remove_component_of_kind(&world_entity, &component_kind)
+                                    .expect("Component already removed?");
+
+                                // Generate event
+                                event_stream.push_back(Ok(Event::RemoveComponent(world_entity, component)));
+                            } else {
+                                panic!("attempting to delete nonexistent component of entity");
+                            }
+                        }
+                        else {
+                            panic!("attempting to delete component of nonexistent entity");
+                        }
                     } else {
-                        let world_entity =
-                            self.component_to_entity_map.remove(&component_key).unwrap();
-
-                        // Get entity record, remove component
-                        let component_kind = self
-                            .entity_records
-                            .get_mut(&world_entity)
-                            .expect("entity not instantiated properly? no such entity")
-                            .remove_component(&component_key)
-                            .expect("entity not instantiated properly? no type");
-
-                        // Get component for last change
-                        let component = world
-                            .remove_component_of_kind(&world_entity, &component_kind)
-                            .expect("Component already removed?");
-
-                        // Generate event
-                        event_stream.push_back(Ok(Event::RemoveComponent(world_entity, component)));
+                        panic!("attempting to delete component of nonexistent entity");
                     }
                 }
             }
@@ -340,7 +315,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             client_tick.ser(writer);
 
             // write local entity
-            entity_record.entity_net_id.ser(writer);
+            entity_record.net_entity.ser(writer);
 
             // write message kind
             message.dyn_ref().kind().ser(writer);

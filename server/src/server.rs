@@ -11,7 +11,7 @@ use slotmap::DenseSlotMap;
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::serde::{BitWriter, Serde};
 pub use naia_shared::{
-    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, LocalComponentKey,
+    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator,
     Manifest, NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator,
     ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
     Timestamp, WorldMutType, WorldRefType,
@@ -27,7 +27,6 @@ use super::{
     global_entity_record::GlobalEntityRecord,
     handshake_manager::{HandshakeManager, HandshakeResult},
     io::Io,
-    keys::ComponentKey,
     room::{room_key::RoomKey, Room, RoomMut, RoomRef},
     server_config::ServerConfig,
     tick_manager::TickManager,
@@ -514,7 +513,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         }
 
         // Clean up associated components
-        for component_key in self.world_record.component_keys(entity) {
+        for component_key in self.world_record.component_kinds(entity) {
             self.component_cleanup(&component_key);
         }
 
