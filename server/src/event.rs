@@ -1,6 +1,6 @@
 use naia_shared::Protocolize;
 
-use super::user::{UserKey, User};
+use super::user::{User, UserKey};
 
 /// An Event that is emitted as a result of some communication with a Client, or
 /// a Tick event

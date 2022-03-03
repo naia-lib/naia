@@ -5,8 +5,12 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde}, EntityActionType, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, write_list_header, read_list_header};
-use naia_shared::serde::UnsignedVariableInteger;
+use naia_shared::{
+    read_list_header,
+    serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+    write_list_header, EntityActionType, Manifest, NetEntity, PacketIndex, Protocolize, Tick,
+    WorldMutType, MTU_SIZE_BITS,
+};
 
 use super::{
     entity_message_sender::EntityMessageSender, entity_record::EntityRecord,
@@ -38,12 +42,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         event_stream: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
     ) {
         let action_count = read_list_header(reader);
-        self.process_actions(world,
-                             manifest,
-                             server_tick,
-                             reader,
-                             event_stream,
-                             action_count);
+        self.process_actions(
+            world,
+            manifest,
+            server_tick,
+            reader,
+            event_stream,
+            action_count,
+        );
     }
 
     fn process_actions<W: WorldMutType<P, E>>(
@@ -81,7 +87,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                         let mut component_list: Vec<P::Kind> = Vec::new();
                         for _ in 0..components_num {
-
                             // Component Creation //
                             let component_kind = P::Kind::de(reader).unwrap();
 
@@ -113,10 +118,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             if let Some(component) =
                                 world.remove_component_of_kind(&world_entity, &component_kind)
                             {
-                                event_stream.push_back(Ok(Event::RemoveComponent(
-                                    world_entity,
-                                    component,
-                                )));
+                                event_stream
+                                    .push_back(Ok(Event::RemoveComponent(world_entity, component)));
                             }
                         }
 
@@ -169,26 +172,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                         new_component.extract_and_insert(world_entity, world);
 
-                        event_stream.push_back(Ok(Event::InsertComponent(
-                            *world_entity,
-                            component_kind,
-                        )));
+                        event_stream
+                            .push_back(Ok(Event::InsertComponent(*world_entity, component_kind)));
                     }
-
                 }
                 // Component Update
                 EntityActionType::UpdateComponent => {
                     let net_entity = NetEntity::de(reader).unwrap();
                     let component_kind = P::Kind::de(reader).unwrap();
 
-                    if let Some(world_entity) = self.local_to_world_entity.get_mut(&net_entity)
-                    {
+                    if let Some(world_entity) = self.local_to_world_entity.get_mut(&net_entity) {
                         // read incoming delta
-                        world.component_read_partial(
-                            world_entity,
-                            &component_kind,
-                            reader,
-                        );
+                        world.component_read_partial(world_entity, &component_kind, reader);
 
                         event_stream.push_back(Ok(Event::UpdateComponent(
                             server_tick,
@@ -201,29 +196,26 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
                 // Component Removal
                 EntityActionType::RemoveComponent => {
-
                     let net_entity = NetEntity::de(reader).unwrap();
                     let component_kind = P::Kind::de(reader).unwrap();
 
-                    if let Some(world_entity) = self.local_to_world_entity.get_mut(&net_entity)
-                    {
+                    if let Some(world_entity) = self.local_to_world_entity.get_mut(&net_entity) {
                         if let Some(entity_record) = self.entity_records.get_mut(world_entity) {
-
                             if entity_record.component_kinds.remove(&component_kind) {
-
                                 // Get component for last change
                                 let component = world
                                     .remove_component_of_kind(&world_entity, &component_kind)
                                     .expect("Component already removed?");
 
                                 // Generate event
-                                event_stream.push_back(Ok(Event::RemoveComponent(*world_entity, component)));
-
+                                event_stream.push_back(Ok(Event::RemoveComponent(
+                                    *world_entity,
+                                    component,
+                                )));
                             } else {
                                 panic!("attempting to delete nonexistent component of entity");
                             }
-                        }
-                        else {
+                        } else {
                             panic!("attempting to delete component of nonexistent entity");
                         }
                     } else {

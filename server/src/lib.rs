@@ -57,7 +57,7 @@ pub use event::Event;
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;
 pub use server_config::ServerConfig;
-pub use user::{UserKey, User, UserMut, UserRef};
+pub use user::{User, UserKey, UserMut, UserRef};
 pub use user_scope::UserScopeMut;
 
 pub mod internal {

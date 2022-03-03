@@ -2,7 +2,7 @@ use naia_shared::{EntityActionType, Protocolize};
 
 #[derive(Clone)]
 pub enum EntityAction<P: Protocolize, E: Copy> {
-    SpawnEntity (E, Option<Vec<P::Kind>>),
+    SpawnEntity(E, Option<Vec<P::Kind>>),
     DespawnEntity(E),
     MessageEntity(E, P),
     InsertComponent(E, P::Kind),

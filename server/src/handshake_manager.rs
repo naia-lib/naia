@@ -6,10 +6,9 @@ use crate::cache_map::CacheMap;
 use naia_shared::serde::BitWriter;
 pub use naia_shared::{
     serde::{BitReader, Serde},
-    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator,
-    Manifest, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType,
-    Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
-    WorldMutType, WorldRefType,
+    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, Manifest, PacketType,
+    PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe,
+    SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{connection::Connection, io::Io, world_record::WorldRecord};
@@ -43,10 +42,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 1 of Handshake
-    pub fn recv_challenge_request(
-        &mut self,
-        reader: &mut BitReader,
-    ) -> BitWriter {
+    pub fn recv_challenge_request(&mut self, reader: &mut BitReader) -> BitWriter {
         let timestamp = u64::de(reader).unwrap();
 
         let writer = self.write_challenge_response(&timestamp);
@@ -56,8 +52,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     // Step 2 of Handshake
     pub fn write_challenge_response(&mut self, timestamp: &u64) -> BitWriter {
         let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0, 0)
-            .ser(&mut writer);
+        StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0, 0).ser(&mut writer);
         timestamp.ser(&mut writer);
 
         let timestamp_tag: Tag = {

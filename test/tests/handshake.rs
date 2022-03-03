@@ -1,5 +1,11 @@
-use std::{net::{IpAddr, Ipv4Addr, SocketAddr}, time::Duration};
-use naia_shared::{serde::{BitReader, BitWriter, Serde}, Protocolize, StandardHeader, PacketType};
+use naia_shared::{
+    serde::{BitReader, BitWriter, Serde},
+    PacketType, Protocolize, StandardHeader,
+};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    time::Duration,
+};
 
 use naia_client::internal::{HandshakeManager as ClientHandshakeManager, HandshakeState};
 use naia_server::internal::{HandshakeManager as ServerHandshakeManager, HandshakeResult};
@@ -8,8 +14,7 @@ use naia_test::{Auth, Protocol};
 
 #[test]
 fn end_to_end_handshake_w_auth() {
-
-    let mut client = ClientHandshakeManager::<Protocol>::new(Duration::new(0,0));
+    let mut client = ClientHandshakeManager::<Protocol>::new(Duration::new(0, 0));
     let mut server = ServerHandshakeManager::<Protocol>::new(true);
     let mut message_length: usize;
     let mut message_buffer: [u8; 508];
@@ -50,7 +55,10 @@ fn end_to_end_handshake_w_auth() {
         reader = BitReader::new(&message_buffer[..message_length]);
         StandardHeader::de(&mut reader).unwrap();
         client.recv_challenge_response(&mut reader);
-        assert_eq!(client.connection_state, HandshakeState::AwaitingConnectResponse);
+        assert_eq!(
+            client.connection_state,
+            HandshakeState::AwaitingConnectResponse
+        );
     }
 
     // 5. Client send connect request
@@ -65,17 +73,22 @@ fn end_to_end_handshake_w_auth() {
     {
         reader = BitReader::new(&message_buffer[..message_length]);
         StandardHeader::de(&mut reader).unwrap();
-        let result = server.recv_new_connect_request(&Protocol::load(), &test_socket_addr, &mut reader);
+        let result =
+            server.recv_new_connect_request(&Protocol::load(), &test_socket_addr, &mut reader);
         if let HandshakeResult::AuthUser(auth_message) = result {
-            let auth_replica = auth_message.cast_ref::<Auth>().expect("did not construct protocol correctly...");
-            assert_eq!(*auth_replica.username,
-                       username, "Server received an invalid username: '{}', should be: '{}'",
-                       *auth_replica.username,
-                       username);
-            assert_eq!(*auth_replica.password,
-                       password, "Server received an invalid password: '{}', should be: '{}'",
-                       *auth_replica.password,
-                       password);
+            let auth_replica = auth_message
+                .cast_ref::<Auth>()
+                .expect("did not construct protocol correctly...");
+            assert_eq!(
+                *auth_replica.username, username,
+                "Server received an invalid username: '{}', should be: '{}'",
+                *auth_replica.username, username
+            );
+            assert_eq!(
+                *auth_replica.password, password,
+                "Server received an invalid password: '{}', should be: '{}'",
+                *auth_replica.password, password
+            );
         } else {
             assert!(false, "handshake result from server was not correct");
         }

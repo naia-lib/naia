@@ -3,7 +3,7 @@ use std::{
     vec::Vec,
 };
 
-use crate::{constants::MTU_SIZE_BITS, PacketIndex, read_list_header, write_list_header};
+use crate::{constants::MTU_SIZE_BITS, read_list_header, write_list_header, PacketIndex};
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
 
 use super::{
@@ -141,7 +141,12 @@ impl<P: Protocolize> MessageManager<P> {
 
     /// Given incoming packet data, read transmitted Messages and store them to
     /// be returned to the application
-    fn process_message_data(&mut self, reader: &mut BitReader, manifest: &Manifest<P>, message_count: u16) {
+    fn process_message_data(
+        &mut self,
+        reader: &mut BitReader,
+        manifest: &Manifest<P>,
+        message_count: u16,
+    ) {
         for _x in 0..message_count {
             let component_kind: P::Kind = P::Kind::de(reader).unwrap();
 

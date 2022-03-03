@@ -1,8 +1,8 @@
 use std::{
     collections::HashMap,
+    hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock, RwLockReadGuard},
-    hash::Hash
 };
 
 use naia_shared::{DiffMask, ProtocolKindType};

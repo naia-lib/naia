@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use naia_shared::serde::{BitReader, BitWriter, Serde};
 pub use naia_shared::{
-    ConnectionConfig, Manifest, PacketType, ProtocolKindType, Protocolize,
-    ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    ConnectionConfig, Manifest, PacketType, ProtocolKindType, Protocolize, ReplicateSafe,
+    SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::io::Io;
@@ -87,9 +87,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ClientChallengeRequest, 0, 0, 0, 0).ser(&mut writer);
 
-        self.pre_connection_timestamp
-            .to_u64()
-            .ser(&mut writer);
+        self.pre_connection_timestamp.to_u64().ser(&mut writer);
 
         writer
     }
@@ -115,8 +113,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     pub fn write_connect_request(&self) -> BitWriter {
         let mut writer = BitWriter::new();
 
-        StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0, 0)
-            .ser(&mut writer);
+        StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0, 0).ser(&mut writer);
 
         // write timestamp & digest into payload
         self.write_signed_timestamp(&mut writer);
@@ -153,9 +150,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     // Private methods
 
     fn write_signed_timestamp(&self, writer: &mut BitWriter) {
-        self.pre_connection_timestamp
-            .to_u64()
-            .ser(writer);
+        self.pre_connection_timestamp.to_u64().ser(writer);
         for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref() {
             digest_byte.ser(writer);
         }

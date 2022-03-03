@@ -83,12 +83,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
                 .read_messages(&mut reader, manifest);
 
             // Read Entity Actions
-            self.entity_manager
-                .read_actions(world,
-                              manifest,
-                              server_tick,
-                              &mut reader,
-                              incoming_events);
+            self.entity_manager.read_actions(
+                world,
+                manifest,
+                server_tick,
+                &mut reader,
+                incoming_events,
+            );
         }
     }
 

@@ -1,6 +1,6 @@
 use std::{hash::Hash, net::SocketAddr};
 
-use naia_shared::{Protocolize, SlotMapKey};
+use naia_shared::{BigMapKey, Protocolize};
 
 use crate::{RoomKey, Server};
 
@@ -8,7 +8,7 @@ use crate::{RoomKey, Server};
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub struct UserKey(u64);
 
-impl SlotMapKey for UserKey {
+impl BigMapKey for UserKey {
     fn to_u64(&self) -> u64 {
         self.0
     }
