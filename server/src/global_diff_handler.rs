@@ -30,7 +30,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> GlobalDiffHandler<E, K> {
 
         let (sender, builder) = MutChannel::new_channel(diff_mask_length);
 
-        self.mut_receiver_builders.insert(component_index, builder);
+        self.mut_receiver_builders.insert((*entity, *component_kind), builder);
 
         return sender;
     }

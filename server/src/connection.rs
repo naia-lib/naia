@@ -27,7 +27,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         connection_config: &ConnectionConfig,
         user_address: SocketAddr,
         user_key: &UserKey,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler>>,
+        diff_handler: &Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
     ) -> Self {
         Connection {
             user_key: *user_key,

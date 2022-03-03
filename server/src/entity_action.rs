@@ -1,4 +1,4 @@
-use naia_shared::{DiffMask, EntityActionType, Protocolize};
+use naia_shared::{EntityActionType, Protocolize};
 
 #[derive(Clone)]
 pub enum EntityAction<P: Protocolize, E: Copy> {
