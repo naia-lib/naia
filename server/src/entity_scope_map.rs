@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use crate::user::user_key::UserKey;
+use crate::user::UserKey;
 
 pub struct EntityScopeMap<E: Copy + Eq + Hash> {
     entities_of_user: HashMap<UserKey, HashSet<E>>,

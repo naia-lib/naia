@@ -5,7 +5,7 @@ use naia_shared::{
     WorldRefType,
 };
 
-use super::{room::room_key::RoomKey, server::Server, user::user_key::UserKey};
+use super::{room::RoomKey, server::Server, user::UserKey};
 
 // EntityRef
 

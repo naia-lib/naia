@@ -6,15 +6,13 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use slotmap::DenseSlotMap;
-
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::serde::{BitWriter, Serde};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator,
     Manifest, NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator,
     ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
-    Timestamp, WorldMutType, WorldRefType,
+    Timestamp, WorldMutType, WorldRefType, SlotMap
 };
 
 use super::{
@@ -27,10 +25,10 @@ use super::{
     global_entity_record::GlobalEntityRecord,
     handshake_manager::{HandshakeManager, HandshakeResult},
     io::Io,
-    room::{room_key::RoomKey, Room, RoomMut, RoomRef},
+    room::{RoomKey, Room, RoomMut, RoomRef},
     server_config::ServerConfig,
     tick_manager::TickManager,
-    user::{user_key::UserKey, User, UserMut, UserRef},
+    user::{UserKey, User, UserMut, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
 };
@@ -47,10 +45,10 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
     heartbeat_timer: Timer,
     handshake_manager: HandshakeManager<P>,
     // Users
-    users: DenseSlotMap<UserKey, User>,
+    users: SlotMap<UserKey, User>,
     user_connections: HashMap<SocketAddr, Connection<P, E>>,
     // Rooms
-    rooms: DenseSlotMap<RoomKey, Room<E>>,
+    rooms: SlotMap<RoomKey, Room<E>>,
     // Entities
     world_record: WorldRecord<E, P::Kind>,
     entity_records: HashMap<E, GlobalEntityRecord>,
@@ -91,10 +89,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             heartbeat_timer,
             handshake_manager: HandshakeManager::new(server_config.require_auth),
             // Users
-            users: DenseSlotMap::with_key(),
+            users: SlotMap::new(),
             user_connections: HashMap::new(),
             // Rooms
-            rooms: DenseSlotMap::with_key(),
+            rooms: SlotMap::new(),
             // Entities
             world_record: WorldRecord::new(),
             entity_records: HashMap::new(),
@@ -184,7 +182,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Accepts an incoming Client User, allowing them to establish a connection
     /// with the Server
     pub fn accept_connection(&mut self, user_key: &UserKey) {
-        if let Some(user) = self.users.get(*user_key) {
+        if let Some(user) = self.users.get(user_key) {
             let mut new_connection = Connection::new(
                 &self.server_config.connection,
                 user.address,
@@ -221,7 +219,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         message: &R,
         guaranteed_delivery: bool,
     ) {
-        if let Some(user) = self.users.get(*user_key) {
+        if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
                 connection
                     .base
@@ -342,14 +340,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Returns whether or not a User exists for the given RoomKey
     pub fn user_exists(&self, user_key: &UserKey) -> bool {
-        return self.users.contains_key(*user_key);
+        return self.users.contains_key(user_key);
     }
 
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Panics if the user does not exist.
     pub fn user(&self, user_key: &UserKey) -> UserRef<P, E> {
-        if self.users.contains_key(*user_key) {
+        if self.users.contains_key(user_key) {
             return UserRef::new(self, &user_key);
         }
         panic!("No User exists for given Key!");
@@ -359,7 +357,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
     pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, E> {
-        if self.users.contains_key(*user_key) {
+        if self.users.contains_key(user_key) {
             return UserMut::new(self, &user_key);
         }
         panic!("No User exists for given Key!");
@@ -384,7 +382,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
     pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, E> {
-        if self.users.contains_key(*user_key) {
+        if self.users.contains_key(user_key) {
             return UserScopeMut::new(self, &user_key);
         }
         panic!("No User exists for given Key!");
@@ -392,7 +390,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Returns whether a given User has a particular Entity in-scope currently
     pub fn user_scope_has_entity(&self, user_key: &UserKey, entity: &E) -> bool {
-        if let Some(user) = self.users.get(*user_key) {
+        if let Some(user) = self.users.get(user_key) {
             if let Some(user_connection) = self.user_connections.get(&user.address) {
                 return user_connection.entity_manager.has_entity(entity);
             }
@@ -414,14 +412,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Returns whether or not a Room exists for the given RoomKey
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
-        return self.rooms.contains_key(*room_key);
+        return self.rooms.contains_key(room_key);
     }
 
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
     pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, E> {
-        if self.rooms.contains_key(*room_key) {
+        if self.rooms.contains_key(room_key) {
             return RoomRef::new(self, room_key);
         }
         panic!("No Room exists for given Key!");
@@ -431,7 +429,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
     pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, E> {
-        if self.rooms.contains_key(*room_key) {
+        if self.rooms.contains_key(room_key) {
             return RoomMut::new(self, room_key);
         }
         panic!("No Room exists for given Key!");
@@ -457,7 +455,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Gets the last received tick from the Client
     pub fn client_tick(&self, user_key: &UserKey) -> Option<u16> {
-        if let Some(user) = self.users.get(*user_key) {
+        if let Some(user) = self.users.get(user_key) {
             if let Some(user_connection) = self.user_connections.get(&user.address) {
                 return Some(user_connection.base.last_received_tick);
             }
@@ -607,7 +605,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Get a User's Socket Address, given the associated UserKey
     pub(crate) fn user_address(&self, user_key: &UserKey) -> Option<SocketAddr> {
-        if let Some(user) = self.users.get(*user_key) {
+        if let Some(user) = self.users.get(user_key) {
             return Some(user.address);
         }
         return None;
@@ -615,7 +613,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// All necessary cleanup, when they're actually gone...
     pub(crate) fn delete_user(&mut self, user_key: &UserKey) -> Option<User> {
-        if let Some(user) = self.users.remove(*user_key) {
+        if let Some(user) = self.users.remove(user_key) {
             if let Some(_) = self.user_connections.remove(&user.address) {
                 self.entity_scope_map.remove_user(user_key);
                 self.handshake_manager.delete_user(&user.address);
@@ -642,9 +640,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Deletes the Room associated with a given RoomKey on the Server.
     /// Returns true if the Room existed.
     pub(crate) fn room_destroy(&mut self, room_key: &RoomKey) -> bool {
-        if self.rooms.contains_key(*room_key) {
+        if self.rooms.contains_key(room_key) {
             // remove all entities from the entity_room_map
-            for entity in self.rooms.get(*room_key).unwrap().entities() {
+            for entity in self.rooms.get(room_key).unwrap().entities() {
                 if let Some(record) = self.entity_records.get_mut(entity) {
                     record.room_key = None;
                 }
@@ -653,7 +651,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             // TODO: what else kind of cleanup do we need to do here? Scopes?
 
             // actually remove the room from the collection
-            self.rooms.remove(*room_key);
+            self.rooms.remove(room_key);
 
             return true;
         } else {
@@ -666,7 +664,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Returns whether or not an User is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_user(&self, room_key: &RoomKey, user_key: &UserKey) -> bool {
-        if let Some(room) = self.rooms.get(*room_key) {
+        if let Some(room) = self.rooms.get(room_key) {
             return room.has_user(user_key);
         }
         return false;
@@ -676,21 +674,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Entities will only ever be in-scope for Users which are in a
     /// Room with them
     pub(crate) fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
-        if let Some(room) = self.rooms.get_mut(*room_key) {
+        if let Some(room) = self.rooms.get_mut(room_key) {
             room.subscribe_user(user_key);
         }
     }
 
     /// Removes a User from a Room
     pub(crate) fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
-        if let Some(room) = self.rooms.get_mut(*room_key) {
+        if let Some(room) = self.rooms.get_mut(room_key) {
             room.unsubscribe_user(user_key);
         }
     }
 
     /// Get a count of Users in a given Room
     pub(crate) fn room_users_count(&self, room_key: &RoomKey) -> usize {
-        if let Some(room) = self.rooms.get(*room_key) {
+        if let Some(room) = self.rooms.get(room_key) {
             return room.users_count();
         }
         return 0;
@@ -718,7 +716,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 panic!("Entity already belongs to a Room! Remove the Entity from the Room before adding it to a new Room.");
             }
 
-            if let Some(room) = self.rooms.get_mut(*room_key) {
+            if let Some(room) = self.rooms.get_mut(room_key) {
                 room.add_entity(entity);
                 entity_record.room_key = Some(*room_key);
             }
@@ -727,7 +725,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Remove an Entity from a Room, associated with the given RoomKey
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &E) {
-        if let Some(room) = self.rooms.get_mut(*room_key) {
+        if let Some(room) = self.rooms.get_mut(room_key) {
             if room.remove_entity(entity) {
                 if let Some(entity_record) = self.entity_records.get_mut(entity) {
                     entity_record.room_key = None;
@@ -738,7 +736,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Get a count of Entities in a given Room
     pub(crate) fn room_entities_count(&self, room_key: &RoomKey) -> usize {
-        if let Some(room) = self.rooms.get(*room_key) {
+        if let Some(room) = self.rooms.get(room_key) {
             return room.entities_count();
         }
         return 0;
@@ -754,7 +752,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         entity: &E,
         message: &R,
     ) {
-        if let Some(user) = self.users.get(*user_key) {
+        if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
                 connection
                     .entity_manager
@@ -976,7 +974,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     fn update_entity_scopes<W: WorldRefType<P, E>>(&mut self, world: &W) {
         for (_, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
-                if let Some(user) = self.users.get(removed_user) {
+                if let Some(user) = self.users.get(&removed_user) {
                     if let Some(user_connection) = self.user_connections.get_mut(&user.address) {
                         //remove entity from user connection
                         user_connection
@@ -991,7 +989,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             for user_key in room.user_keys() {
                 for entity in room.entities() {
                     if world.has_entity(entity) {
-                        if let Some(user) = self.users.get(*user_key) {
+                        if let Some(user) = self.users.get(user_key) {
                             if let Some(user_connection) =
                                 self.user_connections.get_mut(&user.address)
                             {

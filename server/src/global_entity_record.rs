@@ -1,4 +1,4 @@
-use super::room::room_key::RoomKey;
+use super::room::RoomKey;
 
 pub struct GlobalEntityRecord {
     pub room_key: Option<RoomKey>,

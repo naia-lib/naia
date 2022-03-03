@@ -12,7 +12,7 @@ use naia_shared::{
 
 use super::{
     entity_manager::EntityManager, entity_message_receiver::EntityMessageReceiver,
-    global_diff_handler::GlobalDiffHandler, user::user_key::UserKey, world_record::WorldRecord,
+    global_diff_handler::GlobalDiffHandler, user::UserKey, world_record::WorldRecord,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {

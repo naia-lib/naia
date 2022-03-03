@@ -15,9 +15,6 @@ extern crate cfg_if;
 #[macro_use]
 extern crate log;
 
-#[macro_use]
-extern crate slotmap;
-
 #[cfg(all(feature = "use-udp", feature = "use-webrtc"))]
 compile_error!("Naia Server can only use UDP or WebRTC, you must pick one");
 
@@ -57,10 +54,10 @@ mod world_record;
 pub use entity_ref::{EntityMut, EntityRef};
 pub use error::NaiaServerError;
 pub use event::Event;
-pub use room::{room_key::RoomKey, RoomMut, RoomRef};
+pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;
 pub use server_config::ServerConfig;
-pub use user::{user_key::UserKey, User, UserMut, UserRef};
+pub use user::{UserKey, User, UserMut, UserRef};
 pub use user_scope::UserScopeMut;
 
 pub mod internal {

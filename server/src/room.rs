@@ -1,17 +1,27 @@
 use std::{
     collections::{hash_set::Iter, HashSet, VecDeque},
-    hash::Hash,
+    hash::Hash
 };
 
-use super::user::user_key::UserKey;
+use naia_shared::SlotMapKey;
 
-#[allow(missing_docs)]
-#[allow(unused_doc_comments)]
-pub mod room_key {
-    // The Key used to get a reference of a Room
-    new_key_type! { pub struct RoomKey; }
+use super::user::UserKey;
+
+// RoomKey
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+pub struct RoomKey(u64);
+
+impl SlotMapKey for RoomKey {
+    fn to_u64(&self) -> u64 {
+        self.0
+    }
+
+    fn from_u64(value: u64) -> Self {
+        RoomKey(value)
+    }
 }
 
+// Room
 pub struct Room<E: Copy + Eq + Hash> {
     users: HashSet<UserKey>,
     entities: HashSet<E>,
@@ -87,8 +97,6 @@ impl<E: Copy + Eq + Hash> Room<E> {
 use naia_shared::Protocolize;
 
 use super::server::Server;
-
-use room_key::RoomKey;
 
 // RoomRef
 
