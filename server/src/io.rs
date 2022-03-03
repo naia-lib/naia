@@ -4,9 +4,9 @@ use naia_server_socket::{NaiaServerSocketError, Packet, PacketReceiver, PacketSe
 use naia_shared::serde::{BitWriter, OwnedBitReader};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, CompressionConfig, ConnectionConfig, Decoder, Encoder, Instant,
-    KeyGenerator, Manifest, PacketType, PropertyMutate,
-    PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig,
-    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    KeyGenerator, Manifest, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType,
+    Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
+    WorldMutType, WorldRefType,
 };
 
 use crate::bandwidth_monitor::BandwidthMonitor;

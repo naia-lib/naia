@@ -8,7 +8,6 @@ pub fn write_list_header<S: BitWrite>(writer: &mut S, message_count: &u16) {
 
     // write number of messages
     if has_messages {
-
         // we already know messages isn't 0, so you can send the count as a value >= 1
         message_count -= 1;
 

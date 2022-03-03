@@ -1,9 +1,9 @@
 use std::{
     collections::{hash_set::Iter, HashSet, VecDeque},
-    hash::Hash
+    hash::Hash,
 };
 
-use naia_shared::SlotMapKey;
+use naia_shared::BigMapKey;
 
 use super::user::UserKey;
 
@@ -11,7 +11,7 @@ use super::user::UserKey;
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct RoomKey(u64);
 
-impl SlotMapKey for RoomKey {
+impl BigMapKey for RoomKey {
     fn to_u64(&self) -> u64 {
         self.0
     }

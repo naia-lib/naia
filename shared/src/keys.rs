@@ -1,7 +1,7 @@
 // Local Entity
 
-use naia_serde::{BitReader, BitWrite, SerdeErr, UnsignedVariableInteger};
 use crate::serde;
+use naia_serde::{BitReader, BitWrite, SerdeErr, UnsignedVariableInteger};
 
 // An Entity in the Client's scope, that is being
 // synced to the Client

@@ -386,7 +386,6 @@ fn read_partial_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     let mut output = quote! {};
 
     for (field_name, _) in properties.iter() {
-
         let new_output_right = quote! {
             if bool::de(reader).unwrap() {
                 Property::read(&mut self.#field_name, reader);
@@ -492,7 +491,7 @@ fn write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> T
 //
 //         let new_output_right = quote! {
 //             if let Some(true) =
-// diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {                 
+// diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
 // size += Property::<#field_type>::size();             }
 //         };
 //         let new_output_result = quote! {

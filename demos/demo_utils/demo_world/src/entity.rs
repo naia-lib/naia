@@ -1,10 +1,10 @@
-use naia_shared::SlotMapKey;
+use naia_shared::BigMapKey;
 
 // Entity
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Entity(u64);
 
-impl SlotMapKey for Entity {
+impl BigMapKey for Entity {
     fn to_u64(&self) -> u64 {
         self.0
     }

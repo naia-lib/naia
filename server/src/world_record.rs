@@ -1,5 +1,7 @@
-use std::{collections::HashMap, hash::Hash};
-use std::collections::HashSet;
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use naia_shared::ProtocolKindType;
 

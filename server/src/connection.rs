@@ -6,8 +6,8 @@ use std::{
 
 use naia_shared::{
     serde::{BitReader, BitWriter},
-    BaseConnection, ConnectionConfig, Manifest, PacketType, Protocolize,
-    StandardHeader, Tick, WorldRefType,
+    BaseConnection, ConnectionConfig, Manifest, PacketType, Protocolize, StandardHeader, Tick,
+    WorldRefType,
 };
 
 use super::{
@@ -56,16 +56,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         reader: &mut BitReader,
     ) {
         // Read Entity Messages
-        self.entity_message_receiver.read_messages(
-            server_tick,
-            reader,
-            manifest,
-        );
+        self.entity_message_receiver
+            .read_messages(server_tick, reader, manifest);
 
         // Read Messages
-        self.base
-            .message_manager
-            .read_messages(reader, manifest);
+        self.base.message_manager.read_messages(reader, manifest);
     }
 
     pub fn pop_incoming_entity_message(&mut self, server_tick: u16) -> Option<(E, P)> {

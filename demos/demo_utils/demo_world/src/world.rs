@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use naia_shared::{serde::BitReader, ProtocolInserter, Protocolize, ReplicaDynMutWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType, SlotMap};
+use naia_shared::{
+    serde::BitReader, BigMap, ProtocolInserter, Protocolize, ReplicaDynMutWrapper,
+    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -14,14 +17,14 @@ use super::{
 /// It's recommended to use this only when you do not have another ECS library's
 /// own World available.
 pub struct World<P: Protocolize> {
-    pub entities: SlotMap<Entity, HashMap<P::Kind, P>>,
+    pub entities: BigMap<Entity, HashMap<P::Kind, P>>,
 }
 
 impl<P: Protocolize> World<P> {
     /// Create a new default World
     pub fn new() -> Self {
         World {
-            entities: SlotMap::new(),
+            entities: BigMap::new(),
         }
     }
 

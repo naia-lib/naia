@@ -9,10 +9,10 @@ use std::{
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::serde::{BitWriter, Serde};
 pub use naia_shared::{
-    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator,
-    Manifest, NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator,
-    ProtocolKindType, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer,
-    Timestamp, WorldMutType, WorldRefType, SlotMap
+    wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, Manifest,
+    NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType,
+    Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
+    WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -25,10 +25,10 @@ use super::{
     global_entity_record::GlobalEntityRecord,
     handshake_manager::{HandshakeManager, HandshakeResult},
     io::Io,
-    room::{RoomKey, Room, RoomMut, RoomRef},
+    room::{Room, RoomKey, RoomMut, RoomRef},
     server_config::ServerConfig,
     tick_manager::TickManager,
-    user::{UserKey, User, UserMut, UserRef},
+    user::{User, UserKey, UserMut, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
 };
@@ -45,10 +45,10 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
     heartbeat_timer: Timer,
     handshake_manager: HandshakeManager<P>,
     // Users
-    users: SlotMap<UserKey, User>,
+    users: BigMap<UserKey, User>,
     user_connections: HashMap<SocketAddr, Connection<P, E>>,
     // Rooms
-    rooms: SlotMap<RoomKey, Room<E>>,
+    rooms: BigMap<RoomKey, Room<E>>,
     // Entities
     world_record: WorldRecord<E, P::Kind>,
     entity_records: HashMap<E, GlobalEntityRecord>,
@@ -89,10 +89,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             heartbeat_timer,
             handshake_manager: HandshakeManager::new(server_config.require_auth),
             // Users
-            users: SlotMap::new(),
+            users: BigMap::new(),
             user_connections: HashMap::new(),
             // Rooms
-            rooms: SlotMap::new(),
+            rooms: BigMap::new(),
             // Entities
             world_record: WorldRecord::new(),
             entity_records: HashMap::new(),
@@ -190,7 +190,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 &self.diff_handler,
             );
             // send connectaccept response
-            let mut writer = self.handshake_manager
+            let mut writer = self
+                .handshake_manager
                 .write_connect_response(&mut new_connection);
             self.io.send_writer(&user.address, &mut writer);
             //
@@ -272,9 +273,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
-            connection
-                .entity_manager
-                .collect_component_updates();
+            connection.entity_manager.collect_component_updates();
             let mut sent = false;
             while let Some(mut writer) =
                 connection.outgoing_packet(&world, &self.world_record, server_tick)
@@ -809,11 +808,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
                     match header.packet_type() {
                         PacketType::ClientChallengeRequest => {
-                            let mut writer = self
-                            .handshake_manager
-                            .recv_challenge_request(&mut reader);
+                            let mut writer =
+                                self.handshake_manager.recv_challenge_request(&mut reader);
                             self.io.send_writer(&address, &mut writer);
-                        },
+                        }
                         PacketType::ClientConnectRequest => {
                             if let Some(mut connection) = self.user_connections.get_mut(&address) {
                                 self.handshake_manager.recv_old_connect_request(
@@ -1029,15 +1027,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     // Component Helpers
 
-    fn component_init<R: ReplicateSafe<P>>(
-        &mut self,
-        entity: &E,
-        component_ref: &mut R,
-    ) {
+    fn component_init<R: ReplicateSafe<P>>(&mut self, entity: &E, component_ref: &mut R) {
         let component_kind = component_ref.kind();
-        self
-            .world_record
-            .add_component(entity, &component_kind);
+        self.world_record.add_component(entity, &component_kind);
 
         let diff_mask_length: u8 = component_ref.diff_mask_size();
 

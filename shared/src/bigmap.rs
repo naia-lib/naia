@@ -1,17 +1,25 @@
-use std::{hash::Hash, collections::HashMap, collections::hash_map::{Iter, IterMut}, iter::Map, marker::PhantomData};
+use std::{
+    collections::{
+        hash_map::{Iter, IterMut},
+        HashMap,
+    },
+    hash::Hash,
+    iter::Map,
+    marker::PhantomData,
+};
 
-pub trait SlotMapKey: Clone + Copy + Eq + PartialEq + Hash {
+pub trait BigMapKey: Clone + Copy + Eq + PartialEq + Hash {
     fn to_u64(&self) -> u64;
     fn from_u64(value: u64) -> Self;
 }
 
-pub struct SlotMap<K: SlotMapKey, V> {
+pub struct BigMap<K: BigMapKey, V> {
     inner: HashMap<u64, V>,
     current_index: u64,
     phantom_k: PhantomData<K>,
 }
 
-impl<K: SlotMapKey, V> SlotMap<K, V> {
+impl<K: BigMapKey, V> BigMap<K, V> {
     pub fn new() -> Self {
         Self {
             inner: HashMap::new(),
@@ -46,11 +54,19 @@ impl<K: SlotMapKey, V> SlotMap<K, V> {
     }
 
     pub fn iter<'a>(&'a self) -> Map<Iter<'_, u64, V>, fn((&'a u64, &'a V)) -> (K, &'a V)> {
-        return self.inner.iter().map(|(key, value)| (K::from_u64(*key), value));
+        return self
+            .inner
+            .iter()
+            .map(|(key, value)| (K::from_u64(*key), value));
     }
 
-    pub fn iter_mut<'a>(&'a mut self) -> Map<IterMut<'_, u64, V>, fn((&'a u64, &'a mut V)) -> (K, &'a mut V)> {
-        return self.inner.iter_mut().map(|(key, value)| (K::from_u64(*key), value));
+    pub fn iter_mut<'a>(
+        &'a mut self,
+    ) -> Map<IterMut<'_, u64, V>, fn((&'a u64, &'a mut V)) -> (K, &'a mut V)> {
+        return self
+            .inner
+            .iter_mut()
+            .map(|(key, value)| (K::from_u64(*key), value));
     }
 
     pub fn len(&self) -> usize {

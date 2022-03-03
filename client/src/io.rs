@@ -3,9 +3,9 @@ use std::{net::SocketAddr, time::Duration};
 use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, ServerAddr};
 pub use naia_shared::{
     serde::{BitReader, BitWriter},
-    BandwidthMonitor, CompressionConfig, ConnectionConfig, Decoder, Encoder, Manifest,
-    PacketType, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, StandardHeader, Timer,
-    Timestamp, WorldMutType, WorldRefType,
+    BandwidthMonitor, CompressionConfig, ConnectionConfig, Decoder, Encoder, Manifest, PacketType,
+    ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
+    WorldMutType, WorldRefType,
 };
 
 pub struct Io {

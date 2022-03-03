@@ -1,12 +1,12 @@
-use std::collections::HashMap;
 use naia_shared::{NetEntity, Protocolize};
+use std::collections::HashMap;
 
 use super::locality_status::LocalityStatus;
 
 pub struct LocalEntityRecord<P: Protocolize> {
     pub net_entity: NetEntity,
     pub status: LocalityStatus,
-    pub components: HashMap<P::Kind, LocalityStatus>
+    pub components: HashMap<P::Kind, LocalityStatus>,
 }
 
 impl<P: Protocolize> LocalEntityRecord<P> {

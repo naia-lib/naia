@@ -4,7 +4,7 @@ use naia_shared::{NetEntity, ProtocolKindType};
 
 pub struct EntityRecord<K: ProtocolKindType> {
     pub net_entity: NetEntity,
-    pub component_kinds: HashSet<K>
+    pub component_kinds: HashSet<K>,
 }
 
 impl<K: ProtocolKindType> EntityRecord<K> {
