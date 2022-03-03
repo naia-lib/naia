@@ -5,7 +5,7 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde}, EntityActionType, LocalComponentKey, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, write_list_header, read_list_header};
+use naia_shared::{serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde}, EntityActionType, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, write_list_header, read_list_header};
 use naia_shared::serde::UnsignedVariableInteger;
 
 use super::{
@@ -103,25 +103,27 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 EntityActionType::DespawnEntity => {
                     let net_entity = NetEntity::de(reader).unwrap();
                     if let Some(world_entity) = self.local_to_world_entity.remove(&net_entity) {
-                        if let Some(entity_record) = self.entity_records.remove(&world_entity) {
-                            // Generate event for each component, handing references off just in
-                            // case
-                            for component_kind in world.component_kinds(&world_entity) {
-                                if let Some(component) =
-                                    world.remove_component_of_kind(&world_entity, &component_kind)
-                                {
-                                    event_stream.push_back(Ok(Event::RemoveComponent(
-                                        world_entity,
-                                        component,
-                                    )));
-                                }
-                            }
-
-                            world.despawn_entity(&world_entity);
-
-                            event_stream.push_back(Ok(Event::DespawnEntity(world_entity)));
-                            continue;
+                        if self.entity_records.remove(&world_entity).is_none() {
+                            panic!("despawning an uninitialized entity");
                         }
+
+                        // Generate event for each component, handing references off just in
+                        // case
+                        for component_kind in world.component_kinds(&world_entity) {
+                            if let Some(component) =
+                                world.remove_component_of_kind(&world_entity, &component_kind)
+                            {
+                                event_stream.push_back(Ok(Event::RemoveComponent(
+                                    world_entity,
+                                    component,
+                                )));
+                            }
+                        }
+
+                        world.despawn_entity(&world_entity);
+
+                        event_stream.push_back(Ok(Event::DespawnEntity(world_entity)));
+                        continue;
                     }
                     warn!("received message attempting to delete nonexistent entity");
                 }
@@ -155,8 +157,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     if !self.local_to_world_entity.contains_key(&net_entity) {
                         // its possible we received a very late duplicate message
                         warn!(
-                            "attempting to add a component: {}, to nonexistent entity: {}",
-                            Into::<u16>::into(component_kind),
+                            "attempting to add a component to nonexistent entity: {}",
                             Into::<u16>::into(net_entity)
                         );
                     } else {
@@ -164,7 +165,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                         let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
 
-                        entity_record.component_kinds.insert(&component_kind);
+                        entity_record.component_kinds.insert(component_kind);
 
                         new_component.extract_and_insert(world_entity, world);
 
@@ -182,23 +183,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                     if let Some(world_entity) = self.local_to_world_entity.get_mut(&net_entity)
                     {
-                        if let Some(entity_record) = self.entity_records.get(world_entity) {
+                        // read incoming delta
+                        world.component_read_partial(
+                            world_entity,
+                            &component_kind,
+                            reader,
+                        );
 
-                            // read incoming delta
-                            world.component_read_partial(
-                                world_entity,
-                                component_kind,
-                                reader,
-                            );
-
-                            event_stream.push_back(Ok(Event::UpdateComponent(
-                                server_tick,
-                                *world_entity,
-                                *component_kind,
-                            )));
-                        } else {
-                            panic!("attempting to update component for nonexistent entity");
-                        }
+                        event_stream.push_back(Ok(Event::UpdateComponent(
+                            server_tick,
+                            *world_entity,
+                            component_kind,
+                        )));
                     } else {
                         panic!("attempting to update component for nonexistent entity");
                     }
@@ -212,8 +208,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     if let Some(world_entity) = self.local_to_world_entity.get_mut(&net_entity)
                     {
                         if let Some(entity_record) = self.entity_records.get_mut(world_entity) {
-                            if entity_record.component_kinds.contains(component_kind) {
-                                entity_record.component_kinds.remove(component_kind);
+
+                            if entity_record.component_kinds.remove(&component_kind) {
 
                                 // Get component for last change
                                 let component = world
@@ -221,7 +217,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                     .expect("Component already removed?");
 
                                 // Generate event
-                                event_stream.push_back(Ok(Event::RemoveComponent(world_entity, component)));
+                                event_stream.push_back(Ok(Event::RemoveComponent(*world_entity, component)));
+
                             } else {
                                 panic!("attempting to delete nonexistent component of entity");
                             }

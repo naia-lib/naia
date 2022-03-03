@@ -65,22 +65,22 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
     pub fn spawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, global_entity: &E) {
         if !self.entity_records.contains_key(global_entity) {
-            // first, get a list of components
-            // then, add components
+            // initialize entity
             if !world_record.has_entity(global_entity) {
                 panic!("entity nonexistant!");
             }
-            for component_kind in world_record.component_kinds(global_entity) {
-                self.component_init(global_entity, &component_kind);
-            }
-
-            // then, add entity
             let local_id: NetEntity = self.entity_generator.generate();
             self.local_to_global_entity_map
                 .insert(local_id, *global_entity);
             let local_entity_record = LocalEntityRecord::new(local_id);
             self.entity_records
                 .insert(*global_entity, local_entity_record);
+
+            // now initialize components
+            for component_kind in world_record.component_kinds(global_entity) {
+                self.component_init(global_entity, &component_kind);
+            }
+
             self.queued_actions.push_back(EntityAction::SpawnEntity(*global_entity, None));
         } else {
             panic!("added entity twice");

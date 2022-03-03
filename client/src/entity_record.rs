@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-use naia_shared::{LocalComponentKey, NetEntity, ProtocolKindType};
+use naia_shared::{NetEntity, ProtocolKindType};
 
 pub struct EntityRecord<K: ProtocolKindType> {
     pub net_entity: NetEntity,
