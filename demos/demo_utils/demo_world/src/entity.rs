@@ -1,22 +1,15 @@
-use std::ops::Deref;
+use naia_shared::SlotMapKey;
 
 // Entity
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+pub struct Entity(u64);
 
-#[allow(missing_docs)]
-#[allow(unused_doc_comments)]
-mod entity {
-    // The Key used to reference an Entity
-    new_key_type! { pub struct Entity; }
-}
+impl SlotMapKey for Entity {
+    fn to_u64(&self) -> u64 {
+        self.0
+    }
 
-use entity::Entity as Key;
-
-pub type Entity = Key;
-
-impl Deref for Entity {
-    type Target = Self;
-
-    fn deref(&self) -> &Self {
-        &self
+    fn from_u64(value: u64) -> Self {
+        Entity(value)
     }
 }

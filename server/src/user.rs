@@ -1,16 +1,21 @@
 use std::{hash::Hash, net::SocketAddr};
 
-use naia_shared::Protocolize;
+use naia_shared::{Protocolize, SlotMapKey};
 
-use crate::{RoomKey, Server, UserKey};
+use crate::{RoomKey, Server};
 
 // UserKey
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+pub struct UserKey(u64);
 
-#[allow(missing_docs)]
-#[allow(unused_doc_comments)]
-pub mod user_key {
-    // The Key used to get a reference of a User
-    new_key_type! { pub struct UserKey; }
+impl SlotMapKey for UserKey {
+    fn to_u64(&self) -> u64 {
+        self.0
+    }
+
+    fn from_u64(value: u64) -> Self {
+        UserKey(value)
+    }
 }
 
 // User

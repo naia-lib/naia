@@ -11,4 +11,3 @@ publish = false
 
 [dependencies]
 naia-shared = { path = "../../../shared" }
-slotmap = { version = "0.4" }
