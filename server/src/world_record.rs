@@ -39,16 +39,14 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
         component_kind_set.insert(*component_type);
     }
 
-    pub fn remove_component(&mut self, entity: &E, component_type: &K) {
-        if !self.entities.contains_key(entity) {
+    pub fn remove_component(&mut self, entity: &E, component_kind: &K) {
+        if let Some(component_kind_set) = self.entities.get_mut(entity) {
+            if !component_kind_set.remove(component_kind) {
+                panic!("component does not exist!");
+            }
+        } else {
             panic!("entity does not exist!");
         }
-        let component_kind_set = self.entities.get_mut(entity).unwrap();
-
-        if !component_kind_set.contains_key(component_type) {
-            panic!("component does not exist!");
-        }
-        component_kind_set.remove(component_type);
     }
 
     // Access

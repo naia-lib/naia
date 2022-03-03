@@ -56,7 +56,7 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, GlobalEntityRecord>,
     entity_scope_map: EntityScopeMap<E>,
     // Components
-    diff_handler: Arc<RwLock<GlobalDiffHandler>>,
+    diff_handler: Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
     // Events
     incoming_events: VecDeque<Result<Event<P, E>, NaiaServerError>>,
     // Ticks
@@ -276,7 +276,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
             connection
                 .entity_manager
-                .collect_component_updates(&self.world_record);
+                .collect_component_updates();
             let mut sent = false;
             while let Some(mut writer) =
                 connection.outgoing_packet(&world, &self.world_record, server_tick)
@@ -513,8 +513,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         }
 
         // Clean up associated components
-        for component_key in self.world_record.component_kinds(entity) {
-            self.component_cleanup(&component_key);
+        for component_kind in self.world_record.component_kinds(entity) {
+            self.component_cleanup(entity, &component_kind);
         }
 
         // Remove from ECS Record
@@ -561,8 +561,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             )
         }
 
-        // generate unique component key
-        let component_key: ComponentKey = self.component_init(entity, &mut component_ref);
+        self.component_init(entity, &mut component_ref);
 
         // actually insert component into world
         world.insert_component(entity, component_ref);
@@ -573,7 +572,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 // insert component into user's connection
                 user_connection
                     .entity_manager
-                    .insert_component(&self.world_record, &component_key);
+                    .insert_component(entity, &component_kind);
             }
         }
     }
@@ -586,10 +585,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     ) -> Option<R> {
         // get component key from type
         let component_kind = P::kind_of::<R>();
-        let component_key = self
-            .world_record
-            .key_from_type(entity, &component_kind)
-            .expect("component does not exist!");
 
         // clean up component on all connections
         // TODO: should be able to make this more efficient by caching for every Entity
@@ -598,11 +593,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             //remove component from user connection
             user_connection
                 .entity_manager
-                .remove_component(&component_key);
+                .remove_component(entity, &component_kind);
         }
 
         // cleanup all other loose ends
-        self.component_cleanup(&component_key);
+        self.component_cleanup(entity, &component_kind);
 
         // remove from world
         return world.remove_component::<R>(entity);
@@ -1040,10 +1035,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         &mut self,
         entity: &E,
         component_ref: &mut R,
-    ) -> ComponentKey {
-        let component_key = self
+    ) {
+        let component_kind = component_ref.kind();
+        self
             .world_record
-            .add_component(entity, &component_ref.kind());
+            .add_component(entity, &component_kind);
 
         let diff_mask_length: u8 = component_ref.diff_mask_size();
 
@@ -1052,21 +1048,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             .as_ref()
             .write()
             .expect("DiffHandler should be initialized")
-            .register_component(&component_key, diff_mask_length);
+            .register_component(entity, &component_kind, diff_mask_length);
 
         let prop_mutator = PropertyMutator::new(mut_sender);
 
         component_ref.set_mutator(&prop_mutator);
-
-        return component_key;
     }
 
-    fn component_cleanup(&mut self, component_key: &ComponentKey) {
-        self.world_record.remove_component(component_key);
+    fn component_cleanup(&mut self, entity: &E, component_kind: &P::Kind) {
+        self.world_record.remove_component(entity, component_kind);
         self.diff_handler
             .as_ref()
             .write()
             .expect("Haven't initialized DiffHandler")
-            .deregister_component(component_key);
+            .deregister_component(entity, component_kind);
     }
 }
