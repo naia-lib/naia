@@ -1,4 +1,3 @@
-use crate::Tick;
 use std::collections::HashMap;
 
 use super::{
@@ -117,7 +116,6 @@ impl AckManager {
 
     pub fn next_outgoing_packet_header(
         &mut self,
-        host_tick: Tick,
         packet_type: PacketType,
     ) -> StandardHeader {
         let next_packet_index = self.next_sender_packet_index();
@@ -127,7 +125,6 @@ impl AckManager {
             next_packet_index,
             self.last_received_packet_index(),
             self.ack_bitfield(),
-            host_tick,
         );
 
         self.track_packet(packet_type, next_packet_index);

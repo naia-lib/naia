@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use naia_shared::{Tick, Timer};
+use naia_shared::serde::{BitReader, BitWriter, Serde};
 
 /// Manages the current tick for the host
 pub struct TickManager {
@@ -17,8 +18,16 @@ impl TickManager {
         }
     }
 
+    pub fn write_server_tick(&self, writer: &mut BitWriter) {
+        self.current_tick.ser(writer);
+    }
+
+    pub fn read_client_tick(&self, reader: &mut BitReader) -> Tick {
+        Tick::de(reader).unwrap()
+    }
+
     /// Whether or not we should emit a tick event
-    pub fn receive_tick(&mut self) -> bool {
+    pub fn recv_server_tick(&mut self) -> bool {
         if self.timer.ringing() {
             self.timer.reset();
             self.current_tick = self.current_tick.wrapping_add(1);

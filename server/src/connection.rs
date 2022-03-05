@@ -4,15 +4,13 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    serde::{BitReader, BitWriter},
-    BaseConnection, ConnectionConfig, Manifest, PacketType, Protocolize, StandardHeader, Tick,
-    WorldRefType,
-};
+use naia_shared::{serde::{BitReader, BitWriter}, BaseConnection, ConnectionConfig, Manifest,
+                  PacketType, Protocolize, StandardHeader, Tick, WorldRefType, sequence_greater_than};
 
 use super::{
     entity_manager::EntityManager, entity_message_receiver::EntityMessageReceiver,
     global_diff_handler::GlobalDiffHandler, user::UserKey, world_record::WorldRecord,
+    io::Io, tick_manager::TickManager
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
@@ -20,6 +18,7 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
     pub base: BaseConnection<P>,
     pub entity_manager: EntityManager<P, E>,
     entity_message_receiver: EntityMessageReceiver<P>,
+    pub last_received_tick: Tick,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
@@ -34,6 +33,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             base: BaseConnection::new(user_address, connection_config),
             entity_manager: EntityManager::new(user_address, diff_handler),
             entity_message_receiver: EntityMessageReceiver::new(),
+            last_received_tick: 0,
         }
     }
 
@@ -49,21 +49,30 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         self.entity_manager.process_delivered_packets(world_record);
     }
 
+    pub fn recv_client_tick(&mut self, client_tick: Tick) {
+        if sequence_greater_than(client_tick, self.last_received_tick) {
+            self.last_received_tick = client_tick;
+        }
+    }
+
     pub fn process_incoming_data(
         &mut self,
-        server_tick: Option<Tick>,
+        tick_manager_option: &Option<TickManager>,
         manifest: &Manifest<P>,
         reader: &mut BitReader,
     ) {
-        // Read Entity Messages
-        self.entity_message_receiver
-            .read_messages(server_tick, reader, manifest);
+        if let Some(tick_manager) = tick_manager_option {
+            let server_tick = tick_manager.server_tick();
+            // Read Entity Messages
+            self.entity_message_receiver
+                .read_messages(server_tick, reader, manifest);
+        }
 
         // Read Messages
         self.base.message_manager.read_messages(reader, manifest);
     }
 
-    pub fn pop_incoming_entity_message(&mut self, server_tick: u16) -> Option<(E, P)> {
+    pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<(E, P)> {
         if let Some((local_entity, message)) = self
             .entity_message_receiver
             .pop_incoming_entity_message(server_tick)
@@ -78,13 +87,32 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     }
 
     // Outgoing data
+    pub fn send_outgoing_packets<W: WorldRefType<P, E>>(&mut self,
+                                 io: &mut Io,
+                                 world: &W,
+                                 world_record: &WorldRecord<E, P::Kind>,
+                                 tick_manager_opt: &Option<TickManager>) {
 
-    pub fn outgoing_packet<W: WorldRefType<P, E>>(
+        let mut any_sent = false;
+        loop {
+            if self.send_outgoing_packet(io, world, world_record, tick_manager_opt) {
+                any_sent = true;
+            } else {
+                break;
+            }
+        }
+        if any_sent {
+            self.base.mark_sent();
+        }
+    }
+
+    fn send_outgoing_packet<W: WorldRefType<P, E>>(
         &mut self,
+        io: &mut Io,
         world: &W,
         world_record: &WorldRecord<E, P::Kind>,
-        server_tick: Tick,
-    ) -> Option<BitWriter> {
+        tick_manager_opt: &Option<TickManager>,
+    ) -> bool {
         if self.base.message_manager.has_outgoing_messages()
             || self.entity_manager.has_outgoing_actions()
         {
@@ -92,22 +120,30 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
             let mut writer = BitWriter::new();
 
-            // Add header
+            // write header
             self.base
-                .write_outgoing_header(server_tick, PacketType::Data, &mut writer);
+                .write_outgoing_header(PacketType::Data, &mut writer);
 
-            // Write Messages
+            // write server tick
+            if let Some(tick_manager) = tick_manager_opt {
+                tick_manager.write_server_tick(&mut writer);
+            }
+
+            // write messages
             self.base
                 .message_manager
                 .write_messages(&mut writer, next_packet_index);
 
-            // Write Entity Actions
+            // write entity actions
             self.entity_manager
                 .write_actions(&mut writer, next_packet_index, world, world_record);
 
-            return Some(writer);
+            // send packet
+            io.send_writer(&self.base.address, &mut writer);
+
+            return true;
         }
 
-        return None;
+        return false;
     }
 }

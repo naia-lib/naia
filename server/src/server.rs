@@ -129,7 +129,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // tick event
         let mut did_tick = false;
         if let Some(tick_manager) = &mut self.tick_manager {
-            if tick_manager.receive_tick() {
+            if tick_manager.recv_server_tick() {
                 did_tick = true;
             }
         }
@@ -264,8 +264,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         // update entity scopes
         self.update_entity_scopes(&world);
 
-        let server_tick = self.server_tick().unwrap_or(0);
-
         // loop through all connections, send packet
         let mut user_addresses: Vec<SocketAddr> =
             self.user_connections.keys().map(|addr| *addr).collect();
@@ -274,16 +272,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
             connection.entity_manager.collect_component_updates();
-            let mut sent = false;
-            while let Some(mut writer) =
-                connection.outgoing_packet(&world, &self.world_record, server_tick)
-            {
-                self.io.send_writer(&user_address, &mut writer);
-                sent = true;
-            }
-            if sent {
-                connection.base.mark_sent();
-            }
+            connection.send_outgoing_packets(&mut self.io, &world, &self.world_record, &self.tick_manager);
         }
     }
 
@@ -456,7 +445,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     pub fn client_tick(&self, user_key: &UserKey) -> Option<u16> {
         if let Some(user) = self.users.get(user_key) {
             if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.base.last_received_tick);
+                return Some(user_connection.last_received_tick);
             }
         }
         return None;
@@ -767,7 +756,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         if self.heartbeat_timer.ringing() {
             self.heartbeat_timer.reset();
 
-            let server_tick = self.server_tick().unwrap_or(0);
             let mut user_disconnects: Vec<UserKey> = Vec::new();
 
             for (user_address, connection) in &mut self.user_connections.iter_mut() {
@@ -780,11 +768,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     // Don't try to refactor this to self.internal_send, doesn't seem to
                     // work cause of iter_mut()
                     let mut writer = BitWriter::new();
+
+                    // write header
                     connection.base.write_outgoing_header(
-                        server_tick,
                         PacketType::Heartbeat,
                         &mut writer,
                     );
+
+                    // write server tick
+                    if let Some(tick_manager) = self.tick_manager.as_mut() {
+                        tick_manager.write_server_tick(&mut writer);
+                    }
+
+                    // send packet
                     self.io.send_writer(user_address, &mut writer);
                     connection.base.mark_sent();
                 }
@@ -800,11 +796,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             match self.io.recv_reader() {
                 Ok(Some((address, owned_reader))) => {
                     let mut reader = owned_reader.borrow();
-                    if let Some(user_connection) = self.user_connections.get_mut(&address) {
-                        user_connection.base.mark_heard();
-                    }
 
+                    // Read header
                     let header = StandardHeader::de(&mut reader).unwrap();
+
+                    if let Some(user_connection) = self.user_connections.get_mut(&address) {
+                        // Mark that we've heard from the client
+                        user_connection.base.mark_heard();
+
+                        // read client tick
+                        if let Some(tick_manager) = self.tick_manager.as_ref() {
+                            let client_tick = tick_manager.read_client_tick(&mut reader);
+                            user_connection.recv_client_tick(client_tick);
+                        }
+                    }
 
                     match header.packet_type() {
                         PacketType::ClientChallengeRequest => {
@@ -864,12 +869,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                             }
                         }
                         PacketType::Data => {
-                            let server_tick_opt = self.server_tick();
                             match self.user_connections.get_mut(&address) {
                                 Some(connection) => {
                                     connection.process_incoming_header(&self.world_record, &header);
                                     connection.process_incoming_data(
-                                        server_tick_opt,
+                                        &self.tick_manager,
                                         &self.shared_config.manifest,
                                         &mut reader,
                                     );
@@ -896,7 +900,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                         }
                         PacketType::Ping => {
                             if self.shared_config.ping.is_some() {
-                                let server_tick = self.server_tick().unwrap_or(0);
                                 match self.user_connections.get_mut(&address) {
                                     Some(connection) => {
                                         connection
@@ -910,10 +913,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
                                         // write header
                                         connection.base.write_outgoing_header(
-                                            server_tick,
                                             PacketType::Pong,
                                             &mut writer,
                                         );
+
+                                        // write server tick
+                                        if let Some(tick_manager) = self.tick_manager.as_ref() {
+                                            tick_manager.write_server_tick(&mut writer);
+                                        }
 
                                         // write index
                                         ping_index.ser(&mut writer);

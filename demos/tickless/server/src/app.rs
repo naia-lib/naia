@@ -32,8 +32,8 @@ impl App {
         server_config.require_auth = false;
         server_config.connection.disconnection_timeout_duration = Duration::from_secs(30);
 
-        let mut server = Server::new(server_config, shared_config());
-        server.listen(server_addresses);
+        let mut server = Server::new(&server_config, &shared_config());
+        server.listen(&server_addresses);
 
         App { server }
     }
@@ -50,11 +50,11 @@ impl App {
                     info!("Naia Server disconnected from: {}", user.address);
                 }
                 Ok(Event::Message(user_key, Protocol::Text(text))) => {
-                    let client_message = text.value.get();
+                    let client_message: &String = &text.value;
                     info!("Server recv <- {}", client_message);
 
                     let new_message_contents = format!("Server Message ({})", client_message);
-                    info!("Server echo -> {}", new_message_contents);
+                    info!("Server send -> {}", new_message_contents);
 
                     let message = Text::new(&new_message_contents);
                     self.server.send_message(&user_key, &message, true);

@@ -11,8 +11,7 @@ use super::{
     packet_type::PacketType,
     protocolize::Protocolize,
     standard_header::StandardHeader,
-    types::{PacketIndex, Tick},
-    wrapping_number::sequence_greater_than,
+    types::PacketIndex,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -23,7 +22,6 @@ pub struct BaseConnection<P: Protocolize> {
     timeout_timer: Timer,
     ack_manager: AckManager,
     pub message_manager: MessageManager<P>,
-    pub last_received_tick: u16,
 }
 
 impl<P: Protocolize> BaseConnection<P> {
@@ -35,7 +33,6 @@ impl<P: Protocolize> BaseConnection<P> {
             timeout_timer: Timer::new(config.disconnection_timeout_duration),
             ack_manager: AckManager::new(),
             message_manager: MessageManager::new(),
-            last_received_tick: 0,
         };
     }
 
@@ -76,9 +73,6 @@ impl<P: Protocolize> BaseConnection<P> {
         header: &StandardHeader,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
-        if sequence_greater_than(header.host_tick(), self.last_received_tick) {
-            self.last_received_tick = header.host_tick();
-        }
         self.ack_manager.process_incoming_header(
             &header,
             &mut self.message_manager,
@@ -91,13 +85,12 @@ impl<P: Protocolize> BaseConnection<P> {
     /// bytes
     pub fn write_outgoing_header(
         &mut self,
-        host_tick: Tick,
         packet_type: PacketType,
         writer: &mut BitWriter,
     ) {
         // Add header onto message!
         self.ack_manager
-            .next_outgoing_packet_header(host_tick, packet_type)
+            .next_outgoing_packet_header(packet_type)
             .ser(writer);
     }
 

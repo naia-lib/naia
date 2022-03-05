@@ -1,10 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
-use naia_shared::{
-    read_list_header, sequence_greater_than,
-    serde::{BitReader, Serde},
-    Manifest, NetEntity, Protocolize,
-};
+use naia_shared::{read_list_header, sequence_greater_than, serde::{BitReader, Serde}, Manifest, NetEntity, Protocolize, Tick};
 
 /// Handles incoming Entity Messages, buffering them to be received on the
 /// correct tick
@@ -27,7 +23,7 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
 
     pub fn read_messages(
         &mut self,
-        server_tick: Option<Tick>,
+        server_tick: Tick,
         reader: &mut BitReader,
         manifest: &Manifest<P>,
     ) {
@@ -39,7 +35,7 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
     /// them to be returned to the application
     fn process_incoming_messages(
         &mut self,
-        server_tick_opt: Option<Tick>,
+        server_tick: Tick,
         reader: &mut BitReader,
         manifest: &Manifest<P>,
         message_count: u16,
@@ -51,25 +47,20 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
 
             let new_message = manifest.create_replica(replica_kind, reader);
 
-            if let Some(server_tick) = server_tick_opt {
-                if !self.incoming_messages.push_back(
-                    client_tick,
-                    server_tick,
-                    owned_entity,
-                    new_message,
-                ) {
-                    //info!("failed command. server: {}, client: {}",
-                    // server_tick, client_tick);
-                } else {
-                }
+            if !self.incoming_messages.push_back(
+                client_tick,
+                server_tick,
+                owned_entity,
+                new_message,
+            ) {
+                //info!("failed command. server: {}, client: {}",
+                // server_tick, client_tick);
             }
         }
     }
 }
 
 // Incoming messages
-
-type Tick = u16;
 
 struct IncomingMessages<P> {
     // front is small, back is big
@@ -85,8 +76,8 @@ impl<P> IncomingMessages<P> {
 
     pub fn push_back(
         &mut self,
-        client_tick: u16,
-        server_tick: u16,
+        client_tick: Tick,
+        server_tick: Tick,
         owned_entity: NetEntity,
         new_message: P,
     ) -> bool {

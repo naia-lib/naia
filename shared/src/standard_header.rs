@@ -1,4 +1,4 @@
-use crate::{derive_serde, serde, PacketIndex, Tick};
+use crate::{derive_serde, serde, PacketIndex};
 
 use crate::packet_type::PacketType;
 
@@ -13,8 +13,6 @@ pub struct StandardHeader {
     last_recv_packet_index: PacketIndex,
     // This is an bitfield of all last 32 acknowledged packages
     ack_field: u32,
-    // This the the current Tick of the host,
-    host_tick: Tick,
 }
 
 impl StandardHeader {
@@ -29,14 +27,12 @@ impl StandardHeader {
         sender_packet_index: PacketIndex,
         last_recv_packet_index: PacketIndex,
         ack_field: u32,
-        host_tick: Tick,
     ) -> StandardHeader {
         StandardHeader {
             packet_type,
             sender_packet_index,
             last_recv_packet_index,
             ack_field,
-            host_tick,
         }
     }
 
@@ -58,10 +54,5 @@ impl StandardHeader {
     /// Returns last acknowledged sequence number.
     pub fn sender_ack_index(&self) -> u16 {
         self.last_recv_packet_index
-    }
-
-    /// Returns the current tick of the sending Host
-    pub fn host_tick(&self) -> u16 {
-        self.host_tick
     }
 }
