@@ -4,9 +4,10 @@ mod inner {
     use std::marker::PhantomData;
 
     use naia_shared::{
-        DiffMask, PacketReader, ProtocolInserter, Protocolize, ReplicaDynRefWrapper,
+        ProtocolInserter, Protocolize,
         ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
     };
+    use naia_shared::serde::BitReader;
 
     pub type EmptyEntity = u8;
 
@@ -110,8 +111,7 @@ mod inner {
             &mut self,
             _: &EmptyEntity,
             _: &P::Kind,
-            _: &DiffMask,
-            _: &mut PacketReader,
+            _: &mut BitReader,
         ) {
             unimplemented!()
         }

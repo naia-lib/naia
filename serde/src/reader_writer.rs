@@ -175,14 +175,14 @@ pub struct OwnedBitReader {
 }
 
 impl OwnedBitReader {
-    pub fn new(buffer: Box<[u8]>) -> Self {
+    pub fn new(buffer: &[u8]) -> Self {
         Self {
             state: BitReaderState {
                 scratch: 0,
                 scratch_index: 0,
                 buffer_index: 0,
             },
-            buffer,
+            buffer: buffer.into(),
         }
     }
 

@@ -17,7 +17,7 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Tickless Client Demo started");
 
-        let mut client = Client::new(ClientConfig::default(), shared_config());
+        let mut client = Client::new(&ClientConfig::default(), &shared_config());
         client.connect("http://127.0.0.1:14191");
 
         App {
@@ -41,7 +41,8 @@ impl App {
                     info!("TICK SHOULD NOT HAPPEN!");
                 }
                 Ok(Event::Message(Protocol::Text(text))) => {
-                    info!("Client recv <- {}", text.value.get());
+                    let incoming_message: &String = &text.value;
+                    info!("Client recv <- {}", incoming_message);
 
                     self.send_simple_message();
                 }

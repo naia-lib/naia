@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, panic, time::Duration};
 
-use naia_server_socket::{NaiaServerSocketError, Packet, PacketReceiver, PacketSender};
+use naia_server_socket::{NaiaServerSocketError, PacketReceiver, PacketSender};
 use naia_shared::serde::{BitWriter, OwnedBitReader};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, CompressionConfig, ConnectionConfig, Decoder, Encoder, Instant,
@@ -90,7 +90,7 @@ impl Io {
         self.packet_sender
             .as_ref()
             .expect("Cannot call Server.send_packet() until you call Server.listen()!")
-            .send(Packet::new(*address, payload.into()));
+            .send(address, payload);
     }
 
     pub fn recv_reader(
@@ -102,26 +102,25 @@ impl Io {
             .expect("Cannot call Server.receive_packet() until you call Server.listen()!")
             .receive();
 
-        if let Ok(Some(mut packet)) = receive_result {
-            // Bandwidth monitoring
-            if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
-                monitor.record_packet(&packet.address, packet.payload.len());
-            }
+        match receive_result {
+            Ok(Some((address, mut payload))) => {
+                // Bandwidth monitoring
+                if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
+                    monitor.record_packet(&address, payload.len());
+                }
 
-            // Decompression
-            if let Some(decoder) = &mut self.incoming_decoder {
-                packet = Packet::new(packet.address, decoder.decode(&packet.payload).into());
-            }
+                // Decompression
+                if let Some(decoder) = &mut self.incoming_decoder {
+                    payload = decoder.decode(payload);
+                }
 
-            return Ok(Some((
-                packet.address.clone(),
-                OwnedBitReader::new(packet.payload),
-            )));
-        } else {
-            return receive_result.map(|packet_opt| {
-                packet_opt
-                    .map(|packet| (packet.address.clone(), OwnedBitReader::new(packet.payload)))
-            });
+                return Ok(Some((
+                    address,
+                    OwnedBitReader::new(payload),
+                )));
+            },
+            Ok(None) => Ok(None),
+            Err(err) => Err(err),
         }
     }
 

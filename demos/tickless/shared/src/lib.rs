@@ -1,5 +1,4 @@
 extern crate log;
-extern crate naia_derive;
 
 mod protocol;
 mod shared;

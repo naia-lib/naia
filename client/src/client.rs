@@ -132,8 +132,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
         // until none left
         self.maintain_socket();
 
-        let client_tick = self.client_tick().unwrap_or(0);
-
         // drop connection if necessary
         if self.server_connection.is_some() {
             if self.server_connection.as_ref().unwrap().base.should_drop() {
@@ -148,7 +146,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
             // update current tick
             if let Some(tick_manager) = &mut self.tick_manager {
-                if tick_manager.receive_tick() {
+                if tick_manager.recv_client_tick() {
                     did_tick = true;
 
                     // apply updates on tick boundary
@@ -183,14 +181,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             }
 
             // send outgoing packets
-            let mut sent = false;
-            while let Some(mut writer) = server_connection.outgoing_packet(client_tick) {
-                self.io.send_writer(&mut writer);
-                sent = true;
-            }
-            if sent {
-                server_connection.base.mark_sent();
-            }
+            server_connection.send_outgoing_packets(&mut self.io, &self.tick_manager);
 
             // tick event
             if did_tick {
@@ -315,19 +306,26 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
     fn maintain_socket(&mut self) {
         // get current tick
-        let client_tick = self.client_tick().unwrap_or(0);
-
         if let Some(server_connection) = self.server_connection.as_mut() {
             // connection already established
 
             // send heartbeats
             if server_connection.base.should_send_heartbeat() {
+
                 let mut writer = BitWriter::new();
+
+                // write header
                 server_connection.base.write_outgoing_header(
-                    client_tick,
                     PacketType::Heartbeat,
                     &mut writer,
                 );
+
+                // write client tick
+                if let Some(tick_manager) = self.tick_manager.as_mut() {
+                    tick_manager.write_client_tick(&mut writer);
+                }
+
+                // send packet
                 self.io.send_writer(&mut writer);
                 server_connection.base.mark_sent();
             }
@@ -335,13 +333,24 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             // send pings
             if let Some(ping_manager) = &mut server_connection.ping_manager {
                 if ping_manager.should_send_ping() {
+
                     let mut writer = BitWriter::new();
+
+                    // write header
                     server_connection.base.write_outgoing_header(
-                        client_tick,
                         PacketType::Ping,
                         &mut writer,
                     );
+
+                    // write client tick
+                    if let Some(tick_manager) = self.tick_manager.as_mut() {
+                        tick_manager.write_client_tick(&mut writer);
+                    }
+
+                    // write body
                     ping_manager.write_ping(&mut writer);
+
+                    // send packet
                     self.io.send_writer(&mut writer);
                     server_connection.base.mark_sent();
                 }
@@ -355,13 +364,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
                         let header = StandardHeader::de(&mut reader).unwrap();
 
+                        // Read incoming header
                         server_connection
-                            .process_incoming_header(&header, self.tick_manager.as_mut());
+                            .process_incoming_header(&header);
 
+                        // Record incoming tick
+                        let mut incoming_tick = 0;
+                        if let Some(tick_manager) = self.tick_manager.as_mut() {
+                            if let Some(ping_manager) = &server_connection.ping_manager {
+                                incoming_tick = tick_manager.read_server_tick(&mut reader, ping_manager.rtt, ping_manager.jitter);
+                            }
+                        }
+
+                        // Handle based on PacketType
                         match header.packet_type() {
                             PacketType::Data => {
                                 server_connection
-                                    .buffer_data_packet(header.host_tick(), &mut reader);
+                                    .buffer_data_packet(incoming_tick, &mut reader);
                             }
                             PacketType::Heartbeat => {}
                             PacketType::Pong => {

@@ -42,9 +42,6 @@ mod types;
 mod world_type;
 mod wrapping_number;
 
-/// Commonly used utility methods to be used by naia-server & naia-client
-pub mod utils;
-
 pub use naia_socket_shared::{
     Instant, LinkConditionerConfig, Random, SocketConfig, Timer, Timestamp,
 };

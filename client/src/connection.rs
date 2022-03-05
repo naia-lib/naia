@@ -5,10 +5,12 @@ use naia_shared::{
     BaseConnection, ConnectionConfig, Manifest, PacketType, PingConfig, Protocolize,
     StandardHeader, Tick, WorldMutType,
 };
+use crate::io::Io;
+use crate::tick_manager::TickManager;
 
 use super::{
     entity_manager::EntityManager, error::NaiaClientError, event::Event, ping_manager::PingManager,
-    tick_manager::TickManager, tick_queue::TickQueue,
+    tick_queue::TickQueue,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
@@ -45,19 +47,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
     pub fn process_incoming_header(
         &mut self,
-        header: &StandardHeader,
-        tick_manager_opt: Option<&mut TickManager>,
+        header: &StandardHeader
     ) {
-        if let Some(tick_manager) = tick_manager_opt {
-            if let Some(ping_manager) = &self.ping_manager {
-                tick_manager.record_server_tick(
-                    header.host_tick(),
-                    ping_manager.rtt,
-                    ping_manager.jitter,
-                );
-            }
-        }
-
         self.base
             .process_incoming_header(header, &mut Some(&mut self.entity_manager.message_sender));
     }
@@ -95,7 +86,22 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
     // Outgoing data
 
-    pub fn outgoing_packet(&mut self, client_tick: Tick) -> Option<BitWriter> {
+    pub fn send_outgoing_packets(&mut self, io: &mut Io, tick_manager_opt: &Option<TickManager>) {
+        let mut any_sent = false;
+        loop {
+            if self.send_outgoing_packet(io, tick_manager_opt) {
+                any_sent = true;
+            } else {
+                break;
+            }
+        }
+        if any_sent {
+            self.base.mark_sent();
+        }
+    }
+
+    // Sends packet and returns whether or not a packet was sent
+    fn send_outgoing_packet(&mut self, io: &mut Io, tick_manager_opt: &Option<TickManager>) -> bool {
         if self.base.message_manager.has_outgoing_messages()
             || self.entity_manager.message_sender.has_outgoing_messages()
         {
@@ -103,23 +109,30 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
             let mut writer = BitWriter::new();
 
-            // Add header
+            // write header
             self.base
-                .write_outgoing_header(client_tick, PacketType::Data, &mut writer);
+                .write_outgoing_header(PacketType::Data, &mut writer);
 
-            // Write Entity Messages
-            self.entity_manager
-                .write_messages(&mut writer, next_packet_index);
+            if let Some(tick_manager) = tick_manager_opt {
+                // write tick
+                tick_manager.write_client_tick(&mut writer);
 
-            // Write Messages
+                // write entity messages
+                self.entity_manager
+                    .write_messages(&mut writer, next_packet_index);
+            }
+
+            // write messages
             self.base
                 .message_manager
                 .write_messages(&mut writer, next_packet_index);
 
-            // Return Writer
-            return Some(writer);
+            // send packet
+            io.send_writer(&mut writer);
+
+            return true;
         }
 
-        return None;
+        return false;
     }
 }
