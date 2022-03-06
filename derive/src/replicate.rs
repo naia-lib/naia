@@ -45,12 +45,16 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let read_partial_method = read_partial_method(&properties);
     let write_method = write_method(&properties);
     let write_partial_method = write_partial_method(&enum_name, &properties);
+    let entity_handle_method = entity_handle_method(&properties);
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
         use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateSafe, PropertyMutator,
             Protocolize, ReplicaDynRef, ReplicaDynMut, serde::{BitReader, BitWrite, Serde}};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
+        mod internal {
+            pub use naia_shared::EntityHandle;
+        }
 
         #property_enum_definition
 
@@ -87,8 +91,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #mirror_method
             #set_mutator_method
             #read_partial_method
-            //#write_method
-            //#write_partial_method
+            #entity_handle_method
         }
         impl Replicate<#protocol_name> for #replica_name {
             #clone_method
@@ -100,21 +103,83 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     proc_macro::TokenStream::from(gen)
 }
 
-fn properties(input: &DeriveInput) -> Vec<(Ident, Type)> {
+pub struct NormalProperty {
+    pub variable_name: Ident,
+    pub inner_type: Type,
+    pub uppercase_variable_name: Ident,
+}
+
+pub struct EntityProperty {
+    pub variable_name: Ident,
+    pub uppercase_variable_name: Ident,
+}
+
+pub enum Property {
+    Normal(NormalProperty),
+    Entity(EntityProperty),
+}
+
+impl Property {
+    pub fn normal(variable_name: Ident, inner_type: Type) -> Self {
+        Self::Normal(NormalProperty {
+            variable_name: variable_name.clone(),
+            inner_type,
+            uppercase_variable_name: Ident::new(
+                variable_name.to_string().to_uppercase().as_str(),
+                Span::call_site(),
+            ),
+        })
+    }
+
+    pub fn entity(variable_name: Ident) -> Self {
+        Self::Entity(EntityProperty {
+            variable_name: variable_name.clone(),
+            uppercase_variable_name: Ident::new(
+                variable_name.to_string().to_uppercase().as_str(),
+                Span::call_site(),
+            )
+        })
+    }
+
+    pub fn variable_name(&self) -> &Ident {
+        match self {
+            Self::Normal(property) => &property.variable_name,
+            Self::Entity(property) => &property.variable_name,
+        }
+    }
+
+    pub fn uppercase_variable_name(&self) -> &Ident {
+        match self {
+            Self::Normal(property) => &property.uppercase_variable_name,
+            Self::Entity(property) => &property.uppercase_variable_name,
+        }
+    }
+}
+
+fn properties(input: &DeriveInput) -> Vec<Property> {
     let mut fields = Vec::new();
 
     if let Data::Struct(data_struct) = &input.data {
         if let Fields::Named(fields_named) = &data_struct.fields {
             for field in fields_named.named.iter() {
-                if let Some(property_name) = &field.ident {
+                if let Some(variable_name) = &field.ident {
                     if let Type::Path(type_path) = &field.ty {
-                        if let PathArguments::AngleBracketed(angle_args) =
-                            &type_path.path.segments.first().unwrap().arguments
-                        {
-                            if let Some(GenericArgument::Type(property_type)) =
-                                angle_args.args.first()
-                            {
-                                fields.push((property_name.clone(), property_type.clone()));
+                        if let Some(property_seg) = type_path.path.segments.first() {
+                            let property_type = property_seg.ident.clone();
+                            if property_type == "EntityProperty" {
+                                fields.push(Property::entity(variable_name.clone()));
+                                continue;
+                            } else {
+                                if let PathArguments::AngleBracketed(angle_args) =
+                                &property_seg.arguments
+                                {
+                                    if let Some(GenericArgument::Type(inner_type)) =
+                                    angle_args.args.first()
+                                    {
+                                        fields.push(Property::normal(variable_name.clone(), inner_type.clone()));
+                                        continue;
+                                    }
+                                }
                             }
                         }
                     }
@@ -162,16 +227,15 @@ fn protocol_path(input: &DeriveInput) -> (Path, Ident) {
     panic!("When deriving 'Replicate' you MUST specify the path of the accompanying protocol. IE: '#[protocol_path = \"crate::MyProtocol\"]'");
 }
 
-fn property_enum(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn property_enum(enum_name: &Ident, properties: &Vec<Property>) -> TokenStream {
     let hashtag = Punct::new('#', Spacing::Alone);
 
     let mut variant_index: u8 = 0;
     let mut variant_list = quote! {};
-    for (variant, _) in properties {
-        let uppercase_variant_name = Ident::new(
-            variant.to_string().to_uppercase().as_str(),
-            Span::call_site(),
-        );
+
+    for property in properties {
+
+        let uppercase_variant_name = property.uppercase_variable_name();
 
         let new_output_right = quote! {
             #uppercase_variant_name = #variant_index,
@@ -225,13 +289,25 @@ pub fn dyn_mut_method(protocol_name: &Ident) -> TokenStream {
     };
 }
 
-fn clone_method(replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn clone_method(replica_name: &Ident, properties: &Vec<Property>) -> TokenStream {
     let mut output = quote! {};
 
-    for (field_name, _) in properties.iter() {
-        let new_output_right = quote! {
-            (*self.#field_name).clone(),
+    for property in properties.iter() {
+        let new_output_right = match property {
+            Property::Normal(property) => {
+                let field_name = &property.variable_name;
+                quote! {
+                    (*self.#field_name).clone(),
+                }
+            },
+            Property::Entity(property) => {
+                let field_name = &property.variable_name;
+                quote! {
+                    self.#field_name.get_handle(),
+                }
+            },
         };
+
         let new_output_result = quote! {
             #output
             #new_output_right
@@ -249,11 +325,12 @@ fn clone_method(replica_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenS
 fn mirror_method(
     protocol_name: &Ident,
     replica_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
+    properties: &Vec<Property>,
 ) -> TokenStream {
     let mut output = quote! {};
 
-    for (field_name, _) in properties.iter() {
+    for property in properties.iter() {
+        let field_name = property.variable_name();
         let new_output_right = quote! {
             self.#field_name.mirror(&replica.#field_name);
         };
@@ -273,10 +350,11 @@ fn mirror_method(
     };
 }
 
-fn set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn set_mutator_method(properties: &Vec<Property>) -> TokenStream {
     let mut output = quote! {};
 
-    for (field_name, _) in properties.iter() {
+    for property in properties.iter() {
+        let field_name = property.variable_name();
         let new_output_right = quote! {
             self.#field_name.set_mutator(mutator);
         };
@@ -297,13 +375,26 @@ fn set_mutator_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
 pub fn new_complete_method(
     replica_name: &Ident,
     enum_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
+    properties: &Vec<Property>,
 ) -> TokenStream {
     let mut args = quote! {};
-    for (field_name, field_type) in properties.iter() {
-        let new_output_right = quote! {
-            #field_name: #field_type,
+    for property in properties.iter() {
+        let new_output_right = match property {
+            Property::Normal(property) => {
+                let field_name = &property.variable_name;
+                let field_type = &property.inner_type;
+                quote! {
+                    #field_name: #field_type,
+                }
+            },
+            Property::Entity(property) => {
+                let field_name = &property.variable_name;
+                quote! {
+                    #field_name: EntityHandle,
+                }
+            },
         };
+
         let new_output_result = quote! {
             #args #new_output_right
         };
@@ -311,15 +402,25 @@ pub fn new_complete_method(
     }
 
     let mut fields = quote! {};
-    for (field_name, field_type) in properties.iter() {
-        let uppercase_variant_name = Ident::new(
-            field_name.to_string().to_uppercase().as_str(),
-            Span::call_site(),
-        );
-
-        let new_output_right = quote! {
-            #field_name: Property::<#field_type>::new(#field_name, #enum_name::#uppercase_variant_name as u8)
+    for property in properties.iter() {
+        let new_output_right = match property {
+            Property::Normal(property) => {
+                let field_name = &property.variable_name;
+                let field_type = &property.inner_type;
+                let uppercase_variant_name = &property.uppercase_variable_name;
+                quote! {
+                    #field_name: Property::<#field_type>::new(#field_name, #enum_name::#uppercase_variant_name as u8)
+                }
+            },
+            Property::Entity(property) => {
+                let field_name = &property.variable_name;
+                let uppercase_variant_name = &property.uppercase_variable_name;
+                quote! {
+                    #field_name: EntityProperty::new(#field_name, #enum_name::#uppercase_variant_name as u8)
+                }
+            },
         };
+
         let new_output_result = quote! {
             #fields
             #new_output_right,
@@ -340,10 +441,11 @@ pub fn read_to_type_method(
     protocol_name: &Ident,
     replica_name: &Ident,
     enum_name: &Ident,
-    properties: &Vec<(Ident, Type)>,
+    properties: &Vec<Property>,
 ) -> TokenStream {
     let mut prop_names = quote! {};
-    for (field_name, _) in properties.iter() {
+    for property in properties.iter() {
+        let field_name = property.variable_name();
         let new_output_right = quote! {
             #field_name
         };
@@ -355,15 +457,25 @@ pub fn read_to_type_method(
     }
 
     let mut prop_reads = quote! {};
-    for (field_name, field_type) in properties.iter() {
-        let uppercase_variant_name = Ident::new(
-            field_name.to_string().to_uppercase().as_str(),
-            Span::call_site(),
-        );
-
-        let new_output_right = quote! {
-            let #field_name = Property::<#field_type>::new_read(reader, #enum_name::#uppercase_variant_name as u8);
+    for property in properties.iter() {
+        let new_output_right = match property {
+            Property::Normal(property) => {
+                let field_name = &property.variable_name;
+                let field_type = &property.inner_type;
+                let uppercase_variant_name = &property.uppercase_variable_name;
+                quote! {
+                    let #field_name = Property::<#field_type>::new_read(reader, #enum_name::#uppercase_variant_name as u8);
+                }
+            },
+            Property::Entity(property) => {
+                let field_name = &property.variable_name;
+                let uppercase_variant_name = &property.uppercase_variable_name;
+                quote! {
+                    let #field_name = EntityProperty::new_read(reader, #enum_name::#uppercase_variant_name as u8);
+                }
+            },
         };
+
         let new_output_result = quote! {
             #prop_reads
             #new_output_right
@@ -382,15 +494,29 @@ pub fn read_to_type_method(
     };
 }
 
-fn read_partial_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn read_partial_method(properties: &Vec<Property>) -> TokenStream {
     let mut output = quote! {};
 
-    for (field_name, _) in properties.iter() {
-        let new_output_right = quote! {
-            if bool::de(reader).unwrap() {
-                Property::read(&mut self.#field_name, reader);
-            }
+    for property in properties.iter() {
+        let new_output_right = match property {
+            Property::Normal(property) => {
+                let field_name = &property.variable_name;
+                quote! {
+                    if bool::de(reader).unwrap() {
+                        Property::read(&mut self.#field_name, reader);
+                    }
+                }
+            },
+            Property::Entity(property) => {
+                let field_name = &property.variable_name;
+                quote! {
+                    if bool::de(reader).unwrap() {
+                        EntityProperty::read(&mut self.#field_name, reader);
+                    }
+                }
+            },
         };
+
         let new_output_result = quote! {
             #output
             #new_output_right
@@ -405,13 +531,26 @@ fn read_partial_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     };
 }
 
-fn write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn write_method(properties: &Vec<Property>) -> TokenStream {
     let mut output = quote! {};
 
-    for (field_name, _) in properties.iter() {
-        let new_output_right = quote! {
-            Property::write(&self.#field_name, writer);
+    for property in properties.iter() {
+
+        let new_output_right = match property {
+            Property::Normal(property) => {
+                let field_name = &property.variable_name;
+                quote! {
+                    Property::write(&self.#field_name, writer);
+                }
+            },
+            Property::Entity(property) => {
+                let field_name = &property.variable_name;
+                quote! {
+                    EntityProperty::write(&self.#field_name, writer);
+                }
+            },
         };
+
         let new_output_result = quote! {
             #output
             #new_output_right
@@ -426,23 +565,38 @@ fn write_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
     };
 }
 
-fn write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> TokenStream {
+fn write_partial_method(enum_name: &Ident, properties: &Vec<Property>) -> TokenStream {
     let mut output = quote! {};
 
-    for (field_name, _) in properties.iter() {
-        let uppercase_variant_name = Ident::new(
-            field_name.to_string().to_uppercase().as_str(),
-            Span::call_site(),
-        );
+    for property in properties.iter() {
 
-        let new_output_right = quote! {
-            if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
-                true.ser(writer);
-                Property::write(&self.#field_name, writer);
-            } else {
-                false.ser(writer);
-            }
+        let new_output_right = match property {
+            Property::Normal(property) => {
+                let field_name = &property.variable_name;
+                let uppercase_variant_name = &property.uppercase_variable_name;
+                quote! {
+                    if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
+                        true.ser(writer);
+                        Property::write(&self.#field_name, writer);
+                    } else {
+                        false.ser(writer);
+                    }
+                }
+            },
+            Property::Entity(property) => {
+                let field_name = &property.variable_name;
+                let uppercase_variant_name = &property.uppercase_variable_name;
+                quote! {
+                    if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
+                        true.ser(writer);
+                        EntityProperty::write(&self.#field_name, writer);
+                    } else {
+                        false.ser(writer);
+                    }
+                }
+            },
         };
+
         let new_output_result = quote! {
             #output
             #new_output_right
@@ -457,55 +611,22 @@ fn write_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) -> T
     };
 }
 
-// fn size_method(properties: &Vec<(Ident, Type)>) -> TokenStream {
-//     let mut output = quote! {};
-//
-//     for (_, field_type) in properties.iter() {
-//         let new_output_right = quote! {
-//             size += Property::<#field_type>::size();
-//         };
-//         let new_output_result = quote! {
-//             #output
-//             #new_output_right
-//         };
-//         output = new_output_result;
-//     }
-//
-//     return quote! {
-//         pub fn size() -> usize {
-//             let mut size = 0;
-//             #output
-//             size
-//         }
-//     };
-// }
-//
-// fn size_partial_method(enum_name: &Ident, properties: &Vec<(Ident, Type)>) ->
-// TokenStream {     let mut output = quote! {};
-//
-//     for (field_name, field_type) in properties.iter() {
-//         let uppercase_variant_name = Ident::new(
-//             field_name.to_string().to_uppercase().as_str(),
-//             Span::call_site(),
-//         );
-//
-//         let new_output_right = quote! {
-//             if let Some(true) =
-// diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
-// size += Property::<#field_type>::size();             }
-//         };
-//         let new_output_result = quote! {
-//             #output
-//             #new_output_right
-//         };
-//         output = new_output_result;
-//     }
-//
-//     return quote! {
-//         pub fn size_partial(diff_mask: &DiffMask) -> usize {
-//             let mut size = 0;
-//             #output
-//             size
-//         }
-//     };
-// }
+fn entity_handle_method(properties: &Vec<Property>) -> TokenStream {
+
+    for property in properties.iter() {
+        if let Property::Entity(entity_prop) = property {
+            let field_name = &entity_prop.variable_name;
+            return quote! {
+                fn entity_handle(&self) -> internal::EntityHandle {
+                    return self.#field_name.get_handle();
+                }
+            };
+        }
+    }
+
+    return quote! {
+        fn entity_handle(&self) -> internal::EntityHandle {
+            return internal::EntityHandle::empty();
+        }
+    };
+}

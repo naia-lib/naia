@@ -14,6 +14,7 @@ pub use naia_shared::{
     Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };
+use naia_shared::{EntityHandle, EntityHandleInner};
 
 use super::{
     connection::Connection,
@@ -53,6 +54,7 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
     world_record: WorldRecord<E, P::Kind>,
     entity_records: HashMap<E, GlobalEntityRecord>,
     entity_scope_map: EntityScopeMap<E>,
+    handle_entity_map: BigMap<EntityHandleInner, E>,
     // Components
     diff_handler: Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
     // Events
@@ -97,6 +99,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             world_record: WorldRecord::new(),
             entity_records: HashMap::new(),
             entity_scope_map: EntityScopeMap::new(),
+            handle_entity_map: BigMap::new(),
             // Components
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
             // Events
@@ -280,10 +283,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
-    pub fn spawn_entity<'s, W: WorldMutType<P, E>>(
-        &'s mut self,
+    pub fn spawn_entity<W: WorldMutType<P, E>>(
+        &mut self,
         mut world: W,
-    ) -> EntityMut<'s, P, E, W> {
+    ) -> EntityMut<P, E, W> {
         let entity = world.spawn_entity();
         self.spawn_entity_init(&entity);
 
@@ -291,14 +294,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     }
 
     /// Creates a new Entity with a specific id
-    pub fn spawn_entity_at<'s>(&'s mut self, entity: &E) {
+    pub fn spawn_entity_at(&mut self, entity: &E) {
         self.spawn_entity_init(&entity);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<'s, W: WorldRefType<P, E>>(&'s self, world: W, entity: &E) -> EntityRef<P, E, W> {
+    pub fn entity<W: WorldRefType<P, E>>(&self, world: W, entity: &E) -> EntityRef<P, E, W> {
         if world.has_entity(entity) {
             return EntityRef::new(world, &entity);
         }
@@ -308,11 +311,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity_mut<'s, 'w, W: WorldMutType<P, E>>(
-        &'s mut self,
+    pub fn entity_mut<W: WorldMutType<P, E>>(
+        &mut self,
         world: W,
         entity: &E,
-    ) -> EntityMut<'s, P, E, W> {
+    ) -> EntityMut<P, E, W> {
         if world.has_entity(entity) {
             return EntityMut::new(self, world, &entity);
         }
@@ -734,19 +737,42 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Sends a Message to a User, associated with a given Entity, once that
     /// Entity is in-scope
-    pub(crate) fn send_entity_message<R: ReplicateSafe<P>>(
+    pub fn send_entity_message<R: ReplicateSafe<P>>(
         &mut self,
         user_key: &UserKey,
-        entity: &E,
         message: &R,
     ) {
+        let entity_handle = message.entity_handle();
+        let entity = match self.handle_to_entity(&entity_handle) {
+            Some(e) => *e,
+            None => {
+                return;
+            }
+        };
+
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
                 connection
                     .entity_manager
-                    .send_entity_message(entity, message);
+                    .send_entity_message(&entity, message);
             }
         }
+    }
+
+    pub(crate) fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
+        let entity_record = self.entity_records.get_mut(entity).expect("entity does not exist!");
+        if entity_record.entity_handle.is_none() {
+            entity_record.entity_handle = Some(self.handle_entity_map.insert(*entity));
+        }
+
+        entity_record.entity_handle.unwrap().to_outer()
+    }
+
+    pub(crate) fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Option<&E> {
+        if let Some(inner_entity_handle) = entity_handle.inner() {
+            return self.handle_entity_map.get(inner_entity_handle);
+        }
+        return None;
     }
 
     // Private methods

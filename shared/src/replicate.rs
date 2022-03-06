@@ -1,11 +1,6 @@
 use naia_serde::{BitReader, BitWrite};
 
-use crate::{
-    diff_mask::DiffMask,
-    property_mutate::PropertyMutator,
-    protocolize::Protocolize,
-    replica_ref::{ReplicaDynMut, ReplicaDynRef},
-};
+use crate::{diff_mask::DiffMask, EntityHandle, property_mutate::PropertyMutator, protocolize::Protocolize, replica_ref::{ReplicaDynMut, ReplicaDynRef}};
 
 /// A struct that implements Replicate is a Message/Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a
@@ -48,6 +43,8 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
     fn read_partial(&mut self, reader: &mut BitReader);
+    /// Gets an EntityHandle from a container EntityProperty
+    fn entity_handle(&self) -> EntityHandle;
 }
 
 cfg_if! {

@@ -11,6 +11,7 @@ pub use naia_serde as serde;
 pub use serde::derive_serde;
 
 mod ack_manager;
+mod entity_property;
 mod bandwidth_monitor;
 mod base_connection;
 mod bigmap;
@@ -41,6 +42,7 @@ mod standard_header;
 mod types;
 mod world_type;
 mod wrapping_number;
+mod entity_handle;
 
 pub use naia_socket_shared::{
     Instant, LinkConditionerConfig, Random, SocketConfig, Timer, Timestamp,
@@ -66,6 +68,7 @@ pub use packet_notifiable::PacketNotifiable;
 pub use packet_type::PacketType;
 pub use ping_config::PingConfig;
 pub use property::Property;
+pub use entity_property::EntityProperty;
 pub use property_mutate::{PropertyMutate, PropertyMutator};
 pub use protocolize::{ProtocolInserter, ProtocolKindType, Protocolize};
 pub use replica_builder::ReplicaBuilder;
@@ -79,3 +82,4 @@ pub use standard_header::StandardHeader;
 pub use types::{PacketIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
+pub use entity_handle::{EntityHandle, EntityHandleInner};

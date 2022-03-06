@@ -7,11 +7,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    write_list_header, DiffMask, KeyGenerator, NetEntity, PacketIndex, PacketNotifiable,
-    Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
-};
+use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, DiffMask, KeyGenerator, NetEntity, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS};
 
 use super::{
     entity_action::EntityAction, global_diff_handler::GlobalDiffHandler,
@@ -120,7 +116,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R) {
-        if let Some(entity_record) = self.entity_records.get(&entity) {
+        if let Some(entity_record) = self.entity_records.get(entity) {
             match entity_record.status {
                 LocalityStatus::Created => {
                     // send MessageEntity action
