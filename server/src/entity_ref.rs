@@ -1,11 +1,8 @@
 use std::{hash::Hash, marker::PhantomData};
 
-use naia_shared::{
-    Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType,
-    WorldRefType,
-};
+use naia_shared::{EntityHandle, Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType};
 
-use super::{room::RoomKey, server::Server, user::UserKey};
+use super::{room::RoomKey, server::Server};
 
 // EntityRef
 
@@ -64,6 +61,10 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<'
         self.entity
     }
 
+    pub fn handle(&mut self) -> EntityHandle {
+        self.server.entity_to_handle(&self.entity)
+    }
+
     pub fn despawn(&mut self) {
         self.server.despawn_entity(&mut self.world, &self.entity);
     }
@@ -112,19 +113,6 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<'
 
     pub fn leave_room(&mut self, room_key: &RoomKey) -> &mut Self {
         self.server.room_remove_entity(room_key, &self.entity);
-
-        self
-    }
-
-    // Messages
-
-    pub fn send_message<R: ReplicateSafe<P>>(
-        &mut self,
-        user_key: &UserKey,
-        message: &R,
-    ) -> &mut Self {
-        self.server
-            .send_entity_message(user_key, &self.entity, message);
 
         self
     }
