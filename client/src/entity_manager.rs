@@ -8,8 +8,8 @@ use log::warn;
 use naia_shared::{
     read_list_header,
     serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    write_list_header, EntityActionType, Manifest, NetEntity, PacketIndex, Protocolize, Tick,
-    WorldMutType, MTU_SIZE_BITS,
+    write_list_header, BigMap, EntityActionType, EntityHandle, EntityHandleInner, Manifest,
+    NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS,
 };
 
 use super::{
@@ -21,6 +21,7 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
     local_to_world_entity: HashMap<NetEntity, E>,
     pub message_sender: EntityMessageSender<P, E>,
+    pub handle_entity_map: BigMap<EntityHandleInner, E>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
@@ -29,6 +30,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             local_to_world_entity: HashMap::new(),
             entity_records: HashMap::new(),
             message_sender: EntityMessageSender::new(),
+            handle_entity_map: BigMap::new(),
         }
     }
 
@@ -132,23 +134,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
                 // Receive special Entity Message
                 EntityActionType::MessageEntity => {
-                    let net_entity = NetEntity::de(reader).unwrap();
                     let message_kind = P::Kind::de(reader).unwrap();
 
                     let new_message = manifest.create_replica(message_kind, reader);
 
-                    if !self.local_to_world_entity.contains_key(&net_entity) {
-                        // received message BEFORE spawn, or AFTER despawn
-                        panic!(
-                            "attempting to receive message to nonexistent entity: {}",
-                            Into::<u16>::into(net_entity)
-                        );
-                    } else {
-                        let world_entity = self.local_to_world_entity.get(&net_entity).unwrap();
-
-                        event_stream
-                            .push_back(Ok(Event::MessageEntity(*world_entity, new_message)));
-                    }
+                    event_stream.push_back(Ok(Event::MessageEntity(new_message)));
                 }
                 // Add Component to Entity
                 EntityActionType::InsertComponent => {
@@ -314,5 +304,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         } else {
             panic!("Cannot find the entity record to serialize entity message!");
         }
+    }
+
+    pub fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Option<&E> {
+        if let Some(inner_entity_handle) = entity_handle.inner() {
+            return self.handle_entity_map.get(inner_entity_handle);
+        }
+        return None;
     }
 }

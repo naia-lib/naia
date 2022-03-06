@@ -177,8 +177,15 @@ impl App {
                 Ok(Event::DespawnEntity(entity)) => {
                     self.squares.remove(&entity);
                 }
-                Ok(Event::MessageEntity(entity, Protocol::EntityAssignment(entity_assignment))) => {
+                Ok(Event::MessageEntity(Protocol::EntityAssignment(entity_assignment))) => {
                     let assign = *entity_assignment.assign;
+                    let entity = self
+                        .client
+                        .entity_from_handle(
+                            self.world.proxy(),
+                            &entity_assignment.entity.get_handle(),
+                        )
+                        .id();
 
                     if assign {
                         info!("gave ownership of entity");
@@ -273,6 +280,7 @@ impl App {
                         Color::Red => RED,
                         Color::Blue => BLUE,
                         Color::Yellow => YELLOW,
+                        Color::Green => GREEN,
                     };
                     draw_rectangle(
                         f32::from(*square.x),

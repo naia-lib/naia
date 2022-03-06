@@ -752,6 +752,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     // Handles
 
+    pub fn entity_from_handle<W: WorldRefType<P, E>>(
+        &self,
+        world: W,
+        entity_handle: &EntityHandle,
+    ) -> EntityRef<P, E, W> {
+        if let Some(entity) = self.handle_to_entity(entity_handle) {
+            return self.entity(world, entity);
+        }
+        panic!("No Entity exists for the given Handle!");
+    }
+
     pub(crate) fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
         let entity_record = self
             .entity_records

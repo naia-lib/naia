@@ -159,7 +159,7 @@ impl AckManager {
     }
 
     fn ack_bitfield(&self) -> u32 {
-        let last_received_remote_packet_index: u16 = self.last_received_packet_index();
+        let last_received_remote_packet_index: PacketIndex = self.last_received_packet_index();
         let mut ack_bitfield: u32 = 0;
         let mut mask: u32 = 1;
 
