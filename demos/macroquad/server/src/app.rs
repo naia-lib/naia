@@ -102,9 +102,6 @@ impl App {
                     // Spawn new Entity
                     let mut entity = self.server.spawn_entity(self.world.proxy_mut());
 
-                    // Entity enters Room as well
-                    entity.enter_room(&self.main_room_key);
-
                     // Create "Square" Component
                     let x = Random::gen_range_u32(0, 50) * 16;
                     let y = Random::gen_range_u32(0, 37) * 16;
@@ -116,14 +113,20 @@ impl App {
                         _ => Color::Green,
                     };
 
-                    // Add to Entity
-                    entity.insert_component(Square::new(x as u16, y as u16, square_color));
+                    // Get Entity ID
+                    let entity_id = entity
+                        // Entity enters Room
+                        .enter_room(&self.main_room_key)
+                        // Add Square component to Entity
+                        .insert_component(Square::new(x as u16, y as u16, square_color))
+                        .id();
 
                     // Associate new Entity with User that spawned it
-                    self.user_squares.insert(user_key, entity.id());
+                    self.user_squares.insert(user_key, entity_id);
 
                     // Send an Entity Assignment message to the User that owns the Square
-                    let assignment_message = EntityAssignment::new(entity.handle(), true);
+                    let mut assignment_message = EntityAssignment::new(true);
+                    assignment_message.entity.set(&mut self.server, &entity_id);
                     self.server
                         .send_message(&user_key, &assignment_message, true);
                 }
