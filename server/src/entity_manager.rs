@@ -124,10 +124,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             match entity_record.status {
                 LocalityStatus::Created => {
                     // send MessageEntity action
-                    self.queued_actions.push_back(EntityAction::MessageEntity(
-                        *entity,
-                        message.protocol_copy(),
-                    ));
+                    self.queued_actions
+                        .push_back(EntityAction::MessageEntity(message.protocol_copy()));
                     return;
                 }
                 LocalityStatus::Deleting => {
@@ -353,12 +351,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     sent_actions_list.push(EntityAction::DespawnEntity(*global_entity));
                 }
             }
-            EntityAction::MessageEntity(global_entity, message) => {
-                // write local entity
-                let net_entity = self.entity_records.get(global_entity).unwrap().net_entity;
-                net_entity.ser(writer);
-
-                // write message's naia id
+            EntityAction::MessageEntity(message) => {
+                // write message's protocol kind
                 message.dyn_ref().kind().ser(writer);
 
                 // write message payload
@@ -367,8 +361,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 // write to record, if we are writing to this packet
                 if is_writing {
                     let sent_actions_list = self.sent_actions.get_mut(&packet_index).unwrap();
-                    sent_actions_list
-                        .push(EntityAction::MessageEntity(*global_entity, message.clone()));
+                    sent_actions_list.push(EntityAction::MessageEntity(message.clone()));
                 }
             }
             EntityAction::InsertComponent(global_entity, component_kind) => {
@@ -582,10 +575,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                     self.delayed_entity_messages.get_mut(&global_entity)
                                 {
                                     while let Some(message) = message_queue.pop_front() {
-                                        self.queued_actions.push_back(EntityAction::MessageEntity(
-                                            global_entity,
-                                            message,
-                                        ));
+                                        self.queued_actions
+                                            .push_back(EntityAction::MessageEntity(message));
                                     }
                                 }
                             }
@@ -600,7 +591,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             self.local_to_global_entity_map.remove(&local_id);
                             self.entity_generator.recycle_key(&local_id);
                         }
-                        EntityAction::MessageEntity(_, _) => {
+                        EntityAction::MessageEntity(_) => {
                             // Don't do anything, mission accomplished
                         }
                         EntityAction::InsertComponent(global_entity, component_kind) => {
@@ -669,18 +660,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> PacketNotifiable for EntityManager<P, E> {
-    fn notify_packet_delivered(&mut self, packet_index: u16) {
+    fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         self.delivered_packets.push_back(packet_index);
     }
 
-    fn notify_packet_dropped(&mut self, dropped_packet_index: u16) {
+    fn notify_packet_dropped(&mut self, dropped_packet_index: PacketIndex) {
         if let Some(dropped_actions_list) = self.sent_actions.get_mut(&dropped_packet_index) {
             for dropped_action in dropped_actions_list.drain(..) {
                 match dropped_action {
                     // guaranteed delivery actions
                     EntityAction::SpawnEntity { .. }
                     | EntityAction::DespawnEntity(_)
-                    | EntityAction::MessageEntity(_, _)
+                    | EntityAction::MessageEntity(_)
                     | EntityAction::InsertComponent(_, _)
                     | EntityAction::RemoveComponent(_, _) => {
                         self.queued_actions.push_back(dropped_action);

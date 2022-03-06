@@ -92,7 +92,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> PacketNotifiable for EntityMessageSend
         }
     }
 
-    fn notify_packet_dropped(&mut self, _dropped_packet_index: u16) {}
+    fn notify_packet_dropped(&mut self, _dropped_packet_index: PacketIndex) {}
 }
 
 // SentMessages

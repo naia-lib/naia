@@ -49,7 +49,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             .process_incoming_header(header, &mut Some(&mut self.entity_manager.message_sender));
     }
 
-    pub fn buffer_data_packet(&mut self, incoming_tick: u16, reader: &mut BitReader) {
+    pub fn buffer_data_packet(&mut self, incoming_tick: Tick, reader: &mut BitReader) {
         self.jitter_buffer
             .add_item(incoming_tick, reader.to_owned());
     }

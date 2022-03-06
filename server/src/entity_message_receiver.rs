@@ -21,7 +21,7 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
     }
 
     /// Get the most recently received Entity Message
-    pub fn pop_incoming_entity_message(&mut self, server_tick: u16) -> Option<(NetEntity, P)> {
+    pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<(NetEntity, P)> {
         return self.incoming_messages.pop_front(server_tick);
     }
 
@@ -148,7 +148,7 @@ impl<P> IncomingMessages<P> {
         }
     }
 
-    pub fn pop_front(&mut self, server_tick: u16) -> Option<(NetEntity, P)> {
+    pub fn pop_front(&mut self, server_tick: Tick) -> Option<(NetEntity, P)> {
         // get rid of outdated commands
         loop {
             let mut pop = false;

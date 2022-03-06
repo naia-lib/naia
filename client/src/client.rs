@@ -1,6 +1,7 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use naia_client_socket::Socket;
+use naia_shared::EntityHandle;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
     ConnectionConfig, Manifest, PacketType, PingConfig, ProtocolKindType, Protocolize,
@@ -225,6 +226,24 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Return a list of all Entities
     pub fn entities<W: WorldRefType<P, E>>(&self, world: &W) -> Vec<E> {
         return world.entities();
+    }
+
+    pub fn entity_from_handle<W: WorldRefType<P, E>>(
+        &self,
+        world: W,
+        entity_handle: &EntityHandle,
+    ) -> EntityRef<P, E, W> {
+        if let Some(entity) = self.handle_to_entity(entity_handle) {
+            return self.entity(world, entity);
+        }
+        panic!("No Entity exists for the given Handle!");
+    }
+
+    pub(crate) fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Option<&E> {
+        if let Some(connection) = &self.server_connection {
+            return connection.entity_manager.handle_to_entity(entity_handle);
+        }
+        return None;
     }
 
     // Connection

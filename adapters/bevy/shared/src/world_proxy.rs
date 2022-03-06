@@ -167,7 +167,7 @@ impl<'w, P: 'static + Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
         component_kind: &P::Kind,
         diff_mask: &DiffMask,
         reader: &mut PacketReader,
-        packet_index: u16,
+        packet_index: PacketIndex,
     ) {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {

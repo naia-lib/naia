@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, collections::BinaryHeap};
 
-use naia_shared::sequence_greater_than;
+use naia_shared::{sequence_greater_than, Tick};
 
 /// A queue for items marked by tick, will only ever pop items from the queue if
 /// the tick has elapsed
@@ -18,12 +18,12 @@ impl<T> TickQueue<T> {
     }
 
     /// Adds an item to the queue marked by tick
-    pub fn add_item(&mut self, tick: u16, item: T) {
+    pub fn add_item(&mut self, tick: Tick, item: T) {
         self.queue.push(ItemContainer { tick, item });
     }
 
     /// Returns whether or not there is an item that is ready to be returned
-    fn has_item(&self, current_tick: u16) -> bool {
+    fn has_item(&self, current_tick: Tick) -> bool {
         if self.queue.len() == 0 {
             return false;
         }
@@ -34,7 +34,7 @@ impl<T> TickQueue<T> {
     }
 
     /// Pops an item from the queue if the tick has elapsed
-    pub fn pop_item(&mut self, current_tick: u16) -> Option<(u16, T)> {
+    pub fn pop_item(&mut self, current_tick: Tick) -> Option<(Tick, T)> {
         if self.has_item(current_tick) {
             if let Some(container) = self.queue.pop() {
                 return Some((container.tick, container.item));
@@ -46,7 +46,7 @@ impl<T> TickQueue<T> {
 
 #[derive(Debug)]
 pub struct ItemContainer<T> {
-    pub tick: u16,
+    pub tick: Tick,
     pub item: T,
 }
 

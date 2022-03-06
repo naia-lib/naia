@@ -38,7 +38,7 @@ impl<P: Protocolize> MessageManager<P> {
     }
 
     /// Gets the next queued Message to be transmitted
-    pub fn pop_outgoing_message(&mut self, packet_index: u16) -> Option<P> {
+    pub fn pop_outgoing_message(&mut self, packet_index: PacketIndex) -> Option<P> {
         match self.queued_outgoing_messages.pop_front() {
             Some((guaranteed, message)) => {
                 //place in transmission record if this is a guaranteed message
@@ -159,13 +159,13 @@ impl<P: Protocolize> MessageManager<P> {
 impl<P: Protocolize> PacketNotifiable for MessageManager<P> {
     /// Occurs when a packet has been notified as delivered. Stops tracking the
     /// status of Messages in that packet.
-    fn notify_packet_delivered(&mut self, packet_index: u16) {
+    fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         self.sent_guaranteed_messages.remove(&packet_index);
     }
 
     /// Occurs when a packet has been notified as having been dropped. Queues up
     /// any guaranteed Messages that were lost in the packet for retransmission.
-    fn notify_packet_dropped(&mut self, packet_index: u16) {
+    fn notify_packet_dropped(&mut self, packet_index: PacketIndex) {
         if let Some(dropped_messages_list) = self.sent_guaranteed_messages.get(&packet_index) {
             for dropped_message in dropped_messages_list.into_iter() {
                 self.queued_outgoing_messages
