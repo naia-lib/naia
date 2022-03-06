@@ -1,62 +1,112 @@
 use std::hash::Hash;
 
-use naia_serde::{BitReader, BitWrite};
+use naia_serde::{BitReader, BitWrite, Serde};
 
-use crate::{property_mutate::PropertyMutator, EntityHandle, Property};
+use crate::{property_mutate::PropertyMutator, EntityHandle, Property, NetEntity};
+use crate::entity_property::NeedToSet::{HandleProperty, Uninit};
+
+#[derive(Eq, PartialEq, Clone, Copy)]
+enum NeedToSet {
+    Uninit,
+    HandleProperty,
+    NetEntity,
+    None,
+}
 
 #[derive(Clone)]
 pub struct EntityProperty {
-    inner: Property<EntityHandle>,
+    handle_prop: Property<EntityHandle>,
+    net_entity: Option<NetEntity>,
+    need_to_set: NeedToSet,
 }
 
 impl EntityProperty {
     pub fn new(mutator_index: u8) -> Self {
         Self {
-            inner: Property::<EntityHandle>::new(EntityHandle::empty(), mutator_index),
+            handle_prop: Property::<EntityHandle>::new(EntityHandle::empty(), mutator_index),
+            net_entity: None,
+            need_to_set: Uninit,
         }
     }
 
     pub fn mirror(&mut self, other: &EntityProperty) {
-        *self.inner = other.get_inner();
+        *self.handle_prop = other.handle();
+        self.net_entity = other.net_entity;
+        self.need_to_set = other.need_to_set;
     }
 
-    pub(crate) fn get_inner(&self) -> EntityHandle {
-        *self.inner
+    pub(crate) fn handle(&self) -> EntityHandle {
+        *self.handle_prop
+    }
+
+    pub fn prewrite(&mut self, entity_converter: &dyn NetEntityConverter) {
+        if self.need_to_set == NeedToSet::NetEntity {
+
+            if let Some(net_entity) = entity_converter.handle_to_net_entity(&self.handle_prop) {
+                self.net_entity = Some(net_entity);
+            } else {
+                self.net_entity = None;
+            }
+
+            self.need_to_set = NeedToSet::None;
+        }
+    }
+
+    pub fn postread(&mut self, entity_converter: &mut dyn NetEntityConverter) {
+        if self.need_to_set == HandleProperty {
+
+            if let Some(net_entity) = &self.net_entity {
+                *self.handle_prop = entity_converter.net_entity_to_handle(net_entity);
+            } else {
+                *self.handle_prop = EntityHandle::empty();
+            }
+
+            self.need_to_set = NeedToSet::None;
+        }
     }
 
     // Serialization / deserialization
 
     pub fn write<S: BitWrite>(&self, writer: &mut S) {
-        self.inner.write(writer);
+        if self.need_to_set == NeedToSet::NetEntity {
+            panic!("Still need to sync with World!");
+        }
+        self.net_entity.ser(writer);
     }
 
     pub fn new_read(reader: &mut BitReader, mutator_index: u8) -> Self {
-        Self {
-            inner: Property::<EntityHandle>::new_read(reader, mutator_index),
-        }
+        let mut new_prop = Self::new(mutator_index);
+        new_prop.read(reader);
+        return new_prop;
     }
 
     pub fn read(&mut self, reader: &mut BitReader) {
-        self.inner.read(reader);
+        self.net_entity = Some(NetEntity::de(reader).unwrap());
+        self.need_to_set = NeedToSet::HandleProperty;
     }
 
     // Comparison
 
     pub fn equals(&self, other: &EntityProperty) -> bool {
-        return self.inner.equals(&other.inner);
+        return self.handle_prop.equals(&other.handle_prop)
+            && self.net_entity == other.net_entity
+            && self.need_to_set == other.need_to_set;
     }
 
     // Internal
 
     pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
-        self.inner.set_mutator(mutator);
+        self.handle_prop.set_mutator(mutator);
     }
 
     pub fn get<'h, E: Copy + Eq + Hash>(
         &self,
         handler: &'h dyn EntityHandleConverter<E>,
     ) -> Option<&'h E> {
-        let handle = *self.inner;
+        if self.need_to_set == NeedToSet::HandleProperty {
+            panic!("EntityProperty still needs to be synced with World!");
+        }
+        let handle = *self.handle_prop;
         return handler.handle_to_entity(&handle);
     }
 
@@ -66,12 +116,17 @@ impl EntityProperty {
         entity: &E,
     ) {
         let new_handle = handler.entity_to_handle(entity);
-        *self.inner = new_handle;
+        *self.handle_prop = new_handle;
+        self.need_to_set = NeedToSet::NetEntity;
     }
 }
 
-// EntityPropertyHandler
 pub trait EntityHandleConverter<E: Copy + Eq + Hash> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Option<&E>;
     fn entity_to_handle(&mut self, entity: &E) -> EntityHandle;
+}
+
+pub trait NetEntityConverter {
+    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Option<NetEntity>;
+    fn net_entity_to_handle(&mut self, net_entity: &NetEntity) -> EntityHandle;
 }
