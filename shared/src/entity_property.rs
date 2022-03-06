@@ -1,4 +1,5 @@
 use std::hash::Hash;
+use std::marker::PhantomData;
 
 use naia_serde::{BitReader, BitWrite, Serde};
 
@@ -39,7 +40,7 @@ impl EntityProperty {
         *self.handle_prop
     }
 
-    pub fn prewrite(&mut self, entity_converter: &dyn NetEntityConverter) {
+    pub fn prewrite(&mut self, entity_converter: &dyn NetEntityHandleConverter) {
         if self.need_to_set == NeedToSet::NetEntity {
 
             if let Some(net_entity) = entity_converter.handle_to_net_entity(&self.handle_prop) {
@@ -52,7 +53,7 @@ impl EntityProperty {
         }
     }
 
-    pub fn postread(&mut self, entity_converter: &mut dyn NetEntityConverter) {
+    pub fn postread(&mut self, entity_converter: &mut dyn NetEntityHandleConverter) {
         if self.need_to_set == HandleProperty {
 
             if let Some(net_entity) = &self.net_entity {
@@ -126,7 +127,33 @@ pub trait EntityHandleConverter<E: Copy + Eq + Hash> {
     fn entity_to_handle(&mut self, entity: &E) -> EntityHandle;
 }
 
-pub trait NetEntityConverter {
+pub trait NetEntityHandleConverter {
     fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Option<NetEntity>;
     fn net_entity_to_handle(&mut self, net_entity: &NetEntity) -> EntityHandle;
+}
+
+pub trait NetEntityConverter<E: Copy + Eq + Hash> {
+    fn entity_to_net_entity(&self, entity: &E) -> NetEntity;
+    fn net_entity_to_entity(&self, net_entity: &NetEntity) -> E;
+}
+
+impl<E: Copy + Eq + Hash, A: EntityHandleConverter<E>, B: NetEntityConverter<E>> NetEntityHandleConverter for (&mut A, &mut B, PhantomData<E>)
+{
+    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Option<NetEntity> {
+        let entity_handle_converter = &self.0;
+        let net_entity_converter = &self.1;
+
+        if let Some(entity) = entity_handle_converter.handle_to_entity(entity_handle) {
+            return Some(net_entity_converter.entity_to_net_entity(entity));
+        }
+        return None;
+    }
+
+    fn net_entity_to_handle(&mut self, net_entity: &NetEntity) -> EntityHandle {
+        let entity_handle_converter = &mut self.0;
+        let net_entity_converter = &self.1;
+
+        let entity = net_entity_converter.net_entity_to_entity(net_entity);
+        return entity_handle_converter.entity_to_handle(&entity);
+    }
 }
