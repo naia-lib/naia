@@ -10,9 +10,9 @@ pub struct EntityProperty {
 }
 
 impl EntityProperty {
-    pub fn new(handle: EntityHandle, mutator_index: u8) -> Self {
+    pub fn new(mutator_index: u8) -> Self {
         Self {
-            inner: Property::<EntityHandle>::new(handle, mutator_index),
+            inner: Property::<EntityHandle>::new(EntityHandle::empty(), mutator_index),
         }
     }
 
@@ -52,12 +52,19 @@ impl EntityProperty {
         self.inner.set_mutator(mutator);
     }
 
-    pub fn get<'h, E: Copy + Eq + Hash>(&self, handler: &'h dyn EntityHandleConverter<E>) -> Option<&'h E> {
+    pub fn get<'h, E: Copy + Eq + Hash>(
+        &self,
+        handler: &'h dyn EntityHandleConverter<E>,
+    ) -> Option<&'h E> {
         let handle = *self.inner;
         return handler.handle_to_entity(&handle);
     }
 
-    pub fn set<E: Copy + Eq + Hash>(&mut self, handler: &mut dyn EntityHandleConverter<E>, entity: &E) {
+    pub fn set<E: Copy + Eq + Hash>(
+        &mut self,
+        handler: &mut dyn EntityHandleConverter<E>,
+        entity: &E,
+    ) {
         let new_handle = handler.entity_to_handle(entity);
         *self.inner = new_handle;
     }

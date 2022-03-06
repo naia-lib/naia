@@ -191,7 +191,7 @@ impl App {
                             for component_kind in world_mut.component_kinds(&entity) {
                                 let mut component_copy_opt: Option<Protocol> = None;
                                 if let Some(component) =
-                                world_mut.component_of_kind(&entity, &component_kind)
+                                    world_mut.component_of_kind(&entity, &component_kind)
                                 {
                                     component_copy_opt = Some(component.clone());
                                 }

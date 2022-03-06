@@ -423,7 +423,7 @@ pub fn new_complete_method(
                 let field_name = &property.variable_name;
                 let uppercase_variant_name = &property.uppercase_variable_name;
                 quote! {
-                    #field_name: EntityProperty::new(EntityHandle::empty(), #enum_name::#uppercase_variant_name as u8)
+                    #field_name: EntityProperty::new(#enum_name::#uppercase_variant_name as u8)
                 }
             }
         };

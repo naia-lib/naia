@@ -1,4 +1,4 @@
-use naia_shared::{EntityHandle, EntityProperty, Property, Replicate};
+use naia_shared::{EntityProperty, Property, Replicate};
 
 #[derive(Replicate)]
 #[protocol_path = "crate::protocol::Protocol"]

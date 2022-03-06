@@ -1,5 +1,5 @@
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 use crate::BigMapKey;
+use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 
 // EntityHandle
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
