@@ -5,7 +5,7 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{read_list_header, serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, BigMap, EntityActionType, EntityHandle, EntityHandleInner, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, NetEntityConverter};
+use naia_shared::{read_list_header, serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, BigMap, EntityActionType, EntityHandle, EntityHandleInner, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, NetEntityHandleConverter};
 
 use super::{
     entity_message_sender::EntityMessageSender, entity_record::EntityRecord,
@@ -320,7 +320,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityConverter for EntityManager<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityManager<P, E> {
     fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Option<NetEntity> {
         if let Some(inner_entity_handle) = entity_handle.inner() {
             if let Some(entity) = self.handle_entity_map.get(inner_entity_handle) {
