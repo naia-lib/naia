@@ -4,10 +4,9 @@ mod inner {
     use std::marker::PhantomData;
 
     use naia_shared::{
-        ProtocolInserter, Protocolize,
-        ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
+        serde::BitReader, ProtocolInserter, Protocolize, ReplicaMutWrapper, ReplicaRefWrapper,
+        Replicate, ReplicateSafe, WorldMutType, WorldRefType,
     };
-    use naia_shared::serde::BitReader;
 
     pub type EmptyEntity = u8;
 
@@ -107,12 +106,7 @@ mod inner {
             unimplemented!()
         }
 
-        fn component_read_partial(
-            &mut self,
-            _: &EmptyEntity,
-            _: &P::Kind,
-            _: &mut BitReader,
-        ) {
+        fn component_read_partial(&mut self, _: &EmptyEntity, _: &P::Kind, _: &mut BitReader) {
             unimplemented!()
         }
 

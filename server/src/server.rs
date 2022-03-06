@@ -7,14 +7,16 @@ use std::{
 };
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::serde::{BitWriter, Serde};
+use naia_shared::{
+    serde::{BitWriter, Serde},
+    EntityHandle, EntityHandleInner,
+};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, Manifest,
     NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType,
     Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };
-use naia_shared::{EntityHandle, EntityHandleInner};
 
 use super::{
     connection::Connection,
@@ -275,7 +277,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
             connection.entity_manager.collect_component_updates();
-            connection.send_outgoing_packets(&mut self.io, &world, &self.world_record, &self.tick_manager);
+            connection.send_outgoing_packets(
+                &mut self.io,
+                &world,
+                &self.world_record,
+                &self.tick_manager,
+            );
         }
     }
 
@@ -283,10 +290,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
-    pub fn spawn_entity<W: WorldMutType<P, E>>(
-        &mut self,
-        mut world: W,
-    ) -> EntityMut<P, E, W> {
+    pub fn spawn_entity<W: WorldMutType<P, E>>(&mut self, mut world: W) -> EntityMut<P, E, W> {
         let entity = world.spawn_entity();
         self.spawn_entity_init(&entity);
 
@@ -737,11 +741,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Sends a Message to a User, associated with a given Entity, once that
     /// Entity is in-scope
-    pub fn send_entity_message<R: ReplicateSafe<P>>(
-        &mut self,
-        user_key: &UserKey,
-        message: &R,
-    ) {
+    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, user_key: &UserKey, message: &R) {
         let entity_handle = message.entity_handle();
         let entity = match self.handle_to_entity(&entity_handle) {
             Some(e) => *e,
@@ -760,7 +760,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     }
 
     pub(crate) fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
-        let entity_record = self.entity_records.get_mut(entity).expect("entity does not exist!");
+        let entity_record = self
+            .entity_records
+            .get_mut(entity)
+            .expect("entity does not exist!");
         if entity_record.entity_handle.is_none() {
             entity_record.entity_handle = Some(self.handle_entity_map.insert(*entity));
         }
@@ -796,10 +799,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                     let mut writer = BitWriter::new();
 
                     // write header
-                    connection.base.write_outgoing_header(
-                        PacketType::Heartbeat,
-                        &mut writer,
-                    );
+                    connection
+                        .base
+                        .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
                     // write server tick
                     if let Some(tick_manager) = self.tick_manager.as_mut() {
@@ -894,21 +896,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                 self.disconnect_user(&user_key);
                             }
                         }
-                        PacketType::Data => {
-                            match self.user_connections.get_mut(&address) {
-                                Some(connection) => {
-                                    connection.process_incoming_header(&self.world_record, &header);
-                                    connection.process_incoming_data(
-                                        &self.tick_manager,
-                                        &self.shared_config.manifest,
-                                        &mut reader,
-                                    );
-                                }
-                                None => {
-                                    warn!("received data from unauthenticated client: {}", address);
-                                }
+                        PacketType::Data => match self.user_connections.get_mut(&address) {
+                            Some(connection) => {
+                                connection.process_incoming_header(&self.world_record, &header);
+                                connection.process_incoming_data(
+                                    &self.tick_manager,
+                                    &self.shared_config.manifest,
+                                    &mut reader,
+                                );
                             }
-                        }
+                            None => {
+                                warn!("received data from unauthenticated client: {}", address);
+                            }
+                        },
                         PacketType::Heartbeat => {
                             match self.user_connections.get_mut(&address) {
                                 Some(connection) => {
@@ -938,10 +938,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                         let mut writer = BitWriter::new();
 
                                         // write header
-                                        connection.base.write_outgoing_header(
-                                            PacketType::Pong,
-                                            &mut writer,
-                                        );
+                                        connection
+                                            .base
+                                            .write_outgoing_header(PacketType::Pong, &mut writer);
 
                                         // write server tick
                                         if let Some(tick_manager) = self.tick_manager.as_ref() {

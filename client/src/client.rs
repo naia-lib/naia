@@ -311,14 +311,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
             // send heartbeats
             if server_connection.base.should_send_heartbeat() {
-
                 let mut writer = BitWriter::new();
 
                 // write header
-                server_connection.base.write_outgoing_header(
-                    PacketType::Heartbeat,
-                    &mut writer,
-                );
+                server_connection
+                    .base
+                    .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
                 // write client tick
                 if let Some(tick_manager) = self.tick_manager.as_mut() {
@@ -333,14 +331,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
             // send pings
             if let Some(ping_manager) = &mut server_connection.ping_manager {
                 if ping_manager.should_send_ping() {
-
                     let mut writer = BitWriter::new();
 
                     // write header
-                    server_connection.base.write_outgoing_header(
-                        PacketType::Ping,
-                        &mut writer,
-                    );
+                    server_connection
+                        .base
+                        .write_outgoing_header(PacketType::Ping, &mut writer);
 
                     // write client tick
                     if let Some(tick_manager) = self.tick_manager.as_mut() {
@@ -365,22 +361,24 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                         let header = StandardHeader::de(&mut reader).unwrap();
 
                         // Read incoming header
-                        server_connection
-                            .process_incoming_header(&header);
+                        server_connection.process_incoming_header(&header);
 
                         // Record incoming tick
                         let mut incoming_tick = 0;
                         if let Some(tick_manager) = self.tick_manager.as_mut() {
                             if let Some(ping_manager) = &server_connection.ping_manager {
-                                incoming_tick = tick_manager.read_server_tick(&mut reader, ping_manager.rtt, ping_manager.jitter);
+                                incoming_tick = tick_manager.read_server_tick(
+                                    &mut reader,
+                                    ping_manager.rtt,
+                                    ping_manager.jitter,
+                                );
                             }
                         }
 
                         // Handle based on PacketType
                         match header.packet_type() {
                             PacketType::Data => {
-                                server_connection
-                                    .buffer_data_packet(incoming_tick, &mut reader);
+                                server_connection.buffer_data_packet(incoming_tick, &mut reader);
                             }
                             PacketType::Heartbeat => {}
                             PacketType::Pong => {

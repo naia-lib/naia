@@ -1,9 +1,8 @@
-
 use std::ops::DerefMut;
 
 use naia_serde::{BitReader, BitWrite};
 
-use crate::{EntityHandle, NetEntity, Property, property_mutate::PropertyMutator};
+use crate::{property_mutate::PropertyMutator, EntityHandle, NetEntity, Property};
 
 #[derive(Eq, PartialEq, Clone)]
 enum NeedToSet {
@@ -19,7 +18,6 @@ pub struct EntityProperty {
 }
 
 impl EntityProperty {
-
     pub fn new(handle: EntityHandle, mutator_index: u8) -> Self {
         Self {
             net_entity: Property::<NetEntity>::new(NetEntity::default(), mutator_index),

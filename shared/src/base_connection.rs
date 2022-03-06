@@ -4,14 +4,9 @@ use naia_serde::{BitWriter, Serde};
 use naia_socket_shared::Timer;
 
 use super::{
-    ack_manager::AckManager,
-    connection_config::ConnectionConfig,
-    message_manager::MessageManager,
-    packet_notifiable::PacketNotifiable,
-    packet_type::PacketType,
-    protocolize::Protocolize,
-    standard_header::StandardHeader,
-    types::PacketIndex,
+    ack_manager::AckManager, connection_config::ConnectionConfig, message_manager::MessageManager,
+    packet_notifiable::PacketNotifiable, packet_type::PacketType, protocolize::Protocolize,
+    standard_header::StandardHeader, types::PacketIndex,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -83,11 +78,7 @@ impl<P: Protocolize> BaseConnection<P> {
     /// Given a packet payload, start tracking the packet via it's index, attach
     /// the appropriate header, and return the packet's resulting underlying
     /// bytes
-    pub fn write_outgoing_header(
-        &mut self,
-        packet_type: PacketType,
-        writer: &mut BitWriter,
-    ) {
+    pub fn write_outgoing_header(&mut self, packet_type: PacketType, writer: &mut BitWriter) {
         // Add header onto message!
         self.ack_manager
             .next_outgoing_packet_header(packet_type)

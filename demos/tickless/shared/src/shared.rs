@@ -8,5 +8,6 @@ pub fn shared_config() -> SharedConfig<Protocol> {
         SocketConfig::new(None, None),
         None,
         None,
-        None);
+        None,
+    );
 }

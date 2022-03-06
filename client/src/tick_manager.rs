@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use naia_shared::{wrapping_diff, Instant, Tick, serde::Serde};
+use naia_shared::{serde::Serde, wrapping_diff, Instant, Tick};
 
 use crate::client::{BitReader, BitWriter};
 
@@ -60,14 +60,9 @@ impl TickManager {
     }
 
     pub fn read_server_tick(&mut self, reader: &mut BitReader, rtt: f32, jitter: f32) -> Tick {
-
         let server_tick = Tick::de(reader).unwrap();
 
-        self.record_server_tick(
-            server_tick,
-            rtt,
-            jitter,
-        );
+        self.record_server_tick(server_tick, rtt, jitter);
 
         server_tick
     }
@@ -102,12 +97,7 @@ impl TickManager {
 
     /// Using information from the Server and RTT/Jitter measurements, determine
     /// the appropriate future intended tick
-    fn record_server_tick(
-        &mut self,
-        server_tick: Tick,
-        rtt_average: f32,
-        jitter_deviation: f32,
-    ) {
+    fn record_server_tick(&mut self, server_tick: Tick, rtt_average: f32, jitter_deviation: f32) {
         // make sure we only record server_ticks going FORWARD
 
         // tick diff

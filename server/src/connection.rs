@@ -4,13 +4,17 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{serde::{BitReader, BitWriter}, BaseConnection, ConnectionConfig, Manifest,
-                  PacketType, Protocolize, StandardHeader, Tick, WorldRefType, sequence_greater_than};
+use naia_shared::{
+    sequence_greater_than,
+    serde::{BitReader, BitWriter},
+    BaseConnection, ConnectionConfig, Manifest, PacketType, Protocolize, StandardHeader, Tick,
+    WorldRefType,
+};
 
 use super::{
     entity_manager::EntityManager, entity_message_receiver::EntityMessageReceiver,
-    global_diff_handler::GlobalDiffHandler, user::UserKey, world_record::WorldRecord,
-    io::Io, tick_manager::TickManager
+    global_diff_handler::GlobalDiffHandler, io::Io, tick_manager::TickManager, user::UserKey,
+    world_record::WorldRecord,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
@@ -87,12 +91,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     }
 
     // Outgoing data
-    pub fn send_outgoing_packets<W: WorldRefType<P, E>>(&mut self,
-                                 io: &mut Io,
-                                 world: &W,
-                                 world_record: &WorldRecord<E, P::Kind>,
-                                 tick_manager_opt: &Option<TickManager>) {
-
+    pub fn send_outgoing_packets<W: WorldRefType<P, E>>(
+        &mut self,
+        io: &mut Io,
+        world: &W,
+        world_record: &WorldRecord<E, P::Kind>,
+        tick_manager_opt: &Option<TickManager>,
+    ) {
         let mut any_sent = false;
         loop {
             if self.send_outgoing_packet(io, world, world_record, tick_manager_opt) {
