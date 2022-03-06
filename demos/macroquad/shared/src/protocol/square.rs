@@ -5,6 +5,7 @@ pub enum Color {
     Red,
     Blue,
     Yellow,
+    Green,
 }
 
 impl Default for Color {

@@ -20,7 +20,7 @@ pub struct App {
     server: Server,
     world: World,
     main_room_key: RoomKey,
-    user_to_prediction_map: HashMap<UserKey, Entity>,
+    user_squares: HashMap<UserKey, Entity>,
     bandwidth_timer: Timer,
 }
 
@@ -57,7 +57,7 @@ impl App {
             server,
             world,
             main_room_key,
-            user_to_prediction_map: HashMap::<UserKey, Entity>::new(),
+            user_squares: HashMap::<UserKey, Entity>::new(),
             bandwidth_timer: Timer::new(Duration::from_secs(1)),
         }
     }
@@ -87,40 +87,49 @@ impl App {
                     }
                 }
                 Ok(Event::Connection(user_key)) => {
+                    // New User has joined the Server
                     let user_address = self
                         .server
                         .user_mut(&user_key)
+                        // User enters a Room to see the contained Entities
                         .enter_room(&self.main_room_key)
                         .address();
 
                     info!("Naia Server connected to: {}", user_address);
 
+                    let total_user_count = self.server.users_count();
+
+                    // Spawn new Entity
+                    let mut entity = self.server.spawn_entity(self.world.proxy_mut());
+
+                    // Entity enters Room as well
+                    entity.enter_room(&self.main_room_key);
+
+                    // Create "Square" Component
                     let x = Random::gen_range_u32(0, 50) * 16;
                     let y = Random::gen_range_u32(0, 37) * 16;
 
-                    let square_color = match self.server.users_count() % 3 {
+                    let square_color = match total_user_count % 3 {
                         0 => Color::Yellow,
                         1 => Color::Red,
-                        _ => Color::Blue,
+                        2 => Color::Blue,
+                        _ => Color::Green,
                     };
 
-                    let square = Square::new(x as u16, y as u16, square_color);
-                    let mut entity = self.server.spawn_entity(self.world.proxy_mut());
-                    let entity_id = entity
-                        .insert_component(square)
-                        .enter_room(&self.main_room_key)
-                        .id();
-                    let entity_handle = entity.handle();
-                    self.server.send_message(
-                        &user_key,
-                        &EntityAssignment::new(entity_handle, true),
-                        true,
-                    );
-                    self.user_to_prediction_map.insert(user_key, entity_id);
+                    // Add to Entity
+                    entity.insert_component(Square::new(x as u16, y as u16, square_color));
+
+                    // Associate new Entity with User that spawned it
+                    self.user_squares.insert(user_key, entity.id());
+
+                    // Send an Entity Assignment message to the User that owns the Square
+                    let assignment_message = EntityAssignment::new(entity.handle(), true);
+                    self.server
+                        .send_message(&user_key, &assignment_message, true);
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
                     info!("Naia Server disconnected from: {}", user.address);
-                    if let Some(entity) = self.user_to_prediction_map.remove(&user_key) {
+                    if let Some(entity) = self.user_squares.remove(&user_key) {
                         self.server
                             .entity_mut(self.world.proxy_mut(), &entity)
                             .leave_room(&self.main_room_key)

@@ -223,9 +223,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         &mut self,
         user_key: &UserKey,
         message: &R,
-        guaranteed_delivery: bool)
-    {
-        let entity_opt = self.handle_to_entity(&message.entity_handle()).map(|entity_ref| *entity_ref);
+        guaranteed_delivery: bool,
+    ) {
+        let entity_opt = self
+            .handle_to_entity(&message.entity_handle())
+            .map(|entity_ref| *entity_ref);
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
                 if let Some(entity) = entity_opt {
