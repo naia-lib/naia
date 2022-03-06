@@ -111,9 +111,10 @@ impl App {
                         .enter_room(&self.main_room_key)
                         .id();
                     let entity_handle = entity.handle();
-                    self.server.send_entity_message(
+                    self.server.send_message(
                         &user_key,
                         &EntityAssignment::new(entity_handle, true),
+                        true,
                     );
                     self.user_to_prediction_map.insert(user_key, entity_id);
                 }

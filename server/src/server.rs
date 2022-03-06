@@ -223,14 +223,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         &mut self,
         user_key: &UserKey,
         message: &R,
-        guaranteed_delivery: bool,
-    ) {
+        guaranteed_delivery: bool)
+    {
+        let entity_opt = self.handle_to_entity(&message.entity_handle()).map(|entity_ref| *entity_ref);
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
-                connection
-                    .base
-                    .message_manager
-                    .send_message(message, guaranteed_delivery);
+                if let Some(entity) = entity_opt {
+                    connection
+                        .entity_manager
+                        .send_entity_message(&entity, message);
+                } else {
+                    connection
+                        .base
+                        .message_manager
+                        .send_message(message, guaranteed_delivery);
+                }
             }
         }
     }
@@ -741,27 +748,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         return 0;
     }
 
-    // Messages
-
-    /// Sends a Message to a User, associated with a given Entity, once that
-    /// Entity is in-scope
-    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, user_key: &UserKey, message: &R) {
-        let entity_handle = message.entity_handle();
-        let entity = match self.handle_to_entity(&entity_handle) {
-            Some(e) => *e,
-            None => {
-                return;
-            }
-        };
-
-        if let Some(user) = self.users.get(user_key) {
-            if let Some(connection) = self.user_connections.get_mut(&user.address) {
-                connection
-                    .entity_manager
-                    .send_entity_message(&entity, message);
-            }
-        }
-    }
+    // Handles
 
     pub(crate) fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
         let entity_record = self
