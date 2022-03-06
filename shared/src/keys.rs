@@ -20,12 +20,6 @@ impl Into<u16> for NetEntity {
     }
 }
 
-impl Default for NetEntity {
-    fn default() -> Self {
-        NetEntity(0)
-    }
-}
-
 impl serde::Serde for NetEntity {
     fn ser<S: BitWrite>(&self, writer: &mut S) {
         UnsignedVariableInteger::<7>::new(self.0).ser(writer);

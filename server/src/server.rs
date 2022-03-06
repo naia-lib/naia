@@ -7,10 +7,7 @@ use std::{
 };
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{
-    serde::{BitWriter, Serde},
-    EntityHandle, EntityHandleConverter, EntityHandleInner,
-};
+use naia_shared::{serde::{BitWriter, Serde}, EntityHandle, EntityHandleConverter};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, Manifest,
     NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType,
@@ -25,7 +22,6 @@ use super::{
     error::NaiaServerError,
     event::Event,
     global_diff_handler::GlobalDiffHandler,
-    global_entity_record::GlobalEntityRecord,
     handshake_manager::{HandshakeManager, HandshakeResult},
     io::Io,
     room::{Room, RoomKey, RoomMut, RoomRef},
@@ -54,9 +50,9 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
     world_record: WorldRecord<E, P::Kind>,
-    entity_records: HashMap<E, GlobalEntityRecord>,
+
     entity_scope_map: EntityScopeMap<E>,
-    handle_entity_map: BigMap<EntityHandleInner, E>,
+
     // Components
     diff_handler: Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
     // Events
@@ -99,9 +95,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             rooms: BigMap::new(),
             // Entities
             world_record: WorldRecord::new(),
-            entity_records: HashMap::new(),
             entity_scope_map: EntityScopeMap::new(),
-            handle_entity_map: BigMap::new(),
             // Components
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
             // Events
@@ -521,18 +515,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             self.component_cleanup(entity, &component_kind);
         }
 
-        // Remove from ECS Record
-        self.world_record.despawn_entity(entity);
-
         // Delete from world
         world.despawn_entity(entity);
 
+        // Delete scope
         self.entity_scope_map.remove_entity(entity);
-        if let Some(entity_record) = self.entity_records.remove(entity) {
-            if let Some(entity_handle) = entity_record.entity_handle {
-                self.handle_entity_map.remove(&entity_handle);
-            }
-        }
+
+        // Remove from ECS Record
+        self.world_record.despawn_entity(entity);
     }
 
     //// Entity Scopes
@@ -650,14 +640,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Deletes the Room associated with a given RoomKey on the Server.
     /// Returns true if the Room existed.
     pub(crate) fn room_destroy(&mut self, room_key: &RoomKey) -> bool {
-        if self.rooms.contains_key(room_key) {
-            // remove all entities from the entity_room_map
-            for entity in self.rooms.get(room_key).unwrap().entities() {
-                if let Some(record) = self.entity_records.get_mut(entity) {
-                    record.room_key = None;
-                }
-            }
+        self.room_remove_all_entities(room_key);
 
+        if self.rooms.contains_key(room_key) {
             // TODO: what else kind of cleanup do we need to do here? Scopes?
 
             // actually remove the room from the collection
@@ -709,37 +694,39 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Returns whether or not an Entity is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity: &E) -> bool {
-        if let Some(entity_record) = self.entity_records.get(entity) {
-            if let Some(actual_room_key) = entity_record.room_key {
-                return *room_key == actual_room_key;
-            }
-        }
-        return false;
+        return self.world_record.entity_is_in_room(entity, room_key);
     }
 
     /// Add an Entity to a Room associated with the given RoomKey.
     /// Entities will only ever be in-scope for Users which are in a Room with
     /// them.
     pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, entity: &E) {
-        if let Some(entity_record) = self.entity_records.get_mut(entity) {
-            if entity_record.room_key.is_some() {
-                panic!("Entity already belongs to a Room! Remove the Entity from the Room before adding it to a new Room.");
-            }
-
-            if let Some(room) = self.rooms.get_mut(room_key) {
-                room.add_entity(entity);
-                entity_record.room_key = Some(*room_key);
-            }
+        let mut is_some = false;
+        if let Some(room) = self.rooms.get_mut(room_key) {
+            room.add_entity(entity);
+            is_some = true;
+        }
+        if is_some {
+            self.world_record.entity_enter_room(entity, room_key);
         }
     }
 
     /// Remove an Entity from a Room, associated with the given RoomKey
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &E) {
         if let Some(room) = self.rooms.get_mut(room_key) {
-            if room.remove_entity(entity) {
-                if let Some(entity_record) = self.entity_records.get_mut(entity) {
-                    entity_record.room_key = None;
-                }
+            room.remove_entity(entity);
+            self.world_record.entity_leave_rooms(entity);
+        }
+    }
+
+    /// Remove all Entities from a Room, associated with the given RoomKey
+    fn room_remove_all_entities(&mut self, room_key: &RoomKey) {
+        if let Some(room) = self.rooms.get_mut(room_key) {
+
+            let entities: Vec<E> = room.entities().map(|entity_ref| *entity_ref).collect();
+            for entity in entities {
+                room.remove_entity(&entity);
+                self.world_record.entity_leave_rooms(&entity);
             }
         }
     }
@@ -750,19 +737,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             return room.entities_count();
         }
         return 0;
-    }
-
-    // Handles
-
-    pub fn entity_from_handle<W: WorldRefType<P, E>>(
-        &self,
-        world: W,
-        entity_handle: &EntityHandle,
-    ) -> EntityRef<P, E, W> {
-        if let Some(entity) = self.handle_to_entity(entity_handle) {
-            return self.entity(world, entity);
-        }
-        panic!("No Entity exists for the given Handle!");
     }
 
     // Private methods
@@ -982,8 +956,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     fn spawn_entity_init(&mut self, entity: &E) {
         self.world_record.spawn_entity(entity);
-        self.entity_records
-            .insert(*entity, GlobalEntityRecord::new());
     }
 
     // Entity Scopes
@@ -1076,21 +1048,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for Server<P, E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Option<&E> {
-        if let Some(inner_entity_handle) = entity_handle.inner() {
-            return self.handle_entity_map.get(inner_entity_handle);
-        }
-        return None;
+        return self.world_record.handle_to_entity(entity_handle);
     }
 
     fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
-        let entity_record = self
-            .entity_records
-            .get_mut(entity)
-            .expect("entity does not exist!");
-        if entity_record.entity_handle.is_none() {
-            entity_record.entity_handle = Some(self.handle_entity_map.insert(*entity));
-        }
-
-        entity_record.entity_handle.unwrap().to_outer()
+        return self.world_record.entity_to_handle(entity);
     }
 }

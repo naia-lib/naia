@@ -5,12 +5,7 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{
-    read_list_header,
-    serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    write_list_header, BigMap, EntityActionType, EntityHandle, EntityHandleInner, Manifest,
-    NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS,
-};
+use naia_shared::{read_list_header, serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, BigMap, EntityActionType, EntityHandle, EntityHandleInner, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, NetEntityConverter};
 
 use super::{
     entity_message_sender::EntityMessageSender, entity_record::EntityRecord,
@@ -322,5 +317,28 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             return self.handle_entity_map.get(inner_entity_handle);
         }
         return None;
+    }
+}
+
+impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityConverter for EntityManager<P, E> {
+    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Option<NetEntity> {
+        if let Some(inner_entity_handle) = entity_handle.inner() {
+            if let Some(entity) = self.handle_entity_map.get(inner_entity_handle) {
+                if let Some(entity_record) = self.entity_records.get(entity) {
+                    return Some(entity_record.net_entity);
+                }
+            }
+        }
+        return None;
+    }
+
+    fn net_entity_to_handle(&mut self, net_entity: &NetEntity) -> EntityHandle {
+        if let Some(entity) = self.local_to_world_entity
+            .get(net_entity)
+            .map(|entity_ref| *entity_ref)
+        {
+            return self.entity_to_handle(&entity);
+        }
+        return EntityHandle::empty();
     }
 }
