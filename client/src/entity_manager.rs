@@ -309,7 +309,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     pub fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
         if let Some(entity_record) = self.entity_records.get_mut(entity) {
             if entity_record.entity_handle.is_none() {
-                entity_record.entity_handle = Some(self.handle_entity_map.insert(*entity).to_outer());
+                entity_record.entity_handle =
+                    Some(self.handle_entity_map.insert(*entity).to_outer());
             }
             return entity_record.entity_handle.unwrap();
         }

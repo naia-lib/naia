@@ -7,7 +7,10 @@ use std::{
 };
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{serde::{BitWriter, Serde}, EntityHandle, EntityHandleInner, EntityHandleConverter};
+use naia_shared::{
+    serde::{BitWriter, Serde},
+    EntityHandle, EntityHandleConverter, EntityHandleInner,
+};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, Manifest,
     NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType,
@@ -224,9 +227,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     ) {
         let entity_opt: Option<E> = message
             .entity_handle()
-            .map(|entity_property| entity_property
-                .get(self)
-                .map(|entity_ref| *entity_ref))
+            .map(|entity_property| entity_property.get(self).map(|entity_ref| *entity_ref))
             .flatten();
 
         if let Some(user) = self.users.get(user_key) {

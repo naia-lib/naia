@@ -1,13 +1,13 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use naia_client_socket::Socket;
-use naia_shared::{EntityHandle, EntityHandleConverter};
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
     ConnectionConfig, Manifest, PacketType, PingConfig, ProtocolKindType, Protocolize,
     ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };
+use naia_shared::{EntityHandle, EntityHandleConverter};
 
 use super::{
     client_config::ClientConfig,

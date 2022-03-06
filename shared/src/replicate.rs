@@ -1,6 +1,12 @@
 use naia_serde::{BitReader, BitWrite};
 
-use crate::{diff_mask::DiffMask, property_mutate::PropertyMutator, protocolize::Protocolize, replica_ref::{ReplicaDynMut, ReplicaDynRef}, EntityProperty};
+use crate::{
+    diff_mask::DiffMask,
+    property_mutate::PropertyMutator,
+    protocolize::Protocolize,
+    replica_ref::{ReplicaDynMut, ReplicaDynRef},
+    EntityProperty,
+};
 
 /// A struct that implements Replicate is a Message/Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a

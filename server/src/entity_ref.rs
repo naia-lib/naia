@@ -1,8 +1,8 @@
 use std::{hash::Hash, marker::PhantomData};
 
 use naia_shared::{
-    Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
-    WorldMutType, WorldRefType,
+    Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType,
+    WorldRefType,
 };
 
 use super::{room::RoomKey, server::Server};

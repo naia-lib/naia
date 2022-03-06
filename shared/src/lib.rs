@@ -60,7 +60,7 @@ pub use diff_mask::DiffMask;
 pub use encoder::Encoder;
 pub use entity_action_type::EntityActionType;
 pub use entity_handle::{EntityHandle, EntityHandleInner};
-pub use entity_property::{EntityProperty, EntityHandleConverter};
+pub use entity_property::{EntityHandleConverter, EntityProperty};
 pub use key_store::KeyGenerator;
 pub use keys::NetEntity;
 pub use manifest::Manifest;
