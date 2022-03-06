@@ -12,7 +12,7 @@ use naia_shared::{EntityHandle, EntityHandleConverter};
 use super::{
     client_config::ClientConfig,
     connection::Connection,
-    entity_ref::{EntityMut, EntityRef},
+    entity_ref::EntityRef,
     error::NaiaClientError,
     event::Event,
     handshake_manager::HandshakeManager,
@@ -199,13 +199,40 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
     /// Queues up an Message to be sent to the Server
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
-        if let Some(connection) = &mut self.server_connection {
-            connection
-                .base
-                .message_manager
-                .send_message(message, guaranteed_delivery);
+
+        let entity_opt: Option<E> = message
+            .entity_handle()
+            .map(|entity_property| entity_property.get(self).map(|entity_ref| *entity_ref))
+            .flatten();
+
+        //if let Some(client_tick) = self.client_tick() {
+        //             if let Some(connection) = self.server_connection.as_mut() {
+        //                 connection
+        //                     .entity_manager
+        //                     .message_sender
+        //                     .send_entity_message(entity, message, client_tick);
+        //             }
+        //         }
+
+
+            if let Some(entity) = entity_opt {
+                if let Some(client_tick) = self.client_tick() {
+                    if let Some(connection) = &mut self.server_connection {
+                        connection
+                            .entity_manager
+                            .message_sender
+                            .send_entity_message(&entity, message, client_tick);
+                    }
+                }
+            } else {
+                if let Some(connection) = &mut self.server_connection {
+                    connection
+                        .base
+                        .message_manager
+                        .send_message(message, guaranteed_delivery);
+                }
+            }
         }
-    }
 
     // Entities
 
@@ -214,13 +241,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Panics if the Entity does not exist.
     pub fn entity<'s, W: WorldRefType<P, E>>(&'s self, world: W, entity: &E) -> EntityRef<P, E, W> {
         return EntityRef::new(world, &entity);
-    }
-
-    /// Retrieves an EntityMut that exposes write operations for the
-    /// given Entity.
-    /// Panics if the Entity does not exist.
-    pub fn entity_mut<'s>(&'s mut self, entity: &E) -> EntityMut<P, E> {
-        return EntityMut::new(self, &entity);
     }
 
     /// Return a list of all Entities
@@ -287,20 +307,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 
     pub fn incoming_bandwidth(&mut self) -> f32 {
         return self.io.incoming_bandwidth();
-    }
-
-    // Crate-public functions
-
-    /// Sends a Message to the Server, associated with a given Entity
-    pub(crate) fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R) {
-        if let Some(client_tick) = self.client_tick() {
-            if let Some(connection) = self.server_connection.as_mut() {
-                connection
-                    .entity_manager
-                    .message_sender
-                    .send_entity_message(entity, message, client_tick);
-            }
-        }
     }
 
     // internal functions

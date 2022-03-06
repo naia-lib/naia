@@ -101,7 +101,7 @@ impl App {
     }
 
     fn input(&mut self) {
-        if let Some(_) = self.owned_entity {
+        if let Some(owned_entity) = &self.owned_entity {
             let w = is_key_down(KeyCode::W);
             let s = is_key_down(KeyCode::S);
             let a = is_key_down(KeyCode::A);
@@ -122,7 +122,9 @@ impl App {
                         *command.d = true;
                     }
                 } else {
-                    self.queued_command = Some(KeyCommand::new(w, s, a, d));
+                    let mut key_command = KeyCommand::new(w, s, a, d);
+                    key_command.entity.set(&mut self.client, &owned_entity.confirmed);
+                    self.queued_command = Some(key_command);
                 }
             }
         }
@@ -156,8 +158,7 @@ impl App {
 
                                 // Send command
                                 self.client
-                                    .entity_mut(&owned_entity.confirmed)
-                                    .send_message(&command);
+                                    .send_message(&command, true);
 
                                 // Apply command
                                 if let Some(mut square_ref) = self
