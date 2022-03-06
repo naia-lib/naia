@@ -8,7 +8,7 @@ pub struct EntityAssignment {
 }
 
 impl EntityAssignment {
-    pub fn new(entity_handle: EntityHandle, assign: bool) -> Self {
-        return EntityAssignment::new_complete(entity_handle, assign);
+    pub fn new(assign: bool) -> Self {
+        return EntityAssignment::new_complete(assign);
     }
 }

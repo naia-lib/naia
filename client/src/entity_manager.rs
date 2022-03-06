@@ -306,6 +306,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
+    pub fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
+        if let Some(entity_record) = self.entity_records.get_mut(entity) {
+            if entity_record.entity_handle.is_none() {
+                entity_record.entity_handle = Some(self.handle_entity_map.insert(*entity).to_outer());
+            }
+            return entity_record.entity_handle.unwrap();
+        }
+        return EntityHandle::empty();
+    }
+
     pub fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Option<&E> {
         if let Some(inner_entity_handle) = entity_handle.inner() {
             return self.handle_entity_map.get(inner_entity_handle);

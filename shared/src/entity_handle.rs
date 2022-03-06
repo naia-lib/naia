@@ -1,3 +1,4 @@
+use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 use crate::BigMapKey;
 
 // EntityHandle
@@ -19,6 +20,16 @@ impl EntityHandle {
 
     pub fn inner(&self) -> Option<&EntityHandleInner> {
         return self.inner.as_ref();
+    }
+}
+
+impl Serde for EntityHandle {
+    fn ser<S: BitWrite>(&self, _: &mut S) {
+        panic!("shouldn't call this");
+    }
+
+    fn de(_: &mut BitReader) -> Result<Self, SerdeErr> {
+        panic!("shouldn't call this");
     }
 }
 

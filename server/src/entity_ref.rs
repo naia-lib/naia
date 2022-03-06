@@ -1,7 +1,7 @@
 use std::{hash::Hash, marker::PhantomData};
 
 use naia_shared::{
-    EntityHandle, Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+    Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
     WorldMutType, WorldRefType,
 };
 
@@ -62,10 +62,6 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<'
 
     pub fn id(&self) -> E {
         self.entity
-    }
-
-    pub fn handle(&mut self) -> EntityHandle {
-        self.server.entity_to_handle(&self.entity)
     }
 
     pub fn despawn(&mut self) {

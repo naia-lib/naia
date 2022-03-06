@@ -7,10 +7,7 @@ use std::{
 };
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{
-    serde::{BitWriter, Serde},
-    EntityHandle, EntityHandleInner,
-};
+use naia_shared::{serde::{BitWriter, Serde}, EntityHandle, EntityHandleInner, EntityHandleConverter};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, Manifest,
     NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType,
@@ -225,9 +222,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         message: &R,
         guaranteed_delivery: bool,
     ) {
-        let entity_opt = self
-            .handle_to_entity(&message.entity_handle())
-            .map(|entity_ref| *entity_ref);
+        let entity_opt: Option<E> = message
+            .entity_handle()
+            .map(|entity_property| entity_property
+                .get(self)
+                .map(|entity_ref| *entity_ref))
+            .flatten();
+
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
                 if let Some(entity) = entity_opt {
@@ -763,25 +764,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         panic!("No Entity exists for the given Handle!");
     }
 
-    pub(crate) fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
-        let entity_record = self
-            .entity_records
-            .get_mut(entity)
-            .expect("entity does not exist!");
-        if entity_record.entity_handle.is_none() {
-            entity_record.entity_handle = Some(self.handle_entity_map.insert(*entity));
-        }
-
-        entity_record.entity_handle.unwrap().to_outer()
-    }
-
-    pub(crate) fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Option<&E> {
-        if let Some(inner_entity_handle) = entity_handle.inner() {
-            return self.handle_entity_map.get(inner_entity_handle);
-        }
-        return None;
-    }
-
     // Private methods
 
     fn maintain_socket(&mut self) {
@@ -1088,5 +1070,26 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
             .write()
             .expect("Haven't initialized DiffHandler")
             .deregister_component(entity, component_kind);
+    }
+}
+
+impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for Server<P, E> {
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Option<&E> {
+        if let Some(inner_entity_handle) = entity_handle.inner() {
+            return self.handle_entity_map.get(inner_entity_handle);
+        }
+        return None;
+    }
+
+    fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
+        let entity_record = self
+            .entity_records
+            .get_mut(entity)
+            .expect("entity does not exist!");
+        if entity_record.entity_handle.is_none() {
+            entity_record.entity_handle = Some(self.handle_entity_map.insert(*entity));
+        }
+
+        entity_record.entity_handle.unwrap().to_outer()
     }
 }

@@ -53,7 +53,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             Protocolize, ReplicaDynRef, ReplicaDynMut, serde::{BitReader, BitWrite, Serde}};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
         mod internal {
-            pub use naia_shared::EntityHandle;
+            pub use naia_shared::EntityProperty;
         }
 
         #property_enum_definition
@@ -293,33 +293,40 @@ pub fn dyn_mut_method(protocol_name: &Ident) -> TokenStream {
 
 fn clone_method(replica_name: &Ident, properties: &Vec<Property>) -> TokenStream {
     let mut output = quote! {};
+    let mut entity_property_output = quote! {};
 
     for property in properties.iter() {
-        let new_output_right = match property {
+        match property {
             Property::Normal(property) => {
                 let field_name = &property.variable_name;
-                quote! {
+                let new_output_right = quote! {
                     (*self.#field_name).clone(),
-                }
+                };
+                let new_output_result = quote! {
+                    #output
+                    #new_output_right
+                };
+                output = new_output_result;
             }
             Property::Entity(property) => {
                 let field_name = &property.variable_name;
-                quote! {
-                    self.#field_name.get_handle(),
-                }
+                let new_output_right = quote! {
+                    new_clone.#field_name.mirror(&self.#field_name);
+                };
+                let new_output_result = quote! {
+                    #entity_property_output
+                    #new_output_right
+                };
+                entity_property_output = new_output_result;
             }
         };
-
-        let new_output_result = quote! {
-            #output
-            #new_output_right
-        };
-        output = new_output_result;
     }
 
     return quote! {
         fn clone(&self) -> #replica_name {
-            return #replica_name::new_complete(#output);
+            let mut new_clone = #replica_name::new_complete(#output);
+            #entity_property_output
+            return new_clone;
         }
     };
 }
@@ -381,26 +388,24 @@ pub fn new_complete_method(
 ) -> TokenStream {
     let mut args = quote! {};
     for property in properties.iter() {
-        let new_output_right = match property {
+        match property {
             Property::Normal(property) => {
                 let field_name = &property.variable_name;
                 let field_type = &property.inner_type;
-                quote! {
-                    #field_name: #field_type,
-                }
-            }
-            Property::Entity(property) => {
-                let field_name = &property.variable_name;
-                quote! {
-                    #field_name: EntityHandle,
-                }
-            }
-        };
 
-        let new_output_result = quote! {
-            #args #new_output_right
+                let new_output_right = quote! {
+                    #field_name: #field_type,
+                };
+
+                let new_output_result = quote! {
+                    #args #new_output_right
+                };
+                args = new_output_result;
+            }
+            Property::Entity(_) => {
+                continue;
+            }
         };
-        args = new_output_result;
     }
 
     let mut fields = quote! {};
@@ -418,7 +423,7 @@ pub fn new_complete_method(
                 let field_name = &property.variable_name;
                 let uppercase_variant_name = &property.uppercase_variable_name;
                 quote! {
-                    #field_name: EntityProperty::new(#field_name, #enum_name::#uppercase_variant_name as u8)
+                    #field_name: EntityProperty::new(EntityHandle::empty(), #enum_name::#uppercase_variant_name as u8)
                 }
             }
         };
@@ -616,16 +621,16 @@ fn entity_handle_method(properties: &Vec<Property>) -> TokenStream {
         if let Property::Entity(entity_prop) = property {
             let field_name = &entity_prop.variable_name;
             return quote! {
-                fn entity_handle(&self) -> internal::EntityHandle {
-                    return self.#field_name.get_handle();
+                fn entity_handle(&self) -> Option<&internal::EntityProperty> {
+                    return Some(&self.#field_name);
                 }
             };
         }
     }
 
     return quote! {
-        fn entity_handle(&self) -> internal::EntityHandle {
-            return internal::EntityHandle::empty();
+        fn entity_handle(&self) -> Option<&internal::EntityProperty> {
+            return None;
         }
     };
 }
