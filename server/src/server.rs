@@ -517,7 +517,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         world.despawn_entity(entity);
 
         self.entity_scope_map.remove_entity(entity);
-        self.entity_records.remove(entity);
+        if let Some(entity_record) = self.entity_records.remove(entity) {
+            if let Some(entity_handle) = entity_record.entity_handle {
+                self.handle_entity_map.remove(&entity_handle);
+            }
+        }
     }
 
     //// Entity Scopes
