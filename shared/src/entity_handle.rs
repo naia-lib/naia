@@ -14,9 +14,7 @@ impl EntityHandle {
     }
 
     pub fn empty() -> Self {
-        Self {
-            inner: None,
-        }
+        Self { inner: None }
     }
 
     pub fn inner(&self) -> Option<&EntityHandleInner> {
@@ -30,9 +28,7 @@ pub struct EntityHandleInner(u64);
 
 impl EntityHandleInner {
     pub fn to_outer(self) -> EntityHandle {
-        return EntityHandle {
-            inner: Some(self),
-        };
+        return EntityHandle { inner: Some(self) };
     }
 }
 

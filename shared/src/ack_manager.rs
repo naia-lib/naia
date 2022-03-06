@@ -114,10 +114,7 @@ impl AckManager {
         self.next_packet_index = self.next_packet_index.wrapping_add(1);
     }
 
-    pub fn next_outgoing_packet_header(
-        &mut self,
-        packet_type: PacketType,
-    ) -> StandardHeader {
+    pub fn next_outgoing_packet_header(&mut self, packet_type: PacketType) -> StandardHeader {
         let next_packet_index = self.next_sender_packet_index();
 
         let outgoing = StandardHeader::new(

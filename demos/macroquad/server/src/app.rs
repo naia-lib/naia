@@ -105,15 +105,16 @@ impl App {
                     };
 
                     let square = Square::new(x as u16, y as u16, square_color);
-                    let mut entity = self
-                        .server
-                        .spawn_entity(self.world.proxy_mut());
+                    let mut entity = self.server.spawn_entity(self.world.proxy_mut());
                     let entity_id = entity
                         .insert_component(square)
                         .enter_room(&self.main_room_key)
                         .id();
                     let entity_handle = entity.handle();
-                    self.server.send_entity_message(&user_key, &EntityAssignment::new(entity_handle, true));
+                    self.server.send_entity_message(
+                        &user_key,
+                        &EntityAssignment::new(entity_handle, true),
+                    );
                     self.user_to_prediction_map.insert(user_key, entity_id);
                 }
                 Ok(Event::Disconnection(user_key, user)) => {

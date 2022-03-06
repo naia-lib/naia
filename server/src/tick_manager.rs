@@ -1,7 +1,9 @@
 use std::time::Duration;
 
-use naia_shared::{Tick, Timer};
-use naia_shared::serde::{BitReader, BitWriter, Serde};
+use naia_shared::{
+    serde::{BitReader, BitWriter, Serde},
+    Tick, Timer,
+};
 
 /// Manages the current tick for the host
 pub struct TickManager {

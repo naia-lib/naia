@@ -52,8 +52,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     // Step 2 of Handshake
     pub fn write_challenge_response(&mut self, timestamp: &u64) -> BitWriter {
         let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0)
-            .ser(&mut writer);
+        StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0).ser(&mut writer);
         timestamp.ser(&mut writer);
 
         let timestamp_tag: Tag = {

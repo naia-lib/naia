@@ -1,6 +1,10 @@
 use std::collections::{HashMap, VecDeque};
 
-use naia_shared::{read_list_header, sequence_greater_than, serde::{BitReader, Serde}, Manifest, NetEntity, Protocolize, Tick};
+use naia_shared::{
+    read_list_header, sequence_greater_than,
+    serde::{BitReader, Serde},
+    Manifest, NetEntity, Protocolize, Tick,
+};
 
 /// Handles incoming Entity Messages, buffering them to be received on the
 /// correct tick

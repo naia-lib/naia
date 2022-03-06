@@ -1,12 +1,11 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
+use crate::{io::Io, tick_manager::TickManager};
 use naia_shared::{
     serde::{BitReader, BitWriter, OwnedBitReader},
     BaseConnection, ConnectionConfig, Manifest, PacketType, PingConfig, Protocolize,
     StandardHeader, Tick, WorldMutType,
 };
-use crate::io::Io;
-use crate::tick_manager::TickManager;
 
 use super::{
     entity_manager::EntityManager, error::NaiaClientError, event::Event, ping_manager::PingManager,
@@ -45,10 +44,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
 
     // Incoming data
 
-    pub fn process_incoming_header(
-        &mut self,
-        header: &StandardHeader
-    ) {
+    pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         self.base
             .process_incoming_header(header, &mut Some(&mut self.entity_manager.message_sender));
     }
@@ -101,7 +97,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
     }
 
     // Sends packet and returns whether or not a packet was sent
-    fn send_outgoing_packet(&mut self, io: &mut Io, tick_manager_opt: &Option<TickManager>) -> bool {
+    fn send_outgoing_packet(
+        &mut self,
+        io: &mut Io,
+        tick_manager_opt: &Option<TickManager>,
+    ) -> bool {
         if self.base.message_manager.has_outgoing_messages()
             || self.entity_manager.message_sender.has_outgoing_messages()
         {

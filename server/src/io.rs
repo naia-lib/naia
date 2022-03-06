@@ -114,11 +114,8 @@ impl Io {
                     payload = decoder.decode(payload);
                 }
 
-                return Ok(Some((
-                    address,
-                    OwnedBitReader::new(payload),
-                )));
-            },
+                return Ok(Some((address, OwnedBitReader::new(payload))));
+            }
             Ok(None) => Ok(None),
             Err(err) => Err(err),
         }
