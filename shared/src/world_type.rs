@@ -4,6 +4,7 @@ use super::{
     replicate::{Replicate, ReplicateSafe},
 };
 use naia_serde::BitReader;
+use crate::NetEntityHandleConverter;
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
@@ -53,6 +54,7 @@ pub trait WorldMutType<P: Protocolize, E>: WorldRefType<P, E> + ProtocolInserter
         entity: &E,
         component_kind: &P::Kind,
         reader: &mut BitReader,
+        converter: &dyn NetEntityHandleConverter,
     );
     /// mirrors the state of the same component of two different entities
     /// (setting 1st entity's component to 2nd entity's component's state)

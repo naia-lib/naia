@@ -73,6 +73,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                         for _ in 0..components_num {
                             let component_kind = P::Kind::de(reader).unwrap();
                             manifest.create_replica(component_kind, reader);
+                            // no need for post-read because we don't do anything with this
                         }
                     } else {
                         // set up entity
@@ -87,7 +88,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             // Component Creation //
                             let component_kind = P::Kind::de(reader).unwrap();
 
-                            let new_component = manifest.create_replica(component_kind, reader);
+                            let mut new_component = manifest.create_replica(component_kind, reader);
+
+                            new_component.post_read(&mut self);
 
                             entity_record.component_kinds.insert(component_kind);
                             component_list.push(component_kind);
@@ -131,7 +134,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 EntityActionType::MessageEntity => {
                     let message_kind = P::Kind::de(reader).unwrap();
 
-                    let new_message = manifest.create_replica(message_kind, reader);
+                    let mut new_message = manifest.create_replica(message_kind, reader);
+
+                    new_message.post_read(&mut self);
 
                     event_stream.push_back(Ok(Event::MessageEntity(new_message)));
                 }
@@ -140,7 +145,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     let net_entity = NetEntity::de(reader).unwrap();
                     let component_kind = P::Kind::de(reader).unwrap();
 
-                    let new_component = manifest.create_replica(component_kind, reader);
+                    let mut new_component = manifest.create_replica(component_kind, reader);
+
+                    new_component.post_read(&mut self);
 
                     if !self.local_to_world_entity.contains_key(&net_entity) {
                         // its possible we received a very late duplicate message
@@ -168,7 +175,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                     if let Some(world_entity) = self.local_to_world_entity.get_mut(&net_entity) {
                         // read incoming delta
-                        world.component_read_partial(world_entity, &component_kind, reader);
+                        world.component_read_partial(world_entity, &component_kind, reader, self);
 
                         event_stream.push_back(Ok(Event::UpdateComponent(
                             server_tick,
@@ -282,7 +289,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         entity_records: &HashMap<E, EntityRecord<P::Kind>>,
         client_tick: &Tick,
         world_entity: &E,
-        message: &P,
+        message: &mut P,
     ) {
         if let Some(entity_record) = entity_records.get(world_entity) {
             // write client tick
@@ -293,6 +300,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
             // write message kind
             message.dyn_ref().kind().ser(writer);
+
+            // message pre-write processing
+            message.pre_write(&mut self);
 
             // write payload
             message.write(writer);

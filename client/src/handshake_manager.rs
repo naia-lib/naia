@@ -5,6 +5,7 @@ pub use naia_shared::{
     ConnectionConfig, Manifest, PacketType, ProtocolKindType, Protocolize, ReplicateSafe,
     SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
+use naia_shared::NetEntityHandleConverter;
 
 use super::io::Io;
 
@@ -124,6 +125,7 @@ impl<P: Protocolize> HandshakeManager<P> {
             true.ser(&mut writer);
             // write auth kind
             auth_message.dyn_ref().kind().ser(&mut writer);
+            // no pre-write processing because auth is pre-world
             // write payload
             auth_message.write(&mut writer);
         } else {

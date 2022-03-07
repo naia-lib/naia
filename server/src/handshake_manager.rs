@@ -2,16 +2,14 @@ use std::{collections::HashMap, hash::Hash, marker::PhantomData, net::SocketAddr
 
 use ring::{hmac, hmac::Tag, rand};
 
-use crate::cache_map::CacheMap;
-use naia_shared::serde::BitWriter;
 pub use naia_shared::{
-    serde::{BitReader, Serde},
+    serde::{BitReader, BitWriter, Serde},
     wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, Manifest, PacketType,
     PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe,
-    SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType, FakeEntityConverter
 };
 
-use super::{connection::Connection, io::Io, world_record::WorldRecord};
+use super::{connection::Connection, io::Io, world_record::WorldRecord, cache_map::CacheMap};
 
 pub enum HandshakeResult<P: Protocolize> {
     Invalid,
@@ -93,7 +91,7 @@ impl<P: Protocolize> HandshakeManager<P> {
 
             if has_auth {
                 let auth_kind = P::Kind::de(reader).unwrap();
-                let auth_message = manifest.create_replica(auth_kind, reader);
+                let auth_message = manifest.create_replica(auth_kind, reader, &FakeEntityConverter);
                 return HandshakeResult::AuthUser(auth_message);
             } else {
                 return HandshakeResult::ConnectUser;

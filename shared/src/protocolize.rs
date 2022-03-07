@@ -1,4 +1,4 @@
-use crate::DiffMask;
+use crate::{DiffMask, NetEntityHandleConverter};
 use naia_serde::{BitWrite, Serde};
 use std::{any::TypeId, hash::Hash};
 
@@ -33,10 +33,10 @@ pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
     fn extract_and_insert<N, X: ProtocolInserter<Self, N>>(&self, entity: &N, inserter: &mut X);
     /// Writes data into an outgoing byte stream, sufficient to completely
     /// recreate the Message/Component on the client
-    fn write<S: BitWrite>(&self, writer: &mut S);
+    fn write<S: BitWrite>(&self, writer: &mut S, converter: &dyn NetEntityHandleConverter);
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Message/Component on the client
-    fn write_partial<S: BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S);
+    fn write_partial<S: BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S, converter: &dyn NetEntityHandleConverter);
 }
 
 pub trait ProtocolKindType: Eq + Hash + Copy + Send + Sync + Serde {

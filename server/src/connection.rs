@@ -4,12 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    sequence_greater_than,
-    serde::{BitReader, BitWriter},
-    BaseConnection, ConnectionConfig, Manifest, PacketType, Protocolize, StandardHeader, Tick,
-    WorldRefType,
-};
+use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter}, BaseConnection, ConnectionConfig, Manifest, PacketType, Protocolize, StandardHeader, Tick, WorldRefType, EntityConverter};
 
 use super::{
     entity_manager::EntityManager, entity_message_receiver::EntityMessageReceiver,
@@ -64,16 +59,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         tick_manager_option: &Option<TickManager>,
         manifest: &Manifest<P>,
         reader: &mut BitReader,
+        world_record: &WorldRecord<E, P::Kind>,
     ) {
         if let Some(tick_manager) = tick_manager_option {
             let server_tick = tick_manager.server_tick();
             // Read Entity Messages
+            let mut converter = EntityConverter::new(world_record, &self.entity_manager);
             self.entity_message_receiver
-                .read_messages(server_tick, reader, manifest);
+                .read_messages(server_tick, reader, manifest, &mut converter);
         }
 
         // Read Messages
-        self.base.message_manager.read_messages(reader, manifest);
+        {
+            let mut converter = EntityConverter::new(world_record, &self.entity_manager);
+            self.base.message_manager.read_messages(reader, manifest, &mut converter);
+        }
     }
 
     pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<(E, P)> {
@@ -135,9 +135,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             }
 
             // write messages
-            self.base
-                .message_manager
-                .write_messages(&mut writer, next_packet_index);
+            {
+                let mut converter = EntityConverter::new(world_record, &self.entity_manager);
+                self.base
+                    .message_manager
+                    .write_messages(&mut writer, next_packet_index, &mut converter);
+            }
 
             // write entity actions
             self.entity_manager
