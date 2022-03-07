@@ -478,7 +478,7 @@ pub fn read_to_type_method(
                 let field_name = &property.variable_name;
                 let uppercase_variant_name = &property.uppercase_variable_name;
                 quote! {
-                    let #field_name = EntityProperty::new_read(reader, #enum_name::#uppercase_variant_name as u8);
+                    let #field_name = EntityProperty::new_read(reader, #enum_name::#uppercase_variant_name as u8, converter);
                 }
             }
         };
@@ -491,7 +491,7 @@ pub fn read_to_type_method(
     }
 
     return quote! {
-        fn read_to_type(reader: &mut BitReader) -> #protocol_name {
+        fn read_to_type(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> #protocol_name {
             #prop_reads
 
             return #protocol_name::#replica_name(#replica_name {
@@ -518,7 +518,7 @@ fn read_partial_method(properties: &Vec<Property>) -> TokenStream {
                 let field_name = &property.variable_name;
                 quote! {
                     if bool::de(reader).unwrap() {
-                        EntityProperty::read(&mut self.#field_name, reader);
+                        EntityProperty::read(&mut self.#field_name, reader, converter);
                     }
                 }
             }
@@ -532,7 +532,7 @@ fn read_partial_method(properties: &Vec<Property>) -> TokenStream {
     }
 
     return quote! {
-        fn read_partial(&mut self, reader: &mut BitReader) {
+        fn read_partial(&mut self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) {
             #output
         }
     };
@@ -552,7 +552,7 @@ fn write_method(properties: &Vec<Property>) -> TokenStream {
             Property::Entity(property) => {
                 let field_name = &property.variable_name;
                 quote! {
-                    EntityProperty::write(&self.#field_name, writer);
+                    EntityProperty::write(&self.#field_name, writer, converter);
                 }
             }
         };
@@ -565,7 +565,7 @@ fn write_method(properties: &Vec<Property>) -> TokenStream {
     }
 
     return quote! {
-        fn write<S: BitWrite>(&self, writer: &mut S) {
+        fn write<S: BitWrite>(&self, writer: &mut S, converter: &dyn NetEntityHandleConverter) {
             #output
         }
     };
@@ -594,7 +594,7 @@ fn write_partial_method(enum_name: &Ident, properties: &Vec<Property>) -> TokenS
                 quote! {
                     if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
                         true.ser(writer);
-                        EntityProperty::write(&self.#field_name, writer);
+                        EntityProperty::write(&self.#field_name, writer, converter);
                     } else {
                         false.ser(writer);
                     }
@@ -610,7 +610,7 @@ fn write_partial_method(enum_name: &Ident, properties: &Vec<Property>) -> TokenS
     }
 
     return quote! {
-        fn write_partial<S: BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S) {
+        fn write_partial<S: BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S, converter: &dyn NetEntityHandleConverter) {
             #output
         }
     };

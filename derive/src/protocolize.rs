@@ -27,7 +27,8 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}, sync::RwLock, collections::HashMap};
         use naia_shared::{ProtocolInserter, ProtocolKindType, ReplicateSafe,
-            DiffMask, ReplicaDynRef, ReplicaDynMut, Replicate, Manifest, derive_serde, serde};
+            DiffMask, ReplicaDynRef, ReplicaDynMut, Replicate, Manifest, derive_serde, serde,
+            NetEntityHandleConverter};
 
         #kind_enum_def
 
@@ -382,7 +383,7 @@ fn write_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     for variant_name in variants {
         let new_output_right = quote! {
             #protocol_name::#variant_name(replica) => {
-                replica.write(writer);
+                replica.write(writer, converter);
             }
         };
         let new_output_result = quote! {
@@ -393,7 +394,7 @@ fn write_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     }
 
     return quote! {
-        fn write<S: serde::BitWrite>(&self, writer: &mut S) {
+        fn write<S: serde::BitWrite>(&self, writer: &mut S, converter: &dyn NetEntityHandleConverter) {
             match self {
                 #variant_definitions
             }
@@ -407,7 +408,7 @@ fn write_partial_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenSt
     for variant_name in variants {
         let new_output_right = quote! {
             #protocol_name::#variant_name(replica) => {
-                replica.write_partial(diff_mask, writer);
+                replica.write_partial(diff_mask, writer, converter);
             }
         };
         let new_output_result = quote! {
@@ -418,7 +419,7 @@ fn write_partial_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenSt
     }
 
     return quote! {
-        fn write_partial<S: serde::BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S) {
+        fn write_partial<S: serde::BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S, converter: &dyn NetEntityHandleConverter) {
             match self {
                 #variant_definitions
             }
