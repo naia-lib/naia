@@ -221,7 +221,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     ) {
         let entity_opt: Option<E> = message
             .entity_handle()
-            .map(|entity_property| entity_property.get(self));
+            .map(|entity_property| entity_property.get(self))
+            .flatten();
 
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {

@@ -78,7 +78,7 @@ impl<P: Protocolize> MessageManager<P> {
     // MessageWriter
 
     /// Write into outgoing packet
-    pub fn write_messages(&mut self, writer: &mut BitWriter, packet_index: PacketIndex, converter: &mut dyn NetEntityHandleConverter) {
+    pub fn write_messages(&mut self, writer: &mut BitWriter, packet_index: PacketIndex, converter: &dyn NetEntityHandleConverter) {
         let mut message_count: u16 = 0;
 
         // Header

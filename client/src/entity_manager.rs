@@ -5,7 +5,7 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{read_list_header, serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, BigMap, EntityActionType, EntityHandle, EntityHandleInner, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, NetEntityHandleConverter};
+use naia_shared::{read_list_header, serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, BigMap, EntityActionType, EntityHandle, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, NetEntityHandleConverter, EntityProperty, ReplicateSafe, FakeEntityConverter, EntityHandleConverter};
 
 use super::{
     entity_message_sender::EntityMessageSender, entity_record::EntityRecord,
@@ -16,7 +16,7 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
     local_to_world_entity: HashMap<NetEntity, E>,
     pub message_sender: EntityMessageSender<P, E>,
-    pub handle_entity_map: BigMap<EntityHandleInner, E>,
+    pub handle_entity_map: BigMap<EntityHandle, E>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
@@ -64,39 +64,40 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             match message_type {
                 // Entity Creation
                 EntityActionType::SpawnEntity => {
-                    let local_id = NetEntity::de(reader).unwrap();
+                    let net_entity = NetEntity::de(reader).unwrap();
                     let components_num = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
-                    if self.local_to_world_entity.contains_key(&local_id) {
+                    if self.local_to_world_entity.contains_key(&net_entity) {
                         // its possible we received a very late duplicate message
                         warn!("attempted to insert duplicate entity");
                         // continue reading, just don't do anything with the data
                         for _ in 0..components_num {
                             let component_kind = P::Kind::de(reader).unwrap();
-                            manifest.create_replica(component_kind, reader);
-                            // no need for post-read because we don't do anything with this
+                            manifest.create_replica(component_kind, reader, &FakeEntityConverter);
                         }
                     } else {
                         // set up entity
                         let world_entity = world.spawn_entity();
-                        self.local_to_world_entity.insert(local_id, world_entity);
+                        self.local_to_world_entity.insert(net_entity, world_entity);
+                        let entity_handle = self.handle_entity_map.insert(world_entity);
                         self.entity_records
-                            .insert(world_entity, EntityRecord::new(local_id));
-                        let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
+                            .insert(world_entity, EntityRecord::new(net_entity, entity_handle));
 
                         let mut component_list: Vec<P::Kind> = Vec::new();
                         for _ in 0..components_num {
                             // Component Creation //
                             let component_kind = P::Kind::de(reader).unwrap();
 
-                            let mut new_component = manifest.create_replica(component_kind, reader);
+                            let new_component = manifest.create_replica(component_kind, reader, self);
 
-                            new_component.post_read(&mut self);
-
-                            entity_record.component_kinds.insert(component_kind);
                             component_list.push(component_kind);
 
                             new_component.extract_and_insert(&world_entity, world);
                             ////////////////////////
+                        }
+
+                        let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
+                        for component_kind in &component_list {
+                            entity_record.component_kinds.insert(*component_kind);
                         }
 
                         event_stream
@@ -134,9 +135,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 EntityActionType::MessageEntity => {
                     let message_kind = P::Kind::de(reader).unwrap();
 
-                    let mut new_message = manifest.create_replica(message_kind, reader);
-
-                    new_message.post_read(&mut self);
+                    let new_message = manifest.create_replica(message_kind, reader, self);
 
                     event_stream.push_back(Ok(Event::MessageEntity(new_message)));
                 }
@@ -145,9 +144,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     let net_entity = NetEntity::de(reader).unwrap();
                     let component_kind = P::Kind::de(reader).unwrap();
 
-                    let mut new_component = manifest.create_replica(component_kind, reader);
-
-                    new_component.post_read(&mut self);
+                    let new_component = manifest.create_replica(component_kind, reader, self);
 
                     if !self.local_to_world_entity.contains_key(&net_entity) {
                         // its possible we received a very late duplicate message
@@ -173,7 +170,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     let net_entity = NetEntity::de(reader).unwrap();
                     let component_kind = P::Kind::de(reader).unwrap();
 
-                    if let Some(world_entity) = self.local_to_world_entity.get_mut(&net_entity) {
+                    if let Some(world_entity) = self.local_to_world_entity.get(&net_entity) {
                         // read incoming delta
                         world.component_read_partial(world_entity, &component_kind, reader, self);
 
@@ -243,12 +240,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
             // Find how many messages will fit into the packet
             for (_, client_tick, entity, message) in entity_messages.iter() {
-                Self::write_message(
+                self.write_message(
                     &mut counter,
                     &self.entity_records,
                     &client_tick,
                     &entity,
-                    &message,
+                    message,
                 );
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
@@ -269,7 +266,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     entity_messages.pop_front().unwrap();
 
                 // Write message
-                Self::write_message(
+                self.write_message(
                     writer,
                     &self.entity_records,
                     &client_tick,
@@ -285,11 +282,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
     pub fn write_message<S: BitWrite>(
+        &self,
         writer: &mut S,
         entity_records: &HashMap<E, EntityRecord<P::Kind>>,
         client_tick: &Tick,
         world_entity: &E,
-        message: &mut P,
+        message: &P,
     ) {
         if let Some(entity_record) = entity_records.get(world_entity) {
             // write client tick
@@ -301,54 +299,39 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             // write message kind
             message.dyn_ref().kind().ser(writer);
 
-            // message pre-write processing
-            message.pre_write(&mut self);
-
             // write payload
-            message.write(writer);
+            message.write(writer, self);
         } else {
             panic!("Cannot find the entity record to serialize entity message!");
         }
     }
 
-    pub fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
-        if let Some(entity_record) = self.entity_records.get_mut(entity) {
-            if entity_record.entity_handle.is_none() {
-                entity_record.entity_handle =
-                    Some(self.handle_entity_map.insert(*entity).to_outer());
-            }
-            return entity_record.entity_handle.unwrap();
+    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity_property: &EntityProperty, message: &R, tick: Tick) {
+        if let Some(entity) = entity_property.get(self) {
+            self.message_sender.send_entity_message(&entity, message, tick);
         }
-        return EntityHandle::empty();
+    }
+}
+
+impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for EntityManager<P, E> {
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
+        *self.handle_entity_map.get(entity_handle).expect("entity does not exist for given handle!")
     }
 
-    pub fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Option<&E> {
-        if let Some(inner_entity_handle) = entity_handle.inner() {
-            return self.handle_entity_map.get(inner_entity_handle);
-        }
-        return None;
+    fn entity_to_handle(&self, entity: &E) -> EntityHandle {
+        self.entity_records.get(entity).expect("entity does not exist!").entity_handle
     }
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityManager<P, E> {
-    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Option<NetEntity> {
-        if let Some(inner_entity_handle) = entity_handle.inner() {
-            if let Some(entity) = self.handle_entity_map.get(inner_entity_handle) {
-                if let Some(entity_record) = self.entity_records.get(entity) {
-                    return Some(entity_record.net_entity);
-                }
-            }
-        }
-        return None;
+    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity {
+        let entity = self.handle_entity_map.get(entity_handle).expect("no entity exists for the given handle!");
+        let entity_record = self.entity_records.get(entity).unwrap();
+        return entity_record.net_entity;
     }
 
-    fn net_entity_to_handle(&mut self, net_entity: &NetEntity) -> EntityHandle {
-        if let Some(entity) = self.local_to_world_entity
-            .get(net_entity)
-            .map(|entity_ref| *entity_ref)
-        {
-            return self.entity_to_handle(&entity);
-        }
-        return EntityHandle::empty();
+    fn net_entity_to_handle(&self, net_entity: &NetEntity) -> EntityHandle {
+        let entity = self.local_to_world_entity.get(net_entity).expect("no entity exists associated with given net entity");
+        return self.entity_to_handle(entity);
     }
 }

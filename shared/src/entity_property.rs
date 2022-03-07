@@ -6,13 +6,13 @@ use crate::{property_mutate::PropertyMutator, EntityHandle, Property, NetEntity,
 
 #[derive(Clone)]
 pub struct EntityProperty {
-    handle_prop: Property<EntityHandle>,
+    handle_prop: Property<Option<EntityHandle>>,
 }
 
 impl EntityProperty {
-    pub fn new(handle: EntityHandle, mutator_index: u8) -> Self {
+    pub fn new(mutator_index: u8) -> Self {
         Self {
-            handle_prop: Property::<EntityHandle>::new(handle, mutator_index),
+            handle_prop: Property::<Option<EntityHandle>>::new(None, mutator_index),
         }
     }
 
@@ -20,36 +20,50 @@ impl EntityProperty {
         *self.handle_prop = other.handle();
     }
 
-    pub(crate) fn handle(&self) -> EntityHandle {
+    pub(crate) fn handle(&self) -> Option<EntityHandle> {
         *self.handle_prop
     }
 
     // Serialization / deserialization
 
     pub fn write<S: BitWrite>(&self, writer: &mut S, converter: &dyn NetEntityHandleConverter) {
-        converter
-            .handle_to_net_entity(&self.handle_prop)
+        (*self.handle_prop)
+            .map(|handle| converter.handle_to_net_entity(&handle))
             .ser(writer);
     }
 
     pub fn new_read(reader: &mut BitReader, mutator_index: u8, converter: &dyn NetEntityHandleConverter) -> Self {
-        let net_entity = NetEntity::de(reader).unwrap();
-        let handle = converter.net_entity_to_handle(&net_entity);
-        let mut new_prop = Self::new(handle, mutator_index);
-        *new_prop.handle_prop = handle;
-        return new_prop;
+        if let Some(net_entity) = Option::<NetEntity>::de(reader).unwrap() {
+            let handle = converter.net_entity_to_handle(&net_entity);
+            let mut new_prop = Self::new(mutator_index);
+            *new_prop.handle_prop = Some(handle);
+            return new_prop;
+        } else {
+            let mut new_prop = Self::new(mutator_index);
+            *new_prop.handle_prop = None;
+            return new_prop;
+        }
     }
 
     pub fn read(&mut self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) {
-        let net_entity = NetEntity::de(reader).unwrap();
-        let handle = converter.net_entity_to_handle(&net_entity);
-        *self.handle_prop = handle;
+        if let Some(net_entity) = Option::<NetEntity>::de(reader).unwrap() {
+            let handle = converter.net_entity_to_handle(&net_entity);
+            *self.handle_prop = Some(handle);
+        } else {
+            *self.handle_prop = None;
+        }
     }
 
     // Comparison
 
     pub fn equals(&self, other: &EntityProperty) -> bool {
-        return self.handle_prop.equals(&other.handle_prop);
+        if let Some(handle) = *self.handle_prop {
+            if let Some(other_handle) = *other.handle_prop {
+                return handle == other_handle;
+            }
+            return false
+        }
+        return other.handle_prop.is_none();
     }
 
     // Internal
@@ -61,9 +75,10 @@ impl EntityProperty {
     pub fn get<E: Copy + Eq + Hash>(
         &self,
         handler: &dyn EntityHandleConverter<E>,
-    ) -> E {
-        let handle = *self.handle_prop;
-        return handler.handle_to_entity(&handle);
+    ) -> Option<E> {
+        (*self.handle_prop)
+            .map(|handle| handler
+                .handle_to_entity(&handle))
     }
 
     pub fn set<E: Copy + Eq + Hash>(
@@ -72,7 +87,7 @@ impl EntityProperty {
         entity: &E,
     ) {
         let new_handle = handler.entity_to_handle(entity);
-        *self.handle_prop = new_handle;
+        *self.handle_prop = Some(new_handle);
     }
 }
 

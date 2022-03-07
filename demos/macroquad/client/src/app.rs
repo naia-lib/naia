@@ -123,7 +123,7 @@ impl App {
                     }
                 } else {
                     let mut key_command = KeyCommand::new(w, s, a, d);
-                    key_command.entity.set(&mut self.client, &owned_entity.confirmed);
+                    key_command.entity.set(&self.client, &owned_entity.confirmed);
                     self.queued_command = Some(key_command);
                 }
             }
@@ -203,11 +203,11 @@ impl App {
                             }
                             ////////////////////////////////
 
-                            self.owned_entity = Some(OwnedEntity::new(*entity, prediction_entity));
+                            self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
                         } else {
                             let mut disowned: bool = false;
                             if let Some(owned_entity) = &self.owned_entity {
-                                if owned_entity.confirmed == *entity {
+                                if owned_entity.confirmed == entity {
                                     self.world
                                         .proxy_mut()
                                         .despawn_entity(&owned_entity.predicted);

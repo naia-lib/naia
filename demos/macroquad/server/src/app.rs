@@ -125,7 +125,11 @@ impl App {
                     self.user_squares.insert(user_key, entity_id);
 
                     // Send an Entity Assignment message to the User that owns the Square
-                    let mut assignment_message = EntityAssignment::new(&self.server, &entity_id, true);
+                    let mut assignment_message = EntityAssignment::new(true);
+                    assignment_message.entity.set(&self.server, &entity_id);
+                    //eventually would like to do this like:
+                    //self.server.entity_property(assigment_message).set(&entity_id);
+
                     self.server
                         .send_message(&user_key, &assignment_message, true);
                 }
