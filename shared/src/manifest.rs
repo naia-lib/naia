@@ -1,5 +1,6 @@
 use naia_serde::BitReader;
 use std::collections::HashMap;
+use crate::NetEntityHandleConverter;
 
 use super::{protocolize::Protocolize, replica_builder::ReplicaBuilder};
 
@@ -29,11 +30,11 @@ impl<P: Protocolize> Manifest<P> {
 
     /// Creates a Message/Component instance, given a NaiaId and a
     /// payload, typically from an incoming packet
-    pub fn create_replica(&self, component_kind: P::Kind, reader: &mut BitReader) -> P {
+    pub fn create_replica(&self, component_kind: P::Kind, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> P {
         let replica_builder = self
             .builder_map
             .get(&component_kind)
             .expect("No ReplicaBuilder registered for given NaiaId!");
-        return replica_builder.as_ref().build(reader);
+        return replica_builder.as_ref().build(reader, converter);
     }
 }

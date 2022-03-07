@@ -1,10 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
-use naia_shared::{
-    read_list_header, sequence_greater_than,
-    serde::{BitReader, Serde},
-    Manifest, NetEntity, Protocolize, Tick,
-};
+use naia_shared::{read_list_header, sequence_greater_than, serde::{BitReader, Serde}, Manifest, NetEntity, Protocolize, Tick, NetEntityHandleConverter};
 
 /// Handles incoming Entity Messages, buffering them to be received on the
 /// correct tick
@@ -30,9 +26,10 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
         server_tick: Tick,
         reader: &mut BitReader,
         manifest: &Manifest<P>,
+        converter: &mut dyn NetEntityHandleConverter,
     ) {
         let message_count = read_list_header(reader);
-        self.process_incoming_messages(server_tick, reader, manifest, message_count);
+        self.process_incoming_messages(server_tick, reader, manifest, message_count, converter);
     }
 
     /// Given incoming packet data, read transmitted Entity Message and store
@@ -43,13 +40,14 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
         reader: &mut BitReader,
         manifest: &Manifest<P>,
         message_count: u16,
+        converter: &dyn NetEntityHandleConverter,
     ) {
         for _x in 0..message_count {
-            let client_tick = u16::de(reader).unwrap();
+            let client_tick = Tick::de(reader).unwrap();
             let owned_entity = NetEntity::de(reader).unwrap();
             let replica_kind: P::Kind = P::Kind::de(reader).unwrap();
 
-            let new_message = manifest.create_replica(replica_kind, reader);
+            let new_message = manifest.create_replica(replica_kind, reader, converter);
 
             if !self.incoming_messages.push_back(
                 client_tick,

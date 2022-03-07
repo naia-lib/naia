@@ -3,13 +3,13 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{BigMap, EntityHandle, EntityHandleConverter, EntityHandleInner, ProtocolKindType};
+use naia_shared::{BigMap, EntityHandle, EntityHandleConverter, ProtocolKindType};
 
 use super::{global_entity_record::GlobalEntityRecord, room::RoomKey};
 
 pub struct WorldRecord<E: Copy + Eq + Hash, K: ProtocolKindType> {
     entity_records: HashMap<E, GlobalEntityRecord<K>>,
-    handle_entity_map: BigMap<EntityHandleInner, E>,
+    handle_entity_map: BigMap<EntityHandle, E>,
 }
 
 impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
@@ -26,7 +26,8 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
         if self.entity_records.contains_key(entity) {
             panic!("entity already initialized!");
         }
-        self.entity_records.insert(*entity, GlobalEntityRecord::new());
+        let entity_handle = self.handle_entity_map.insert(*entity);
+        self.entity_records.insert(*entity, GlobalEntityRecord::new(entity_handle));
     }
 
     pub fn despawn_entity(&mut self, entity: &E) -> Option<GlobalEntityRecord<K>> {
@@ -98,22 +99,15 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
 }
 
 impl<E: Copy + Eq + Hash, K: ProtocolKindType> EntityHandleConverter<E> for WorldRecord<E, K> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Option<&E> {
-        if let Some(inner_entity_handle) = entity_handle.inner() {
-            return self.handle_entity_map.get(inner_entity_handle);
-        }
-        return None;
+    fn handle_to_entity(&self, handle: &EntityHandle) -> E {
+        return *self.handle_entity_map.get(handle).expect("should always be an entity for a given handle");
     }
 
-    fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
-        let entity_record = self
+    fn entity_to_handle(&self, entity: &E) -> EntityHandle {
+        return self
             .entity_records
-            .get_mut(entity)
-            .expect("entity does not exist!");
-        if entity_record.entity_handle.is_none() {
-            entity_record.entity_handle = Some(self.handle_entity_map.insert(*entity));
-        }
-
-        entity_record.entity_handle.unwrap().to_outer()
+            .get(entity)
+            .expect("entity does not exist!")
+            .entity_handle;
     }
 }

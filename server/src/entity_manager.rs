@@ -7,9 +7,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-                  write_list_header, DiffMask, KeyGenerator, NetEntity, PacketIndex, PacketNotifiable,
-                  Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS};
+use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, DiffMask, KeyGenerator, NetEntity, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, NetEntityConverter, EntityConverter};
 
 use super::{
     entity_action::EntityAction, global_diff_handler::GlobalDiffHandler,
@@ -317,10 +315,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     component_kind.ser(writer);
 
                     // write payload
-                    world
+                    let component = world
                         .component_of_kind(global_entity, &component_kind)
-                        .expect("Component does not exist in World")
-                        .write(writer);
+                        .expect("Component does not exist in World");
+
+                    {
+                        let converter = EntityConverter::new(world_record, self);
+                        component.write(writer, &converter);
+                    }
 
                     // only clear diff mask if we are actually writing the packet
                     if is_writing {
@@ -354,7 +356,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 message.dyn_ref().kind().ser(writer);
 
                 // write message payload
-                message.write(writer);
+                {
+                    let converter = EntityConverter::new(world_record, self);
+                    message.write(writer, &converter);
+                }
 
                 // write to record, if we are writing to this packet
                 if is_writing {
@@ -371,10 +376,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 component_kind.ser(writer);
 
                 // write component payload
-                world
+                let component = world
                     .component_of_kind(global_entity, component_kind)
-                    .expect("Component does not exist in World")
-                    .write(writer);
+                    .expect("Component does not exist in World");
+
+                {
+                    let converter = EntityConverter::new(world_record, self);
+                    component
+                        .write(writer, &converter);
+                }
 
                 // if we are actually writing this packet
                 if is_writing {
@@ -406,10 +416,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     .clone();
 
                 // write payload
-                world
-                    .component_of_kind(global_entity, component_kind)
-                    .expect("Component does not exist in World")
-                    .write_partial(&diff_mask, writer);
+                {
+                    let converter = EntityConverter::new(world_record, self);
+                    world
+                        .component_of_kind(global_entity, component_kind)
+                        .expect("Component does not exist in World")
+                        .write_partial(&diff_mask, writer, &converter);
+                }
+
 
                 ////////
                 if is_writing {
@@ -714,5 +728,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash> PacketNotifiable for EntityManager<P, 
             self.sent_updates.remove(&dropped_packet_index);
             self.sent_actions.remove(&dropped_packet_index);
         }
+    }
+}
+
+impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityConverter<E> for EntityManager<P, E> {
+    fn entity_to_net_entity(&self, entity: &E) -> NetEntity {
+        return self.entity_records.get(entity).expect("entity does not exist for this connection!").net_entity;
+    }
+
+    fn net_entity_to_entity(&self, net_entity: &NetEntity) -> E {
+        return *self.local_to_global_entity_map.get(net_entity).expect("entity does not exist for this connection!");
     }
 }

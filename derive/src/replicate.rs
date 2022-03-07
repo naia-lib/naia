@@ -50,7 +50,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
         use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateSafe, PropertyMutator,
-            Protocolize, ReplicaDynRef, ReplicaDynMut, serde::{BitReader, BitWrite, Serde}};
+            Protocolize, ReplicaDynRef, ReplicaDynMut, serde::{BitReader, BitWrite, Serde}, NetEntityHandleConverter};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
         mod internal {
             pub use naia_shared::EntityProperty;
@@ -66,8 +66,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             fn kind(&self) -> #protocol_kind_name {
                 return self.kind;
             }
-            fn build(&self, reader: &mut BitReader) -> #protocol_name {
-                return #replica_name::read_to_type(reader);
+            fn build(&self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> #protocol_name {
+                return #replica_name::read_to_type(reader, converter);
             }
         }
         impl #replica_name {

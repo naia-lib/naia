@@ -221,8 +221,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     ) {
         let entity_opt: Option<E> = message
             .entity_handle()
-            .map(|entity_property| entity_property.get(self).map(|entity_ref| *entity_ref))
-            .flatten();
+            .map(|entity_property| entity_property.get(self));
 
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
@@ -864,6 +863,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                                     &self.tick_manager,
                                     &self.shared_config.manifest,
                                     &mut reader,
+                                    &self.world_record
                                 );
                             }
                             None => {
@@ -1047,11 +1047,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for Server<P, E> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Option<&E> {
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
         return self.world_record.handle_to_entity(entity_handle);
     }
 
-    fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
+    fn entity_to_handle(&self, entity: &E) -> EntityHandle {
         return self.world_record.entity_to_handle(entity);
     }
 }
