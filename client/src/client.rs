@@ -200,39 +200,26 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Queues up an Message to be sent to the Server
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
 
-        let entity_opt: Option<E> = message
-            .entity_handle()
-            .map(|entity_property| entity_property.get(self).map(|entity_ref| *entity_ref))
-            .flatten();
+        if let Some(entity_prop) = message.entity_handle() {
+            if self.server_connection.is_none() {
+                return;
+            }
+            if let Some(client_tick) = self.client_tick() {
+                let connection = self.server_connection.as_mut().unwrap();
+                connection
+                    .entity_manager
+                    .send_entity_message(entity_prop, message, client_tick);
+            }
 
-        //if let Some(client_tick) = self.client_tick() {
-        //             if let Some(connection) = self.server_connection.as_mut() {
-        //                 connection
-        //                     .entity_manager
-        //                     .message_sender
-        //                     .send_entity_message(entity, message, client_tick);
-        //             }
-        //         }
-
-
-            if let Some(entity) = entity_opt {
-                if let Some(client_tick) = self.client_tick() {
-                    if let Some(connection) = &mut self.server_connection {
-                        connection
-                            .entity_manager
-                            .message_sender
-                            .send_entity_message(&entity, message, client_tick);
-                    }
-                }
-            } else {
-                if let Some(connection) = &mut self.server_connection {
-                    connection
-                        .base
-                        .message_manager
-                        .send_message(message, guaranteed_delivery);
-                }
+        } else {
+            if let Some(connection) = &mut self.server_connection {
+                connection
+                    .base
+                    .message_manager
+                    .send_message(message, guaranteed_delivery);
             }
         }
+    }
 
     // Entities
 
@@ -478,17 +465,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for Client<P, E> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Option<&E> {
-        if let Some(connection) = &self.server_connection {
-            return connection.entity_manager.handle_to_entity(entity_handle);
-        }
-        return None;
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
+        let connection = self.server_connection.as_ref().expect("cannot handle entity properties unless connection is established");
+        return connection.entity_manager.handle_to_entity(entity_handle);
     }
 
-    fn entity_to_handle(&mut self, entity: &E) -> EntityHandle {
-        if let Some(connection) = &mut self.server_connection {
-            return connection.entity_manager.entity_to_handle(entity);
-        }
-        return EntityHandle::empty();
+    fn entity_to_handle(&self, entity: &E) -> EntityHandle {
+        let connection = self.server_connection.as_ref().expect("cannot handle entity properties unless connection is established");
+        return connection.entity_manager.entity_to_handle(entity);
     }
 }

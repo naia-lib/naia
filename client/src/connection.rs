@@ -67,7 +67,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             // Read Messages
             self.base
                 .message_manager
-                .read_messages(&mut reader, manifest);
+                .read_messages(&mut reader, manifest, &self.entity_manager);
 
             // Read Entity Actions
             self.entity_manager.read_actions(
@@ -125,7 +125,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             // write messages
             self.base
                 .message_manager
-                .write_messages(&mut writer, next_packet_index);
+                .write_messages(&mut writer, next_packet_index, &self.entity_manager);
 
             // send packet
             io.send_writer(&mut writer);
