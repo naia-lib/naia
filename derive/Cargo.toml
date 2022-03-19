@@ -1,6 +1,6 @@
 [package]
 name = "naia-derive"
-version = "0.7.4"
+version = "0.8.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Procedural macros to simplify implementation of Naia ReplicateSafe & ProtocolType traits"
 documentation = "https://docs.rs/naia-derive"
@@ -22,5 +22,5 @@ proc-macro = true
 
 [dependencies]
 proc-macro2 = "1.0"
-syn = { version = "=1.0.86", features = ["clone-impls"] }
+syn = { version = "1.0.86", features = ["clone-impls"] }
 quote = "1.0"
