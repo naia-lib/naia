@@ -1,6 +1,6 @@
 [package]
 name = "naia-hecs-client"
-version = "0.7.3"
+version = "0.8.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Library to faciliate naia_client & Hecs interop"
 homepage = "https://github.com/naia-rs/naia"
@@ -19,5 +19,5 @@ mquad = [ "naia-client/mquad", "naia-hecs-shared/mquad" ]
 
 [dependencies]
 naia-client = { version = "=0.7.4", path = "../../../client" }
-naia-hecs-shared = { version = "=0.7.3", path = "../shared" }
+naia-hecs-shared = { version = "0.8", path = "../shared" }
 hecs = { version = "=0.5.2" }
