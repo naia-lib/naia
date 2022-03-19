@@ -1,6 +1,6 @@
 [package]
 name = "naia-bevy-server"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Library to faciliate naia_server & Bevy interop"
 homepage = "https://github.com/naia-rs/naia"
@@ -18,4 +18,4 @@ use-webrtc = [ "naia-server/use-webrtc" ]
 [dependencies]
 naia-server = { version = "0.8", path = "../../../server", features = ["bevy_support"] }
 naia-bevy-shared = { version = "0.9", path = "../shared" }
-bevy = { version="=0.6.0", default-features=false }
+bevy = { version = "0.6", default-features=false }
