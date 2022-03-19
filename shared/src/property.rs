@@ -53,8 +53,8 @@ impl<T: Clone + DeBin + SerBin + PartialEq> Property<T> {
     fn read_inner(reader: &mut PacketReader) -> T {
         let length = reader.read_u8();
 
-        let buffer = reader.get_buffer();
-        let cursor = reader.get_cursor();
+        let buffer = reader.buffer();
+        let cursor = reader.cursor();
 
         let start: usize = cursor.position() as usize;
         let end: usize = start + (length as usize);

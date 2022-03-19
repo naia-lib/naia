@@ -15,5 +15,5 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 naia-client = { version = "=0.7.4", path = "../../../client", features = ["bevy_support", "wbindgen"] }
-naia-bevy-shared = { version = "=0.7.3", path = "../shared" }
+naia-bevy-shared = { version = "0.8", path = "../shared" }
 bevy = { version="=0.6.0", default-features=false }

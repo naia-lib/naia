@@ -125,8 +125,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Server<P, E> {
     pub fn listen(&mut self, server_addrs: ServerAddrs) {
         self.socket.listen(server_addrs);
         self.io.load(
-            self.socket.get_packet_sender(),
-            self.socket.get_packet_receiver(),
+            self.socket.packet_sender(),
+            self.socket.packet_receiver(),
         );
     }
 
