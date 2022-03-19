@@ -7,7 +7,7 @@ use naia_client::{Client as NaiaClient, ClientConfig, Event};
 use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
 
 use naia_macroquad_demo_shared::{
-    behavior as shared_behavior, get_server_address, get_shared_config,
+    behavior as shared_behavior, get_shared_config,
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
 };
 
@@ -28,12 +28,11 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Macroquad Client Demo started");
 
-        let server_address = get_server_address();
         let auth = Auth::new("charlie", "12345");
 
         let mut client = Client::new(ClientConfig::default(), get_shared_config());
         client.auth(auth);
-        client.connect(server_address);
+        client.connect("http://127.0.0.1:14191");
 
         App {
             client,
