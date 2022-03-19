@@ -11,8 +11,7 @@ use naia_client::{Client as NaiaClient, ClientConfig, Event, ProtocolType};
 use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_basic_demo_shared::{
-    get_server_address, get_shared_config,
-    protocol::{Auth, Character, Protocol, StringMessage},
+    get_shared_config, protocol::{Auth, Character, Protocol, StringMessage},
 };
 
 type World = DemoWorld<Protocol>;
@@ -28,12 +27,11 @@ impl App {
     pub fn new() -> Self {
         info!("Basic Naia Client Demo started");
 
-        let server_address = get_server_address();
         let auth = Auth::new("charlie", "12345");
 
         let mut client = Client::new(ClientConfig::default(), get_shared_config());
         client.auth(auth);
-        client.connect(server_address);
+        client.connect("http://127.0.0.1:14191");
 
         App {
             client,

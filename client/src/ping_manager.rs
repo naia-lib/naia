@@ -62,7 +62,7 @@ impl PingManager {
     /// Process an incoming pong payload
     pub fn process_pong(&mut self, pong_payload: &[u8]) {
         let mut reader = PacketReader::new(&pong_payload);
-        let ping_index = reader.get_cursor().read_u16::<BigEndian>().unwrap();
+        let ping_index = reader.cursor().read_u16::<BigEndian>().unwrap();
 
         match self.sent_pings.remove(ping_index) {
             None => {}

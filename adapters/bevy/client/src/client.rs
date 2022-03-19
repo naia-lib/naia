@@ -43,8 +43,8 @@ impl<'a, P: ProtocolType> Client<'a, P> {
         self.client.auth(auth);
     }
 
-    pub fn connect(&mut self, server_address: SocketAddr) {
-        self.client.connect(server_address);
+    pub fn connect(&mut self, server_session_url: &str) {
+        self.client.connect(server_session_url);
     }
 
     pub fn server_address(&self) -> SocketAddr {

@@ -1,10 +1,11 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use naia_client_socket::{Packet, Socket};
+
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
     ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
-    WorldMutType, WorldRefType,
+    WorldMutType, WorldRefType, SocketConfig
 };
 
 use super::{
@@ -27,9 +28,8 @@ pub struct Client<P: ProtocolType, E: Copy + Eq + Hash> {
     manifest: Manifest<P>,
     // Connection
     connection_config: ConnectionConfig,
-    socket: Socket,
+    socket_config: SocketConfig,
     io: Io,
-    address: Option<SocketAddr>,
     server_connection: Option<Connection<P, E>>,
     handshake_manager: HandshakeManager<P>,
     // Events
@@ -54,8 +54,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
             client_config.rtt_sample_size,
         );
 
-        let socket = Socket::new(client_config.socket_config);
-
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
 
         let tick_manager = {
@@ -74,9 +72,8 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
             manifest: shared_config.manifest,
             // Connection
             io: Io::new(),
-            socket,
             connection_config,
-            address: None,
+            socket_config: client_config.socket_config.clone(),
             server_connection: None,
             handshake_manager,
             // Events
@@ -96,13 +93,19 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
     }
 
     /// Connect to the given server address
-    pub fn connect(&mut self, server_address: SocketAddr) {
-        self.address = Some(server_address);
-        self.socket.connect(server_address);
-        self.io.load(
-            self.socket.get_packet_sender(),
-            self.socket.get_packet_receiver(),
-        );
+    pub fn connect(&mut self, server_session_url: &str) {
+        if !self.is_disconnected() {
+            panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
+        }
+        let mut socket = Socket::new(self.socket_config.clone());
+        socket.connect(server_session_url);
+        self.io
+            .load(socket.packet_sender(), socket.packet_receiver());
+    }
+
+    /// Returns whether or not the client is disconnected
+    pub fn is_disconnected(&self) -> bool {
+        !self.io.is_loaded()
     }
 
     /// Returns whether or not a connection has been established with the Server
@@ -152,9 +155,7 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
 
     /// Get the address currently associated with the Server
     pub fn server_address(&self) -> SocketAddr {
-        return self
-            .address
-            .expect("Client has not initiated connection to Server yet!");
+        return self.io.server_addr_unwrapped();
     }
 
     /// Return whether or not a connection has been established with the Server

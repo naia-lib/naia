@@ -127,7 +127,7 @@ impl<P: ProtocolType> HandshakeManager<P> {
                 if self.connection_state == ConnectionState::AwaitingChallengeResponse {
                     if let Some(my_timestamp) = self.pre_connection_timestamp {
                         let mut reader = PacketReader::new(&payload);
-                        let server_tick = reader.get_cursor().read_u16::<BigEndian>().unwrap();
+                        let server_tick = reader.cursor().read_u16::<BigEndian>().unwrap();
                         let payload_timestamp = Timestamp::read(&mut reader);
 
                         if my_timestamp == payload_timestamp {
