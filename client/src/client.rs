@@ -1,12 +1,12 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use naia_client_socket::{Packet, Socket};
+
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
     ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
-    WorldMutType, WorldRefType,
+    WorldMutType, WorldRefType, SocketConfig
 };
-use naia_shared::SocketConfig;
 
 use super::{
     client_config::ClientConfig,
@@ -30,7 +30,6 @@ pub struct Client<P: ProtocolType, E: Copy + Eq + Hash> {
     connection_config: ConnectionConfig,
     socket_config: SocketConfig,
     io: Io,
-    address: Option<SocketAddr>,
     server_connection: Option<Connection<P, E>>,
     handshake_manager: HandshakeManager<P>,
     // Events
@@ -75,7 +74,6 @@ impl<P: ProtocolType, E: Copy + Eq + Hash> Client<P, E> {
             io: Io::new(),
             connection_config,
             socket_config: client_config.socket_config.clone(),
-            address: None,
             server_connection: None,
             handshake_manager,
             // Events
