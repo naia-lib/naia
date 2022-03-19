@@ -1,6 +1,6 @@
 [package]
 name = "naia-bevy-shared"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 description = "Library to faciliate naia & Bevy interop, functionality shared by client & server versions"
 homepage = "https://github.com/naia-rs/naia"

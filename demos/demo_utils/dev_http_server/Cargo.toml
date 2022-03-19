@@ -10,8 +10,8 @@ name = "dev_http_server"
 path = "src/main.rs"
 
 [dependencies]
-actix = { version = "=0.10.0" }
-actix-web = { version = "=3.3.1" }
-actix-web-actors = { version = "=3.0.0" }
-actix-files = { version = "=0.3.0" }
+actix = { version = "0.10.0" }
+actix-web = { version = "3.3.1" }
+actix-web-actors = { version = "3.0.0" }
+actix-files = { version = "0.3.0" }
 env_logger = "0.8"
