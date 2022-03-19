@@ -1,4 +1,7 @@
-use naia_client_socket::{NaiaClientSocketError, Packet, PacketReceiver, PacketSender};
+use std::net::SocketAddr;
+
+use naia_client_socket::{NaiaClientSocketError, Packet, PacketReceiver, PacketSender, ServerAddr};
+
 pub use naia_shared::{
     ConnectionConfig, ManagerType, Manifest, PacketReader, PacketType, ProtocolKindType,
     ProtocolType, ReplicateSafe, SequenceIterator, SharedConfig, StandardHeader, Timer, Timestamp,
@@ -29,6 +32,19 @@ impl Io {
 
     pub fn is_loaded(&self) -> bool {
         self.packet_sender.is_some()
+    }
+
+    pub fn server_addr_unwrapped(&self) -> SocketAddr {
+        if let ServerAddr::Found(server_addr) = self
+            .packet_sender
+            .as_ref()
+            .expect("Cannot call Client.server_addr_unwrapped() until you call Client.connect()!")
+            .server_addr()
+        {
+            return server_addr;
+        } else {
+            panic!("Connection has not yet been established! Call server_addr() instead when unsure about the connection status.")
+        }
     }
 
     pub fn send_packet(&mut self, packet: Packet) {

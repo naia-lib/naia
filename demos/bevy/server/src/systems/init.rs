@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 use naia_bevy_server::{Server, ServerAddrs};
-use naia_bevy_demo_shared::{get_server_address, protocol::Protocol};
+use naia_bevy_demo_shared::protocol::Protocol;
 
 use crate::resources::Global;
 
@@ -11,15 +11,14 @@ pub fn init(mut commands: Commands, mut server: Server<Protocol>) {
 
     // Naia Server initialization
     let server_addresses = ServerAddrs::new(
-        get_server_address(),
+        "127.0.0.1:14191".parse()
+            .expect("could not parse session address/port"),
         // IP Address to listen on for UDP WebRTC data channels
         "127.0.0.1:14192"
             .parse()
             .expect("could not parse WebRTC data address/port"),
         // The public WebRTC IP address to advertise
-        "127.0.0.1:14192"
-            .parse()
-            .expect("could not parse advertised public WebRTC data address/port"),
+        "http://127.0.0.1:14192",
     );
 
     server.listen(server_addresses);

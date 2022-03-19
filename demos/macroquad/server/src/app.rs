@@ -7,7 +7,7 @@ use naia_server::{
 use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_macroquad_demo_shared::{
-    behavior as shared_behavior, get_server_address, get_shared_config,
+    behavior as shared_behavior, get_shared_config,
     protocol::{Color, Protocol, Square},
 };
 
@@ -26,15 +26,15 @@ impl App {
         info!("Naia Macroquad Server Demo started");
 
         let server_addresses = ServerAddrs::new(
-            get_server_address(),
+            "127.0.0.1:14191"
+                .parse()
+                .expect("could not parse session address/port"),
             // IP Address to listen on for UDP WebRTC data channels
             "127.0.0.1:14192"
                 .parse()
                 .expect("could not parse WebRTC data address/port"),
             // The public WebRTC IP address to advertise
-            "127.0.0.1:14192"
-                .parse()
-                .expect("could not parse advertised public WebRTC data address/port"),
+            "http://127.0.0.1:14192",
         );
 
         let mut server = Server::new(ServerConfig::default(), get_shared_config());
