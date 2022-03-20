@@ -1,10 +1,10 @@
 [package]
-name = "naia-serde-derive"
+name = "naia-serde"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>", "Fedor <not.fl3@gmail.com>", "makepad <info@makepad.nl>"]
 workspace = "../.."
-description = "Derive methods for naia-serde"
-documentation = "https://docs.rs/naia-serde-derive"
+description = "Bit-level de/serialization for naia"
+documentation = "https://docs.rs/naia-serde"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
 readme = "../README.md"
@@ -16,11 +16,9 @@ edition = "2021"
 [badges]
 maintenance = { status = "actively-developed" }
 
-[lib]
-proc-macro = true
-
 [features]
 
 [dependencies]
+naia-serde-derive = { version = "=0.1.0", path = "derive" }
 log = "0.4"
 cfg-if = "=1.0.0"
