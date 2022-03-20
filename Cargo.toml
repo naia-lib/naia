@@ -4,7 +4,7 @@ members = [
     "client",
     "server",
     "shared",
-    "derive",
+    "shared/derive",
     "test",
     "serde",
     "serde/derive",
