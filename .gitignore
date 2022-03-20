@@ -19,6 +19,12 @@ node_modules
 /demos/macroquad/client/target
 /demos/macroquad/client/target/
 /demos/macroquad/client/target/*
+/demos/socket/client/miniquad/target
+/demos/socket/client/miniquad/target/
+/demos/socket/client/miniquad/target/*
+/demos/socket/client/wasm_bindgen/target
+/demos/socket/client/wasm_bindgen/target/
+/demos/socket/client/wasm_bindgen/target/*
 /demos/tickless/client/target
 /demos/tickless/client/target/
 /demos/tickless/client/target/*
