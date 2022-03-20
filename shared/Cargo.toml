@@ -24,7 +24,7 @@ bevy_support = [ "bevy" ]
 [dependencies]
 naia-socket-shared = { path = "../../naia-socket/shared" }
 naia-derive = { version = "0.8", path = "derive" }
-naia-serde = { version = "0.1", path = "../serde" }
+naia-serde = { version = "0.1", path = "serde" }
 log = "0.4"
 cfg-if = "1.0.0"
 bevy = { version = "0.6", default_features = false, optional = true }
