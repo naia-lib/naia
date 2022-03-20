@@ -1,0 +1,19 @@
+[package]
+name = "naia-socket-client-demo-app"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../../../.."
+license = "MIT OR Apache-2.0"
+edition = "2021"
+publish = false
+
+[features]
+mquad = [ "naia-client-socket/mquad", "naia-socket-demo-shared/mquad", "miniquad" ]
+wbindgen = [ "naia-client-socket/wbindgen", "naia-socket-demo-shared/wbindgen" ]
+
+[dependencies]
+naia-client-socket = { path = "../../../../socket/client" }
+naia-socket-demo-shared = { path = "../../shared" }
+cfg-if = "0.1.10"
+log = "0.4"
+miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"], optional = true }

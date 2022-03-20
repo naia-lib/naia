@@ -50,8 +50,6 @@ To run the UDP client demo on Linux: (that will be able to communicate with a UD
 To run the WebRTC client demo on Web: (that will be able to communicate with a WebRTC server)
 
     1. cargo install cargo-web  // should only need to do this once if you haven't already
-    2. Enter in your IP Address at the appropriate spot in /demos/basic/shared/src/lib.rs
-    3. cd /naia/demos/basic/client/wasm_bindgen
-    4. npm install              // should only need to do this once to install dependencies
-    5. npm run start            // this will open a web browser, and hot reload
-    6. Web page will be blank - check debug console to see communications from the server
+    2. cd /naia/demos/basic/client/wasm_bindgen
+    3. make serve
+    4. Web page will be blank - check debug console to see communications from the server

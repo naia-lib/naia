@@ -1,0 +1,31 @@
+[package]
+name = "naia-socket-shared"
+version = "0.9.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../.."
+description = "Common data types shared between naia-server-socket & naia-client-socket crates"
+documentation = "https://docs.rs/naia-socket-shared"
+homepage = "https://github.com/naia-rs/naia-socket"
+repository = "https://github.com/naia-rs/naia-socket"
+readme = "../README.md"
+keywords = ["webrtc", "udp", "server", "gamedev", "networking"]
+categories = ["network-programming", "game-development", "wasm", "web-programming"]
+license = "MIT OR Apache-2.0"
+edition = "2021"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[features]
+wbindgen = [ "wasm-bindgen", "js-sys" ]
+mquad = [ ]
+
+[dependencies]
+cfg-if = { version = "0.1.10" }
+log = { version = "0.4" }
+url = { version = "2.2.2" }
+wasm-bindgen = { version = "0.2.45", optional = true }
+js-sys = { version = "0.3", optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rand = { version = "0.8.4" }

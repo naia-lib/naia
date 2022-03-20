@@ -22,7 +22,7 @@ mquad = [ "naia-client-socket/mquad", "naia-shared/mquad" ]
 bevy_support = ["naia-shared/bevy_support"]
 
 [dependencies]
-naia-client-socket = { path = "../../naia-socket/client" }
+naia-client-socket = { path = "../socket/client" }
 naia-shared = { version = "0.8.0", path = "../shared" }
 cfg-if = "1.0.0"
 log = "0.4"
