@@ -25,7 +25,7 @@ use-webrtc = [ "naia-server-socket/use-webrtc" ]
 bevy_support = ["naia-shared/bevy_support"]
 
 [dependencies]
-naia-server-socket = { path = "../../naia-socket/server" }
+naia-server-socket = { path = "../socket/server" }
 naia-shared = { path = "../shared", version = "0.8" }
 log = "0.4"
 ring = "0.16.15"
