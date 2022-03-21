@@ -68,6 +68,10 @@ impl<P: Protocolize> MessageManager<P> {
             .push_back((guaranteed_delivery, message.protocol_copy()));
     }
 
+    pub fn queue_entity_message(&mut self, message: P) {
+        self.queued_outgoing_messages.push_back((true, message));
+    }
+
     // Incoming Messages
 
     /// Get the most recently received Message

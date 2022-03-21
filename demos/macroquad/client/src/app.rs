@@ -183,7 +183,7 @@ impl App {
                 Ok(Event::DespawnEntity(entity)) => {
                     self.squares.remove(&entity);
                 }
-                Ok(Event::MessageEntity(Protocol::EntityAssignment(entity_assignment))) => {
+                Ok(Event::Message(Protocol::EntityAssignment(entity_assignment))) => {
                     let assign = *entity_assignment.assign;
 
                     if let Some(other_entity) = entity_assignment.other_entity.get(&self.client) {

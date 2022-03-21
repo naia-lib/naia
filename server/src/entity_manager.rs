@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, DiffMask, KeyGenerator, NetEntity, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, NetEntityConverter, EntityConverter, EntityHandleConverter};
+use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, DiffMask, KeyGenerator, NetEntity, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, NetEntityConverter, EntityConverter, MessageManager};
 use crate::entity_message_waitlist::EntityMessageWaitlist;
 
 use super::{
@@ -116,34 +116,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         return self.entity_records.contains_key(entity);
     }
 
-    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, world_record: &WorldRecord<E, P::Kind>, message: &R) {
-
-        // collect all entities in the message
-        let entities: Vec<E> = message
-            .entities()
-            .iter()
-            .map(|handle| world_record.handle_to_entity(&handle))
-            .collect();
-
-        // check whether all entities are in scope for the connection
-        let all_entities_in_scope = {
-            entities.iter().all(|entity| {
-                if let Some(entity_record) = self.entity_records.get(&entity) {
-                    if entity_record.status == LocalityStatus::Created {
-                        return true;
-                    }
-                }
-                return false;
-            })
-        };
-        if all_entities_in_scope {
-            // All necessary entities are in scope, so send MessageEntity action
-            self.queued_actions
-                .push_back(EntityAction::MessageEntity(message.protocol_copy()));
-        } else {
-            // Entity hasn't been added to the User Scope yet, or replicated to Client yet
-            self.delayed_entity_messages.queue_message(entities, message.protocol_copy());
+    pub fn entity_in_scope(&self, entity: &E) -> bool {
+        if let Some(entity_record) = self.entity_records.get(&entity) {
+            if entity_record.status == LocalityStatus::Created {
+                return true;
+            }
         }
+        return false;
+    }
+
+    pub fn queue_entity_message<R: ReplicateSafe<P>>(&mut self, entities: Vec<E>, message: &R) {
+        self.delayed_entity_messages.queue_message(entities, message.protocol_copy());
+    }
+
+    pub fn collect_entity_messages(&mut self, message_manager: &mut MessageManager<P>) {
+        self.delayed_entity_messages.collect_ready_messages(message_manager);
     }
 
     // Components
@@ -355,22 +342,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 if is_writing {
                     let sent_actions_list = self.sent_actions.get_mut(&packet_index).unwrap();
                     sent_actions_list.push(EntityAction::DespawnEntity(*global_entity));
-                }
-            }
-            EntityAction::MessageEntity(message) => {
-                // write message's protocol kind
-                message.dyn_ref().kind().ser(writer);
-
-                // write message payload
-                {
-                    let converter = EntityConverter::new(world_record, self);
-                    message.write(writer, &converter);
-                }
-
-                // write to record, if we are writing to this packet
-                if is_writing {
-                    let sent_actions_list = self.sent_actions.get_mut(&packet_index).unwrap();
-                    sent_actions_list.push(EntityAction::MessageEntity(message.clone()));
                 }
             }
             EntityAction::InsertComponent(global_entity, component_kind) => {
@@ -588,12 +559,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                     }
                                 }
 
-                                // send any Entity messages that have been waiting
-                                let mut outgoing_messages = self.delayed_entity_messages.add_entity(&global_entity);
-                                while let Some(message) = outgoing_messages.pop() {
-                                    self.queued_actions
-                                        .push_back(EntityAction::MessageEntity(message));
-                                }
+                                // update delayed entity message structure, to send any Entity
+                                // messages that have been waiting
+                                self.delayed_entity_messages.add_entity(&global_entity);
                             }
                         }
                         EntityAction::DespawnEntity(global_entity) => {
@@ -605,9 +573,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             self.delayed_entity_messages.remove_entity(&global_entity);
                             self.local_to_global_entity_map.remove(&local_id);
                             self.entity_generator.recycle_key(&local_id);
-                        }
-                        EntityAction::MessageEntity(_) => {
-                            // Don't do anything, mission accomplished
                         }
                         EntityAction::InsertComponent(global_entity, component_kind) => {
                             // do we need to delete this now?
@@ -686,7 +651,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> PacketNotifiable for EntityManager<P, 
                     // guaranteed delivery actions
                     EntityAction::SpawnEntity { .. }
                     | EntityAction::DespawnEntity(_)
-                    | EntityAction::MessageEntity(_)
                     | EntityAction::InsertComponent(_, _)
                     | EntityAction::RemoveComponent(_, _) => {
                         self.queued_actions.push_back(dropped_action);
