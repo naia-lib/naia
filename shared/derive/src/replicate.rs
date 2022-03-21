@@ -34,7 +34,14 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         read_to_type_method(&protocol_name, &replica_name, &enum_name, &properties);
 
     // ReplicateSafe Derive Methods
-    let diff_mask_size = (((properties.len() - 1) / 8) + 1) as u8;
+    let diff_mask_size = {
+        let len = properties.len();
+        if len == 0 {
+            0
+        } else {
+            ((len - 1) / 8) + 1
+        }
+    } as u8;
     let dyn_ref_method = dyn_ref_method(&protocol_name);
     let dyn_mut_method = dyn_mut_method(&protocol_name);
     let to_protocol_method = into_protocol_method(&protocol_name, &replica_name);
@@ -233,6 +240,13 @@ fn protocol_path(input: &DeriveInput) -> (Path, Ident) {
 }
 
 fn property_enum(enum_name: &Ident, properties: &Vec<Property>) -> TokenStream {
+
+    if properties.len() == 0 {
+        return quote! {
+            enum #enum_name {}
+        };
+    }
+
     let hashtag = Punct::new('#', Spacing::Alone);
 
     let mut variant_index: u8 = 0;
