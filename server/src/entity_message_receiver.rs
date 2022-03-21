@@ -1,6 +1,8 @@
 use std::collections::{HashMap, VecDeque};
 
-use naia_shared::{read_list_header, sequence_greater_than, serde::{BitReader, Serde}, Manifest, NetEntity, Protocolize, Tick, NetEntityHandleConverter};
+use naia_shared::{read_list_header, sequence_greater_than, serde::{BitReader, Serde}, Manifest, Protocolize, Tick, NetEntityHandleConverter};
+
+type ShortMsgId = u8;
 
 /// Handles incoming Entity Messages, buffering them to be received on the
 /// correct tick
@@ -17,7 +19,7 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
     }
 
     /// Get the most recently received Entity Message
-    pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<(NetEntity, P)> {
+    pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<P> {
         return self.incoming_messages.pop_front(server_tick);
     }
 
@@ -43,16 +45,22 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
         converter: &dyn NetEntityHandleConverter,
     ) {
         for _x in 0..message_count {
+            // read client tick
             let client_tick = Tick::de(reader).unwrap();
-            let owned_entity = NetEntity::de(reader).unwrap();
+
+            // read message id
+            let short_msg_id: ShortMsgId = ShortMsgId::de(reader).unwrap();
+
+            // read message kind
             let replica_kind: P::Kind = P::Kind::de(reader).unwrap();
 
+            // read payload
             let new_message = manifest.create_replica(replica_kind, reader, converter);
 
             if !self.incoming_messages.push_back(
                 client_tick,
                 server_tick,
-                owned_entity,
+                short_msg_id,
                 new_message,
             ) {
                 //info!("failed command. server: {}, client: {}",
@@ -66,7 +74,7 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
 
 struct IncomingMessages<P> {
     // front is small, back is big
-    buffer: VecDeque<(Tick, HashMap<NetEntity, P>)>,
+    buffer: VecDeque<(Tick, HashMap<ShortMsgId, P>)>,
 }
 
 impl<P> IncomingMessages<P> {
@@ -80,7 +88,7 @@ impl<P> IncomingMessages<P> {
         &mut self,
         client_tick: Tick,
         server_tick: Tick,
-        owned_entity: NetEntity,
+        short_msg_id: ShortMsgId,
         new_message: P,
     ) -> bool {
         if sequence_greater_than(client_tick, server_tick) {
@@ -89,7 +97,7 @@ impl<P> IncomingMessages<P> {
             //in the case of empty vec
             if index == 0 {
                 let mut map = HashMap::new();
-                map.insert(owned_entity, new_message);
+                map.insert(short_msg_id, new_message);
                 self.buffer.push_back((client_tick, map));
                 //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (empty q)",
                 // server_tick, client_tick, owned_entity);
@@ -102,8 +110,8 @@ impl<P> IncomingMessages<P> {
 
                 if let Some((tick, command_map)) = self.buffer.get_mut(index) {
                     if *tick == client_tick {
-                        if !command_map.contains_key(&owned_entity) {
-                            command_map.insert(owned_entity, new_message);
+                        if !command_map.contains_key(&short_msg_id) {
+                            command_map.insert(short_msg_id, new_message);
                             //info!("inserting command at tick: {}", client_tick);
                             //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (map
                             // xzist)", server_tick, client_tick, owned_entity);
@@ -123,7 +131,7 @@ impl<P> IncomingMessages<P> {
                 if insert {
                     // found correct position to insert node
                     let mut map = HashMap::new();
-                    map.insert(owned_entity, new_message);
+                    map.insert(short_msg_id, new_message);
                     self.buffer.insert(index + 1, (client_tick, map));
                     //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (midbck
                     // insrt)", server_tick, client_tick, owned_entity);
@@ -133,7 +141,7 @@ impl<P> IncomingMessages<P> {
                 if index == 0 {
                     //traversed the whole vec, push front
                     let mut map = HashMap::new();
-                    map.insert(owned_entity, new_message);
+                    map.insert(short_msg_id, new_message);
                     self.buffer.push_front((client_tick, map));
                     //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (front
                     // insrt)", server_tick, client_tick, owned_entity);
@@ -146,7 +154,7 @@ impl<P> IncomingMessages<P> {
         }
     }
 
-    pub fn pop_front(&mut self, server_tick: Tick) -> Option<(NetEntity, P)> {
+    pub fn pop_front(&mut self, server_tick: Tick) -> Option<P> {
         // get rid of outdated commands
         loop {
             let mut pop = false;
@@ -169,13 +177,13 @@ impl<P> IncomingMessages<P> {
         let mut pop = false;
         if let Some((front_tick, command_map)) = self.buffer.front_mut() {
             if *front_tick == server_tick {
-                let mut any_entity: Option<NetEntity> = None;
-                if let Some(any_entity_ref) = command_map.keys().next() {
-                    any_entity = Some(*any_entity_ref);
+                let mut any_msg_id: Option<ShortMsgId> = None;
+                if let Some(any_msg_id_ref) = command_map.keys().next() {
+                    any_msg_id = Some(*any_msg_id_ref);
                 }
-                if let Some(any_entity) = any_entity {
-                    if let Some(message) = command_map.remove(&any_entity) {
-                        output = Some((any_entity, message));
+                if let Some(msg_id) = any_msg_id {
+                    if let Some(message) = command_map.remove(&msg_id) {
+                        output = Some(message);
                         // info!("popping message at tick: {}, for entity: {}",
                         // front_tick, any_entity);
                     }

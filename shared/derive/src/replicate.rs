@@ -45,7 +45,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let read_partial_method = read_partial_method(&properties);
     let write_method = write_method(&properties);
     let write_partial_method = write_partial_method(&enum_name, &properties);
-    let entity_handle_method = entity_handle_method(&properties);
+    let has_entity_properties = has_entity_properties_method(&properties);
+    let entities = entities_method(&properties);
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
@@ -53,7 +54,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             Protocolize, ReplicaDynRef, ReplicaDynMut, serde::{BitReader, BitWrite, Serde}, NetEntityHandleConverter};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
         mod internal {
-            pub use naia_shared::EntityProperty;
+            pub use naia_shared::{EntityProperty, EntityHandle};
         }
 
         #property_enum_definition
@@ -91,7 +92,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #mirror_method
             #set_mutator_method
             #read_partial_method
-            #entity_handle_method
+            #has_entity_properties
+            #entities
         }
         impl Replicate<#protocol_name> for #replica_name {
             #clone_method
@@ -616,21 +618,48 @@ fn write_partial_method(enum_name: &Ident, properties: &Vec<Property>) -> TokenS
     };
 }
 
-fn entity_handle_method(properties: &Vec<Property>) -> TokenStream {
+fn has_entity_properties_method(properties: &Vec<Property>) -> TokenStream {
     for property in properties.iter() {
-        if let Property::Entity(entity_prop) = property {
-            let field_name = &entity_prop.variable_name;
+        if let Property::Entity(_) = property {
             return quote! {
-                fn entity_handle(&self) -> Option<&internal::EntityProperty> {
-                    return Some(&self.#field_name);
+                fn has_entity_properties(&self) -> bool {
+                    return true;
                 }
             };
         }
     }
 
     return quote! {
-        fn entity_handle(&self) -> Option<&internal::EntityProperty> {
-            return None;
+        fn has_entity_properties(&self) -> bool {
+            return false;
+        }
+    };
+}
+
+fn entities_method(properties: &Vec<Property>) -> TokenStream {
+    let mut body = quote! {};
+
+    for property in properties.iter() {
+        if let Property::Entity(entity_prop) = property {
+            let field_name = &entity_prop.variable_name;
+            let body_add_right = quote! {
+                if let Some(handle) = self.#field_name.handle() {
+                    output.push(handle);
+                }
+            };
+            let new_body = quote! {
+                #body
+                #body_add_right
+            };
+            body = new_body;
+        }
+    }
+
+    return quote! {
+        fn entities(&self) -> Vec<internal::EntityHandle> {
+            let mut output = Vec::new();
+            #body
+            return output;
         }
     };
 }

@@ -5,7 +5,13 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{read_list_header, serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, BigMap, EntityActionType, EntityHandle, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, NetEntityHandleConverter, EntityProperty, ReplicateSafe, FakeEntityConverter, EntityHandleConverter};
+use naia_shared::{
+    read_list_header,
+    serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+    write_list_header, BigMap, EntityActionType, EntityHandle, Manifest, NetEntity, PacketIndex,
+    Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, NetEntityHandleConverter, ReplicateSafe,
+    FakeEntityConverter, EntityHandleConverter};
+use crate::types::MsgId;
 
 use super::{
     entity_message_sender::EntityMessageSender, entity_record::EntityRecord,
@@ -15,7 +21,7 @@ use super::{
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
     local_to_world_entity: HashMap<NetEntity, E>,
-    pub message_sender: EntityMessageSender<P, E>,
+    pub message_sender: EntityMessageSender<P>,
     pub handle_entity_map: BigMap<EntityHandle, E>,
 }
 
@@ -239,12 +245,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             }
 
             // Find how many messages will fit into the packet
-            for (_, client_tick, entity, message) in entity_messages.iter() {
+            for (message_id, client_tick, message) in entity_messages.iter() {
                 self.write_message(
                     &mut counter,
-                    &self.entity_records,
                     &client_tick,
-                    &entity,
+                    &message_id,
                     message,
                 );
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
@@ -262,15 +267,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         {
             for _ in 0..message_count {
                 // Pop message
-                let (message_id, client_tick, entity, message) =
+                let (message_id, client_tick, message) =
                     entity_messages.pop_front().unwrap();
 
                 // Write message
                 self.write_message(
                     writer,
-                    &self.entity_records,
                     &client_tick,
-                    &entity,
+                    &message_id,
                     &message,
                 );
                 self.message_sender
@@ -284,32 +288,26 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     pub fn write_message<S: BitWrite>(
         &self,
         writer: &mut S,
-        entity_records: &HashMap<E, EntityRecord<P::Kind>>,
         client_tick: &Tick,
-        world_entity: &E,
+        message_id: &MsgId,
         message: &P,
     ) {
-        if let Some(entity_record) = entity_records.get(world_entity) {
-            // write client tick
-            client_tick.ser(writer);
+        // write client tick
+        client_tick.ser(writer);
 
-            // write local entity
-            entity_record.net_entity.ser(writer);
+        // write message id
+        let short_msg_id: u8 = (message_id % 256) as u8;
+        short_msg_id.ser(writer);
 
-            // write message kind
-            message.dyn_ref().kind().ser(writer);
+        // write message kind
+        message.dyn_ref().kind().ser(writer);
 
-            // write payload
-            message.write(writer, self);
-        } else {
-            panic!("Cannot find the entity record to serialize entity message!");
-        }
+        // write payload
+        message.write(writer, self);
     }
 
-    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity_property: &EntityProperty, message: &R, tick: Tick) {
-        if let Some(entity) = entity_property.get(self) {
-            self.message_sender.send_entity_message(&entity, message, tick);
-        }
+    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, message: &R, tick: Tick) {
+        self.message_sender.send_entity_message(message, tick);
     }
 }
 

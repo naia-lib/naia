@@ -22,6 +22,7 @@ pub struct App {
     main_room_key: RoomKey,
     user_squares: HashMap<UserKey, Entity>,
     bandwidth_timer: Timer,
+    other_main_entity: Entity,
 }
 
 impl App {
@@ -47,11 +48,14 @@ impl App {
         let mut server = Server::new(&server_config, &shared_config());
         server.listen(&server_addresses);
 
-        let world = World::new();
+        let mut world = World::new();
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
         let main_room_key = server.make_room().key();
+
+        // Create a new main entity that we can use for testing
+        let other_main_entity = server.spawn_entity(world.proxy_mut()).id();
 
         App {
             server,
@@ -59,6 +63,7 @@ impl App {
             main_room_key,
             user_squares: HashMap::<UserKey, Entity>::new(),
             bandwidth_timer: Timer::new(Duration::from_secs(1)),
+            other_main_entity,
         }
     }
 
@@ -129,6 +134,7 @@ impl App {
                     assignment_message.entity.set(&self.server, &entity_id);
                     //eventually would like to do this like:
                     //self.server.entity_property(assigment_message).set(&entity_id);
+                    //assignment_message.other_entity.set(&self.server, &self.other_main_entity);
 
                     self.server
                         .send_message(&user_key, &assignment_message, true);
@@ -142,13 +148,15 @@ impl App {
                             .despawn();
                     }
                 }
-                Ok(Event::MessageEntity(_, entity, Protocol::KeyCommand(key_command))) => {
-                    if let Some(mut square) = self
-                        .server
-                        .entity_mut(self.world.proxy_mut(), &entity)
-                        .component::<Square>()
-                    {
-                        shared_behavior::process_command(&key_command, &mut square);
+                Ok(Event::Message(_, Protocol::KeyCommand(key_command))) => {
+                    if let Some(entity) = key_command.entity.get(&self.server) {
+                        if let Some(mut square) = self
+                            .server
+                            .entity_mut(self.world.proxy_mut(), &entity)
+                            .component::<Square>()
+                        {
+                            shared_behavior::process_command(&key_command, &mut square);
+                        }
                     }
                 }
                 Ok(Event::Tick) => {

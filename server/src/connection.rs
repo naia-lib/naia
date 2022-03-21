@@ -76,18 +76,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         }
     }
 
-    pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<(E, P)> {
-        if let Some((local_entity, message)) = self
+    pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<P> {
+        return self
             .entity_message_receiver
-            .pop_incoming_entity_message(server_tick)
-        {
-            // get global entity from the local one
-            if let Some(global_entity) = self.entity_manager.global_entity_from_local(local_entity)
-            {
-                return Some((*global_entity, message));
-            }
-        }
-        return None;
+            .pop_incoming_entity_message(server_tick);
     }
 
     // Outgoing data

@@ -3,7 +3,6 @@ use std::marker::PhantomData;
 use std::collections::VecDeque;
 
 /// Simple implementation of a store that manages a recycling pool of u16 keys
-#[derive(Debug)]
 pub struct KeyGenerator<K: From<u16> + Into<u16> + Copy> {
     recycled_local_keys: VecDeque<u16>,
     next_new_local_key: u16,
