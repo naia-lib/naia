@@ -13,8 +13,6 @@ pub enum EntityActionType {
     SpawnEntity,
     // Action indicating an Entity to be deleted
     DespawnEntity,
-    // Action indicating a Message to be sent to an Entity
-    MessageEntity,
     // Action indicating a Component to be added to an Entity
     InsertComponent,
 }

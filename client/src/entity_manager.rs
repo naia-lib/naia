@@ -137,14 +137,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     }
                     warn!("received message attempting to delete nonexistent entity");
                 }
-                // Receive special Entity Message
-                EntityActionType::MessageEntity => {
-                    let message_kind = P::Kind::de(reader).unwrap();
-
-                    let new_message = manifest.create_replica(message_kind, reader, self);
-
-                    event_stream.push_back(Ok(Event::MessageEntity(new_message)));
-                }
                 // Add Component to Entity
                 EntityActionType::InsertComponent => {
                     let net_entity = NetEntity::de(reader).unwrap();

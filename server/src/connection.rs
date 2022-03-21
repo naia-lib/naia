@@ -82,6 +82,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             .pop_incoming_entity_message(server_tick);
     }
 
+    pub fn collect_entity_messages(&mut self) {
+        self.entity_manager.collect_entity_messages(&mut self.base.message_manager);
+    }
+
     // Outgoing data
     pub fn send_outgoing_packets<W: WorldRefType<P, E>>(
         &mut self,

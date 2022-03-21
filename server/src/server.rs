@@ -219,9 +219,31 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
                 if message.has_entity_properties() {
-                    connection
-                        .entity_manager
-                        .send_entity_message(&self.world_record, message);
+                    // collect all entities in the message
+                    let entities: Vec<E> = message
+                        .entities()
+                        .iter()
+                        .map(|handle| self.world_record.handle_to_entity(&handle))
+                        .collect();
+
+                    // check whether all entities are in scope for the connection
+                    let all_entities_in_scope = {
+                        entities.iter().all(|entity| {
+                            connection.entity_manager.entity_in_scope(entity)
+                        })
+                    };
+                    if all_entities_in_scope {
+                        // All necessary entities are in scope, so send message
+                        connection
+                            .base
+                            .message_manager
+                            .send_message(message, true);
+                    } else {
+                        // Entity hasn't been added to the User Scope yet, or replicated to Client yet
+                        connection
+                            .entity_manager
+                            .queue_entity_message(entities, message);
+                    }
                 } else {
                     connection
                         .base
@@ -274,6 +296,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
             connection.entity_manager.collect_component_updates();
+            connection.collect_entity_messages();
             connection.send_outgoing_packets(
                 &mut self.io,
                 &world,
