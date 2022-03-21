@@ -12,6 +12,7 @@ use naia_macroquad_demo_shared::{
     protocol::{Color, EntityAssignment, Protocol, Square},
     shared_config,
 };
+use naia_macroquad_demo_shared::protocol::Marker;
 
 type World = DemoWorld<Protocol>;
 type Server = NaiaServer<Protocol, Entity>;
@@ -127,6 +128,8 @@ impl App {
                         .enter_room(&self.main_room_key)
                         // Add Square component to Entity
                         .insert_component(Square::new(x as u16, y as u16, square_color))
+                        // Add Marker component to Entity
+                        .insert_component(Marker::new())
                         .id();
 
                     // Associate new Entity with User that spawned it
