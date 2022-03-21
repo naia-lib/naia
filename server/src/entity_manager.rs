@@ -7,7 +7,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, DiffMask, KeyGenerator, NetEntity, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, NetEntityConverter, EntityConverter};
+use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, DiffMask, KeyGenerator, NetEntity, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, NetEntityConverter, EntityConverter, EntityHandleConverter};
+use crate::entity_message_waitlist::EntityMessageWaitlist;
 
 use super::{
     entity_action::EntityAction, global_diff_handler::GlobalDiffHandler,
@@ -24,7 +25,7 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, LocalEntityRecord<P>>,
     local_to_global_entity_map: HashMap<NetEntity, E>,
     delayed_entity_deletions: HashSet<E>,
-    delayed_entity_messages: HashMap<E, VecDeque<P>>,
+    delayed_entity_messages: EntityMessageWaitlist<P, E>,
     // Components
     diff_handler: UserDiffHandler<E, P::Kind>,
     delayed_component_deletions: HashSet<(E, P::Kind)>,
@@ -49,7 +50,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             entity_records: HashMap::new(),
             local_to_global_entity_map: HashMap::new(),
             delayed_entity_deletions: HashSet::new(),
-            delayed_entity_messages: HashMap::new(),
+            delayed_entity_messages: EntityMessageWaitlist::new(),
             // Components
             diff_handler: UserDiffHandler::new(diff_handler),
             delayed_component_deletions: HashSet::new(),
@@ -115,29 +116,34 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         return self.entity_records.contains_key(entity);
     }
 
-    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, entity: &E, message: &R) {
-        if let Some(entity_record) = self.entity_records.get(entity) {
-            match entity_record.status {
-                LocalityStatus::Created => {
-                    // send MessageEntity action
-                    self.queued_actions
-                        .push_back(EntityAction::MessageEntity(message.protocol_copy()));
-                    return;
-                }
-                LocalityStatus::Deleting => {
-                    return;
-                }
-                _ => {}
-            }
-        }
+    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, world_record: &WorldRecord<E, P::Kind>, message: &R) {
 
-        // Entity hasn't been added to the User Scope yet, or replicated to Client yet
-        if !self.delayed_entity_messages.contains_key(entity) {
-            self.delayed_entity_messages
-                .insert(*entity, VecDeque::new());
+        // collect all entities in the message
+        let entities: Vec<E> = message
+            .entities()
+            .iter()
+            .map(|handle| world_record.handle_to_entity(&handle))
+            .collect();
+
+        // check whether all entities are in scope for the connection
+        let all_entities_in_scope = {
+            entities.iter().all(|entity| {
+                if let Some(entity_record) = self.entity_records.get(&entity) {
+                    if entity_record.status == LocalityStatus::Created {
+                        return true;
+                    }
+                }
+                return false;
+            })
+        };
+        if all_entities_in_scope {
+            // All necessary entities are in scope, so send MessageEntity action
+            self.queued_actions
+                .push_back(EntityAction::MessageEntity(message.protocol_copy()));
+        } else {
+            // Entity hasn't been added to the User Scope yet, or replicated to Client yet
+            self.delayed_entity_messages.queue_message(entities, message.protocol_copy());
         }
-        let message_queue = self.delayed_entity_messages.get_mut(entity).unwrap();
-        message_queue.push_back(message.protocol_copy());
     }
 
     // Components
@@ -583,13 +589,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 }
 
                                 // send any Entity messages that have been waiting
-                                if let Some(message_queue) =
-                                    self.delayed_entity_messages.get_mut(&global_entity)
-                                {
-                                    while let Some(message) = message_queue.pop_front() {
-                                        self.queued_actions
-                                            .push_back(EntityAction::MessageEntity(message));
-                                    }
+                                let mut outgoing_messages = self.delayed_entity_messages.add_entity(&global_entity);
+                                while let Some(message) = outgoing_messages.pop() {
+                                    self.queued_actions
+                                        .push_back(EntityAction::MessageEntity(message));
                                 }
                             }
                         }
@@ -599,7 +602,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                             // actually delete the entity from local records
                             self.entity_records.remove(&global_entity);
-                            self.delayed_entity_messages.remove(&global_entity);
+                            self.delayed_entity_messages.remove_entity(&global_entity);
                             self.local_to_global_entity_map.remove(&local_id);
                             self.entity_generator.recycle_key(&local_id);
                         }

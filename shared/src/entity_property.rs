@@ -20,7 +20,7 @@ impl EntityProperty {
         *self.handle_prop = other.handle();
     }
 
-    pub(crate) fn handle(&self) -> Option<EntityHandle> {
+    pub fn handle(&self) -> Option<EntityHandle> {
         *self.handle_prop
     }
 

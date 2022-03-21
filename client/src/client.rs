@@ -200,7 +200,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     /// Queues up an Message to be sent to the Server
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
 
-        if let Some(entity_prop) = message.entity_handle() {
+        if message.has_entity_properties() {
             if self.server_connection.is_none() {
                 return;
             }
@@ -208,7 +208,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
                 let connection = self.server_connection.as_mut().unwrap();
                 connection
                     .entity_manager
-                    .send_entity_message(entity_prop, message, client_tick);
+                    .send_entity_message(message, client_tick);
             }
 
         } else {

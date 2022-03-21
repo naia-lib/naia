@@ -50,13 +50,11 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
     world_record: WorldRecord<E, P::Kind>,
-
     entity_scope_map: EntityScopeMap<E>,
-
     // Components
     diff_handler: Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
     // Events
-    incoming_events: VecDeque<Result<Event<P, E>, NaiaServerError>>,
+    incoming_events: VecDeque<Result<Event<P>, NaiaServerError>>,
     // Ticks
     tick_manager: Option<TickManager>,
 }
@@ -120,7 +118,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P, E>, NaiaServerError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P>, NaiaServerError>> {
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
         self.maintain_socket();
@@ -153,12 +151,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
                 for user_address in &user_addresses {
                     let connection = self.user_connections.get_mut(user_address).unwrap();
 
-                    while let Some((entity, message)) = connection.pop_incoming_entity_message(
+                    while let Some(message) = connection.pop_incoming_entity_message(
                         self.tick_manager.as_ref().unwrap().server_tick(),
                     ) {
-                        self.incoming_events.push_back(Ok(Event::MessageEntity(
+                        self.incoming_events.push_back(Ok(Event::Message(
                             connection.user_key,
-                            entity,
                             message,
                         )));
                     }
@@ -219,17 +216,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         message: &R,
         guaranteed_delivery: bool,
     ) {
-        let entity_opt: Option<E> = message
-            .entity_handle()
-            .map(|entity_property| entity_property.get(self))
-            .flatten();
-
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
-                if let Some(entity) = entity_opt {
+                if message.has_entity_properties() {
                     connection
                         .entity_manager
-                        .send_entity_message(&entity, message);
+                        .send_entity_message(&self.world_record, message);
                 } else {
                     connection
                         .base

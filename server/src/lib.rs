@@ -31,6 +31,7 @@ mod connection;
 mod entity_action;
 mod entity_manager;
 mod entity_message_receiver;
+mod entity_message_waitlist;
 mod entity_ref;
 mod entity_scope_map;
 mod error;
