@@ -44,6 +44,7 @@ pub struct App {
     queued_command: Option<KeyCommand>,
     command_history: CommandHistory<KeyCommand>,
     bandwidth_timer: Timer,
+    other_main_entity: Option<Entity>,
 }
 
 impl App {
@@ -64,6 +65,7 @@ impl App {
             queued_command: None,
             command_history: CommandHistory::new(),
             bandwidth_timer: Timer::new(Duration::from_secs(1)),
+            other_main_entity: None,
         }
     }
 
@@ -124,6 +126,9 @@ impl App {
                 } else {
                     let mut key_command = KeyCommand::new(w, s, a, d);
                     key_command.entity.set(&self.client, &owned_entity.confirmed);
+                    if let Some(other_entity) = &self.other_main_entity {
+                        key_command.other_entity.set(&self.client, other_entity);
+                    }
                     self.queued_command = Some(key_command);
                 }
             }
@@ -180,6 +185,11 @@ impl App {
                 }
                 Ok(Event::MessageEntity(Protocol::EntityAssignment(entity_assignment))) => {
                     let assign = *entity_assignment.assign;
+
+                    if let Some(other_entity) = entity_assignment.other_entity.get(&self.client) {
+                        self.other_main_entity = Some(other_entity);
+                    }
+
                     if let Some(entity) = entity_assignment.entity.get(&self.client) {
                         if assign {
                             info!("gave ownership of entity");

@@ -55,7 +55,10 @@ impl App {
         let main_room_key = server.make_room().key();
 
         // Create a new main entity that we can use for testing
-        let other_main_entity = server.spawn_entity(world.proxy_mut()).id();
+        let other_main_entity = server
+            .spawn_entity(world.proxy_mut())
+            .enter_room(&main_room_key)
+            .id();
 
         App {
             server,
@@ -134,7 +137,7 @@ impl App {
                     assignment_message.entity.set(&self.server, &entity_id);
                     //eventually would like to do this like:
                     //self.server.entity_property(assigment_message).set(&entity_id);
-                    //assignment_message.other_entity.set(&self.server, &self.other_main_entity);
+                    assignment_message.other_entity.set(&self.server, &self.other_main_entity);
 
                     self.server
                         .send_message(&user_key, &assignment_message, true);

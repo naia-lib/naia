@@ -4,6 +4,7 @@ use naia_shared::{EntityProperty, Property, Replicate};
 #[protocol_path = "crate::protocol::Protocol"]
 pub struct EntityAssignment {
     pub entity: EntityProperty,
+    pub other_entity: EntityProperty,
     pub assign: Property<bool>,
 }
 
