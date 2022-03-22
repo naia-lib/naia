@@ -1,21 +1,18 @@
 use std::collections::{HashMap, VecDeque};
 
 use crate::{constants::MESSAGE_HISTORY_SIZE, types::MsgId};
-use naia_shared::{
-    sequence_greater_than, sequence_less_than, PacketIndex, PacketNotifiable, Protocolize,
-    ReplicateSafe, Tick,
-};
+use naia_shared::{sequence_greater_than, sequence_less_than, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, ChannelIndex};
 
-pub struct EntityMessageSender<P: Protocolize> {
+pub struct EntityMessageSender<P: Protocolize, C: ChannelIndex> {
     // This SequenceBuffer is indexed by Tick
-    outgoing_messages: OutgoingMessages<P>,
+    outgoing_messages: OutgoingMessages<P, C>,
     // This SequenceBuffer is indexed by PacketIndex
     sent_messages: SentMessages,
     // Whether currently sending this tick
     send_locked: bool,
 }
 
-impl<P: Protocolize> EntityMessageSender<P> {
+impl<P: Protocolize, C: ChannelIndex> EntityMessageSender<P, C> {
     pub fn new() -> Self {
         EntityMessageSender {
             outgoing_messages: OutgoingMessages::new(),
@@ -26,18 +23,19 @@ impl<P: Protocolize> EntityMessageSender<P> {
 
     pub fn send_entity_message<R: ReplicateSafe<P>>(
         &mut self,
-        message: &R,
         client_tick: Tick,
+        channel: C,
+        message: &R,
     ) {
         let message_protocol = message.protocol_copy();
 
         self.outgoing_messages
-            .push(client_tick, message_protocol);
+            .push(client_tick, channel, message_protocol);
 
         self.send_locked = false;
     }
 
-    pub fn generate_outgoing_message_list(&mut self) -> VecDeque<(MsgId, Tick, P)> {
+    pub fn generate_outgoing_message_list(&mut self) -> VecDeque<(MsgId, Tick, C, P)> {
         if self.send_locked {
             panic!("Should not call this method when send_locked");
         }
@@ -79,7 +77,7 @@ impl<P: Protocolize> EntityMessageSender<P> {
     }
 }
 
-impl<P: Protocolize> PacketNotifiable for EntityMessageSender<P> {
+impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for EntityMessageSender<P, C> {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(delivered_messages) = self.sent_messages.remove(packet_index) {
             for (tick, message_id) in delivered_messages.into_iter() {
@@ -171,12 +169,12 @@ impl SentMessages {
 }
 
 // MessageMap
-struct MessageMap<P: Protocolize> {
-    map: HashMap<MsgId, P>,
+struct MessageMap<P: Protocolize, C: ChannelIndex> {
+    map: HashMap<MsgId, (C, P)>,
     message_id: MsgId,
 }
 
-impl<P: Protocolize> MessageMap<P> {
+impl<P: Protocolize, C: ChannelIndex> MessageMap<P, C> {
     pub fn new() -> Self {
         MessageMap {
             map: HashMap::new(),
@@ -184,17 +182,17 @@ impl<P: Protocolize> MessageMap<P> {
         }
     }
 
-    pub fn insert(&mut self, message: P) {
+    pub fn insert(&mut self, channel: C, message: P) {
         let new_message_id = self.message_id;
 
-        self.map.insert(new_message_id, message);
+        self.map.insert(new_message_id, (channel, message));
 
         self.message_id = self.message_id.wrapping_add(1);
     }
 
-    pub fn append_messages(&self, list: &mut VecDeque<(MsgId, Tick, P)>, tick: Tick) {
-        for (message_id, message) in &self.map {
-            list.push_back((*message_id, tick, message.clone()));
+    pub fn append_messages(&self, list: &mut VecDeque<(MsgId, Tick, C, P)>, tick: Tick) {
+        for (message_id, (channel, message)) in &self.map {
+            list.push_back((*message_id, tick, channel.clone(), message.clone()));
         }
     }
 
@@ -208,13 +206,13 @@ impl<P: Protocolize> MessageMap<P> {
 }
 
 // OutgoingMessages
-struct OutgoingMessages<P: Protocolize> {
+struct OutgoingMessages<P: Protocolize, C: ChannelIndex> {
     // front big, back small
     // front recent, back past
-    buffer: VecDeque<(Tick, MessageMap<P>)>,
+    buffer: VecDeque<(Tick, MessageMap<P, C>)>,
 }
 
-impl<P: Protocolize> OutgoingMessages<P> {
+impl<P: Protocolize, C: ChannelIndex> OutgoingMessages<P, C> {
     pub fn new() -> Self {
         OutgoingMessages {
             buffer: VecDeque::new(),
@@ -222,11 +220,11 @@ impl<P: Protocolize> OutgoingMessages<P> {
     }
 
     // should only push increasing ticks of messages
-    pub fn push(&mut self, client_tick: Tick, message_protocol: P) {
+    pub fn push(&mut self, client_tick: Tick, channel: C, message_protocol: P) {
         if let Some((front_tick, msg_map)) = self.buffer.front_mut() {
             if client_tick == *front_tick {
                 // been here before, cool
-                msg_map.insert(message_protocol);
+                msg_map.insert(channel, message_protocol);
                 return;
             }
 
@@ -238,7 +236,7 @@ impl<P: Protocolize> OutgoingMessages<P> {
         }
 
         let mut msg_map = MessageMap::new();
-        msg_map.insert(message_protocol);
+        msg_map.insert(channel, message_protocol);
         self.buffer.push_front((client_tick, msg_map));
 
         // a good time to prune down this list
@@ -262,7 +260,7 @@ impl<P: Protocolize> OutgoingMessages<P> {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &(Tick, MessageMap<P>)> {
+    pub fn iter(&self) -> impl Iterator<Item = &(Tick, MessageMap<P, C>)> {
         self.buffer.iter().rev()
     }
 

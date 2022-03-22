@@ -28,7 +28,7 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     shared_config: SharedConfig<P, C>,
     // Connection
     io: Io,
-    server_connection: Option<Connection<P, E>>,
+    server_connection: Option<Connection<P, E, C>>,
     handshake_manager: HandshakeManager<P>,
     // Events
     incoming_events: VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
@@ -173,12 +173,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             }
 
             // receive messages
-            while let Some(message) = server_connection
+            while let Some((channel, message)) = server_connection
                 .base
                 .message_manager
                 .pop_incoming_message()
             {
-                self.incoming_events.push_back(Ok(Event::Message(message)));
+                self.incoming_events.push_back(Ok(Event::Message(channel, message)));
             }
 
             // send outgoing packets
@@ -198,7 +198,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, channel: C) {
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
 
         if message.has_entity_properties() {
             if self.server_connection.is_none() {
@@ -208,16 +208,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                 let connection = self.server_connection.as_mut().unwrap();
                 connection
                     .entity_manager
-                    .send_entity_message(message, client_tick);
+                    .send_entity_message(client_tick, channel, message);
             }
 
         } else {
-            let channel_settings = self.shared_config.channel.settings(channel);
             if let Some(connection) = &mut self.server_connection {
                 connection
                     .base
                     .message_manager
-                    .send_message(message, channel_settings.reliable());
+                    .send_message(channel, message);
             }
         }
     }
@@ -407,6 +406,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                             self.server_connection = Some(Connection::new(
                                 server_addr,
                                 &self.client_config.connection,
+                                &self.shared_config.channel,
                                 &self.shared_config.ping,
                             ));
                             self.incoming_events

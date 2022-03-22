@@ -1,24 +1,25 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use crate::{io::Io, tick_manager::TickManager};
-use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ConnectionConfig, Manifest, PacketType, PingConfig, Protocolize, StandardHeader, Tick, WorldMutType, ChannelIndex};
+use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ConnectionConfig, Manifest, PacketType, PingConfig, Protocolize, StandardHeader, Tick, WorldMutType, ChannelIndex, ChannelConfig};
 
 use super::{
     entity_manager::EntityManager, error::NaiaClientError, event::Event, ping_manager::PingManager,
     tick_queue::TickQueue,
 };
 
-pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
-    pub base: BaseConnection<P>,
-    pub entity_manager: EntityManager<P, E>,
+pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+    pub base: BaseConnection<P, C>,
+    pub entity_manager: EntityManager<P, E, C>,
     pub ping_manager: Option<PingManager>,
     jitter_buffer: TickQueue<OwnedBitReader>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
+        channel_config: &ChannelConfig<C>,
         ping_config: &Option<PingConfig>,
     ) -> Self {
         let ping_manager: Option<PingManager> = ping_config.as_ref().map(|config| {
@@ -31,7 +32,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         });
 
         return Connection {
-            base: BaseConnection::new(address, connection_config),
+            base: BaseConnection::new(address, connection_config, channel_config),
             entity_manager: EntityManager::new(),
             ping_manager,
             jitter_buffer: TickQueue::new(),
@@ -50,7 +51,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             .add_item(incoming_tick, reader.to_owned());
     }
 
-    pub fn process_buffered_packets<W: WorldMutType<P, E>, C: ChannelIndex>(
+    pub fn process_buffered_packets<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
