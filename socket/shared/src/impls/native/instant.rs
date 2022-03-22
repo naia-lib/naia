@@ -29,6 +29,10 @@ impl Instant {
         self.inner += Duration::from_millis(millis.into());
     }
 
+    pub fn subtract_duration(&mut self, duration: &Duration) {
+        self.inner -= duration.clone();
+    }
+
     /// Returns inner Instant implementation
     pub fn inner(&self) -> std::time::Instant {
         return self.inner.clone();

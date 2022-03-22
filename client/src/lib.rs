@@ -26,6 +26,7 @@ mod tick_buffer_message_sender;
 mod tick_manager;
 mod tick_queue;
 mod types;
+mod channel_tick_buffer;
 
 pub use naia_shared as shared;
 

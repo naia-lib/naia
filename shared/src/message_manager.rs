@@ -33,6 +33,10 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         }
     }
 
+    pub fn generate_resend_messages(&mut self) {
+
+    }
+
     // Outgoing Messages
 
     /// Returns whether the Manager has queued Messages that can be transmitted
@@ -69,8 +73,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
     /// Queues an Message to be transmitted to the remote host
     pub fn send_message(&mut self, channel_index: C, message: P) {
-        self.queued_outgoing_messages
-            .push_back((channel_index, message));
+        self.queued_outgoing_messages.push_back((channel_index, message));
     }
 
     // Incoming Messages
