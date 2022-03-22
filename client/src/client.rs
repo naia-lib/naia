@@ -31,7 +31,7 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     server_connection: Option<Connection<P, E>>,
     handshake_manager: HandshakeManager<P>,
     // Events
-    incoming_events: VecDeque<Result<Event<P, E>, NaiaClientError>>,
+    incoming_events: VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     // Ticks
     tick_manager: Option<TickManager>,
     // Phantom
@@ -128,7 +128,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     pub fn receive<W: WorldMutType<P, E>>(
         &mut self,
         mut world: W,
-    ) -> VecDeque<Result<Event<P, E>, NaiaClientError>> {
+    ) -> VecDeque<Result<Event<P, E, C>, NaiaClientError>> {
         // Need to run this to maintain connection with server, and receive packets
         // until none left
         self.maintain_socket();

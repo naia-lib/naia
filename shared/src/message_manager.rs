@@ -16,7 +16,7 @@ use super::{
 pub struct MessageManager<P: Protocolize> {
     queued_outgoing_messages: VecDeque<(bool, P)>,
     queued_incoming_messages: VecDeque<P>,
-    sent_guaranteed_messages: HashMap<u16, Vec<P>>,
+    sent_guaranteed_messages: HashMap<PacketIndex, Vec<P>>,
 }
 
 impl<P: Protocolize> MessageManager<P> {

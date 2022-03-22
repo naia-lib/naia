@@ -5,12 +5,7 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{
-    read_list_header,
-    serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    write_list_header, BigMap, EntityActionType, EntityHandle, Manifest, NetEntity, PacketIndex,
-    Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, NetEntityHandleConverter, ReplicateSafe,
-    FakeEntityConverter, EntityHandleConverter};
+use naia_shared::{read_list_header, serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, BigMap, EntityActionType, EntityHandle, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, NetEntityHandleConverter, ReplicateSafe, FakeEntityConverter, EntityHandleConverter, ChannelIndex};
 use crate::types::MsgId;
 
 use super::{
@@ -36,13 +31,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     // Action Reader
-    pub fn read_actions<W: WorldMutType<P, E>>(
+    pub fn read_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
         server_tick: Tick,
         reader: &mut BitReader,
-        event_stream: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
+        event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
         let action_count = read_list_header(reader);
         self.process_actions(
@@ -55,13 +50,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         );
     }
 
-    fn process_actions<W: WorldMutType<P, E>>(
+    fn process_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
         server_tick: Tick,
         reader: &mut BitReader,
-        event_stream: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
+        event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
         action_count: u16,
     ) {
         for _ in 0..action_count {

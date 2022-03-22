@@ -1,11 +1,11 @@
 use std::net::SocketAddr;
 
-use naia_shared::{Protocolize, Tick};
+use naia_shared::{ChannelIndex, Protocolize, Tick};
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
 #[derive(Debug)]
-pub enum Event<P: Protocolize, E: Copy> {
+pub enum Event<P: Protocolize, E: Copy, C: ChannelIndex> {
     /// Occurs when the Client has successfully established a connection with
     /// the Server
     Connection(SocketAddr),
@@ -28,5 +28,5 @@ pub enum Event<P: Protocolize, E: Copy> {
     /// Occurs when a Component should be removed from the given Entity
     RemoveComponent(E, P),
     /// A Message emitted to the Client from the Server
-    Message(P),
+    Message(C, P),
 }
