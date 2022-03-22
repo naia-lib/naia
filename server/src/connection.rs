@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter}, BaseConnection, ConnectionConfig, Manifest, PacketType, Protocolize, StandardHeader, Tick, WorldRefType, EntityConverter};
+use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter}, BaseConnection, ConnectionConfig, Manifest, PacketType, Protocolize, StandardHeader, Tick, WorldRefType, EntityConverter, ChannelIndex, ChannelConfig};
 
 use super::{
     entity_manager::EntityManager, entity_message_receiver::EntityMessageReceiver,
@@ -12,24 +12,25 @@ use super::{
     world_record::WorldRecord,
 };
 
-pub struct Connection<P: Protocolize, E: Copy + Eq + Hash> {
+pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub user_key: UserKey,
-    pub base: BaseConnection<P>,
-    pub entity_manager: EntityManager<P, E>,
-    entity_message_receiver: EntityMessageReceiver<P>,
+    pub base: BaseConnection<P, C>,
+    pub entity_manager: EntityManager<P, E, C>,
+    entity_message_receiver: EntityMessageReceiver<P, C>,
     pub last_received_tick: Tick,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     pub fn new(
         connection_config: &ConnectionConfig,
+        channel_config: &ChannelConfig<C>,
         user_address: SocketAddr,
         user_key: &UserKey,
         diff_handler: &Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
     ) -> Self {
         Connection {
             user_key: *user_key,
-            base: BaseConnection::new(user_address, connection_config),
+            base: BaseConnection::new(user_address, connection_config, channel_config),
             entity_manager: EntityManager::new(user_address, diff_handler),
             entity_message_receiver: EntityMessageReceiver::new(),
             last_received_tick: 0,
@@ -76,7 +77,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
         }
     }
 
-    pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<P> {
+    pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<(C, P)> {
         return self
             .entity_message_receiver
             .pop_incoming_entity_message(server_tick);

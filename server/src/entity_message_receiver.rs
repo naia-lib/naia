@@ -1,16 +1,16 @@
 use std::collections::{HashMap, VecDeque};
 
-use naia_shared::{read_list_header, sequence_greater_than, serde::{BitReader, Serde}, Manifest, Protocolize, Tick, NetEntityHandleConverter};
+use naia_shared::{read_list_header, sequence_greater_than, serde::{BitReader, Serde}, Manifest, Protocolize, Tick, NetEntityHandleConverter, ChannelIndex};
 
 type ShortMsgId = u8;
 
 /// Handles incoming Entity Messages, buffering them to be received on the
 /// correct tick
-pub struct EntityMessageReceiver<P: Protocolize> {
-    incoming_messages: IncomingMessages<P>,
+pub struct EntityMessageReceiver<P: Protocolize, C: ChannelIndex> {
+    incoming_messages: IncomingMessages<P, C>,
 }
 
-impl<P: Protocolize> EntityMessageReceiver<P> {
+impl<P: Protocolize, C: ChannelIndex> EntityMessageReceiver<P, C> {
     /// Creates a new EntityMessageReceiver
     pub fn new() -> Self {
         EntityMessageReceiver {
@@ -19,7 +19,7 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
     }
 
     /// Get the most recently received Entity Message
-    pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<P> {
+    pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<(C, P)> {
         return self.incoming_messages.pop_front(server_tick);
     }
 
@@ -51,6 +51,9 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
             // read message id
             let short_msg_id: ShortMsgId = ShortMsgId::de(reader).unwrap();
 
+            // read message channel
+            let channel: C = C::de(reader).unwrap();
+
             // read message kind
             let replica_kind: P::Kind = P::Kind::de(reader).unwrap();
 
@@ -61,6 +64,7 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
                 client_tick,
                 server_tick,
                 short_msg_id,
+                channel,
                 new_message,
             ) {
                 //info!("failed command. server: {}, client: {}",
@@ -72,12 +76,12 @@ impl<P: Protocolize> EntityMessageReceiver<P> {
 
 // Incoming messages
 
-struct IncomingMessages<P> {
+struct IncomingMessages<P: Protocolize, C: ChannelIndex> {
     // front is small, back is big
-    buffer: VecDeque<(Tick, HashMap<ShortMsgId, P>)>,
+    buffer: VecDeque<(Tick, HashMap<ShortMsgId, (C, P)>)>,
 }
 
-impl<P> IncomingMessages<P> {
+impl<P: Protocolize, C: ChannelIndex> IncomingMessages<P, C> {
     pub fn new() -> Self {
         IncomingMessages {
             buffer: VecDeque::new(),
@@ -89,6 +93,7 @@ impl<P> IncomingMessages<P> {
         client_tick: Tick,
         server_tick: Tick,
         short_msg_id: ShortMsgId,
+        message_channel: C,
         new_message: P,
     ) -> bool {
         if sequence_greater_than(client_tick, server_tick) {
@@ -97,7 +102,7 @@ impl<P> IncomingMessages<P> {
             //in the case of empty vec
             if index == 0 {
                 let mut map = HashMap::new();
-                map.insert(short_msg_id, new_message);
+                map.insert(short_msg_id, (message_channel, new_message));
                 self.buffer.push_back((client_tick, map));
                 //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (empty q)",
                 // server_tick, client_tick, owned_entity);
@@ -111,7 +116,7 @@ impl<P> IncomingMessages<P> {
                 if let Some((tick, command_map)) = self.buffer.get_mut(index) {
                     if *tick == client_tick {
                         if !command_map.contains_key(&short_msg_id) {
-                            command_map.insert(short_msg_id, new_message);
+                            command_map.insert(short_msg_id, (message_channel, new_message));
                             //info!("inserting command at tick: {}", client_tick);
                             //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (map
                             // xzist)", server_tick, client_tick, owned_entity);
@@ -131,7 +136,7 @@ impl<P> IncomingMessages<P> {
                 if insert {
                     // found correct position to insert node
                     let mut map = HashMap::new();
-                    map.insert(short_msg_id, new_message);
+                    map.insert(short_msg_id, (message_channel, new_message));
                     self.buffer.insert(index + 1, (client_tick, map));
                     //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (midbck
                     // insrt)", server_tick, client_tick, owned_entity);
@@ -141,7 +146,7 @@ impl<P> IncomingMessages<P> {
                 if index == 0 {
                     //traversed the whole vec, push front
                     let mut map = HashMap::new();
-                    map.insert(short_msg_id, new_message);
+                    map.insert(short_msg_id, (message_channel, new_message));
                     self.buffer.push_front((client_tick, map));
                     //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (front
                     // insrt)", server_tick, client_tick, owned_entity);
@@ -154,7 +159,7 @@ impl<P> IncomingMessages<P> {
         }
     }
 
-    pub fn pop_front(&mut self, server_tick: Tick) -> Option<P> {
+    pub fn pop_front(&mut self, server_tick: Tick) -> Option<(C, P)> {
         // get rid of outdated commands
         loop {
             let mut pop = false;

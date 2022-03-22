@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::ChannelIndex;
 
 use super::{
     message_manager::MessageManager, packet_notifiable::PacketNotifiable, packet_type::PacketType,
@@ -43,10 +44,10 @@ impl AckManager {
 
     /// Process an incoming packet, handle notifications of delivered / dropped
     /// packets
-    pub fn process_incoming_header<P: Protocolize>(
+    pub fn process_incoming_header<P: Protocolize, C: ChannelIndex>(
         &mut self,
         header: &StandardHeader,
-        message_manager: &mut MessageManager<P>,
+        message_manager: &mut MessageManager<P, C>,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         let sender_packet_index = header.sender_packet_index();
@@ -130,10 +131,10 @@ impl AckManager {
         outgoing
     }
 
-    fn notify_packet_delivered<P: Protocolize>(
+    fn notify_packet_delivered<P: Protocolize, C: ChannelIndex>(
         &self,
         sent_packet_index: PacketIndex,
-        message_manager: &mut MessageManager<P>,
+        message_manager: &mut MessageManager<P, C>,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         message_manager.notify_packet_delivered(sent_packet_index);
@@ -142,10 +143,10 @@ impl AckManager {
         }
     }
 
-    fn notify_packet_dropped<P: Protocolize>(
+    fn notify_packet_dropped<P: Protocolize, C: ChannelIndex>(
         &self,
         sent_packet_index: PacketIndex,
-        message_manager: &mut MessageManager<P>,
+        message_manager: &mut MessageManager<P, C>,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         message_manager.notify_packet_dropped(sent_packet_index);
