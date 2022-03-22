@@ -1,4 +1,4 @@
-use naia_shared::{derive_channels, Channel, ChannelConfig, ChannelMode};
+use naia_shared::{derive_channels, Channel, ChannelConfig, ChannelMode, ChannelDirection};
 
 #[derive_channels]
 pub enum Channels {
@@ -11,11 +11,11 @@ pub fn channels_init() -> ChannelConfig<Channels> {
 
     config.add_channel(
         Channels::PlayerCommand,
-        Channel::new(ChannelMode::TickBuffered),
+        Channel::new(ChannelMode::TickBuffered, ChannelDirection::ClientToServer),
     );
     config.add_channel(
         Channels::EntityAssignment,
-        Channel::new(ChannelMode::UnorderedReliable),
+        Channel::new(ChannelMode::UnorderedReliable, ChannelDirection::ServerToClient),
     );
 
     config

@@ -224,9 +224,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     pub fn send_message<R: ReplicateSafe<P>>(
         &mut self,
         user_key: &UserKey,
-        message: &R,
         channel: C,
+        message: &R,
     ) {
+        if !self.shared_config.channel.settings(&channel).can_send_to_client() {
+            panic!("Cannot send message to Client on this Channel");
+        }
+
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
                 if message.has_entity_properties() {

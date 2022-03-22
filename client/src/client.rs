@@ -194,7 +194,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     /// Queues up an Message to be sent to the Server
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
-        let tick_buffered = match self.shared_config.channel.settings(&channel).mode {
+        let channel_settings = self.shared_config.channel.settings(&channel);
+
+        if !channel_settings.can_send_to_server() {
+            panic!("Cannot send message to Server on this Channel");
+        }
+
+        let tick_buffered = match channel_settings.mode {
             ChannelMode::TickBuffered => true,
             _ => false,
         };
