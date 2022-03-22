@@ -54,7 +54,7 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     // Components
     diff_handler: Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
     // Events
-    incoming_events: VecDeque<Result<Event<P>, NaiaServerError>>,
+    incoming_events: VecDeque<Result<Event<P, C>, NaiaServerError>>,
     // Ticks
     tick_manager: Option<TickManager>,
 }
@@ -118,7 +118,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P>, NaiaServerError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P, C>, NaiaServerError>> {
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
         self.maintain_socket();

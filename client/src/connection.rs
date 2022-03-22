@@ -1,11 +1,7 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use crate::{io::Io, tick_manager::TickManager};
-use naia_shared::{
-    serde::{BitReader, BitWriter, OwnedBitReader},
-    BaseConnection, ConnectionConfig, Manifest, PacketType, PingConfig, Protocolize,
-    StandardHeader, Tick, WorldMutType,
-};
+use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ConnectionConfig, Manifest, PacketType, PingConfig, Protocolize, StandardHeader, Tick, WorldMutType, ChannelIndex};
 
 use super::{
     entity_manager::EntityManager, error::NaiaClientError, event::Event, ping_manager::PingManager,
@@ -54,12 +50,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Connection<P, E> {
             .add_item(incoming_tick, reader.to_owned());
     }
 
-    pub fn process_buffered_packets<W: WorldMutType<P, E>>(
+    pub fn process_buffered_packets<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
         receiving_tick: Tick,
-        incoming_events: &mut VecDeque<Result<Event<P, E>, NaiaClientError>>,
+        incoming_events: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();
