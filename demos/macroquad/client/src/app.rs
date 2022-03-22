@@ -9,16 +9,12 @@ use naia_client::{
 
 use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
 
-use naia_macroquad_demo_shared::{
-    behavior as shared_behavior,
-    protocol::{Auth, Color, KeyCommand, Protocol, Square},
-    shared_config,
-};
+use naia_macroquad_demo_shared::{behavior as shared_behavior, Channels, protocol::{Auth, Color, KeyCommand, Protocol, Square}, shared_config};
 
 use crate::command_history::CommandHistory;
 
 type World = DemoWorld<Protocol>;
-type Client = NaiaClient<Protocol, Entity>;
+type Client = NaiaClient<Protocol, Entity, Channels>;
 
 const SQUARE_SIZE: f32 = 32.0;
 
