@@ -1,8 +1,13 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
-use crate::{io::Io, tick_manager::TickManager};
-use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ConnectionConfig, Manifest, PacketType, PingConfig, Protocolize, StandardHeader, Tick, WorldMutType, ChannelIndex, ChannelConfig};
-use crate::tick_buffer_message_sender::TickBufferMessageSender;
+use crate::{
+    io::Io, tick_buffer_message_sender::TickBufferMessageSender, tick_manager::TickManager,
+};
+use naia_shared::{
+    serde::{BitReader, BitWriter, OwnedBitReader},
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, Manifest, PacketType,
+    PingConfig, Protocolize, StandardHeader, Tick, WorldMutType,
+};
 
 use super::{
     entity_manager::EntityManager, error::NaiaClientError, event::Event, ping_manager::PingManager,
@@ -13,7 +18,7 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub base: BaseConnection<P, C>,
     pub entity_manager: EntityManager<P, E>,
     pub ping_manager: Option<PingManager>,
-    pub message_sender: TickBufferMessageSender<P, C>,
+    pub tick_buffer_message_sender: TickBufferMessageSender<P, C>,
     jitter_buffer: TickQueue<OwnedBitReader>,
 }
 
@@ -37,7 +42,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             base: BaseConnection::new(address, connection_config, channel_config),
             entity_manager: EntityManager::new(),
             ping_manager,
-            message_sender: TickBufferMessageSender::new(),
+            tick_buffer_message_sender: TickBufferMessageSender::new(),
             jitter_buffer: TickQueue::new(),
         };
     }
@@ -46,7 +51,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         self.base
-            .process_incoming_header(header, &mut Some(&mut self.message_sender));
+            .process_incoming_header(header, &mut Some(&mut self.tick_buffer_message_sender));
     }
 
     pub fn buffer_data_packet(&mut self, incoming_tick: Tick, reader: &mut BitReader) {
@@ -103,7 +108,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         tick_manager_opt: &Option<TickManager>,
     ) -> bool {
         if self.base.message_manager.has_outgoing_messages()
-            || self.message_sender.has_outgoing_messages()
+            || self.tick_buffer_message_sender.has_outgoing_messages()
         {
             let next_packet_index = self.base.next_packet_index();
 
@@ -117,14 +122,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
                 // write tick
                 tick_manager.write_client_tick(&mut writer);
 
-                // write entity messages
-                self.message_sender.write_messages(&self.entity_manager, &mut writer, next_packet_index);
+                // write tick buffered messages
+                self.tick_buffer_message_sender.write_messages(
+                    &self.entity_manager,
+                    &mut writer,
+                    next_packet_index,
+                );
             }
 
             // write messages
-            self.base
-                .message_manager
-                .write_messages(&mut writer, next_packet_index, &self.entity_manager);
+            self.base.message_manager.write_messages(
+                &mut writer,
+                next_packet_index,
+                &self.entity_manager,
+            );
 
             // send packet
             io.send_writer(&mut writer);

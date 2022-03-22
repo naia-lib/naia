@@ -7,7 +7,10 @@ use std::{
 };
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{serde::{BitWriter, Serde}, EntityHandle, EntityHandleConverter, ChannelIndex};
+use naia_shared::{
+    serde::{BitWriter, Serde},
+    ChannelIndex, EntityHandle, EntityHandleConverter,
+};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, Manifest,
     NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType,
@@ -140,20 +143,26 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
             let connection = self.user_connections.get_mut(user_address).unwrap();
 
             // receive messages from anyone
-            while let Some((channel, message)) = connection.base.message_manager.pop_incoming_message() {
-                self.incoming_events
-                    .push_back(Ok(Event::Message(connection.user_key, channel, message)));
+            while let Some((channel, message)) =
+                connection.base.message_manager.pop_incoming_message()
+            {
+                self.incoming_events.push_back(Ok(Event::Message(
+                    connection.user_key,
+                    channel,
+                    message,
+                )));
             }
 
-            // receive entity messages on tick
+            // receive tick buffered messages on tick
             if did_tick {
-                // Receive EntityMessages
+                // Receive Tick Buffered Messages
                 for user_address in &user_addresses {
                     let connection = self.user_connections.get_mut(user_address).unwrap();
 
-                    while let Some((channel, message)) = connection.pop_incoming_entity_message(
-                        self.tick_manager.as_ref().unwrap().server_tick(),
-                    ) {
+                    while let Some((channel, message)) = connection
+                        .tick_buffer_message_receiver
+                        .pop_incoming_message(self.tick_manager.as_ref().unwrap().server_tick())
+                    {
                         self.incoming_events.push_back(Ok(Event::Message(
                             connection.user_key,
                             channel,
@@ -230,9 +239,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
 
                     // check whether all entities are in scope for the connection
                     let all_entities_in_scope = {
-                        entities.iter().all(|entity| {
-                            connection.entity_manager.entity_in_scope(entity)
-                        })
+                        entities
+                            .iter()
+                            .all(|entity| connection.entity_manager.entity_in_scope(entity))
                     };
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
@@ -241,7 +250,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                             .message_manager
                             .send_message(channel, message);
                     } else {
-                        // Entity hasn't been added to the User Scope yet, or replicated to Client yet
+                        // Entity hasn't been added to the User Scope yet, or replicated to Client
+                        // yet
                         connection
                             .entity_manager
                             .queue_entity_message(entities, channel, message);
@@ -739,7 +749,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     /// Remove all Entities from a Room, associated with the given RoomKey
     fn room_remove_all_entities(&mut self, room_key: &RoomKey) {
         if let Some(room) = self.rooms.get_mut(room_key) {
-
             let entities: Vec<E> = room.entities().map(|entity_ref| *entity_ref).collect();
             for entity in entities {
                 room.remove_entity(&entity);
@@ -881,7 +890,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                     &self.tick_manager,
                                     &self.shared_config.manifest,
                                     &mut reader,
-                                    &self.world_record
+                                    &self.world_record,
                                 );
                             }
                             None => {
@@ -1064,7 +1073,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter<E> for Server<P, E, C> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter<E>
+    for Server<P, E, C>
+{
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
         return self.world_record.handle_to_entity(entity_handle);
     }

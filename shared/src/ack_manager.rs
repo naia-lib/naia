@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::ChannelIndex;
+use std::collections::HashMap;
 
 use super::{
     message_manager::MessageManager, packet_notifiable::PacketNotifiable, packet_type::PacketType,

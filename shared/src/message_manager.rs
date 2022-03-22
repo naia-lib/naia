@@ -3,7 +3,10 @@ use std::{
     vec::Vec,
 };
 
-use crate::{constants::MTU_SIZE_BITS, read_list_header, write_list_header, PacketIndex, NetEntityHandleConverter, ChannelIndex, ChannelConfig};
+use crate::{
+    constants::MTU_SIZE_BITS, read_list_header, write_list_header, ChannelConfig, ChannelIndex,
+    NetEntityHandleConverter, PacketIndex,
+};
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
 
 use super::{
@@ -72,7 +75,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     }
 
     pub fn queue_entity_message(&mut self, channel_index: C, message: P) {
-        self.queued_outgoing_messages.push_back((channel_index, message));
+        self.queued_outgoing_messages
+            .push_back((channel_index, message));
     }
 
     // Incoming Messages
@@ -85,7 +89,12 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     // MessageWriter
 
     /// Write into outgoing packet
-    pub fn write_messages(&mut self, writer: &mut BitWriter, packet_index: PacketIndex, converter: &dyn NetEntityHandleConverter) {
+    pub fn write_messages(
+        &mut self,
+        writer: &mut BitWriter,
+        packet_index: PacketIndex,
+        converter: &dyn NetEntityHandleConverter,
+    ) {
         let mut message_count: u16 = 0;
 
         // Header
@@ -122,17 +131,28 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         {
             for _ in 0..message_count {
                 // Pop message
-                let (message_channel, popped_message) = self.pop_outgoing_message(packet_index).unwrap();
+                let (message_channel, popped_message) =
+                    self.pop_outgoing_message(packet_index).unwrap();
 
                 // Write message
-                MessageManager::<P, C>::write_message(writer, &message_channel, &popped_message, converter);
+                MessageManager::<P, C>::write_message(
+                    writer,
+                    &message_channel,
+                    &popped_message,
+                    converter,
+                );
             }
         }
     }
 
     /// Writes an Message into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_message<S: BitWrite>(writer: &mut S, channel: &C, message: &P, converter: &dyn NetEntityHandleConverter) {
+    pub fn write_message<S: BitWrite>(
+        writer: &mut S,
+        channel: &C,
+        message: &P,
+        converter: &dyn NetEntityHandleConverter,
+    ) {
         // write channel
         channel.ser(writer);
 
@@ -144,7 +164,12 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     }
 
     // MessageReader
-    pub fn read_messages(&mut self, reader: &mut BitReader, manifest: &Manifest<P>, converter: &dyn NetEntityHandleConverter) {
+    pub fn read_messages(
+        &mut self,
+        reader: &mut BitReader,
+        manifest: &Manifest<P>,
+        converter: &dyn NetEntityHandleConverter,
+    ) {
         let message_count = read_list_header(reader);
         self.process_message_data(reader, manifest, message_count, converter);
     }
@@ -159,7 +184,6 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         converter: &dyn NetEntityHandleConverter,
     ) {
         for _x in 0..message_count {
-
             // read channel
             let channel: C = C::de(reader).unwrap();
 
@@ -169,7 +193,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             // read payload
             let new_message = manifest.create_replica(component_kind, reader, converter);
 
-            self.queued_incoming_messages.push_back((channel, new_message));
+            self.queued_incoming_messages
+                .push_back((channel, new_message));
         }
     }
 }

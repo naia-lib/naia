@@ -2,15 +2,16 @@ use std::{collections::HashMap, hash::Hash, marker::PhantomData, net::SocketAddr
 
 use ring::{hmac, hmac::Tag, rand};
 
+use naia_shared::ChannelIndex;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
-    wrapping_diff, BaseConnection, ConnectionConfig, Instant, KeyGenerator, Manifest, PacketType,
-    PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe,
-    SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType, FakeEntityConverter
+    wrapping_diff, BaseConnection, ConnectionConfig, FakeEntityConverter, Instant, KeyGenerator,
+    Manifest, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
+    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType,
+    WorldRefType,
 };
-use naia_shared::ChannelIndex;
 
-use super::{connection::Connection, io::Io, world_record::WorldRecord, cache_map::CacheMap};
+use super::{cache_map::CacheMap, connection::Connection, io::Io, world_record::WorldRecord};
 
 pub enum HandshakeResult<P: Protocolize> {
     Invalid,

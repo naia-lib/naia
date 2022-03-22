@@ -4,19 +4,24 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter}, BaseConnection, ConnectionConfig, Manifest, PacketType, Protocolize, StandardHeader, Tick, WorldRefType, EntityConverter, ChannelIndex, ChannelConfig};
+use naia_shared::{
+    sequence_greater_than,
+    serde::{BitReader, BitWriter},
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, Manifest,
+    PacketType, Protocolize, StandardHeader, Tick, WorldRefType,
+};
 
 use super::{
-    entity_manager::EntityManager, tick_buffer_message_receiver::TickBufferMessageReceiver,
-    global_diff_handler::GlobalDiffHandler, io::Io, tick_manager::TickManager, user::UserKey,
-    world_record::WorldRecord,
+    entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, io::Io,
+    tick_buffer_message_receiver::TickBufferMessageReceiver, tick_manager::TickManager,
+    user::UserKey, world_record::WorldRecord,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub user_key: UserKey,
     pub base: BaseConnection<P, C>,
     pub entity_manager: EntityManager<P, E, C>,
-    entity_message_receiver: TickBufferMessageReceiver<P, C>,
+    pub tick_buffer_message_receiver: TickBufferMessageReceiver<P, C>,
     pub last_received_tick: Tick,
 }
 
@@ -32,7 +37,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             user_key: *user_key,
             base: BaseConnection::new(user_address, connection_config, channel_config),
             entity_manager: EntityManager::new(user_address, diff_handler),
-            entity_message_receiver: TickBufferMessageReceiver::new(),
+            tick_buffer_message_receiver: TickBufferMessageReceiver::new(),
             last_received_tick: 0,
         }
     }
@@ -64,27 +69,28 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     ) {
         if let Some(tick_manager) = tick_manager_option {
             let server_tick = tick_manager.server_tick();
-            // Read Entity Messages
+            // Read Tick Buffered Messages
             let mut converter = EntityConverter::new(world_record, &self.entity_manager);
-            self.entity_message_receiver
-                .read_messages(server_tick, reader, manifest, &mut converter);
+            self.tick_buffer_message_receiver.read_messages(
+                server_tick,
+                reader,
+                manifest,
+                &mut converter,
+            );
         }
 
         // Read Messages
         {
             let mut converter = EntityConverter::new(world_record, &self.entity_manager);
-            self.base.message_manager.read_messages(reader, manifest, &mut converter);
+            self.base
+                .message_manager
+                .read_messages(reader, manifest, &mut converter);
         }
     }
 
-    pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<(C, P)> {
-        return self
-            .entity_message_receiver
-            .pop_incoming_message(server_tick);
-    }
-
     pub fn collect_entity_messages(&mut self) {
-        self.entity_manager.collect_entity_messages(&mut self.base.message_manager);
+        self.entity_manager
+            .collect_entity_messages(&mut self.base.message_manager);
     }
 
     // Outgoing data
@@ -134,9 +140,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             // write messages
             {
                 let mut converter = EntityConverter::new(world_record, &self.entity_manager);
-                self.base
-                    .message_manager
-                    .write_messages(&mut writer, next_packet_index, &mut converter);
+                self.base.message_manager.write_messages(
+                    &mut writer,
+                    next_packet_index,
+                    &mut converter,
+                );
             }
 
             // write entity actions

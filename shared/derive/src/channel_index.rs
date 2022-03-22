@@ -27,11 +27,10 @@ pub fn channels_impl(
             pub use define_{enum_name}::{enum_name};
             "
         )
-            .parse()
-            .unwrap();
+        .parse()
+        .unwrap();
 
         return output;
-
     } else {
         unimplemented!("Only enums are supported");
     }
@@ -44,6 +43,6 @@ pub fn derive_channel_enum(enum_: &Enum) -> String {
         impl ChannelIndex for {enum_name} {{}}
         "
     )
-        .parse()
-        .unwrap()
+    .parse()
+    .unwrap()
 }

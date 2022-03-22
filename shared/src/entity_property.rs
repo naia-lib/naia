@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use naia_serde::{BitReader, BitWrite, Serde};
 
-use crate::{property_mutate::PropertyMutator, EntityHandle, Property, NetEntity, BigMapKey};
+use crate::{property_mutate::PropertyMutator, BigMapKey, EntityHandle, NetEntity, Property};
 
 #[derive(Clone)]
 pub struct EntityProperty {
@@ -32,7 +32,11 @@ impl EntityProperty {
             .ser(writer);
     }
 
-    pub fn new_read(reader: &mut BitReader, mutator_index: u8, converter: &dyn NetEntityHandleConverter) -> Self {
+    pub fn new_read(
+        reader: &mut BitReader,
+        mutator_index: u8,
+        converter: &dyn NetEntityHandleConverter,
+    ) -> Self {
         if let Some(net_entity) = Option::<NetEntity>::de(reader).unwrap() {
             let handle = converter.net_entity_to_handle(&net_entity);
             let mut new_prop = Self::new(mutator_index);
@@ -61,7 +65,7 @@ impl EntityProperty {
             if let Some(other_handle) = *other.handle_prop {
                 return handle == other_handle;
             }
-            return false
+            return false;
         }
         return other.handle_prop.is_none();
     }
@@ -72,20 +76,11 @@ impl EntityProperty {
         self.handle_prop.set_mutator(mutator);
     }
 
-    pub fn get<E: Copy + Eq + Hash>(
-        &self,
-        handler: &dyn EntityHandleConverter<E>,
-    ) -> Option<E> {
-        (*self.handle_prop)
-            .map(|handle| handler
-                .handle_to_entity(&handle))
+    pub fn get<E: Copy + Eq + Hash>(&self, handler: &dyn EntityHandleConverter<E>) -> Option<E> {
+        (*self.handle_prop).map(|handle| handler.handle_to_entity(&handle))
     }
 
-    pub fn set<E: Copy + Eq + Hash>(
-        &mut self,
-        handler: &dyn EntityHandleConverter<E>,
-        entity: &E,
-    ) {
+    pub fn set<E: Copy + Eq + Hash>(&mut self, handler: &dyn EntityHandleConverter<E>, entity: &E) {
         let new_handle = handler.entity_to_handle(entity);
         *self.handle_prop = Some(new_handle);
     }
@@ -124,7 +119,10 @@ pub struct EntityConverter<'a, 'b, E: Eq + Copy + Hash> {
 }
 
 impl<'a, 'b, E: Eq + Copy + Hash> EntityConverter<'a, 'b, E> {
-    pub fn new(handle_converter: &'a dyn EntityHandleConverter<E>, net_entity_converter: &'b dyn NetEntityConverter<E>) -> Self {
+    pub fn new(
+        handle_converter: &'a dyn EntityHandleConverter<E>,
+        net_entity_converter: &'b dyn NetEntityConverter<E>,
+    ) -> Self {
         Self {
             handle_converter,
             net_entity_converter,
@@ -132,8 +130,7 @@ impl<'a, 'b, E: Eq + Copy + Hash> EntityConverter<'a, 'b, E> {
     }
 }
 
-impl<'a, 'b, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityConverter<'a, 'b, E>
-{
+impl<'a, 'b, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityConverter<'a, 'b, E> {
     fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity {
         let entity = self.handle_converter.handle_to_entity(entity_handle);
         return self.net_entity_converter.entity_to_net_entity(&entity);

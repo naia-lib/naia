@@ -1,6 +1,8 @@
-use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
-use naia_shared::{Protocolize, KeyGenerator, MessageManager, ChannelIndex};
+use naia_shared::{ChannelIndex, KeyGenerator, MessageManager, Protocolize};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 type MessageHandle = u16;
 
@@ -35,7 +37,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist
             }
         }
 
-        self.messages.insert(new_handle, (entities, channel.clone(), message));
+        self.messages
+            .insert(new_handle, (entities, channel.clone(), message));
     }
 
     pub fn add_entity(&mut self, entity: &E) {
@@ -48,7 +51,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist
         if let Some(message_set) = self.waiting_entities.get_mut(entity) {
             for message_handle in message_set.iter() {
                 if let Some((entities, _, _)) = self.messages.get(message_handle) {
-                    if entities.iter().all(|entity| self.in_scope_entities.contains(entity)) {
+                    if entities
+                        .iter()
+                        .all(|entity| self.in_scope_entities.contains(entity))
+                    {
                         outgoing_message_handles.push(*message_handle);
                     }
                 }
@@ -57,13 +63,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist
 
         // get the messages ready to send, also clean up
         for outgoing_message_handle in outgoing_message_handles {
-            let (entities, channel, message) = self.messages.remove(&outgoing_message_handle).unwrap();
+            let (entities, channel, message) =
+                self.messages.remove(&outgoing_message_handle).unwrap();
 
             // push outgoing message
             self.ready_messages.push((channel, message));
 
             // recycle message handle
-            self.message_handle_store.recycle_key(&outgoing_message_handle);
+            self.message_handle_store
+                .recycle_key(&outgoing_message_handle);
 
             // for all associated entities, remove from waitlist
             for entity in entities {

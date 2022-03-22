@@ -1,6 +1,6 @@
 use super::protocolize::Protocolize;
-use naia_serde::BitReader;
 use crate::NetEntityHandleConverter;
+use naia_serde::BitReader;
 
 /// Handles the creation of new Replica (Message/Component) instances
 pub trait ReplicaBuilder<P: Protocolize>: Send + Sync + ReplicaBuilderClone<P> {

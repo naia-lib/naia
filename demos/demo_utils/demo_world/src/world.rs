@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use naia_shared::{serde::BitReader, BigMap, ProtocolInserter, Protocolize, ReplicaDynMutWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType, NetEntityHandleConverter};
+use naia_shared::{
+    serde::BitReader, BigMap, NetEntityHandleConverter, ProtocolInserter, Protocolize,
+    ReplicaDynMutWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+    WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
