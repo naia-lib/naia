@@ -1,7 +1,9 @@
 use std::collections::{HashMap, VecDeque};
 
 use crate::{constants::MESSAGE_HISTORY_SIZE, types::MsgId};
-use naia_shared::{sequence_greater_than, sequence_less_than, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, ChannelIndex};
+
+use naia_shared::{sequence_greater_than, sequence_less_than, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, ChannelIndex, MTU_SIZE_BITS, write_list_header, NetEntityHandleConverter};
+use naia_shared::serde::{BitCounter, BitWrite, BitWriter, Serde};
 
 pub struct TickBufferMessageSender<P: Protocolize, C: ChannelIndex> {
     // This SequenceBuffer is indexed by Tick
@@ -74,6 +76,99 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferMessageSender<P, C> {
         // Remove messages that would never be able to reach the Server
         self.outgoing_messages
             .pop_back_until_excluding(server_receivable_tick);
+    }
+
+    // Tick Buffer Message Writing
+
+    pub fn write_messages(&mut self, converter: &dyn NetEntityHandleConverter, writer: &mut BitWriter, packet_index: PacketIndex) {
+        let mut entity_messages = self.generate_outgoing_message_list();
+
+        let mut message_count: u16 = 0;
+
+        // Header
+        {
+            // Measure
+            let current_packet_size = writer.bit_count();
+            if current_packet_size > MTU_SIZE_BITS {
+                return;
+            }
+
+            let mut counter = BitCounter::new();
+            write_list_header(&mut counter, &123);
+
+            // Check for overflow
+            if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
+                return;
+            }
+
+            // Find how many messages will fit into the packet
+            for (message_id, client_tick, channel, message) in entity_messages.iter() {
+                self.write_message(
+                    converter,
+                    &mut counter,
+                    &client_tick,
+                    &message_id,
+                    channel,
+                    message,
+                );
+                if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
+                    message_count += 1;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // Write header
+        write_list_header(writer, &message_count);
+
+        // Messages
+        {
+            for _ in 0..message_count {
+                // Pop message
+                let (message_id, client_tick, channel, message) =
+                    entity_messages.pop_front().unwrap();
+
+                // Write message
+                self.write_message(
+                    converter,
+                    writer,
+                    &client_tick,
+                    &message_id,
+                    &channel,
+                    &message,
+                );
+                self.message_written(packet_index, client_tick, message_id);
+            }
+        }
+    }
+
+    /// Writes a Command into the Writer's internal buffer, which will
+    /// eventually be put into the outgoing packet
+    pub fn write_message<S: BitWrite>(
+        &self,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut S,
+        client_tick: &Tick,
+        message_id: &MsgId,
+        channel: &C,
+        message: &P,
+    ) {
+        // write client tick
+        client_tick.ser(writer);
+
+        // write message id
+        let short_msg_id: u8 = (message_id % 256) as u8;
+        short_msg_id.ser(writer);
+
+        // write message channel
+        channel.ser(writer);
+
+        // write message kind
+        message.dyn_ref().kind().ser(writer);
+
+        // write payload
+        message.write(writer, converter);
     }
 }
 
