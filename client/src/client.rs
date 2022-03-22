@@ -198,7 +198,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, guaranteed_delivery: bool) {
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, message: &R, channel: C) {
 
         if message.has_entity_properties() {
             if self.server_connection.is_none() {
@@ -212,11 +212,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             }
 
         } else {
+            let channel_settings = self.shared_config.channel.settings(channel);
             if let Some(connection) = &mut self.server_connection {
                 connection
                     .base
                     .message_manager
-                    .send_message(message, guaranteed_delivery);
+                    .send_message(message, channel_settings.reliable());
             }
         }
     }

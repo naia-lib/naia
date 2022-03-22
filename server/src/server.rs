@@ -214,8 +214,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
         &mut self,
         user_key: &UserKey,
         message: &R,
-        guaranteed_delivery: bool,
+        channel: C,
     ) {
+        let reliable = self.shared_config.channel.settings(channel).reliable();
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
                 if message.has_entity_properties() {
@@ -237,7 +238,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                         connection
                             .base
                             .message_manager
-                            .send_message(message, true);
+                            .send_message(message, reliable);
                     } else {
                         // Entity hasn't been added to the User Scope yet, or replicated to Client yet
                         connection
@@ -248,7 +249,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                     connection
                         .base
                         .message_manager
-                        .send_message(message, guaranteed_delivery);
+                        .send_message(message, reliable);
                 }
             }
         }
