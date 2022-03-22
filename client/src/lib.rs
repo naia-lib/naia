@@ -15,7 +15,7 @@ mod client_config;
 mod connection;
 mod constants;
 mod entity_manager;
-mod entity_message_sender;
+mod tick_buffer_message_sender;
 mod entity_record;
 mod entity_ref;
 mod error;

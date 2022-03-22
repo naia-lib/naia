@@ -9,14 +9,14 @@ use naia_shared::{read_list_header, serde::{BitCounter, BitReader, BitWrite, Bit
 use crate::types::MsgId;
 
 use super::{
-    entity_message_sender::EntityMessageSender, entity_record::EntityRecord,
+    tick_buffer_message_sender::TickBufferMessageSender, entity_record::EntityRecord,
     error::NaiaClientError, event::Event,
 };
 
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
     local_to_world_entity: HashMap<NetEntity, E>,
-    pub message_sender: EntityMessageSender<P, C>,
+    pub message_sender: TickBufferMessageSender<P, C>,
     pub handle_entity_map: BigMap<EntityHandle, E>,
 }
 
@@ -25,7 +25,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         EntityManager {
             local_to_world_entity: HashMap::new(),
             entity_records: HashMap::new(),
-            message_sender: EntityMessageSender::new(),
+            message_sender: TickBufferMessageSender::new(),
             handle_entity_map: BigMap::new(),
         }
     }
@@ -300,7 +300,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     }
 
     pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, tick: Tick, channel: C, message: &R) {
-        self.message_sender.send_entity_message(tick, channel, message);
+        self.message_sender.send_message(tick, channel, message);
     }
 }
 
