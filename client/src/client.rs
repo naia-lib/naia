@@ -7,7 +7,7 @@ pub use naia_shared::{
     ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };
-use naia_shared::{EntityHandle, EntityHandleConverter};
+use naia_shared::{ChannelIndex, EntityHandle, EntityHandleConverter};
 
 use super::{
     client_config::ClientConfig,
@@ -22,10 +22,10 @@ use super::{
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
-pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
+pub struct Client<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     // Config
     client_config: ClientConfig,
-    shared_config: SharedConfig<P>,
+    shared_config: SharedConfig<P, C>,
     // Connection
     io: Io,
     server_connection: Option<Connection<P, E>>,
@@ -38,9 +38,9 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash> {
     phantom_k: PhantomData<E>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     /// Create a new Client
-    pub fn new(client_config: &ClientConfig, shared_config: &SharedConfig<P>) -> Self {
+    pub fn new(client_config: &ClientConfig, shared_config: &SharedConfig<P, C>) -> Self {
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
 
         let tick_manager = {
@@ -464,7 +464,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Client<P, E> {
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for Client<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter<E> for Client<P, E, C> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
         let connection = self.server_connection.as_ref().expect("cannot handle entity properties unless connection is established");
         return connection.entity_manager.handle_to_entity(entity_handle);
