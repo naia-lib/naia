@@ -1,33 +1,34 @@
 use std::net::SocketAddr;
 
 use naia_serde::{BitWriter, Serde};
+
 use naia_socket_shared::Timer;
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig, message_manager::MessageManager,
     packet_notifiable::PacketNotifiable, packet_type::PacketType, protocolize::Protocolize,
-    standard_header::StandardHeader, types::PacketIndex,
+    standard_header::StandardHeader, types::PacketIndex, channel_config::{ChannelConfig, ChannelIndex}
 };
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
-pub struct BaseConnection<P: Protocolize> {
+pub struct BaseConnection<P: Protocolize, C: ChannelIndex> {
     pub address: SocketAddr,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
     ack_manager: AckManager,
-    pub message_manager: MessageManager<P>,
+    pub message_manager: MessageManager<P, C>,
 }
 
-impl<P: Protocolize> BaseConnection<P> {
+impl<P: Protocolize, C: ChannelIndex> BaseConnection<P, C> {
     /// Create a new BaseConnection, given the appropriate underlying managers
-    pub fn new(address: SocketAddr, config: &ConnectionConfig) -> Self {
+    pub fn new(address: SocketAddr, connection_config: &ConnectionConfig, channel_config: &ChannelConfig<C>) -> Self {
         return BaseConnection {
             address,
-            heartbeat_timer: Timer::new(config.heartbeat_interval),
-            timeout_timer: Timer::new(config.disconnection_timeout_duration),
+            heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
+            timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
             ack_manager: AckManager::new(),
-            message_manager: MessageManager::new(),
+            message_manager: MessageManager::new(channel_config),
         };
     }
 

@@ -19,9 +19,9 @@ impl<C: ChannelIndex> ChannelConfig<C> {
         self.map.insert(channel_index, channel);
     }
 
-    pub fn settings(&self, channel_index: C) -> &Channel {
+    pub fn settings(&self, channel_index: &C) -> &Channel {
         return self.map
-            .get(&channel_index)
+            .get(channel_index)
             .expect("Channel has not been registered in the config!");
     }
 }

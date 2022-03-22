@@ -277,6 +277,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         writer: &mut S,
         client_tick: &Tick,
         message_id: &MsgId,
+        channel: &C,
         message: &P,
     ) {
         // write client tick
@@ -285,6 +286,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         // write message id
         let short_msg_id: u8 = (message_id % 256) as u8;
         short_msg_id.ser(writer);
+
+        // write message channel
+        channel.ser(writer);
 
         // write message kind
         message.dyn_ref().kind().ser(writer);

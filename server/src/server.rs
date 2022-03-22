@@ -45,7 +45,7 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     handshake_manager: HandshakeManager<P>,
     // Users
     users: BigMap<UserKey, User>,
-    user_connections: HashMap<SocketAddr, Connection<P, E>>,
+    user_connections: HashMap<SocketAddr, Connection<P, E, C>>,
     // Rooms
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
@@ -140,9 +140,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
             let connection = self.user_connections.get_mut(user_address).unwrap();
 
             // receive messages from anyone
-            while let Some(message) = connection.base.message_manager.pop_incoming_message() {
+            while let Some((channel, message)) = connection.base.message_manager.pop_incoming_message() {
                 self.incoming_events
-                    .push_back(Ok(Event::Message(connection.user_key, message)));
+                    .push_back(Ok(Event::Message(connection.user_key, channel, message)));
             }
 
             // receive entity messages on tick
@@ -151,11 +151,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                 for user_address in &user_addresses {
                     let connection = self.user_connections.get_mut(user_address).unwrap();
 
-                    while let Some(message) = connection.pop_incoming_entity_message(
+                    while let Some((channel, message)) = connection.pop_incoming_entity_message(
                         self.tick_manager.as_ref().unwrap().server_tick(),
                     ) {
                         self.incoming_events.push_back(Ok(Event::Message(
                             connection.user_key,
+                            channel,
                             message,
                         )));
                     }
@@ -181,6 +182,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
         if let Some(user) = self.users.get(user_key) {
             let mut new_connection = Connection::new(
                 &self.server_config.connection,
+                &self.shared_config.channel,
                 user.address,
                 &user_key,
                 &self.diff_handler,
@@ -214,9 +216,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
         &mut self,
         user_key: &UserKey,
         message: &R,
-        channel: C,
+        channel: &C,
     ) {
-        let reliable = self.shared_config.channel.settings(channel).reliable();
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
                 if message.has_entity_properties() {
@@ -238,18 +239,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                         connection
                             .base
                             .message_manager
-                            .send_message(message, reliable);
+                            .send_message(channel, message);
                     } else {
                         // Entity hasn't been added to the User Scope yet, or replicated to Client yet
                         connection
                             .entity_manager
-                            .queue_entity_message(entities, message);
+                            .queue_entity_message(entities, channel, message);
                     }
                 } else {
                     connection
                         .base
                         .message_manager
-                        .send_message(message, reliable);
+                        .send_message(channel, message);
                 }
             }
         }

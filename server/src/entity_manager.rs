@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, DiffMask, KeyGenerator, NetEntity, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, NetEntityConverter, EntityConverter, MessageManager};
+use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, DiffMask, KeyGenerator, NetEntity, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, NetEntityConverter, EntityConverter, MessageManager, ChannelIndex};
 use crate::entity_message_waitlist::EntityMessageWaitlist;
 
 use super::{
@@ -18,14 +18,14 @@ use super::{
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
-pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
+pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     address: SocketAddr,
     // Entities
     entity_generator: KeyGenerator<NetEntity>,
     entity_records: HashMap<E, LocalEntityRecord<P>>,
     local_to_global_entity_map: HashMap<NetEntity, E>,
     delayed_entity_deletions: HashSet<E>,
-    delayed_entity_messages: EntityMessageWaitlist<P, E>,
+    delayed_entity_messages: EntityMessageWaitlist<P, E, C>,
     // Components
     diff_handler: UserDiffHandler<E, P::Kind>,
     delayed_component_deletions: HashSet<(E, P::Kind)>,
@@ -37,7 +37,7 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     delivered_packets: VecDeque<PacketIndex>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C> {
     /// Create a new EntityManager, given the client's address
     pub fn new(
         address: SocketAddr,
@@ -125,11 +125,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         return false;
     }
 
-    pub fn queue_entity_message<R: ReplicateSafe<P>>(&mut self, entities: Vec<E>, message: &R) {
-        self.delayed_entity_messages.queue_message(entities, message.protocol_copy());
+    pub fn queue_entity_message<R: ReplicateSafe<P>>(&mut self, entities: Vec<E>, channel: &C, message: &R) {
+        self.delayed_entity_messages.queue_message(entities, channel, message.protocol_copy());
     }
 
-    pub fn collect_entity_messages(&mut self, message_manager: &mut MessageManager<P>) {
+    pub fn collect_entity_messages(&mut self, message_manager: &mut MessageManager<P, C>) {
         self.delayed_entity_messages.collect_ready_messages(message_manager);
     }
 
@@ -639,7 +639,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> PacketNotifiable for EntityManager<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> PacketNotifiable for EntityManager<P, E, C> {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         self.delivered_packets.push_back(packet_index);
     }
@@ -698,7 +698,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> PacketNotifiable for EntityManager<P, 
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityConverter<E> for EntityManager<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NetEntityConverter<E> for EntityManager<P, E, C> {
     fn entity_to_net_entity(&self, entity: &E) -> NetEntity {
         return self.entity_records.get(entity).expect("entity does not exist for this connection!").net_entity;
     }

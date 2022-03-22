@@ -8,6 +8,7 @@ pub use naia_shared::{
     PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize, Replicate, ReplicateSafe,
     SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType, FakeEntityConverter
 };
+use naia_shared::ChannelIndex;
 
 use super::{connection::Connection, io::Io, world_record::WorldRecord, cache_map::CacheMap};
 
@@ -102,11 +103,11 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 3 of Handshake, for subsequent incoming copied packets
-    pub fn recv_old_connect_request<E: Copy + Eq + Hash>(
+    pub fn recv_old_connect_request<E: Copy + Eq + Hash, C: ChannelIndex>(
         &self,
         io: &mut Io,
         world_record: &WorldRecord<E, P::Kind>,
-        connection: &mut Connection<P, E>,
+        connection: &mut Connection<P, E, C>,
         incoming_header: &StandardHeader,
         reader: &mut BitReader,
     ) {
@@ -132,9 +133,9 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 4 of Handshake
-    pub fn write_connect_response<E: Copy + Eq + Hash>(
+    pub fn write_connect_response<E: Copy + Eq + Hash, C: ChannelIndex>(
         &self,
-        connection: &mut Connection<P, E>,
+        connection: &mut Connection<P, E, C>,
     ) -> BitWriter {
         let mut writer = BitWriter::new();
         connection
@@ -143,9 +144,9 @@ impl<P: Protocolize> HandshakeManager<P> {
         writer
     }
 
-    pub fn verify_disconnect_request<E: Copy + Eq + Hash>(
+    pub fn verify_disconnect_request<E: Copy + Eq + Hash, C: ChannelIndex>(
         &mut self,
-        connection: &mut Connection<P, E>,
+        connection: &mut Connection<P, E, C>,
         reader: &mut BitReader,
     ) -> bool {
         // Verify that timestamp hash has been written by this
