@@ -23,7 +23,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist
         }
     }
 
-    pub fn queue_message(&mut self, entities: Vec<E>, channel: &C, message: P) {
+    pub fn queue_message(&mut self, entities: Vec<E>, channel: C, message: P) {
         let new_handle = self.message_handle_store.generate();
 
         for entity in &entities {
