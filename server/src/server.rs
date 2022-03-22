@@ -252,7 +252,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                         connection
                             .base
                             .message_manager
-                            .send_message(channel, message);
+                            .send_message(channel, message.protocol_copy());
                     } else {
                         // Entity hasn't been added to the User Scope yet, or replicated to Client
                         // yet
@@ -264,7 +264,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                     connection
                         .base
                         .message_manager
-                        .send_message(channel, message);
+                        .send_message(channel, message.protocol_copy());
                 }
             }
         }

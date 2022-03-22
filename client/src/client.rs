@@ -220,7 +220,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                 connection
                     .base
                     .message_manager
-                    .send_message(channel, message);
+                    .send_message(channel, message.protocol_copy());
             }
         }
     }
