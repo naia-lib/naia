@@ -30,7 +30,7 @@ mod cache_map;
 mod connection;
 mod entity_action;
 mod entity_manager;
-mod entity_message_receiver;
+mod tick_buffer_message_receiver;
 mod entity_message_waitlist;
 mod entity_ref;
 mod entity_scope_map;

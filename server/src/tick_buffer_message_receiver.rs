@@ -4,22 +4,21 @@ use naia_shared::{read_list_header, sequence_greater_than, serde::{BitReader, Se
 
 type ShortMsgId = u8;
 
-/// Handles incoming Entity Messages, buffering them to be received on the
-/// correct tick
-pub struct EntityMessageReceiver<P: Protocolize, C: ChannelIndex> {
+/// Handles incoming Tick Buffered Messages
+pub struct TickBufferMessageReceiver<P: Protocolize, C: ChannelIndex> {
     incoming_messages: IncomingMessages<P, C>,
 }
 
-impl<P: Protocolize, C: ChannelIndex> EntityMessageReceiver<P, C> {
-    /// Creates a new EntityMessageReceiver
+impl<P: Protocolize, C: ChannelIndex> TickBufferMessageReceiver<P, C> {
+    /// Creates a new TickBufferMessageReceiver
     pub fn new() -> Self {
-        EntityMessageReceiver {
+        TickBufferMessageReceiver {
             incoming_messages: IncomingMessages::new(),
         }
     }
 
-    /// Get the most recently received Entity Message
-    pub fn pop_incoming_entity_message(&mut self, server_tick: Tick) -> Option<(C, P)> {
+    /// Get the most recently received Message
+    pub fn pop_incoming_message(&mut self, server_tick: Tick) -> Option<(C, P)> {
         return self.incoming_messages.pop_front(server_tick);
     }
 
@@ -34,7 +33,7 @@ impl<P: Protocolize, C: ChannelIndex> EntityMessageReceiver<P, C> {
         self.process_incoming_messages(server_tick, reader, manifest, message_count, converter);
     }
 
-    /// Given incoming packet data, read transmitted Entity Message and store
+    /// Given incoming packet data, read transmitted Message and store
     /// them to be returned to the application
     fn process_incoming_messages(
         &mut self,

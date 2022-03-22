@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use crate::{constants::MESSAGE_HISTORY_SIZE, types::MsgId};
 use naia_shared::{sequence_greater_than, sequence_less_than, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, ChannelIndex};
 
-pub struct EntityMessageSender<P: Protocolize, C: ChannelIndex> {
+pub struct TickBufferMessageSender<P: Protocolize, C: ChannelIndex> {
     // This SequenceBuffer is indexed by Tick
     outgoing_messages: OutgoingMessages<P, C>,
     // This SequenceBuffer is indexed by PacketIndex
@@ -12,16 +12,16 @@ pub struct EntityMessageSender<P: Protocolize, C: ChannelIndex> {
     send_locked: bool,
 }
 
-impl<P: Protocolize, C: ChannelIndex> EntityMessageSender<P, C> {
+impl<P: Protocolize, C: ChannelIndex> TickBufferMessageSender<P, C> {
     pub fn new() -> Self {
-        EntityMessageSender {
+        TickBufferMessageSender {
             outgoing_messages: OutgoingMessages::new(),
             sent_messages: SentMessages::new(),
             send_locked: false,
         }
     }
 
-    pub fn send_entity_message<R: ReplicateSafe<P>>(
+    pub fn send_message<R: ReplicateSafe<P>>(
         &mut self,
         client_tick: Tick,
         channel: C,
@@ -77,7 +77,7 @@ impl<P: Protocolize, C: ChannelIndex> EntityMessageSender<P, C> {
     }
 }
 
-impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for EntityMessageSender<P, C> {
+impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for TickBufferMessageSender<P, C> {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(delivered_messages) = self.sent_messages.remove(packet_index) {
             for (tick, message_id) in delivered_messages.into_iter() {
