@@ -13,14 +13,14 @@ use super::{
     error::NaiaClientError, event::Event,
 };
 
-pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
+pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
     local_to_world_entity: HashMap<NetEntity, E>,
-    pub message_sender: EntityMessageSender<P>,
+    pub message_sender: EntityMessageSender<P, C>,
     pub handle_entity_map: BigMap<EntityHandle, E>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C> {
     pub fn new() -> Self {
         EntityManager {
             local_to_world_entity: HashMap::new(),
@@ -31,7 +31,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     // Action Reader
-    pub fn read_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
+    pub fn read_actions<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
@@ -50,7 +50,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         );
     }
 
-    fn process_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
+    fn process_actions<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
@@ -232,11 +232,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             }
 
             // Find how many messages will fit into the packet
-            for (message_id, client_tick, message) in entity_messages.iter() {
+            for (message_id, client_tick, channel, message) in entity_messages.iter() {
                 self.write_message(
                     &mut counter,
                     &client_tick,
                     &message_id,
+                    channel,
                     message,
                 );
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
@@ -254,7 +255,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         {
             for _ in 0..message_count {
                 // Pop message
-                let (message_id, client_tick, message) =
+                let (message_id, client_tick, channel, message) =
                     entity_messages.pop_front().unwrap();
 
                 // Write message
@@ -262,6 +263,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     writer,
                     &client_tick,
                     &message_id,
+                    &channel,
                     &message,
                 );
                 self.message_sender
@@ -297,12 +299,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         message.write(writer, self);
     }
 
-    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, message: &R, tick: Tick) {
-        self.message_sender.send_entity_message(message, tick);
+    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, tick: Tick, channel: C, message: &R) {
+        self.message_sender.send_entity_message(tick, channel, message);
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for EntityManager<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter<E> for EntityManager<P, E, C> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
         *self.handle_entity_map.get(entity_handle).expect("entity does not exist for given handle!")
     }
@@ -312,7 +314,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for EntityMan
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityManager<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NetEntityHandleConverter for EntityManager<P, E, C> {
     fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity {
         let entity = self.handle_entity_map.get(entity_handle).expect("no entity exists for the given handle!");
         let entity_record = self.entity_records.get(entity).unwrap();

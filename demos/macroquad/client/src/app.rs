@@ -159,7 +159,7 @@ impl App {
 
                                 // Send command
                                 self.client
-                                    .send_message(&command, Channels::PlayerCommand);
+                                    .send_message(Channels::PlayerCommand, &command);
 
                                 // Apply command
                                 if let Some(mut square_ref) = self
@@ -179,14 +179,14 @@ impl App {
                 Ok(Event::DespawnEntity(entity)) => {
                     self.squares.remove(&entity);
                 }
-                Ok(Event::Message(Protocol::EntityAssignment(entity_assignment))) => {
-                    let assign = *entity_assignment.assign;
+                Ok(Event::Message(Channels::EntityAssignment, Protocol::EntityAssignment(message))) => {
+                    let assign = *message.assign;
 
-                    if let Some(other_entity) = entity_assignment.other_entity.get(&self.client) {
+                    if let Some(other_entity) = message.other_entity.get(&self.client) {
                         self.other_main_entity = Some(other_entity);
                     }
 
-                    if let Some(entity) = entity_assignment.entity.get(&self.client) {
+                    if let Some(entity) = message.entity.get(&self.client) {
                         if assign {
                             info!("gave ownership of entity");
 
