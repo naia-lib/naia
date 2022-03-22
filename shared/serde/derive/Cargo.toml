@@ -22,5 +22,6 @@ proc-macro = true
 [features]
 
 [dependencies]
+naia-parse = { version = "0.1.0", path = "../../parse" }
 log = "0.4"
 cfg-if = "=1.0.0"

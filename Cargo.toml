@@ -5,6 +5,7 @@ members = [
     "server",
     "shared",
     "shared/derive",
+    "shared/parse",
     "shared/serde",
     "shared/serde/derive",
     "socket/client",
