@@ -7,7 +7,7 @@ use std::{
 };
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{serde::{BitWriter, Serde}, EntityHandle, EntityHandleConverter};
+use naia_shared::{serde::{BitWriter, Serde}, EntityHandle, EntityHandleConverter, ChannelIndex};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, Manifest,
     NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType,
@@ -35,10 +35,10 @@ use super::{
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
-pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
+pub struct Server<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     // Config
     server_config: ServerConfig,
-    shared_config: SharedConfig<P>,
+    shared_config: SharedConfig<P, C>,
     socket: Socket,
     io: Io,
     heartbeat_timer: Timer,
@@ -59,9 +59,9 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash> {
     tick_manager: Option<TickManager>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     /// Create a new Server
-    pub fn new(server_config: &ServerConfig, shared_config: &SharedConfig<P>) -> Self {
+    pub fn new(server_config: &ServerConfig, shared_config: &SharedConfig<P, C>) -> Self {
         let socket = Socket::new(&shared_config.socket);
 
         let heartbeat_timer = Timer::new(server_config.connection.heartbeat_interval);
@@ -310,7 +310,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
-    pub fn spawn_entity<W: WorldMutType<P, E>>(&mut self, mut world: W) -> EntityMut<P, E, W> {
+    pub fn spawn_entity<W: WorldMutType<P, E>>(&mut self, mut world: W) -> EntityMut<P, E, W, C> {
         let entity = world.spawn_entity();
         self.spawn_entity_init(&entity);
 
@@ -339,7 +339,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
         &mut self,
         world: W,
         entity: &E,
-    ) -> EntityMut<P, E, W> {
+    ) -> EntityMut<P, E, W, C> {
         if world.has_entity(entity) {
             return EntityMut::new(self, world, &entity);
         }
@@ -361,7 +361,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Panics if the user does not exist.
-    pub fn user(&self, user_key: &UserKey) -> UserRef<P, E> {
+    pub fn user(&self, user_key: &UserKey) -> UserRef<P, E, C> {
         if self.users.contains_key(user_key) {
             return UserRef::new(self, &user_key);
         }
@@ -371,7 +371,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Retrieves an UserMut that exposes read and write operations for the User
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
-    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, E> {
+    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, E, C> {
         if self.users.contains_key(user_key) {
             return UserMut::new(self, &user_key);
         }
@@ -396,7 +396,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
 
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
-    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, E> {
+    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, E, C> {
         if self.users.contains_key(user_key) {
             return UserScopeMut::new(self, &user_key);
         }
@@ -419,7 +419,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Creates a new Room on the Server and returns a corresponding RoomMut,
     /// which can be used to add users/entities to the room or retrieve its
     /// key
-    pub fn make_room(&mut self) -> RoomMut<P, E> {
+    pub fn make_room(&mut self) -> RoomMut<P, E, C> {
         let new_room = Room::new();
         let room_key = self.rooms.insert(new_room);
         return RoomMut::new(self, &room_key);
@@ -433,7 +433,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, E> {
+    pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, E, C> {
         if self.rooms.contains_key(room_key) {
             return RoomRef::new(self, room_key);
         }
@@ -443,7 +443,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, E> {
+    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, E, C> {
         if self.rooms.contains_key(room_key) {
             return RoomMut::new(self, room_key);
         }
@@ -1062,7 +1062,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Server<P, E> {
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for Server<P, E> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter<E> for Server<P, E, C> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
         return self.world_record.handle_to_entity(entity_handle);
     }

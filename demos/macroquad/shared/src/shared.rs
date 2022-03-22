@@ -4,9 +4,9 @@ use naia_shared::{
     CompressionConfig, LinkConditionerConfig, PingConfig, SharedConfig, SocketConfig,
 };
 
-use super::protocol::Protocol;
+use super::{protocol::Protocol, channels::{channels_init, Channels}};
 
-pub fn shared_config() -> SharedConfig<Protocol> {
+pub fn shared_config() -> SharedConfig<Protocol, Channels> {
     // Set tick rate to ~60 FPS
     let tick_interval = Some(Duration::from_millis(20));
 
@@ -24,6 +24,7 @@ pub fn shared_config() -> SharedConfig<Protocol> {
     return SharedConfig::new(
         Protocol::load(),
         SocketConfig::new(link_condition, None),
+        channels_init(),
         tick_interval,
         Some(PingConfig::default()),
         Some(CompressionConfig::new(

@@ -1,9 +1,10 @@
 extern crate proc_macro;
 
+use naia_parse::parse;
+
 #[macro_use]
 mod shared;
 mod impls;
-mod parse;
 
 use impls::*;
 

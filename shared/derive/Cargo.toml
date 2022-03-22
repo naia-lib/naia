@@ -22,6 +22,8 @@ proc-macro = true
 [features]
 
 [dependencies]
+naia-serde-derive = { version = "0.1.0", path = "../serde/derive" }
+naia-parse = { version = "0.1.0", path = "../parse" }
 proc-macro2 = "1.0"
 syn = { version = "1.0.86", features = ["clone-impls"] }
 quote = "1.0"

@@ -9,13 +9,12 @@ use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
-    protocol::{Color, EntityAssignment, Protocol, Square},
-    shared_config,
+    protocol::{Color, EntityAssignment, Protocol, Square, Marker},
+    shared_config, Channels
 };
-use naia_macroquad_demo_shared::protocol::Marker;
 
 type World = DemoWorld<Protocol>;
-type Server = NaiaServer<Protocol, Entity>;
+type Server = NaiaServer<Protocol, Entity, Channels>;
 
 pub struct App {
     server: Server,

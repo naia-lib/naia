@@ -1,6 +1,6 @@
 use std::{hash::Hash, net::SocketAddr};
 
-use naia_shared::{BigMapKey, Protocolize};
+use naia_shared::{BigMapKey, ChannelIndex, Protocolize};
 
 use crate::{RoomKey, Server};
 
@@ -33,13 +33,13 @@ impl User {
 
 // UserRef
 
-pub struct UserRef<'s, P: Protocolize, E: Copy + Eq + Hash> {
-    server: &'s Server<P, E>,
+pub struct UserRef<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+    server: &'s Server<P, E, C>,
     key: UserKey,
 }
 
-impl<'s, P: Protocolize, E: Copy + Eq + Hash> UserRef<'s, P, E> {
-    pub fn new(server: &'s Server<P, E>, key: &UserKey) -> Self {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> UserRef<'s, P, E, C> {
+    pub fn new(server: &'s Server<P, E, C>, key: &UserKey) -> Self {
         UserRef { server, key: *key }
     }
 
@@ -53,13 +53,13 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash> UserRef<'s, P, E> {
 }
 
 // UserMut
-pub struct UserMut<'s, P: Protocolize, E: Copy + Eq + Hash> {
-    server: &'s mut Server<P, E>,
+pub struct UserMut<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+    server: &'s mut Server<P, E, C>,
     key: UserKey,
 }
 
-impl<'s, P: Protocolize, E: Copy + Eq + Hash> UserMut<'s, P, E> {
-    pub fn new(server: &'s mut Server<P, E>, key: &UserKey) -> Self {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> UserMut<'s, P, E, C> {
+    pub fn new(server: &'s mut Server<P, E, C>, key: &UserKey) -> Self {
         UserMut { server, key: *key }
     }
 

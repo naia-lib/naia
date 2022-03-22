@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::BigMapKey;
+use naia_shared::{BigMapKey, ChannelIndex};
 
 use super::user::UserKey;
 
@@ -100,13 +100,13 @@ use super::server::Server;
 
 // RoomRef
 
-pub struct RoomRef<'s, P: Protocolize, E: Copy + Eq + Hash> {
-    server: &'s Server<P, E>,
+pub struct RoomRef<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+    server: &'s Server<P, E, C>,
     key: RoomKey,
 }
 
-impl<'s, P: Protocolize, E: Copy + Eq + Hash> RoomRef<'s, P, E> {
-    pub fn new(server: &'s Server<P, E>, key: &RoomKey) -> Self {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> RoomRef<'s, P, E, C> {
+    pub fn new(server: &'s Server<P, E, C>, key: &RoomKey) -> Self {
         RoomRef { server, key: *key }
     }
 
@@ -136,13 +136,13 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash> RoomRef<'s, P, E> {
 }
 
 // RoomMut
-pub struct RoomMut<'s, P: Protocolize, E: Copy + Eq + Hash> {
-    server: &'s mut Server<P, E>,
+pub struct RoomMut<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+    server: &'s mut Server<P, E, C>,
     key: RoomKey,
 }
 
-impl<'s, P: Protocolize, E: Copy + Eq + Hash> RoomMut<'s, P, E> {
-    pub fn new(server: &'s mut Server<P, E>, key: &RoomKey) -> Self {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> RoomMut<'s, P, E, C> {
+    pub fn new(server: &'s mut Server<P, E, C>, key: &RoomKey) -> Self {
         RoomMut { server, key: *key }
     }
 
