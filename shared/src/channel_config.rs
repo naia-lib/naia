@@ -1,4 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
+use std::time::Duration;
 
 use crate::{derive_serde, serde, serde::Serde};
 
@@ -25,6 +26,18 @@ impl<C: ChannelIndex> ChannelConfig<C> {
             .get(channel_index)
             .expect("Channel has not been registered in the config!");
     }
+
+    pub fn all_tick_buffer_settings(&self) -> Vec<(C, TickBufferSettings)> {
+        let mut output = Vec::new();
+
+        for (index, channel) in self.map.iter() {
+            if let ChannelMode::TickBuffered(settings) = &channel.mode {
+                output.push((index.clone(), settings.clone()));
+            }
+        }
+
+        output
+    }
 }
 
 // ChannelIndex
@@ -33,13 +46,13 @@ pub trait ChannelIndex: Serde + Eq + Hash {}
 // Channel
 #[derive(Clone)]
 pub struct Channel {
-    pub mode: ChannelMode,
-    pub direction: ChannelDirection,
+    mode: ChannelMode,
+    direction: ChannelDirection,
 }
 
 impl Channel {
     pub fn new(mode: ChannelMode, direction: ChannelDirection) -> Self {
-        if mode == ChannelMode::TickBuffered && direction != ChannelDirection::ClientToServer {
+        if mode.tick_buffered() && direction != ChannelDirection::ClientToServer {
             panic!("TickBuffered Messages are only allowed to be sent from Client to Server");
         }
 
@@ -49,10 +62,14 @@ impl Channel {
     pub fn reliable(&self) -> bool {
         match &self.mode {
             ChannelMode::UnorderedUnreliable => false,
-            ChannelMode::UnorderedReliable => true,
-            ChannelMode::OrderedReliable => true,
-            ChannelMode::TickBuffered => false,
+            ChannelMode::UnorderedReliable(_) => true,
+            ChannelMode::OrderedReliable(_) => true,
+            ChannelMode::TickBuffered(_) => false,
         }
+    }
+
+    pub fn tick_buffered(&self) -> bool {
+        return self.mode.tick_buffered();
     }
 
     pub fn can_send_to_server(&self) -> bool {
@@ -72,13 +89,48 @@ impl Channel {
     }
 }
 
+#[derive(Clone)]
+pub struct ReliableSettings {
+    pub rtt_resend_factor: f32,
+}
+
+impl Default for ReliableSettings {
+    fn default() -> Self {
+        Self {
+            rtt_resend_factor: 1.5,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct TickBufferSettings {
+    pub resend_interval: Duration,
+}
+
+impl Default for TickBufferSettings {
+    fn default() -> Self {
+        Self {
+            resend_interval: Duration::from_millis(100),
+        }
+    }
+}
+
 // ChannelMode
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub enum ChannelMode {
     UnorderedUnreliable,
-    UnorderedReliable,
-    OrderedReliable,
-    TickBuffered,
+    UnorderedReliable(ReliableSettings),
+    OrderedReliable(ReliableSettings),
+    TickBuffered(TickBufferSettings),
+}
+
+impl ChannelMode {
+    pub fn tick_buffered(&self) -> bool {
+        match self {
+            ChannelMode::TickBuffered(_) => true,
+            _ => false,
+        }
+    }
 }
 
 // ChannelDirection
@@ -110,16 +162,19 @@ impl ChannelConfig<DefaultChannels> {
             Channel::new(ChannelMode::UnorderedUnreliable, ChannelDirection::Bidirectional),
         );
         config.add_channel(
-            DefaultChannels::UnorderedReliable,
-            Channel::new(ChannelMode::UnorderedReliable, ChannelDirection::Bidirectional),
+            DefaultChannels::UnorderedReliable, Channel::new(
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+            ChannelDirection::Bidirectional),
         );
         config.add_channel(
-            DefaultChannels::OrderedReliable,
-            Channel::new(ChannelMode::OrderedReliable, ChannelDirection::Bidirectional),
+            DefaultChannels::OrderedReliable, Channel::new(
+                ChannelMode::OrderedReliable(ReliableSettings::default()),
+                ChannelDirection::Bidirectional),
         );
         config.add_channel(
-            DefaultChannels::TickBuffered,
-            Channel::new(ChannelMode::TickBuffered, ChannelDirection::ClientToServer),
+            DefaultChannels::TickBuffered, Channel::new(
+                ChannelMode::TickBuffered(TickBufferSettings::default()),
+                ChannelDirection::ClientToServer),
         );
 
         config

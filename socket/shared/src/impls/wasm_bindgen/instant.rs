@@ -34,6 +34,11 @@ impl Instant {
         let millis_f64: f64 = millis.into();
         self.inner += millis_f64;
     }
+
+    pub fn subtract_duration(&mut self, duration: &Duration) {
+        let millis_f64: f64 = duration.as_millis().into();
+        self.inner -= millis_f64;
+    }
 }
 
 impl Eq for Instant {}

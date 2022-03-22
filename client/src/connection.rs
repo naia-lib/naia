@@ -3,11 +3,7 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 use crate::{
     io::Io, tick_buffer_message_sender::TickBufferMessageSender, tick_manager::TickManager,
 };
-use naia_shared::{
-    serde::{BitReader, BitWriter, OwnedBitReader},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, Manifest, PacketType,
-    PingConfig, Protocolize, StandardHeader, Tick, WorldMutType,
-};
+use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, Manifest, PacketType, PingConfig, Protocolize, StandardHeader, Tick, WorldMutType, Instant};
 
 use super::{
     entity_manager::EntityManager, error::NaiaClientError, event::Event, ping_manager::PingManager,
@@ -42,7 +38,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             base: BaseConnection::new(address, connection_config, channel_config),
             entity_manager: EntityManager::new(),
             ping_manager,
-            tick_buffer_message_sender: TickBufferMessageSender::new(),
+            tick_buffer_message_sender: TickBufferMessageSender::new(channel_config),
             jitter_buffer: TickQueue::new(),
         };
     }
@@ -87,7 +83,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
     // Outgoing data
 
-    pub fn send_outgoing_packets(&mut self, io: &mut Io, tick_manager_opt: &Option<TickManager>) {
+    pub fn send_outgoing_packets(&mut self, now: &Instant, io: &mut Io, tick_manager_opt: &Option<TickManager>) {
+
+        self.generate_resend_messages(now, tick_manager_opt);
+
         let mut any_sent = false;
         loop {
             if self.send_outgoing_packet(io, tick_manager_opt) {
@@ -98,6 +97,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         }
         if any_sent {
             self.base.mark_sent();
+        }
+    }
+
+    fn generate_resend_messages(&mut self, now: &Instant, tick_manager_opt: &Option<TickManager>) {
+        self.base.message_manager.generate_resend_messages();
+        if let Some(tick_manager) = tick_manager_opt {
+            self.tick_buffer_message_sender.generate_resend_messages(now, &tick_manager.server_receivable_tick());
         }
     }
 

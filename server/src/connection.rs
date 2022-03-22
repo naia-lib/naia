@@ -88,11 +88,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         }
     }
 
-    pub fn collect_entity_messages(&mut self) {
-        self.entity_manager
-            .collect_entity_messages(&mut self.base.message_manager);
-    }
-
     // Outgoing data
     pub fn send_outgoing_packets<W: WorldRefType<P, E>>(
         &mut self,
@@ -101,6 +96,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         world_record: &WorldRecord<E, P::Kind>,
         tick_manager_opt: &Option<TickManager>,
     ) {
+        self.generate_resend_messages();
+
         let mut any_sent = false;
         loop {
             if self.send_outgoing_packet(io, world, world_record, tick_manager_opt) {
@@ -112,6 +109,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         if any_sent {
             self.base.mark_sent();
         }
+    }
+
+    fn generate_resend_messages(&mut self) {
+        self.base.message_manager.generate_resend_messages();
+        self.entity_manager.collect_component_updates();
+        self.entity_manager.collect_entity_messages(&mut self.base.message_manager);
     }
 
     fn send_outgoing_packet<W: WorldRefType<P, E>>(
