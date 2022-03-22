@@ -9,7 +9,11 @@ use naia_client::{
 
 use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
 
-use naia_macroquad_demo_shared::{behavior as shared_behavior, Channels, protocol::{Auth, Color, KeyCommand, Protocol, Square}, shared_config};
+use naia_macroquad_demo_shared::{
+    behavior as shared_behavior,
+    protocol::{Auth, Color, KeyCommand, Protocol, Square},
+    shared_config, Channels,
+};
 
 use crate::command_history::CommandHistory;
 
@@ -121,7 +125,9 @@ impl App {
                     }
                 } else {
                     let mut key_command = KeyCommand::new(w, s, a, d);
-                    key_command.entity.set(&self.client, &owned_entity.confirmed);
+                    key_command
+                        .entity
+                        .set(&self.client, &owned_entity.confirmed);
                     if let Some(other_entity) = &self.other_main_entity {
                         key_command.other_entity.set(&self.client, other_entity);
                     }
@@ -158,8 +164,7 @@ impl App {
                                     .push_front(client_tick, command.clone());
 
                                 // Send command
-                                self.client
-                                    .send_message(Channels::PlayerCommand, &command);
+                                self.client.send_message(Channels::PlayerCommand, &command);
 
                                 // Apply command
                                 if let Some(mut square_ref) = self
@@ -179,7 +184,10 @@ impl App {
                 Ok(Event::DespawnEntity(entity)) => {
                     self.squares.remove(&entity);
                 }
-                Ok(Event::Message(Channels::EntityAssignment, Protocol::EntityAssignment(message))) => {
+                Ok(Event::Message(
+                    Channels::EntityAssignment,
+                    Protocol::EntityAssignment(message),
+                )) => {
                     let assign = *message.assign;
 
                     if let Some(other_entity) = message.other_entity.get(&self.client) {

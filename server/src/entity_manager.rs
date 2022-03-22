@@ -7,8 +7,13 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, DiffMask, KeyGenerator, NetEntity, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, NetEntityConverter, EntityConverter, MessageManager, ChannelIndex};
 use crate::entity_message_waitlist::EntityMessageWaitlist;
+use naia_shared::{
+    serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+    write_list_header, ChannelIndex, DiffMask, EntityConverter, KeyGenerator, MessageManager,
+    NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe,
+    WorldRefType, MTU_SIZE_BITS,
+};
 
 use super::{
     entity_action::EntityAction, global_diff_handler::GlobalDiffHandler,
@@ -125,12 +130,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         return false;
     }
 
-    pub fn queue_entity_message<R: ReplicateSafe<P>>(&mut self, entities: Vec<E>, channel: C, message: &R) {
-        self.delayed_entity_messages.queue_message(entities, channel, message.protocol_copy());
+    pub fn queue_entity_message<R: ReplicateSafe<P>>(
+        &mut self,
+        entities: Vec<E>,
+        channel: C,
+        message: &R,
+    ) {
+        self.delayed_entity_messages
+            .queue_message(entities, channel, message.protocol_copy());
     }
 
     pub fn collect_entity_messages(&mut self, message_manager: &mut MessageManager<P, C>) {
-        self.delayed_entity_messages.collect_ready_messages(message_manager);
+        self.delayed_entity_messages
+            .collect_ready_messages(message_manager);
     }
 
     // Components
@@ -359,8 +371,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
                 {
                     let converter = EntityConverter::new(world_record, self);
-                    component
-                        .write(writer, &converter);
+                    component.write(writer, &converter);
                 }
 
                 // if we are actually writing this packet
@@ -400,7 +411,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                         .expect("Component does not exist in World")
                         .write_partial(&diff_mask, writer, &converter);
                 }
-
 
                 ////////
                 if is_writing {
@@ -639,7 +649,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> PacketNotifiable for EntityManager<P, E, C> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> PacketNotifiable
+    for EntityManager<P, E, C>
+{
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         self.delivered_packets.push_back(packet_index);
     }
@@ -698,12 +710,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> PacketNotifiable for 
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NetEntityConverter<E> for EntityManager<P, E, C> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NetEntityConverter<E>
+    for EntityManager<P, E, C>
+{
     fn entity_to_net_entity(&self, entity: &E) -> NetEntity {
-        return self.entity_records.get(entity).expect("entity does not exist for this connection!").net_entity;
+        return self
+            .entity_records
+            .get(entity)
+            .expect("entity does not exist for this connection!")
+            .net_entity;
     }
 
     fn net_entity_to_entity(&self, net_entity: &NetEntity) -> E {
-        return *self.local_to_global_entity_map.get(net_entity).expect("entity does not exist for this connection!");
+        return *self
+            .local_to_global_entity_map
+            .get(net_entity)
+            .expect("entity does not exist for this connection!");
     }
 }

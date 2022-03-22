@@ -5,7 +5,7 @@ use crate::{derive_serde, serde, serde::Serde};
 // ChannelConfig
 #[derive(Clone)]
 pub struct ChannelConfig<C: ChannelIndex> {
-    map: HashMap<C, Channel>
+    map: HashMap<C, Channel>,
 }
 
 impl<C: ChannelIndex> ChannelConfig<C> {
@@ -20,7 +20,8 @@ impl<C: ChannelIndex> ChannelConfig<C> {
     }
 
     pub fn settings(&self, channel_index: &C) -> &Channel {
-        return self.map
+        return self
+            .map
             .get(channel_index)
             .expect("Channel has not been registered in the config!");
     }
@@ -32,14 +33,12 @@ pub trait ChannelIndex: Serde + Eq + Hash {}
 // Channel
 #[derive(Clone)]
 pub struct Channel {
-    mode: ChannelMode
+    pub mode: ChannelMode,
 }
 
 impl Channel {
     pub fn new(mode: ChannelMode) -> Self {
-        Self {
-            mode,
-        }
+        Self { mode }
     }
 
     pub fn reliable(&self) -> bool {
@@ -77,10 +76,22 @@ impl ChannelConfig<DefaultChannels> {
     pub fn default() -> Self {
         let mut config = ChannelConfig::new();
 
-        config.add_channel(DefaultChannels::UnorderedUnreliable, Channel::new(ChannelMode::UnorderedUnreliable));
-        config.add_channel(DefaultChannels::UnorderedReliable, Channel::new(ChannelMode::UnorderedReliable));
-        config.add_channel(DefaultChannels::OrderedReliable, Channel::new(ChannelMode::OrderedReliable));
-        config.add_channel(DefaultChannels::TickBuffered, Channel::new(ChannelMode::TickBuffered));
+        config.add_channel(
+            DefaultChannels::UnorderedUnreliable,
+            Channel::new(ChannelMode::UnorderedUnreliable),
+        );
+        config.add_channel(
+            DefaultChannels::UnorderedReliable,
+            Channel::new(ChannelMode::UnorderedReliable),
+        );
+        config.add_channel(
+            DefaultChannels::OrderedReliable,
+            Channel::new(ChannelMode::OrderedReliable),
+        );
+        config.add_channel(
+            DefaultChannels::TickBuffered,
+            Channel::new(ChannelMode::TickBuffered),
+        );
 
         config
     }

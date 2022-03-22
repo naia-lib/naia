@@ -7,16 +7,11 @@ pub use naia_shared::{
     ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };
-use naia_shared::{ChannelIndex, EntityHandle, EntityHandleConverter};
+use naia_shared::{ChannelIndex, ChannelMode, EntityHandle, EntityHandleConverter};
 
 use super::{
-    client_config::ClientConfig,
-    connection::Connection,
-    entity_ref::EntityRef,
-    error::NaiaClientError,
-    event::Event,
-    handshake_manager::HandshakeManager,
-    io::Io,
+    client_config::ClientConfig, connection::Connection, entity_ref::EntityRef,
+    error::NaiaClientError, event::Event, handshake_manager::HandshakeManager, io::Io,
     tick_manager::TickManager,
 };
 
@@ -159,7 +154,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                         &mut self.incoming_events,
                     );
                     server_connection
-                        .message_sender
+                        .tick_buffer_message_sender
                         .on_tick(tick_manager.server_receivable_tick());
                 }
             } else {
@@ -177,7 +172,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                 .message_manager
                 .pop_incoming_message()
             {
-                self.incoming_events.push_back(Ok(Event::Message(channel, message)));
+                self.incoming_events
+                    .push_back(Ok(Event::Message(channel, message)));
             }
 
             // send outgoing packets
@@ -198,18 +194,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     /// Queues up an Message to be sent to the Server
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+        let tick_buffered = match self.shared_config.channel.settings(&channel).mode {
+            ChannelMode::TickBuffered => true,
+            _ => false,
+        };
 
-        if message.has_entity_properties() {
+        if tick_buffered {
             if self.server_connection.is_none() {
                 return;
             }
             if let Some(client_tick) = self.client_tick() {
                 let connection = self.server_connection.as_mut().unwrap();
                 connection
-                    .message_sender
+                    .tick_buffer_message_sender
                     .send_message(client_tick, channel, message);
             }
-
         } else {
             if let Some(connection) = &mut self.server_connection {
                 connection
@@ -464,14 +463,22 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter<E> for Client<P, E, C> {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter<E>
+    for Client<P, E, C>
+{
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
-        let connection = self.server_connection.as_ref().expect("cannot handle entity properties unless connection is established");
+        let connection = self
+            .server_connection
+            .as_ref()
+            .expect("cannot handle entity properties unless connection is established");
         return connection.entity_manager.handle_to_entity(entity_handle);
     }
 
     fn entity_to_handle(&self, entity: &E) -> EntityHandle {
-        let connection = self.server_connection.as_ref().expect("cannot handle entity properties unless connection is established");
+        let connection = self
+            .server_connection
+            .as_ref()
+            .expect("cannot handle entity properties unless connection is established");
         return connection.entity_manager.entity_to_handle(entity);
     }
 }

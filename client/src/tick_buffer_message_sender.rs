@@ -2,8 +2,12 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::{constants::MESSAGE_HISTORY_SIZE, types::MsgId};
 
-use naia_shared::{sequence_greater_than, sequence_less_than, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, ChannelIndex, MTU_SIZE_BITS, write_list_header, NetEntityHandleConverter};
-use naia_shared::serde::{BitCounter, BitWrite, BitWriter, Serde};
+use naia_shared::{
+    sequence_greater_than, sequence_less_than,
+    serde::{BitCounter, BitWrite, BitWriter, Serde},
+    write_list_header, ChannelIndex, NetEntityHandleConverter, PacketIndex, PacketNotifiable,
+    Protocolize, ReplicateSafe, Tick, MTU_SIZE_BITS,
+};
 
 pub struct TickBufferMessageSender<P: Protocolize, C: ChannelIndex> {
     // This SequenceBuffer is indexed by Tick
@@ -80,7 +84,12 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferMessageSender<P, C> {
 
     // Tick Buffer Message Writing
 
-    pub fn write_messages(&mut self, converter: &dyn NetEntityHandleConverter, writer: &mut BitWriter, packet_index: PacketIndex) {
+    pub fn write_messages(
+        &mut self,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
+        packet_index: PacketIndex,
+    ) {
         let mut entity_messages = self.generate_outgoing_message_list();
 
         let mut message_count: u16 = 0;

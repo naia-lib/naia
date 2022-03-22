@@ -5,9 +5,15 @@ use naia_serde::{BitWriter, Serde};
 use naia_socket_shared::Timer;
 
 use super::{
-    ack_manager::AckManager, connection_config::ConnectionConfig, message_manager::MessageManager,
-    packet_notifiable::PacketNotifiable, packet_type::PacketType, protocolize::Protocolize,
-    standard_header::StandardHeader, types::PacketIndex, channel_config::{ChannelConfig, ChannelIndex}
+    ack_manager::AckManager,
+    channel_config::{ChannelConfig, ChannelIndex},
+    connection_config::ConnectionConfig,
+    message_manager::MessageManager,
+    packet_notifiable::PacketNotifiable,
+    packet_type::PacketType,
+    protocolize::Protocolize,
+    standard_header::StandardHeader,
+    types::PacketIndex,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -22,7 +28,11 @@ pub struct BaseConnection<P: Protocolize, C: ChannelIndex> {
 
 impl<P: Protocolize, C: ChannelIndex> BaseConnection<P, C> {
     /// Create a new BaseConnection, given the appropriate underlying managers
-    pub fn new(address: SocketAddr, connection_config: &ConnectionConfig, channel_config: &ChannelConfig<C>) -> Self {
+    pub fn new(
+        address: SocketAddr,
+        connection_config: &ConnectionConfig,
+        channel_config: &ChannelConfig<C>,
+    ) -> Self {
         return BaseConnection {
             address,
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),

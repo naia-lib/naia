@@ -1,11 +1,13 @@
 use std::time::Duration;
 
-use naia_shared::serde::{BitReader, BitWriter, Serde};
+use naia_shared::{
+    serde::{BitReader, BitWriter, Serde},
+    FakeEntityConverter,
+};
 pub use naia_shared::{
     ConnectionConfig, Manifest, PacketType, ProtocolKindType, Protocolize, ReplicateSafe,
     SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
-use naia_shared::FakeEntityConverter;
 
 use super::io::Io;
 

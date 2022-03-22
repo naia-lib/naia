@@ -1,6 +1,10 @@
 use std::collections::{HashMap, VecDeque};
 
-use naia_shared::{read_list_header, sequence_greater_than, serde::{BitReader, Serde}, Manifest, Protocolize, Tick, NetEntityHandleConverter, ChannelIndex};
+use naia_shared::{
+    read_list_header, sequence_greater_than,
+    serde::{BitReader, Serde},
+    ChannelIndex, Manifest, NetEntityHandleConverter, Protocolize, Tick,
+};
 
 type ShortMsgId = u8;
 

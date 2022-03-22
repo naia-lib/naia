@@ -1,6 +1,12 @@
 use naia_serde::{BitReader, BitWrite};
 
-use crate::{diff_mask::DiffMask, property_mutate::PropertyMutator, protocolize::Protocolize, replica_ref::{ReplicaDynMut, ReplicaDynRef}, NetEntityHandleConverter, EntityHandle};
+use crate::{
+    diff_mask::DiffMask,
+    property_mutate::PropertyMutator,
+    protocolize::Protocolize,
+    replica_ref::{ReplicaDynMut, ReplicaDynRef},
+    EntityHandle, NetEntityHandleConverter,
+};
 
 /// A struct that implements Replicate is a Message/Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a
@@ -13,7 +19,12 @@ pub trait Replicate<P: Protocolize>: ReplicateSafe<P> {
     fn write<S: BitWrite>(&self, writer: &mut S, converter: &dyn NetEntityHandleConverter);
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Message/Component on the client
-    fn write_partial<S: BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S, converter: &dyn NetEntityHandleConverter);
+    fn write_partial<S: BitWrite>(
+        &self,
+        diff_mask: &DiffMask,
+        writer: &mut S,
+        converter: &dyn NetEntityHandleConverter,
+    );
 }
 
 /// The part of Replicate which is object-safe

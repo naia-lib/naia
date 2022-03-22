@@ -14,8 +14,8 @@ mod ack_manager;
 mod bandwidth_monitor;
 mod base_connection;
 mod bigmap;
-mod compression_config;
 mod channel_config;
+mod compression_config;
 mod connection_config;
 mod constants;
 mod decoder;
@@ -53,6 +53,7 @@ pub use ack_manager::AckManager;
 pub use bandwidth_monitor::BandwidthMonitor;
 pub use base_connection::BaseConnection;
 pub use bigmap::{BigMap, BigMapKey};
+pub use channel_config::{Channel, ChannelConfig, ChannelIndex, ChannelMode};
 pub use compression_config::{CompressionConfig, CompressionMode};
 pub use connection_config::ConnectionConfig;
 pub use constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
@@ -61,7 +62,10 @@ pub use diff_mask::DiffMask;
 pub use encoder::Encoder;
 pub use entity_action_type::EntityActionType;
 pub use entity_handle::EntityHandle;
-pub use entity_property::{EntityHandleConverter, NetEntityHandleConverter, NetEntityConverter, EntityProperty, EntityConverter, FakeEntityConverter};
+pub use entity_property::{
+    EntityConverter, EntityHandleConverter, EntityProperty, FakeEntityConverter,
+    NetEntityConverter, NetEntityHandleConverter,
+};
 pub use key_store::KeyGenerator;
 pub use keys::NetEntity;
 pub use manifest::Manifest;
@@ -84,4 +88,3 @@ pub use standard_header::StandardHeader;
 pub use types::{PacketIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
-pub use channel_config::{ChannelConfig, Channel, ChannelMode, ChannelIndex};

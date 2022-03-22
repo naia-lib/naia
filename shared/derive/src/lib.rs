@@ -4,13 +4,13 @@
 
 #![deny(trivial_casts, trivial_numeric_casts, unstable_features)]
 
+mod channel_index;
 mod protocolize;
 mod replicate;
-mod channel_index;
 
+use channel_index::channels_impl;
 use protocolize::protocolize_impl;
 use replicate::replicate_impl;
-use channel_index::channels_impl;
 
 /// Derives the Protocolize trait for a given enum
 #[proc_macro_derive(Protocolize)]

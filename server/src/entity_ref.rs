@@ -1,6 +1,9 @@
 use std::{hash::Hash, marker::PhantomData};
 
-use naia_shared::{ChannelIndex, Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType};
+use naia_shared::{
+    ChannelIndex, Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+    WorldMutType, WorldRefType,
+};
 
 use super::{room::RoomKey, server::Server};
 
@@ -42,13 +45,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E,
 }
 
 // EntityMut
-pub struct EntityMut<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>, C: ChannelIndex> {
+pub struct EntityMut<
+    's,
+    P: Protocolize,
+    E: Copy + Eq + Hash,
+    W: WorldMutType<P, E>,
+    C: ChannelIndex,
+> {
     server: &'s mut Server<P, E, C>,
     world: W,
     entity: E,
 }
 
-impl<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>, C: ChannelIndex> EntityMut<'s, P, E, W, C> {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>, C: ChannelIndex>
+    EntityMut<'s, P, E, W, C>
+{
     pub(crate) fn new(server: &'s mut Server<P, E, C>, world: W, entity: &E) -> Self {
         EntityMut {
             server,

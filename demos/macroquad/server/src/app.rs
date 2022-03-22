@@ -9,8 +9,8 @@ use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
-    protocol::{Color, EntityAssignment, Protocol, Square, Marker},
-    shared_config, Channels
+    protocol::{Color, EntityAssignment, Marker, Protocol, Square},
+    shared_config, Channels,
 };
 
 type World = DemoWorld<Protocol>;
@@ -139,10 +139,15 @@ impl App {
                     assignment_message.entity.set(&self.server, &entity_id);
                     //eventually would like to do this like:
                     //self.server.entity_property(assigment_message).set(&entity_id);
-                    assignment_message.other_entity.set(&self.server, &self.other_main_entity);
+                    assignment_message
+                        .other_entity
+                        .set(&self.server, &self.other_main_entity);
 
-                    self.server
-                        .send_message(&user_key, &assignment_message, Channels::EntityAssignment);
+                    self.server.send_message(
+                        &user_key,
+                        &assignment_message,
+                        Channels::EntityAssignment,
+                    );
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
                     info!("Naia Server disconnected from: {}", user.address);
@@ -153,7 +158,11 @@ impl App {
                             .despawn();
                     }
                 }
-                Ok(Event::Message(_, Channels::PlayerCommand, Protocol::KeyCommand(key_command))) => {
+                Ok(Event::Message(
+                    _,
+                    Channels::PlayerCommand,
+                    Protocol::KeyCommand(key_command),
+                )) => {
                     if let Some(entity) = key_command.entity.get(&self.server) {
                         if let Some(mut square) = self
                             .server

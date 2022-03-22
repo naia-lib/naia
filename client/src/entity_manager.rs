@@ -5,12 +5,15 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{read_list_header, serde::{BitReader, Serde, UnsignedVariableInteger}, BigMap, EntityActionType, EntityHandle, Manifest, NetEntity, Protocolize, Tick, WorldMutType, NetEntityHandleConverter, FakeEntityConverter, EntityHandleConverter, ChannelIndex};
-
-use super::{
-    entity_record::EntityRecord,
-    error::NaiaClientError, event::Event,
+use naia_shared::{
+    read_list_header,
+    serde::{BitReader, Serde, UnsignedVariableInteger},
+    BigMap, ChannelIndex, EntityActionType, EntityHandle, EntityHandleConverter,
+    FakeEntityConverter, Manifest, NetEntity, NetEntityHandleConverter, Protocolize, Tick,
+    WorldMutType,
 };
+
+use super::{entity_record::EntityRecord, error::NaiaClientError, event::Event};
 
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
@@ -85,7 +88,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             // Component Creation //
                             let component_kind = P::Kind::de(reader).unwrap();
 
-                            let new_component = manifest.create_replica(component_kind, reader, self);
+                            let new_component =
+                                manifest.create_replica(component_kind, reader, self);
 
                             component_list.push(component_kind);
 
@@ -208,23 +212,35 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for EntityManager<P, E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
-        *self.handle_entity_map.get(entity_handle).expect("entity does not exist for given handle!")
+        *self
+            .handle_entity_map
+            .get(entity_handle)
+            .expect("entity does not exist for given handle!")
     }
 
     fn entity_to_handle(&self, entity: &E) -> EntityHandle {
-        self.entity_records.get(entity).expect("entity does not exist!").entity_handle
+        self.entity_records
+            .get(entity)
+            .expect("entity does not exist!")
+            .entity_handle
     }
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityManager<P, E> {
     fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity {
-        let entity = self.handle_entity_map.get(entity_handle).expect("no entity exists for the given handle!");
+        let entity = self
+            .handle_entity_map
+            .get(entity_handle)
+            .expect("no entity exists for the given handle!");
         let entity_record = self.entity_records.get(entity).unwrap();
         return entity_record.net_entity;
     }
 
     fn net_entity_to_handle(&self, net_entity: &NetEntity) -> EntityHandle {
-        let entity = self.local_to_world_entity.get(net_entity).expect("no entity exists associated with given net entity");
+        let entity = self
+            .local_to_world_entity
+            .get(net_entity)
+            .expect("no entity exists associated with given net entity");
         return self.entity_to_handle(entity);
     }
 }

@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    hash::Hash,
-};
+use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{BigMap, EntityHandle, EntityHandleConverter, ProtocolKindType};
 
@@ -27,7 +24,8 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
             panic!("entity already initialized!");
         }
         let entity_handle = self.handle_entity_map.insert(*entity);
-        self.entity_records.insert(*entity, GlobalEntityRecord::new(entity_handle));
+        self.entity_records
+            .insert(*entity, GlobalEntityRecord::new(entity_handle));
     }
 
     pub fn despawn_entity(&mut self, entity: &E) -> Option<GlobalEntityRecord<K>> {
@@ -68,7 +66,10 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
         }
 
         let component_kind_set = &self.entity_records.get(entity).unwrap().component_kinds;
-        return component_kind_set.iter().map(|kind_ref| *kind_ref).collect();
+        return component_kind_set
+            .iter()
+            .map(|kind_ref| *kind_ref)
+            .collect();
     }
 
     // Rooms
@@ -100,7 +101,10 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
 
 impl<E: Copy + Eq + Hash, K: ProtocolKindType> EntityHandleConverter<E> for WorldRecord<E, K> {
     fn handle_to_entity(&self, handle: &EntityHandle) -> E {
-        return *self.handle_entity_map.get(handle).expect("should always be an entity for a given handle");
+        return *self
+            .handle_entity_map
+            .get(handle)
+            .expect("should always be an entity for a given handle");
     }
 
     fn entity_to_handle(&self, entity: &E) -> EntityHandle {

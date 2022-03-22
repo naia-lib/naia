@@ -1,12 +1,11 @@
 use std::{default::Default, time::Duration};
 
+use crate::{channel_config::DefaultChannels, ChannelIndex};
 use naia_socket_shared::SocketConfig;
-use crate::channel_config::DefaultChannels;
-use crate::ChannelIndex;
 
 use super::{
-    compression_config::CompressionConfig, manifest::Manifest, ping_config::PingConfig,
-    protocolize::Protocolize, channel_config::ChannelConfig
+    channel_config::ChannelConfig, compression_config::CompressionConfig, manifest::Manifest,
+    ping_config::PingConfig, protocolize::Protocolize,
 };
 
 /// Contains Config properties which will be shared by Server and Client
@@ -60,4 +59,3 @@ impl<P: Protocolize> SharedConfig<P, DefaultChannels> {
         }
     }
 }
-

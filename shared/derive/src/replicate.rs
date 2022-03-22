@@ -240,7 +240,6 @@ fn protocol_path(input: &DeriveInput) -> (Path, Ident) {
 }
 
 fn property_enum(enum_name: &Ident, properties: &Vec<Property>) -> TokenStream {
-
     if properties.len() == 0 {
         return quote! {
             enum #enum_name {}
