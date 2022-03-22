@@ -216,7 +216,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
         &mut self,
         user_key: &UserKey,
         message: &R,
-        channel: &C,
+        channel: C,
     ) {
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {

@@ -153,7 +153,7 @@ impl App {
                             .despawn();
                     }
                 }
-                Ok(Event::Message(_, Protocol::KeyCommand(key_command))) => {
+                Ok(Event::Message(_, Channels::PlayerCommand, Protocol::KeyCommand(key_command))) => {
                     if let Some(entity) = key_command.entity.get(&self.server) {
                         if let Some(mut square) = self
                             .server

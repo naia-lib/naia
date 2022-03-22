@@ -125,7 +125,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         return false;
     }
 
-    pub fn queue_entity_message<R: ReplicateSafe<P>>(&mut self, entities: Vec<E>, channel: &C, message: &R) {
+    pub fn queue_entity_message<R: ReplicateSafe<P>>(&mut self, entities: Vec<E>, channel: C, message: &R) {
         self.delayed_entity_messages.queue_message(entities, channel, message.protocol_copy());
     }
 

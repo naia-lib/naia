@@ -66,9 +66,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     }
 
     /// Queues an Message to be transmitted to the remote host
-    pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel_index: &C, message: &R) {
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel_index: C, message: &R) {
         self.queued_outgoing_messages
-            .push_back((channel_index.clone(), message.protocol_copy()));
+            .push_back((channel_index, message.protocol_copy()));
     }
 
     pub fn queue_entity_message(&mut self, channel_index: C, message: P) {
