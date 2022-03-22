@@ -159,7 +159,7 @@ impl App {
 
                                 // Send command
                                 self.client
-                                    .send_message(&command, true);
+                                    .send_message(&command, Channels::PlayerCommand);
 
                                 // Apply command
                                 if let Some(mut square_ref) = self

@@ -142,7 +142,7 @@ impl App {
                     assignment_message.other_entity.set(&self.server, &self.other_main_entity);
 
                     self.server
-                        .send_message(&user_key, &assignment_message, true);
+                        .send_message(&user_key, &assignment_message, Channels::EntityAssignment);
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
                     info!("Naia Server disconnected from: {}", user.address);
