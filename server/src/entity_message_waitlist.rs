@@ -95,7 +95,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist
 
     pub fn collect_ready_messages(&mut self, message_manager: &mut MessageManager<P, C>) {
         for (channel, message) in self.ready_messages.drain(..) {
-            message_manager.queue_entity_message(channel, message);
+            message_manager.send_message(channel, message);
         }
     }
 }

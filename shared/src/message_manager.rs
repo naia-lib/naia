@@ -11,26 +11,25 @@ use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
 
 use super::{
     manifest::Manifest, packet_notifiable::PacketNotifiable, protocolize::Protocolize,
-    replicate::ReplicateSafe,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
+    channel_config: ChannelConfig<C>,
     queued_outgoing_messages: VecDeque<(C, P)>,
     queued_incoming_messages: VecDeque<(C, P)>,
     sent_guaranteed_messages: HashMap<PacketIndex, Vec<(C, P)>>,
-    channel_config: ChannelConfig<C>,
 }
 
 impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Creates a new MessageManager
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
         MessageManager {
+            channel_config: channel_config.clone(),
             queued_outgoing_messages: VecDeque::new(),
             queued_incoming_messages: VecDeque::new(),
             sent_guaranteed_messages: HashMap::new(),
-            channel_config: channel_config.clone(),
         }
     }
 
@@ -69,12 +68,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     }
 
     /// Queues an Message to be transmitted to the remote host
-    pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel_index: C, message: &R) {
-        self.queued_outgoing_messages
-            .push_back((channel_index, message.protocol_copy()));
-    }
-
-    pub fn queue_entity_message(&mut self, channel_index: C, message: P) {
+    pub fn send_message(&mut self, channel_index: C, message: P) {
         self.queued_outgoing_messages
             .push_back((channel_index, message));
     }
