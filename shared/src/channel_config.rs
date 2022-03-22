@@ -34,11 +34,16 @@ pub trait ChannelIndex: Serde + Eq + Hash {}
 #[derive(Clone)]
 pub struct Channel {
     pub mode: ChannelMode,
+    pub direction: ChannelDirection,
 }
 
 impl Channel {
-    pub fn new(mode: ChannelMode) -> Self {
-        Self { mode }
+    pub fn new(mode: ChannelMode, direction: ChannelDirection) -> Self {
+        if mode == ChannelMode::TickBuffered && direction != ChannelDirection::ClientToServer {
+            panic!("TickBuffered Messages are only allowed to be sent from Client to Server");
+        }
+
+        Self { mode, direction }
     }
 
     pub fn reliable(&self) -> bool {
@@ -49,15 +54,39 @@ impl Channel {
             ChannelMode::TickBuffered => false,
         }
     }
+
+    pub fn can_send_to_server(&self) -> bool {
+        match &self.direction {
+            ChannelDirection::ClientToServer => true,
+            ChannelDirection::ServerToClient => false,
+            ChannelDirection::Bidirectional => true,
+        }
+    }
+
+    pub fn can_send_to_client(&self) -> bool {
+        match &self.direction {
+            ChannelDirection::ClientToServer => false,
+            ChannelDirection::ServerToClient => true,
+            ChannelDirection::Bidirectional => true,
+        }
+    }
 }
 
 // ChannelMode
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum ChannelMode {
     UnorderedUnreliable,
     UnorderedReliable,
     OrderedReliable,
     TickBuffered,
+}
+
+// ChannelDirection
+#[derive(Clone, PartialEq)]
+pub enum ChannelDirection {
+    ClientToServer,
+    ServerToClient,
+    Bidirectional,
 }
 
 // Default Channels
@@ -78,19 +107,19 @@ impl ChannelConfig<DefaultChannels> {
 
         config.add_channel(
             DefaultChannels::UnorderedUnreliable,
-            Channel::new(ChannelMode::UnorderedUnreliable),
+            Channel::new(ChannelMode::UnorderedUnreliable, ChannelDirection::Bidirectional),
         );
         config.add_channel(
             DefaultChannels::UnorderedReliable,
-            Channel::new(ChannelMode::UnorderedReliable),
+            Channel::new(ChannelMode::UnorderedReliable, ChannelDirection::Bidirectional),
         );
         config.add_channel(
             DefaultChannels::OrderedReliable,
-            Channel::new(ChannelMode::OrderedReliable),
+            Channel::new(ChannelMode::OrderedReliable, ChannelDirection::Bidirectional),
         );
         config.add_channel(
             DefaultChannels::TickBuffered,
-            Channel::new(ChannelMode::TickBuffered),
+            Channel::new(ChannelMode::TickBuffered, ChannelDirection::ClientToServer),
         );
 
         config

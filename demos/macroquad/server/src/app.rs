@@ -145,8 +145,8 @@ impl App {
 
                     self.server.send_message(
                         &user_key,
-                        &assignment_message,
                         Channels::EntityAssignment,
+                        &assignment_message,
                     );
                 }
                 Ok(Event::Disconnection(user_key, user)) => {
