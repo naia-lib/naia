@@ -159,7 +159,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                         &mut self.incoming_events,
                     );
                     server_connection
-                        .entity_manager
                         .message_sender
                         .on_tick(tick_manager.server_receivable_tick());
                 }
@@ -207,8 +206,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             if let Some(client_tick) = self.client_tick() {
                 let connection = self.server_connection.as_mut().unwrap();
                 connection
-                    .entity_manager
-                    .send_entity_message(client_tick, channel, message);
+                    .message_sender
+                    .send_message(client_tick, channel, message);
             }
 
         } else {

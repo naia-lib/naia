@@ -5,33 +5,30 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{read_list_header, serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, write_list_header, BigMap, EntityActionType, EntityHandle, Manifest, NetEntity, PacketIndex, Protocolize, Tick, WorldMutType, MTU_SIZE_BITS, NetEntityHandleConverter, ReplicateSafe, FakeEntityConverter, EntityHandleConverter, ChannelIndex};
-use crate::types::MsgId;
+use naia_shared::{read_list_header, serde::{BitReader, Serde, UnsignedVariableInteger}, BigMap, EntityActionType, EntityHandle, Manifest, NetEntity, Protocolize, Tick, WorldMutType, NetEntityHandleConverter, FakeEntityConverter, EntityHandleConverter, ChannelIndex};
 
 use super::{
-    tick_buffer_message_sender::TickBufferMessageSender, entity_record::EntityRecord,
+    entity_record::EntityRecord,
     error::NaiaClientError, event::Event,
 };
 
-pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
     local_to_world_entity: HashMap<NetEntity, E>,
-    pub message_sender: TickBufferMessageSender<P, C>,
     pub handle_entity_map: BigMap<EntityHandle, E>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C> {
+impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     pub fn new() -> Self {
         EntityManager {
             local_to_world_entity: HashMap::new(),
             entity_records: HashMap::new(),
-            message_sender: TickBufferMessageSender::new(),
             handle_entity_map: BigMap::new(),
         }
     }
 
     // Action Reader
-    pub fn read_actions<W: WorldMutType<P, E>>(
+    pub fn read_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
@@ -50,7 +47,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         );
     }
 
-    fn process_actions<W: WorldMutType<P, E>>(
+    fn process_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
         manifest: &Manifest<P>,
@@ -207,104 +204,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             }
         }
     }
-
-    // EntityMessagePacketWriter
-
-    pub fn write_messages(&mut self, writer: &mut BitWriter, packet_index: PacketIndex) {
-        let mut entity_messages = self.message_sender.generate_outgoing_message_list();
-
-        let mut message_count: u16 = 0;
-
-        // Header
-        {
-            // Measure
-            let current_packet_size = writer.bit_count();
-            if current_packet_size > MTU_SIZE_BITS {
-                return;
-            }
-
-            let mut counter = BitCounter::new();
-            write_list_header(&mut counter, &123);
-
-            // Check for overflow
-            if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
-                return;
-            }
-
-            // Find how many messages will fit into the packet
-            for (message_id, client_tick, channel, message) in entity_messages.iter() {
-                self.write_message(
-                    &mut counter,
-                    &client_tick,
-                    &message_id,
-                    channel,
-                    message,
-                );
-                if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
-                    message_count += 1;
-                } else {
-                    break;
-                }
-            }
-        }
-
-        // Write header
-        write_list_header(writer, &message_count);
-
-        // Messages
-        {
-            for _ in 0..message_count {
-                // Pop message
-                let (message_id, client_tick, channel, message) =
-                    entity_messages.pop_front().unwrap();
-
-                // Write message
-                self.write_message(
-                    writer,
-                    &client_tick,
-                    &message_id,
-                    &channel,
-                    &message,
-                );
-                self.message_sender
-                    .message_written(packet_index, client_tick, message_id);
-            }
-        }
-    }
-
-    /// Writes a Command into the Writer's internal buffer, which will
-    /// eventually be put into the outgoing packet
-    pub fn write_message<S: BitWrite>(
-        &self,
-        writer: &mut S,
-        client_tick: &Tick,
-        message_id: &MsgId,
-        channel: &C,
-        message: &P,
-    ) {
-        // write client tick
-        client_tick.ser(writer);
-
-        // write message id
-        let short_msg_id: u8 = (message_id % 256) as u8;
-        short_msg_id.ser(writer);
-
-        // write message channel
-        channel.ser(writer);
-
-        // write message kind
-        message.dyn_ref().kind().ser(writer);
-
-        // write payload
-        message.write(writer, self);
-    }
-
-    pub fn send_entity_message<R: ReplicateSafe<P>>(&mut self, tick: Tick, channel: C, message: &R) {
-        self.message_sender.send_message(tick, channel, message);
-    }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter<E> for EntityManager<P, E, C> {
+impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for EntityManager<P, E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
         *self.handle_entity_map.get(entity_handle).expect("entity does not exist for given handle!")
     }
@@ -314,7 +216,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NetEntityHandleConverter for EntityManager<P, E, C> {
+impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityManager<P, E> {
     fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity {
         let entity = self.handle_entity_map.get(entity_handle).expect("no entity exists for the given handle!");
         let entity_record = self.entity_records.get(entity).unwrap();
