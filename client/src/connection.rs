@@ -10,7 +10,7 @@ use super::{
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub base: BaseConnection<P, C>,
     pub entity_manager: EntityManager<P, E>,
-    pub ping_manager: Option<PingManager>,
+    pub ping_manager: PingManager,
     pub tick_buffer_message_sender: TickBuffer<P, C>,
     jitter_buffer: TickQueue<OwnedBitReader>,
 }
@@ -20,16 +20,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         address: SocketAddr,
         connection_config: &ConnectionConfig,
         channel_config: &ChannelConfig<C>,
-        ping_config: &Option<PingConfig>,
+        ping_config: &PingConfig,
     ) -> Self {
-        let ping_manager: Option<PingManager> = ping_config.as_ref().map(|config| {
-            PingManager::new(
-                config.ping_interval,
-                config.rtt_initial_estimate,
-                config.jitter_initial_estimate,
-                config.rtt_smoothing_factor,
-            )
-        });
+        let ping_manager = PingManager::new(
+            ping_config.ping_interval,
+            ping_config.rtt_initial_estimate,
+            ping_config.jitter_initial_estimate,
+            ping_config.rtt_smoothing_factor,
+        );
 
         return Connection {
             base: BaseConnection::new(address, connection_config, channel_config),
@@ -98,9 +96,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     }
 
     fn generate_resend_messages(&mut self, tick_manager_opt: &Option<TickManager>) {
-        if let Some(ping_manager) = &self.ping_manager {
-            self.base.message_manager.generate_resend_messages(&ping_manager.rtt);
-        }
+        self.base.message_manager.generate_resend_messages(&self.ping_manager.rtt);
         if let Some(tick_manager) = tick_manager_opt {
             self.tick_buffer_message_sender.generate_resend_messages(&tick_manager.server_receivable_tick());
         }

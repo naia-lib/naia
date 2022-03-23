@@ -249,8 +249,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             .as_ref()
             .unwrap()
             .ping_manager
-            .as_ref()
-            .expect("SharedConfig.ping_config is set to None! Enable to allow checking RTT.")
             .rtt;
     }
 
@@ -261,8 +259,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             .as_ref()
             .unwrap()
             .ping_manager
-            .as_ref()
-            .expect("SharedConfig.ping_config is set to None! Enable to allow checking Jitter.")
             .jitter;
     }
 
@@ -321,28 +317,27 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             }
 
             // send pings
-            if let Some(ping_manager) = &mut server_connection.ping_manager {
-                if ping_manager.should_send_ping() {
-                    let mut writer = BitWriter::new();
+            if server_connection.ping_manager.should_send_ping() {
+                let mut writer = BitWriter::new();
 
-                    // write header
-                    server_connection
-                        .base
-                        .write_outgoing_header(PacketType::Ping, &mut writer);
+                // write header
+                server_connection
+                    .base
+                    .write_outgoing_header(PacketType::Ping, &mut writer);
 
-                    // write client tick
-                    if let Some(tick_manager) = self.tick_manager.as_mut() {
-                        tick_manager.write_client_tick(&mut writer);
-                    }
-
-                    // write body
-                    ping_manager.write_ping(&mut writer);
-
-                    // send packet
-                    self.io.send_writer(&mut writer);
-                    server_connection.base.mark_sent();
+                // write client tick
+                if let Some(tick_manager) = self.tick_manager.as_mut() {
+                    tick_manager.write_client_tick(&mut writer);
                 }
+
+                // write body
+                server_connection.ping_manager.write_ping(&mut writer);
+
+                // send packet
+                self.io.send_writer(&mut writer);
+                server_connection.base.mark_sent();
             }
+
 
             // receive from socket
             loop {
@@ -358,13 +353,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                         // Record incoming tick
                         let mut incoming_tick = 0;
                         if let Some(tick_manager) = self.tick_manager.as_mut() {
-                            if let Some(ping_manager) = &server_connection.ping_manager {
-                                incoming_tick = tick_manager.read_server_tick(
-                                    &mut reader,
-                                    ping_manager.rtt,
-                                    ping_manager.jitter,
-                                );
-                            }
+                            incoming_tick = tick_manager.read_server_tick(
+                                &mut reader,
+                                server_connection.ping_manager.rtt,
+                                server_connection.ping_manager.jitter,
+                            );
                         }
 
                         // Handle based on PacketType
@@ -374,9 +367,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                             }
                             PacketType::Heartbeat => {}
                             PacketType::Pong => {
-                                if let Some(ping_manager) = &mut server_connection.ping_manager {
-                                    ping_manager.process_pong(&mut reader);
-                                }
+                                server_connection.ping_manager.process_pong(&mut reader);
                             }
                             // TODO: explicitly cover these cases
                             _ => {}
