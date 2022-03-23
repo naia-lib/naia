@@ -1,20 +1,17 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
-use crate::{
-    io::Io, tick_buffer_message_sender::TickBufferMessageSender, tick_manager::TickManager,
-};
-use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, Manifest, PacketType, PingConfig, Protocolize, StandardHeader, Tick, WorldMutType, Instant};
+use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, Manifest, PacketType, PingConfig, Protocolize, StandardHeader, Tick, WorldMutType};
 
 use super::{
     entity_manager::EntityManager, error::NaiaClientError, event::Event, ping_manager::PingManager,
-    tick_queue::TickQueue,
+    tick_queue::TickQueue, io::Io, tick_buffer::TickBuffer, tick_manager::TickManager,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub base: BaseConnection<P, C>,
     pub entity_manager: EntityManager<P, E>,
     pub ping_manager: Option<PingManager>,
-    pub tick_buffer_message_sender: TickBufferMessageSender<P, C>,
+    pub tick_buffer_message_sender: TickBuffer<P, C>,
     jitter_buffer: TickQueue<OwnedBitReader>,
 }
 
@@ -38,7 +35,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             base: BaseConnection::new(address, connection_config, channel_config),
             entity_manager: EntityManager::new(),
             ping_manager,
-            tick_buffer_message_sender: TickBufferMessageSender::new(channel_config),
+            tick_buffer_message_sender: TickBuffer::new(channel_config),
             jitter_buffer: TickQueue::new(),
         };
     }
@@ -83,9 +80,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
     // Outgoing data
 
-    pub fn send_outgoing_packets(&mut self, now: &Instant, io: &mut Io, tick_manager_opt: &Option<TickManager>) {
+    pub fn send_outgoing_packets(&mut self, io: &mut Io, tick_manager_opt: &Option<TickManager>) {
 
-        self.generate_resend_messages(now, tick_manager_opt);
+        self.generate_resend_messages(tick_manager_opt);
 
         let mut any_sent = false;
         loop {
@@ -100,10 +97,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         }
     }
 
-    fn generate_resend_messages(&mut self, now: &Instant, tick_manager_opt: &Option<TickManager>) {
-        self.base.message_manager.generate_resend_messages();
+    fn generate_resend_messages(&mut self, tick_manager_opt: &Option<TickManager>) {
+        if let Some(ping_manager) = &self.ping_manager {
+            self.base.message_manager.generate_resend_messages(&ping_manager.rtt);
+        }
         if let Some(tick_manager) = tick_manager_opt {
-            self.tick_buffer_message_sender.generate_resend_messages(now, &tick_manager.server_receivable_tick());
+            self.tick_buffer_message_sender.generate_resend_messages(&tick_manager.server_receivable_tick());
         }
     }
 

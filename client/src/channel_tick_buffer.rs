@@ -7,13 +7,9 @@ use crate::{constants::MESSAGE_HISTORY_SIZE, types::MsgId};
 use naia_shared::{sequence_greater_than, sequence_less_than, ChannelIndex, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, TickBufferSettings};
 
 pub struct ChannelTickBuffer<P: Protocolize> {
-    // This SequenceBuffer is indexed by Tick
     outgoing_messages: OutgoingMessages<P>,
-    // This SequenceBuffer is indexed by PacketIndex
     sent_messages: SentMessages,
-    // Resend interval
     resend_interval: Duration,
-    // last sent
     last_sent: Instant,
 }
 
@@ -28,7 +24,6 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
     }
 
     pub fn generate_resend_messages<C: ChannelIndex>(&mut self,
-                                    now: &Instant,
                                     server_receivable_tick: &Tick,
                                     channel_index: &C,
                                     outgoing_messages: &mut VecDeque<(MsgId, Tick, C, P)>) {
@@ -37,7 +32,7 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
             self.outgoing_messages
                 .pop_back_until_excluding(server_receivable_tick);
 
-            self.last_sent = now.clone();
+            self.last_sent = Instant::now();
 
             // Loop through outstanding messages and add them to the outgoing list
             let mut iter = self.outgoing_messages.iter();

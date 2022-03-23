@@ -1,40 +1,47 @@
 use std::{
     collections::{HashMap, VecDeque},
-    vec::Vec,
 };
 
-use crate::{
-    constants::MTU_SIZE_BITS, read_list_header, write_list_header, ChannelConfig, ChannelIndex,
-    NetEntityHandleConverter, PacketIndex,
-};
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
 
 use super::{
-    manifest::Manifest, packet_notifiable::PacketNotifiable, protocolize::Protocolize,
+    manifest::Manifest, packet_notifiable::PacketNotifiable, protocolize::Protocolize, types::MessageId, channel_message_manager::ReliableMessageManager,
+    constants::MTU_SIZE_BITS, message_list_header::{read_list_header, write_list_header}, channel_config::{ChannelConfig, ChannelIndex},
+    entity_property::NetEntityHandleConverter, types::PacketIndex,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
-    channel_config: ChannelConfig<C>,
-    queued_outgoing_messages: VecDeque<(C, P)>,
-    queued_incoming_messages: VecDeque<(C, P)>,
-    sent_guaranteed_messages: HashMap<PacketIndex, Vec<(C, P)>>,
+    reliable_channels: HashMap<C, ReliableMessageManager<P>>,
+    outgoing_messages: VecDeque<(C, MessageId, P)>,
+    packet_to_message_map: HashMap<PacketIndex, (C, MessageId)>,
+    incoming_messages: VecDeque<(C, P)>,
 }
 
 impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Creates a new MessageManager
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
+        // initialize all tick buffer channels
+        let mut channels = HashMap::new();
+        let all_channel_settings = channel_config.all_reliable_settings();
+        for (index, settings) in all_channel_settings {
+            let new_channel = ReliableMessageManager::new(&settings);
+            channels.insert(index, new_channel);
+        }
+
         MessageManager {
-            channel_config: channel_config.clone(),
-            queued_outgoing_messages: VecDeque::new(),
-            queued_incoming_messages: VecDeque::new(),
-            sent_guaranteed_messages: HashMap::new(),
+            reliable_channels: channels,
+            outgoing_messages: VecDeque::new(),
+            packet_to_message_map: HashMap::new(),
+            incoming_messages: VecDeque::new(),
         }
     }
 
-    pub fn generate_resend_messages(&mut self) {
-
+    pub fn generate_resend_messages(&mut self, rtt_millis: &f32) {
+        for (channel_index, channel) in &mut self.reliable_channels {
+            channel.generate_resend_messages(rtt_millis, channel_index, &mut self.outgoing_messages);
+        }
     }
 
     // Outgoing Messages
@@ -42,45 +49,29 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Returns whether the Manager has queued Messages that can be transmitted
     /// to the remote host
     pub fn has_outgoing_messages(&self) -> bool {
-        return !self.queued_outgoing_messages.is_empty();
-    }
-
-    /// Gets the next queued Message to be transmitted
-    pub fn pop_outgoing_message(&mut self, packet_index: PacketIndex) -> Option<(C, P)> {
-        match self.queued_outgoing_messages.pop_front() {
-            Some((channel_index, message)) => {
-                let guaranteed = self.channel_config.settings(&channel_index).reliable();
-                //place in transmission record if this is a guaranteed message
-                if guaranteed {
-                    if !self.sent_guaranteed_messages.contains_key(&packet_index) {
-                        let sent_messages_list: Vec<(C, P)> = Vec::new();
-                        self.sent_guaranteed_messages
-                            .insert(packet_index, sent_messages_list);
-                    }
-
-                    if let Some(sent_messages_list) =
-                        self.sent_guaranteed_messages.get_mut(&packet_index)
-                    {
-                        sent_messages_list.push((channel_index.clone(), message.clone()));
-                    }
-                }
-
-                Some((channel_index, message))
-            }
-            None => None,
-        }
+        return self.outgoing_messages.len() > 0;
     }
 
     /// Queues an Message to be transmitted to the remote host
-    pub fn send_message(&mut self, channel_index: C, message: P) {
-        self.queued_outgoing_messages.push_back((channel_index, message));
+    pub fn send_message(
+        &mut self,
+        channel_index: C,
+        message: P,
+    ) {
+        if let Some(channel) = self.reliable_channels.get_mut(&channel_index) {
+            // reliable channels
+            channel.send_message(message);
+        } else {
+            // unreliable channels
+            self.outgoing_messages.push_back((channel_index, 0, message));
+        }
     }
 
     // Incoming Messages
 
     /// Get the most recently received Message
     pub fn pop_incoming_message(&mut self) -> Option<(C, P)> {
-        return self.queued_incoming_messages.pop_front();
+        return self.incoming_messages.pop_front();
     }
 
     // MessageWriter
@@ -111,7 +102,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             }
 
             // Find how many messages will fit into the packet
-            for (channel, message) in self.queued_outgoing_messages.iter() {
+            for (channel, _, message) in self.outgoing_messages.iter() {
                 MessageManager::<P, C>::write_message(&mut counter, channel, message, converter);
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
@@ -128,13 +119,14 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         {
             for _ in 0..message_count {
                 // Pop message
-                let (message_channel, popped_message) =
-                    self.pop_outgoing_message(packet_index).unwrap();
+                let (channel_index, message_id, popped_message) = self.outgoing_messages.pop_front().unwrap();
+
+                self.packet_to_message_map.insert(packet_index, (channel_index.clone(), message_id));
 
                 // Write message
-                MessageManager::<P, C>::write_message(
+                Self::write_message(
                     writer,
-                    &message_channel,
+                    &channel_index,
                     &popped_message,
                     converter,
                 );
@@ -190,7 +182,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             // read payload
             let new_message = manifest.create_replica(component_kind, reader, converter);
 
-            self.queued_incoming_messages
+            self.incoming_messages
                 .push_back((channel, new_message));
         }
     }
@@ -200,19 +192,12 @@ impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for MessageManager<P, C> 
     /// Occurs when a packet has been notified as delivered. Stops tracking the
     /// status of Messages in that packet.
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
-        self.sent_guaranteed_messages.remove(&packet_index);
-    }
-
-    /// Occurs when a packet has been notified as having been dropped. Queues up
-    /// any guaranteed Messages that were lost in the packet for retransmission.
-    fn notify_packet_dropped(&mut self, packet_index: PacketIndex) {
-        if let Some(dropped_messages_list) = self.sent_guaranteed_messages.get(&packet_index) {
-            for (channel, dropped_message) in dropped_messages_list.into_iter() {
-                self.queued_outgoing_messages
-                    .push_back((channel.clone(), dropped_message.clone()));
+        if let Some((channel_index, message_id)) = self.packet_to_message_map.get(&packet_index) {
+            if let Some(channel) = self.reliable_channels.get_mut(channel_index) {
+                channel.notify_message_delivered(message_id);
             }
-
-            self.sent_guaranteed_messages.remove(&packet_index);
         }
     }
+
+    fn notify_packet_dropped(&mut self, _: PacketIndex) {}
 }

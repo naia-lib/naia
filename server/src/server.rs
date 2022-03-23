@@ -311,11 +311,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
 
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
+            let rtt_millis = 200.0; // TODO FIX THIS! NEED PING IN SERVER!
             connection.send_outgoing_packets(
                 &mut self.io,
                 &world,
                 &self.world_record,
                 &self.tick_manager,
+                &rtt_millis,
             );
         }
     }

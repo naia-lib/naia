@@ -22,7 +22,7 @@ mod event;
 mod handshake_manager;
 mod io;
 mod ping_manager;
-mod tick_buffer_message_sender;
+mod tick_buffer;
 mod tick_manager;
 mod tick_queue;
 mod types;

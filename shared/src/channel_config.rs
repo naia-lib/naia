@@ -38,6 +38,22 @@ impl<C: ChannelIndex> ChannelConfig<C> {
 
         output
     }
+
+    pub fn all_reliable_settings(&self) -> Vec<(C, ReliableSettings)> {
+        let mut output = Vec::new();
+
+        for (index, channel) in self.map.iter() {
+            match &channel.mode {
+                ChannelMode::UnorderedReliable(settings) |
+                ChannelMode::OrderedReliable(settings) => {
+                    output.push((index.clone(), settings.clone()));
+                }
+                _ => {}
+            }
+        }
+
+        output
+    }
 }
 
 // ChannelIndex
