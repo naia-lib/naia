@@ -2,16 +2,16 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::types::MsgId;
 
-use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde}, write_list_header, ChannelIndex, NetEntityHandleConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, MTU_SIZE_BITS, Instant, ChannelConfig};
+use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde}, write_list_header, ChannelIndex, NetEntityHandleConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, MTU_SIZE_BITS, ChannelConfig};
 use crate::channel_tick_buffer::ChannelTickBuffer;
 
-pub struct TickBufferMessageSender<P: Protocolize, C: ChannelIndex> {
+pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
     channels: HashMap<C, ChannelTickBuffer<P>>,
     outgoing_messages: VecDeque<(MsgId, Tick, C, P)>,
     packet_to_channel_map: HashMap<PacketIndex, C>,
 }
 
-impl<P: Protocolize, C: ChannelIndex> TickBufferMessageSender<P, C> {
+impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
     pub fn new(channel_config: &ChannelConfig<C>,) -> Self {
 
         // initialize all tick buffer channels
@@ -22,16 +22,16 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferMessageSender<P, C> {
             channels.insert(index, new_channel);
         }
 
-        TickBufferMessageSender {
+        TickBuffer {
             channels,
             outgoing_messages: VecDeque::new(),
             packet_to_channel_map: HashMap::new(),
         }
     }
 
-    pub fn generate_resend_messages(&mut self, now: &Instant, server_receivable_tick: &Tick) {
+    pub fn generate_resend_messages(&mut self, server_receivable_tick: &Tick) {
         for (channel_index, channel) in &mut self.channels {
-            channel.generate_resend_messages(now, server_receivable_tick, channel_index, &mut self.outgoing_messages);
+            channel.generate_resend_messages(server_receivable_tick, channel_index, &mut self.outgoing_messages);
         }
     }
 
@@ -150,7 +150,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferMessageSender<P, C> {
     }
 }
 
-impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for TickBufferMessageSender<P, C> {
+impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for TickBuffer<P, C> {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_index) = self.packet_to_channel_map.get(&packet_index) {
             if let Some(channel) = self.channels.get_mut(channel_index) {

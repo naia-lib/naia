@@ -1,13 +1,13 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use naia_client_socket::Socket;
+
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
     ConnectionConfig, Manifest, PacketType, PingConfig, ProtocolKindType, Protocolize,
     ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
-    WorldMutType, WorldRefType,
+    WorldMutType, WorldRefType, ChannelIndex, EntityHandle, EntityHandleConverter
 };
-use naia_shared::{ChannelIndex, EntityHandle, EntityHandleConverter, Instant};
 
 use super::{
     client_config::ClientConfig, connection::Connection, entity_ref::EntityRef,
@@ -139,7 +139,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
         // all other operations
         if let Some(server_connection) = self.server_connection.as_mut() {
             let mut did_tick = false;
-            let now = Instant::now();
 
             // update current tick
             if let Some(tick_manager) = &mut self.tick_manager {
@@ -175,7 +174,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             }
 
             // send outgoing packets
-            server_connection.send_outgoing_packets(&now, &mut self.io, &self.tick_manager);
+            server_connection.send_outgoing_packets(&mut self.io, &self.tick_manager);
 
             // tick event
             if did_tick {
