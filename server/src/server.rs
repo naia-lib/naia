@@ -917,44 +917,40 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                             }
                         }
                         PacketType::Ping => {
-                            if self.shared_config.ping.is_some() {
-                                match self.user_connections.get_mut(&address) {
-                                    Some(connection) => {
-                                        connection
-                                            .process_incoming_header(&self.world_record, &header);
+                            match self.user_connections.get_mut(&address) {
+                                Some(connection) => {
+                                    connection
+                                        .process_incoming_header(&self.world_record, &header);
 
-                                        // read incoming ping index
-                                        let ping_index = u16::de(&mut reader).unwrap();
+                                    // read incoming ping index
+                                    let ping_index = u16::de(&mut reader).unwrap();
 
-                                        // write pong payload
-                                        let mut writer = BitWriter::new();
+                                    // write pong payload
+                                    let mut writer = BitWriter::new();
 
-                                        // write header
-                                        connection
-                                            .base
-                                            .write_outgoing_header(PacketType::Pong, &mut writer);
+                                    // write header
+                                    connection
+                                        .base
+                                        .write_outgoing_header(PacketType::Pong, &mut writer);
 
-                                        // write server tick
-                                        if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                            tick_manager.write_server_tick(&mut writer);
-                                        }
-
-                                        // write index
-                                        ping_index.ser(&mut writer);
-
-                                        // send packet
-                                        self.io.send_writer(&address, &mut writer);
-                                        connection.base.mark_sent();
+                                    // write server tick
+                                    if let Some(tick_manager) = self.tick_manager.as_ref() {
+                                        tick_manager.write_server_tick(&mut writer);
                                     }
-                                    None => {
-                                        warn!(
-                                            "received ping from unauthenticated client: {}",
-                                            address
-                                        );
-                                    }
+
+                                    // write index
+                                    ping_index.ser(&mut writer);
+
+                                    // send packet
+                                    self.io.send_writer(&address, &mut writer);
+                                    connection.base.mark_sent();
                                 }
-                            } else {
-                                warn!("received ping address: {}, even though not configured to receive pings", address);
+                                None => {
+                                    warn!(
+                                        "received ping from unauthenticated client: {}",
+                                        address
+                                    );
+                                }
                             }
                         }
                         PacketType::ServerChallengeResponse

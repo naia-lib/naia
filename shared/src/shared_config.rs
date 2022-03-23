@@ -20,7 +20,7 @@ pub struct SharedConfig<P: Protocolize, C: ChannelIndex> {
     /// The duration between each tick
     pub tick_interval: Option<Duration>,
     /// Configuration used to monitor the ping & jitter on the network
-    pub ping: Option<PingConfig>,
+    pub ping: PingConfig,
     /// Configuration used to control compression parameters
     pub compression: Option<CompressionConfig>,
 }
@@ -32,7 +32,7 @@ impl<P: Protocolize, C: ChannelIndex> SharedConfig<P, C> {
         socket: SocketConfig,
         channel: ChannelConfig<C>,
         tick_interval: Option<Duration>,
-        ping: Option<PingConfig>,
+        ping: PingConfig,
         compression: Option<CompressionConfig>,
     ) -> Self {
         Self {
@@ -54,7 +54,7 @@ impl<P: Protocolize> SharedConfig<P, DefaultChannels> {
             socket: SocketConfig::default(),
             channel: ChannelConfig::<DefaultChannels>::default(),
             tick_interval: Some(Duration::from_millis(50)),
-            ping: Some(PingConfig::default()),
+            ping: PingConfig::default(),
             compression: None,
         }
     }
