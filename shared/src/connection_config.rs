@@ -1,4 +1,5 @@
 use std::{default::Default, time::Duration};
+use crate::PingConfig;
 
 /// Contains Config properties which will be used by a Server or Client
 #[derive(Clone, Debug)]
@@ -12,6 +13,8 @@ pub struct ConnectionConfig {
     /// The duration over which to measure bandwidth. Set to None to avoid
     /// measure bandwidth at all.
     pub bandwidth_measure_duration: Option<Duration>,
+    /// Configuration used to monitor the ping & jitter on the network
+    pub ping: PingConfig,
 }
 
 impl ConnectionConfig {
@@ -20,11 +23,13 @@ impl ConnectionConfig {
         disconnection_timeout_duration: Duration,
         heartbeat_interval: Duration,
         bandwidth_measure_duration: Option<Duration>,
+        ping: PingConfig,
     ) -> Self {
         ConnectionConfig {
             disconnection_timeout_duration,
             heartbeat_interval,
             bandwidth_measure_duration,
+            ping,
         }
     }
 }
@@ -35,6 +40,7 @@ impl Default for ConnectionConfig {
             disconnection_timeout_duration: Duration::from_secs(10),
             heartbeat_interval: Duration::from_secs(4),
             bandwidth_measure_duration: None,
+            ping: PingConfig::default(),
         }
     }
 }

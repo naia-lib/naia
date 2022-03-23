@@ -1,9 +1,11 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
-use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, Manifest, PacketType, PingConfig, Protocolize, StandardHeader, Tick, WorldMutType};
+use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ChannelConfig,
+                  ChannelIndex, ConnectionConfig, Manifest, PacketType, Protocolize,
+                  StandardHeader, Tick, WorldMutType, PingManager};
 
 use super::{
-    entity_manager::EntityManager, error::NaiaClientError, event::Event, ping_manager::PingManager,
+    entity_manager::EntityManager, error::NaiaClientError, event::Event,
     tick_queue::TickQueue, io::Io, tick_buffer::TickBuffer, tick_manager::TickManager,
 };
 
@@ -20,19 +22,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         address: SocketAddr,
         connection_config: &ConnectionConfig,
         channel_config: &ChannelConfig<C>,
-        ping_config: &PingConfig,
     ) -> Self {
-        let ping_manager = PingManager::new(
-            ping_config.ping_interval,
-            ping_config.rtt_initial_estimate,
-            ping_config.jitter_initial_estimate,
-            ping_config.rtt_smoothing_factor,
-        );
-
         return Connection {
             base: BaseConnection::new(address, connection_config, channel_config),
             entity_manager: EntityManager::new(),
-            ping_manager,
+            ping_manager: PingManager::new(&connection_config.ping),
             tick_buffer_message_sender: TickBuffer::new(channel_config),
             jitter_buffer: TickQueue::new(),
         };
