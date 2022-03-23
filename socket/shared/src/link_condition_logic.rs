@@ -14,7 +14,7 @@ pub fn process_packet<T: Eq>(
 ) {
     if Random::gen_range_f32(0.0, 1.0) <= config.incoming_loss {
         // drop the packet
-        info!("link conditioner: packet lost");
+        //info!("link conditioner: packet lost");
         return;
     }
     let mut latency: u32 = config.incoming_latency;

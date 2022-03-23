@@ -29,7 +29,6 @@ pub fn shared_config() -> SharedConfig<Protocol, Channels> {
         SocketConfig::new(link_condition, None),
         channels_init(),
         tick_interval,
-        PingConfig::default(),
         Some(CompressionConfig::new(
             None,
             //Some(CompressionMode::Dictionary(22, compression_dictionary)),

@@ -55,7 +55,7 @@ pub use ack_manager::AckManager;
 pub use bandwidth_monitor::BandwidthMonitor;
 pub use base_connection::BaseConnection;
 pub use bigmap::{BigMap, BigMapKey};
-pub use channel_config::{Channel, ChannelConfig, ChannelIndex, ChannelMode, ChannelDirection, TickBufferSettings, ReliableSettings};
+pub use channel_config::{Channel, ChannelConfig, ChannelIndex, ChannelMode, ChannelDirection, TickBufferSettings, ReliableSettings, DefaultChannels};
 pub use compression_config::{CompressionConfig, CompressionMode};
 pub use connection_config::ConnectionConfig;
 pub use constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
