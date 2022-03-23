@@ -5,7 +5,7 @@ use naia_socket_shared::SocketConfig;
 
 use super::{
     channel_config::ChannelConfig, compression_config::CompressionConfig, manifest::Manifest,
-    ping_config::PingConfig, protocolize::Protocolize,
+    protocolize::Protocolize,
 };
 
 /// Contains Config properties which will be shared by Server and Client
@@ -19,8 +19,6 @@ pub struct SharedConfig<P: Protocolize, C: ChannelIndex> {
     pub channel: ChannelConfig<C>,
     /// The duration between each tick
     pub tick_interval: Option<Duration>,
-    /// Configuration used to monitor the ping & jitter on the network
-    pub ping: PingConfig,
     /// Configuration used to control compression parameters
     pub compression: Option<CompressionConfig>,
 }
@@ -32,7 +30,6 @@ impl<P: Protocolize, C: ChannelIndex> SharedConfig<P, C> {
         socket: SocketConfig,
         channel: ChannelConfig<C>,
         tick_interval: Option<Duration>,
-        ping: PingConfig,
         compression: Option<CompressionConfig>,
     ) -> Self {
         Self {
@@ -40,7 +37,6 @@ impl<P: Protocolize, C: ChannelIndex> SharedConfig<P, C> {
             socket,
             channel,
             tick_interval,
-            ping,
             compression,
         }
     }
@@ -54,7 +50,6 @@ impl<P: Protocolize> SharedConfig<P, DefaultChannels> {
             socket: SocketConfig::default(),
             channel: ChannelConfig::<DefaultChannels>::default(),
             tick_interval: Some(Duration::from_millis(50)),
-            ping: PingConfig::default(),
             compression: None,
         }
     }

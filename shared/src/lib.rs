@@ -45,6 +45,7 @@ mod types;
 mod world_type;
 mod wrapping_number;
 mod channel_message_manager;
+mod ping_manager;
 
 pub use naia_socket_shared::{
     Instant, LinkConditionerConfig, Random, SocketConfig, Timer, Timestamp,
@@ -89,3 +90,4 @@ pub use standard_header::StandardHeader;
 pub use types::{PacketIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
+pub use ping_manager::{PingManager, PingIndex};

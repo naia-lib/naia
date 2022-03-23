@@ -1,9 +1,10 @@
-use std::{collections::VecDeque, time::Duration};
+use std::collections::VecDeque;
 
-use naia_shared::{
+use super::{
     sequence_greater_than,
     serde::{BitReader, BitWriter, Serde},
     Instant, Timer,
+    ping_config::PingConfig,
 };
 
 pub struct PingManager {
@@ -16,22 +17,17 @@ pub struct PingManager {
 }
 
 impl PingManager {
-    pub fn new(
-        ping_interval: Duration,
-        rtt_initial_estimate: Duration,
-        jitter_initial_estimate: Duration,
-        rtt_smoothing_factor: f32,
-    ) -> Self {
-        let rtt_average = rtt_initial_estimate.as_secs_f32() * 1000.0;
-        let jitter_average = jitter_initial_estimate.as_secs_f32() * 1000.0;
+    pub fn new(ping_config: &PingConfig) -> Self {
+        let rtt_average = ping_config.rtt_initial_estimate.as_secs_f32() * 1000.0;
+        let jitter_average = ping_config.jitter_initial_estimate.as_secs_f32() * 1000.0;
 
         PingManager {
-            ping_timer: Timer::new(ping_interval),
+            ping_timer: Timer::new(ping_config.ping_interval),
             sent_pings: SentPings::new(),
             rtt: rtt_average,
             jitter: jitter_average,
-            rtt_smoothing_factor,
-            rtt_smoothing_factor_inv: 1.0 - rtt_smoothing_factor,
+            rtt_smoothing_factor: ping_config.rtt_smoothing_factor,
+            rtt_smoothing_factor_inv: 1.0 - ping_config.rtt_smoothing_factor,
         }
     }
 
@@ -52,7 +48,7 @@ impl PingManager {
 
     /// Process an incoming pong payload
     pub fn process_pong(&mut self, reader: &mut BitReader) {
-        let ping_index = u16::de(reader).unwrap();
+        let ping_index = PingIndex::de(reader).unwrap();
 
         match self.sent_pings.remove(ping_index) {
             None => {}
@@ -72,7 +68,7 @@ impl PingManager {
     }
 }
 
-type PingIndex = u16;
+pub type PingIndex = u16;
 const SENT_PINGS_HISTORY_SIZE: u16 = 32;
 
 struct SentPings {

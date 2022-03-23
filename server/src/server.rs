@@ -7,10 +7,7 @@ use std::{
 };
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{
-    serde::{BitWriter, Serde},
-    ChannelIndex, EntityHandle, EntityHandleConverter,
-};
+use naia_shared::{serde::{BitWriter, Serde}, ChannelIndex, EntityHandle, EntityHandleConverter, Tick};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, Manifest,
     NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType,
@@ -45,6 +42,8 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     socket: Socket,
     io: Io,
     heartbeat_timer: Timer,
+    timeout_timer: Timer,
+    ping_timer: Timer,
     handshake_manager: HandshakeManager<P>,
     // Users
     users: BigMap<UserKey, User>,
@@ -67,8 +66,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     pub fn new(server_config: &ServerConfig, shared_config: &SharedConfig<P, C>) -> Self {
         let socket = Socket::new(&shared_config.socket);
 
-        let heartbeat_timer = Timer::new(server_config.connection.heartbeat_interval);
-
         let tick_manager = {
             if let Some(duration) = shared_config.tick_interval {
                 Some(TickManager::new(duration))
@@ -87,7 +84,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                 &server_config.connection.bandwidth_measure_duration,
                 &shared_config.compression,
             ),
-            heartbeat_timer,
+            heartbeat_timer: Timer::new(server_config.connection.heartbeat_interval),
+            timeout_timer: Timer::new(server_config.connection.disconnection_timeout_duration),
+            ping_timer: Timer::new(server_config.connection.ping.ping_interval),
             handshake_manager: HandshakeManager::new(server_config.require_auth),
             // Users
             users: BigMap::new(),
@@ -311,13 +310,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
 
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
-            let rtt_millis = 200.0; // TODO FIX THIS! NEED PING IN SERVER!
+
+            let rtt = connection.ping_manager.rtt;
+
             connection.send_outgoing_packets(
                 &mut self.io,
                 &world,
                 &self.world_record,
                 &self.tick_manager,
-                &rtt_millis,
+                &rtt,
             );
         }
     }
@@ -485,7 +486,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     // Ticks
 
     /// Gets the last received tick from the Client
-    pub fn client_tick(&self, user_key: &UserKey) -> Option<u16> {
+    pub fn client_tick(&self, user_key: &UserKey) -> Option<Tick> {
         if let Some(user) = self.users.get(user_key) {
             if let Some(user_connection) = self.user_connections.get(&user.address) {
                 return Some(user_connection.last_received_tick);
@@ -495,7 +496,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     }
 
     /// Gets the current tick of the Server
-    pub fn server_tick(&self) -> Option<u16> {
+    pub fn server_tick(&self) -> Option<Tick> {
         return self
             .tick_manager
             .as_ref()
@@ -517,6 +518,27 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
 
     pub fn incoming_bandwidth_from_client(&mut self, address: &SocketAddr) -> f32 {
         return self.io.incoming_bandwidth_from_client(address);
+    }
+
+    // Ping
+    /// Gets the average Round Trip Time measured to the given User's Client
+    pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
+        if let Some(user) = self.users.get(user_key) {
+            if let Some(user_connection) = self.user_connections.get(&user.address) {
+                return Some(user_connection.ping_manager.rtt);
+            }
+        }
+        return None;
+    }
+
+    /// Gets the average Jitter measured in connection to the given User's Client
+    pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
+        if let Some(user) = self.users.get(user_key) {
+            if let Some(user_connection) = self.user_connections.get(&user.address) {
+                return Some(user_connection.ping_manager.jitter);
+            }
+        }
+        return None;
     }
 
     // Crate-Public methods
@@ -772,18 +794,33 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     // Private methods
 
     fn maintain_socket(&mut self) {
-        // heartbeats & disconnects
-        if self.heartbeat_timer.ringing() {
-            self.heartbeat_timer.reset();
+
+        // disconnects
+        if self.timeout_timer.ringing() {
+            self.timeout_timer.reset();
 
             let mut user_disconnects: Vec<UserKey> = Vec::new();
 
-            for (user_address, connection) in &mut self.user_connections.iter_mut() {
+            for (_, connection) in &mut self.user_connections.iter_mut() {
+
+                // user disconnects
                 if connection.base.should_drop() {
                     user_disconnects.push(connection.user_key);
                     continue;
                 }
+            }
 
+            for user_key in user_disconnects {
+                self.disconnect_user(&user_key);
+            }
+        }
+
+        // heartbeats
+        if self.heartbeat_timer.ringing() {
+            self.heartbeat_timer.reset();
+
+            for (user_address, connection) in &mut self.user_connections.iter_mut() {
+                // user heartbeats
                 if connection.base.should_send_heartbeat() {
                     // Don't try to refactor this to self.internal_send, doesn't seem to
                     // work cause of iter_mut()
@@ -804,9 +841,34 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                     connection.base.mark_sent();
                 }
             }
+        }
 
-            for user_key in user_disconnects {
-                self.disconnect_user(&user_key);
+        // pings
+        if self.ping_timer.ringing() {
+            self.ping_timer.reset();
+
+            for (user_address, connection) in &mut self.user_connections.iter_mut() {
+                // send pings
+                if connection.ping_manager.should_send_ping() {
+                    let mut writer = BitWriter::new();
+
+                    // write header
+                    connection
+                        .base
+                        .write_outgoing_header(PacketType::Ping, &mut writer);
+
+                    // write client tick
+                    if let Some(tick_manager) = self.tick_manager.as_mut() {
+                        tick_manager.write_server_tick(&mut writer);
+                    }
+
+                    // write body
+                    connection.ping_manager.write_ping(&mut writer);
+
+                    // send packet
+                    self.io.send_writer(user_address, &mut writer);
+                    connection.base.mark_sent();
+                }
             }
         }
 
@@ -953,9 +1015,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                 }
                             }
                         }
+                        PacketType::Pong => {
+                            if let Some(connection) = self.user_connections.get_mut(&address) {
+                                connection.ping_manager.process_pong(&mut reader);
+                            }
+                        }
                         PacketType::ServerChallengeResponse
-                        | PacketType::ServerConnectResponse
-                        | PacketType::Pong => {
+                        | PacketType::ServerConnectResponse => {
                             // do nothing
                         }
                     }

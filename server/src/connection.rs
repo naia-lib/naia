@@ -4,12 +4,9 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    sequence_greater_than,
-    serde::{BitReader, BitWriter},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, Manifest,
-    PacketType, Protocolize, StandardHeader, Tick, WorldRefType,
-};
+use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter}, BaseConnection, ChannelConfig,
+                  ChannelIndex, ConnectionConfig, EntityConverter, Manifest, PacketType, Protocolize,
+                  StandardHeader, Tick, WorldRefType, PingManager};
 
 use super::{
     entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, io::Io,
@@ -23,6 +20,7 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub entity_manager: EntityManager<P, E, C>,
     pub tick_buffer_message_receiver: TickBufferMessageReceiver<P, C>,
     pub last_received_tick: Tick,
+    pub ping_manager: PingManager,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
@@ -38,6 +36,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             base: BaseConnection::new(user_address, connection_config, channel_config),
             entity_manager: EntityManager::new(user_address, diff_handler),
             tick_buffer_message_receiver: TickBufferMessageReceiver::new(),
+            ping_manager: PingManager::new(&connection_config.ping),
             last_received_tick: 0,
         }
     }

@@ -8,6 +8,7 @@ pub use naia_shared::{
     ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
     WorldMutType, WorldRefType, ChannelIndex, EntityHandle, EntityHandleConverter
 };
+use naia_shared::PingIndex;
 
 use super::{
     client_config::ClientConfig, connection::Connection, entity_ref::EntityRef,
@@ -240,8 +241,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
         return self.io.server_addr_unwrapped();
     }
 
-    /// Gets the network
-
     /// Gets the average Round Trip Time measured to the Server
     pub fn rtt(&self) -> f32 {
         return self
@@ -338,7 +337,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                 server_connection.base.mark_sent();
             }
 
-
             // receive from socket
             loop {
                 match self.io.recv_reader() {
@@ -366,10 +364,33 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                                 server_connection.buffer_data_packet(incoming_tick, &mut reader);
                             }
                             PacketType::Heartbeat => {}
+                            PacketType::Ping => {
+                                // read incoming ping index
+                                let ping_index = PingIndex::de(&mut reader).unwrap();
+
+                                // write pong payload
+                                let mut writer = BitWriter::new();
+
+                                // write header
+                                server_connection
+                                    .base
+                                    .write_outgoing_header(PacketType::Pong, &mut writer);
+
+                                // write server tick
+                                if let Some(tick_manager) = self.tick_manager.as_ref() {
+                                    tick_manager.write_client_tick(&mut writer);
+                                }
+
+                                // write index
+                                ping_index.ser(&mut writer);
+
+                                // send packet
+                                self.io.send_writer(&mut writer);
+                                server_connection.base.mark_sent();
+                            }
                             PacketType::Pong => {
                                 server_connection.ping_manager.process_pong(&mut reader);
                             }
-                            // TODO: explicitly cover these cases
                             _ => {}
                         }
                     }
@@ -396,7 +417,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                                 server_addr,
                                 &self.client_config.connection,
                                 &self.shared_config.channel,
-                                &self.shared_config.ping,
                             ));
                             self.incoming_events
                                 .push_back(Ok(Event::Connection(server_addr)));
