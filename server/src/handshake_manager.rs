@@ -130,6 +130,8 @@ impl<P: Protocolize> HandshakeManager<P> {
                     connection.base.mark_sent();
                 }
             }
+        } else {
+            warn!("Received connect request with incorrectly signed bytes from: {}", connection.base.address);
         }
     }
 

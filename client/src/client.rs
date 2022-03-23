@@ -165,6 +165,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             }
 
             // receive messages
+            server_connection.base.message_manager.generate_incoming_messages();
             while let Some((channel, message)) = server_connection
                 .base
                 .message_manager
@@ -405,29 +406,30 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             }
         } else {
             // No connection established yet
-
-            // receive from socket
-            loop {
-                match self.io.recv_reader() {
-                    Ok(Some(mut reader)) => {
-                        self.handshake_manager.recv(&mut reader);
-                        if self.handshake_manager.is_connected() {
-                            let server_addr = self.server_address_unwrapped();
-                            self.server_connection = Some(Connection::new(
-                                server_addr,
-                                &self.client_config.connection,
-                                &self.shared_config.channel,
-                            ));
-                            self.incoming_events
-                                .push_back(Ok(Event::Connection(server_addr)));
+            if self.io.is_loaded() {
+                // receive from socket
+                loop {
+                    match self.io.recv_reader() {
+                        Ok(Some(mut reader)) => {
+                            self.handshake_manager.recv(&mut reader);
+                            if self.handshake_manager.is_connected() {
+                                let server_addr = self.server_address_unwrapped();
+                                self.server_connection = Some(Connection::new(
+                                    server_addr,
+                                    &self.client_config.connection,
+                                    &self.shared_config.channel,
+                                ));
+                                self.incoming_events
+                                    .push_back(Ok(Event::Connection(server_addr)));
+                            }
                         }
-                    }
-                    Ok(None) => {
-                        break;
-                    }
-                    Err(error) => {
-                        self.incoming_events
-                            .push_back(Err(NaiaClientError::Wrapped(Box::new(error))));
+                        Ok(None) => {
+                            break;
+                        }
+                        Err(error) => {
+                            self.incoming_events
+                                .push_back(Err(NaiaClientError::Wrapped(Box::new(error))));
+                        }
                     }
                 }
             }
@@ -447,7 +449,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     fn disconnect_cleanup(&mut self) {
         // this is very similar to the newtype method .. can we coalesce and reduce
         // duplication?
-        let handshake_manager = HandshakeManager::new(self.client_config.send_handshake_interval);
         let tick_manager = {
             if let Some(duration) = self.shared_config.tick_interval {
                 Some(TickManager::new(
@@ -464,7 +465,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             &self.shared_config.compression,
         );
         self.server_connection = None;
-        self.handshake_manager = handshake_manager;
+        self.handshake_manager = HandshakeManager::new(self.client_config.send_handshake_interval);
         self.tick_manager = tick_manager;
     }
 

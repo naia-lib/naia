@@ -22,11 +22,11 @@ pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
 impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Creates a new MessageManager
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
-        // initialize all tick buffer channels
+        // initialize all reliable channels
         let mut channels = HashMap::new();
         let all_channel_settings = channel_config.all_reliable_settings();
-        for (index, settings) in all_channel_settings {
-            let new_channel = ReliableMessageManager::new(&settings);
+        for (index, ordered, settings) in all_channel_settings {
+            let new_channel = ReliableMessageManager::new(&settings, ordered);
             channels.insert(index, new_channel);
         }
 
@@ -38,9 +38,15 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         }
     }
 
-    pub fn generate_resend_messages(&mut self, rtt_millis: &f32) {
+    pub fn generate_incoming_messages(&mut self) {
         for (channel_index, channel) in &mut self.reliable_channels {
-            channel.generate_resend_messages(rtt_millis, channel_index, &mut self.outgoing_messages);
+            channel.generate_incoming_messages(channel_index, &mut self.incoming_messages);
+        }
+    }
+
+    pub fn generate_outgoing_messages(&mut self, rtt_millis: &f32) {
+        for (channel_index, channel) in &mut self.reliable_channels {
+            channel.generate_outgoing_messages(rtt_millis, channel_index, &mut self.outgoing_messages);
         }
     }
 
@@ -102,8 +108,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             }
 
             // Find how many messages will fit into the packet
-            for (channel, _, message) in self.outgoing_messages.iter() {
-                MessageManager::<P, C>::write_message(&mut counter, channel, message, converter);
+            for (channel, message_id, message) in self.outgoing_messages.iter() {
+                MessageManager::<P, C>::write_message(&mut counter, channel, message_id, message, converter);
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
                 } else {
@@ -127,6 +133,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                 Self::write_message(
                     writer,
                     &channel_index,
+                    &message_id,
                     &popped_message,
                     converter,
                 );
@@ -139,11 +146,15 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     pub fn write_message<S: BitWrite>(
         writer: &mut S,
         channel: &C,
+        message_id: &MessageId,
         message: &P,
         converter: &dyn NetEntityHandleConverter,
     ) {
         // write channel
         channel.ser(writer);
+
+        // write message id
+        message_id.ser(writer);
 
         // write message kind
         message.dyn_ref().kind().ser(writer);
@@ -176,14 +187,21 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             // read channel
             let channel: C = C::de(reader).unwrap();
 
+            // read message id
+            let message_id: MessageId = MessageId::de(reader).unwrap();
+
             // read message kind
             let component_kind: P::Kind = P::Kind::de(reader).unwrap();
 
             // read payload
             let new_message = manifest.create_replica(component_kind, reader, converter);
 
-            self.incoming_messages
-                .push_back((channel, new_message));
+            if let Some(manager) = self.reliable_channels.get_mut(&channel) {
+                manager.recv_message(message_id, new_message);
+            } else {
+                self.incoming_messages
+                    .push_back((channel, new_message));
+            }
         }
     }
 }
