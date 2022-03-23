@@ -13,7 +13,7 @@ use super::{
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct ReliableMessageManager<P: Protocolize> {
-    messages: VecDeque<Option<(MessageId, Option<Instant>, P)>>,
+    outgoing_messages: VecDeque<Option<(MessageId, Option<Instant>, P)>>,
     rtt_resend_factor: f32,
     current_message_id: MessageId,
 }
@@ -23,13 +23,13 @@ impl<P: Protocolize> ReliableMessageManager<P> {
     pub fn new(reliable_settings: &ReliableSettings) -> Self {
         ReliableMessageManager {
             rtt_resend_factor: reliable_settings.rtt_resend_factor,
-            messages: VecDeque::new(),
+            outgoing_messages: VecDeque::new(),
             current_message_id: 0,
         }
     }
 
     pub fn send_message(&mut self, message: P) {
-        self.messages.push_back(Some((self.current_message_id, None, message)));
+        self.outgoing_messages.push_back(Some((self.current_message_id, None, message)));
         self.current_message_id = self.current_message_id.wrapping_add(1);
     }
 
@@ -40,7 +40,7 @@ impl<P: Protocolize> ReliableMessageManager<P> {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
         let now = Instant::now();
 
-        for message_opt in self.messages.iter_mut() {
+        for message_opt in self.outgoing_messages.iter_mut() {
             if let Some((message_id, last_sent_opt, message)) = message_opt {
                 let mut should_send = false;
                 if let Some(last_sent) = last_sent_opt {
@@ -63,11 +63,11 @@ impl<P: Protocolize> ReliableMessageManager<P> {
         let mut found = false;
 
         loop {
-            if index == self.messages.len() {
+            if index == self.outgoing_messages.len() {
                 break;
             }
 
-            if let Some(Some((old_message_id, _, _))) = self.messages.get(index) {
+            if let Some(Some((old_message_id, _, _))) = self.outgoing_messages.get(index) {
                 if *message_id == *old_message_id {
                     found = true;
                 }
@@ -75,12 +75,22 @@ impl<P: Protocolize> ReliableMessageManager<P> {
 
             if found {
                 // replace found message with nothing
-                let container = self.messages.get_mut(index).unwrap();
+                let container = self.outgoing_messages.get_mut(index).unwrap();
                 *container = None;
 
                 // keep popping off Nones from the front of the Vec
-                while self.messages.front().unwrap().is_none() {
-                    self.messages.pop_front();
+                loop {
+                    let mut pop = false;
+                    if let Some(message_opt) = self.outgoing_messages.front() {
+                        if message_opt.is_none() {
+                            pop = true;
+                        }
+                    }
+                    if pop {
+                        self.outgoing_messages.pop_front();
+                    } else {
+                        break;
+                    }
                 }
 
                 // stop loop

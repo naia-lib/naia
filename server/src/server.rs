@@ -151,31 +151,26 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                     message,
                 )));
             }
-
-            // receive tick buffered messages on tick
-            if did_tick {
-                // Receive Tick Buffered Messages
-                for user_address in &user_addresses {
-                    let connection = self.user_connections.get_mut(user_address).unwrap();
-
-                    while let Some((channel, message)) = connection
-                        .tick_buffer_message_receiver
-                        .pop_incoming_message(self.tick_manager.as_ref().unwrap().server_tick())
-                    {
-                        self.incoming_events.push_back(Ok(Event::Message(
-                            connection.user_key,
-                            channel,
-                            message,
-                        )));
-                    }
-                }
-
-                self.incoming_events.push_back(Ok(Event::Tick));
-            }
         }
 
-        // tick event
+        // receive tick buffered messages on tick
         if did_tick {
+            // Receive Tick Buffered Messages
+            for user_address in &user_addresses {
+                let connection = self.user_connections.get_mut(user_address).unwrap();
+
+                while let Some((channel, message)) = connection
+                    .tick_buffer_message_receiver
+                    .pop_incoming_message(self.tick_manager.as_ref().unwrap().server_tick())
+                {
+                    self.incoming_events.push_back(Ok(Event::Message(
+                        connection.user_key,
+                        channel,
+                        message,
+                    )));
+                }
+            }
+
             self.incoming_events.push_back(Ok(Event::Tick));
         }
 
