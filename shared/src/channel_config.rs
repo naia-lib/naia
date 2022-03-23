@@ -39,14 +39,16 @@ impl<C: ChannelIndex> ChannelConfig<C> {
         output
     }
 
-    pub fn all_reliable_settings(&self) -> Vec<(C, ReliableSettings)> {
+    pub fn all_reliable_settings(&self) -> Vec<(C, bool, ReliableSettings)> {
         let mut output = Vec::new();
 
         for (index, channel) in self.map.iter() {
             match &channel.mode {
-                ChannelMode::UnorderedReliable(settings) |
+                ChannelMode::UnorderedReliable(settings) => {
+                    output.push((index.clone(), false, settings.clone()));
+                }
                 ChannelMode::OrderedReliable(settings) => {
-                    output.push((index.clone(), settings.clone()));
+                    output.push((index.clone(), true, settings.clone()));
                 }
                 _ => {}
             }
