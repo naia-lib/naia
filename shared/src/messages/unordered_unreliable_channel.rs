@@ -1,13 +1,20 @@
 use std::collections::VecDeque;
 
-use crate::{
-    read_list_header, write_list_header, Manifest, NetEntityHandleConverter, MTU_SIZE_BITS,
-};
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
 
-use crate::{protocol::protocolize::Protocolize, types::MessageId};
+use crate::{
+    constants::MTU_SIZE_BITS,
+    protocol::{
+        entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
+    },
+    types::MessageId,
+};
 
-use super::{channel_config::ChannelIndex, message_channel::MessageChannel};
+use super::{
+    channel_config::ChannelIndex,
+    message_channel::MessageChannel,
+    message_list_header::{read_list_header, write_list_header},
+};
 
 pub struct UnorderedUnreliableChannel<P: Protocolize, C: ChannelIndex> {
     channel_index: C,

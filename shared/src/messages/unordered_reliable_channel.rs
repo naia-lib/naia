@@ -1,5 +1,6 @@
-use naia_serde::{BitReader, BitWriter};
 use std::collections::VecDeque;
+
+use naia_serde::{BitReader, BitWriter};
 
 use crate::{
     protocol::protocolize::Protocolize, sequence_less_than, types::MessageId, Manifest,
@@ -14,9 +15,9 @@ use super::{
 pub struct UnorderedReliableChannel<P: Protocolize, C: ChannelIndex> {
     channel_index: C,
     outgoing_channel: OutgoingReliableChannel<P>,
-    oldest_received_message_id: MessageId,
-    received_message_ids: VecDeque<(MessageId, bool)>,
-    incoming_messages: Vec<P>,
+    oldest_waiting_message_id: MessageId,
+    waiting_incoming_messages: VecDeque<(MessageId, bool)>,
+    ready_incoming_messages: Vec<P>,
 }
 
 impl<P: Protocolize, C: ChannelIndex> UnorderedReliableChannel<P, C> {
@@ -24,9 +25,9 @@ impl<P: Protocolize, C: ChannelIndex> UnorderedReliableChannel<P, C> {
         Self {
             channel_index: channel_index.clone(),
             outgoing_channel: OutgoingReliableChannel::new(reliable_settings),
-            oldest_received_message_id: 0,
-            received_message_ids: VecDeque::new(),
-            incoming_messages: Vec::new(),
+            oldest_waiting_message_id: 0,
+            waiting_incoming_messages: VecDeque::new(),
+            ready_incoming_messages: Vec::new(),
         }
     }
 
@@ -38,7 +39,7 @@ impl<P: Protocolize, C: ChannelIndex> UnorderedReliableChannel<P, C> {
         // then add new empty slots at the end until getting to the incoming message id
         // then, once you're there, put the new message in
 
-        if sequence_less_than(message_id, self.oldest_received_message_id) {
+        if sequence_less_than(message_id, self.oldest_waiting_message_id) {
             // already moved sliding window past this message id
             return;
         }
@@ -47,18 +48,18 @@ impl<P: Protocolize, C: ChannelIndex> UnorderedReliableChannel<P, C> {
         let mut found = false;
 
         loop {
-            if index < self.received_message_ids.len() {
-                if let Some((old_message_id, _)) = self.received_message_ids.get(index) {
+            if index < self.waiting_incoming_messages.len() {
+                if let Some((old_message_id, _)) = self.waiting_incoming_messages.get(index) {
                     if *old_message_id == message_id {
                         found = true;
                     }
                 }
 
                 if found {
-                    let (_, old_message) = self.received_message_ids.get_mut(index).unwrap();
+                    let (_, old_message) = self.waiting_incoming_messages.get_mut(index).unwrap();
                     if *old_message == false {
                         *old_message = true;
-                        self.incoming_messages.push(message);
+                        self.ready_incoming_messages.push(message);
                     } else {
                         // already received this message
                     }
@@ -66,14 +67,15 @@ impl<P: Protocolize, C: ChannelIndex> UnorderedReliableChannel<P, C> {
                     break;
                 }
             } else {
-                let next_message_id = self.oldest_received_message_id.wrapping_add(index as u16);
+                let next_message_id = self.oldest_waiting_message_id.wrapping_add(index as u16);
 
                 if next_message_id == message_id {
-                    self.received_message_ids.push_back((next_message_id, true));
-                    self.incoming_messages.push(message);
+                    self.waiting_incoming_messages
+                        .push_back((next_message_id, true));
+                    self.ready_incoming_messages.push(message);
                     break;
                 } else {
-                    self.received_message_ids
+                    self.waiting_incoming_messages
                         .push_back((next_message_id, false));
                 }
             }
@@ -93,18 +95,18 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedReliable
     }
 
     fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>) {
-        for message in self.incoming_messages.drain(..) {
+        for message in self.ready_incoming_messages.drain(..) {
             incoming_messages.push((self.channel_index.clone(), message));
         }
 
         loop {
             let mut has_message = false;
-            if let Some((_, true)) = self.received_message_ids.front() {
+            if let Some((_, true)) = self.waiting_incoming_messages.front() {
                 has_message = true;
             }
             if has_message {
-                self.received_message_ids.pop_front();
-                self.oldest_received_message_id = self.oldest_received_message_id.wrapping_add(1);
+                self.waiting_incoming_messages.pop_front();
+                self.oldest_waiting_message_id = self.oldest_waiting_message_id.wrapping_add(1);
             } else {
                 break;
             }
