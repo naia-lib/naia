@@ -24,7 +24,6 @@ use super::{
 /// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
     channels: HashMap<C, Box<dyn MessageChannel<P, C>>>,
-    incoming_messages: VecDeque<(C, P)>,
     outgoing_messages: VecDeque<(C, MessageId, P)>,
     packet_to_message_map: HashMap<PacketIndex, (C, MessageId)>,
 }
@@ -55,17 +54,18 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         }
 
         MessageManager {
-            channels: channels,
+            channels,
             outgoing_messages: VecDeque::new(),
             packet_to_message_map: HashMap::new(),
-            incoming_messages: VecDeque::new(),
         }
     }
 
-    pub fn collect_incoming_messages(&mut self) {
+    pub fn collect_incoming_messages(&mut self) -> Vec<(C, P)> {
+        let mut output: Vec<(C, P)> = Vec::new();
         for (_, channel) in &mut self.channels {
-            channel.collect_incoming_messages(&mut self.incoming_messages);
+            channel.collect_incoming_messages(&mut output);
         }
+        output
     }
 
     pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
@@ -88,13 +88,6 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             // reliable channels
             channel.send_message(message);
         }
-    }
-
-    // Incoming Messages
-
-    /// Get the most recently received Message
-    pub fn pop_incoming_message(&mut self) -> Option<(C, P)> {
-        return self.incoming_messages.pop_front();
     }
 
     // MessageWriter

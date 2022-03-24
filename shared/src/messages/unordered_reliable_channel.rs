@@ -97,9 +97,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedReliable
             .generate_messages(rtt_millis, outgoing_messages);
     }
 
-    fn collect_incoming_messages(&mut self, incoming_messages: &mut VecDeque<(C, P)>) {
+    fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>) {
         for message in self.incoming_messages.drain(..) {
-            incoming_messages.push_back((self.channel_index.clone(), message));
+            incoming_messages.push((self.channel_index.clone(), message));
         }
 
         loop {

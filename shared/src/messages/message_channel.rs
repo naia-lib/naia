@@ -14,7 +14,7 @@ pub trait MessageChannel<P: Protocolize, C: ChannelIndex> {
         rtt_millis: &f32,
         outgoing_messages: &mut VecDeque<(C, MessageId, P)>,
     );
-    fn collect_incoming_messages(&mut self, incoming_messages: &mut VecDeque<(C, P)>);
+    fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>);
     fn notify_message_delivered(&mut self, message_id: &MessageId);
 }
 

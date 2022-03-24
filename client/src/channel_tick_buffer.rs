@@ -28,7 +28,7 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         }
     }
 
-    pub fn generate_resend_messages<C: ChannelIndex>(
+    pub fn collect_outgoing_messages<C: ChannelIndex>(
         &mut self,
         server_receivable_tick: &Tick,
         channel_index: &C,
