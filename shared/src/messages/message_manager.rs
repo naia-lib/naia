@@ -2,9 +2,14 @@ use std::collections::HashMap;
 
 use naia_serde::{BitReader, BitWriter};
 
-use crate::{connection::packet_notifiable::PacketNotifiable, protocol::{
-    entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
-}, types::{MessageId, PacketIndex}, write_list_header};
+use crate::{
+    connection::packet_notifiable::PacketNotifiable,
+    protocol::{
+        entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
+    },
+    types::{MessageId, PacketIndex},
+    write_list_header,
+};
 
 use super::{
     channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
@@ -29,9 +34,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         let all_channel_settings = channel_config.all_channels();
         for (channel_index, channel) in all_channel_settings {
             let new_channel: Option<Box<dyn MessageChannel<P, C>>> = match channel.mode {
-                ChannelMode::UnorderedUnreliable => {
-                    Some(Box::new(UnorderedUnreliableChannel::new(channel_index.clone())))
-                }
+                ChannelMode::UnorderedUnreliable => Some(Box::new(
+                    UnorderedUnreliableChannel::new(channel_index.clone()),
+                )),
                 ChannelMode::UnorderedReliable(settings) => Some(Box::new(
                     UnorderedReliableChannel::new(channel_index.clone(), &settings),
                 )),
@@ -71,11 +76,10 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Returns whether the Manager has queued Messages that can be transmitted
     /// to the remote host
     pub fn has_outgoing_messages(&self) -> bool {
-        return self.channels
+        return self
+            .channels
             .iter()
-            .any(
-                |(_, channel)|
-                    channel.has_outgoing_messages());
+            .any(|(_, channel)| channel.has_outgoing_messages());
     }
 
     /// Queues an Message to be transmitted to the remote host
@@ -96,7 +100,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         for (channel_index, channel) in &mut self.channels {
             if let Some(message_ids) = channel.write_messages(converter, writer) {
                 for message_id in message_ids {
-                    self.packet_to_message_map.insert(packet_index, (channel_index.clone(), message_id));
+                    self.packet_to_message_map
+                        .insert(packet_index, (channel_index.clone(), message_id));
                 }
             } else {
                 write_list_header(writer, &0);

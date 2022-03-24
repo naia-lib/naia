@@ -6,7 +6,7 @@ use crate::{derive_serde, serde, serde::Serde};
 #[derive(Clone)]
 pub struct ChannelConfig<C: ChannelIndex> {
     map: HashMap<C, Channel>,
-    vec: Vec<(C, Channel)>
+    vec: Vec<(C, Channel)>,
 }
 
 impl<C: ChannelIndex> ChannelConfig<C> {

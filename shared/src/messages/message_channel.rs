@@ -1,18 +1,18 @@
-use std::{collections::VecDeque, time::Duration};
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
+use std::{collections::VecDeque, time::Duration};
 
 use naia_socket_shared::Instant;
 
-use crate::{protocol::protocolize::Protocolize, types::MessageId, ChannelIndex, NetEntityHandleConverter, MTU_SIZE_BITS, write_list_header, Manifest, read_list_header};
+use crate::{
+    protocol::protocolize::Protocolize, read_list_header, types::MessageId, write_list_header,
+    ChannelIndex, Manifest, NetEntityHandleConverter, MTU_SIZE_BITS,
+};
 
 use super::channel_config::ReliableSettings;
 
 pub trait MessageChannel<P: Protocolize, C: ChannelIndex> {
     fn send_message(&mut self, message: P);
-    fn collect_outgoing_messages(
-        &mut self,
-        rtt_millis: &f32
-    );
+    fn collect_outgoing_messages(&mut self, rtt_millis: &f32);
     fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>);
     fn notify_message_delivered(&mut self, message_id: &MessageId);
     fn has_outgoing_messages(&self) -> bool;
@@ -21,10 +21,12 @@ pub trait MessageChannel<P: Protocolize, C: ChannelIndex> {
         converter: &dyn NetEntityHandleConverter,
         writer: &mut BitWriter,
     ) -> Option<Vec<MessageId>>;
-    fn read_messages(&mut self,
-                     reader: &mut BitReader,
-                     manifest: &Manifest<P>,
-                     converter: &dyn NetEntityHandleConverter);
+    fn read_messages(
+        &mut self,
+        reader: &mut BitReader,
+        manifest: &Manifest<P>,
+        converter: &dyn NetEntityHandleConverter,
+    );
 }
 
 pub struct OutgoingReliableChannel<P: Protocolize> {
@@ -50,10 +52,7 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
         self.outgoing_message_id = self.outgoing_message_id.wrapping_add(1);
     }
 
-    pub fn generate_messages(
-        &mut self,
-        rtt_millis: &f32,
-    ) {
+    pub fn generate_messages(&mut self, rtt_millis: &f32) {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
         let now = Instant::now();
 
@@ -68,10 +67,8 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
                     should_send = true;
                 }
                 if should_send {
-                    self.outgoing_messages.push_back((
-                        *message_id,
-                        message.clone(),
-                    ));
+                    self.outgoing_messages
+                        .push_back((*message_id, message.clone()));
                     *last_sent_opt = Some(now.clone());
                 }
             }
@@ -142,7 +139,8 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
 
             let mut counter = BitCounter::new();
 
-            //TODO: message_count is inaccurate here and may be different than final, does this matter?
+            //TODO: message_count is inaccurate here and may be different than final, does
+            // this matter?
             write_list_header(&mut counter, &123);
 
             // Check for overflow
@@ -193,7 +191,6 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
         message_id: &MessageId,
         message: &P,
     ) {
-
         // write message id
         message_id.ser(writer);
 
@@ -204,10 +201,12 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
         message.write(writer, converter);
     }
 
-    pub fn read_messages(&mut self,
-                         reader: &mut BitReader,
-                         manifest: &Manifest<P>,
-                         converter: &dyn NetEntityHandleConverter) -> Vec<(MessageId, P)> {
+    pub fn read_messages(
+        &mut self,
+        reader: &mut BitReader,
+        manifest: &Manifest<P>,
+        converter: &dyn NetEntityHandleConverter,
+    ) -> Vec<(MessageId, P)> {
         let message_count = read_list_header(reader);
         let mut output = Vec::new();
         for _x in 0..message_count {
@@ -223,7 +222,6 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
         manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter,
     ) -> (MessageId, P) {
-
         // read message id
         let message_id: MessageId = MessageId::de(reader).unwrap();
 

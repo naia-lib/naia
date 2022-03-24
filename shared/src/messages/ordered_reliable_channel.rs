@@ -2,7 +2,10 @@ use std::collections::VecDeque;
 
 use naia_serde::{BitReader, BitWriter};
 
-use crate::{Manifest, NetEntityHandleConverter, protocol::protocolize::Protocolize, sequence_less_than, types::MessageId};
+use crate::{
+    protocol::protocolize::Protocolize, sequence_less_than, types::MessageId, Manifest,
+    NetEntityHandleConverter,
+};
 
 use super::{
     channel_config::{ChannelIndex, ReliableSettings},
@@ -20,9 +23,7 @@ impl<P: Protocolize, C: ChannelIndex> OrderedReliableChannel<P, C> {
     pub fn new(channel_index: C, reliable_settings: &ReliableSettings) -> Self {
         Self {
             channel_index: channel_index.clone(),
-            outgoing_channel: OutgoingReliableChannel::new(
-                reliable_settings,
-            ),
+            outgoing_channel: OutgoingReliableChannel::new(reliable_settings),
             incoming_message_id: 0,
             incoming_message_buffer: VecDeque::new(),
         }
@@ -84,15 +85,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for OrderedReliableCh
         return self.outgoing_channel.send_message(message);
     }
 
-
-
-    fn collect_outgoing_messages(
-        &mut self,
-        rtt_millis: &f32,
-    ) {
-        return self
-            .outgoing_channel
-            .generate_messages(rtt_millis);
+    fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
+        return self.outgoing_channel.generate_messages(rtt_millis);
     }
 
     fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>) {
@@ -128,8 +122,15 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for OrderedReliableCh
         return self.outgoing_channel.write_messages(converter, writer);
     }
 
-    fn read_messages(&mut self, reader: &mut BitReader, manifest: &Manifest<P>, converter: &dyn NetEntityHandleConverter) {
-        let id_w_msgs = self.outgoing_channel.read_messages(reader, manifest, converter);
+    fn read_messages(
+        &mut self,
+        reader: &mut BitReader,
+        manifest: &Manifest<P>,
+        converter: &dyn NetEntityHandleConverter,
+    ) {
+        let id_w_msgs = self
+            .outgoing_channel
+            .read_messages(reader, manifest, converter);
         for (id, message) in id_w_msgs {
             self.recv_message(id, message);
         }
