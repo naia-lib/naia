@@ -4,9 +4,12 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter}, BaseConnection, ChannelConfig,
-                  ChannelIndex, ConnectionConfig, EntityConverter, Manifest, PacketType, Protocolize,
-                  StandardHeader, Tick, WorldRefType, PingManager};
+use naia_shared::{
+    sequence_greater_than,
+    serde::{BitReader, BitWriter},
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, Manifest,
+    PacketType, PingManager, Protocolize, StandardHeader, Tick, WorldRefType,
+};
 
 use super::{
     entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, io::Io,
@@ -112,9 +115,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     }
 
     fn generate_resend_messages(&mut self, rtt_millis: &f32) {
-        self.base.message_manager.generate_outgoing_messages(rtt_millis);
+        self.base
+            .message_manager
+            .generate_outgoing_messages(rtt_millis);
         self.entity_manager.collect_component_updates();
-        self.entity_manager.collect_entity_messages(&mut self.base.message_manager);
+        self.entity_manager
+            .collect_entity_messages(&mut self.base.message_manager);
     }
 
     fn send_outgoing_packet<W: WorldRefType<P, E>>(

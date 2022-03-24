@@ -1,5 +1,5 @@
-use std::{default::Default, time::Duration};
 use crate::PingConfig;
+use std::{default::Default, time::Duration};
 
 /// Contains Config properties which will be used by a Server or Client
 #[derive(Clone, Debug)]

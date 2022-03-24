@@ -29,12 +29,15 @@ mod keys;
 mod manifest;
 mod message_list_header;
 mod message_manager;
+mod ordered_reliable_channel;
 mod packet_notifiable;
 mod packet_type;
 mod ping_config;
+mod ping_manager;
 mod property;
 mod property_mutate;
 mod protocolize;
+mod reliable_channel;
 mod replica_builder;
 mod replica_ref;
 mod replicate;
@@ -42,12 +45,9 @@ mod sequence_buffer;
 mod shared_config;
 mod standard_header;
 mod types;
+mod unordered_reliable_channel;
 mod world_type;
 mod wrapping_number;
-mod ordered_reliable_channel;
-mod ping_manager;
-mod unordered_reliable_channel;
-mod reliable_channel;
 
 pub use naia_socket_shared::{
     Instant, LinkConditionerConfig, Random, SocketConfig, Timer, Timestamp,
@@ -57,7 +57,10 @@ pub use ack_manager::AckManager;
 pub use bandwidth_monitor::BandwidthMonitor;
 pub use base_connection::BaseConnection;
 pub use bigmap::{BigMap, BigMapKey};
-pub use channel_config::{Channel, ChannelConfig, ChannelIndex, ChannelMode, ChannelDirection, TickBufferSettings, ReliableSettings, DefaultChannels};
+pub use channel_config::{
+    Channel, ChannelConfig, ChannelDirection, ChannelIndex, ChannelMode, DefaultChannels,
+    ReliableSettings, TickBufferSettings,
+};
 pub use compression_config::{CompressionConfig, CompressionMode};
 pub use connection_config::ConnectionConfig;
 pub use constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
@@ -78,6 +81,7 @@ pub use message_manager::MessageManager;
 pub use packet_notifiable::PacketNotifiable;
 pub use packet_type::PacketType;
 pub use ping_config::PingConfig;
+pub use ping_manager::{PingIndex, PingManager};
 pub use property::Property;
 pub use property_mutate::{PropertyMutate, PropertyMutator};
 pub use protocolize::{ProtocolInserter, ProtocolKindType, Protocolize};
@@ -92,4 +96,3 @@ pub use standard_header::StandardHeader;
 pub use types::{PacketIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
-pub use ping_manager::{PingManager, PingIndex};

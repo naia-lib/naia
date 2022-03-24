@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 
 use super::{
+    ping_config::PingConfig,
     sequence_greater_than,
     serde::{BitReader, BitWriter, Serde},
     Instant, Timer,
-    ping_config::PingConfig,
 };
 
 pub struct PingManager {

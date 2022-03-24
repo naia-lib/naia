@@ -2,8 +2,12 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::types::MsgId;
 
-use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde}, write_list_header, ChannelIndex, NetEntityHandleConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, MTU_SIZE_BITS, ChannelConfig};
 use crate::channel_tick_buffer::ChannelTickBuffer;
+use naia_shared::{
+    serde::{BitCounter, BitWrite, BitWriter, Serde},
+    write_list_header, ChannelConfig, ChannelIndex, NetEntityHandleConverter, PacketIndex,
+    PacketNotifiable, Protocolize, ReplicateSafe, Tick, MTU_SIZE_BITS,
+};
 
 pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
     channels: HashMap<C, ChannelTickBuffer<P>>,
@@ -12,8 +16,7 @@ pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
 }
 
 impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
-    pub fn new(channel_config: &ChannelConfig<C>,) -> Self {
-
+    pub fn new(channel_config: &ChannelConfig<C>) -> Self {
         // initialize all tick buffer channels
         let mut channels = HashMap::new();
         let all_channel_settings = channel_config.all_tick_buffer_settings();
@@ -31,7 +34,11 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
 
     pub fn generate_resend_messages(&mut self, server_receivable_tick: &Tick) {
         for (channel_index, channel) in &mut self.channels {
-            channel.generate_resend_messages(server_receivable_tick, channel_index, &mut self.outgoing_messages);
+            channel.generate_resend_messages(
+                server_receivable_tick,
+                channel_index,
+                &mut self.outgoing_messages,
+            );
         }
     }
 

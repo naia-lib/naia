@@ -1,12 +1,8 @@
-use std::collections::VecDeque;
-use std::time::Duration;
-use naia_socket_shared::Instant;
 use crate::ReliableSettings;
+use naia_socket_shared::Instant;
+use std::{collections::VecDeque, time::Duration};
 
-use super::{
-    protocolize::Protocolize, types::MessageId,
-    ChannelIndex
-};
+use super::{protocolize::Protocolize, types::MessageId, ChannelIndex};
 
 pub trait ReliableChannel<P: Protocolize, C: ChannelIndex> {
     fn outgoing(&mut self) -> &mut OutgoingReliableChannel<P, C>;
@@ -32,11 +28,16 @@ impl<P: Protocolize, C: ChannelIndex> OutgoingReliableChannel<P, C> {
     }
 
     pub fn send_message(&mut self, message: P) {
-        self.outgoing_message_buffer.push_back(Some((self.outgoing_message_id, None, message)));
+        self.outgoing_message_buffer
+            .push_back(Some((self.outgoing_message_id, None, message)));
         self.outgoing_message_id = self.outgoing_message_id.wrapping_add(1);
     }
 
-    pub fn generate_messages(&mut self, rtt_millis: &f32, outgoing_messages: &mut VecDeque<(C, MessageId, P)>) {
+    pub fn generate_messages(
+        &mut self,
+        rtt_millis: &f32,
+        outgoing_messages: &mut VecDeque<(C, MessageId, P)>,
+    ) {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
         let now = Instant::now();
 
@@ -51,7 +52,11 @@ impl<P: Protocolize, C: ChannelIndex> OutgoingReliableChannel<P, C> {
                     should_send = true;
                 }
                 if should_send {
-                    outgoing_messages.push_back((self.channel_index.clone(), *message_id, message.clone()));
+                    outgoing_messages.push_back((
+                        self.channel_index.clone(),
+                        *message_id,
+                        message.clone(),
+                    ));
                     *last_sent_opt = Some(now.clone());
                 }
             }

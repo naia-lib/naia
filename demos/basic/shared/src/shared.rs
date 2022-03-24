@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use naia_shared::{ChannelConfig, LinkConditionerConfig, SharedConfig, SocketConfig, DefaultChannels};
+use naia_shared::{
+    ChannelConfig, DefaultChannels, LinkConditionerConfig, SharedConfig, SocketConfig,
+};
 
 use super::protocol::Protocol;
 
@@ -21,5 +23,6 @@ pub fn shared_config() -> SharedConfig<Protocol, DefaultChannels> {
         SocketConfig::new(link_condition, None),
         ChannelConfig::default(),
         tick_interval,
-        None);
+        None,
+    );
 }

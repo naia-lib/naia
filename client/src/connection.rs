@@ -1,12 +1,14 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
-use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ChannelConfig,
-                  ChannelIndex, ConnectionConfig, Manifest, PacketType, Protocolize,
-                  StandardHeader, Tick, WorldMutType, PingManager};
+use naia_shared::{
+    serde::{BitReader, BitWriter, OwnedBitReader},
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, Manifest, PacketType,
+    PingManager, Protocolize, StandardHeader, Tick, WorldMutType,
+};
 
 use super::{
-    entity_manager::EntityManager, error::NaiaClientError, event::Event,
-    tick_queue::TickQueue, io::Io, tick_buffer::TickBuffer, tick_manager::TickManager,
+    entity_manager::EntityManager, error::NaiaClientError, event::Event, io::Io,
+    tick_buffer::TickBuffer, tick_manager::TickManager, tick_queue::TickQueue,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
@@ -73,7 +75,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     // Outgoing data
 
     pub fn send_outgoing_packets(&mut self, io: &mut Io, tick_manager_opt: &Option<TickManager>) {
-
         self.generate_resend_messages(tick_manager_opt);
 
         let mut any_sent = false;
@@ -90,9 +91,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     }
 
     fn generate_resend_messages(&mut self, tick_manager_opt: &Option<TickManager>) {
-        self.base.message_manager.generate_outgoing_messages(&self.ping_manager.rtt);
+        self.base
+            .message_manager
+            .generate_outgoing_messages(&self.ping_manager.rtt);
         if let Some(tick_manager) = tick_manager_opt {
-            self.tick_buffer_message_sender.generate_resend_messages(&tick_manager.server_receivable_tick());
+            self.tick_buffer_message_sender
+                .generate_resend_messages(&tick_manager.server_receivable_tick());
         }
     }
 

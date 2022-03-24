@@ -1,10 +1,15 @@
-use std::collections::{HashMap, VecDeque};
-use std::time::Duration;
 use naia_client_socket::shared::Instant;
+use std::{
+    collections::{HashMap, VecDeque},
+    time::Duration,
+};
 
 use crate::{constants::MESSAGE_HISTORY_SIZE, types::MsgId};
 
-use naia_shared::{sequence_greater_than, sequence_less_than, ChannelIndex, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, TickBufferSettings};
+use naia_shared::{
+    sequence_greater_than, sequence_less_than, ChannelIndex, PacketIndex, PacketNotifiable,
+    Protocolize, ReplicateSafe, Tick, TickBufferSettings,
+};
 
 pub struct ChannelTickBuffer<P: Protocolize> {
     outgoing_messages: OutgoingMessages<P>,
@@ -23,10 +28,12 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         }
     }
 
-    pub fn generate_resend_messages<C: ChannelIndex>(&mut self,
-                                    server_receivable_tick: &Tick,
-                                    channel_index: &C,
-                                    outgoing_messages: &mut VecDeque<(MsgId, Tick, C, P)>) {
+    pub fn generate_resend_messages<C: ChannelIndex>(
+        &mut self,
+        server_receivable_tick: &Tick,
+        channel_index: &C,
+        outgoing_messages: &mut VecDeque<(MsgId, Tick, C, P)>,
+    ) {
         if self.last_sent.elapsed() >= self.resend_interval {
             // Remove messages that would never be able to reach the Server
             self.outgoing_messages
@@ -46,15 +53,10 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         }
     }
 
-    pub fn send_message<R: ReplicateSafe<P>>(
-        &mut self,
-        client_tick: Tick,
-        message: &R,
-    ) {
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, client_tick: Tick, message: &R) {
         let message_protocol = message.protocol_copy();
 
-        self.outgoing_messages
-            .push(client_tick, message_protocol);
+        self.outgoing_messages.push(client_tick, message_protocol);
 
         self.last_sent = Instant::now();
         self.last_sent.subtract_duration(&self.resend_interval);
@@ -179,7 +181,12 @@ impl<P: Protocolize> MessageMap<P> {
         self.message_id = self.message_id.wrapping_add(1);
     }
 
-    pub fn append_messages<C: ChannelIndex>(&self, tick: Tick, channel_index: &C, list: &mut VecDeque<(MsgId, Tick, C, P)>) {
+    pub fn append_messages<C: ChannelIndex>(
+        &self,
+        tick: Tick,
+        channel_index: &C,
+        list: &mut VecDeque<(MsgId, Tick, C, P)>,
+    ) {
         for (message_id, message) in &self.map {
             list.push_back((*message_id, tick, channel_index.clone(), message.clone()));
         }

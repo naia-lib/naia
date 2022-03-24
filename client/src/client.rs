@@ -2,13 +2,13 @@ use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAdd
 
 use naia_client_socket::Socket;
 
+use naia_shared::PingIndex;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
-    ConnectionConfig, Manifest, PacketType, PingConfig, ProtocolKindType, Protocolize,
-    ReplicateSafe, SharedConfig, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
-    WorldMutType, WorldRefType, ChannelIndex, EntityHandle, EntityHandleConverter
+    ChannelIndex, ConnectionConfig, EntityHandle, EntityHandleConverter, Manifest, PacketType,
+    PingConfig, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, SocketConfig,
+    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
-use naia_shared::PingIndex;
 
 use super::{
     client_config::ClientConfig, connection::Connection, entity_ref::EntityRef,
@@ -165,7 +165,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             }
 
             // receive messages
-            server_connection.base.message_manager.generate_incoming_messages();
+            server_connection
+                .base
+                .message_manager
+                .generate_incoming_messages();
             while let Some((channel, message)) = server_connection
                 .base
                 .message_manager
@@ -244,22 +247,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     /// Gets the average Round Trip Time measured to the Server
     pub fn rtt(&self) -> f32 {
-        return self
-            .server_connection
-            .as_ref()
-            .unwrap()
-            .ping_manager
-            .rtt;
+        return self.server_connection.as_ref().unwrap().ping_manager.rtt;
     }
 
     /// Gets the average Jitter measured in connection to the Server
     pub fn jitter(&self) -> f32 {
-        return self
-            .server_connection
-            .as_ref()
-            .unwrap()
-            .ping_manager
-            .jitter;
+        return self.server_connection.as_ref().unwrap().ping_manager.jitter;
     }
 
     // Ticks

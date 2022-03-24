@@ -6,7 +6,10 @@ cfg_if! {
     }
 }
 
-use naia_client::{shared::{Protocolize, DefaultChannels}, Client as NaiaClient, ClientConfig, Event};
+use naia_client::{
+    shared::{DefaultChannels, Protocolize},
+    Client as NaiaClient, ClientConfig, Event,
+};
 
 use naia_demo_world::{Entity, World as DemoWorld};
 
@@ -54,11 +57,13 @@ impl App {
                     let ref message_contents = *message.contents;
                     info!("Client recv <- {}", message_contents);
 
-                    // let new_message_contents = format!("Client Message ({})", self.message_count);
-                    // info!("Client send -> {}", new_message_contents);
+                    // let new_message_contents = format!("Client Message ({})",
+                    // self.message_count); info!("Client send -> {}",
+                    // new_message_contents);
                     //
                     // let string_message = StringMessage::new(new_message_contents);
-                    // self.client.send_message(DefaultChannels::UnorderedUnreliable, &string_message);
+                    // self.client.send_message(DefaultChannels::UnorderedUnreliable,
+                    // &string_message);
                     self.message_count += 1;
                 }
                 // Ok(Event::SpawnEntity(entity, _)) => {

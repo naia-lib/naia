@@ -1,8 +1,11 @@
 use std::collections::VecDeque;
 
 use super::{
-    protocolize::Protocolize, types::MessageId,
-    ChannelIndex, ReliableSettings, reliable_channel::ReliableChannel, sequence_less_than, reliable_channel::OutgoingReliableChannel
+    protocolize::Protocolize,
+    reliable_channel::{OutgoingReliableChannel, ReliableChannel},
+    sequence_less_than,
+    types::MessageId,
+    ChannelIndex, ReliableSettings,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -18,7 +21,10 @@ impl<P: Protocolize, C: ChannelIndex> OrderedReliableChannel<P, C> {
     pub fn new(channel_index: C, reliable_settings: &ReliableSettings) -> Self {
         Self {
             channel_index: channel_index.clone(),
-            outgoing_channel: OutgoingReliableChannel::new(channel_index.clone(), reliable_settings),
+            outgoing_channel: OutgoingReliableChannel::new(
+                channel_index.clone(),
+                reliable_settings,
+            ),
             incoming_message_id: 0,
             incoming_message_buffer: VecDeque::new(),
         }
@@ -26,16 +32,14 @@ impl<P: Protocolize, C: ChannelIndex> OrderedReliableChannel<P, C> {
 }
 
 impl<P: Protocolize, C: ChannelIndex> ReliableChannel<P, C> for OrderedReliableChannel<P, C> {
-
     fn outgoing(&mut self) -> &mut OutgoingReliableChannel<P, C> {
         return &mut self.outgoing_channel;
     }
 
     fn recv_message(&mut self, message_id: MessageId, message: P) {
-
         // moving from oldest incoming message to newest
-        // compare existing slots and see if the message_id has been instantiated already
-        // if it has, put the message into the slot
+        // compare existing slots and see if the message_id has been instantiated
+        // already if it has, put the message into the slot
         // otherwise, keep track of what the last message id was
         // then add new empty slots at the end until getting to the incoming message id
         // then, once you're there, put the new message in
@@ -69,10 +73,12 @@ impl<P: Protocolize, C: ChannelIndex> ReliableChannel<P, C> for OrderedReliableC
                 let next_message_id = self.incoming_message_id.wrapping_add(index as u16);
 
                 if next_message_id == message_id {
-                    self.incoming_message_buffer.push_back((next_message_id, Some(message)));
+                    self.incoming_message_buffer
+                        .push_back((next_message_id, Some(message)));
                     break;
                 } else {
-                    self.incoming_message_buffer.push_back((next_message_id, None));
+                    self.incoming_message_buffer
+                        .push_back((next_message_id, None));
                 }
             }
 

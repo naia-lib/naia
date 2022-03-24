@@ -7,7 +7,10 @@ use std::{
 };
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{serde::{BitWriter, Serde}, ChannelIndex, EntityHandle, EntityHandleConverter, Tick};
+use naia_shared::{
+    serde::{BitWriter, Serde},
+    ChannelIndex, EntityHandle, EntityHandleConverter, Tick,
+};
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, Manifest,
     NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType,
@@ -192,9 +195,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                 &self.diff_handler,
             );
             // send connectaccept response
-            let mut writer = self
-                .handshake_manager
-                .write_connect_response();
+            let mut writer = self.handshake_manager.write_connect_response();
             self.io.send_writer(&user.address, &mut writer);
             //
             self.user_connections.insert(user.address, new_connection);
@@ -222,7 +223,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
         channel: C,
         message: &R,
     ) {
-        if !self.shared_config.channel.settings(&channel).can_send_to_client() {
+        if !self
+            .shared_config
+            .channel
+            .settings(&channel)
+            .can_send_to_client()
+        {
             panic!("Cannot send message to Client on this Channel");
         }
 
@@ -527,7 +533,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
         return None;
     }
 
-    /// Gets the average Jitter measured in connection to the given User's Client
+    /// Gets the average Jitter measured in connection to the given User's
+    /// Client
     pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
         if let Some(user) = self.users.get(user_key) {
             if let Some(user_connection) = self.user_connections.get(&user.address) {
@@ -790,7 +797,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     // Private methods
 
     fn maintain_socket(&mut self) {
-
         // disconnects
         if self.timeout_timer.ringing() {
             self.timeout_timer.reset();
@@ -798,7 +804,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
             let mut user_disconnects: Vec<UserKey> = Vec::new();
 
             for (_, connection) in &mut self.user_connections.iter_mut() {
-
                 // user disconnects
                 if connection.base.should_drop() {
                     user_disconnects.push(connection.user_key);
@@ -883,18 +888,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                             let mut writer =
                                 self.handshake_manager.recv_challenge_request(&mut reader);
                             self.io.send_writer(&address, &mut writer);
+                            break;
                         }
                         PacketType::ClientConnectRequest => {
-                            match self.handshake_manager.recv_connect_request(
-                                &self.shared_config.manifest,
-                                &mut reader)
+                            match self
+                                .handshake_manager
+                                .recv_connect_request(&self.shared_config.manifest, &mut reader)
                             {
                                 HandshakeResult::Success(auth_message_opt) => {
                                     if self.user_connections.contains_key(&address) {
                                         // send connectaccept response
-                                        let mut writer = self
-                                            .handshake_manager
-                                            .write_connect_response();
+                                        let mut writer =
+                                            self.handshake_manager.write_connect_response();
                                         self.io.send_writer(&address, &mut writer);
                                         //
                                     } else {
@@ -902,10 +907,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                         let user_key = self.users.insert(user);
 
                                         if let Some(auth_message) = auth_message_opt {
-                                            self.incoming_events.push_back(Ok(Event::Authorization(
-                                                user_key,
-                                                auth_message,
-                                            )));
+                                            self.incoming_events.push_back(Ok(
+                                                Event::Authorization(user_key, auth_message),
+                                            ));
                                         } else {
                                             self.accept_connection(&user_key);
                                         }
@@ -915,12 +919,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                     // do nothing
                                 }
                             }
+                            break;
                         }
                         _ => {}
                     }
 
                     if let Some(user_connection) = self.user_connections.get_mut(&address) {
-
                         // Mark that we've heard from the client
                         user_connection.base.mark_heard();
 
@@ -930,7 +934,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                         // read client tick
                         if let Some(tick_manager) = self.tick_manager.as_ref() {
                             match header.packet_type() {
-                                PacketType::Data | PacketType::Ping | PacketType::Pong | PacketType::Heartbeat => {
+                                PacketType::Data
+                                | PacketType::Ping
+                                | PacketType::Pong
+                                | PacketType::Heartbeat => {
                                     let client_tick = tick_manager.read_client_tick(&mut reader);
                                     user_connection.recv_client_tick(client_tick);
                                 }
@@ -946,9 +953,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                     &mut reader,
                                     &self.world_record,
                                 );
-                            },
+                            }
                             PacketType::Disconnect => {
-
                                 if self
                                     .handshake_manager
                                     .verify_disconnect_request(user_connection, &mut reader)
@@ -958,10 +964,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                 }
                             }
                             PacketType::Heartbeat => {
-                                // already marked that we've heard from this client, problem solved
+                                // already marked that we've heard from this
+                                // client, problem solved
                             }
                             PacketType::Ping => {
-
                                 // read incoming ping index
                                 let ping_index = u16::de(&mut reader).unwrap();
 
