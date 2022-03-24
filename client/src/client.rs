@@ -344,12 +344,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
                         // Record incoming tick
                         let mut incoming_tick = 0;
+
                         if let Some(tick_manager) = self.tick_manager.as_mut() {
-                            incoming_tick = tick_manager.read_server_tick(
-                                &mut reader,
-                                server_connection.ping_manager.rtt,
-                                server_connection.ping_manager.jitter,
-                            );
+                            match header.packet_type() {
+                                PacketType::Data | PacketType::Heartbeat | PacketType::Ping | PacketType::Pong => {
+                                    incoming_tick = tick_manager.read_server_tick(
+                                        &mut reader,
+                                        server_connection.ping_manager.rtt,
+                                        server_connection.ping_manager.jitter,
+                                    );
+                                }
+                                _ => {}
+                            }
                         }
 
                         // Handle based on PacketType
