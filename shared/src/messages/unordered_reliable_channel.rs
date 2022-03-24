@@ -4,11 +4,9 @@ use crate::{protocol::protocolize::Protocolize, sequence_less_than, types::Messa
 
 use super::{
     channel_config::{ChannelIndex, ReliableSettings},
-    reliable_channel::{OutgoingReliableChannel, ReliableChannel},
+    message_channel::{MessageChannel, OutgoingReliableChannel},
 };
 
-/// Handles incoming/outgoing messages, tracks the delivery status of Messages
-/// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct UnorderedReliableChannel<P: Protocolize, C: ChannelIndex> {
     channel_index: C,
     outgoing_channel: OutgoingReliableChannel<P, C>,
@@ -32,9 +30,9 @@ impl<P: Protocolize, C: ChannelIndex> UnorderedReliableChannel<P, C> {
     }
 }
 
-impl<P: Protocolize, C: ChannelIndex> ReliableChannel<P, C> for UnorderedReliableChannel<P, C> {
-    fn outgoing(&mut self) -> &mut OutgoingReliableChannel<P, C> {
-        return &mut self.outgoing_channel;
+impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedReliableChannel<P, C> {
+    fn send_message(&mut self, message: P) {
+        return self.outgoing_channel.send_message(message);
     }
 
     fn recv_message(&mut self, message_id: MessageId, message: P) {
@@ -89,7 +87,17 @@ impl<P: Protocolize, C: ChannelIndex> ReliableChannel<P, C> for UnorderedReliabl
         }
     }
 
-    fn generate_incoming_messages(&mut self, incoming_messages: &mut VecDeque<(C, P)>) {
+    fn collect_outgoing_messages(
+        &mut self,
+        rtt_millis: &f32,
+        outgoing_messages: &mut VecDeque<(C, MessageId, P)>,
+    ) {
+        return self
+            .outgoing_channel
+            .generate_messages(rtt_millis, outgoing_messages);
+    }
+
+    fn collect_incoming_messages(&mut self, incoming_messages: &mut VecDeque<(C, P)>) {
         for message in self.incoming_messages.drain(..) {
             incoming_messages.push_back((self.channel_index.clone(), message));
         }
@@ -106,5 +114,9 @@ impl<P: Protocolize, C: ChannelIndex> ReliableChannel<P, C> for UnorderedReliabl
                 break;
             }
         }
+    }
+
+    fn notify_message_delivered(&mut self, message_id: &MessageId) {
+        return self.outgoing_channel.notify_message_delivered(message_id);
     }
 }

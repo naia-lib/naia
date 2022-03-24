@@ -117,7 +117,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     fn generate_resend_messages(&mut self, rtt_millis: &f32) {
         self.base
             .message_manager
-            .generate_outgoing_messages(rtt_millis);
+            .collect_outgoing_messages(rtt_millis);
         self.entity_manager.collect_component_updates();
         self.entity_manager
             .collect_entity_messages(&mut self.base.message_manager);

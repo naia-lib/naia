@@ -38,19 +38,11 @@ impl<C: ChannelIndex> ChannelConfig<C> {
         output
     }
 
-    pub fn all_reliable_settings(&self) -> Vec<(C, bool, ReliableSettings)> {
+    pub fn all_channels(&self) -> Vec<(C, Channel)> {
         let mut output = Vec::new();
 
         for (index, channel) in self.map.iter() {
-            match &channel.mode {
-                ChannelMode::UnorderedReliable(settings) => {
-                    output.push((index.clone(), false, settings.clone()));
-                }
-                ChannelMode::OrderedReliable(settings) => {
-                    output.push((index.clone(), true, settings.clone()));
-                }
-                _ => {}
-            }
+            output.push((index.clone(), channel.clone()));
         }
 
         output
@@ -63,7 +55,7 @@ pub trait ChannelIndex: 'static + Serde + Eq + Hash {}
 // Channel
 #[derive(Clone)]
 pub struct Channel {
-    mode: ChannelMode,
+    pub mode: ChannelMode,
     direction: ChannelDirection,
 }
 

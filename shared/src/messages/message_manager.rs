@@ -12,20 +12,21 @@ use crate::{
 };
 
 use super::{
-    channel_config::{ChannelConfig, ChannelIndex},
+    channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
+    message_channel::MessageChannel,
     message_list_header::{read_list_header, write_list_header},
     ordered_reliable_channel::OrderedReliableChannel,
-    reliable_channel::ReliableChannel,
     unordered_reliable_channel::UnorderedReliableChannel,
+    unordered_unreliable_channel::UnorderedUnreliableChannel,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
-    reliable_channels: HashMap<C, Box<dyn ReliableChannel<P, C>>>,
+    channels: HashMap<C, Box<dyn MessageChannel<P, C>>>,
+    incoming_messages: VecDeque<(C, P)>,
     outgoing_messages: VecDeque<(C, MessageId, P)>,
     packet_to_message_map: HashMap<PacketIndex, (C, MessageId)>,
-    incoming_messages: VecDeque<(C, P)>,
 }
 
 impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
@@ -33,34 +34,43 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
         // initialize all reliable channels
         let mut channels = HashMap::new();
-        let all_channel_settings = channel_config.all_reliable_settings();
-        for (index, ordered, settings) in all_channel_settings {
-            let new_channel: Box<dyn ReliableChannel<P, C>> = match ordered {
-                true => Box::new(OrderedReliableChannel::new(index.clone(), &settings)),
-                false => Box::new(UnorderedReliableChannel::new(index.clone(), &settings)),
+        let all_channel_settings = channel_config.all_channels();
+        for (channel_index, channel) in all_channel_settings {
+            let new_channel: Option<Box<dyn MessageChannel<P, C>>> = match channel.mode {
+                ChannelMode::UnorderedUnreliable => {
+                    Some(Box::new(UnorderedUnreliableChannel::new(channel_index.clone())))
+                }
+                ChannelMode::UnorderedReliable(settings) => Some(Box::new(
+                    UnorderedReliableChannel::new(channel_index.clone(), &settings),
+                )),
+                ChannelMode::OrderedReliable(settings) => Some(Box::new(
+                    OrderedReliableChannel::new(channel_index.clone(), &settings),
+                )),
+                _ => None,
             };
-            channels.insert(index, new_channel);
+
+            if new_channel.is_some() {
+                channels.insert(channel_index.clone(), new_channel.unwrap());
+            }
         }
 
         MessageManager {
-            reliable_channels: channels,
+            channels: channels,
             outgoing_messages: VecDeque::new(),
             packet_to_message_map: HashMap::new(),
             incoming_messages: VecDeque::new(),
         }
     }
 
-    pub fn generate_incoming_messages(&mut self) {
-        for (_, channel) in &mut self.reliable_channels {
-            channel.generate_incoming_messages(&mut self.incoming_messages);
+    pub fn collect_incoming_messages(&mut self) {
+        for (_, channel) in &mut self.channels {
+            channel.collect_incoming_messages(&mut self.incoming_messages);
         }
     }
 
-    pub fn generate_outgoing_messages(&mut self, rtt_millis: &f32) {
-        for (_, channel) in &mut self.reliable_channels {
-            channel
-                .outgoing()
-                .generate_messages(rtt_millis, &mut self.outgoing_messages);
+    pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
+        for (_, channel) in &mut self.channels {
+            channel.collect_outgoing_messages(rtt_millis, &mut self.outgoing_messages);
         }
     }
 
@@ -74,13 +84,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
     /// Queues an Message to be transmitted to the remote host
     pub fn send_message(&mut self, channel_index: C, message: P) {
-        if let Some(channel) = self.reliable_channels.get_mut(&channel_index) {
+        if let Some(channel) = self.channels.get_mut(&channel_index) {
             // reliable channels
-            channel.outgoing().send_message(message);
-        } else {
-            // unreliable channels
-            self.outgoing_messages
-                .push_back((channel_index, 0, message));
+            channel.send_message(message);
         }
     }
 
@@ -215,10 +221,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             // read payload
             let new_message = manifest.create_replica(component_kind, reader, converter);
 
-            if let Some(manager) = self.reliable_channels.get_mut(&channel) {
+            if let Some(manager) = self.channels.get_mut(&channel) {
                 manager.recv_message(message_id, new_message);
-            } else {
-                self.incoming_messages.push_back((channel, new_message));
             }
         }
     }
@@ -229,8 +233,8 @@ impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for MessageManager<P, C> 
     /// status of Messages in that packet.
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some((channel_index, message_id)) = self.packet_to_message_map.get(&packet_index) {
-            if let Some(channel) = self.reliable_channels.get_mut(channel_index) {
-                channel.outgoing().notify_message_delivered(message_id);
+            if let Some(channel) = self.channels.get_mut(channel_index) {
+                channel.notify_message_delivered(message_id);
             }
         }
     }
