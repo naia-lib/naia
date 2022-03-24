@@ -32,9 +32,9 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         }
     }
 
-    pub fn generate_resend_messages(&mut self, server_receivable_tick: &Tick) {
+    pub fn collect_outgoing_messages(&mut self, server_receivable_tick: &Tick) {
         for (channel_index, channel) in &mut self.channels {
-            channel.generate_resend_messages(
+            channel.collect_outgoing_messages(
                 server_receivable_tick,
                 channel_index,
                 &mut self.outgoing_messages,

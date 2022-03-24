@@ -93,7 +93,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for OrderedReliableCh
             .generate_messages(rtt_millis, outgoing_messages);
     }
 
-    fn collect_incoming_messages(&mut self, incoming_messages: &mut VecDeque<(C, P)>) {
+    fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>) {
         loop {
             let mut has_message = false;
             if let Some((_, Some(_))) = self.incoming_message_buffer.front() {
@@ -102,7 +102,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for OrderedReliableCh
             if has_message {
                 let (_, message_opt) = self.incoming_message_buffer.pop_front().unwrap();
                 let message = message_opt.unwrap();
-                incoming_messages.push_back((self.channel_index.clone(), message));
+                incoming_messages.push((self.channel_index.clone(), message));
                 self.incoming_message_id = self.incoming_message_id.wrapping_add(1);
             } else {
                 break;

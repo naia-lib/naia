@@ -36,9 +36,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliab
         }
     }
 
-    fn collect_incoming_messages(&mut self, incoming_messages: &mut VecDeque<(C, P)>) {
+    fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>) {
         while let Some(message) = self.incoming_messages.pop_front() {
-            incoming_messages.push_back((self.channel_index.clone(), message));
+            incoming_messages.push((self.channel_index.clone(), message));
         }
     }
 

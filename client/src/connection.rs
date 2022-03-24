@@ -75,7 +75,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     // Outgoing data
 
     pub fn send_outgoing_packets(&mut self, io: &mut Io, tick_manager_opt: &Option<TickManager>) {
-        self.generate_resend_messages(tick_manager_opt);
+        self.collect_outgoing_messages(tick_manager_opt);
 
         let mut any_sent = false;
         loop {
@@ -90,13 +90,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         }
     }
 
-    fn generate_resend_messages(&mut self, tick_manager_opt: &Option<TickManager>) {
+    fn collect_outgoing_messages(&mut self, tick_manager_opt: &Option<TickManager>) {
         self.base
             .message_manager
             .collect_outgoing_messages(&self.ping_manager.rtt);
         if let Some(tick_manager) = tick_manager_opt {
             self.tick_buffer_message_sender
-                .generate_resend_messages(&tick_manager.server_receivable_tick());
+                .collect_outgoing_messages(&tick_manager.server_receivable_tick());
         }
     }
 

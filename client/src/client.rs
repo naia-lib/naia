@@ -165,15 +165,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             }
 
             // receive messages
-            server_connection
+            let messages = server_connection
                 .base
                 .message_manager
                 .collect_incoming_messages();
-            while let Some((channel, message)) = server_connection
-                .base
-                .message_manager
-                .pop_incoming_message()
-            {
+            for (channel, message) in messages {
                 self.incoming_events
                     .push_back(Ok(Event::Message(channel, message)));
             }

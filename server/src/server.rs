@@ -145,10 +145,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
             let connection = self.user_connections.get_mut(user_address).unwrap();
 
             // receive messages from anyone
-            connection.base.message_manager.collect_incoming_messages();
-            while let Some((channel, message)) =
-                connection.base.message_manager.pop_incoming_message()
-            {
+            let messages = connection.base.message_manager.collect_incoming_messages();
+            for (channel, message) in messages {
                 self.incoming_events.push_back(Ok(Event::Message(
                     connection.user_key,
                     channel,
