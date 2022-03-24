@@ -6,17 +6,20 @@ use crate::{derive_serde, serde, serde::Serde};
 #[derive(Clone)]
 pub struct ChannelConfig<C: ChannelIndex> {
     map: HashMap<C, Channel>,
+    vec: Vec<(C, Channel)>
 }
 
 impl<C: ChannelIndex> ChannelConfig<C> {
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
+            vec: Vec::new(),
         }
     }
 
     pub fn add_channel(&mut self, channel_index: C, channel: Channel) {
-        self.map.insert(channel_index, channel);
+        self.map.insert(channel_index.clone(), channel.clone());
+        self.vec.push((channel_index, channel));
     }
 
     pub fn settings(&self, channel_index: &C) -> &Channel {
@@ -29,7 +32,7 @@ impl<C: ChannelIndex> ChannelConfig<C> {
     pub fn all_tick_buffer_settings(&self) -> Vec<(C, TickBufferSettings)> {
         let mut output = Vec::new();
 
-        for (index, channel) in self.map.iter() {
+        for (index, channel) in &self.vec {
             if let ChannelMode::TickBuffered(settings) = &channel.mode {
                 output.push((index.clone(), settings.clone()));
             }
@@ -39,13 +42,7 @@ impl<C: ChannelIndex> ChannelConfig<C> {
     }
 
     pub fn all_channels(&self) -> Vec<(C, Channel)> {
-        let mut output = Vec::new();
-
-        for (index, channel) in self.map.iter() {
-            output.push((index.clone(), channel.clone()));
-        }
-
-        output
+        return self.vec.clone();
     }
 }
 
