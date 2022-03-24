@@ -74,7 +74,7 @@ fn end_to_end_handshake_w_auth() {
         reader = BitReader::new(&message_buffer[..message_length]);
         StandardHeader::de(&mut reader).unwrap();
         let result =
-            server.recv_new_connect_request(&Protocol::load(), &test_socket_addr, &mut reader);
+            server.recv_connect_request(&Protocol::load(), &test_socket_addr, &mut reader);
         if let HandshakeResult::AuthUser(auth_message) = result {
             let auth_replica = auth_message
                 .cast_ref::<Auth>()
@@ -96,7 +96,7 @@ fn end_to_end_handshake_w_auth() {
 
     // 7. Server send connect response
     {
-        let header = StandardHeader::new(PacketType::ServerConnectResponse, 0, 0, 0, 0);
+        let header = StandardHeader::new(PacketType::ServerConnectResponse, 0, 0, 0);
         writer = BitWriter::new();
         header.ser(&mut writer);
         let (length, buffer) = writer.flush();

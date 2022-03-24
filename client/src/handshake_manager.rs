@@ -6,10 +6,12 @@ use naia_shared::{
 };
 pub use naia_shared::{
     ConnectionConfig, Manifest, PacketType, ProtocolKindType, Protocolize, ReplicateSafe,
-    SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    SharedConfig, StandardHeader, Timer, Timestamp as stamp_time, WorldMutType, WorldRefType,
 };
 
 use super::io::Io;
+
+pub type Timestamp = u64;
 
 #[derive(Debug, PartialEq)]
 pub enum HandshakeState {
@@ -21,7 +23,7 @@ pub enum HandshakeState {
 pub struct HandshakeManager<P: Protocolize> {
     handshake_timer: Timer,
     pre_connection_timestamp: Timestamp,
-    pre_connection_digest: Option<Box<[u8]>>,
+    pre_connection_digest: Option<Vec<u8>>,
     pub connection_state: HandshakeState,
     auth_message: Option<P>,
 }
@@ -31,9 +33,11 @@ impl<P: Protocolize> HandshakeManager<P> {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
 
+        let pre_connection_timestamp = stamp_time::now().to_u64();
+
         Self {
             handshake_timer,
-            pre_connection_timestamp: Timestamp::now(),
+            pre_connection_timestamp,
             pre_connection_digest: None,
             connection_state: HandshakeState::AwaitingChallengeResponse,
             auth_message: None,
@@ -90,7 +94,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ClientChallengeRequest, 0, 0, 0).ser(&mut writer);
 
-        self.pre_connection_timestamp.to_u64().ser(&mut writer);
+        self.pre_connection_timestamp.ser(&mut writer);
 
         writer
     }
@@ -98,14 +102,11 @@ impl<P: Protocolize> HandshakeManager<P> {
     // Step 2 of Handshake
     pub fn recv_challenge_response(&mut self, reader: &mut BitReader) {
         if self.connection_state == HandshakeState::AwaitingChallengeResponse {
-            let payload_timestamp = Timestamp::from_u64(&u64::de(reader).unwrap());
+            let payload_timestamp = Timestamp::de(reader).unwrap();
 
             if self.pre_connection_timestamp == payload_timestamp {
-                let mut digest_bytes: Vec<u8> = Vec::new();
-                for _ in 0..32 {
-                    digest_bytes.push(u8::de(reader).unwrap());
-                }
-                self.pre_connection_digest = Some(digest_bytes.into_boxed_slice());
+                let digest_bytes: Vec<u8> = Vec::<u8>::de(reader).unwrap();
+                self.pre_connection_digest = Some(digest_bytes);
 
                 self.connection_state = HandshakeState::AwaitingConnectResponse;
             }
@@ -153,9 +154,8 @@ impl<P: Protocolize> HandshakeManager<P> {
     // Private methods
 
     fn write_signed_timestamp(&self, writer: &mut BitWriter) {
-        self.pre_connection_timestamp.to_u64().ser(writer);
-        for digest_byte in self.pre_connection_digest.as_ref().unwrap().as_ref() {
-            digest_byte.ser(writer);
-        }
+        self.pre_connection_timestamp.ser(writer);
+        let digest: &Vec<u8> = self.pre_connection_digest.as_ref().unwrap();
+        digest.ser(writer);
     }
 }

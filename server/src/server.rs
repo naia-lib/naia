@@ -194,7 +194,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
             // send connectaccept response
             let mut writer = self
                 .handshake_manager
-                .write_connect_response(&mut new_connection);
+                .write_connect_response();
             self.io.send_writer(&user.address, &mut writer);
             //
             self.user_connections.insert(user.address, new_connection);
@@ -877,17 +877,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                     // Read header
                     let header = StandardHeader::de(&mut reader).unwrap();
 
-                    if let Some(user_connection) = self.user_connections.get_mut(&address) {
-                        // Mark that we've heard from the client
-                        user_connection.base.mark_heard();
-
-                        // read client tick
-                        if let Some(tick_manager) = self.tick_manager.as_ref() {
-                            let client_tick = tick_manager.read_client_tick(&mut reader);
-                            user_connection.recv_client_tick(client_tick);
-                        }
-                    }
-
+                    // Handshake stuff
                     match header.packet_type() {
                         PacketType::ClientChallengeRequest => {
                             let mut writer =
@@ -895,130 +885,110 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                             self.io.send_writer(&address, &mut writer);
                         }
                         PacketType::ClientConnectRequest => {
-                            if let Some(mut connection) = self.user_connections.get_mut(&address) {
-                                self.handshake_manager.recv_old_connect_request(
-                                    &mut self.io,
-                                    &self.world_record,
-                                    &mut connection,
-                                    &header,
-                                    &mut reader,
-                                );
-                            } else {
-                                match self.handshake_manager.recv_new_connect_request(
-                                    &self.shared_config.manifest,
-                                    &address,
-                                    &mut reader,
-                                ) {
-                                    HandshakeResult::AuthUser(auth_message) => {
+                            match self.handshake_manager.recv_connect_request(
+                                &self.shared_config.manifest,
+                                &mut reader)
+                            {
+                                HandshakeResult::Success(auth_message_opt) => {
+                                    if self.user_connections.contains_key(&address) {
+                                        // send connectaccept response
+                                        let mut writer = self
+                                            .handshake_manager
+                                            .write_connect_response();
+                                        self.io.send_writer(&address, &mut writer);
+                                        //
+                                    } else {
                                         let user = User::new(address);
                                         let user_key = self.users.insert(user);
-                                        self.incoming_events.push_back(Ok(Event::Authorization(
-                                            user_key,
-                                            auth_message,
-                                        )));
+
+                                        if let Some(auth_message) = auth_message_opt {
+                                            self.incoming_events.push_back(Ok(Event::Authorization(
+                                                user_key,
+                                                auth_message,
+                                            )));
+                                        } else {
+                                            self.accept_connection(&user_key);
+                                        }
                                     }
-                                    HandshakeResult::ConnectUser => {
-                                        let user = User::new(address);
-                                        let user_key = self.users.insert(user);
-                                        self.accept_connection(&user_key);
-                                    }
-                                    HandshakeResult::Invalid => {
-                                        // do nothing
-                                    }
+                                }
+                                HandshakeResult::Invalid => {
+                                    // do nothing
                                 }
                             }
                         }
-                        PacketType::Disconnect => {
-                            if let Some(user_key) = loop {
-                                if let Some(mut connection) =
-                                    self.user_connections.get_mut(&address)
-                                {
-                                    if self
-                                        .handshake_manager
-                                        .verify_disconnect_request(&mut connection, &mut reader)
-                                    {
-                                        break Some(connection.user_key);
-                                    }
+                        _ => {}
+                    }
+
+                    if let Some(user_connection) = self.user_connections.get_mut(&address) {
+
+                        // Mark that we've heard from the client
+                        user_connection.base.mark_heard();
+
+                        // Process incoming header
+                        user_connection.process_incoming_header(&self.world_record, &header);
+
+                        // read client tick
+                        if let Some(tick_manager) = self.tick_manager.as_ref() {
+                            match header.packet_type() {
+                                PacketType::Data | PacketType::Ping | PacketType::Pong | PacketType::Heartbeat => {
+                                    let client_tick = tick_manager.read_client_tick(&mut reader);
+                                    user_connection.recv_client_tick(client_tick);
                                 }
-                                break None;
-                            } {
-                                self.disconnect_user(&user_key);
+                                _ => {}
                             }
                         }
-                        PacketType::Data => match self.user_connections.get_mut(&address) {
-                            Some(connection) => {
-                                connection.process_incoming_header(&self.world_record, &header);
-                                connection.process_incoming_data(
+
+                        match header.packet_type() {
+                            PacketType::Data => {
+                                user_connection.process_incoming_data(
                                     &self.tick_manager,
                                     &self.shared_config.manifest,
                                     &mut reader,
                                     &self.world_record,
                                 );
-                            }
-                            None => {
-                                warn!("received data from unauthenticated client: {}", address);
-                            }
-                        },
-                        PacketType::Heartbeat => {
-                            match self.user_connections.get_mut(&address) {
-                                Some(connection) => {
-                                    // Still need to do this so that proper notify
-                                    // events fire based on the heartbeat header
-                                    connection.process_incoming_header(&self.world_record, &header);
-                                }
-                                None => {
-                                    warn!(
-                                        "received heartbeat from unauthenticated client: {}",
-                                        address
-                                    );
+                            },
+                            PacketType::Disconnect => {
+
+                                if self
+                                    .handshake_manager
+                                    .verify_disconnect_request(user_connection, &mut reader)
+                                {
+                                    let user_key = user_connection.user_key;
+                                    self.disconnect_user(&user_key);
                                 }
                             }
-                        }
-                        PacketType::Ping => {
-                            match self.user_connections.get_mut(&address) {
-                                Some(connection) => {
-                                    connection
-                                        .process_incoming_header(&self.world_record, &header);
-
-                                    // read incoming ping index
-                                    let ping_index = u16::de(&mut reader).unwrap();
-
-                                    // write pong payload
-                                    let mut writer = BitWriter::new();
-
-                                    // write header
-                                    connection
-                                        .base
-                                        .write_outgoing_header(PacketType::Pong, &mut writer);
-
-                                    // write server tick
-                                    if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                        tick_manager.write_server_tick(&mut writer);
-                                    }
-
-                                    // write index
-                                    ping_index.ser(&mut writer);
-
-                                    // send packet
-                                    self.io.send_writer(&address, &mut writer);
-                                    connection.base.mark_sent();
-                                }
-                                None => {
-                                    warn!(
-                                        "received ping from unauthenticated client: {}",
-                                        address
-                                    );
-                                }
+                            PacketType::Heartbeat => {
+                                // already marked that we've heard from this client, problem solved
                             }
-                        }
-                        PacketType::Pong => {
-                            if let Some(connection) = self.user_connections.get_mut(&address) {
-                                connection.ping_manager.process_pong(&mut reader);
+                            PacketType::Ping => {
+
+                                // read incoming ping index
+                                let ping_index = u16::de(&mut reader).unwrap();
+
+                                // write pong payload
+                                let mut writer = BitWriter::new();
+
+                                // write header
+                                user_connection
+                                    .base
+                                    .write_outgoing_header(PacketType::Pong, &mut writer);
+
+                                // write server tick
+                                if let Some(tick_manager) = self.tick_manager.as_ref() {
+                                    tick_manager.write_server_tick(&mut writer);
+                                }
+
+                                // write index
+                                ping_index.ser(&mut writer);
+
+                                // send packet
+                                self.io.send_writer(&address, &mut writer);
+                                user_connection.base.mark_sent();
                             }
-                        }
-                        PacketType::ServerChallengeResponse
-                        | PacketType::ServerConnectResponse => {
-                            // do nothing
+                            PacketType::Pong => {
+                                user_connection.ping_manager.process_pong(&mut reader);
+                            }
+                            _ => {}
                         }
                     }
                 }

@@ -60,13 +60,14 @@ impl<P: Protocolize, C: ChannelIndex> ReliableChannel<P, C> for UnorderedReliabl
 
                 if found {
                     let (_, old_message) = self.received_message_ids.get_mut(index).unwrap();
-                    if !old_message {
+                    if *old_message == false {
                         *old_message = true;
                         self.incoming_messages.push(message);
-                        break;
                     } else {
                         // already received this message
                     }
+
+                    break;
                 }
             } else {
                 let next_message_id = self.oldest_received_message_id.wrapping_add(index as u16);
@@ -86,14 +87,8 @@ impl<P: Protocolize, C: ChannelIndex> ReliableChannel<P, C> for UnorderedReliabl
 
     fn generate_incoming_messages(&mut self, incoming_messages: &mut VecDeque<(C, P)>) {
 
-        for message in self.incoming_messages {
+        for message in self.incoming_messages.drain(..) {
             incoming_messages.push_back((self.channel_index.clone(), message));
-        }
-
-        if self.incoming_messages.len() == 0 {
-            self.incoming_messages.clear();
-        } else {
-            self.incoming_messages.clear();
         }
 
         loop {

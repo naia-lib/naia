@@ -60,10 +60,10 @@ impl<P: Protocolize, C: ChannelIndex> ReliableChannel<P, C> for OrderedReliableC
                     let (_, old_message) = self.incoming_message_buffer.get_mut(index).unwrap();
                     if old_message.is_none() {
                         *old_message = Some(message);
-                        break;
                     } else {
                         // already received this message
                     }
+                    break;
                 }
             } else {
                 let next_message_id = self.incoming_message_id.wrapping_add(index as u16);

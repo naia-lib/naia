@@ -11,9 +11,9 @@ pub fn shared_config() -> SharedConfig<Protocol, DefaultChannels> {
     //let link_condition = Some(LinkConditionerConfig::average_condition());
 
     let link_condition = Some(LinkConditionerConfig {
-        incoming_latency: 50,
-        incoming_jitter: 1,
-        incoming_loss: 0.5,
+        incoming_latency: 750,
+        incoming_jitter: 500,
+        incoming_loss: 0.3,
     });
 
     return SharedConfig::new(
