@@ -1,37 +1,46 @@
 use std::{collections::VecDeque, time::Duration};
+use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
 
 use naia_socket_shared::Instant;
 
-use crate::{protocol::protocolize::Protocolize, types::MessageId, ChannelIndex};
+use crate::{protocol::protocolize::Protocolize, types::MessageId, ChannelIndex, NetEntityHandleConverter, MTU_SIZE_BITS, write_list_header, Manifest, read_list_header};
 
 use super::channel_config::ReliableSettings;
 
 pub trait MessageChannel<P: Protocolize, C: ChannelIndex> {
     fn send_message(&mut self, message: P);
-    fn recv_message(&mut self, message_id: MessageId, message: P);
     fn collect_outgoing_messages(
         &mut self,
-        rtt_millis: &f32,
-        outgoing_messages: &mut VecDeque<(C, MessageId, P)>,
+        rtt_millis: &f32
     );
     fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>);
     fn notify_message_delivered(&mut self, message_id: &MessageId);
+    fn has_outgoing_messages(&self) -> bool;
+    fn write_messages(
+        &mut self,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
+    ) -> Option<Vec<MessageId>>;
+    fn read_messages(&mut self,
+                     reader: &mut BitReader,
+                     manifest: &Manifest<P>,
+                     converter: &dyn NetEntityHandleConverter);
 }
 
-pub struct OutgoingReliableChannel<P: Protocolize, C: ChannelIndex> {
-    channel_index: C,
+pub struct OutgoingReliableChannel<P: Protocolize> {
     rtt_resend_factor: f32,
     outgoing_message_id: MessageId,
     outgoing_message_buffer: VecDeque<Option<(MessageId, Option<Instant>, P)>>,
+    outgoing_messages: VecDeque<(MessageId, P)>,
 }
 
-impl<P: Protocolize, C: ChannelIndex> OutgoingReliableChannel<P, C> {
-    pub fn new(channel_index: C, reliable_settings: &ReliableSettings) -> Self {
+impl<P: Protocolize> OutgoingReliableChannel<P> {
+    pub fn new(reliable_settings: &ReliableSettings) -> Self {
         Self {
-            channel_index,
             rtt_resend_factor: reliable_settings.rtt_resend_factor,
             outgoing_message_id: 0,
             outgoing_message_buffer: VecDeque::new(),
+            outgoing_messages: VecDeque::new(),
         }
     }
 
@@ -44,7 +53,6 @@ impl<P: Protocolize, C: ChannelIndex> OutgoingReliableChannel<P, C> {
     pub fn generate_messages(
         &mut self,
         rtt_millis: &f32,
-        outgoing_messages: &mut VecDeque<(C, MessageId, P)>,
     ) {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
         let now = Instant::now();
@@ -60,8 +68,7 @@ impl<P: Protocolize, C: ChannelIndex> OutgoingReliableChannel<P, C> {
                     should_send = true;
                 }
                 if should_send {
-                    outgoing_messages.push_back((
-                        self.channel_index.clone(),
+                    self.outgoing_messages.push_back((
                         *message_id,
                         message.clone(),
                     ));
@@ -112,5 +119,120 @@ impl<P: Protocolize, C: ChannelIndex> OutgoingReliableChannel<P, C> {
 
             index += 1;
         }
+    }
+
+    pub fn has_outgoing_messages(&self) -> bool {
+        return self.outgoing_messages.len() != 0;
+    }
+
+    pub fn write_messages(
+        &mut self,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
+    ) -> Option<Vec<MessageId>> {
+        let mut message_count: u16 = 0;
+
+        // Header
+        {
+            // Measure
+            let current_packet_size = writer.bit_count();
+            if current_packet_size > MTU_SIZE_BITS {
+                return None;
+            }
+
+            let mut counter = BitCounter::new();
+
+            //TODO: message_count is inaccurate here and may be different than final, does this matter?
+            write_list_header(&mut counter, &123);
+
+            // Check for overflow
+            if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
+                return None;
+            }
+
+            // Find how many messages will fit into the packet
+            let mut index = 0;
+            loop {
+                if index >= self.outgoing_messages.len() {
+                    break;
+                }
+
+                let (message_id, message) = self.outgoing_messages.get(index).unwrap();
+                self.write_message(converter, &mut counter, message_id, message);
+                if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
+                    message_count += 1;
+                } else {
+                    break;
+                }
+
+                index += 1;
+            }
+        }
+
+        // Write header
+        write_list_header(writer, &message_count);
+
+        // Messages
+        {
+            let mut message_ids = Vec::new();
+            for _ in 0..message_count {
+                // Pop and write message
+                let (message_id, message) = self.outgoing_messages.pop_front().unwrap();
+                self.write_message(converter, writer, &message_id, &message);
+
+                message_ids.push(message_id);
+            }
+            return Some(message_ids);
+        }
+    }
+
+    fn write_message<S: BitWrite>(
+        &self,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut S,
+        message_id: &MessageId,
+        message: &P,
+    ) {
+
+        // write message id
+        message_id.ser(writer);
+
+        // write message kind
+        message.dyn_ref().kind().ser(writer);
+
+        // write payload
+        message.write(writer, converter);
+    }
+
+    pub fn read_messages(&mut self,
+                         reader: &mut BitReader,
+                         manifest: &Manifest<P>,
+                         converter: &dyn NetEntityHandleConverter) -> Vec<(MessageId, P)> {
+        let message_count = read_list_header(reader);
+        let mut output = Vec::new();
+        for _x in 0..message_count {
+            let id_w_msg = self.read_message(reader, manifest, converter);
+            output.push(id_w_msg);
+        }
+        return output;
+    }
+
+    fn read_message(
+        &mut self,
+        reader: &mut BitReader,
+        manifest: &Manifest<P>,
+        converter: &dyn NetEntityHandleConverter,
+    ) -> (MessageId, P) {
+
+        // read message id
+        let message_id: MessageId = MessageId::de(reader).unwrap();
+
+        // read message kind
+        let component_kind: P::Kind = P::Kind::de(reader).unwrap();
+
+        // read payload
+        let new_message = manifest.create_replica(component_kind, reader, converter);
+
+        return (message_id, new_message);
     }
 }
