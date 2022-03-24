@@ -26,7 +26,7 @@ impl<K: Eq + Hash + Clone, V: Clone> CacheMap<K, V> {
             .expect("need to call contains_key() first to make sure this panic won't happen!")
     }
 
-    pub fn insert(&mut self, key: &K, value: &V) {
+    pub fn insert(&mut self, key: K, value: V) {
         if self.keys.len() == self.keys.capacity() {
             // need to make room for other keys
             let popped_key = self.keys.pop_front().unwrap();

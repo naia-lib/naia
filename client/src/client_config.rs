@@ -22,7 +22,7 @@ impl Default for ClientConfig {
     fn default() -> Self {
         Self {
             connection: ConnectionConfig::default(),
-            send_handshake_interval: Duration::from_secs(1),
+            send_handshake_interval: Duration::from_millis(250),
             minimum_latency: None,
         }
     }

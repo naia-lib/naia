@@ -1,29 +1,30 @@
 use std::{collections::HashMap, hash::Hash, marker::PhantomData, net::SocketAddr};
 
-use ring::{hmac, hmac::Tag, rand};
+use ring::{hmac, rand};
 
 use naia_shared::ChannelIndex;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
     wrapping_diff, BaseConnection, ConnectionConfig, FakeEntityConverter, Instant, KeyGenerator,
     Manifest, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
-    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType,
+    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType,
     WorldRefType,
 };
 
 use super::{cache_map::CacheMap, connection::Connection, io::Io, world_record::WorldRecord};
 
+pub type Timestamp = u64;
+
 pub enum HandshakeResult<P: Protocolize> {
     Invalid,
-    AuthUser(P),
-    ConnectUser,
+    Success(Option<P>),
 }
 
 pub struct HandshakeManager<P: Protocolize> {
     connection_hash_key: hmac::Key,
     require_auth: bool,
     address_to_timestamp_map: HashMap<SocketAddr, Timestamp>,
-    timestamp_digest_map: CacheMap<u64, Tag>,
+    timestamp_digest_map: CacheMap<Timestamp, Vec<u8>>,
     phantom: PhantomData<P>,
 }
 
@@ -43,45 +44,39 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     // Step 1 of Handshake
     pub fn recv_challenge_request(&mut self, reader: &mut BitReader) -> BitWriter {
-        let timestamp = u64::de(reader).unwrap();
+        let timestamp = Timestamp::de(reader).unwrap();
 
         let writer = self.write_challenge_response(&timestamp);
         writer
     }
 
     // Step 2 of Handshake
-    pub fn write_challenge_response(&mut self, timestamp: &u64) -> BitWriter {
+    pub fn write_challenge_response(&mut self, timestamp: &Timestamp) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0).ser(&mut writer);
         timestamp.ser(&mut writer);
 
-        let timestamp_tag: Tag = {
-            if self.timestamp_digest_map.contains_key(timestamp) {
-                self.timestamp_digest_map.get_unchecked(timestamp).clone()
-            } else {
-                let bytes: [u8; 8] = timestamp.to_le_bytes();
-                let tag = hmac::sign(&self.connection_hash_key, &bytes);
-                self.timestamp_digest_map.insert(timestamp, &tag);
-                tag
-            }
-        };
+        if !self.timestamp_digest_map.contains_key(timestamp) {
+            let tag = hmac::sign(&self.connection_hash_key, &timestamp.to_le_bytes());
+            let tag_vec: Vec<u8> = Vec::from(tag.as_ref());
+            self.timestamp_digest_map.insert(*timestamp, tag_vec);
+        }
 
         //write timestamp digest
-        timestamp_tag.as_ref().ser(&mut writer);
+        self.timestamp_digest_map.get_unchecked(timestamp).ser(&mut writer);
 
         writer
     }
 
     // Step 3 of Handshake
-    pub fn recv_new_connect_request(
+    pub fn recv_connect_request(
         &mut self,
         manifest: &Manifest<P>,
-        address: &SocketAddr,
         reader: &mut BitReader,
     ) -> HandshakeResult<P> {
         // Verify that timestamp hash has been written by this
         // server instance
-        if let Some(timestamp) = self.timestamp_validate(reader) {
+        if self.timestamp_validate(reader).is_some() {
             // Timestamp hash is validated, now start configured auth process
             let has_auth = bool::de(reader).unwrap();
 
@@ -89,67 +84,31 @@ impl<P: Protocolize> HandshakeManager<P> {
                 return HandshakeResult::Invalid;
             }
 
-            self.address_to_timestamp_map.insert(*address, timestamp);
-
             if has_auth {
                 let auth_kind = P::Kind::de(reader).unwrap();
                 let auth_message = manifest.create_replica(auth_kind, reader, &FakeEntityConverter);
-                return HandshakeResult::AuthUser(auth_message);
+                return HandshakeResult::Success(Some(auth_message));
             } else {
-                return HandshakeResult::ConnectUser;
+                return HandshakeResult::Success(None);
             }
         } else {
             return HandshakeResult::Invalid;
         }
     }
 
-    // Step 3 of Handshake, for subsequent incoming copied packets
-    pub fn recv_old_connect_request<E: Copy + Eq + Hash, C: ChannelIndex>(
+    // Step 3 of Handshake
+    pub fn write_connect_response(
         &self,
-        io: &mut Io,
-        world_record: &WorldRecord<E, P::Kind>,
-        connection: &mut Connection<P, E, C>,
-        incoming_header: &StandardHeader,
-        reader: &mut BitReader,
-    ) {
-        // At this point, we have already sent the ServerConnectResponse
-        // message, but we continue to send the message till the Client
-        // stops sending the ClientConnectRequest
-
-        // Verify that timestamp hash has been written by this
-        // server instance
-        if let Some(new_timestamp) = self.timestamp_validate(reader) {
-            if let Some(old_timestamp) = self.address_to_timestamp_map.get(&connection.base.address)
-            {
-                if *old_timestamp == new_timestamp {
-                    connection.process_incoming_header(world_record, &incoming_header);
-
-                    // send connect accept response
-                    let mut writer = self.write_connect_response(connection);
-                    io.send_writer(&connection.base.address, &mut writer);
-                    connection.base.mark_sent();
-                }
-            }
-        } else {
-            warn!("Received connect request with incorrectly signed bytes from: {}", connection.base.address);
-        }
-    }
-
-    // Step 4 of Handshake
-    pub fn write_connect_response<E: Copy + Eq + Hash, C: ChannelIndex>(
-        &self,
-        connection: &mut Connection<P, E, C>,
     ) -> BitWriter {
         let mut writer = BitWriter::new();
-        connection
-            .base
-            .write_outgoing_header(PacketType::ServerConnectResponse, &mut writer);
+        StandardHeader::new(PacketType::ServerConnectResponse, 0, 0, 0)
+            .ser(&mut writer);
         writer
     }
 
     pub fn verify_disconnect_request<E: Copy + Eq + Hash, C: ChannelIndex>(
         &mut self,
-        connection: &mut Connection<P, E, C>,
+        connection: &Connection<P, E, C>,
         reader: &mut BitReader,
     ) -> bool {
         // Verify that timestamp hash has been written by this
@@ -172,27 +131,20 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     fn timestamp_validate(&self, reader: &mut BitReader) -> Option<Timestamp> {
         // Read timestamp
-        let timestamp = u64::de(reader).unwrap();
-        let mut digest_bytes: Vec<u8> = Vec::new();
-        for _ in 0..32 {
-            digest_bytes.push(u8::de(reader).unwrap());
-        }
+        let timestamp = Timestamp::de(reader).unwrap();
+        let digest_bytes: Vec<u8> = Vec::<u8>::de(reader).unwrap();
 
         // Verify that timestamp hash has been written by this
         // server instance
-        let mut timestamp_writer = BitWriter::new();
-        timestamp.ser(&mut timestamp_writer);
-        let (timestamp_length, timestamp_bytes) = timestamp_writer.flush();
-
         let validation_result = hmac::verify(
             &self.connection_hash_key,
-            &timestamp_bytes[..timestamp_length],
+            &timestamp.to_le_bytes(),
             &digest_bytes,
         );
         if validation_result.is_err() {
             return None;
         } else {
-            return Some(Timestamp::from_u64(&timestamp));
+            return Some(timestamp);
         }
     }
 }
