@@ -1,10 +1,11 @@
 use std::collections::VecDeque;
 
+use crate::{
+    read_list_header, write_list_header, Manifest, NetEntityHandleConverter, MTU_SIZE_BITS,
+};
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
-use crate::{Manifest, MTU_SIZE_BITS, NetEntityHandleConverter, read_list_header, write_list_header};
 
-use crate::protocol::protocolize::Protocolize;
-use crate::types::MessageId;
+use crate::{protocol::protocolize::Protocolize, types::MessageId};
 
 use super::{channel_config::ChannelIndex, message_channel::MessageChannel};
 
@@ -29,7 +30,6 @@ impl<P: Protocolize, C: ChannelIndex> UnorderedUnreliableChannel<P, C> {
         converter: &dyn NetEntityHandleConverter,
         message: &P,
     ) {
-
         // write message kind
         message.dyn_ref().kind().ser(writer);
 
@@ -43,7 +43,6 @@ impl<P: Protocolize, C: ChannelIndex> UnorderedUnreliableChannel<P, C> {
         manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter,
     ) -> P {
-
         // read message kind
         let component_kind: P::Kind = P::Kind::de(reader).unwrap();
 
@@ -98,7 +97,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliab
 
             let mut counter = BitCounter::new();
 
-            //TODO: message_count is inaccurate here and may be different than final, does this matter?
+            //TODO: message_count is inaccurate here and may be different than final, does
+            // this matter?
             write_list_header(&mut counter, &123);
 
             // Check for overflow
@@ -139,10 +139,12 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliab
         }
     }
 
-    fn read_messages(&mut self,
-                         reader: &mut BitReader,
-                         manifest: &Manifest<P>,
-                         converter: &dyn NetEntityHandleConverter) {
+    fn read_messages(
+        &mut self,
+        reader: &mut BitReader,
+        manifest: &Manifest<P>,
+        converter: &dyn NetEntityHandleConverter,
+    ) {
         let message_count = read_list_header(reader);
         for _x in 0..message_count {
             let message = self.read_message(reader, manifest, converter);
