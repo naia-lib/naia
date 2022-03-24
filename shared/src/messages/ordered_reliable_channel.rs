@@ -14,9 +14,9 @@ use super::{
 
 pub struct OrderedReliableChannel<P: Protocolize, C: ChannelIndex> {
     channel_index: C,
-    incoming_message_id: MessageId,
-    incoming_message_buffer: VecDeque<(MessageId, Option<P>)>,
     outgoing_channel: OutgoingReliableChannel<P>,
+    oldest_waiting_message_id: MessageId,
+    waiting_incoming_messages: VecDeque<(MessageId, Option<P>)>,
 }
 
 impl<P: Protocolize, C: ChannelIndex> OrderedReliableChannel<P, C> {
@@ -24,8 +24,8 @@ impl<P: Protocolize, C: ChannelIndex> OrderedReliableChannel<P, C> {
         Self {
             channel_index: channel_index.clone(),
             outgoing_channel: OutgoingReliableChannel::new(reliable_settings),
-            incoming_message_id: 0,
-            incoming_message_buffer: VecDeque::new(),
+            oldest_waiting_message_id: 0,
+            waiting_incoming_messages: VecDeque::new(),
         }
     }
 
@@ -37,7 +37,7 @@ impl<P: Protocolize, C: ChannelIndex> OrderedReliableChannel<P, C> {
         // then add new empty slots at the end until getting to the incoming message id
         // then, once you're there, put the new message in
 
-        if sequence_less_than(message_id, self.incoming_message_id) {
+        if sequence_less_than(message_id, self.oldest_waiting_message_id) {
             // already moved sliding window past this message id
             return;
         }
@@ -46,15 +46,15 @@ impl<P: Protocolize, C: ChannelIndex> OrderedReliableChannel<P, C> {
         let mut found = false;
 
         loop {
-            if index < self.incoming_message_buffer.len() {
-                if let Some((old_message_id, _)) = self.incoming_message_buffer.get(index) {
+            if index < self.waiting_incoming_messages.len() {
+                if let Some((old_message_id, _)) = self.waiting_incoming_messages.get(index) {
                     if *old_message_id == message_id {
                         found = true;
                     }
                 }
 
                 if found {
-                    let (_, old_message) = self.incoming_message_buffer.get_mut(index).unwrap();
+                    let (_, old_message) = self.waiting_incoming_messages.get_mut(index).unwrap();
                     if old_message.is_none() {
                         *old_message = Some(message);
                     } else {
@@ -63,14 +63,14 @@ impl<P: Protocolize, C: ChannelIndex> OrderedReliableChannel<P, C> {
                     break;
                 }
             } else {
-                let next_message_id = self.incoming_message_id.wrapping_add(index as u16);
+                let next_message_id = self.oldest_waiting_message_id.wrapping_add(index as u16);
 
                 if next_message_id == message_id {
-                    self.incoming_message_buffer
+                    self.waiting_incoming_messages
                         .push_back((next_message_id, Some(message)));
                     break;
                 } else {
-                    self.incoming_message_buffer
+                    self.waiting_incoming_messages
                         .push_back((next_message_id, None));
                 }
             }
@@ -92,14 +92,14 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for OrderedReliableCh
     fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>) {
         loop {
             let mut has_message = false;
-            if let Some((_, Some(_))) = self.incoming_message_buffer.front() {
+            if let Some((_, Some(_))) = self.waiting_incoming_messages.front() {
                 has_message = true;
             }
             if has_message {
-                let (_, message_opt) = self.incoming_message_buffer.pop_front().unwrap();
+                let (_, message_opt) = self.waiting_incoming_messages.pop_front().unwrap();
                 let message = message_opt.unwrap();
                 incoming_messages.push((self.channel_index.clone(), message));
-                self.incoming_message_id = self.incoming_message_id.wrapping_add(1);
+                self.oldest_waiting_message_id = self.oldest_waiting_message_id.wrapping_add(1);
             } else {
                 break;
             }

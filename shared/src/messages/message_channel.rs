@@ -31,32 +31,32 @@ pub trait MessageChannel<P: Protocolize, C: ChannelIndex> {
 
 pub struct OutgoingReliableChannel<P: Protocolize> {
     rtt_resend_factor: f32,
-    outgoing_message_id: MessageId,
-    outgoing_message_buffer: VecDeque<Option<(MessageId, Option<Instant>, P)>>,
-    outgoing_messages: VecDeque<(MessageId, P)>,
+    oldest_waiting_message_id: MessageId,
+    waiting_messages: VecDeque<Option<(MessageId, Option<Instant>, P)>>,
+    ready_messages: VecDeque<(MessageId, P)>,
 }
 
 impl<P: Protocolize> OutgoingReliableChannel<P> {
     pub fn new(reliable_settings: &ReliableSettings) -> Self {
         Self {
             rtt_resend_factor: reliable_settings.rtt_resend_factor,
-            outgoing_message_id: 0,
-            outgoing_message_buffer: VecDeque::new(),
-            outgoing_messages: VecDeque::new(),
+            oldest_waiting_message_id: 0,
+            waiting_messages: VecDeque::new(),
+            ready_messages: VecDeque::new(),
         }
     }
 
     pub fn send_message(&mut self, message: P) {
-        self.outgoing_message_buffer
-            .push_back(Some((self.outgoing_message_id, None, message)));
-        self.outgoing_message_id = self.outgoing_message_id.wrapping_add(1);
+        self.waiting_messages
+            .push_back(Some((self.oldest_waiting_message_id, None, message)));
+        self.oldest_waiting_message_id = self.oldest_waiting_message_id.wrapping_add(1);
     }
 
     pub fn generate_messages(&mut self, rtt_millis: &f32) {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
         let now = Instant::now();
 
-        for message_opt in self.outgoing_message_buffer.iter_mut() {
+        for message_opt in self.waiting_messages.iter_mut() {
             if let Some((message_id, last_sent_opt, message)) = message_opt {
                 let mut should_send = false;
                 if let Some(last_sent) = last_sent_opt {
@@ -67,7 +67,7 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
                     should_send = true;
                 }
                 if should_send {
-                    self.outgoing_messages
+                    self.ready_messages
                         .push_back((*message_id, message.clone()));
                     *last_sent_opt = Some(now.clone());
                 }
@@ -80,11 +80,11 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
         let mut found = false;
 
         loop {
-            if index == self.outgoing_message_buffer.len() {
+            if index == self.waiting_messages.len() {
                 break;
             }
 
-            if let Some(Some((old_message_id, _, _))) = self.outgoing_message_buffer.get(index) {
+            if let Some(Some((old_message_id, _, _))) = self.waiting_messages.get(index) {
                 if *message_id == *old_message_id {
                     found = true;
                 }
@@ -92,19 +92,19 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
 
             if found {
                 // replace found message with nothing
-                let container = self.outgoing_message_buffer.get_mut(index).unwrap();
+                let container = self.waiting_messages.get_mut(index).unwrap();
                 *container = None;
 
                 // keep popping off Nones from the front of the Vec
                 loop {
                     let mut pop = false;
-                    if let Some(message_opt) = self.outgoing_message_buffer.front() {
+                    if let Some(message_opt) = self.waiting_messages.front() {
                         if message_opt.is_none() {
                             pop = true;
                         }
                     }
                     if pop {
-                        self.outgoing_message_buffer.pop_front();
+                        self.waiting_messages.pop_front();
                     } else {
                         break;
                     }
@@ -119,7 +119,7 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
     }
 
     pub fn has_outgoing_messages(&self) -> bool {
-        return self.outgoing_messages.len() != 0;
+        return self.ready_messages.len() != 0;
     }
 
     pub fn write_messages(
@@ -151,11 +151,11 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
             // Find how many messages will fit into the packet
             let mut index = 0;
             loop {
-                if index >= self.outgoing_messages.len() {
+                if index >= self.ready_messages.len() {
                     break;
                 }
 
-                let (message_id, message) = self.outgoing_messages.get(index).unwrap();
+                let (message_id, message) = self.ready_messages.get(index).unwrap();
                 self.write_message(converter, &mut counter, message_id, message);
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
@@ -175,7 +175,7 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
             let mut message_ids = Vec::new();
             for _ in 0..message_count {
                 // Pop and write message
-                let (message_id, message) = self.outgoing_messages.pop_front().unwrap();
+                let (message_id, message) = self.ready_messages.pop_front().unwrap();
                 self.write_message(converter, writer, &message_id, &message);
 
                 message_ids.push(message_id);
