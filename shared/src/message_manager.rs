@@ -3,17 +3,18 @@ use std::{
 };
 
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
+use crate::unordered_reliable_channel::UnorderedReliableChannel;
 
 use super::{
-    manifest::Manifest, packet_notifiable::PacketNotifiable, protocolize::Protocolize, types::MessageId, channel_message_manager::ReliableMessageManager,
-    constants::MTU_SIZE_BITS, message_list_header::{read_list_header, write_list_header}, channel_config::{ChannelConfig, ChannelIndex},
-    entity_property::NetEntityHandleConverter, types::PacketIndex,
+    manifest::Manifest, packet_notifiable::PacketNotifiable, protocolize::Protocolize, types::MessageId, ordered_reliable_channel::OrderedReliableChannel,
+    constants::MTU_SIZE_BITS, message_list_header::{read_list_header, write_list_header}, channel_config::{ChannelConfig, ChannelIndex}, reliable_channel::ReliableChannel,
+    entity_property::NetEntityHandleConverter, types::PacketIndex
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
-    reliable_channels: HashMap<C, ReliableMessageManager<P>>,
+    reliable_channels: HashMap<C, Box<dyn ReliableChannel<P, C>>>,
     outgoing_messages: VecDeque<(C, MessageId, P)>,
     packet_to_message_map: HashMap<PacketIndex, (C, MessageId)>,
     incoming_messages: VecDeque<(C, P)>,
@@ -26,7 +27,10 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         let mut channels = HashMap::new();
         let all_channel_settings = channel_config.all_reliable_settings();
         for (index, ordered, settings) in all_channel_settings {
-            let new_channel = ReliableMessageManager::new(&settings, ordered);
+            let new_channel: Box<dyn ReliableChannel<P, C>> = match ordered {
+                true => Box::new(OrderedReliableChannel::new(index.clone(), &settings)),
+                false => Box::new(UnorderedReliableChannel::new(index.clone(), &settings)),
+            };
             channels.insert(index, new_channel);
         }
 
@@ -39,14 +43,14 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     }
 
     pub fn generate_incoming_messages(&mut self) {
-        for (channel_index, channel) in &mut self.reliable_channels {
-            channel.generate_incoming_messages(channel_index, &mut self.incoming_messages);
+        for (_, channel) in &mut self.reliable_channels {
+            channel.generate_incoming_messages(&mut self.incoming_messages);
         }
     }
 
     pub fn generate_outgoing_messages(&mut self, rtt_millis: &f32) {
-        for (channel_index, channel) in &mut self.reliable_channels {
-            channel.generate_outgoing_messages(rtt_millis, channel_index, &mut self.outgoing_messages);
+        for (_, channel) in &mut self.reliable_channels {
+            channel.outgoing().generate_messages(rtt_millis, &mut self.outgoing_messages);
         }
     }
 
@@ -66,7 +70,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     ) {
         if let Some(channel) = self.reliable_channels.get_mut(&channel_index) {
             // reliable channels
-            channel.send_message(message);
+            channel.outgoing().send_message(message);
         } else {
             // unreliable channels
             self.outgoing_messages.push_back((channel_index, 0, message));
@@ -212,7 +216,7 @@ impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for MessageManager<P, C> 
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some((channel_index, message_id)) = self.packet_to_message_map.get(&packet_index) {
             if let Some(channel) = self.reliable_channels.get_mut(channel_index) {
-                channel.notify_message_delivered(message_id);
+                channel.outgoing().notify_message_delivered(message_id);
             }
         }
     }

@@ -59,7 +59,7 @@ impl<C: ChannelIndex> ChannelConfig<C> {
 }
 
 // ChannelIndex
-pub trait ChannelIndex: Serde + Eq + Hash {}
+pub trait ChannelIndex: 'static + Serde + Eq + Hash {}
 
 // Channel
 #[derive(Clone)]

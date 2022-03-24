@@ -44,8 +44,10 @@ mod standard_header;
 mod types;
 mod world_type;
 mod wrapping_number;
-mod channel_message_manager;
+mod ordered_reliable_channel;
 mod ping_manager;
+mod unordered_reliable_channel;
+mod reliable_channel;
 
 pub use naia_socket_shared::{
     Instant, LinkConditionerConfig, Random, SocketConfig, Timer, Timestamp,

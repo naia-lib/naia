@@ -1,5 +1,5 @@
 extern crate log;
-use log::info;
+// use log::info;
 
 use super::{link_conditioner_config::LinkConditionerConfig, time_queue::TimeQueue, Instant};
 use crate::Random;
