@@ -1,4 +1,4 @@
-use super::wrapping_number::{sequence_greater_than, sequence_less_than};
+use crate::wrapping_number::{sequence_greater_than, sequence_less_than};
 
 /// Used to index packets that have been sent & received
 pub type SequenceNumber = u16;

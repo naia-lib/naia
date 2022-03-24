@@ -1,11 +1,11 @@
 use std::{default::Default, time::Duration};
 
-use crate::{channel_config::DefaultChannels, ChannelIndex};
 use naia_socket_shared::SocketConfig;
 
-use super::{
-    channel_config::ChannelConfig, compression_config::CompressionConfig, manifest::Manifest,
-    protocolize::Protocolize,
+use crate::{
+    connection::compression_config::CompressionConfig,
+    messages::channel_config::{ChannelConfig, ChannelIndex, DefaultChannels},
+    protocol::{manifest::Manifest, protocolize::Protocolize},
 };
 
 /// Contains Config properties which will be shared by Server and Client

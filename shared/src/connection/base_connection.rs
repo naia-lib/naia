@@ -4,16 +4,18 @@ use naia_serde::{BitWriter, Serde};
 
 use naia_socket_shared::Timer;
 
-use super::{
-    ack_manager::AckManager,
-    channel_config::{ChannelConfig, ChannelIndex},
-    connection_config::ConnectionConfig,
-    message_manager::MessageManager,
-    packet_notifiable::PacketNotifiable,
-    packet_type::PacketType,
-    protocolize::Protocolize,
-    standard_header::StandardHeader,
+use crate::{
+    messages::{
+        channel_config::{ChannelConfig, ChannelIndex},
+        message_manager::MessageManager,
+    },
+    protocol::protocolize::Protocolize,
     types::PacketIndex,
+};
+
+use super::{
+    ack_manager::AckManager, connection_config::ConnectionConfig,
+    packet_notifiable::PacketNotifiable, packet_type::PacketType, standard_header::StandardHeader,
 };
 
 /// Represents a connection to a remote host, and provides functionality to

@@ -1,8 +1,10 @@
-use crate::ReliableSettings;
-use naia_socket_shared::Instant;
 use std::{collections::VecDeque, time::Duration};
 
-use super::{protocolize::Protocolize, types::MessageId, ChannelIndex};
+use naia_socket_shared::Instant;
+
+use crate::{protocol::protocolize::Protocolize, types::MessageId, ChannelIndex};
+
+use super::channel_config::ReliableSettings;
 
 pub trait ReliableChannel<P: Protocolize, C: ChannelIndex> {
     fn outgoing(&mut self) -> &mut OutgoingReliableChannel<P, C>;

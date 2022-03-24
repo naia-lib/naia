@@ -1,11 +1,12 @@
 use std::collections::VecDeque;
 
-use super::{
-    ping_config::PingConfig,
-    sequence_greater_than,
-    serde::{BitReader, BitWriter, Serde},
-    Instant, Timer,
-};
+use naia_serde::{BitReader, BitWriter, Serde};
+
+use naia_socket_shared::{Instant, Timer};
+
+use crate::wrapping_number::sequence_greater_than;
+
+use super::ping_config::PingConfig;
 
 pub struct PingManager {
     ping_timer: Timer,

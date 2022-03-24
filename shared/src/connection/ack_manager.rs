@@ -1,10 +1,15 @@
-use crate::ChannelIndex;
 use std::collections::HashMap;
 
+use crate::{
+    messages::{channel_config::ChannelIndex, message_manager::MessageManager},
+    protocol::protocolize::Protocolize,
+    types::PacketIndex,
+    wrapping_number::sequence_greater_than,
+};
+
 use super::{
-    message_manager::MessageManager, packet_notifiable::PacketNotifiable, packet_type::PacketType,
-    protocolize::Protocolize, sequence_buffer::SequenceBuffer, standard_header::StandardHeader,
-    types::PacketIndex, wrapping_number::sequence_greater_than,
+    packet_notifiable::PacketNotifiable, packet_type::PacketType, sequence_buffer::SequenceBuffer,
+    standard_header::StandardHeader,
 };
 
 pub const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
