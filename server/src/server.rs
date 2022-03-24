@@ -187,7 +187,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     /// with the Server
     pub fn accept_connection(&mut self, user_key: &UserKey) {
         if let Some(user) = self.users.get(user_key) {
-            let mut new_connection = Connection::new(
+            let new_connection = Connection::new(
                 &self.server_config.connection,
                 &self.shared_config.channel,
                 user.address,
