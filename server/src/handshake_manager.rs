@@ -10,7 +10,7 @@ pub use naia_shared::{
     Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType, WorldRefType,
 };
 
-use super::{cache_map::CacheMap, connection::Connection, io::Io, world_record::WorldRecord};
+use super::{cache_map::CacheMap, connection::Connection};
 
 pub type Timestamp = u64;
 
