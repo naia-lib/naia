@@ -168,7 +168,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             server_connection
                 .base
                 .message_manager
-                .generate_incoming_messages();
+                .collect_incoming_messages();
             while let Some((channel, message)) = server_connection
                 .base
                 .message_manager
@@ -347,7 +347,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
                         if let Some(tick_manager) = self.tick_manager.as_mut() {
                             match header.packet_type() {
-                                PacketType::Data | PacketType::Heartbeat | PacketType::Ping | PacketType::Pong => {
+                                PacketType::Data
+                                | PacketType::Heartbeat
+                                | PacketType::Ping
+                                | PacketType::Pong => {
                                     incoming_tick = tick_manager.read_server_tick(
                                         &mut reader,
                                         server_connection.ping_manager.rtt,

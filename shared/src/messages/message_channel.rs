@@ -6,10 +6,16 @@ use crate::{protocol::protocolize::Protocolize, types::MessageId, ChannelIndex};
 
 use super::channel_config::ReliableSettings;
 
-pub trait ReliableChannel<P: Protocolize, C: ChannelIndex> {
-    fn outgoing(&mut self) -> &mut OutgoingReliableChannel<P, C>;
+pub trait MessageChannel<P: Protocolize, C: ChannelIndex> {
+    fn send_message(&mut self, message: P);
     fn recv_message(&mut self, message_id: MessageId, message: P);
-    fn generate_incoming_messages(&mut self, incoming_messages: &mut VecDeque<(C, P)>);
+    fn collect_outgoing_messages(
+        &mut self,
+        rtt_millis: &f32,
+        outgoing_messages: &mut VecDeque<(C, MessageId, P)>,
+    );
+    fn collect_incoming_messages(&mut self, incoming_messages: &mut VecDeque<(C, P)>);
+    fn notify_message_delivered(&mut self, message_id: &MessageId);
 }
 
 pub struct OutgoingReliableChannel<P: Protocolize, C: ChannelIndex> {

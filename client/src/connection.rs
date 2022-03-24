@@ -93,7 +93,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     fn generate_resend_messages(&mut self, tick_manager_opt: &Option<TickManager>) {
         self.base
             .message_manager
-            .generate_outgoing_messages(&self.ping_manager.rtt);
+            .collect_outgoing_messages(&self.ping_manager.rtt);
         if let Some(tick_manager) = tick_manager_opt {
             self.tick_buffer_message_sender
                 .generate_resend_messages(&tick_manager.server_receivable_tick());
