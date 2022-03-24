@@ -2,7 +2,13 @@ use std::hash::Hash;
 
 use naia_serde::{BitReader, BitWrite, Serde};
 
-use crate::{property_mutate::PropertyMutator, BigMapKey, EntityHandle, NetEntity, Property};
+use crate::{
+    bigmap::BigMapKey,
+    protocol::{
+        entity_handle::EntityHandle, net_entity::NetEntity, property::Property,
+        property_mutate::PropertyMutator,
+    },
+};
 
 #[derive(Clone)]
 pub struct EntityProperty {

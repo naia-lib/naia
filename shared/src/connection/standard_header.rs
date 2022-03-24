@@ -1,6 +1,6 @@
-use crate::{derive_serde, serde, PacketIndex};
+use naia_serde::derive_serde;
 
-use crate::packet_type::PacketType;
+use crate::{connection::packet_type::PacketType, serde, types::PacketIndex};
 
 // This header provides reliability information.
 #[derive(Copy, Debug)]

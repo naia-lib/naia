@@ -1,19 +1,22 @@
 use std::collections::{HashMap, VecDeque};
 
-use crate::unordered_reliable_channel::UnorderedReliableChannel;
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
+
+use crate::{
+    connection::packet_notifiable::PacketNotifiable,
+    constants::MTU_SIZE_BITS,
+    protocol::{
+        entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
+    },
+    types::{MessageId, PacketIndex},
+};
 
 use super::{
     channel_config::{ChannelConfig, ChannelIndex},
-    constants::MTU_SIZE_BITS,
-    entity_property::NetEntityHandleConverter,
-    manifest::Manifest,
     message_list_header::{read_list_header, write_list_header},
     ordered_reliable_channel::OrderedReliableChannel,
-    packet_notifiable::PacketNotifiable,
-    protocolize::Protocolize,
     reliable_channel::ReliableChannel,
-    types::{MessageId, PacketIndex},
+    unordered_reliable_channel::UnorderedReliableChannel,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages

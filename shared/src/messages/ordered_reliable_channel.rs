@@ -1,11 +1,10 @@
 use std::collections::VecDeque;
 
+use crate::{protocol::protocolize::Protocolize, sequence_less_than, types::MessageId};
+
 use super::{
-    protocolize::Protocolize,
+    channel_config::{ChannelIndex, ReliableSettings},
     reliable_channel::{OutgoingReliableChannel, ReliableChannel},
-    sequence_less_than,
-    types::MessageId,
-    ChannelIndex, ReliableSettings,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
