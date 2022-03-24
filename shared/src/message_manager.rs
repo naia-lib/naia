@@ -1,14 +1,19 @@
-use std::{
-    collections::{HashMap, VecDeque},
-};
+use std::collections::{HashMap, VecDeque};
 
-use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
 use crate::unordered_reliable_channel::UnorderedReliableChannel;
+use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
 
 use super::{
-    manifest::Manifest, packet_notifiable::PacketNotifiable, protocolize::Protocolize, types::MessageId, ordered_reliable_channel::OrderedReliableChannel,
-    constants::MTU_SIZE_BITS, message_list_header::{read_list_header, write_list_header}, channel_config::{ChannelConfig, ChannelIndex}, reliable_channel::ReliableChannel,
-    entity_property::NetEntityHandleConverter, types::PacketIndex
+    channel_config::{ChannelConfig, ChannelIndex},
+    constants::MTU_SIZE_BITS,
+    entity_property::NetEntityHandleConverter,
+    manifest::Manifest,
+    message_list_header::{read_list_header, write_list_header},
+    ordered_reliable_channel::OrderedReliableChannel,
+    packet_notifiable::PacketNotifiable,
+    protocolize::Protocolize,
+    reliable_channel::ReliableChannel,
+    types::{MessageId, PacketIndex},
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -50,7 +55,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
     pub fn generate_outgoing_messages(&mut self, rtt_millis: &f32) {
         for (_, channel) in &mut self.reliable_channels {
-            channel.outgoing().generate_messages(rtt_millis, &mut self.outgoing_messages);
+            channel
+                .outgoing()
+                .generate_messages(rtt_millis, &mut self.outgoing_messages);
         }
     }
 
@@ -63,17 +70,14 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     }
 
     /// Queues an Message to be transmitted to the remote host
-    pub fn send_message(
-        &mut self,
-        channel_index: C,
-        message: P,
-    ) {
+    pub fn send_message(&mut self, channel_index: C, message: P) {
         if let Some(channel) = self.reliable_channels.get_mut(&channel_index) {
             // reliable channels
             channel.outgoing().send_message(message);
         } else {
             // unreliable channels
-            self.outgoing_messages.push_back((channel_index, 0, message));
+            self.outgoing_messages
+                .push_back((channel_index, 0, message));
         }
     }
 
@@ -113,7 +117,13 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
             // Find how many messages will fit into the packet
             for (channel, message_id, message) in self.outgoing_messages.iter() {
-                MessageManager::<P, C>::write_message(&mut counter, channel, message_id, message, converter);
+                MessageManager::<P, C>::write_message(
+                    &mut counter,
+                    channel,
+                    message_id,
+                    message,
+                    converter,
+                );
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
                 } else {
@@ -129,9 +139,11 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         {
             for _ in 0..message_count {
                 // Pop message
-                let (channel_index, message_id, popped_message) = self.outgoing_messages.pop_front().unwrap();
+                let (channel_index, message_id, popped_message) =
+                    self.outgoing_messages.pop_front().unwrap();
 
-                self.packet_to_message_map.insert(packet_index, (channel_index.clone(), message_id));
+                self.packet_to_message_map
+                    .insert(packet_index, (channel_index.clone(), message_id));
 
                 // Write message
                 Self::write_message(
@@ -203,8 +215,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             if let Some(manager) = self.reliable_channels.get_mut(&channel) {
                 manager.recv_message(message_id, new_message);
             } else {
-                self.incoming_messages
-                    .push_back((channel, new_message));
+                self.incoming_messages.push_back((channel, new_message));
             }
         }
     }

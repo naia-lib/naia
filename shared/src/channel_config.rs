@@ -1,5 +1,4 @@
-use std::{collections::HashMap, hash::Hash};
-use std::time::Duration;
+use std::{collections::HashMap, hash::Hash, time::Duration};
 
 use crate::{derive_serde, serde, serde::Serde};
 
@@ -177,22 +176,31 @@ impl ChannelConfig<DefaultChannels> {
 
         config.add_channel(
             DefaultChannels::UnorderedUnreliable,
-            Channel::new(ChannelMode::UnorderedUnreliable, ChannelDirection::Bidirectional),
+            Channel::new(
+                ChannelMode::UnorderedUnreliable,
+                ChannelDirection::Bidirectional,
+            ),
         );
         config.add_channel(
-            DefaultChannels::UnorderedReliable, Channel::new(
-            ChannelMode::UnorderedReliable(ReliableSettings::default()),
-            ChannelDirection::Bidirectional),
+            DefaultChannels::UnorderedReliable,
+            Channel::new(
+                ChannelMode::UnorderedReliable(ReliableSettings::default()),
+                ChannelDirection::Bidirectional,
+            ),
         );
         config.add_channel(
-            DefaultChannels::OrderedReliable, Channel::new(
+            DefaultChannels::OrderedReliable,
+            Channel::new(
                 ChannelMode::OrderedReliable(ReliableSettings::default()),
-                ChannelDirection::Bidirectional),
+                ChannelDirection::Bidirectional,
+            ),
         );
         config.add_channel(
-            DefaultChannels::TickBuffered, Channel::new(
+            DefaultChannels::TickBuffered,
+            Channel::new(
                 ChannelMode::TickBuffered(TickBufferSettings::default()),
-                ChannelDirection::ClientToServer),
+                ChannelDirection::ClientToServer,
+            ),
         );
 
         config

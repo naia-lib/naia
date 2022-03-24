@@ -1,8 +1,11 @@
 use std::collections::VecDeque;
 
 use super::{
-    protocolize::Protocolize, types::MessageId,
-    ChannelIndex, ReliableSettings, reliable_channel::ReliableChannel, sequence_less_than, reliable_channel::OutgoingReliableChannel
+    protocolize::Protocolize,
+    reliable_channel::{OutgoingReliableChannel, ReliableChannel},
+    sequence_less_than,
+    types::MessageId,
+    ChannelIndex, ReliableSettings,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -19,7 +22,10 @@ impl<P: Protocolize, C: ChannelIndex> UnorderedReliableChannel<P, C> {
     pub fn new(channel_index: C, reliable_settings: &ReliableSettings) -> Self {
         Self {
             channel_index: channel_index.clone(),
-            outgoing_channel: OutgoingReliableChannel::new(channel_index.clone(), reliable_settings),
+            outgoing_channel: OutgoingReliableChannel::new(
+                channel_index.clone(),
+                reliable_settings,
+            ),
             oldest_received_message_id: 0,
             received_message_ids: VecDeque::new(),
             incoming_messages: Vec::new(),
@@ -28,16 +34,14 @@ impl<P: Protocolize, C: ChannelIndex> UnorderedReliableChannel<P, C> {
 }
 
 impl<P: Protocolize, C: ChannelIndex> ReliableChannel<P, C> for UnorderedReliableChannel<P, C> {
-
     fn outgoing(&mut self) -> &mut OutgoingReliableChannel<P, C> {
         return &mut self.outgoing_channel;
     }
 
     fn recv_message(&mut self, message_id: MessageId, message: P) {
-
         // moving from oldest incoming message to newest
-        // compare existing slots and see if the message_id has been instantiated already
-        // if it has, put the message into the slot
+        // compare existing slots and see if the message_id has been instantiated
+        // already if it has, put the message into the slot
         // otherwise, keep track of what the last message id was
         // then add new empty slots at the end until getting to the incoming message id
         // then, once you're there, put the new message in
@@ -77,7 +81,8 @@ impl<P: Protocolize, C: ChannelIndex> ReliableChannel<P, C> for UnorderedReliabl
                     self.incoming_messages.push(message);
                     break;
                 } else {
-                    self.received_message_ids.push_back((next_message_id, false));
+                    self.received_message_ids
+                        .push_back((next_message_id, false));
                 }
             }
 
@@ -86,7 +91,6 @@ impl<P: Protocolize, C: ChannelIndex> ReliableChannel<P, C> for UnorderedReliabl
     }
 
     fn generate_incoming_messages(&mut self, incoming_messages: &mut VecDeque<(C, P)>) {
-
         for message in self.incoming_messages.drain(..) {
             incoming_messages.push_back((self.channel_index.clone(), message));
         }

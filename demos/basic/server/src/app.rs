@@ -1,5 +1,5 @@
 use naia_server::{
-    shared::{Protocolize, WorldRefType, DefaultChannels},
+    shared::{DefaultChannels, Protocolize, WorldRefType},
     Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
 };
 
@@ -125,7 +125,11 @@ impl App {
                         );
 
                         let new_message = StringMessage::new(new_message_contents);
-                        self.server.send_message(&user_key, DefaultChannels::UnorderedReliable, &new_message);
+                        self.server.send_message(
+                            &user_key,
+                            DefaultChannels::UnorderedReliable,
+                            &new_message,
+                        );
                     }
 
                     // // Iterate through Characters, marching them from (0,0) to (20, N)
@@ -144,7 +148,8 @@ impl App {
                     //     let server = &mut self.server;
                     //     let world = &self.world;
                     //     for (_, user_key, entity) in server.scope_checks() {
-                    //         if let Some(character) = world.proxy().component::<Character>(&entity) {
+                    //         if let Some(character) =
+                    // world.proxy().component::<Character>(&entity) {
                     //             let x = *character.x;
                     //             if x >= 5 && x <= 15 {
                     //                 server.user_scope(&user_key).include(&entity);

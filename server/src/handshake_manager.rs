@@ -7,8 +7,7 @@ pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
     wrapping_diff, BaseConnection, ConnectionConfig, FakeEntityConverter, Instant, KeyGenerator,
     Manifest, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
-    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType,
-    WorldRefType,
+    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType, WorldRefType,
 };
 
 use super::{cache_map::CacheMap, connection::Connection, io::Io, world_record::WorldRecord};
@@ -63,7 +62,9 @@ impl<P: Protocolize> HandshakeManager<P> {
         }
 
         //write timestamp digest
-        self.timestamp_digest_map.get_unchecked(timestamp).ser(&mut writer);
+        self.timestamp_digest_map
+            .get_unchecked(timestamp)
+            .ser(&mut writer);
 
         writer
     }
@@ -97,12 +98,9 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 3 of Handshake
-    pub fn write_connect_response(
-        &self,
-    ) -> BitWriter {
+    pub fn write_connect_response(&self) -> BitWriter {
         let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::ServerConnectResponse, 0, 0, 0)
-            .ser(&mut writer);
+        StandardHeader::new(PacketType::ServerConnectResponse, 0, 0, 0).ser(&mut writer);
         writer
     }
 
