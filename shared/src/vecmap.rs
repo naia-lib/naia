@@ -1,8 +1,8 @@
 use std::{collections::HashMap, hash::Hash};
 
-// This data structure is an ugly hack to get a HashMap that iterates in a fixed insertion order ...
-// I could use IndexMap, but how much would that affect my eventual compile size?
-// Probably should refactor this later to work correctly
+// This data structure is an ugly hack to get a HashMap that iterates in a fixed
+// insertion order ... I could use IndexMap, but how much would that affect my
+// eventual compile size? Probably should refactor this later to work correctly
 
 #[derive(Clone)]
 pub struct VecMap<K: Eq + Hash, V> {

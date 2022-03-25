@@ -1,8 +1,8 @@
 use naia_serde::{BitReader, BitWriter};
 
 use crate::{
-    protocol::protocolize::Protocolize, types::MessageId,
-    ChannelIndex, Manifest, NetEntityHandleConverter,
+    protocol::protocolize::Protocolize, types::MessageId, ChannelIndex, Manifest,
+    NetEntityHandleConverter,
 };
 
 pub trait MessageChannel<P: Protocolize, C: ChannelIndex> {

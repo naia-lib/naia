@@ -1,13 +1,16 @@
-use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
+use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 use std::{collections::VecDeque, time::Duration};
 
 use naia_socket_shared::Instant;
 
 use crate::{
-    protocol::{protocolize::Protocolize, manifest::Manifest, entity_property::NetEntityHandleConverter},
-    messages::message_list_header,
-    types::MessageId,
     constants::MTU_SIZE_BITS,
+    messages::message_list_header,
+    protocol::{
+        entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
+    },
+    types::MessageId,
+    wrapping_diff,
 };
 
 use super::channel_config::ReliableSettings;
@@ -134,6 +137,7 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
             }
 
             // Find how many messages will fit into the packet
+            let mut last_written_id: Option<MessageId> = None;
             let mut index = 0;
             loop {
                 if index >= self.ready_messages.len() {
@@ -141,7 +145,14 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
                 }
 
                 let (message_id, message) = self.ready_messages.get(index).unwrap();
-                self.write_message(converter, &mut counter, message_id, message);
+                self.write_message(
+                    converter,
+                    &mut counter,
+                    &last_written_id,
+                    message_id,
+                    message,
+                );
+                last_written_id = Some(*message_id);
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
                 } else {
@@ -157,33 +168,19 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
 
         // Messages
         {
+            let mut last_written_id: Option<MessageId> = None;
             let mut message_ids = Vec::new();
+
             for _ in 0..message_count {
                 // Pop and write message
                 let (message_id, message) = self.ready_messages.pop_front().unwrap();
-                self.write_message(converter, writer, &message_id, &message);
+                self.write_message(converter, writer, &last_written_id, &message_id, &message);
 
                 message_ids.push(message_id);
+                last_written_id = Some(message_id);
             }
             return Some(message_ids);
         }
-    }
-
-    fn write_message<S: BitWrite>(
-        &self,
-        converter: &dyn NetEntityHandleConverter,
-        writer: &mut S,
-        message_id: &MessageId,
-        message: &P,
-    ) {
-        // write message id
-        message_id.ser(writer);
-
-        // write message kind
-        message.dyn_ref().kind().ser(writer);
-
-        // write payload
-        message.write(writer, converter);
     }
 
     pub fn read_messages(
@@ -193,12 +190,41 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
         converter: &dyn NetEntityHandleConverter,
     ) -> Vec<(MessageId, P)> {
         let message_count = message_list_header::read(reader);
+
+        let mut last_read_id: Option<MessageId> = None;
         let mut output = Vec::new();
+
         for _x in 0..message_count {
-            let id_w_msg = self.read_message(reader, manifest, converter);
+            let id_w_msg = self.read_message(reader, manifest, converter, &last_read_id);
+            last_read_id = Some(id_w_msg.0);
             output.push(id_w_msg);
         }
         return output;
+    }
+
+    fn write_message<S: BitWrite>(
+        &self,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut S,
+        last_written_id: &Option<MessageId>,
+        message_id: &MessageId,
+        message: &P,
+    ) {
+        if let Some(last_id) = last_written_id {
+            // write message id diff
+            let id_diff = wrapping_diff(*last_id, *message_id);
+            let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
+            id_diff_encoded.ser(writer);
+        } else {
+            // write message id
+            message_id.ser(writer);
+        }
+
+        // write message kind
+        message.dyn_ref().kind().ser(writer);
+
+        // write payload
+        message.write(writer, converter);
     }
 
     fn read_message(
@@ -206,9 +232,16 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
         reader: &mut BitReader,
         manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter,
+        last_read_id: &Option<MessageId>,
     ) -> (MessageId, P) {
-        // read message id
-        let message_id: MessageId = MessageId::de(reader).unwrap();
+        let message_id: MessageId;
+        if let Some(last_id) = last_read_id {
+            let id_diff = UnsignedVariableInteger::<3>::de(reader).unwrap().get() as MessageId;
+            message_id = last_id.wrapping_add(id_diff);
+        } else {
+            // read message id
+            message_id = MessageId::de(reader).unwrap();
+        }
 
         // read message kind
         let component_kind: P::Kind = P::Kind::de(reader).unwrap();

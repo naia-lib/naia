@@ -2,7 +2,12 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::{channel_tick_buffer::ChannelTickBuffer, types::MsgId};
 
-use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde}, ChannelConfig, ChannelIndex, ChannelMode, NetEntityHandleConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, VecMap, MTU_SIZE_BITS, message_list_header};
+use naia_shared::{
+    message_list_header,
+    serde::{BitCounter, BitWrite, BitWriter, Serde},
+    ChannelConfig, ChannelIndex, ChannelMode, NetEntityHandleConverter, PacketIndex,
+    PacketNotifiable, Protocolize, ReplicateSafe, Tick, VecMap, MTU_SIZE_BITS,
+};
 
 pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
     channels: VecMap<C, ChannelTickBuffer<P>>,
