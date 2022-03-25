@@ -8,7 +8,7 @@ use crate::{
         entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
     },
     types::{MessageId, PacketIndex},
-    vecmap::VecMap
+    vecmap::VecMap,
 };
 
 use super::{
@@ -31,8 +31,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
         // initialize all reliable channels
         let mut channels = VecMap::new();
-        for channel_index in channel_config.channels().iter() {
-            let channel = channel_config.channels().get(channel_index).unwrap();
+        for channel_index in &channel_config.channels().vec {
+            let channel = channel_config.channels().map.get(channel_index).unwrap();
             let new_channel: Option<Box<dyn MessageChannel<P, C>>> = match &channel.mode {
                 ChannelMode::UnorderedUnreliable => Some(Box::new(
                     UnorderedUnreliableChannel::new(channel_index.clone()),
@@ -47,7 +47,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             };
 
             if new_channel.is_some() {
-                channels.insert(channel_index.clone(), new_channel.unwrap());
+                channels.dual_insert(channel_index.clone(), new_channel.unwrap());
             }
         }
 
@@ -78,8 +78,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Returns whether the Manager has queued Messages that can be transmitted
     /// to the remote host
     pub fn has_outgoing_messages(&self) -> bool {
-        for channel_index in self.channels.iter() {
-            let channel = self.channels.get(channel_index).unwrap();
+        for channel_index in &self.channels.vec {
+            let channel = self.channels.map.get(channel_index).unwrap();
             if channel.has_outgoing_messages() {
                 return true;
             }
@@ -89,7 +89,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
     /// Queues an Message to be transmitted to the remote host
     pub fn send_message(&mut self, channel_index: C, message: P) {
-        if let Some(channel) = self.channels.get_mut(&channel_index) {
+        if let Some(channel) = self.channels.map.get_mut(&channel_index) {
             channel.send_message(message);
         }
     }
@@ -132,7 +132,7 @@ impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for MessageManager<P, C> 
     /// status of Messages in that packet.
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some((channel_index, message_id)) = self.packet_to_message_map.get(&packet_index) {
-            if let Some(channel) = self.channels.get_mut(channel_index) {
+            if let Some(channel) = self.channels.map.get_mut(channel_index) {
                 channel.notify_message_delivered(message_id);
             }
         }

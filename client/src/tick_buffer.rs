@@ -1,8 +1,12 @@
 use std::collections::{HashMap, VecDeque};
 
-use crate::{types::MsgId, channel_tick_buffer::ChannelTickBuffer};
+use crate::{channel_tick_buffer::ChannelTickBuffer, types::MsgId};
 
-use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde}, write_list_header, ChannelConfig, ChannelIndex, NetEntityHandleConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, MTU_SIZE_BITS, VecMap, ChannelMode};
+use naia_shared::{
+    serde::{BitCounter, BitWrite, BitWriter, Serde},
+    write_list_header, ChannelConfig, ChannelIndex, ChannelMode, NetEntityHandleConverter,
+    PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, VecMap, MTU_SIZE_BITS,
+};
 
 pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
     channels: VecMap<C, ChannelTickBuffer<P>>,
@@ -20,11 +24,10 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
             match &channel.mode {
                 ChannelMode::TickBuffered(settings) => {
                     let new_channel = ChannelTickBuffer::new(&settings);
-                    channels.insert(channel_index.clone(), new_channel);
+                    channels.dual_insert(channel_index.clone(), new_channel);
                 }
                 _ => {}
             }
-
         }
 
         TickBuffer {
@@ -51,7 +54,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         channel_index: C,
         message: &R,
     ) {
-        if let Some(channel) = self.channels.get_mut(&channel_index) {
+        if let Some(channel) = self.channels.map.get_mut(&channel_index) {
             channel.send_message(client_tick, message);
         }
     }
@@ -125,7 +128,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
                     &channel,
                     &message,
                 );
-                if let Some(channel_buffer) = self.channels.get_mut(&channel) {
+                if let Some(channel_buffer) = self.channels.map.get_mut(&channel) {
                     channel_buffer.message_written(packet_index, client_tick, message_id);
                 }
                 self.packet_to_channel_map.insert(packet_index, channel);
@@ -165,7 +168,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
 impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for TickBuffer<P, C> {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_index) = self.packet_to_channel_map.get(&packet_index) {
-            if let Some(channel) = self.channels.get_mut(channel_index) {
+            if let Some(channel) = self.channels.map.get_mut(channel_index) {
                 channel.notify_packet_delivered(packet_index);
             }
         }
