@@ -13,7 +13,7 @@ use crate::{
 use super::{
     channel_config::ChannelIndex,
     message_channel::MessageChannel,
-    message_list_header::{read_list_header, write_list_header},
+    message_list_header::{read, write},
 };
 
 pub struct UnorderedUnreliableChannel<P: Protocolize, C: ChannelIndex> {
@@ -99,7 +99,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliab
             // Measure
             let current_packet_size = writer.bit_count();
             if current_packet_size > MTU_SIZE_BITS {
-                write_list_header(writer, 0);
+                write(writer, 0);
                 return None;
             }
 
@@ -107,11 +107,11 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliab
 
             //TODO: message_count is inaccurate here and may be different than final, does
             // this matter?
-            write_list_header(&mut counter, 123);
+            write(&mut counter, 123);
 
             // Check for overflow
             if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
-                write_list_header(writer, 0);
+                write(writer, 0);
                 return None;
             }
 
@@ -135,7 +135,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliab
         }
 
         // Write header
-        write_list_header(writer, message_count);
+        write(writer, message_count);
 
         // Messages
         {
@@ -154,7 +154,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliab
         manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter,
     ) {
-        let message_count = read_list_header(reader);
+        let message_count = read(reader);
         for _x in 0..message_count {
             let message = self.read_message(reader, manifest, converter);
             self.recv_message(message);

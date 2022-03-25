@@ -2,11 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::{channel_tick_buffer::ChannelTickBuffer, types::MsgId};
 
-use naia_shared::{
-    serde::{BitCounter, BitWrite, BitWriter, Serde},
-    write_list_header, ChannelConfig, ChannelIndex, ChannelMode, NetEntityHandleConverter,
-    PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, VecMap, MTU_SIZE_BITS,
-};
+use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde}, ChannelConfig, ChannelIndex, ChannelMode, NetEntityHandleConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, VecMap, MTU_SIZE_BITS, message_list_header};
 
 pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
     channels: VecMap<C, ChannelTickBuffer<P>>,
@@ -78,16 +74,16 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
             // Measure
             let current_packet_size = writer.bit_count();
             if current_packet_size > MTU_SIZE_BITS {
-                write_list_header(writer, 0);
+                message_list_header::write(writer, 0);
                 return;
             }
 
             let mut counter = BitCounter::new();
-            write_list_header(&mut counter, 123);
+            message_list_header::write(&mut counter, 123);
 
             // Check for overflow
             if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
-                write_list_header(writer, 0);
+                message_list_header::write(writer, 0);
                 return;
             }
 
@@ -110,7 +106,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         }
 
         // Write header
-        write_list_header(writer, message_count);
+        message_list_header::write(writer, message_count);
 
         // Messages
         {

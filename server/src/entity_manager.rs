@@ -8,12 +8,7 @@ use std::{
 };
 
 use crate::entity_message_waitlist::EntityMessageWaitlist;
-use naia_shared::{
-    serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    write_list_header, ChannelIndex, DiffMask, EntityConverter, KeyGenerator, MessageManager,
-    NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe,
-    WorldRefType, MTU_SIZE_BITS,
-};
+use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, ChannelIndex, DiffMask, EntityConverter, KeyGenerator, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, message_list_header};
 
 use super::{
     entity_action::EntityAction, global_diff_handler::GlobalDiffHandler,
@@ -222,16 +217,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             // Measure
             let current_packet_size = writer.bit_count();
             if current_packet_size > MTU_SIZE_BITS {
-                write_list_header(writer, 0);
+                message_list_header::write(writer, 0);
                 return;
             }
 
             let mut counter = BitCounter::new();
-            write_list_header(&mut counter, 123);
+            message_list_header::write(&mut counter, 123);
 
             // Check for overflow
             if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
-                write_list_header(writer, 0);
+                message_list_header::write(writer, 0);
                 return;
             }
 
@@ -254,7 +249,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         }
 
         // Write header
-        write_list_header(writer, message_count);
+        message_list_header::write(writer, message_count);
 
         // Actions
         {

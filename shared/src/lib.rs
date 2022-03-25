@@ -46,7 +46,7 @@ pub use messages::{
         Channel, ChannelConfig, ChannelDirection, ChannelIndex, ChannelMode, DefaultChannels,
         ReliableSettings, TickBufferSettings,
     },
-    message_list_header::{read_list_header, write_list_header},
+    message_list_header,
     message_manager::MessageManager,
 };
 pub use protocol::{
