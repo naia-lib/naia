@@ -23,9 +23,9 @@ mod constants;
 mod key_generator;
 mod shared_config;
 mod types;
+mod vecmap;
 mod world_type;
 mod wrapping_number;
-mod vecmap;
 
 pub use connection::{
     ack_manager::AckManager,
@@ -76,6 +76,6 @@ pub use constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
 pub use key_generator::KeyGenerator;
 pub use shared_config::SharedConfig;
 pub use types::{PacketIndex, Tick};
+pub use vecmap::VecMap;
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
-pub use vecmap::VecMap;

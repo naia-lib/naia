@@ -5,29 +5,31 @@ use crate::{derive_serde, serde, serde::Serde, vecmap::VecMap};
 // ChannelConfig
 #[derive(Clone)]
 pub struct ChannelConfig<C: ChannelIndex> {
-    map: VecMap<C, Channel>,
+    channels: VecMap<C, Channel>,
 }
 
 impl<C: ChannelIndex> ChannelConfig<C> {
     pub fn new() -> Self {
         Self {
-            map: VecMap::new(),
+            channels: VecMap::new(),
         }
     }
 
     pub fn add_channel(&mut self, channel_index: C, channel: Channel) {
-        self.map.insert(channel_index.clone(), channel.clone());
+        self.channels
+            .dual_insert(channel_index.clone(), channel.clone());
     }
 
     pub fn channel(&self, channel_index: &C) -> &Channel {
         return self
+            .channels
             .map
             .get(channel_index)
             .expect("Channel has not been registered in the config!");
     }
 
     pub fn channels(&self) -> &VecMap<C, Channel> {
-        return &self.map;
+        return &self.channels;
     }
 }
 

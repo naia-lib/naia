@@ -1,7 +1,6 @@
 use naia_serde::{BitReader, BitWrite, Serde, UnsignedVariableInteger};
 
 pub fn write_list_header<S: BitWrite>(writer: &mut S, mut message_count: u16) {
-
     let has_messages: bool = message_count > 0;
     has_messages.ser(writer);
 
