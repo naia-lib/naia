@@ -99,6 +99,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliab
             // Measure
             let current_packet_size = writer.bit_count();
             if current_packet_size > MTU_SIZE_BITS {
+                write_list_header(writer, 0);
                 return None;
             }
 
@@ -106,10 +107,11 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliab
 
             //TODO: message_count is inaccurate here and may be different than final, does
             // this matter?
-            write_list_header(&mut counter, &123);
+            write_list_header(&mut counter, 123);
 
             // Check for overflow
             if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
+                write_list_header(writer, 0);
                 return None;
             }
 
@@ -133,7 +135,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliab
         }
 
         // Write header
-        write_list_header(writer, &message_count);
+        write_list_header(writer, message_count);
 
         // Messages
         {
@@ -142,7 +144,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliab
                 let message = self.outgoing_messages.pop_front().unwrap();
                 self.write_message(writer, converter, &message);
             }
-            return Some(Vec::new());
+            return None;
         }
     }
 

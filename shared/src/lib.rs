@@ -25,6 +25,7 @@ mod shared_config;
 mod types;
 mod world_type;
 mod wrapping_number;
+mod vecmap;
 
 pub use connection::{
     ack_manager::AckManager,
@@ -77,3 +78,4 @@ pub use shared_config::SharedConfig;
 pub use types::{PacketIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
+pub use vecmap::VecMap;

@@ -192,7 +192,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     /// Queues up an Message to be sent to the Server
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
-        let channel_settings = self.shared_config.channel.settings(&channel);
+        let channel_settings = self.shared_config.channel.channel(&channel);
 
         if !channel_settings.can_send_to_server() {
             panic!("Cannot send message to Server on this Channel");

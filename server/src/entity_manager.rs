@@ -222,14 +222,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             // Measure
             let current_packet_size = writer.bit_count();
             if current_packet_size > MTU_SIZE_BITS {
+                write_list_header(writer, 0);
                 return;
             }
 
             let mut counter = BitCounter::new();
-            write_list_header(&mut counter, &123);
+            write_list_header(&mut counter, 123);
 
             // Check for overflow
             if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
+                write_list_header(writer, 0);
                 return;
             }
 
@@ -252,7 +254,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         }
 
         // Write header
-        write_list_header(writer, &message_count);
+        write_list_header(writer, message_count);
 
         // Actions
         {
