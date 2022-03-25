@@ -1,9 +1,9 @@
-use std::{hash::Hash, collections::{HashMap, hash_map::{Iter, IterMut}}};
+use std::{hash::Hash, collections::HashMap, slice::Iter};
 
 #[derive(Clone)]
 pub struct VecMap<K: Eq + Hash, V> {
-    map: HashMap<K, V>,
-    vec: Vec<K>,
+    pub map: HashMap<K, V>,
+    pub vec: Vec<K>,
 }
 
 impl<K: Eq + Hash + Clone, V> VecMap<K, V> {
@@ -27,11 +27,11 @@ impl<K: Eq + Hash + Clone, V> VecMap<K, V> {
         return self.map.get_mut(key);
     }
 
-    pub fn iter(&self) -> Iter<K, V> {
-        return self.map.iter();
+    pub fn iter(&self) -> Iter<K> {
+        return self.vec.iter();
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<K, V> {
-        return self.map.iter_mut();
+    pub fn iter_mut(&mut self) -> Iter<K> {
+        return self.vec.iter();
     }
 }

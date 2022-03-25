@@ -15,11 +15,12 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         // initialize all tick buffer channels
         let mut channels = VecMap::new();
 
-        for (index, channel) in channel_config.channels().iter() {
+        for channel_index in &channel_config.channels().vec {
+            let channel = channel_config.channels().map.get(channel_index).unwrap();
             match &channel.mode {
                 ChannelMode::TickBuffered(settings) => {
                     let new_channel = ChannelTickBuffer::new(&settings);
-                    channels.insert(index.clone(), new_channel);
+                    channels.insert(channel_index.clone(), new_channel);
                 }
                 _ => {}
             }
@@ -34,7 +35,8 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
     }
 
     pub fn collect_outgoing_messages(&mut self, server_receivable_tick: &Tick) {
-        for (channel_index, channel) in self.channels.iter_mut() {
+        for channel_index in &self.channels.vec {
+            let channel = self.channels.map.get_mut(channel_index).unwrap();
             channel.collect_outgoing_messages(
                 server_receivable_tick,
                 channel_index,

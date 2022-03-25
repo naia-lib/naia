@@ -31,7 +31,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
         // initialize all reliable channels
         let mut channels = VecMap::new();
-        for (channel_index, channel) in channel_config.channels().iter() {
+        for channel_index in channel_config.channels().iter() {
+            let channel = channel_config.channels().get(channel_index).unwrap();
             let new_channel: Option<Box<dyn MessageChannel<P, C>>> = match &channel.mode {
                 ChannelMode::UnorderedUnreliable => Some(Box::new(
                     UnorderedUnreliableChannel::new(channel_index.clone()),
@@ -58,14 +59,16 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
     pub fn collect_incoming_messages(&mut self) -> Vec<(C, P)> {
         let mut output: Vec<(C, P)> = Vec::new();
-        for (_, channel) in self.channels.iter_mut() {
+        for channel_index in &self.channels.vec {
+            let channel = self.channels.map.get_mut(channel_index).unwrap();
             channel.collect_incoming_messages(&mut output);
         }
         output
     }
 
     pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
-        for (_, channel) in self.channels.iter_mut() {
+        for channel_index in &self.channels.vec {
+            let channel = self.channels.map.get_mut(channel_index).unwrap();
             channel.collect_outgoing_messages(rtt_millis);
         }
     }
@@ -75,10 +78,13 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Returns whether the Manager has queued Messages that can be transmitted
     /// to the remote host
     pub fn has_outgoing_messages(&self) -> bool {
-        return self
-            .channels
-            .iter()
-            .any(|(_, channel)| channel.has_outgoing_messages());
+        for channel_index in self.channels.iter() {
+            let channel = self.channels.get(channel_index).unwrap();
+            if channel.has_outgoing_messages() {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// Queues an Message to be transmitted to the remote host
@@ -96,7 +102,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         packet_index: PacketIndex,
         converter: &dyn NetEntityHandleConverter,
     ) {
-        for (channel_index, channel) in self.channels.iter_mut() {
+        for channel_index in &self.channels.vec {
+            let channel = self.channels.map.get_mut(channel_index).unwrap();
             if let Some(message_ids) = channel.write_messages(converter, writer) {
                 for message_id in message_ids {
                     self.packet_to_message_map
@@ -113,7 +120,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter,
     ) {
-        for (_, channel) in self.channels.iter_mut() {
+        for channel_index in &self.channels.vec {
+            let channel = self.channels.map.get_mut(channel_index).unwrap();
             channel.read_messages(reader, manifest, converter);
         }
     }
