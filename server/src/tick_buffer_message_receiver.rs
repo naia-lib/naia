@@ -1,9 +1,10 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    read_list_header, sequence_greater_than,
+    sequence_greater_than,
     serde::{BitReader, Serde},
     ChannelIndex, Manifest, NetEntityHandleConverter, Protocolize, Tick,
+    message_list_header,
 };
 
 type ShortMsgId = u8;
@@ -33,7 +34,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferMessageReceiver<P, C> {
         manifest: &Manifest<P>,
         converter: &mut dyn NetEntityHandleConverter,
     ) {
-        let message_count = read_list_header(reader);
+        let message_count = message_list_header::read(reader);
         self.process_incoming_messages(server_tick, reader, manifest, message_count, converter);
     }
 

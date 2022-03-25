@@ -3,13 +3,15 @@ use std::collections::VecDeque;
 use naia_serde::{BitReader, BitWriter};
 
 use crate::{
-    protocol::protocolize::Protocolize, sequence_less_than, types::MessageId, Manifest,
-    NetEntityHandleConverter,
+    protocol::{protocolize::Protocolize, manifest::Manifest, entity_property::NetEntityHandleConverter},
+    sequence_less_than,
+    types::MessageId,
 };
 
 use super::{
     channel_config::{ChannelIndex, ReliableSettings},
-    message_channel::{MessageChannel, OutgoingReliableChannel},
+    message_channel::MessageChannel,
+    outgoing_reliable_channel::OutgoingReliableChannel
 };
 
 pub struct UnorderedReliableChannel<P: Protocolize, C: ChannelIndex> {

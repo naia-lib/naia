@@ -5,13 +5,7 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{
-    read_list_header,
-    serde::{BitReader, Serde, UnsignedVariableInteger},
-    BigMap, ChannelIndex, EntityActionType, EntityHandle, EntityHandleConverter,
-    FakeEntityConverter, Manifest, NetEntity, NetEntityHandleConverter, Protocolize, Tick,
-    WorldMutType,
-};
+use naia_shared::{serde::{BitReader, Serde, UnsignedVariableInteger}, BigMap, ChannelIndex, EntityActionType, EntityHandle, EntityHandleConverter, FakeEntityConverter, Manifest, NetEntity, NetEntityHandleConverter, Protocolize, Tick, WorldMutType, message_list_header};
 
 use super::{entity_record::EntityRecord, error::NaiaClientError, event::Event};
 
@@ -39,7 +33,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
-        let action_count = read_list_header(reader);
+        let action_count = message_list_header::read(reader);
         self.process_actions(
             world,
             manifest,

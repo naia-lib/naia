@@ -1,6 +1,6 @@
 use naia_serde::{BitReader, BitWrite, Serde, UnsignedVariableInteger};
 
-pub fn write_list_header<S: BitWrite>(writer: &mut S, mut message_count: u16) {
+pub fn write<S: BitWrite>(writer: &mut S, mut message_count: u16) {
     let has_messages: bool = message_count > 0;
     has_messages.ser(writer);
 
@@ -15,7 +15,7 @@ pub fn write_list_header<S: BitWrite>(writer: &mut S, mut message_count: u16) {
     }
 }
 
-pub fn read_list_header(reader: &mut BitReader) -> u16 {
+pub fn read(reader: &mut BitReader) -> u16 {
     let has_messages = bool::de(reader).unwrap();
 
     if has_messages {
