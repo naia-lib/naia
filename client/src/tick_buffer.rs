@@ -1,16 +1,11 @@
 use std::collections::{HashMap, VecDeque};
 
-use crate::types::MsgId;
+use crate::{types::MsgId, channel_tick_buffer::ChannelTickBuffer};
 
-use crate::channel_tick_buffer::ChannelTickBuffer;
-use naia_shared::{
-    serde::{BitCounter, BitWrite, BitWriter, Serde},
-    write_list_header, ChannelConfig, ChannelIndex, NetEntityHandleConverter, PacketIndex,
-    PacketNotifiable, Protocolize, ReplicateSafe, Tick, MTU_SIZE_BITS,
-};
+use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde}, write_list_header, ChannelConfig, ChannelIndex, NetEntityHandleConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, Tick, MTU_SIZE_BITS, VecMap, ChannelMode};
 
 pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
-    channels: HashMap<C, ChannelTickBuffer<P>>,
+    channels: VecMap<C, ChannelTickBuffer<P>>,
     outgoing_messages: VecDeque<(MsgId, Tick, C, P)>,
     packet_to_channel_map: HashMap<PacketIndex, C>,
 }
@@ -18,11 +13,17 @@ pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
 impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
         // initialize all tick buffer channels
-        let mut channels = HashMap::new();
-        let all_channel_settings = channel_config.all_tick_buffer_settings();
-        for (index, settings) in all_channel_settings {
-            let new_channel = ChannelTickBuffer::new(&settings);
-            channels.insert(index, new_channel);
+        let mut channels = VecMap::new();
+
+        for (index, channel) in channel_config.channels().iter() {
+            match &channel.mode {
+                ChannelMode::TickBuffered(settings) => {
+                    let new_channel = ChannelTickBuffer::new(&settings);
+                    channels.insert(index.clone(), new_channel);
+                }
+                _ => {}
+            }
+
         }
 
         TickBuffer {
@@ -33,7 +34,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
     }
 
     pub fn collect_outgoing_messages(&mut self, server_receivable_tick: &Tick) {
-        for (channel_index, channel) in &mut self.channels {
+        for (channel_index, channel) in self.channels.iter_mut() {
             channel.collect_outgoing_messages(
                 server_receivable_tick,
                 channel_index,
@@ -72,14 +73,16 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
             // Measure
             let current_packet_size = writer.bit_count();
             if current_packet_size > MTU_SIZE_BITS {
+                write_list_header(writer, 0);
                 return;
             }
 
             let mut counter = BitCounter::new();
-            write_list_header(&mut counter, &123);
+            write_list_header(&mut counter, 123);
 
             // Check for overflow
             if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
+                write_list_header(writer, 0);
                 return;
             }
 
@@ -102,7 +105,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         }
 
         // Write header
-        write_list_header(writer, &message_count);
+        write_list_header(writer, message_count);
 
         // Messages
         {

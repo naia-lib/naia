@@ -20,7 +20,7 @@ pub struct ChannelTickBuffer<P: Protocolize> {
 
 impl<P: Protocolize> ChannelTickBuffer<P> {
     pub fn new(settings: &TickBufferSettings) -> Self {
-        ChannelTickBuffer {
+        Self {
             outgoing_messages: OutgoingMessages::new(),
             sent_messages: SentMessages::new(),
             resend_interval: settings.resend_interval.clone(),

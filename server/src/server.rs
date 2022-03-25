@@ -224,7 +224,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
         if !self
             .shared_config
             .channel
-            .settings(&channel)
+            .channel(&channel)
             .can_send_to_client()
         {
             panic!("Cannot send message to Client on this Channel");

@@ -1,48 +1,33 @@
-use std::{collections::HashMap, hash::Hash, time::Duration};
+use std::{hash::Hash, time::Duration};
 
-use crate::{derive_serde, serde, serde::Serde};
+use crate::{derive_serde, serde, serde::Serde, vecmap::VecMap};
 
 // ChannelConfig
 #[derive(Clone)]
 pub struct ChannelConfig<C: ChannelIndex> {
-    map: HashMap<C, Channel>,
-    vec: Vec<(C, Channel)>,
+    map: VecMap<C, Channel>,
 }
 
 impl<C: ChannelIndex> ChannelConfig<C> {
     pub fn new() -> Self {
         Self {
-            map: HashMap::new(),
-            vec: Vec::new(),
+            map: VecMap::new(),
         }
     }
 
     pub fn add_channel(&mut self, channel_index: C, channel: Channel) {
         self.map.insert(channel_index.clone(), channel.clone());
-        self.vec.push((channel_index, channel));
     }
 
-    pub fn settings(&self, channel_index: &C) -> &Channel {
+    pub fn channel(&self, channel_index: &C) -> &Channel {
         return self
             .map
             .get(channel_index)
             .expect("Channel has not been registered in the config!");
     }
 
-    pub fn all_tick_buffer_settings(&self) -> Vec<(C, TickBufferSettings)> {
-        let mut output = Vec::new();
-
-        for (index, channel) in &self.vec {
-            if let ChannelMode::TickBuffered(settings) = &channel.mode {
-                output.push((index.clone(), settings.clone()));
-            }
-        }
-
-        output
-    }
-
-    pub fn all_channels(&self) -> Vec<(C, Channel)> {
-        return self.vec.clone();
+    pub fn channels(&self) -> &VecMap<C, Channel> {
+        return &self.map;
     }
 }
 

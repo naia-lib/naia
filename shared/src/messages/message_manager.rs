@@ -8,7 +8,7 @@ use crate::{
         entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
     },
     types::{MessageId, PacketIndex},
-    write_list_header,
+    vecmap::VecMap
 };
 
 use super::{
@@ -22,7 +22,7 @@ use super::{
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
-    channels: HashMap<C, Box<dyn MessageChannel<P, C>>>,
+    channels: VecMap<C, Box<dyn MessageChannel<P, C>>>,
     packet_to_message_map: HashMap<PacketIndex, (C, MessageId)>,
 }
 
@@ -30,10 +30,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Creates a new MessageManager
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
         // initialize all reliable channels
-        let mut channels = HashMap::new();
-        let all_channel_settings = channel_config.all_channels();
-        for (channel_index, channel) in all_channel_settings {
-            let new_channel: Option<Box<dyn MessageChannel<P, C>>> = match channel.mode {
+        let mut channels = VecMap::new();
+        for (channel_index, channel) in channel_config.channels().iter() {
+            let new_channel: Option<Box<dyn MessageChannel<P, C>>> = match &channel.mode {
                 ChannelMode::UnorderedUnreliable => Some(Box::new(
                     UnorderedUnreliableChannel::new(channel_index.clone()),
                 )),
@@ -59,14 +58,14 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
     pub fn collect_incoming_messages(&mut self) -> Vec<(C, P)> {
         let mut output: Vec<(C, P)> = Vec::new();
-        for (_, channel) in &mut self.channels {
+        for (_, channel) in self.channels.iter_mut() {
             channel.collect_incoming_messages(&mut output);
         }
         output
     }
 
     pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
-        for (_, channel) in &mut self.channels {
+        for (_, channel) in self.channels.iter_mut() {
             channel.collect_outgoing_messages(rtt_millis);
         }
     }
@@ -97,14 +96,12 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         packet_index: PacketIndex,
         converter: &dyn NetEntityHandleConverter,
     ) {
-        for (channel_index, channel) in &mut self.channels {
+        for (channel_index, channel) in self.channels.iter_mut() {
             if let Some(message_ids) = channel.write_messages(converter, writer) {
                 for message_id in message_ids {
                     self.packet_to_message_map
                         .insert(packet_index, (channel_index.clone(), message_id));
                 }
-            } else {
-                write_list_header(writer, &0);
             }
         }
     }
@@ -116,7 +113,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter,
     ) {
-        for (_, channel) in &mut self.channels {
+        for (_, channel) in self.channels.iter_mut() {
             channel.read_messages(reader, manifest, converter);
         }
     }
