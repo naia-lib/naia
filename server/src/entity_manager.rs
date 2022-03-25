@@ -8,7 +8,13 @@ use std::{
 };
 
 use crate::entity_message_waitlist::EntityMessageWaitlist;
-use naia_shared::{serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, ChannelIndex, DiffMask, EntityConverter, KeyGenerator, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, message_list_header};
+use naia_shared::{
+    message_list_header,
+    serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+    ChannelIndex, DiffMask, EntityConverter, KeyGenerator, MessageManager, NetEntity,
+    NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType,
+    MTU_SIZE_BITS,
+};
 
 use super::{
     entity_action::EntityAction, global_diff_handler::GlobalDiffHandler,
