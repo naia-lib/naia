@@ -76,16 +76,19 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Call this regularly so handshake manager can process incoming requests
-    pub fn recv(&mut self, reader: &mut BitReader) {
+    pub fn recv(&mut self, reader: &mut BitReader) -> bool {
         let header = StandardHeader::de(reader).unwrap();
         match header.packet_type() {
             PacketType::ServerChallengeResponse => {
                 self.recv_challenge_response(reader);
+                return false;
             }
             PacketType::ServerConnectResponse => {
-                self.recv_connect_response();
+                return self.recv_connect_response();
             }
-            _ => {}
+            _ => {
+                return false;
+            }
         }
     }
 
@@ -139,8 +142,10 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 4 of Handshake
-    pub fn recv_connect_response(&mut self) {
+    pub fn recv_connect_response(&mut self) -> bool {
+        let was_not_connected = self.connection_state != HandshakeState::Connected;
         self.connection_state = HandshakeState::Connected;
+        return was_not_connected;
     }
 
     // Send 10 disconnect packets
