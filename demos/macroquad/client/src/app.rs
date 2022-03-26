@@ -1,6 +1,8 @@
 use std::{collections::HashSet, time::Duration};
 
-use macroquad::prelude::*;
+use log::info;
+
+use macroquad::prelude::{KeyCode, is_key_pressed, is_key_down, clear_background, BLACK, RED, BLUE, YELLOW, GREEN, WHITE, draw_rectangle};
 
 use naia_client::{
     shared::{Protocolize, Replicate, Timer},
@@ -53,7 +55,7 @@ impl App {
 
         let mut client_config = ClientConfig::default();
 
-        client_config.connection.bandwidth_measure_duration = Some(Duration::from_secs(1));
+        client_config.connection.bandwidth_measure_duration = Some(Duration::from_secs(4));
 
         let client = Client::new(&client_config, &shared_config());
 
@@ -64,7 +66,7 @@ impl App {
             squares: HashSet::new(),
             queued_command: None,
             command_history: CommandHistory::new(),
-            bandwidth_timer: Timer::new(Duration::from_secs(1)),
+            bandwidth_timer: Timer::new(Duration::from_secs(4)),
             other_main_entity: None,
         }
     }
@@ -90,8 +92,7 @@ impl App {
                 self.bandwidth_timer.reset();
 
                 info!(
-                    "Bandwidth: {} kbps incoming, {} kbps outgoing",
-                    self.client.incoming_bandwidth(),
+                    "Bandwidth: {} kbps outgoing",
                     self.client.outgoing_bandwidth()
                 );
             }
@@ -180,9 +181,11 @@ impl App {
                 }
                 Ok(Event::SpawnEntity(entity, _)) => {
                     self.squares.insert(entity);
+                    info!("spawned entity");
                 }
                 Ok(Event::DespawnEntity(entity)) => {
                     self.squares.remove(&entity);
+                    info!("despawned entity");
                 }
                 Ok(Event::Message(
                     Channels::EntityAssignment,
@@ -190,48 +193,46 @@ impl App {
                 )) => {
                     let assign = *message.assign;
 
-                    if let Some(other_entity) = message.other_entity.get(&self.client) {
-                        self.other_main_entity = Some(other_entity);
-                    }
+                    let other_entity = message.other_entity.get(&self.client).unwrap();
+                    self.other_main_entity = Some(other_entity);
 
-                    if let Some(entity) = message.entity.get(&self.client) {
-                        if assign {
-                            info!("gave ownership of entity");
+                    let entity = message.entity.get(&self.client).unwrap();
+                    if assign {
+                        info!("gave ownership of entity");
 
-                            ////////////////////////////////
-                            let mut world_mut = self.world.proxy_mut();
-                            let prediction_entity = world_mut.spawn_entity();
+                        ////////////////////////////////
+                        let mut world_mut = self.world.proxy_mut();
+                        let prediction_entity = world_mut.spawn_entity();
 
-                            // create copies of components //
-                            for component_kind in world_mut.component_kinds(&entity) {
-                                let mut component_copy_opt: Option<Protocol> = None;
-                                if let Some(component) =
-                                    world_mut.component_of_kind(&entity, &component_kind)
-                                {
-                                    component_copy_opt = Some(component.clone());
-                                }
-                                if let Some(component_copy) = component_copy_opt {
-                                    component_copy
-                                        .extract_and_insert(&prediction_entity, &mut world_mut);
-                                }
+                        // create copies of components //
+                        for component_kind in world_mut.component_kinds(&entity) {
+                            let mut component_copy_opt: Option<Protocol> = None;
+                            if let Some(component) =
+                                world_mut.component_of_kind(&entity, &component_kind)
+                            {
+                                component_copy_opt = Some(component.clone());
                             }
-                            ////////////////////////////////
+                            if let Some(component_copy) = component_copy_opt {
+                                component_copy
+                                    .extract_and_insert(&prediction_entity, &mut world_mut);
+                            }
+                        }
+                        ////////////////////////////////
 
-                            self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
-                        } else {
-                            let mut disowned: bool = false;
-                            if let Some(owned_entity) = &self.owned_entity {
-                                if owned_entity.confirmed == entity {
-                                    self.world
-                                        .proxy_mut()
-                                        .despawn_entity(&owned_entity.predicted);
-                                    disowned = true;
-                                }
+                        self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
+                    } else {
+                        let mut disowned: bool = false;
+                        if let Some(owned_entity) = &self.owned_entity {
+                            if owned_entity.confirmed == entity {
+                                self.world
+                                    .proxy_mut()
+                                    .despawn_entity(&owned_entity.predicted);
+                                disowned = true;
                             }
-                            if disowned {
-                                info!("removed ownership of entity");
-                                self.owned_entity = None;
-                            }
+                        }
+                        if disowned {
+                            info!("removed ownership of entity");
+                            self.owned_entity = None;
                         }
                     }
                 }

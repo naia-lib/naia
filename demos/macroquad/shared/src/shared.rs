@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use naia_shared::{
-    CompressionConfig, LinkConditionerConfig, PingConfig, SharedConfig, SocketConfig,
+    CompressionConfig, LinkConditionerConfig, SharedConfig, SocketConfig,
 };
 
 use super::{

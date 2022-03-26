@@ -90,7 +90,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for OrderedReliableCh
     }
 
     fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
-        return self.outgoing_channel.generate_messages(rtt_millis);
+        return self.outgoing_channel.collect_outgoing_messages(rtt_millis);
     }
 
     fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>) {
@@ -123,7 +123,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for OrderedReliableCh
         converter: &dyn NetEntityHandleConverter,
         writer: &mut BitWriter,
     ) -> Option<Vec<MessageId>> {
-        return self.outgoing_channel.write_messages(converter, writer);
+        return self.outgoing_channel.write_outgoing_messages(converter, writer);
     }
 
     fn read_messages(
@@ -134,7 +134,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for OrderedReliableCh
     ) {
         let id_w_msgs = self
             .outgoing_channel
-            .read_messages(reader, manifest, converter);
+            .read_incoming_messages(reader, manifest, converter);
         for (id, message) in id_w_msgs {
             self.recv_message(id, message);
         }

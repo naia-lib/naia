@@ -43,7 +43,7 @@ impl App {
 
         let mut server_config = ServerConfig::default();
 
-        server_config.connection.bandwidth_measure_duration = Some(Duration::from_secs(1));
+        server_config.connection.bandwidth_measure_duration = Some(Duration::from_secs(4));
 
         let mut server = Server::new(&server_config, &shared_config());
         server.listen(&server_addresses);
@@ -65,7 +65,7 @@ impl App {
             world,
             main_room_key,
             user_squares: HashMap::<UserKey, Entity>::new(),
-            bandwidth_timer: Timer::new(Duration::from_secs(1)),
+            bandwidth_timer: Timer::new(Duration::from_secs(4)),
             other_main_entity,
         }
     }
@@ -75,8 +75,7 @@ impl App {
             self.bandwidth_timer.reset();
 
             info!(
-                "Bandwidth: {} kbps incoming (Free! :)), {} kbps outgoing (COST!)",
-                self.server.incoming_bandwidth_total(),
+                "Bandwidth: {} kbps outgoing",
                 self.server.outgoing_bandwidth_total()
             );
         }

@@ -886,7 +886,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                             let mut writer =
                                 self.handshake_manager.recv_challenge_request(&mut reader);
                             self.io.send_writer(&address, &mut writer);
-                            break;
+                            continue;
                         }
                         PacketType::ClientConnectRequest => {
                             match self
@@ -917,11 +917,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                     // do nothing
                                 }
                             }
-                            break;
+                            continue;
                         }
                         _ => {}
                     }
 
+                    // Packets requiring established connection
                     if let Some(user_connection) = self.user_connections.get_mut(&address) {
                         // Mark that we've heard from the client
                         user_connection.base.mark_heard();

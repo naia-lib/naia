@@ -2,12 +2,11 @@ use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAdd
 
 use naia_client_socket::Socket;
 
-use naia_shared::PingIndex;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
     ChannelIndex, ConnectionConfig, EntityHandle, EntityHandleConverter, Manifest, PacketType,
     PingConfig, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, SocketConfig,
-    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType, PingIndex
 };
 
 use super::{
@@ -335,6 +334,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
                         let header = StandardHeader::de(&mut reader).unwrap();
 
+                        match header.packet_type() {
+                            PacketType::Data
+                            | PacketType::Heartbeat
+                            | PacketType::Ping
+                            | PacketType::Pong => {
+                                // continue, these packet types are allowed when connection is established
+                            }
+                            _ => {
+                                // short-circuit, do not need to handle other packet types at this point
+                                continue;
+                            }
+                        }
+
                         // Read incoming header
                         server_connection.process_incoming_header(&header);
 
@@ -342,19 +354,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                         let mut incoming_tick = 0;
 
                         if let Some(tick_manager) = self.tick_manager.as_mut() {
-                            match header.packet_type() {
-                                PacketType::Data
-                                | PacketType::Heartbeat
-                                | PacketType::Ping
-                                | PacketType::Pong => {
-                                    incoming_tick = tick_manager.read_server_tick(
-                                        &mut reader,
-                                        server_connection.ping_manager.rtt,
-                                        server_connection.ping_manager.jitter,
-                                    );
-                                }
-                                _ => {}
-                            }
+                            incoming_tick = tick_manager.read_server_tick(
+                                &mut reader,
+                                server_connection.ping_manager.rtt,
+                                server_connection.ping_manager.jitter,
+                            );
                         }
 
                         // Handle based on PacketType
@@ -362,7 +366,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                             PacketType::Data => {
                                 server_connection.buffer_data_packet(incoming_tick, &mut reader);
                             }
-                            PacketType::Heartbeat => {}
+                            PacketType::Heartbeat => {
+                                // already marked as heard, job done
+                            }
                             PacketType::Ping => {
                                 // read incoming ping index
                                 let ping_index = PingIndex::de(&mut reader).unwrap();
@@ -390,7 +396,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                             PacketType::Pong => {
                                 server_connection.ping_manager.process_pong(&mut reader);
                             }
-                            _ => {}
+                            _ => {
+                                // no other packet types matter when connection is established
+                            }
                         }
                     }
                     Ok(None) => {
@@ -409,8 +417,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                 loop {
                     match self.io.recv_reader() {
                         Ok(Some(mut reader)) => {
-                            self.handshake_manager.recv(&mut reader);
-                            if self.handshake_manager.is_connected() {
+                            if self.handshake_manager.recv(&mut reader) {
+                                // new connect!
                                 let server_addr = self.server_address_unwrapped();
                                 self.server_connection = Some(Connection::new(
                                     server_addr,
