@@ -4,16 +4,11 @@ use naia_serde::{BitCounter, BitWrite, BitWriter, Serde};
 
 use crate::{
     constants::MTU_SIZE_BITS,
-    protocol::{
-        entity_property::NetEntityHandleConverter, protocolize::Protocolize,
-    },
+    protocol::{entity_property::NetEntityHandleConverter, protocolize::Protocolize},
     types::MessageId,
 };
 
-use super::{
-    message_channel::ChannelSender,
-    message_list_header::write,
-};
+use super::{message_channel::ChannelSender, message_list_header::write};
 
 pub struct UnorderedUnreliableSender<P: Protocolize> {
     outgoing_messages: VecDeque<P>,

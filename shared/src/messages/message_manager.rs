@@ -12,12 +12,12 @@ use crate::{
 
 use super::{
     channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
-    message_channel::{ChannelSender, ChannelReceiver},
-    reliable_sender::ReliableSender,
+    message_channel::{ChannelReceiver, ChannelSender},
     ordered_reliable_receiver::OrderedReliableReceiver,
+    reliable_sender::ReliableSender,
     unordered_reliable_receiver::UnorderedReliableReceiver,
-    unordered_unreliable_sender::UnorderedUnreliableSender,
     unordered_unreliable_receiver::UnorderedUnreliableReceiver,
+    unordered_unreliable_sender::UnorderedUnreliableSender,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -31,7 +31,6 @@ pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
 impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Creates a new MessageManager
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
-
         // initialize all reliable channels
         let mut channel_senders = HashMap::<C, Box<dyn ChannelSender<P>>>::new();
         let mut channel_receivers = HashMap::<C, Box<dyn ChannelReceiver<P>>>::new();
@@ -40,18 +39,36 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             let channel = channel_config.channels().map.get(channel_index).unwrap();
             match &channel.mode {
                 ChannelMode::UnorderedUnreliable => {
-                    channel_senders.insert(channel_index.clone(), Box::new(UnorderedUnreliableSender::new()));
-                    channel_receivers.insert(channel_index.clone(), Box::new(UnorderedUnreliableReceiver::new()));
+                    channel_senders.insert(
+                        channel_index.clone(),
+                        Box::new(UnorderedUnreliableSender::new()),
+                    );
+                    channel_receivers.insert(
+                        channel_index.clone(),
+                        Box::new(UnorderedUnreliableReceiver::new()),
+                    );
                 }
                 ChannelMode::UnorderedReliable(settings) => {
-                    channel_senders.insert(channel_index.clone(), Box::new(ReliableSender::new(&settings)));
-                    channel_receivers.insert(channel_index.clone(), Box::new(UnorderedReliableReceiver::new()));
+                    channel_senders.insert(
+                        channel_index.clone(),
+                        Box::new(ReliableSender::new(&settings)),
+                    );
+                    channel_receivers.insert(
+                        channel_index.clone(),
+                        Box::new(UnorderedReliableReceiver::new()),
+                    );
                 }
                 ChannelMode::OrderedReliable(settings) => {
-                    channel_senders.insert(channel_index.clone(), Box::new(ReliableSender::new(&settings)));
-                    channel_receivers.insert(channel_index.clone(), Box::new(OrderedReliableReceiver::new()));
+                    channel_senders.insert(
+                        channel_index.clone(),
+                        Box::new(ReliableSender::new(&settings)),
+                    );
+                    channel_receivers.insert(
+                        channel_index.clone(),
+                        Box::new(OrderedReliableReceiver::new()),
+                    );
                 }
-                _ => {},
+                _ => {}
             };
         }
 

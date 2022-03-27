@@ -2,12 +2,11 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitReader, Serde};
 
-use crate::protocol::{entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize, };
-
-use super::{
-    message_channel::ChannelReceiver,
-    message_list_header::read,
+use crate::protocol::{
+    entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
 };
+
+use super::{message_channel::ChannelReceiver, message_list_header::read};
 
 pub struct UnorderedUnreliableReceiver<P: Protocolize> {
     incoming_messages: VecDeque<P>,

@@ -10,10 +10,7 @@ use crate::{
     types::MessageId,
 };
 
-use super::{
-    message_channel::ChannelReceiver,
-    reliable_receiver::ReliableReceiver,
-};
+use super::{message_channel::ChannelReceiver, reliable_receiver::ReliableReceiver};
 
 pub struct UnorderedReliableReceiver<P: Protocolize> {
     oldest_waiting_message_id: MessageId,
