@@ -7,13 +7,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    message_list_header,
-    serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    ChannelIndex, DiffMask, EntityConverter, KeyGenerator, MessageManager, NetEntity,
-    NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType,
-    MTU_SIZE_BITS,
-};
+use naia_shared::{message_list_header, serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+                  ChannelIndex, DiffMask, EntityConverter, KeyGenerator, MessageManager, NetEntity,
+                  NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType,
+                  MTU_SIZE_BITS, ReliableSettings, ReliableSender, ChannelSender};
 
 use super::{
     entity_action::EntityAction, entity_message_waitlist::EntityMessageWaitlist,
@@ -40,6 +37,7 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     sent_updates: HashMap<PacketIndex, HashMap<(E, P::Kind), DiffMask>>,
     last_update_packet_index: PacketIndex,
     delivered_packets: VecDeque<PacketIndex>,
+    reliable_action_channel: ReliableSender<P>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C> {
@@ -65,6 +63,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             sent_updates: HashMap::new(),
             last_update_packet_index: 0,
             delivered_packets: VecDeque::new(),
+            reliable_action_channel: ReliableSender::new(&ReliableSettings { rtt_resend_factor: 1.5 }),
         }
     }
 
@@ -140,9 +139,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             .queue_message(entities, channel, message.protocol_copy());
     }
 
-    pub fn collect_entity_messages(&mut self, message_manager: &mut MessageManager<P, C>) {
-        self.delayed_entity_messages
-            .collect_ready_messages(message_manager);
+    pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32, message_manager: &mut MessageManager<P, C>) {
+        self.collect_resend_messages(rtt_millis);
+        self.collect_component_updates();
+        self.delayed_entity_messages.collect_ready_messages(message_manager);
     }
 
     // Components
@@ -463,13 +463,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         return self.local_to_global_entity_map.get(&local_entity);
     }
 
-    pub fn collect_component_updates(&mut self) {
+    pub fn has_outgoing_actions(&self) -> bool {
+        return self.queued_actions.len() != 0;
+    }
+
+    // Private methods
+
+    fn collect_resend_messages(&mut self, rtt_millis: &f32) {
+        self.reliable_action_channel.collect_outgoing_messages(rtt_millis);
+    }
+
+    fn collect_component_updates(&mut self) {
         for (global_entity, entity_record) in self.entity_records.iter() {
             for (component_kind, locality_status) in entity_record.components.iter() {
                 if *locality_status == LocalityStatus::Created
                     && !self
-                        .diff_handler
-                        .diff_mask_is_clear(global_entity, component_kind)
+                    .diff_handler
+                    .diff_mask_is_clear(global_entity, component_kind)
                 {
                     self.queued_actions.push_back(EntityAction::UpdateComponent(
                         *global_entity,
@@ -479,12 +489,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             }
         }
     }
-
-    pub fn has_outgoing_actions(&self) -> bool {
-        return self.queued_actions.len() != 0;
-    }
-
-    // Private methods
 
     fn component_init(&mut self, entity: &E, component_kind: &P::Kind) {
         if let Some(entity_record) = self.entity_records.get_mut(entity) {

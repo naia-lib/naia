@@ -1,5 +1,6 @@
-use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 use std::{collections::VecDeque, time::Duration};
+
+use naia_serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
 use naia_socket_shared::Instant;
 
@@ -7,22 +8,24 @@ use crate::{
     constants::MTU_SIZE_BITS,
     messages::message_list_header,
     protocol::{
-        entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
+        entity_property::NetEntityHandleConverter, protocolize::Protocolize,
     },
     types::MessageId,
     wrapping_diff,
 };
 
-use super::channel_config::ReliableSettings;
+use super::{channel_config::ReliableSettings, message_channel::ChannelSender};
 
-pub struct OutgoingReliableChannel<P: Protocolize> {
+// Sender
+
+pub struct ReliableSender<P: Protocolize> {
     rtt_resend_factor: f32,
     next_send_message_id: MessageId,
     sending_messages: VecDeque<Option<(MessageId, Option<Instant>, P)>>,
     next_send_messages: VecDeque<(MessageId, P)>,
 }
 
-impl<P: Protocolize> OutgoingReliableChannel<P> {
+impl<P: Protocolize> ReliableSender<P> {
     pub fn new(reliable_settings: &ReliableSettings) -> Self {
         Self {
             rtt_resend_factor: reliable_settings.rtt_resend_factor,
@@ -32,13 +35,40 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
         }
     }
 
-    pub fn send_message(&mut self, message: P) {
+    fn write_outgoing_message<S: BitWrite>(
+        &self,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut S,
+        last_written_id: &Option<MessageId>,
+        message_id: &MessageId,
+        message: &P,
+    ) {
+        if let Some(last_id) = last_written_id {
+            // write message id diff
+            let id_diff = wrapping_diff(*last_id, *message_id);
+            let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
+            id_diff_encoded.ser(writer);
+        } else {
+            // write message id
+            message_id.ser(writer);
+        }
+
+        // write message kind
+        message.dyn_ref().kind().ser(writer);
+
+        // write payload
+        message.write(writer, converter);
+    }
+}
+
+impl<P: Protocolize> ChannelSender<P> for ReliableSender<P> {
+    fn send_message(&mut self, message: P) {
         self.sending_messages
             .push_back(Some((self.next_send_message_id, None, message)));
         self.next_send_message_id = self.next_send_message_id.wrapping_add(1);
     }
 
-    pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
+    fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
         let now = Instant::now();
 
@@ -61,54 +91,11 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
         }
     }
 
-    pub fn notify_message_delivered(&mut self, message_id: &MessageId) {
-        let mut index = 0;
-        let mut found = false;
-
-        loop {
-            if index == self.sending_messages.len() {
-                break;
-            }
-
-            if let Some(Some((old_message_id, _, _))) = self.sending_messages.get(index) {
-                if *message_id == *old_message_id {
-                    found = true;
-                }
-            }
-
-            if found {
-                // replace found message with nothing
-                let container = self.sending_messages.get_mut(index).unwrap();
-                *container = None;
-
-                // keep popping off Nones from the front of the Vec
-                loop {
-                    let mut pop = false;
-                    if let Some(message_opt) = self.sending_messages.front() {
-                        if message_opt.is_none() {
-                            pop = true;
-                        }
-                    }
-                    if pop {
-                        self.sending_messages.pop_front();
-                    } else {
-                        break;
-                    }
-                }
-
-                // stop loop
-                break;
-            }
-
-            index += 1;
-        }
-    }
-
-    pub fn has_outgoing_messages(&self) -> bool {
+    fn has_outgoing_messages(&self) -> bool {
         return self.next_send_messages.len() != 0;
     }
 
-    pub fn write_outgoing_messages(
+    fn write_messages(
         &mut self,
         converter: &dyn NetEntityHandleConverter,
         writer: &mut BitWriter,
@@ -189,72 +176,46 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
         }
     }
 
-    fn write_outgoing_message<S: BitWrite>(
-        &self,
-        converter: &dyn NetEntityHandleConverter,
-        writer: &mut S,
-        last_written_id: &Option<MessageId>,
-        message_id: &MessageId,
-        message: &P,
-    ) {
-        if let Some(last_id) = last_written_id {
-            // write message id diff
-            let id_diff = wrapping_diff(*last_id, *message_id);
-            let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
-            id_diff_encoded.ser(writer);
-        } else {
-            // write message id
-            message_id.ser(writer);
+    fn notify_message_delivered(&mut self, message_id: &MessageId) {
+        let mut index = 0;
+        let mut found = false;
+
+        loop {
+            if index == self.sending_messages.len() {
+                break;
+            }
+
+            if let Some(Some((old_message_id, _, _))) = self.sending_messages.get(index) {
+                if *message_id == *old_message_id {
+                    found = true;
+                }
+            }
+
+            if found {
+                // replace found message with nothing
+                let container = self.sending_messages.get_mut(index).unwrap();
+                *container = None;
+
+                // keep popping off Nones from the front of the Vec
+                loop {
+                    let mut pop = false;
+                    if let Some(message_opt) = self.sending_messages.front() {
+                        if message_opt.is_none() {
+                            pop = true;
+                        }
+                    }
+                    if pop {
+                        self.sending_messages.pop_front();
+                    } else {
+                        break;
+                    }
+                }
+
+                // stop loop
+                break;
+            }
+
+            index += 1;
         }
-
-        // write message kind
-        message.dyn_ref().kind().ser(writer);
-
-        // write payload
-        message.write(writer, converter);
-    }
-
-    pub fn read_incoming_messages(
-        &mut self,
-        reader: &mut BitReader,
-        manifest: &Manifest<P>,
-        converter: &dyn NetEntityHandleConverter,
-    ) -> Vec<(MessageId, P)> {
-        let message_count = message_list_header::read(reader);
-
-        let mut last_read_id: Option<MessageId> = None;
-        let mut output = Vec::new();
-
-        for _x in 0..message_count {
-            let id_w_msg = self.read_incoming_message(reader, manifest, converter, &last_read_id);
-            last_read_id = Some(id_w_msg.0);
-            output.push(id_w_msg);
-        }
-        return output;
-    }
-
-    fn read_incoming_message(
-        &mut self,
-        reader: &mut BitReader,
-        manifest: &Manifest<P>,
-        converter: &dyn NetEntityHandleConverter,
-        last_read_id: &Option<MessageId>,
-    ) -> (MessageId, P) {
-        let message_id: MessageId;
-        if let Some(last_id) = last_read_id {
-            let id_diff = UnsignedVariableInteger::<3>::de(reader).unwrap().get() as MessageId;
-            message_id = last_id.wrapping_add(id_diff);
-        } else {
-            // read message id
-            message_id = MessageId::de(reader).unwrap();
-        }
-
-        // read message kind
-        let component_kind: P::Kind = P::Kind::de(reader).unwrap();
-
-        // read payload
-        let new_message = manifest.create_replica(component_kind, reader, converter);
-
-        return (message_id, new_message);
     }
 }

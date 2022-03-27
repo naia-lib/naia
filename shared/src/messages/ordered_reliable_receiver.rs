@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use naia_serde::{BitReader, BitWriter};
+use naia_serde::BitReader;
 
 use crate::{
     protocol::{
@@ -10,27 +10,24 @@ use crate::{
     types::MessageId,
 };
 
-use super::{
-    channel_config::ReliableSettings, message_channel::MessageChannel,
-    outgoing_reliable_channel::OutgoingReliableChannel,
-};
+use super::{message_channel::ChannelReceiver, reliable_receiver::ReliableReceiver};
 
-pub struct OrderedReliableChannel<P: Protocolize> {
-    outgoing_channel: OutgoingReliableChannel<P>,
+// OrderedReliableReceiver
+
+pub struct OrderedReliableReceiver<P: Protocolize> {
     oldest_waiting_message_id: MessageId,
     waiting_incoming_messages: VecDeque<(MessageId, Option<P>)>,
 }
 
-impl<P: Protocolize> OrderedReliableChannel<P> {
-    pub fn new(reliable_settings: &ReliableSettings) -> Self {
+impl<P: Protocolize> OrderedReliableReceiver<P> {
+    pub fn new() -> Self {
         Self {
-            outgoing_channel: OutgoingReliableChannel::new(reliable_settings),
             oldest_waiting_message_id: 0,
             waiting_incoming_messages: VecDeque::new(),
         }
     }
 
-    pub fn recv_message(&mut self, message_id: MessageId, message: P) {
+    fn recv_message(&mut self, message_id: MessageId, message: P) {
         // moving from oldest incoming message to newest
         // compare existing slots and see if the message_id has been instantiated
         // already if it has, put the message into the slot
@@ -81,13 +78,17 @@ impl<P: Protocolize> OrderedReliableChannel<P> {
     }
 }
 
-impl<P: Protocolize> MessageChannel<P> for OrderedReliableChannel<P> {
-    fn send_message(&mut self, message: P) {
-        return self.outgoing_channel.send_message(message);
-    }
-
-    fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
-        return self.outgoing_channel.collect_outgoing_messages(rtt_millis);
+impl<P: Protocolize> ChannelReceiver<P> for OrderedReliableReceiver<P> {
+    fn read_messages(
+        &mut self,
+        reader: &mut BitReader,
+        manifest: &Manifest<P>,
+        converter: &dyn NetEntityHandleConverter,
+    ) {
+        let id_w_msgs = ReliableReceiver::read_incoming_messages(reader, manifest, converter);
+        for (id, message) in id_w_msgs {
+            self.recv_message(id, message);
+        }
     }
 
     fn collect_incoming_messages(&mut self) -> Vec<P> {
@@ -107,37 +108,5 @@ impl<P: Protocolize> MessageChannel<P> for OrderedReliableChannel<P> {
             }
         }
         return output;
-    }
-
-    fn notify_message_delivered(&mut self, message_id: &MessageId) {
-        return self.outgoing_channel.notify_message_delivered(message_id);
-    }
-
-    fn has_outgoing_messages(&self) -> bool {
-        return self.outgoing_channel.has_outgoing_messages();
-    }
-
-    fn write_messages(
-        &mut self,
-        converter: &dyn NetEntityHandleConverter,
-        writer: &mut BitWriter,
-    ) -> Option<Vec<MessageId>> {
-        return self
-            .outgoing_channel
-            .write_outgoing_messages(converter, writer);
-    }
-
-    fn read_messages(
-        &mut self,
-        reader: &mut BitReader,
-        manifest: &Manifest<P>,
-        converter: &dyn NetEntityHandleConverter,
-    ) {
-        let id_w_msgs = self
-            .outgoing_channel
-            .read_incoming_messages(reader, manifest, converter);
-        for (id, message) in id_w_msgs {
-            self.recv_message(id, message);
-        }
     }
 }

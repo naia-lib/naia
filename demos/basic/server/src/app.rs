@@ -127,7 +127,7 @@ impl App {
                         let new_message = StringMessage::new(new_message_contents);
                         self.server.send_message(
                             &user_key,
-                            DefaultChannels::OrderedReliable,
+                            DefaultChannels::UnorderedReliable,
                             &new_message,
                         );
                     }

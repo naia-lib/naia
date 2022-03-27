@@ -114,9 +114,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     }
 
     fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
-        self.entity_manager.collect_component_updates();
         self.entity_manager
-            .collect_entity_messages(&mut self.base.message_manager);
+            .collect_outgoing_messages(rtt_millis, &mut self.base.message_manager);
         self.base
             .message_manager
             .collect_outgoing_messages(rtt_millis);
