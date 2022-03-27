@@ -9,20 +9,12 @@ use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
-    protocol::{Color, EntityAssignment, Marker, Protocol, Square},
+    protocol::{Color, EntityAssignment, KeyCommand, Marker, Protocol, Square},
     shared_config, Channels,
 };
-use naia_macroquad_demo_shared::protocol::KeyCommand;
 
 type World = DemoWorld<Protocol>;
 type Server = NaiaServer<Protocol, Entity, Channels>;
-
-struct LastCommand {
-    pub w: bool,
-    pub s: bool,
-    pub a: bool,
-    pub d: bool,
-}
 
 pub struct App {
     server: Server,
@@ -142,7 +134,8 @@ impl App {
 
                     // Associate new Entity with User that spawned it
                     self.user_squares.insert(user_key, entity_id);
-                    self.square_last_command.insert(entity_id, KeyCommand::new(false, false, false, false));
+                    self.square_last_command
+                        .insert(entity_id, KeyCommand::new(false, false, false, false));
 
                     // Send an Entity Assignment message to the User that owns the Square
                     let mut assignment_message = EntityAssignment::new(true);

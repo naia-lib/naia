@@ -7,7 +7,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::entity_message_waitlist::EntityMessageWaitlist;
 use naia_shared::{
     message_list_header,
     serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
@@ -17,9 +16,9 @@ use naia_shared::{
 };
 
 use super::{
-    entity_action::EntityAction, global_diff_handler::GlobalDiffHandler,
-    local_entity_record::LocalEntityRecord, locality_status::LocalityStatus,
-    user_diff_handler::UserDiffHandler, world_record::WorldRecord,
+    entity_action::EntityAction, entity_message_waitlist::EntityMessageWaitlist,
+    global_diff_handler::GlobalDiffHandler, local_entity_record::LocalEntityRecord,
+    locality_status::LocalityStatus, user_diff_handler::UserDiffHandler, world_record::WorldRecord,
 };
 
 /// Manages Entities for a given Client connection and keeps them in

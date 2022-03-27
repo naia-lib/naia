@@ -174,7 +174,13 @@ impl<P: Protocolize> OutgoingReliableChannel<P> {
             for _ in 0..message_count {
                 // Pop and write message
                 let (message_id, message) = self.next_send_messages.pop_front().unwrap();
-                self.write_outgoing_message(converter, writer, &last_written_id, &message_id, &message);
+                self.write_outgoing_message(
+                    converter,
+                    writer,
+                    &last_written_id,
+                    &message_id,
+                    &message,
+                );
 
                 message_ids.push(message_id);
                 last_written_id = Some(message_id);

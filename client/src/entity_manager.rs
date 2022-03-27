@@ -41,13 +41,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     ) {
         let action_count = message_list_header::read(reader);
         for _ in 0..action_count {
-            self.read_action(
-                world,
-                manifest,
-                server_tick,
-                reader,
-                event_stream,
-            );
+            self.read_action(world, manifest, server_tick, reader, event_stream);
         }
     }
 
@@ -87,8 +81,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                         // Component Creation //
                         let component_kind = P::Kind::de(reader).unwrap();
 
-                        let new_component =
-                            manifest.create_replica(component_kind, reader, self);
+                        let new_component = manifest.create_replica(component_kind, reader, self);
 
                         component_list.push(component_kind);
 
@@ -101,8 +94,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                         entity_record.component_kinds.insert(*component_kind);
                     }
 
-                    event_stream
-                        .push_back(Ok(Event::SpawnEntity(world_entity, component_list)));
+                    event_stream.push_back(Ok(Event::SpawnEntity(world_entity, component_list)));
                 }
             }
             // Entity Deletion
@@ -188,10 +180,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                                 .expect("Component already removed?");
 
                             // Generate event
-                            event_stream.push_back(Ok(Event::RemoveComponent(
-                                *world_entity,
-                                component,
-                            )));
+                            event_stream
+                                .push_back(Ok(Event::RemoveComponent(*world_entity, component)));
                         } else {
                             panic!("attempting to delete nonexistent component of entity");
                         }

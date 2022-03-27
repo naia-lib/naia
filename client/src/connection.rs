@@ -1,8 +1,10 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
-use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ChannelConfig,
-                  ChannelIndex, ConnectionConfig, Manifest, PacketType, PingManager, Protocolize,
-                  StandardHeader, Tick, WorldMutType, TickBuffer};
+use naia_shared::{
+    serde::{BitReader, BitWriter, OwnedBitReader},
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, Manifest, PacketType,
+    PingManager, Protocolize, StandardHeader, Tick, TickBuffer, WorldMutType,
+};
 
 use super::{
     entity_manager::EntityManager, error::NaiaClientError, event::Event, io::Io,
@@ -93,8 +95,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             .message_manager
             .collect_outgoing_messages(&self.ping_manager.rtt);
         if let Some(tick_manager) = tick_manager_opt {
-            self.tick_buffer
-                .collect_outgoing_messages(&tick_manager.client_sending_tick(), &tick_manager.server_receivable_tick());
+            self.tick_buffer.collect_outgoing_messages(
+                &tick_manager.client_sending_tick(),
+                &tick_manager.server_receivable_tick(),
+            );
         }
     }
 

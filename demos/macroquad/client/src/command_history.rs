@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use naia_client::shared::{sequence_greater_than, sequence_less_than};
+use naia_client::shared::sequence_greater_than;
 
 type Tick = u16;
 

@@ -5,8 +5,8 @@ use naia_client_socket::Socket;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
     ChannelIndex, ConnectionConfig, EntityHandle, EntityHandleConverter, Manifest, PacketType,
-    PingConfig, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, SocketConfig,
-    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType, PingIndex
+    PingConfig, PingIndex, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig,
+    SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -334,15 +334,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
                         let header = StandardHeader::de(&mut reader).unwrap();
 
-                        match header.packet_type() {
+                        match header.packet_type {
                             PacketType::Data
                             | PacketType::Heartbeat
                             | PacketType::Ping
                             | PacketType::Pong => {
-                                // continue, these packet types are allowed when connection is established
+                                // continue, these packet types are allowed when
+                                // connection is established
                             }
                             _ => {
-                                // short-circuit, do not need to handle other packet types at this point
+                                // short-circuit, do not need to handle other packet types at this
+                                // point
                                 continue;
                             }
                         }
@@ -362,7 +364,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                         }
 
                         // Handle based on PacketType
-                        match header.packet_type() {
+                        match header.packet_type {
                             PacketType::Data => {
                                 server_connection.buffer_data_packet(incoming_tick, &mut reader);
                             }
@@ -397,7 +399,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                                 server_connection.ping_manager.process_pong(&mut reader);
                             }
                             _ => {
-                                // no other packet types matter when connection is established
+                                // no other packet types matter when connection
+                                // is established
                             }
                         }
                     }

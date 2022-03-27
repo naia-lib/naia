@@ -2,7 +2,10 @@ use std::{collections::HashSet, time::Duration};
 
 use log::info;
 
-use macroquad::prelude::{KeyCode, is_key_pressed, is_key_down, clear_background, BLACK, RED, BLUE, YELLOW, GREEN, WHITE, draw_rectangle};
+use macroquad::prelude::{
+    clear_background, draw_rectangle, is_key_down, is_key_pressed, KeyCode, BLACK, BLUE, GREEN,
+    RED, WHITE, YELLOW,
+};
 
 use naia_client::{
     shared::{Protocolize, Replicate, Timer},
@@ -161,10 +164,8 @@ impl App {
                         if let Some(command) = self.queued_command.take() {
                             if let Some(client_tick) = self.client.client_tick() {
                                 if self.command_history.can_insert(&client_tick) {
-
                                     // Record command
-                                    self.command_history
-                                        .insert(client_tick, command.clone());
+                                    self.command_history.insert(client_tick, command.clone());
 
                                     // Send command
                                     self.client.send_message(Channels::PlayerCommand, &command);
