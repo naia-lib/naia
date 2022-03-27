@@ -46,11 +46,11 @@ pub use messages::{
         Channel, ChannelConfig, ChannelDirection, ChannelIndex, ChannelMode, DefaultChannels,
         ReliableSettings, TickBufferSettings,
     },
-    message_channel::{ChannelSender, ChannelReceiver},
-    reliable_sender::ReliableSender,
     channel_tick_buffer::ChannelTickBuffer,
+    message_channel::{ChannelReceiver, ChannelSender},
     message_list_header,
     message_manager::MessageManager,
+    reliable_sender::ReliableSender,
     tick_buffer::TickBuffer,
 };
 pub use protocol::{

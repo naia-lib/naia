@@ -7,9 +7,7 @@ use naia_socket_shared::Instant;
 use crate::{
     constants::MTU_SIZE_BITS,
     messages::message_list_header,
-    protocol::{
-        entity_property::NetEntityHandleConverter, protocolize::Protocolize,
-    },
+    protocol::{entity_property::NetEntityHandleConverter, protocolize::Protocolize},
     types::MessageId,
     wrapping_diff,
 };
