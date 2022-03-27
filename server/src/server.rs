@@ -930,24 +930,24 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                         // Process incoming header
                         user_connection.process_incoming_header(&self.world_record, &header);
 
-                        // read client tick
-                        if let Some(tick_manager) = self.tick_manager.as_ref() {
-                            match header.packet_type() {
-                                PacketType::Data
-                                | PacketType::Ping
-                                | PacketType::Pong
-                                | PacketType::Heartbeat => {
-                                    let client_tick = tick_manager.read_client_tick(&mut reader);
-                                    user_connection.recv_client_tick(client_tick);
-                                }
-                                _ => {}
-                            }
-                        }
-
                         match header.packet_type() {
                             PacketType::Data => {
+
+                                // read client tick
+                                let server_and_client_tick_opt = {
+                                    if let Some(tick_manager) = self.tick_manager.as_ref() {
+                                        let client_tick = tick_manager.read_client_tick(&mut reader);
+                                        user_connection.recv_client_tick(client_tick);
+                                        let server_tick = tick_manager.server_tick();
+                                        Some((server_tick, client_tick))
+                                    } else {
+                                        None
+                                    }
+                                };
+
+                                // process data
                                 user_connection.process_incoming_data(
-                                    &self.tick_manager,
+                                    server_and_client_tick_opt,
                                     &self.shared_config.manifest,
                                     &mut reader,
                                     &self.world_record,
@@ -963,10 +963,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                 }
                             }
                             PacketType::Heartbeat => {
-                                // already marked that we've heard from this
-                                // client, problem solved
+
+                                // read client tick, don't need to do anything else
+                                if let Some(tick_manager) = self.tick_manager.as_ref() {
+                                    let client_tick = tick_manager.read_client_tick(&mut reader);
+                                    user_connection.recv_client_tick(client_tick);
+                                }
                             }
                             PacketType::Ping => {
+
+                                // read client tick
+                                if let Some(tick_manager) = self.tick_manager.as_ref() {
+                                    let client_tick = tick_manager.read_client_tick(&mut reader);
+                                    user_connection.recv_client_tick(client_tick);
+                                }
+
                                 // read incoming ping index
                                 let ping_index = u16::de(&mut reader).unwrap();
 
@@ -991,6 +1002,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                 user_connection.base.mark_sent();
                             }
                             PacketType::Pong => {
+
+                                // read client tick
+                                if let Some(tick_manager) = self.tick_manager.as_ref() {
+                                    let client_tick = tick_manager.read_client_tick(&mut reader);
+                                    user_connection.recv_client_tick(client_tick);
+                                }
+
                                 user_connection.ping_manager.process_pong(&mut reader);
                             }
                             _ => {}

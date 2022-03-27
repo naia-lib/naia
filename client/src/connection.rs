@@ -94,7 +94,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             .collect_outgoing_messages(&self.ping_manager.rtt);
         if let Some(tick_manager) = tick_manager_opt {
             self.tick_buffer
-                .collect_outgoing_messages(&tick_manager.server_receivable_tick());
+                .collect_outgoing_messages(&tick_manager.client_sending_tick(), &tick_manager.server_receivable_tick());
         }
     }
 
@@ -117,13 +117,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
             if let Some(tick_manager) = tick_manager_opt {
                 // write tick
-                tick_manager.write_client_tick(&mut writer);
+                let client_tick = tick_manager.write_client_tick(&mut writer);
 
                 // write tick buffered messages
                 self.tick_buffer.write_messages(
                     &mut writer,
                     next_packet_index,
                     &self.entity_manager,
+                    &client_tick,
                 );
             }
 

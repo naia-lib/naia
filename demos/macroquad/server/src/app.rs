@@ -12,15 +12,24 @@ use naia_macroquad_demo_shared::{
     protocol::{Color, EntityAssignment, Marker, Protocol, Square},
     shared_config, Channels,
 };
+use naia_macroquad_demo_shared::protocol::KeyCommand;
 
 type World = DemoWorld<Protocol>;
 type Server = NaiaServer<Protocol, Entity, Channels>;
+
+struct LastCommand {
+    pub w: bool,
+    pub s: bool,
+    pub a: bool,
+    pub d: bool,
+}
 
 pub struct App {
     server: Server,
     world: World,
     main_room_key: RoomKey,
     user_squares: HashMap<UserKey, Entity>,
+    square_last_command: HashMap<Entity, KeyCommand>,
     bandwidth_timer: Timer,
     other_main_entity: Entity,
 }
@@ -64,7 +73,8 @@ impl App {
             server,
             world,
             main_room_key,
-            user_squares: HashMap::<UserKey, Entity>::new(),
+            user_squares: HashMap::new(),
+            square_last_command: HashMap::new(),
             bandwidth_timer: Timer::new(Duration::from_secs(4)),
             other_main_entity,
         }
@@ -132,6 +142,7 @@ impl App {
 
                     // Associate new Entity with User that spawned it
                     self.user_squares.insert(user_key, entity_id);
+                    self.square_last_command.insert(entity_id, KeyCommand::new(false, false, false, false));
 
                     // Send an Entity Assignment message to the User that owns the Square
                     let mut assignment_message = EntityAssignment::new(true);
@@ -155,6 +166,7 @@ impl App {
                             .entity_mut(self.world.proxy_mut(), &entity)
                             .leave_room(&self.main_room_key)
                             .despawn();
+                        self.square_last_command.remove(&entity);
                     }
                 }
                 Ok(Event::Message(
@@ -163,13 +175,7 @@ impl App {
                     Protocol::KeyCommand(key_command),
                 )) => {
                     if let Some(entity) = key_command.entity.get(&self.server) {
-                        if let Some(mut square) = self
-                            .server
-                            .entity_mut(self.world.proxy_mut(), &entity)
-                            .component::<Square>()
-                        {
-                            shared_behavior::process_command(&key_command, &mut square);
-                        }
+                        self.square_last_command.insert(entity, key_command);
                     }
                 }
                 Ok(Event::Tick) => {
@@ -185,6 +191,16 @@ impl App {
 
                         // And call this if Entity should NOT be in this scope.
                         // self.server.user_scope(..).exclude(..);
+                    }
+
+                    for (entity, last_command) in self.square_last_command.drain() {
+                        if let Some(mut square) = self
+                            .server
+                            .entity_mut(self.world.proxy_mut(), &entity)
+                            .component::<Square>()
+                        {
+                            shared_behavior::process_command(&last_command, &mut square);
+                        }
                     }
 
                     // VERY IMPORTANT! Calling this actually sends all update data

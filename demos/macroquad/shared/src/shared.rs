@@ -18,7 +18,7 @@ pub fn shared_config() -> SharedConfig<Protocol, Channels> {
     let link_condition = Some(LinkConditionerConfig {
         incoming_latency: 150,
         incoming_jitter: 1,
-        incoming_loss: 0.3,
+        incoming_loss: 0.0,
     });
 
     //let compression_dictionary = fs::read("dictionary.txt").expect("Error reading
