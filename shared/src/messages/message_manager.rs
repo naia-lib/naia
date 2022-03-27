@@ -34,15 +34,15 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         for channel_index in &channel_config.channels().vec {
             let channel = channel_config.channels().map.get(channel_index).unwrap();
             let new_channel: Option<Box<dyn MessageChannel<P>>> = match &channel.mode {
-                ChannelMode::UnorderedUnreliable => Some(Box::new(
-                    UnorderedUnreliableChannel::new(),
-                )),
-                ChannelMode::UnorderedReliable(settings) => Some(Box::new(
-                    UnorderedReliableChannel::new(&settings),
-                )),
-                ChannelMode::OrderedReliable(settings) => Some(Box::new(
-                    OrderedReliableChannel::new(&settings),
-                )),
+                ChannelMode::UnorderedUnreliable => {
+                    Some(Box::new(UnorderedUnreliableChannel::new()))
+                }
+                ChannelMode::UnorderedReliable(settings) => {
+                    Some(Box::new(UnorderedReliableChannel::new(&settings)))
+                }
+                ChannelMode::OrderedReliable(settings) => {
+                    Some(Box::new(OrderedReliableChannel::new(&settings)))
+                }
                 _ => None,
             };
 

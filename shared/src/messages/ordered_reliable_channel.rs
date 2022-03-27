@@ -11,8 +11,7 @@ use crate::{
 };
 
 use super::{
-    channel_config::ReliableSettings,
-    message_channel::MessageChannel,
+    channel_config::ReliableSettings, message_channel::MessageChannel,
     outgoing_reliable_channel::OutgoingReliableChannel,
 };
 
@@ -123,7 +122,9 @@ impl<P: Protocolize> MessageChannel<P> for OrderedReliableChannel<P> {
         converter: &dyn NetEntityHandleConverter,
         writer: &mut BitWriter,
     ) -> Option<Vec<MessageId>> {
-        return self.outgoing_channel.write_outgoing_messages(converter, writer);
+        return self
+            .outgoing_channel
+            .write_outgoing_messages(converter, writer);
     }
 
     fn read_messages(

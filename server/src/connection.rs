@@ -4,15 +4,16 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter},
-                  BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter,
-                  Manifest, PacketType, PingManager, Protocolize, StandardHeader, Tick,
-                  WorldRefType, TickBuffer};
+use naia_shared::{
+    sequence_greater_than,
+    serde::{BitReader, BitWriter},
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, Manifest,
+    PacketType, PingManager, Protocolize, StandardHeader, Tick, TickBuffer, WorldRefType,
+};
 
 use super::{
     entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, io::Io,
-    tick_manager::TickManager,
-    user::UserKey, world_record::WorldRecord,
+    tick_manager::TickManager, user::UserKey, world_record::WorldRecord,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {

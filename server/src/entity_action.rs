@@ -12,7 +12,7 @@ pub enum EntityAction<P: Protocolize, E: Copy> {
 impl<P: Protocolize, E: Copy> EntityAction<P, E> {
     pub fn as_type(&self) -> EntityActionType {
         match self {
-            EntityAction::SpawnEntity { .. } => EntityActionType::SpawnEntity,
+            EntityAction::SpawnEntity(_, _) => EntityActionType::SpawnEntity,
             EntityAction::DespawnEntity(_) => EntityActionType::DespawnEntity,
             EntityAction::InsertComponent(_, _) => EntityActionType::InsertComponent,
             EntityAction::UpdateComponent(_, _) => EntityActionType::UpdateComponent,

@@ -1,12 +1,23 @@
 use std::collections::HashMap;
-use log::info;
+
 use naia_serde::BitReader;
 
 use super::{
-    channel_config::{ChannelConfig, ChannelIndex, ChannelMode}, channel_tick_buffer::ChannelTickBuffer,
+    channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
+    channel_tick_buffer::ChannelTickBuffer,
 };
 
-use crate::{connection::packet_notifiable::PacketNotifiable, protocol::{entity_property::NetEntityHandleConverter, replicate::ReplicateSafe, protocolize::Protocolize}, types::{Tick, PacketIndex, ShortMessageId}, vecmap::VecMap, serde::BitWriter, Manifest};
+use crate::{
+    connection::packet_notifiable::PacketNotifiable,
+    protocol::{
+        entity_property::NetEntityHandleConverter, protocolize::Protocolize,
+        replicate::ReplicateSafe,
+    },
+    serde::BitWriter,
+    types::{PacketIndex, ShortMessageId, Tick},
+    vecmap::VecMap,
+    Manifest,
+};
 
 pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
     channels: VecMap<C, ChannelTickBuffer<P>>,
@@ -47,7 +58,11 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         return output;
     }
 
-    pub fn collect_outgoing_messages(&mut self, client_sending_tick: &Tick, server_receivable_tick: &Tick) {
+    pub fn collect_outgoing_messages(
+        &mut self,
+        client_sending_tick: &Tick,
+        server_receivable_tick: &Tick,
+    ) {
         for channel_index in &self.channels.vec {
             let channel = self.channels.map.get_mut(channel_index).unwrap();
             channel.collect_outgoing_messages(client_sending_tick, server_receivable_tick);
@@ -85,14 +100,13 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         for channel_index in &self.channels.vec {
             let channel = self.channels.map.get_mut(channel_index).unwrap();
             if let Some(message_ids) = channel.write_messages(converter, writer, host_tick) {
-
                 // {
                 //     let mut messages_string = "".to_string();
                 //     for (tick, message_id) in &message_ids {
                 //         messages_string += &format!("(t{}, i{})", tick, message_id);
                 //     }
-                //     info!("Writing Packet ({}), with messages: [{}]", packet_index, messages_string);
-                // }
+                //     info!("Writing Packet ({}), with messages: [{}]", packet_index,
+                // messages_string); }
 
                 if !self.packet_to_channel_map.contains_key(&packet_index) {
                     self.packet_to_channel_map.insert(packet_index, Vec::new());

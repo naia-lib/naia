@@ -5,14 +5,14 @@ use crate::{derive_serde, serde};
 #[derive(Copy)]
 #[derive_serde]
 pub enum EntityActionType {
-    // Action indicating a Component to be updated
-    UpdateComponent,
-    // Action indicating a Component to be deleted
-    RemoveComponent,
     // Action indicating an Entity to be created
     SpawnEntity,
     // Action indicating an Entity to be deleted
     DespawnEntity,
     // Action indicating a Component to be added to an Entity
     InsertComponent,
+    // Action indicating a Component to be updated
+    UpdateComponent,
+    // Action indicating a Component to be deleted
+    RemoveComponent,
 }

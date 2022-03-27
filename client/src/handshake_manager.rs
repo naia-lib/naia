@@ -78,7 +78,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     // Call this regularly so handshake manager can process incoming requests
     pub fn recv(&mut self, reader: &mut BitReader) -> bool {
         let header = StandardHeader::de(reader).unwrap();
-        match header.packet_type() {
+        match header.packet_type {
             PacketType::ServerChallengeResponse => {
                 self.recv_challenge_response(reader);
                 return false;

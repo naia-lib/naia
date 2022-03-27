@@ -55,9 +55,9 @@ impl AckManager {
         message_manager: &mut MessageManager<P, C>,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
-        let sender_packet_index = header.sender_packet_index();
-        let sender_ack_index = header.sender_ack_index();
-        let mut sender_ack_bitfield = header.sender_ack_bitfield();
+        let sender_packet_index = header.sender_packet_index;
+        let sender_ack_index = header.sender_ack_index;
+        let mut sender_ack_bitfield = header.sender_ack_bitfield;
 
         self.received_packets
             .insert(sender_packet_index, ReceivedPacket {});

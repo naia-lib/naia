@@ -1,4 +1,4 @@
-use std::{mem, collections::VecDeque};
+use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitReader, BitWriter};
 
@@ -11,8 +11,7 @@ use crate::{
 };
 
 use super::{
-    channel_config::ReliableSettings,
-    message_channel::MessageChannel,
+    channel_config::ReliableSettings, message_channel::MessageChannel,
     outgoing_reliable_channel::OutgoingReliableChannel,
 };
 
@@ -112,7 +111,6 @@ impl<P: Protocolize> MessageChannel<P> for UnorderedReliableChannel<P> {
     }
 
     fn collect_incoming_messages(&mut self) -> Vec<P> {
-
         self.clear_sent_messages();
 
         mem::take(&mut self.ready_incoming_messages)
@@ -131,7 +129,9 @@ impl<P: Protocolize> MessageChannel<P> for UnorderedReliableChannel<P> {
         converter: &dyn NetEntityHandleConverter,
         writer: &mut BitWriter,
     ) -> Option<Vec<MessageId>> {
-        return self.outgoing_channel.write_outgoing_messages(converter, writer);
+        return self
+            .outgoing_channel
+            .write_outgoing_messages(converter, writer);
     }
 
     fn read_messages(

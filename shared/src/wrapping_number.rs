@@ -84,7 +84,6 @@ mod sequence_compare_tests {
     }
 }
 
-
 #[cfg(test)]
 mod wrapping_diff_tests {
     use super::wrapping_diff;

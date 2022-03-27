@@ -1,6 +1,5 @@
-
 use std::{
-    collections::{VecDeque, HashMap},
+    collections::{HashMap, VecDeque},
     time::Duration,
 };
 
@@ -8,11 +7,19 @@ use log::info;
 
 use naia_serde::{BitReader, UnsignedVariableInteger};
 
-use super::{
-    message_list_header, channel_config::TickBufferSettings
-};
+use super::{channel_config::TickBufferSettings, message_list_header};
 
-use crate::{protocol::{entity_property::NetEntityHandleConverter, replicate::ReplicateSafe, protocolize::Protocolize, manifest::Manifest}, types::{Tick, ShortMessageId}, serde::{BitCounter, BitWrite, BitWriter, Serde}, constants::{MTU_SIZE_BITS, MESSAGE_HISTORY_SIZE}, Instant, sequence_greater_than, sequence_less_than, wrapping_diff};
+use crate::{
+    constants::{MESSAGE_HISTORY_SIZE, MTU_SIZE_BITS},
+    protocol::{
+        entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
+        replicate::ReplicateSafe,
+    },
+    sequence_greater_than, sequence_less_than,
+    serde::{BitCounter, BitWrite, BitWriter, Serde},
+    types::{ShortMessageId, Tick},
+    wrapping_diff, Instant,
+};
 
 pub struct ChannelTickBuffer<P: Protocolize> {
     sending_messages: OutgoingMessages<P>,
@@ -61,8 +68,8 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
             }
 
             // if self.next_send_messages.len() > 0 {
-            //     info!("next_send_messages.len() = {} messages", self.next_send_messages.len());
-            // }
+            //     info!("next_send_messages.len() = {} messages",
+            // self.next_send_messages.len()); }
         }
     }
 
@@ -146,8 +153,7 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
             let mut output = Vec::new();
             for _ in 0..message_count {
                 // Pop message
-                let (message_tick, messages) =
-                    self.next_send_messages.pop_front().unwrap();
+                let (message_tick, messages) = self.next_send_messages.pop_front().unwrap();
 
                 // Write message
                 let message_ids = self.write_message(
@@ -176,7 +182,6 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         message_tick: &Tick,
         messages: &Vec<(ShortMessageId, P)>,
     ) -> Vec<ShortMessageId> {
-
         let mut message_ids = Vec::new();
 
         // write message tick diff
@@ -192,7 +197,6 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
 
         let mut last_id_written: ShortMessageId = 0;
         for (message_id, message) in messages {
-
             // write message id diff
             let id_diff = UnsignedVariableInteger::<2>::new(*message_id - last_id_written);
             id_diff.ser(writer);
@@ -250,7 +254,6 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
 
         let mut last_read_message_id: ShortMessageId = 0;
         for _ in 0..message_count {
-
             // read message id diff, add to last read id
             let id_diff = UnsignedVariableInteger::<2>::de(reader).unwrap().get() as ShortMessageId;
             let message_id: ShortMessageId = last_read_message_id + id_diff;
@@ -262,12 +265,10 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
             // read payload
             let new_message = manifest.create_replica(replica_kind, reader, converter);
 
-            if !self.incoming_messages.insert(
-                host_tick,
-                &remote_tick,
-                message_id,
-                new_message,
-            ) {
+            if !self
+                .incoming_messages
+                .insert(host_tick, &remote_tick, message_id, new_message)
+            {
                 //info!("failed command. server: {}, client: {}",
                 // server_tick, client_tick);
             }
@@ -282,9 +283,7 @@ struct MessageMap<P: Protocolize> {
 
 impl<P: Protocolize> MessageMap<P> {
     pub fn new() -> Self {
-        MessageMap {
-            list: Vec::new(),
-        }
+        MessageMap { list: Vec::new() }
     }
 
     pub fn insert(&mut self, message: P) {

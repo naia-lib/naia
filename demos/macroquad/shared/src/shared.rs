@@ -1,8 +1,6 @@
 use std::time::Duration;
 
-use naia_shared::{
-    CompressionConfig, LinkConditionerConfig, SharedConfig, SocketConfig,
-};
+use naia_shared::{CompressionConfig, LinkConditionerConfig, SharedConfig, SocketConfig};
 
 use super::{
     channels::{channels_init, Channels},

@@ -1,5 +1,4 @@
-use std::collections::VecDeque;
-use std::mem;
+use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
 

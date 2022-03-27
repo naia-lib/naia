@@ -161,9 +161,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
             for user_address in &user_addresses {
                 let connection = self.user_connections.get_mut(user_address).unwrap();
 
-                let messages = connection.tick_buffer.collect_incoming_messages(
-                    &self.tick_manager.as_ref().unwrap().server_tick()
-                );
+                let messages = connection
+                    .tick_buffer
+                    .collect_incoming_messages(&self.tick_manager.as_ref().unwrap().server_tick());
                 for (channel, message) in messages {
                     self.incoming_events.push_back(Ok(Event::Message(
                         connection.user_key,
@@ -881,7 +881,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                     let header = StandardHeader::de(&mut reader).unwrap();
 
                     // Handshake stuff
-                    match header.packet_type() {
+                    match header.packet_type {
                         PacketType::ClientChallengeRequest => {
                             let mut writer =
                                 self.handshake_manager.recv_challenge_request(&mut reader);
@@ -930,13 +930,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                         // Process incoming header
                         user_connection.process_incoming_header(&self.world_record, &header);
 
-                        match header.packet_type() {
+                        match header.packet_type {
                             PacketType::Data => {
-
                                 // read client tick
                                 let server_and_client_tick_opt = {
                                     if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                        let client_tick = tick_manager.read_client_tick(&mut reader);
+                                        let client_tick =
+                                            tick_manager.read_client_tick(&mut reader);
                                         user_connection.recv_client_tick(client_tick);
 
                                         let server_tick = tick_manager.server_tick();
@@ -965,7 +965,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                 }
                             }
                             PacketType::Heartbeat => {
-
                                 // read client tick, don't need to do anything else
                                 if let Some(tick_manager) = self.tick_manager.as_ref() {
                                     let client_tick = tick_manager.read_client_tick(&mut reader);
@@ -973,7 +972,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                 }
                             }
                             PacketType::Ping => {
-
                                 // read client tick
                                 if let Some(tick_manager) = self.tick_manager.as_ref() {
                                     let client_tick = tick_manager.read_client_tick(&mut reader);
@@ -1004,7 +1002,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                 user_connection.base.mark_sent();
                             }
                             PacketType::Pong => {
-
                                 // read client tick
                                 if let Some(tick_manager) = self.tick_manager.as_ref() {
                                     let client_tick = tick_manager.read_client_tick(&mut reader);
