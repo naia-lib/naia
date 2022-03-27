@@ -160,20 +160,23 @@ impl App {
                     if let Some(owned_entity) = &self.owned_entity {
                         if let Some(command) = self.queued_command.take() {
                             if let Some(client_tick) = self.client.client_tick() {
-                                // Record command
-                                // self.command_history
-                                //     .push_front(client_tick, command.clone());
+                                if self.command_history.can_insert(&client_tick) {
 
-                                // Send command
-                                self.client.send_message(Channels::PlayerCommand, &command);
+                                    // Record command
+                                    self.command_history
+                                        .insert(client_tick, command.clone());
 
-                                // Apply command
-                                if let Some(mut square_ref) = self
-                                    .world
-                                    .proxy_mut()
-                                    .component_mut::<Square>(&owned_entity.predicted)
-                                {
-                                    shared_behavior::process_command(&command, &mut square_ref);
+                                    // Send command
+                                    self.client.send_message(Channels::PlayerCommand, &command);
+
+                                    // Apply command
+                                    if let Some(mut square_ref) = self
+                                        .world
+                                        .proxy_mut()
+                                        .component_mut::<Square>(&owned_entity.predicted)
+                                    {
+                                        shared_behavior::process_command(&command, &mut square_ref);
+                                    }
                                 }
                             }
                         }
@@ -242,33 +245,33 @@ impl App {
                         let server_entity = owned_entity.confirmed;
 
                         // If entity is owned
-                        // if updated_entity == server_entity {
-                        //     let client_entity = owned_entity.predicted;
-                        //
-                        //     // Set prediction to server authoritative Entity
-                        //     // go through all components to make prediction components = world
-                        //     // components
-                        //     for component_kind in world_mut.component_kinds(&server_entity) {
-                        //         world_mut.mirror_components(
-                        //             &client_entity,
-                        //             &server_entity,
-                        //             &component_kind,
-                        //         );
-                        //     }
-                        //
-                        //     // Remove history of commands until current received tick
-                        //     self.command_history.remove_to_and_including(server_tick);
-                        //
-                        //     // Replay all existing historical commands until current tick
-                        //     let mut command_iter = self.command_history.iter_mut();
-                        //     while let Some((_, command)) = command_iter.next() {
-                        //         if let Some(mut square_ref) =
-                        //             world_mut.component_mut::<Square>(&client_entity)
-                        //         {
-                        //             shared_behavior::process_command(&command, &mut square_ref);
-                        //         }
-                        //     }
-                        // }
+                        if updated_entity == server_entity {
+                            let client_entity = owned_entity.predicted;
+
+                            // Set prediction to server authoritative Entity
+                            // go through all components to make prediction components = world
+                            // components
+                            for component_kind in world_mut.component_kinds(&server_entity) {
+                                world_mut.mirror_components(
+                                    &client_entity,
+                                    &server_entity,
+                                    &component_kind,
+                                );
+                            }
+
+                            // Remove history of commands until current received tick
+                            self.command_history.remove_to_and_including(server_tick);
+
+                            // Replay all existing historical commands until current tick
+                            let mut command_iter = self.command_history.iter_mut();
+                            while let Some((_, command)) = command_iter.next() {
+                                if let Some(mut square_ref) =
+                                    world_mut.component_mut::<Square>(&client_entity)
+                                {
+                                    shared_behavior::process_command(&command, &mut square_ref);
+                                }
+                            }
+                        }
                     }
                 }
                 Err(err) => {

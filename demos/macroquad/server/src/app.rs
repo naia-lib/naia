@@ -174,8 +174,8 @@ impl App {
                     Channels::PlayerCommand,
                     Protocol::KeyCommand(key_command),
                 )) => {
-                    if let Some(entity) = key_command.entity.get(&self.server) {
-                        self.square_last_command.insert(entity, key_command);
+                    if let Some(entity) = &key_command.entity.get(&self.server) {
+                        self.square_last_command.insert(*entity, key_command);
                     }
                 }
                 Ok(Event::Tick) => {
