@@ -45,7 +45,6 @@ mod mut_channel;
 mod room;
 mod server;
 mod server_config;
-mod tick_buffer_message_receiver;
 mod tick_manager;
 mod user;
 mod user_diff_handler;

@@ -206,7 +206,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             if let Some(client_tick) = self.client_tick() {
                 let connection = self.server_connection.as_mut().unwrap();
                 connection
-                    .tick_buffer_message_sender
+                    .tick_buffer
                     .send_message(client_tick, channel, message);
             }
         } else {

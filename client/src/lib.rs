@@ -10,7 +10,6 @@
     unused_import_braces
 )]
 
-mod channel_tick_buffer;
 mod client;
 mod client_config;
 mod connection;
@@ -22,10 +21,8 @@ mod error;
 mod event;
 mod handshake_manager;
 mod io;
-mod tick_buffer;
 mod tick_manager;
 mod tick_queue;
-mod types;
 
 pub use naia_shared as shared;
 

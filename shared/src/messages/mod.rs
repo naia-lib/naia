@@ -6,3 +6,5 @@ pub mod ordered_reliable_channel;
 pub mod outgoing_reliable_channel;
 pub mod unordered_reliable_channel;
 pub mod unordered_unreliable_channel;
+pub mod channel_tick_buffer;
+pub mod tick_buffer;

@@ -4,16 +4,14 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    sequence_greater_than,
-    serde::{BitReader, BitWriter},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, Manifest,
-    PacketType, PingManager, Protocolize, StandardHeader, Tick, WorldRefType,
-};
+use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter},
+                  BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter,
+                  Manifest, PacketType, PingManager, Protocolize, StandardHeader, Tick,
+                  WorldRefType, TickBuffer};
 
 use super::{
     entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, io::Io,
-    tick_buffer_message_receiver::TickBufferMessageReceiver, tick_manager::TickManager,
+    tick_manager::TickManager,
     user::UserKey, world_record::WorldRecord,
 };
 
@@ -21,7 +19,7 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub user_key: UserKey,
     pub base: BaseConnection<P, C>,
     pub entity_manager: EntityManager<P, E, C>,
-    pub tick_buffer_message_receiver: TickBufferMessageReceiver<P, C>,
+    pub tick_buffer: TickBuffer<P, C>,
     pub last_received_tick: Tick,
     pub ping_manager: PingManager,
 }
@@ -38,7 +36,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             user_key: *user_key,
             base: BaseConnection::new(user_address, connection_config, channel_config),
             entity_manager: EntityManager::new(user_address, diff_handler),
-            tick_buffer_message_receiver: TickBufferMessageReceiver::new(),
+            tick_buffer: TickBuffer::new(channel_config),
             ping_manager: PingManager::new(&connection_config.ping),
             last_received_tick: 0,
         }
@@ -73,7 +71,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             let server_tick = tick_manager.server_tick();
             // Read Tick Buffered Messages
             let mut converter = EntityConverter::new(world_record, &self.entity_manager);
-            self.tick_buffer_message_receiver.read_messages(
+            self.tick_buffer.read_messages(
                 server_tick,
                 reader,
                 manifest,

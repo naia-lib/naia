@@ -22,8 +22,8 @@ use super::{
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
-    channels: VecMap<C, Box<dyn MessageChannel<P, C>>>,
-    packet_to_message_map: HashMap<PacketIndex, (C, MessageId)>,
+    channels: VecMap<C, Box<dyn MessageChannel<P>>>,
+    packet_to_message_map: HashMap<PacketIndex, Vec<(C, Vec<MessageId>)>>,
 }
 
 impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
@@ -33,15 +33,15 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         let mut channels = VecMap::new();
         for channel_index in &channel_config.channels().vec {
             let channel = channel_config.channels().map.get(channel_index).unwrap();
-            let new_channel: Option<Box<dyn MessageChannel<P, C>>> = match &channel.mode {
+            let new_channel: Option<Box<dyn MessageChannel<P>>> = match &channel.mode {
                 ChannelMode::UnorderedUnreliable => Some(Box::new(
-                    UnorderedUnreliableChannel::new(channel_index.clone()),
+                    UnorderedUnreliableChannel::new(),
                 )),
                 ChannelMode::UnorderedReliable(settings) => Some(Box::new(
-                    UnorderedReliableChannel::new(channel_index.clone(), &settings),
+                    UnorderedReliableChannel::new(&settings),
                 )),
                 ChannelMode::OrderedReliable(settings) => Some(Box::new(
-                    OrderedReliableChannel::new(channel_index.clone(), &settings),
+                    OrderedReliableChannel::new(&settings),
                 )),
                 _ => None,
             };
@@ -58,12 +58,15 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     }
 
     pub fn collect_incoming_messages(&mut self) -> Vec<(C, P)> {
-        let mut output: Vec<(C, P)> = Vec::new();
+        let mut output = Vec::new();
         for channel_index in &self.channels.vec {
             let channel = self.channels.map.get_mut(channel_index).unwrap();
-            channel.collect_incoming_messages(&mut output);
+            let mut messages = channel.collect_incoming_messages();
+            for message in messages.drain(..) {
+                output.push((channel_index.clone(), message));
+            }
         }
-        output
+        return output;
     }
 
     pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
@@ -105,10 +108,11 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         for channel_index in &self.channels.vec {
             let channel = self.channels.map.get_mut(channel_index).unwrap();
             if let Some(message_ids) = channel.write_messages(converter, writer) {
-                for message_id in message_ids {
-                    self.packet_to_message_map
-                        .insert(packet_index, (channel_index.clone(), message_id));
+                if !self.packet_to_message_map.contains_key(&packet_index) {
+                    self.packet_to_message_map.insert(packet_index, Vec::new());
                 }
+                let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
+                channel_list.push((channel_index.clone(), message_ids));
             }
         }
     }
@@ -131,9 +135,13 @@ impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for MessageManager<P, C> 
     /// Occurs when a packet has been notified as delivered. Stops tracking the
     /// status of Messages in that packet.
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
-        if let Some((channel_index, message_id)) = self.packet_to_message_map.get(&packet_index) {
-            if let Some(channel) = self.channels.map.get_mut(channel_index) {
-                channel.notify_message_delivered(message_id);
+        if let Some(channel_list) = self.packet_to_message_map.get(&packet_index) {
+            for (channel_index, message_ids) in channel_list {
+                if let Some(channel) = self.channels.map.get_mut(channel_index) {
+                    for message_id in message_ids {
+                        channel.notify_message_delivered(message_id);
+                    }
+                }
             }
         }
     }

@@ -11,22 +11,20 @@ use crate::{
 };
 
 use super::{
-    channel_config::{ChannelIndex, ReliableSettings},
+    channel_config::ReliableSettings,
     message_channel::MessageChannel,
     outgoing_reliable_channel::OutgoingReliableChannel,
 };
 
-pub struct OrderedReliableChannel<P: Protocolize, C: ChannelIndex> {
-    channel_index: C,
+pub struct OrderedReliableChannel<P: Protocolize> {
     outgoing_channel: OutgoingReliableChannel<P>,
     oldest_waiting_message_id: MessageId,
     waiting_incoming_messages: VecDeque<(MessageId, Option<P>)>,
 }
 
-impl<P: Protocolize, C: ChannelIndex> OrderedReliableChannel<P, C> {
-    pub fn new(channel_index: C, reliable_settings: &ReliableSettings) -> Self {
+impl<P: Protocolize> OrderedReliableChannel<P> {
+    pub fn new(reliable_settings: &ReliableSettings) -> Self {
         Self {
-            channel_index: channel_index.clone(),
             outgoing_channel: OutgoingReliableChannel::new(reliable_settings),
             oldest_waiting_message_id: 0,
             waiting_incoming_messages: VecDeque::new(),
@@ -84,7 +82,7 @@ impl<P: Protocolize, C: ChannelIndex> OrderedReliableChannel<P, C> {
     }
 }
 
-impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for OrderedReliableChannel<P, C> {
+impl<P: Protocolize> MessageChannel<P> for OrderedReliableChannel<P> {
     fn send_message(&mut self, message: P) {
         return self.outgoing_channel.send_message(message);
     }
@@ -93,7 +91,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for OrderedReliableCh
         return self.outgoing_channel.collect_outgoing_messages(rtt_millis);
     }
 
-    fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>) {
+    fn collect_incoming_messages(&mut self) -> Vec<P> {
+        let mut output = Vec::new();
         loop {
             let mut has_message = false;
             if let Some((_, Some(_))) = self.waiting_incoming_messages.front() {
@@ -102,12 +101,13 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for OrderedReliableCh
             if has_message {
                 let (_, message_opt) = self.waiting_incoming_messages.pop_front().unwrap();
                 let message = message_opt.unwrap();
-                incoming_messages.push((self.channel_index.clone(), message));
+                output.push(message);
                 self.oldest_waiting_message_id = self.oldest_waiting_message_id.wrapping_add(1);
             } else {
                 break;
             }
         }
+        return output;
     }
 
     fn notify_message_delivered(&mut self, message_id: &MessageId) {
