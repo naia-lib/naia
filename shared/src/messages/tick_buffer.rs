@@ -35,11 +35,11 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         }
     }
 
-    pub fn collect_incoming_messages(&mut self, tick: Tick) -> Vec<(C, P)> {
+    pub fn collect_incoming_messages(&mut self, host_tick: &Tick) -> Vec<(C, P)> {
         let mut output = Vec::new();
         for channel_index in &self.channels.vec {
             let channel = self.channels.map.get_mut(channel_index).unwrap();
-            let mut messages = channel.collect_incoming_messages(tick);
+            let mut messages = channel.collect_incoming_messages(host_tick);
             for message in messages.drain(..) {
                 output.push((channel_index.clone(), message));
             }

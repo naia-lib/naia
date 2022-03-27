@@ -2,10 +2,10 @@ use std::collections::VecDeque;
 
 use naia_client::shared::{sequence_greater_than, sequence_less_than};
 
-type Index = u16;
+type Tick = u16;
 
 pub struct CommandHistory<T> {
-    buffer: VecDeque<(Index, T)>,
+    buffer: VecDeque<(Tick, T)>,
 }
 
 impl<T> CommandHistory<T> {
@@ -15,27 +15,23 @@ impl<T> CommandHistory<T> {
         }
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (Index, T)> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (Tick, T)> {
         return self.buffer.iter_mut().rev();
     }
 
     // this only goes forward
-    pub fn push_front(&mut self, index: Index, command: T) {
-        let mut some_front_index = None;
-        if let Some((front_index, _)) = self.buffer.front() {
-            some_front_index = Some(*front_index);
-        }
-        if let Some(front_index) = some_front_index {
-            if sequence_less_than(index, front_index) {
-                panic!("Can't push a lesser index to the Command Buffer!");
+    pub fn insert(&mut self, new_command_tick: Tick, new_command: T) {
+        if let Some((last_most_recent_command_tick, _)) = self.buffer.front() {
+            if !sequence_greater_than(new_command_tick, *last_most_recent_command_tick) {
+                panic!("You must always insert a more recent command into the CommandHistory than the one you last inserted.");
             }
         }
 
         // go ahead and push
-        self.buffer.push_front((index, command));
+        self.buffer.push_front((new_command_tick, new_command));
     }
 
-    pub fn remove_to_and_including(&mut self, index: Index) {
+    pub fn remove_to_and_including(&mut self, index: Tick) {
         loop {
             let back_index = match self.buffer.back() {
                 Some((index, _)) => *index,
@@ -48,5 +44,14 @@ impl<T> CommandHistory<T> {
             }
             self.buffer.pop_back();
         }
+    }
+
+    pub fn can_insert(&self, tick: &Tick) -> bool {
+        if let Some((last_most_recent_command_tick, _)) = self.buffer.front() {
+            if !sequence_greater_than(*tick, *last_most_recent_command_tick) {
+                return false;
+            }
+        }
+        return true;
     }
 }
