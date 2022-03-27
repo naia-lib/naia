@@ -48,8 +48,44 @@ pub fn wrapping_diff(a: u16, b: u16) -> i16 {
 }
 
 #[cfg(test)]
+mod sequence_compare_tests {
+    use super::{sequence_greater_than, sequence_less_than};
+
+    #[test]
+    fn greater_is_greater() {
+        assert!(sequence_greater_than(2, 1));
+    }
+
+    #[test]
+    fn greater_is_not_equal() {
+        assert!(!sequence_greater_than(2, 2));
+    }
+
+    #[test]
+    fn greater_is_not_less() {
+        assert!(!sequence_greater_than(1, 2));
+    }
+
+    #[test]
+    fn less_is_less() {
+        assert!(sequence_less_than(1, 2));
+    }
+
+    #[test]
+    fn less_is_not_equal() {
+        assert!(!sequence_less_than(2, 2));
+    }
+
+    #[test]
+    fn less_is_not_greater() {
+        assert!(!sequence_less_than(2, 1));
+    }
+}
+
+
+#[cfg(test)]
 mod wrapping_diff_tests {
-    use crate::wrapping_number::wrapping_diff;
+    use super::wrapping_diff;
 
     #[test]
     fn simple() {
