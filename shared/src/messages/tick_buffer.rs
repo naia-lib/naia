@@ -6,11 +6,11 @@ use super::{
     channel_config::{ChannelConfig, ChannelIndex, ChannelMode}, channel_tick_buffer::ChannelTickBuffer,
 };
 
-use crate::{connection::packet_notifiable::PacketNotifiable, protocol::{entity_property::NetEntityHandleConverter, replicate::ReplicateSafe, protocolize::Protocolize}, types::{Tick, MessageId, PacketIndex}, vecmap::VecMap, serde::BitWriter, Manifest};
+use crate::{connection::packet_notifiable::PacketNotifiable, protocol::{entity_property::NetEntityHandleConverter, replicate::ReplicateSafe, protocolize::Protocolize}, types::{Tick, PacketIndex, ShortMessageId}, vecmap::VecMap, serde::BitWriter, Manifest};
 
 pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
     channels: VecMap<C, ChannelTickBuffer<P>>,
-    packet_to_channel_map: HashMap<PacketIndex, Vec<(C, Vec<(Tick, MessageId)>)>>,
+    packet_to_channel_map: HashMap<PacketIndex, Vec<(C, Vec<(Tick, ShortMessageId)>)>>,
 }
 
 impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {

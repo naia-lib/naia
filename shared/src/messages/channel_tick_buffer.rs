@@ -1,9 +1,9 @@
 
 use std::{
-    collections::VecDeque,
+    collections::{VecDeque, HashMap},
     time::Duration,
 };
-use std::collections::HashMap;
+
 use log::info;
 
 use naia_serde::{BitReader, UnsignedVariableInteger};
@@ -12,13 +12,11 @@ use super::{
     message_list_header, channel_config::TickBufferSettings
 };
 
-use crate::{protocol::{entity_property::NetEntityHandleConverter, replicate::ReplicateSafe, protocolize::Protocolize, manifest::Manifest}, types::{Tick, MessageId}, serde::{BitCounter, BitWrite, BitWriter, Serde}, constants::{MTU_SIZE_BITS, MESSAGE_HISTORY_SIZE}, Instant, sequence_greater_than, sequence_less_than, wrapping_diff};
-
-type ShortMessageId = u8;
+use crate::{protocol::{entity_property::NetEntityHandleConverter, replicate::ReplicateSafe, protocolize::Protocolize, manifest::Manifest}, types::{Tick, ShortMessageId}, serde::{BitCounter, BitWrite, BitWriter, Serde}, constants::{MTU_SIZE_BITS, MESSAGE_HISTORY_SIZE}, Instant, sequence_greater_than, sequence_less_than, wrapping_diff};
 
 pub struct ChannelTickBuffer<P: Protocolize> {
     sending_messages: OutgoingMessages<P>,
-    next_send_messages: VecDeque<(Tick, Vec<(MessageId, P)>)>,
+    next_send_messages: VecDeque<(Tick, Vec<(ShortMessageId, P)>)>,
     resend_interval: Duration,
     last_sent: Instant,
     incoming_messages: IncomingMessages<P>,
@@ -88,7 +86,7 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         converter: &dyn NetEntityHandleConverter,
         writer: &mut BitWriter,
         host_tick: &Tick,
-    ) -> Option<Vec<(Tick, MessageId)>> {
+    ) -> Option<Vec<(Tick, ShortMessageId)>> {
         let mut message_count: u16 = 0;
 
         // Header
@@ -170,14 +168,14 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
 
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    pub fn write_message<S: BitWrite>(
+    fn write_message<S: BitWrite>(
         &self,
         converter: &dyn NetEntityHandleConverter,
         writer: &mut S,
         last_written_tick: &Tick,
         message_tick: &Tick,
-        messages: &Vec<(MessageId, P)>,
-    ) -> Vec<MessageId> {
+        messages: &Vec<(ShortMessageId, P)>,
+    ) -> Vec<ShortMessageId> {
 
         let mut message_ids = Vec::new();
 
@@ -192,25 +190,28 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         let message_count = UnsignedVariableInteger::<3>::new(messages.len() as u64);
         message_count.ser(writer);
 
+        let mut last_id_written: ShortMessageId = 0;
         for (message_id, message) in messages {
 
-            message_ids.push(*message_id);
-
-            // write message id
-            let short_msg_id: u8 = (message_id % 256) as u8;
-            short_msg_id.ser(writer);
+            // write message id diff
+            let id_diff = UnsignedVariableInteger::<2>::new(*message_id - last_id_written);
+            id_diff.ser(writer);
 
             // write message kind
             message.dyn_ref().kind().ser(writer);
 
             // write payload
             message.write(writer, converter);
+
+            // record id for output
+            message_ids.push(*message_id);
+            last_id_written = *message_id;
         }
 
         return message_ids;
     }
 
-    pub fn notify_message_delivered(&mut self, tick: &Tick, message_id: &MessageId) {
+    pub fn notify_message_delivered(&mut self, tick: &Tick, message_id: &ShortMessageId) {
         self.sending_messages.remove_message(tick, message_id);
     }
 
@@ -240,16 +241,20 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         converter: &dyn NetEntityHandleConverter,
     ) {
         // read remote tick
-        let remote_tick_diff = UnsignedVariableInteger::<3>::de(reader).unwrap().get() as u16;
+        let remote_tick_diff = UnsignedVariableInteger::<3>::de(reader).unwrap().get() as Tick;
         *last_read_tick = last_read_tick.wrapping_sub(remote_tick_diff);
         let remote_tick = *last_read_tick;
 
         // read message count
         let message_count = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
 
+        let mut last_read_message_id: ShortMessageId = 0;
         for _ in 0..message_count {
-            // read message id
-            let short_msg_id: ShortMessageId = ShortMessageId::de(reader).unwrap();
+
+            // read message id diff, add to last read id
+            let id_diff = UnsignedVariableInteger::<2>::de(reader).unwrap().get() as ShortMessageId;
+            let message_id: ShortMessageId = last_read_message_id + id_diff;
+            last_read_message_id = message_id;
 
             // read message kind
             let replica_kind: P::Kind = P::Kind::de(reader).unwrap();
@@ -260,7 +265,7 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
             if !self.incoming_messages.insert(
                 host_tick,
                 &remote_tick,
-                short_msg_id,
+                message_id,
                 new_message,
             ) {
                 //info!("failed command. server: {}, client: {}",
@@ -286,7 +291,7 @@ impl<P: Protocolize> MessageMap<P> {
         self.list.push(Some(message));
     }
 
-    pub fn collect_messages(&self) -> Vec<(MessageId, P)> {
+    pub fn collect_messages(&self) -> Vec<(ShortMessageId, P)> {
         let mut output = Vec::new();
         let mut index = 0;
         for message_opt in &self.list {
@@ -298,7 +303,7 @@ impl<P: Protocolize> MessageMap<P> {
         return output;
     }
 
-    pub fn remove(&mut self, message_id: &MessageId) {
+    pub fn remove(&mut self, message_id: &ShortMessageId) {
         if let Some(container) = self.list.get_mut(*message_id as usize) {
             *container = None;
         }
@@ -369,7 +374,7 @@ impl<P: Protocolize> OutgoingMessages<P> {
         self.buffer.iter()
     }
 
-    pub fn remove_message(&mut self, tick: &Tick, msg_id: &MessageId) {
+    pub fn remove_message(&mut self, tick: &Tick, message_id: &ShortMessageId) {
         let mut index = self.buffer.len();
 
         if index == 0 {
@@ -382,13 +387,12 @@ impl<P: Protocolize> OutgoingMessages<P> {
 
             let mut remove = false;
 
-            if let Some((old_tick, msg_map)) = self.buffer.get_mut(index) {
+            if let Some((old_tick, message_map)) = self.buffer.get_mut(index) {
                 if *old_tick == *tick {
                     // found it!
-                    msg_map.remove(&msg_id);
-                    //info!("removed delivered message! tick: {}, msg_id: {}",
-                    // tick, msg_id);
-                    if msg_map.len() == 0 {
+                    message_map.remove(&message_id);
+                    //info!("removed delivered message! tick: {}, msg_id: {}", tick, msg_id);
+                    if message_map.len() == 0 {
                         remove = true;
                     }
                 } else {
@@ -430,7 +434,7 @@ impl<P: Protocolize> IncomingMessages<P> {
         &mut self,
         host_tick: &Tick,
         message_tick: &Tick,
-        short_msg_id: ShortMessageId,
+        message_id: ShortMessageId,
         new_message: P,
     ) -> bool {
         if sequence_greater_than(*message_tick, *host_tick) {
@@ -439,7 +443,7 @@ impl<P: Protocolize> IncomingMessages<P> {
             //in the case of empty vec
             if index == 0 {
                 let mut map = HashMap::new();
-                map.insert(short_msg_id, new_message);
+                map.insert(message_id, new_message);
                 self.buffer.push_back((*message_tick, map));
                 //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (empty q)",
                 // server_tick, client_tick, owned_entity);
@@ -452,8 +456,8 @@ impl<P: Protocolize> IncomingMessages<P> {
 
                 if let Some((existing_tick, existing_messages)) = self.buffer.get_mut(index) {
                     if *existing_tick == *message_tick {
-                        if !existing_messages.contains_key(&short_msg_id) {
-                            existing_messages.insert(short_msg_id, new_message);
+                        if !existing_messages.contains_key(&message_id) {
+                            existing_messages.insert(message_id, new_message);
                             //info!("inserting command at tick: {}", client_tick);
                             //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (map
                             // xzist)", server_tick, client_tick, owned_entity);
@@ -473,7 +477,7 @@ impl<P: Protocolize> IncomingMessages<P> {
                 if insert {
                     // found correct position to insert node
                     let mut new_messages = HashMap::new();
-                    new_messages.insert(short_msg_id, new_message);
+                    new_messages.insert(message_id, new_message);
                     self.buffer.insert(index + 1, (*message_tick, new_messages));
                     //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (midbck
                     // insrt)", server_tick, client_tick, owned_entity);
@@ -483,7 +487,7 @@ impl<P: Protocolize> IncomingMessages<P> {
                 if index == 0 {
                     //traversed the whole vec, push front
                     let mut new_messages = HashMap::new();
-                    new_messages.insert(short_msg_id, new_message);
+                    new_messages.insert(message_id, new_message);
                     self.buffer.push_front((*message_tick, new_messages));
                     //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (front
                     // insrt)", server_tick, client_tick, owned_entity);
