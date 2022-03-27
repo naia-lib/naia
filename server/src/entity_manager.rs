@@ -40,7 +40,7 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     sent_updates: HashMap<PacketIndex, HashMap<(E, P::Kind), DiffMask>>,
     last_update_packet_index: PacketIndex,
     delivered_packets: VecDeque<PacketIndex>,
-    reliable_action_channel: ReliableSender<P>,
+    reliable_action_sender: ReliableSender<P>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C> {
@@ -66,7 +66,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             sent_updates: HashMap::new(),
             last_update_packet_index: 0,
             delivered_packets: VecDeque::new(),
-            reliable_action_channel: ReliableSender::new(&ReliableSettings {
+            reliable_action_sender: ReliableSender::new(&ReliableSettings {
                 rtt_resend_factor: 1.5,
             }),
         }
@@ -140,8 +140,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         channel: C,
         message: &R,
     ) {
-        self.delayed_entity_messages
-            .queue_message(entities, channel, message.protocol_copy());
+        self.delayed_entity_messages.queue_message(entities, channel, message.protocol_copy());
     }
 
     pub fn collect_outgoing_messages(
@@ -151,8 +150,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     ) {
         self.collect_resend_messages(rtt_millis);
         self.collect_component_updates();
-        self.delayed_entity_messages
-            .collect_ready_messages(message_manager);
+        self.delayed_entity_messages.collect_ready_messages(message_manager);
     }
 
     // Components
@@ -480,8 +478,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     // Private methods
 
     fn collect_resend_messages(&mut self, rtt_millis: &f32) {
-        self.reliable_action_channel
-            .collect_outgoing_messages(rtt_millis);
+        self.reliable_action_sender.collect_messages(rtt_millis);
     }
 
     fn collect_component_updates(&mut self) {

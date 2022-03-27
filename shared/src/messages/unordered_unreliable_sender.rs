@@ -25,8 +25,8 @@ impl<P: Protocolize> UnorderedUnreliableSender<P> {
         &self,
         writer: &mut S,
         converter: &dyn NetEntityHandleConverter,
-        message: &P,
-    ) {
+        message: &P)
+    {
         // write message kind
         message.dyn_ref().kind().ser(writer);
 
@@ -40,11 +40,11 @@ impl<P: Protocolize> ChannelSender<P> for UnorderedUnreliableSender<P> {
         self.outgoing_messages.push_back(message);
     }
 
-    fn collect_outgoing_messages(&mut self, _: &f32) {
+    fn collect_messages(&mut self, _: &f32) {
         // not necessary for an unreliable channel
     }
 
-    fn has_outgoing_messages(&self) -> bool {
+    fn has_messages(&self) -> bool {
         return self.outgoing_messages.len() != 0;
     }
 

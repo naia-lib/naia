@@ -29,8 +29,10 @@ pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
 }
 
 impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
+
     /// Creates a new MessageManager
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
+
         // initialize all reliable channels
         let mut channel_senders = HashMap::<C, Box<dyn ChannelSender<P>>>::new();
         let mut channel_receivers = HashMap::<C, Box<dyn ChannelReceiver<P>>>::new();
@@ -79,35 +81,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         }
     }
 
-    pub fn collect_incoming_messages(&mut self) -> Vec<(C, P)> {
-        let mut output = Vec::new();
-        for (channel_index, channel) in &mut self.channel_receivers {
-            let mut messages = channel.collect_incoming_messages();
-            for message in messages.drain(..) {
-                output.push((channel_index.clone(), message));
-            }
-        }
-        return output;
-    }
-
-    pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
-        for (_, channel) in &mut self.channel_senders {
-            channel.collect_outgoing_messages(rtt_millis);
-        }
-    }
-
     // Outgoing Messages
-
-    /// Returns whether the Manager has queued Messages that can be transmitted
-    /// to the remote host
-    pub fn has_outgoing_messages(&self) -> bool {
-        for (_, channel) in &self.channel_senders {
-            if channel.has_outgoing_messages() {
-                return true;
-            }
-        }
-        return false;
-    }
 
     /// Queues an Message to be transmitted to the remote host
     pub fn send_message(&mut self, channel_index: C, message: P) {
@@ -116,7 +90,22 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         }
     }
 
-    // MessageWriter
+    pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
+        for (_, channel) in &mut self.channel_senders {
+            channel.collect_messages(rtt_millis);
+        }
+    }
+
+    /// Returns whether the Manager has queued Messages that can be transmitted
+    /// to the remote host
+    pub fn has_outgoing_messages(&self) -> bool {
+        for (_, channel) in &self.channel_senders {
+            if channel.has_messages() {
+                return true;
+            }
+        }
+        return false;
+    }
 
     pub fn write_messages(
         &mut self,
@@ -126,7 +115,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     ) {
         let mut channels_to_write = Vec::new();
         for (channel_index, channel) in &self.channel_senders {
-            if channel.has_outgoing_messages() {
+            if channel.has_messages() {
                 channels_to_write.push(channel_index.clone());
             }
         }
@@ -150,13 +139,14 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         }
     }
 
-    // MessageReader
+    // Incoming Messages
+
     pub fn read_messages(
         &mut self,
         reader: &mut BitReader,
         manifest: &Manifest<P>,
-        converter: &dyn NetEntityHandleConverter,
-    ) {
+        converter: &dyn NetEntityHandleConverter) {
+
         // read channel count
         let channel_count = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
 
@@ -167,6 +157,17 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                 channel.read_messages(reader, manifest, converter);
             }
         }
+    }
+
+    pub fn receive_messages(&mut self) -> Vec<(C, P)> {
+        let mut output = Vec::new();
+        for (channel_index, channel) in &mut self.channel_receivers {
+            let mut messages = channel.receive_messages();
+            for message in messages.drain(..) {
+                output.push((channel_index.clone(), message));
+            }
+        }
+        return output;
     }
 }
 

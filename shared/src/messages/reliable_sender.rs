@@ -66,7 +66,7 @@ impl<P: Protocolize> ChannelSender<P> for ReliableSender<P> {
         self.next_send_message_id = self.next_send_message_id.wrapping_add(1);
     }
 
-    fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
+    fn collect_messages(&mut self, rtt_millis: &f32) {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
         let now = Instant::now();
 
@@ -89,7 +89,7 @@ impl<P: Protocolize> ChannelSender<P> for ReliableSender<P> {
         }
     }
 
-    fn has_outgoing_messages(&self) -> bool {
+    fn has_messages(&self) -> bool {
         return self.next_send_messages.len() != 0;
     }
 

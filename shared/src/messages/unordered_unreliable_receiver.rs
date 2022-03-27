@@ -53,7 +53,7 @@ impl<P: Protocolize> ChannelReceiver<P> for UnorderedUnreliableReceiver<P> {
         }
     }
 
-    fn collect_incoming_messages(&mut self) -> Vec<P> {
+    fn receive_messages(&mut self) -> Vec<P> {
         Vec::from(mem::take(&mut self.incoming_messages))
     }
 }

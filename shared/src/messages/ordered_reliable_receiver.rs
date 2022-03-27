@@ -91,7 +91,7 @@ impl<P: Protocolize> ChannelReceiver<P> for OrderedReliableReceiver<P> {
         }
     }
 
-    fn collect_incoming_messages(&mut self) -> Vec<P> {
+    fn receive_messages(&mut self) -> Vec<P> {
         let mut output = Vec::new();
         loop {
             let mut has_message = false;

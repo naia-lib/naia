@@ -111,7 +111,7 @@ impl<P: Protocolize> ChannelReceiver<P> for UnorderedReliableReceiver<P> {
         }
     }
 
-    fn collect_incoming_messages(&mut self) -> Vec<P> {
+    fn receive_messages(&mut self) -> Vec<P> {
         self.clear_sent_messages();
 
         mem::take(&mut self.ready_incoming_messages)
