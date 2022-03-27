@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::mem;
 
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
 
@@ -11,21 +12,18 @@ use crate::{
 };
 
 use super::{
-    channel_config::ChannelIndex,
     message_channel::MessageChannel,
     message_list_header::{read, write},
 };
 
-pub struct UnorderedUnreliableChannel<P: Protocolize, C: ChannelIndex> {
-    channel_index: C,
+pub struct UnorderedUnreliableChannel<P: Protocolize> {
     outgoing_messages: VecDeque<P>,
     incoming_messages: VecDeque<P>,
 }
 
-impl<P: Protocolize, C: ChannelIndex> UnorderedUnreliableChannel<P, C> {
-    pub fn new(channel_index: C) -> Self {
+impl<P: Protocolize> UnorderedUnreliableChannel<P> {
+    pub fn new() -> Self {
         Self {
-            channel_index: channel_index.clone(),
             outgoing_messages: VecDeque::new(),
             incoming_messages: VecDeque::new(),
         }
@@ -64,7 +62,7 @@ impl<P: Protocolize, C: ChannelIndex> UnorderedUnreliableChannel<P, C> {
     }
 }
 
-impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliableChannel<P, C> {
+impl<P: Protocolize> MessageChannel<P> for UnorderedUnreliableChannel<P> {
     fn send_message(&mut self, message: P) {
         self.incoming_messages.push_back(message);
     }
@@ -73,10 +71,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedUnreliab
         // not necessary for an unreliable channel
     }
 
-    fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>) {
-        while let Some(message) = self.incoming_messages.pop_front() {
-            incoming_messages.push((self.channel_index.clone(), message));
-        }
+    fn collect_incoming_messages(&mut self) -> Vec<P> {
+        Vec::from(mem::take(&mut self.incoming_messages))
     }
 
     fn notify_message_delivered(&mut self, _: &MessageId) {

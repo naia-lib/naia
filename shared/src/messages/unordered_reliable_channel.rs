@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{mem, collections::VecDeque};
 
 use naia_serde::{BitReader, BitWriter};
 
@@ -11,23 +11,21 @@ use crate::{
 };
 
 use super::{
-    channel_config::{ChannelIndex, ReliableSettings},
+    channel_config::ReliableSettings,
     message_channel::MessageChannel,
     outgoing_reliable_channel::OutgoingReliableChannel,
 };
 
-pub struct UnorderedReliableChannel<P: Protocolize, C: ChannelIndex> {
-    channel_index: C,
+pub struct UnorderedReliableChannel<P: Protocolize> {
     outgoing_channel: OutgoingReliableChannel<P>,
     oldest_waiting_message_id: MessageId,
     waiting_incoming_messages: VecDeque<(MessageId, bool)>,
     ready_incoming_messages: Vec<P>,
 }
 
-impl<P: Protocolize, C: ChannelIndex> UnorderedReliableChannel<P, C> {
-    pub fn new(channel_index: C, reliable_settings: &ReliableSettings) -> Self {
+impl<P: Protocolize> UnorderedReliableChannel<P> {
+    pub fn new(reliable_settings: &ReliableSettings) -> Self {
         Self {
-            channel_index: channel_index.clone(),
             outgoing_channel: OutgoingReliableChannel::new(reliable_settings),
             oldest_waiting_message_id: 0,
             waiting_incoming_messages: VecDeque::new(),
@@ -87,22 +85,8 @@ impl<P: Protocolize, C: ChannelIndex> UnorderedReliableChannel<P, C> {
             index += 1;
         }
     }
-}
 
-impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedReliableChannel<P, C> {
-    fn send_message(&mut self, message: P) {
-        return self.outgoing_channel.send_message(message);
-    }
-
-    fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
-        return self.outgoing_channel.collect_outgoing_messages(rtt_millis);
-    }
-
-    fn collect_incoming_messages(&mut self, incoming_messages: &mut Vec<(C, P)>) {
-        for message in self.ready_incoming_messages.drain(..) {
-            incoming_messages.push((self.channel_index.clone(), message));
-        }
-
+    fn clear_sent_messages(&mut self) {
         loop {
             let mut has_message = false;
             if let Some((_, true)) = self.waiting_incoming_messages.front() {
@@ -115,6 +99,23 @@ impl<P: Protocolize, C: ChannelIndex> MessageChannel<P, C> for UnorderedReliable
                 break;
             }
         }
+    }
+}
+
+impl<P: Protocolize> MessageChannel<P> for UnorderedReliableChannel<P> {
+    fn send_message(&mut self, message: P) {
+        return self.outgoing_channel.send_message(message);
+    }
+
+    fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
+        return self.outgoing_channel.collect_outgoing_messages(rtt_millis);
+    }
+
+    fn collect_incoming_messages(&mut self) -> Vec<P> {
+
+        self.clear_sent_messages();
+
+        mem::take(&mut self.ready_incoming_messages)
     }
 
     fn notify_message_delivered(&mut self, message_id: &MessageId) {

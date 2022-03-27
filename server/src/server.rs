@@ -161,10 +161,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
             for user_address in &user_addresses {
                 let connection = self.user_connections.get_mut(user_address).unwrap();
 
-                while let Some((channel, message)) = connection
-                    .tick_buffer_message_receiver
-                    .pop_incoming_message(self.tick_manager.as_ref().unwrap().server_tick())
-                {
+                let messages = connection.tick_buffer.collect_incoming_messages(
+                    self.tick_manager.as_ref().unwrap().server_tick()
+                );
+                for (channel, message) in messages {
                     self.incoming_events.push_back(Ok(Event::Message(
                         connection.user_key,
                         channel,

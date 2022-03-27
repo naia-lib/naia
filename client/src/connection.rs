@@ -1,21 +1,19 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
-use naia_shared::{
-    serde::{BitReader, BitWriter, OwnedBitReader},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, Manifest, PacketType,
-    PingManager, Protocolize, StandardHeader, Tick, WorldMutType,
-};
+use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ChannelConfig,
+                  ChannelIndex, ConnectionConfig, Manifest, PacketType, PingManager, Protocolize,
+                  StandardHeader, Tick, WorldMutType, TickBuffer};
 
 use super::{
     entity_manager::EntityManager, error::NaiaClientError, event::Event, io::Io,
-    tick_buffer::TickBuffer, tick_manager::TickManager, tick_queue::TickQueue,
+    tick_manager::TickManager, tick_queue::TickQueue,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub base: BaseConnection<P, C>,
     pub entity_manager: EntityManager<P, E>,
     pub ping_manager: PingManager,
-    pub tick_buffer_message_sender: TickBuffer<P, C>,
+    pub tick_buffer: TickBuffer<P, C>,
     jitter_buffer: TickQueue<OwnedBitReader>,
 }
 
@@ -29,7 +27,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             base: BaseConnection::new(address, connection_config, channel_config),
             entity_manager: EntityManager::new(),
             ping_manager: PingManager::new(&connection_config.ping),
-            tick_buffer_message_sender: TickBuffer::new(channel_config),
+            tick_buffer: TickBuffer::new(channel_config),
             jitter_buffer: TickQueue::new(),
         };
     }
@@ -38,7 +36,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         self.base
-            .process_incoming_header(header, &mut Some(&mut self.tick_buffer_message_sender));
+            .process_incoming_header(header, &mut Some(&mut self.tick_buffer));
     }
 
     pub fn buffer_data_packet(&mut self, incoming_tick: Tick, reader: &mut BitReader) {
@@ -95,7 +93,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             .message_manager
             .collect_outgoing_messages(&self.ping_manager.rtt);
         if let Some(tick_manager) = tick_manager_opt {
-            self.tick_buffer_message_sender
+            self.tick_buffer
                 .collect_outgoing_messages(&tick_manager.server_receivable_tick());
         }
     }
@@ -107,7 +105,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         tick_manager_opt: &Option<TickManager>,
     ) -> bool {
         if self.base.message_manager.has_outgoing_messages()
-            || self.tick_buffer_message_sender.has_outgoing_messages()
+            || self.tick_buffer.has_outgoing_messages()
         {
             let next_packet_index = self.base.next_packet_index();
 
@@ -122,10 +120,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
                 tick_manager.write_client_tick(&mut writer);
 
                 // write tick buffered messages
-                self.tick_buffer_message_sender.write_messages(
-                    &self.entity_manager,
+                self.tick_buffer.write_messages(
                     &mut writer,
                     next_packet_index,
+                    &self.entity_manager,
                 );
             }
 

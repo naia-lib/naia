@@ -48,6 +48,8 @@ pub use messages::{
     },
     message_list_header,
     message_manager::MessageManager,
+    tick_buffer::TickBuffer,
+    channel_tick_buffer::ChannelTickBuffer,
 };
 pub use protocol::{
     diff_mask::DiffMask,
@@ -75,7 +77,7 @@ pub use bigmap::{BigMap, BigMapKey};
 pub use constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
 pub use key_generator::KeyGenerator;
 pub use shared_config::SharedConfig;
-pub use types::{PacketIndex, Tick};
+pub use types::{PacketIndex, Tick, MessageId};
 pub use vecmap::VecMap;
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
