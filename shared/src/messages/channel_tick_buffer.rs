@@ -5,7 +5,7 @@ use std::{
 };
 use std::collections::HashMap;
 
-use naia_serde::BitReader;
+use naia_serde::{BitReader, UnsignedVariableInteger};
 
 use super::{
     message_list_header, channel_config::TickBufferSettings
@@ -23,7 +23,7 @@ type ShortMessageId = u8;
 
 pub struct ChannelTickBuffer<P: Protocolize> {
     sending_messages: OutgoingMessages<P>,
-    next_send_messages: VecDeque<(Tick, MessageId, P)>,
+    next_send_messages: VecDeque<(Tick, Vec<(MessageId, P)>)>,
     resend_interval: Duration,
     last_sent: Instant,
     incoming_messages: IncomingMessages<P>,
@@ -62,7 +62,8 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
             // Loop through outstanding messages and add them to the outgoing list
             let mut iter = self.sending_messages.iter();
             while let Some((tick, msg_map)) = iter.next() {
-                msg_map.append_messages(*tick, &mut self.next_send_messages);
+                let messages = msg_map.collect_messages();
+                self.next_send_messages.push_back((*tick, messages));
             }
 
             // if outgoing_list.len() > 0 {
@@ -122,13 +123,12 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
                     break;
                 }
 
-                let (tick, message_id, message) = self.next_send_messages.get(index).unwrap();
+                let (tick, messages) = self.next_send_messages.get(index).unwrap();
                 self.write_message(
                     converter,
                     &mut counter,
                     tick,
-                    message_id,
-                    message,
+                    messages,
                 );
                 //last_written_id = Some((*tick, *message_id));
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
@@ -149,19 +149,20 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
             let mut output = Vec::new();
             for _ in 0..message_count {
                 // Pop message
-                let (tick, message_id, message) =
+                let (tick, messages) =
                     self.next_send_messages.pop_front().unwrap();
 
                 // Write message
-                self.write_message(
+                let message_ids = self.write_message(
                     converter,
                     writer,
                     &tick,
-                    &message_id,
-                    &message,
+                    &messages,
                 );
 
-                output.push((tick, message_id));
+                for message_id in message_ids {
+                    output.push((tick, message_id));
+                }
             }
             return Some(output);
         }
@@ -173,22 +174,35 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         &self,
         converter: &dyn NetEntityHandleConverter,
         writer: &mut S,
-        client_tick: &Tick,
-        message_id: &MessageId,
-        message: &P,
-    ) {
-        // write client tick
-        client_tick.ser(writer);
+        tick: &Tick,
+        messages: &Vec<(MessageId, P)>,
+    ) -> Vec<MessageId> {
 
-        // write message id
-        let short_msg_id: u8 = (message_id % 256) as u8;
-        short_msg_id.ser(writer);
+        let mut message_ids = Vec::new();
 
-        // write message kind
-        message.dyn_ref().kind().ser(writer);
+        // write tick
+        tick.ser(writer);
 
-        // write payload
-        message.write(writer, converter);
+        // write number of messages
+        let message_count = UnsignedVariableInteger::<3>::new(messages.len() as u64);
+        message_count.ser(writer);
+
+        for (message_id, message) in messages {
+
+            message_ids.push(*message_id);
+
+            // write message id
+            let short_msg_id: u8 = (message_id % 256) as u8;
+            short_msg_id.ser(writer);
+
+            // write message kind
+            message.dyn_ref().kind().ser(writer);
+
+            // write payload
+            message.write(writer, converter);
+        }
+
+        return message_ids;
     }
 
     pub fn notify_message_delivered(&mut self, tick: &Tick, message_id: &MessageId) {
@@ -197,14 +211,14 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
 
     pub fn read_messages(
         &mut self,
-        server_tick: Tick,
+        tick: Tick,
         reader: &mut BitReader,
         manifest: &Manifest<P>,
         converter: &mut dyn NetEntityHandleConverter,
     ) {
         let message_count = message_list_header::read(reader);
         for _x in 0..message_count {
-            self.read_message(server_tick, reader, manifest, converter);
+            self.read_message(tick, reader, manifest, converter);
         }
     }
 
@@ -212,31 +226,36 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
     /// them to be returned to the application
     fn read_message(
         &mut self,
-        server_tick: Tick,
+        host_tick: Tick,
         reader: &mut BitReader,
         manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter,
     ) {
         // read client tick
-        let client_tick = Tick::de(reader).unwrap();
+        let remote_tick = Tick::de(reader).unwrap();
 
-        // read message id
-        let short_msg_id: ShortMessageId = ShortMessageId::de(reader).unwrap();
+        // read message count
+        let message_count = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
 
-        // read message kind
-        let replica_kind: P::Kind = P::Kind::de(reader).unwrap();
+        for _ in 0..message_count {
+            // read message id
+            let short_msg_id: ShortMessageId = ShortMessageId::de(reader).unwrap();
 
-        // read payload
-        let new_message = manifest.create_replica(replica_kind, reader, converter);
+            // read message kind
+            let replica_kind: P::Kind = P::Kind::de(reader).unwrap();
 
-        if !self.incoming_messages.push_back(
-            client_tick,
-            server_tick,
-            short_msg_id,
-            new_message,
-        ) {
-            //info!("failed command. server: {}, client: {}",
-            // server_tick, client_tick);
+            // read payload
+            let new_message = manifest.create_replica(replica_kind, reader, converter);
+
+            if !self.incoming_messages.push_back(
+                remote_tick,
+                host_tick,
+                short_msg_id,
+                new_message,
+            ) {
+                //info!("failed command. server: {}, client: {}",
+                // server_tick, client_tick);
+            }
         }
     }
 }
@@ -257,18 +276,16 @@ impl<P: Protocolize> MessageMap<P> {
         self.list.push(Some(message));
     }
 
-    pub fn append_messages(
-        &self,
-        tick: Tick,
-        list: &mut VecDeque<(Tick, MessageId, P)>,
-    ) {
+    pub fn collect_messages(&self) -> Vec<(MessageId, P)> {
+        let mut output = Vec::new();
         let mut index = 0;
         for message_opt in &self.list {
             if let Some(message) = message_opt {
-                list.push_back((tick, index, message.clone()));
+                output.push((index, message.clone()));
             }
             index += 1;
         }
+        return output;
     }
 
     pub fn remove(&mut self, message_id: &MessageId) {
