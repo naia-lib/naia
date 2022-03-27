@@ -46,6 +46,8 @@ pub use messages::{
         Channel, ChannelConfig, ChannelDirection, ChannelIndex, ChannelMode, DefaultChannels,
         ReliableSettings, TickBufferSettings,
     },
+    message_channel::{ChannelSender, ChannelReceiver},
+    reliable_sender::ReliableSender,
     channel_tick_buffer::ChannelTickBuffer,
     message_list_header,
     message_manager::MessageManager,

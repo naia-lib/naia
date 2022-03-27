@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_serde::{BitReader, BitWriter};
+use naia_serde::{BitReader, BitWriter, Serde, UnsignedVariableInteger};
 
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
@@ -8,59 +8,63 @@ use crate::{
         entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
     },
     types::{MessageId, PacketIndex},
-    vecmap::VecMap,
 };
 
 use super::{
     channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
-    message_channel::MessageChannel,
-    ordered_reliable_channel::OrderedReliableChannel,
-    unordered_reliable_channel::UnorderedReliableChannel,
-    unordered_unreliable_channel::UnorderedUnreliableChannel,
+    message_channel::{ChannelSender, ChannelReceiver},
+    reliable_sender::ReliableSender,
+    ordered_reliable_receiver::OrderedReliableReceiver,
+    unordered_reliable_receiver::UnorderedReliableReceiver,
+    unordered_unreliable_sender::UnorderedUnreliableSender,
+    unordered_unreliable_receiver::UnorderedUnreliableReceiver,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
-    channels: VecMap<C, Box<dyn MessageChannel<P>>>,
+    channel_senders: HashMap<C, Box<dyn ChannelSender<P>>>,
+    channel_receivers: HashMap<C, Box<dyn ChannelReceiver<P>>>,
     packet_to_message_map: HashMap<PacketIndex, Vec<(C, Vec<MessageId>)>>,
 }
 
 impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Creates a new MessageManager
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
+
         // initialize all reliable channels
-        let mut channels = VecMap::new();
+        let mut channel_senders = HashMap::<C, Box<dyn ChannelSender<P>>>::new();
+        let mut channel_receivers = HashMap::<C, Box<dyn ChannelReceiver<P>>>::new();
+
         for channel_index in &channel_config.channels().vec {
             let channel = channel_config.channels().map.get(channel_index).unwrap();
-            let new_channel: Option<Box<dyn MessageChannel<P>>> = match &channel.mode {
+            match &channel.mode {
                 ChannelMode::UnorderedUnreliable => {
-                    Some(Box::new(UnorderedUnreliableChannel::new()))
+                    channel_senders.insert(channel_index.clone(), Box::new(UnorderedUnreliableSender::new()));
+                    channel_receivers.insert(channel_index.clone(), Box::new(UnorderedUnreliableReceiver::new()));
                 }
                 ChannelMode::UnorderedReliable(settings) => {
-                    Some(Box::new(UnorderedReliableChannel::new(&settings)))
+                    channel_senders.insert(channel_index.clone(), Box::new(ReliableSender::new(&settings)));
+                    channel_receivers.insert(channel_index.clone(), Box::new(UnorderedReliableReceiver::new()));
                 }
                 ChannelMode::OrderedReliable(settings) => {
-                    Some(Box::new(OrderedReliableChannel::new(&settings)))
+                    channel_senders.insert(channel_index.clone(), Box::new(ReliableSender::new(&settings)));
+                    channel_receivers.insert(channel_index.clone(), Box::new(OrderedReliableReceiver::new()));
                 }
-                _ => None,
+                _ => {},
             };
-
-            if new_channel.is_some() {
-                channels.dual_insert(channel_index.clone(), new_channel.unwrap());
-            }
         }
 
         MessageManager {
-            channels,
+            channel_senders,
+            channel_receivers,
             packet_to_message_map: HashMap::new(),
         }
     }
 
     pub fn collect_incoming_messages(&mut self) -> Vec<(C, P)> {
         let mut output = Vec::new();
-        for channel_index in &self.channels.vec {
-            let channel = self.channels.map.get_mut(channel_index).unwrap();
+        for (channel_index, channel) in &mut self.channel_receivers {
             let mut messages = channel.collect_incoming_messages();
             for message in messages.drain(..) {
                 output.push((channel_index.clone(), message));
@@ -70,8 +74,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     }
 
     pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
-        for channel_index in &self.channels.vec {
-            let channel = self.channels.map.get_mut(channel_index).unwrap();
+        for (_, channel) in &mut self.channel_senders {
             channel.collect_outgoing_messages(rtt_millis);
         }
     }
@@ -81,8 +84,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Returns whether the Manager has queued Messages that can be transmitted
     /// to the remote host
     pub fn has_outgoing_messages(&self) -> bool {
-        for channel_index in &self.channels.vec {
-            let channel = self.channels.map.get(channel_index).unwrap();
+        for (_, channel) in &self.channel_senders {
             if channel.has_outgoing_messages() {
                 return true;
             }
@@ -92,7 +94,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
     /// Queues an Message to be transmitted to the remote host
     pub fn send_message(&mut self, channel_index: C, message: P) {
-        if let Some(channel) = self.channels.map.get_mut(&channel_index) {
+        if let Some(channel) = self.channel_senders.get_mut(&channel_index) {
             channel.send_message(message);
         }
     }
@@ -105,8 +107,22 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         packet_index: PacketIndex,
         converter: &dyn NetEntityHandleConverter,
     ) {
-        for channel_index in &self.channels.vec {
-            let channel = self.channels.map.get_mut(channel_index).unwrap();
+        let mut channels_to_write = Vec::new();
+        for (channel_index, channel) in &self.channel_senders {
+            if channel.has_outgoing_messages() {
+                channels_to_write.push(channel_index.clone());
+            }
+        }
+
+        // write channel count
+        UnsignedVariableInteger::<3>::new(channels_to_write.len() as u64).ser(writer);
+
+        for channel_index in channels_to_write {
+            let channel = self.channel_senders.get_mut(&channel_index).unwrap();
+
+            // write channel index
+            channel_index.ser(writer);
+
             if let Some(message_ids) = channel.write_messages(converter, writer) {
                 if !self.packet_to_message_map.contains_key(&packet_index) {
                     self.packet_to_message_map.insert(packet_index, Vec::new());
@@ -124,9 +140,15 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter,
     ) {
-        for channel_index in &self.channels.vec {
-            let channel = self.channels.map.get_mut(channel_index).unwrap();
-            channel.read_messages(reader, manifest, converter);
+        // read channel count
+        let channel_count = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
+
+        for _ in 0..channel_count {
+            // read channel index
+            let channel_index = C::de(reader).unwrap();
+            if let Some(channel) = self.channel_receivers.get_mut(&channel_index) {
+                channel.read_messages(reader, manifest, converter);
+            }
         }
     }
 }
@@ -137,7 +159,7 @@ impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for MessageManager<P, C> 
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_message_map.get(&packet_index) {
             for (channel_index, message_ids) in channel_list {
-                if let Some(channel) = self.channels.map.get_mut(channel_index) {
+                if let Some(channel) = self.channel_senders.get_mut(channel_index) {
                     for message_id in message_ids {
                         channel.notify_message_delivered(message_id);
                     }

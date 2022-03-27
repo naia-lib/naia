@@ -1,34 +1,32 @@
-use std::{collections::VecDeque, mem};
+use std::collections::VecDeque;
 
-use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde};
+use naia_serde::{BitCounter, BitWrite, BitWriter, Serde};
 
 use crate::{
     constants::MTU_SIZE_BITS,
     protocol::{
-        entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
+        entity_property::NetEntityHandleConverter, protocolize::Protocolize,
     },
     types::MessageId,
 };
 
 use super::{
-    message_channel::MessageChannel,
-    message_list_header::{read, write},
+    message_channel::ChannelSender,
+    message_list_header::write,
 };
 
-pub struct UnorderedUnreliableChannel<P: Protocolize> {
+pub struct UnorderedUnreliableSender<P: Protocolize> {
     outgoing_messages: VecDeque<P>,
-    incoming_messages: VecDeque<P>,
 }
 
-impl<P: Protocolize> UnorderedUnreliableChannel<P> {
+impl<P: Protocolize> UnorderedUnreliableSender<P> {
     pub fn new() -> Self {
         Self {
             outgoing_messages: VecDeque::new(),
-            incoming_messages: VecDeque::new(),
         }
     }
 
-    pub fn write_message<S: BitWrite>(
+    fn write_message<S: BitWrite>(
         &self,
         writer: &mut S,
         converter: &dyn NetEntityHandleConverter,
@@ -40,41 +38,14 @@ impl<P: Protocolize> UnorderedUnreliableChannel<P> {
         // write payload
         message.write(writer, converter);
     }
-
-    pub fn read_message(
-        &mut self,
-        reader: &mut BitReader,
-        manifest: &Manifest<P>,
-        converter: &dyn NetEntityHandleConverter,
-    ) -> P {
-        // read message kind
-        let component_kind: P::Kind = P::Kind::de(reader).unwrap();
-
-        // read payload
-        let new_message = manifest.create_replica(component_kind, reader, converter);
-
-        return new_message;
-    }
-
-    fn recv_message(&mut self, message: P) {
-        self.outgoing_messages.push_back(message);
-    }
 }
 
-impl<P: Protocolize> MessageChannel<P> for UnorderedUnreliableChannel<P> {
+impl<P: Protocolize> ChannelSender<P> for UnorderedUnreliableSender<P> {
     fn send_message(&mut self, message: P) {
-        self.incoming_messages.push_back(message);
+        self.outgoing_messages.push_back(message);
     }
 
     fn collect_outgoing_messages(&mut self, _: &f32) {
-        // not necessary for an unreliable channel
-    }
-
-    fn collect_incoming_messages(&mut self) -> Vec<P> {
-        Vec::from(mem::take(&mut self.incoming_messages))
-    }
-
-    fn notify_message_delivered(&mut self, _: &MessageId) {
         // not necessary for an unreliable channel
     }
 
@@ -143,16 +114,7 @@ impl<P: Protocolize> MessageChannel<P> for UnorderedUnreliableChannel<P> {
         }
     }
 
-    fn read_messages(
-        &mut self,
-        reader: &mut BitReader,
-        manifest: &Manifest<P>,
-        converter: &dyn NetEntityHandleConverter,
-    ) {
-        let message_count = read(reader);
-        for _x in 0..message_count {
-            let message = self.read_message(reader, manifest, converter);
-            self.recv_message(message);
-        }
+    fn notify_message_delivered(&mut self, _: &MessageId) {
+        // not necessary for an unreliable channel
     }
 }
