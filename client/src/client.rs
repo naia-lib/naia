@@ -167,7 +167,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             let messages = server_connection
                 .base
                 .message_manager
-                .collect_incoming_messages();
+                .receive_messages();
             for (channel, message) in messages {
                 self.incoming_events
                     .push_back(Ok(Event::Message(channel, message)));

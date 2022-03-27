@@ -6,8 +6,8 @@ use crate::{
 
 pub trait ChannelSender<P: Protocolize> {
     fn send_message(&mut self, message: P);
-    fn collect_outgoing_messages(&mut self, rtt_millis: &f32);
-    fn has_outgoing_messages(&self) -> bool;
+    fn collect_messages(&mut self, rtt_millis: &f32);
+    fn has_messages(&self) -> bool;
     fn write_messages(
         &mut self,
         converter: &dyn NetEntityHandleConverter,
@@ -23,5 +23,5 @@ pub trait ChannelReceiver<P: Protocolize> {
         manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter,
     );
-    fn collect_incoming_messages(&mut self) -> Vec<P>;
+    fn receive_messages(&mut self) -> Vec<P>;
 }
