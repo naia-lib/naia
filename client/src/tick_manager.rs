@@ -55,8 +55,10 @@ impl TickManager {
         }
     }
 
-    pub fn write_client_tick(&self, writer: &mut BitWriter) {
-        self.client_sending_tick().ser(writer);
+    pub fn write_client_tick(&self, writer: &mut BitWriter) -> Tick {
+        let client_tick = self.client_sending_tick();
+        client_tick.ser(writer);
+        client_tick
     }
 
     pub fn read_server_tick(&mut self, reader: &mut BitReader, rtt: f32, jitter: f32) -> Tick {

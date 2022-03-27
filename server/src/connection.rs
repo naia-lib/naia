@@ -62,17 +62,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
     pub fn process_incoming_data(
         &mut self,
-        tick_manager_option: &Option<TickManager>,
+        server_and_client_tick_opt: Option<(Tick, Tick)>,
         manifest: &Manifest<P>,
         reader: &mut BitReader,
         world_record: &WorldRecord<E, P::Kind>,
     ) {
-        if let Some(tick_manager) = tick_manager_option {
-            let server_tick = tick_manager.server_tick();
+        if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
             // Read Tick Buffered Messages
             let mut converter = EntityConverter::new(world_record, &self.entity_manager);
             self.tick_buffer.read_messages(
-                server_tick,
+                &server_tick,
+                &client_tick,
                 reader,
                 manifest,
                 &mut converter,

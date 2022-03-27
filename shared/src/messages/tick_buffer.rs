@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use log::info;
 use naia_serde::BitReader;
 
 use super::{
@@ -46,21 +47,21 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         return output;
     }
 
-    pub fn collect_outgoing_messages(&mut self, server_receivable_tick: &Tick) {
+    pub fn collect_outgoing_messages(&mut self, client_sending_tick: &Tick, server_receivable_tick: &Tick) {
         for channel_index in &self.channels.vec {
             let channel = self.channels.map.get_mut(channel_index).unwrap();
-            channel.collect_outgoing_messages(server_receivable_tick);
+            channel.collect_outgoing_messages(client_sending_tick, server_receivable_tick);
         }
     }
 
     pub fn send_message<R: ReplicateSafe<P>>(
         &mut self,
-        client_tick: Tick,
+        host_tick: &Tick,
         channel_index: C,
         message: &R,
     ) {
         if let Some(channel) = self.channels.map.get_mut(&channel_index) {
-            channel.send_message(client_tick, message);
+            channel.send_message(host_tick, message);
         }
     }
 
@@ -79,10 +80,20 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         writer: &mut BitWriter,
         packet_index: PacketIndex,
         converter: &dyn NetEntityHandleConverter,
+        host_tick: &Tick,
     ) {
         for channel_index in &self.channels.vec {
             let channel = self.channels.map.get_mut(channel_index).unwrap();
-            if let Some(message_ids) = channel.write_messages(converter, writer) {
+            if let Some(message_ids) = channel.write_messages(converter, writer, host_tick) {
+
+                // {
+                //     let mut messages_string = "".to_string();
+                //     for (tick, message_id) in &message_ids {
+                //         messages_string += &format!("(t{}, i{})", tick, message_id);
+                //     }
+                //     info!("Writing Packet ({}), with messages: [{}]", packet_index, messages_string);
+                // }
+
                 if !self.packet_to_channel_map.contains_key(&packet_index) {
                     self.packet_to_channel_map.insert(packet_index, Vec::new());
                 }
@@ -94,14 +105,15 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
 
     pub fn read_messages(
         &mut self,
-        server_tick: Tick,
+        host_tick: &Tick,
+        remote_tick: &Tick,
         reader: &mut BitReader,
         manifest: &Manifest<P>,
         converter: &mut dyn NetEntityHandleConverter,
     ) {
         for channel_index in &self.channels.vec {
             let channel = self.channels.map.get_mut(channel_index).unwrap();
-            channel.read_messages(server_tick, reader, manifest, converter);
+            channel.read_messages(host_tick, remote_tick, reader, manifest, converter);
         }
     }
 }
