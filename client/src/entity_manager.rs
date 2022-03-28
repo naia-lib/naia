@@ -5,12 +5,8 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{
-    message_list_header,
-    serde::{BitReader, Serde, UnsignedVariableInteger},
-    BigMap, ChannelIndex, EntityActionType, EntityHandle, EntityHandleConverter,
-    FakeEntityConverter, NetEntity, NetEntityHandleConverter, Protocolize, Tick, WorldMutType,
-};
+use naia_shared::{message_list_header, serde::{BitReader, Serde, UnsignedVariableInteger}, BigMap, ChannelIndex, EntityActionType, EntityHandle, EntityHandleConverter, FakeEntityConverter, NetEntity, NetEntityHandleConverter, Protocolize, Tick, WorldMutType, MessageId};
+use naia_shared::serde::SignedVariableInteger;
 
 use super::{entity_record::EntityRecord, error::NaiaClientError, event::Event};
 
@@ -37,10 +33,26 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
+        let mut last_read_id: Option<MessageId> = None;
         let action_count = message_list_header::read(reader);
         for _ in 0..action_count {
-            self.read_action(world, server_tick, reader, event_stream);
+            self.read_action(world, server_tick, reader, &mut last_read_id, event_stream);
         }
+    }
+
+    fn read_message_id(bit_reader: &mut BitReader, last_id_opt: &mut Option<MessageId>) -> MessageId {
+        let current_id;
+        if let Some(last_id) = last_id_opt {
+            // read diff
+            // TODO: make this unsigned when we're able to send in ascending order
+            let id_diff = SignedVariableInteger::<3>::de(bit_reader).unwrap().get() as MessageId;
+            current_id = last_id.wrapping_add(id_diff);
+        } else {
+            // read message id
+            current_id = MessageId::de(bit_reader).unwrap();
+        }
+        *last_id_opt = Some(current_id);
+        current_id
     }
 
     fn read_action<W: WorldMutType<P, E>, C: ChannelIndex>(
@@ -48,6 +60,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         world: &mut W,
         server_tick: Tick,
         reader: &mut BitReader,
+        last_read_id: &mut Option<MessageId>,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
         let message_type = EntityActionType::de(reader).unwrap();
@@ -55,6 +68,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         match message_type {
             // Entity Creation
             EntityActionType::SpawnEntity => {
+                let action_id = Self::read_message_id(reader, last_read_id);
                 let net_entity = NetEntity::de(reader).unwrap();
                 let components_num = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
                 if self.local_to_world_entity.contains_key(&net_entity) {
@@ -95,6 +109,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             }
             // Entity Deletion
             EntityActionType::DespawnEntity => {
+                let action_id = Self::read_message_id(reader, last_read_id);
                 let net_entity = NetEntity::de(reader).unwrap();
                 if let Some(world_entity) = self.local_to_world_entity.remove(&net_entity) {
                     if self.entity_records.remove(&world_entity).is_none() {
@@ -120,6 +135,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             }
             // Add Component to Entity
             EntityActionType::InsertComponent => {
+                let action_id = Self::read_message_id(reader, last_read_id);
                 let net_entity = NetEntity::de(reader).unwrap();
 
                 let new_component = P::build(reader, self);
@@ -165,6 +181,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             }
             // Component Removal
             EntityActionType::RemoveComponent => {
+                let action_id = Self::read_message_id(reader, last_read_id);
                 let net_entity = NetEntity::de(reader).unwrap();
                 let component_kind = P::Kind::de(reader).unwrap();
 
