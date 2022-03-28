@@ -51,10 +51,10 @@ pub use messages::{
     message_list_header,
     message_manager::MessageManager,
     reliable_sender::ReliableSender,
-    unordered_reliable_receiver::{UnorderedReliableReceiver, UnorderedReliableReceiverRecord},
-    unordered_unreliable_sender::UnorderedUnreliableSender,
-    unordered_unreliable_receiver::UnorderedUnreliableReceiver,
     tick_buffer::TickBuffer,
+    unordered_reliable_receiver::{UnorderedReliableReceiver, UnorderedReliableReceiverRecord},
+    unordered_unreliable_receiver::UnorderedUnreliableReceiver,
+    unordered_unreliable_sender::UnorderedUnreliableSender,
 };
 pub use protocol::{
     diff_mask::DiffMask,

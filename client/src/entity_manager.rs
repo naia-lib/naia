@@ -3,7 +3,13 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{message_list_header, serde::{BitReader, Serde, UnsignedVariableInteger, SignedVariableInteger}, BigMap, ChannelIndex, EntityActionType, EntityHandle, EntityHandleConverter, NetEntity, NetEntityHandleConverter, Protocolize, Tick, WorldMutType, MessageId, UnorderedReliableReceiverRecord};
+use naia_shared::{
+    message_list_header,
+    serde::{BitReader, Serde, SignedVariableInteger, UnsignedVariableInteger},
+    BigMap, ChannelIndex, EntityActionType, EntityHandle, EntityHandleConverter, MessageId,
+    NetEntity, NetEntityHandleConverter, Protocolize, Tick, UnorderedReliableReceiverRecord,
+    WorldMutType,
+};
 
 use super::{entity_record::EntityRecord, error::NaiaClientError, event::Event};
 
@@ -37,7 +43,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         self.read_updates(world, server_tick, reader, event_stream);
     }
 
-    fn read_message_id(bit_reader: &mut BitReader, last_id_opt: &mut Option<MessageId>) -> MessageId {
+    fn read_message_id(
+        bit_reader: &mut BitReader,
+        last_id_opt: &mut Option<MessageId>,
+    ) -> MessageId {
         let current_id;
         if let Some(last_id) = last_id_opt {
             // read diff
@@ -196,10 +205,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     return;
                 }
 
-                let world_entity = self.local_to_world_entity
+                let world_entity = self
+                    .local_to_world_entity
                     .get_mut(&net_entity)
                     .expect("attempting to delete component of nonexistent entity");
-                let entity_record = self.entity_records
+                let entity_record = self
+                    .entity_records
                     .get_mut(world_entity)
                     .expect("attempting to delete component of nonexistent entity");
                 if entity_record.component_kinds.remove(&component_kind) {
@@ -209,8 +220,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                         .expect("Component already removed?");
 
                     // Generate event
-                    event_stream
-                        .push_back(Ok(Event::RemoveComponent(*world_entity, component)));
+                    event_stream.push_back(Ok(Event::RemoveComponent(*world_entity, component)));
                 } else {
                     panic!("attempting to delete nonexistent component of entity");
                 }

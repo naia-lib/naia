@@ -4,7 +4,13 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter}, BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, TickBuffer, WorldRefType, Instant};
+use naia_shared::{
+    sequence_greater_than,
+    serde::{BitReader, BitWriter},
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, Instant,
+    PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, TickBuffer,
+    WorldRefType,
+};
 
 use super::{
     entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, io::Io,

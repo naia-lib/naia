@@ -5,11 +5,18 @@ use std::{
     hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock},
+    time::Duration,
 };
-use std::time::Duration;
 
-use naia_shared::{message_list_header, serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, ChannelIndex, DiffMask, EntityConverter, KeyGenerator, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, Instant, MessageId, wrapping_diff};
-use naia_shared::serde::SignedVariableInteger;
+use naia_shared::{
+    message_list_header,
+    serde::{
+        BitCounter, BitWrite, BitWriter, Serde, SignedVariableInteger, UnsignedVariableInteger,
+    },
+    wrapping_diff, ChannelIndex, DiffMask, EntityConverter, Instant, KeyGenerator, MessageId,
+    MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize,
+    ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
+};
 
 use super::{
     entity_action::EntityAction, entity_message_waitlist::EntityMessageWaitlist,
@@ -66,7 +73,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             sent_updates: HashMap::new(),
             last_update_packet_index: 0,
             delivered_packets: VecDeque::new(),
-
         }
     }
 
@@ -262,7 +268,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                                 // set status of Components to Created
                                 while let Some(component_kind) = component_list.pop() {
                                     if let Some(locality_status) =
-                                    entity_record.components.get_mut(&component_kind)
+                                        entity_record.components.get_mut(&component_kind)
                                     {
                                         *locality_status = LocalityStatus::Created;
                                     } else {
@@ -274,7 +280,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                                 // initiate that now
                                 for component_kind in world_record.component_kinds(&global_entity) {
                                     if let Some(locality_status) =
-                                    entity_record.components.get(&component_kind)
+                                        entity_record.components.get(&component_kind)
                                     {
                                         // check if component has been successfully created
                                         // (perhaps through the previous entity_create operation)
@@ -314,10 +320,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                             } else {
                                 // we do not need to delete just yet
                                 if let Some(entity_record) =
-                                self.entity_records.get_mut(&global_entity)
+                                    self.entity_records.get_mut(&global_entity)
                                 {
                                     if let Some(locality_status) =
-                                    entity_record.components.get_mut(&component_kind)
+                                        entity_record.components.get_mut(&component_kind)
                                     {
                                         *locality_status = LocalityStatus::Created;
                                     } else {
@@ -393,7 +399,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         message_list_header::write(writer, message_count);
 
         if !self.sent_actions.contains_key(&packet_index) {
-            self.sent_actions.insert(*packet_index, (now.clone(), Vec::new()));
+            self.sent_actions
+                .insert(*packet_index, (now.clone(), Vec::new()));
         }
 
         // Actions
@@ -404,12 +411,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 // Pop message
 
                 // Write message
-                self.write_action(world, world_record, packet_index, writer, None, &mut last_written_id);
+                self.write_action(
+                    world,
+                    world_record,
+                    packet_index,
+                    writer,
+                    None,
+                    &mut last_written_id,
+                );
             }
         }
     }
 
-    fn write_message_id(bit_writer: &mut dyn BitWrite, last_id_opt: &mut Option<MessageId>, current_id: &MessageId) {
+    fn write_message_id(
+        bit_writer: &mut dyn BitWrite,
+        last_id_opt: &mut Option<MessageId>,
+        current_id: &MessageId,
+    ) {
         if let Some(last_id) = last_id_opt {
             // write diff
             let id_diff = wrapping_diff(*last_id, *current_id);
@@ -497,10 +515,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 // write to record, if we are writing to this packet
                 if is_writing {
                     let (_, sent_actions_list) = self.sent_actions.get_mut(&packet_index).unwrap();
-                    sent_actions_list.push((*action_id, EntityAction::SpawnEntity(
-                        *global_entity,
-                        Some(component_kinds),
-                    )));
+                    sent_actions_list.push((
+                        *action_id,
+                        EntityAction::SpawnEntity(*global_entity, Some(component_kinds)),
+                    ));
                 }
             }
             EntityAction::DespawnEntity(global_entity) => {
@@ -514,7 +532,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 // write to record, if we are writing to this packet
                 if is_writing {
                     let (_, sent_actions_list) = self.sent_actions.get_mut(&packet_index).unwrap();
-                    sent_actions_list.push((*action_id, EntityAction::DespawnEntity(*global_entity)));
+                    sent_actions_list
+                        .push((*action_id, EntityAction::DespawnEntity(*global_entity)));
                 }
             }
             EntityAction::InsertComponent(global_entity, component_kind) => {
@@ -546,10 +565,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
                     // write to record
                     let (_, sent_actions_list) = self.sent_actions.get_mut(&packet_index).unwrap();
-                    sent_actions_list.push((*action_id, EntityAction::InsertComponent(
-                        *global_entity,
-                        *component_kind,
-                    )));
+                    sent_actions_list.push((
+                        *action_id,
+                        EntityAction::InsertComponent(*global_entity, *component_kind),
+                    ));
                 }
             }
             EntityAction::RemoveComponent(global_entity, component_kind) => {
@@ -567,10 +586,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 if is_writing {
                     // write to record
                     let (_, sent_actions_list) = self.sent_actions.get_mut(&packet_index).unwrap();
-                    sent_actions_list.push((*action_id, EntityAction::RemoveComponent(
-                        *global_entity,
-                        *component_kind,
-                    )));
+                    sent_actions_list.push((
+                        *action_id,
+                        EntityAction::RemoveComponent(*global_entity, *component_kind),
+                    ));
                 }
             }
         }
@@ -614,7 +633,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                     packet_index,
                     &mut counter,
                     &update_entity,
-                    false
+                    false,
                 );
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     update_entities.push(update_entity);
@@ -628,7 +647,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         message_list_header::write(writer, update_entities.len() as u16);
 
         if !self.sent_updates.contains_key(&packet_index) {
-            self.sent_updates.insert(*packet_index, (now.clone(), HashMap::new()));
+            self.sent_updates
+                .insert(*packet_index, (now.clone(), HashMap::new()));
         }
 
         // Actions
@@ -668,7 +688,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         };
 
         // write local entity
-        self.entity_records.get(global_entity).unwrap().net_entity.ser(bit_writer);
+        self.entity_records
+            .get(global_entity)
+            .unwrap()
+            .net_entity
+            .ser(bit_writer);
 
         // write number of components
         UnsignedVariableInteger::<3>::new(component_set.len() as u64).ser(bit_writer);
@@ -816,7 +840,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     }
 
     fn notify_action_dropped(&mut self, dropped_packet_index: PacketIndex) {
-        if let Some((_, mut dropped_actions_list)) = self.sent_actions.remove(&dropped_packet_index) {
+        if let Some((_, mut dropped_actions_list)) = self.sent_actions.remove(&dropped_packet_index)
+        {
             for (action_id, dropped_action) in dropped_actions_list.drain(..) {
                 match dropped_action {
                     // guaranteed delivery actions
@@ -845,25 +870,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
                 let mut packet_index = dropped_packet_index.wrapping_add(1);
                 while packet_index != self.last_update_packet_index {
-                    if let Some((_, diff_mask_map)) =
-                    self.sent_updates.get(&packet_index)
-                    {
-                        if let Some(next_diff_mask) =
-                        diff_mask_map.get(&component_index)
-                        {
-                            new_diff_mask
-                                .nand(next_diff_mask.borrow().borrow());
+                    if let Some((_, diff_mask_map)) = self.sent_updates.get(&packet_index) {
+                        if let Some(next_diff_mask) = diff_mask_map.get(&component_index) {
+                            new_diff_mask.nand(next_diff_mask.borrow().borrow());
                         }
                     }
 
                     packet_index = packet_index.wrapping_add(1);
                 }
 
-                self.diff_handler.or_diff_mask(
-                    &global_entity,
-                    &component_kind,
-                    &new_diff_mask,
-                );
+                self.diff_handler
+                    .or_diff_mask(&global_entity, &component_kind, &new_diff_mask);
             }
         }
     }
