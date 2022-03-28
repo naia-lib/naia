@@ -8,7 +8,8 @@ use std::{
 };
 use std::time::Duration;
 
-use naia_shared::{message_list_header, serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, ChannelIndex, ChannelSender, DiffMask, EntityConverter, KeyGenerator, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReliableSender, ReliableSettings, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, UnorderedUnreliableSender, Instant};
+use naia_shared::{message_list_header, serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, ChannelIndex, DiffMask, EntityConverter, KeyGenerator, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, Instant, MessageId, wrapping_diff};
+use naia_shared::serde::SignedVariableInteger;
 
 use super::{
     entity_action::EntityAction, entity_message_waitlist::EntityMessageWaitlist,
@@ -32,8 +33,8 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     diff_handler: UserDiffHandler<E, P::Kind>,
     delayed_component_deletions: HashSet<(E, P::Kind)>,
     // Actions / updates / ect
-    queued_actions: VecDeque<EntityAction<P, E>>,
-    sent_actions: HashMap<PacketIndex, (Instant, Vec<EntityAction<P, E>>)>,
+    queued_actions: QueuedEntityActions<P, E>,
+    sent_actions: HashMap<PacketIndex, (Instant, Vec<(MessageId, EntityAction<P, E>)>)>,
     sent_updates: HashMap<PacketIndex, HashMap<(E, P::Kind), DiffMask>>,
     last_update_packet_index: PacketIndex,
     delivered_packets: VecDeque<PacketIndex>,
@@ -58,7 +59,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             diff_handler: UserDiffHandler::new(diff_handler),
             delayed_component_deletions: HashSet::new(),
             // Actions / updates / ect
-            queued_actions: VecDeque::new(),
+            queued_actions: QueuedEntityActions::new(),
             sent_actions: HashMap::new(),
             sent_updates: HashMap::new(),
             last_update_packet_index: 0,
@@ -90,7 +91,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             }
 
             self.queued_actions
-                .push_back(EntityAction::SpawnEntity(*global_entity, None));
+                .push_new(EntityAction::SpawnEntity(*global_entity, None));
         } else {
             panic!("added entity twice");
         }
@@ -174,7 +175,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             LocalityStatus::Created => {
                 // send InsertComponent action
                 self.queued_actions
-                    .push_back(EntityAction::InsertComponent(*entity, *component_kind));
+                    .push_new(EntityAction::InsertComponent(*entity, *component_kind));
             }
             LocalityStatus::Deleting => {
                 // deletion in progress, do nothing
@@ -245,14 +246,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
             // Find how many messages will fit into the packet
             let queued_actions_len = self.queued_actions.len();
+            let mut last_written_id: Option<MessageId> = None;
+
             for action_index in 0..queued_actions_len {
                 self.write_action(
-                    &now,
-                    &mut counter,
-                    packet_index,
                     world,
                     world_record,
+                    &now,
+                    packet_index,
+                    &mut counter,
                     Some(action_index),
+                    &mut last_written_id,
                 );
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
@@ -267,34 +271,51 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
         // Actions
         {
+            let mut last_written_id: Option<MessageId> = None;
+
             for _ in 0..message_count {
                 // Pop message
 
                 // Write message
-                self.write_action(&now, writer, packet_index, world, world_record, None);
+                self.write_action(world, world_record, &now, packet_index, writer, None, &mut last_written_id);
             }
         }
     }
 
+    fn write_message_id(bit_writer: &mut dyn BitWrite, last_id_opt: &mut Option<MessageId>, current_id: &MessageId) {
+        if let Some(last_id) = last_id_opt {
+            // write diff
+            let id_diff = wrapping_diff(*last_id, *current_id);
+            // TODO: make this unsigned when we're able to send in ascending order
+            let id_diff_encoded = SignedVariableInteger::<3>::new(id_diff);
+            id_diff_encoded.ser(bit_writer);
+        } else {
+            // write message id
+            current_id.ser(bit_writer);
+        }
+        *last_id_opt = Some(*current_id);
+    }
+
     pub fn write_action<W: WorldRefType<P, E>>(
         &mut self,
-        now: &Instant,
-        bit_writer: &mut dyn BitWrite,
-        packet_index: PacketIndex,
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        now: &Instant,
+        packet_index: PacketIndex,
+        bit_writer: &mut dyn BitWrite,
         action_index: Option<usize>,
+        last_written_id: &mut Option<MessageId>,
     ) {
         let is_writing: bool = action_index.is_none();
-        let mut action_holder: Option<EntityAction<P, E>> = None;
+        let mut action_holder: Option<(MessageId, EntityAction<P, E>)> = None;
         if is_writing {
             action_holder = Some(
                 self.queued_actions
-                    .pop_front()
+                    .pop()
                     .expect("should be an action available to pop"),
             );
         }
-        let action = {
+        let (action_id, action) = {
             if is_writing {
                 action_holder.as_ref().unwrap()
             } else {
@@ -309,11 +330,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             }
         }
 
-        //Write EntityAction type
+        // write EntityAction type
         action.as_type().ser(bit_writer);
 
         match action {
             EntityAction::SpawnEntity(global_entity, _) => {
+                // write message id
+                Self::write_message_id(bit_writer, last_written_id, action_id);
+
                 // write local entity
                 let net_entity = self.entity_records.get(global_entity).unwrap().net_entity;
                 net_entity.ser(bit_writer);
@@ -353,13 +377,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 // write to record, if we are writing to this packet
                 if is_writing {
                     let (_, sent_actions_list) = self.sent_actions.get_mut(&packet_index).unwrap();
-                    sent_actions_list.push(EntityAction::SpawnEntity(
+                    sent_actions_list.push((*action_id, EntityAction::SpawnEntity(
                         *global_entity,
                         Some(component_kinds),
-                    ));
+                    )));
                 }
             }
             EntityAction::DespawnEntity(global_entity) => {
+                // write message id
+                Self::write_message_id(bit_writer, last_written_id, action_id);
+
                 // write local entity
                 let net_entity = self.entity_records.get(global_entity).unwrap().net_entity;
                 net_entity.ser(bit_writer);
@@ -367,10 +394,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 // write to record, if we are writing to this packet
                 if is_writing {
                     let (_, sent_actions_list) = self.sent_actions.get_mut(&packet_index).unwrap();
-                    sent_actions_list.push(EntityAction::DespawnEntity(*global_entity));
+                    sent_actions_list.push((*action_id, EntityAction::DespawnEntity(*global_entity)));
                 }
             }
             EntityAction::InsertComponent(global_entity, component_kind) => {
+                // write message id
+                Self::write_message_id(bit_writer, last_written_id, action_id);
+
                 // write local entity
                 let net_entity = self.entity_records.get(global_entity).unwrap().net_entity;
                 net_entity.ser(bit_writer);
@@ -396,10 +426,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
                     // write to record
                     let (_, sent_actions_list) = self.sent_actions.get_mut(&packet_index).unwrap();
-                    sent_actions_list.push(EntityAction::InsertComponent(
+                    sent_actions_list.push((*action_id, EntityAction::InsertComponent(
                         *global_entity,
                         *component_kind,
-                    ));
+                    )));
                 }
             }
             EntityAction::UpdateComponent(global_entity, component_kind) => {
@@ -442,13 +472,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                         .clear_diff_mask(global_entity, component_kind);
 
                     let (_, sent_actions_list) = self.sent_actions.get_mut(&packet_index).unwrap();
-                    sent_actions_list.push(EntityAction::UpdateComponent(
+                    sent_actions_list.push((*action_id, EntityAction::UpdateComponent(
                         *global_entity,
                         *component_kind,
-                    ));
+                    )));
                 }
             }
             EntityAction::RemoveComponent(global_entity, component_kind) => {
+                // write message id
+                Self::write_message_id(bit_writer, last_written_id, action_id);
+
                 // write local entity
                 let net_entity = self.entity_records.get(global_entity).unwrap().net_entity;
                 net_entity.ser(bit_writer);
@@ -460,10 +493,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 if is_writing {
                     // write to record
                     let (_, sent_actions_list) = self.sent_actions.get_mut(&packet_index).unwrap();
-                    sent_actions_list.push(EntityAction::RemoveComponent(
+                    sent_actions_list.push((*action_id, EntityAction::RemoveComponent(
                         *global_entity,
                         *component_kind,
-                    ));
+                    )));
                 }
             }
         }
@@ -491,8 +524,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             }
         }
 
-        info!("dropped {} packets", dropped_packets.len());
-
         for packet_index in dropped_packets {
             self.notify_packet_dropped(packet_index);
         }
@@ -506,7 +537,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                         .diff_handler
                         .diff_mask_is_clear(global_entity, component_kind)
                 {
-                    self.queued_actions.push_back(EntityAction::UpdateComponent(
+                    self.queued_actions.push_new(EntityAction::UpdateComponent(
                         *global_entity,
                         *component_kind,
                     ));
@@ -549,7 +580,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             let mut deleted_components: Vec<(E, P::Kind)> = Vec::new();
 
             if let Some((_, delivered_actions_list)) = self.sent_actions.remove(&packet_index) {
-                for delivered_action in delivered_actions_list.into_iter() {
+                for (_, delivered_action) in delivered_actions_list.into_iter() {
                     match delivered_action {
                         EntityAction::RemoveComponent(global_entity, component_kind) => {
                             deleted_components.push((global_entity, component_kind));
@@ -590,7 +621,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                                         // check if component has been successfully created
                                         // (perhaps through the previous entity_create operation)
                                         if *locality_status == LocalityStatus::Creating {
-                                            self.queued_actions.push_back(
+                                            self.queued_actions.push_new(
                                                 EntityAction::InsertComponent(
                                                     global_entity,
                                                     component_kind,
@@ -660,7 +691,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             }
 
             self.queued_actions
-                .push_back(EntityAction::DespawnEntity(*entity));
+                .push_new(EntityAction::DespawnEntity(*entity));
         }
     }
 
@@ -676,19 +707,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         *component_status = LocalityStatus::Deleting;
 
         self.queued_actions
-            .push_back(EntityAction::RemoveComponent(*entity, *component_kind));
+            .push_new(EntityAction::RemoveComponent(*entity, *component_kind));
     }
 
     fn notify_packet_dropped(&mut self, dropped_packet_index: PacketIndex) {
         if let Some((_, mut dropped_actions_list)) = self.sent_actions.remove(&dropped_packet_index) {
-            for dropped_action in dropped_actions_list.drain(..) {
+            for (action_id, dropped_action) in dropped_actions_list.drain(..) {
                 match dropped_action {
                     // guaranteed delivery actions
                     EntityAction::SpawnEntity { .. }
                     | EntityAction::DespawnEntity(_)
                     | EntityAction::InsertComponent(_, _)
                     | EntityAction::RemoveComponent(_, _) => {
-                        self.queued_actions.push_back(dropped_action);
+                        self.queued_actions.push_old(action_id, dropped_action);
                     }
                     // non-guaranteed delivery actions
                     EntityAction::UpdateComponent(global_entity, component_kind) => {
@@ -730,6 +761,43 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     }
 }
 
+// QueuedEntityActions
+pub struct QueuedEntityActions<P: Protocolize, E: Copy + Eq + Hash> {
+    next_send_message_id: MessageId,
+    list: VecDeque<(MessageId, EntityAction<P, E>)>,
+}
+
+impl<P: Protocolize, E: Copy + Eq + Hash> QueuedEntityActions<P, E> {
+    pub fn new() -> Self {
+        Self {
+            next_send_message_id: 0,
+            list: VecDeque::new(),
+        }
+    }
+
+    pub fn push_new(&mut self, action: EntityAction<P, E>) {
+        self.list.push_back((self.next_send_message_id, action));
+        self.next_send_message_id = self.next_send_message_id.wrapping_add(1);
+    }
+
+    pub fn push_old(&mut self, message_id: MessageId, action: EntityAction<P, E>) {
+        self.list.push_back((message_id, action));
+    }
+
+    pub fn pop(&mut self) -> Option<(MessageId, EntityAction<P, E>)> {
+        return self.list.pop_front();
+    }
+
+    pub fn len(&self) -> usize {
+        self.list.len()
+    }
+
+    pub fn get(&self, index: usize) -> Option<&(MessageId, EntityAction<P, E>)> {
+        return self.list.get(index);
+    }
+}
+
+// PacketNotifiable
 impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> PacketNotifiable
     for EntityManager<P, E, C>
 {
@@ -738,6 +806,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> PacketNotifiable
     }
 }
 
+// NetEntityConverter
 impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NetEntityConverter<E>
     for EntityManager<P, E, C>
 {

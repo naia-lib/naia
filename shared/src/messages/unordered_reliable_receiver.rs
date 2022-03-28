@@ -2,20 +2,20 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::BitReader;
 
-use crate::{protocol::protocolize::Protocolize, sequence_less_than, types::MessageId};
+use crate::{sequence_less_than, types::MessageId};
 
 use super::{
     message_channel::{ChannelReader, ChannelReceiver},
     reliable_receiver::ReliableReceiver,
 };
 
-pub struct UnorderedReliableReceiver<P: Protocolize> {
+pub struct UnorderedReliableReceiver<P> {
     oldest_waiting_message_id: MessageId,
     waiting_incoming_messages: VecDeque<(MessageId, bool)>,
     ready_incoming_messages: Vec<P>,
 }
 
-impl<P: Protocolize> UnorderedReliableReceiver<P> {
+impl<P> UnorderedReliableReceiver<P> {
     pub fn new() -> Self {
         Self {
             oldest_waiting_message_id: 0,
@@ -95,7 +95,7 @@ impl<P: Protocolize> UnorderedReliableReceiver<P> {
     }
 }
 
-impl<P: Protocolize> ChannelReceiver<P> for UnorderedReliableReceiver<P> {
+impl<P> ChannelReceiver<P> for UnorderedReliableReceiver<P> {
     fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader) {
         let id_w_msgs = ReliableReceiver::read_incoming_messages(channel_reader, bit_reader);
         for (id, message) in id_w_msgs {
