@@ -5,7 +5,7 @@ use std::{
 
 use naia_shared::{
     message_list_header,
-    serde::{BitReader, Serde, SignedVariableInteger, UnsignedVariableInteger},
+    serde::{BitReader, Serde, UnsignedVariableInteger},
     BigMap, ChannelIndex, EntityActionType, EntityHandle, EntityHandleConverter, MessageId,
     NetEntity, NetEntityHandleConverter, Protocolize, Tick, UnorderedReliableReceiverRecord,
     WorldMutType,
@@ -50,8 +50,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         let current_id;
         if let Some(last_id) = last_id_opt {
             // read diff
-            // TODO: make this unsigned when we're able to send in ascending order
-            let id_diff = SignedVariableInteger::<3>::de(bit_reader).unwrap().get() as MessageId;
+            let id_diff = UnsignedVariableInteger::<3>::de(bit_reader).unwrap().get() as MessageId;
             current_id = last_id.wrapping_add(id_diff);
         } else {
             // read message id
@@ -84,11 +83,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     ) {
         let message_type = EntityActionType::de(reader).unwrap();
 
+        let action_id = Self::read_message_id(reader, last_read_id);
+
         match message_type {
             // Entity Creation
             EntityActionType::SpawnEntity => {
                 // read all data
-                let action_id = Self::read_message_id(reader, last_read_id);
                 let net_entity = NetEntity::de(reader).unwrap();
                 let components_num = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
                 let mut components = Vec::new();
@@ -130,7 +130,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             // Entity Deletion
             EntityActionType::DespawnEntity => {
                 // read all data
-                let action_id = Self::read_message_id(reader, last_read_id);
                 let net_entity = NetEntity::de(reader).unwrap();
 
                 // test whether this is a duplicate message
@@ -164,7 +163,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             // Add Component to Entity
             EntityActionType::InsertComponent => {
                 // read all data
-                let action_id = Self::read_message_id(reader, last_read_id);
                 let net_entity = NetEntity::de(reader).unwrap();
                 let new_component = P::build(reader, self);
 
@@ -196,7 +194,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             // Component Removal
             EntityActionType::RemoveComponent => {
                 // read all data
-                let action_id = Self::read_message_id(reader, last_read_id);
                 let net_entity = NetEntity::de(reader).unwrap();
                 let component_kind = P::Kind::de(reader).unwrap();
 
