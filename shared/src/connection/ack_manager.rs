@@ -94,13 +94,6 @@ impl AckManager {
 
                     self.sent_packets.remove(&sent_packet_index);
                 } else {
-                    if sent_packet.packet_type == PacketType::Data {
-                        self.notify_packet_dropped(
-                            sent_packet_index,
-                            message_manager,
-                            packet_notifiable,
-                        );
-                    }
                     self.sent_packets.remove(&sent_packet_index);
                 }
             }
@@ -145,18 +138,6 @@ impl AckManager {
         message_manager.notify_packet_delivered(sent_packet_index);
         if let Some(notifiable) = packet_notifiable {
             notifiable.notify_packet_delivered(sent_packet_index);
-        }
-    }
-
-    fn notify_packet_dropped<P: Protocolize, C: ChannelIndex>(
-        &self,
-        sent_packet_index: PacketIndex,
-        message_manager: &mut MessageManager<P, C>,
-        packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
-    ) {
-        message_manager.notify_packet_dropped(sent_packet_index);
-        if let Some(notifiable) = packet_notifiable {
-            notifiable.notify_packet_dropped(sent_packet_index);
         }
     }
 
