@@ -180,6 +180,4 @@ impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for MessageManager<P, C> 
             }
         }
     }
-
-    fn notify_packet_dropped(&mut self, _: PacketIndex) {}
 }

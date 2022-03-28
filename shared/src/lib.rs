@@ -51,6 +51,9 @@ pub use messages::{
     message_list_header,
     message_manager::MessageManager,
     reliable_sender::ReliableSender,
+    unordered_reliable_receiver::{UnorderedReliableReceiver, UnorderedReliableReceiverRecord},
+    unordered_unreliable_sender::UnorderedUnreliableSender,
+    unordered_unreliable_receiver::UnorderedUnreliableReceiver,
     tick_buffer::TickBuffer,
 };
 pub use protocol::{

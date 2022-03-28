@@ -5,6 +5,4 @@ use crate::PacketIndex;
 pub trait PacketNotifiable {
     /// Notifies the manager that a packet has been delivered
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex);
-    /// Notifies the manager that a packet has been dropped
-    fn notify_packet_dropped(&mut self, packet_index: PacketIndex);
 }
