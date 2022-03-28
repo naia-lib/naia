@@ -4,9 +4,7 @@ use naia_shared::{
     ChannelConfig, DefaultChannels, LinkConditionerConfig, SharedConfig, SocketConfig,
 };
 
-use super::protocol::Protocol;
-
-pub fn shared_config() -> SharedConfig<Protocol, DefaultChannels> {
+pub fn shared_config() -> SharedConfig<DefaultChannels> {
     let tick_interval = Some(Duration::from_millis(1000));
 
     // Simulate network conditions with this configuration property
@@ -19,7 +17,6 @@ pub fn shared_config() -> SharedConfig<Protocol, DefaultChannels> {
     });
 
     return SharedConfig::new(
-        Protocol::load(),
         SocketConfig::new(link_condition, None),
         ChannelConfig::default(),
         tick_interval,
