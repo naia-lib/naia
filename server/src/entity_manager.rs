@@ -34,9 +34,9 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     delayed_component_deletions: HashSet<(E, P::Kind)>,
     // Actions / updates / ect
     queued_actions: QueuedEntityActions<P, E>,
-    queued_updates: VecDeque<(E, P::Kind)>,
+    queued_updates: HashMap<E, HashSet<P::Kind>>,
     sent_actions: HashMap<PacketIndex, (Instant, Vec<(MessageId, EntityAction<P, E>)>)>,
-    sent_updates: HashMap<PacketIndex, HashMap<(E, P::Kind), DiffMask>>,
+    sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, P::Kind), DiffMask>)>,
     last_update_packet_index: PacketIndex,
     delivered_packets: VecDeque<PacketIndex>,
     // reliable_action_sender: ReliableSender<P>,
@@ -61,7 +61,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             delayed_component_deletions: HashSet::new(),
             // Actions / updates / ect
             queued_actions: QueuedEntityActions::new(),
-            queued_updates: VecDeque::new(),
+            queued_updates: HashMap::new(),
             sent_actions: HashMap::new(),
             sent_updates: HashMap::new(),
             last_update_packet_index: 0,
@@ -147,10 +147,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         rtt_millis: &f32,
         message_manager: &mut MessageManager<P, C>,
     ) {
-        self.collect_resend_messages(rtt_millis);
-        self.collect_component_updates();
+        self.collect_dropped_messages(rtt_millis);
         self.delayed_entity_messages
             .collect_ready_messages(message_manager);
+        self.collect_component_updates();
     }
 
     // Components
@@ -218,13 +218,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
     pub fn write_all<W: WorldRefType<P, E>>(
         &mut self,
+        now: &Instant,
         writer: &mut BitWriter,
-        packet_index: PacketIndex,
+        packet_index: &PacketIndex,
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
     ) {
-        self.write_actions(writer, packet_index, world, world_record);
-        self.write_updates(writer, packet_index, world, world_record);
+        self.write_actions(&now, writer, packet_index, world, world_record);
+        self.write_updates(&now, writer, packet_index, world, world_record);
     }
 
     // Ect..
@@ -341,12 +342,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
     fn write_actions<W: WorldRefType<P, E>>(
         &mut self,
+        now: &Instant,
         writer: &mut BitWriter,
-        packet_index: PacketIndex,
+        packet_index: &PacketIndex,
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
     ) {
-        let now = Instant::now();
         let mut message_count: u16 = 0;
 
         // Header
@@ -375,7 +376,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 self.write_action(
                     world,
                     world_record,
-                    &now,
                     packet_index,
                     &mut counter,
                     Some(action_index),
@@ -392,6 +392,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         // Write header
         message_list_header::write(writer, message_count);
 
+        if !self.sent_actions.contains_key(&packet_index) {
+            self.sent_actions.insert(*packet_index, (now.clone(), Vec::new()));
+        }
+
         // Actions
         {
             let mut last_written_id: Option<MessageId> = None;
@@ -400,7 +404,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 // Pop message
 
                 // Write message
-                self.write_action(world, world_record, &now, packet_index, writer, None, &mut last_written_id);
+                self.write_action(world, world_record, packet_index, writer, None, &mut last_written_id);
             }
         }
     }
@@ -423,8 +427,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         &mut self,
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
-        now: &Instant,
-        packet_index: PacketIndex,
+        packet_index: &PacketIndex,
         bit_writer: &mut dyn BitWrite,
         action_index: Option<usize>,
         last_written_id: &mut Option<MessageId>,
@@ -446,12 +449,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 self.queued_actions.get(open_action_index).as_ref().unwrap()
             }
         };
-
-        if is_writing {
-            if !self.sent_actions.contains_key(&packet_index) {
-                self.sent_actions.insert(packet_index, (now.clone(), Vec::new()));
-            }
-        }
 
         // write EntityAction type
         action.as_type().ser(bit_writer);
@@ -581,12 +578,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
     fn write_updates<W: WorldRefType<P, E>>(
         &mut self,
+        now: &Instant,
         writer: &mut BitWriter,
-        packet_index: PacketIndex,
+        packet_index: &PacketIndex,
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
     ) {
-        let mut message_count: u16 = 0;
+        let mut update_entities: Vec<E> = Vec::new();
 
         // Header
         {
@@ -607,18 +605,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             }
 
             // Find how many messages will fit into the packet
-            let queued_updates_len = self.queued_updates.len();
+            let all_update_entities: Vec<E> = self.queued_updates.keys().map(|e| *e).collect();
 
-            for update_index in 0..queued_updates_len {
+            for update_entity in all_update_entities {
                 self.write_update(
                     world,
                     world_record,
                     packet_index,
                     &mut counter,
-                    Some(update_index),
+                    &update_entity,
+                    false
                 );
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
-                    message_count += 1;
+                    update_entities.push(update_entity);
                 } else {
                     break;
                 }
@@ -626,15 +625,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         }
 
         // Write header
-        message_list_header::write(writer, message_count);
+        message_list_header::write(writer, update_entities.len() as u16);
+
+        if !self.sent_updates.contains_key(&packet_index) {
+            self.sent_updates.insert(*packet_index, (now.clone(), HashMap::new()));
+        }
 
         // Actions
         {
-            for _ in 0..message_count {
+            for entity in update_entities {
                 // Pop message
 
                 // Write message
-                self.write_update(world, world_record, packet_index, writer, None);
+                self.write_update(world, world_record, packet_index, writer, &entity, true);
             }
         }
     }
@@ -643,83 +646,95 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         &mut self,
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
-        packet_index: PacketIndex,
+        packet_index: &PacketIndex,
         bit_writer: &mut dyn BitWrite,
-        action_index: Option<usize>,
+        global_entity: &E,
+        is_writing: bool,
     ) {
-        let is_writing: bool = action_index.is_none();
-        let mut update_holder: Option<(E, P::Kind)> = None;
+        let mut update_holder: Option<HashSet<P::Kind>> = None;
         if is_writing {
             update_holder = Some(
                 self.queued_updates
-                    .pop_front()
+                    .remove(global_entity)
                     .expect("should be an update available to pop"),
             );
         }
-        let (global_entity, component_kind) = {
+        let component_set = {
             if is_writing {
                 update_holder.as_ref().unwrap()
             } else {
-                let open_action_index = action_index.unwrap();
-                self.queued_updates.get(open_action_index).as_ref().unwrap()
+                self.queued_updates.get(global_entity).as_ref().unwrap()
             }
         };
 
-        if is_writing {
-            if !self.sent_updates.contains_key(&packet_index) {
-                self.sent_updates.insert(packet_index, HashMap::new());
-            }
-        }
-
         // write local entity
-        let net_entity = self.entity_records.get(global_entity).unwrap().net_entity;
-        net_entity.ser(bit_writer);
+        self.entity_records.get(global_entity).unwrap().net_entity.ser(bit_writer);
 
-        // write component kind
-        component_kind.ser(bit_writer);
+        // write number of components
+        UnsignedVariableInteger::<3>::new(component_set.len() as u64).ser(bit_writer);
 
-        // get diff mask
-        let diff_mask = self
-            .diff_handler
-            .diff_mask(global_entity, component_kind)
-            .expect("DiffHandler does not have registered Component!")
-            .clone();
+        for component_kind in component_set {
+            // write component kind
+            component_kind.ser(bit_writer);
 
-        // write payload
-        {
-            let converter = EntityConverter::new(world_record, self);
-            world
-                .component_of_kind(global_entity, component_kind)
-                .expect("Component does not exist in World")
-                .write_partial(&diff_mask, bit_writer, &converter);
-        }
+            // get diff mask
+            let diff_mask = self
+                .diff_handler
+                .diff_mask(global_entity, component_kind)
+                .expect("DiffHandler does not have registered Component!")
+                .clone();
 
-        ////////
-        if is_writing {
-            // place diff mask in a special transmission record - like map
-            self.last_update_packet_index = packet_index;
+            // write payload
+            {
+                let converter = EntityConverter::new(world_record, self);
+                world
+                    .component_of_kind(global_entity, component_kind)
+                    .expect("Component does not exist in World")
+                    .write_partial(&diff_mask, bit_writer, &converter);
+            }
 
-            let sent_updates_map = self.sent_updates.get_mut(&packet_index).unwrap();
-            sent_updates_map.insert((*global_entity, *component_kind), diff_mask);
+            ////////
+            if is_writing {
+                // place diff mask in a special transmission record - like map
+                self.last_update_packet_index = *packet_index;
 
-            // having copied the diff mask for this update, clear the component
-            self.diff_handler
-                .clear_diff_mask(global_entity, component_kind);
+                let (_, sent_updates_map) = self.sent_updates.get_mut(packet_index).unwrap();
+                sent_updates_map.insert((*global_entity, *component_kind), diff_mask);
+
+                // having copied the diff mask for this update, clear the component
+                self.diff_handler
+                    .clear_diff_mask(global_entity, component_kind);
+            }
         }
     }
 
-    fn collect_resend_messages(&mut self, rtt_millis: &f32) {
+    fn collect_dropped_messages(&mut self, rtt_millis: &f32) {
         let drop_duration = Duration::from_millis((DROP_PACKET_RTT_FACTOR * rtt_millis) as u64);
 
-        let mut dropped_packets = Vec::new();
-        for (packet_index, (time_sent, _)) in &self.sent_actions {
-            if time_sent.elapsed() > drop_duration {
-                dropped_packets.push(*packet_index);
+        {
+            let mut dropped_packets = Vec::new();
+            for (packet_index, (time_sent, _)) in &self.sent_actions {
+                if time_sent.elapsed() > drop_duration {
+                    dropped_packets.push(*packet_index);
+                }
+            }
+
+            for packet_index in dropped_packets {
+                self.notify_action_dropped(packet_index);
             }
         }
 
-        for packet_index in dropped_packets {
-            self.notify_packet_dropped(packet_index);
+        {
+            let mut dropped_packets = Vec::new();
+            for (packet_index, (time_sent, _)) in &self.sent_updates {
+                if time_sent.elapsed() > drop_duration {
+                    dropped_packets.push(*packet_index);
+                }
+            }
+
+            for packet_index in dropped_packets {
+                self.notify_update_dropped(packet_index);
+            }
         }
     }
 
@@ -731,10 +746,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                         .diff_handler
                         .diff_mask_is_clear(global_entity, component_kind)
                 {
-                    self.queued_updates.push_back((
-                        *global_entity,
-                        *component_kind,
-                    ));
+                    if !self.queued_updates.contains_key(global_entity) {
+                        self.queued_updates.insert(*global_entity, HashSet::new());
+                    }
+                    let component_set = self.queued_updates.get_mut(global_entity).unwrap();
+                    component_set.insert(*component_kind);
                 }
             }
         }
@@ -799,7 +815,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             .push_new(EntityAction::RemoveComponent(*entity, *component_kind));
     }
 
-    fn notify_packet_dropped(&mut self, dropped_packet_index: PacketIndex) {
+    fn notify_action_dropped(&mut self, dropped_packet_index: PacketIndex) {
         if let Some((_, mut dropped_actions_list)) = self.sent_actions.remove(&dropped_packet_index) {
             for (action_id, dropped_action) in dropped_actions_list.drain(..) {
                 match dropped_action {
@@ -813,8 +829,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 }
             }
         }
+    }
 
-        if let Some(diff_mask_map) = self.sent_updates.remove(&dropped_packet_index) {
+    fn notify_update_dropped(&mut self, dropped_packet_index: PacketIndex) {
+        if let Some((_, diff_mask_map)) = self.sent_updates.remove(&dropped_packet_index) {
             // non-guaranteed delivery actions
             for (component_index, diff_mask) in &diff_mask_map {
                 let (global_entity, component_kind) = component_index;
@@ -827,7 +845,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
                 let mut packet_index = dropped_packet_index.wrapping_add(1);
                 while packet_index != self.last_update_packet_index {
-                    if let Some(diff_mask_map) =
+                    if let Some((_, diff_mask_map)) =
                     self.sent_updates.get(&packet_index)
                     {
                         if let Some(next_diff_mask) =

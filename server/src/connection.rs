@@ -4,12 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    sequence_greater_than,
-    serde::{BitReader, BitWriter},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, PacketType,
-    PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, TickBuffer, WorldRefType,
-};
+use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter}, BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, TickBuffer, WorldRefType, Instant};
 
 use super::{
     entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, io::Io,
@@ -87,6 +82,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     // Outgoing data
     pub fn send_outgoing_packets<W: WorldRefType<P, E>>(
         &mut self,
+        now: &Instant,
         io: &mut Io,
         world: &W,
         world_record: &WorldRecord<E, P::Kind>,
@@ -97,7 +93,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(io, world, world_record, tick_manager_opt) {
+            if self.send_outgoing_packet(now, io, world, world_record, tick_manager_opt) {
                 any_sent = true;
             } else {
                 break;
@@ -118,6 +114,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
     fn send_outgoing_packet<W: WorldRefType<P, E>>(
         &mut self,
+        now: &Instant,
         io: &mut Io,
         world: &W,
         world_record: &WorldRecord<E, P::Kind>,
@@ -152,8 +149,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
             // write entity actions
             self.entity_manager.write_all(
+                now,
                 &mut bit_writer,
-                next_packet_index,
+                &next_packet_index,
                 world,
                 world_record,
             );
