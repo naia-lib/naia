@@ -144,6 +144,4 @@ impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for TickBuffer<P, C> {
             }
         }
     }
-
-    fn notify_packet_dropped(&mut self, _dropped_packet_index: PacketIndex) {}
 }
