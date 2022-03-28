@@ -16,7 +16,6 @@ use crate::{
     serde::BitWriter,
     types::{PacketIndex, ShortMessageId, Tick},
     vecmap::VecMap,
-    Manifest,
 };
 
 pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
@@ -122,12 +121,11 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         host_tick: &Tick,
         remote_tick: &Tick,
         reader: &mut BitReader,
-        manifest: &Manifest<P>,
         converter: &mut dyn NetEntityHandleConverter,
     ) {
         for channel_index in &self.channels.vec {
             let channel = self.channels.map.get_mut(channel_index).unwrap();
-            channel.read_messages(host_tick, remote_tick, reader, manifest, converter);
+            channel.read_messages(host_tick, remote_tick, reader, converter);
         }
     }
 }

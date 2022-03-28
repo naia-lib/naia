@@ -6,7 +6,7 @@ use naia_shared::ChannelIndex;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
     wrapping_diff, BaseConnection, ConnectionConfig, FakeEntityConverter, Instant, KeyGenerator,
-    Manifest, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
+    PacketType, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
     Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType, WorldRefType,
 };
 
@@ -72,7 +72,6 @@ impl<P: Protocolize> HandshakeManager<P> {
     // Step 3 of Handshake
     pub fn recv_connect_request(
         &mut self,
-        manifest: &Manifest<P>,
         reader: &mut BitReader,
     ) -> HandshakeResult<P> {
         // Verify that timestamp hash has been written by this
@@ -86,8 +85,7 @@ impl<P: Protocolize> HandshakeManager<P> {
             }
 
             if has_auth {
-                let auth_kind = P::Kind::de(reader).unwrap();
-                let auth_message = manifest.create_replica(auth_kind, reader, &FakeEntityConverter);
+                let auth_message = P::build(reader, &FakeEntityConverter);
                 return HandshakeResult::Success(Some(auth_message));
             } else {
                 return HandshakeResult::Success(None);

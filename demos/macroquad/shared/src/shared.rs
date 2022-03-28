@@ -7,7 +7,7 @@ use super::{
     protocol::Protocol,
 };
 
-pub fn shared_config() -> SharedConfig<Protocol, Channels> {
+pub fn shared_config() -> SharedConfig<Channels> {
     // Set tick rate to ~60 FPS
     let tick_interval = Some(Duration::from_millis(20));
 
@@ -23,7 +23,6 @@ pub fn shared_config() -> SharedConfig<Protocol, Channels> {
     // compression dictionary");
 
     return SharedConfig::new(
-        Protocol::load(),
         SocketConfig::new(link_condition, None),
         channels_init(),
         tick_interval,

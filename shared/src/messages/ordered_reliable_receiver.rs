@@ -4,7 +4,7 @@ use naia_serde::BitReader;
 
 use crate::{
     protocol::{
-        entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
+        entity_property::NetEntityHandleConverter, protocolize::Protocolize,
     },
     sequence_less_than,
     types::MessageId,
@@ -82,10 +82,9 @@ impl<P: Protocolize> ChannelReceiver<P> for OrderedReliableReceiver<P> {
     fn read_messages(
         &mut self,
         reader: &mut BitReader,
-        manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter,
     ) {
-        let id_w_msgs = ReliableReceiver::read_incoming_messages(reader, manifest, converter);
+        let id_w_msgs = ReliableReceiver::read_incoming_messages(reader, converter);
         for (id, message) in id_w_msgs {
             self.recv_message(id, message);
         }

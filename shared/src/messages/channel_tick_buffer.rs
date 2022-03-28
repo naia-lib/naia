@@ -12,7 +12,7 @@ use super::{channel_config::TickBufferSettings, message_list_header};
 use crate::{
     constants::{MESSAGE_HISTORY_SIZE, MTU_SIZE_BITS},
     protocol::{
-        entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
+        entity_property::NetEntityHandleConverter, protocolize::Protocolize,
         replicate::ReplicateSafe,
     },
     sequence_greater_than, sequence_less_than,
@@ -224,13 +224,12 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         host_tick: &Tick,
         remote_tick: &Tick,
         reader: &mut BitReader,
-        manifest: &Manifest<P>,
         converter: &mut dyn NetEntityHandleConverter,
     ) {
         let mut last_read_tick = *remote_tick;
         let message_count = message_list_header::read(reader);
         for _ in 0..message_count {
-            self.read_message(host_tick, &mut last_read_tick, reader, manifest, converter);
+            self.read_message(host_tick, &mut last_read_tick, reader, converter);
         }
     }
 
@@ -241,7 +240,6 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         host_tick: &Tick,
         last_read_tick: &mut Tick,
         reader: &mut BitReader,
-        manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter,
     ) {
         // read remote tick
@@ -259,11 +257,8 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
             let message_id: ShortMessageId = last_read_message_id + id_diff;
             last_read_message_id = message_id;
 
-            // read message kind
-            let replica_kind: P::Kind = P::Kind::de(reader).unwrap();
-
             // read payload
-            let new_message = manifest.create_replica(replica_kind, reader, converter);
+            let new_message = P::build(reader, converter);
 
             if !self
                 .incoming_messages

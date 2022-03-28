@@ -8,8 +8,6 @@ use syn::{
 pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    let hashtag = Punct::new('#', Spacing::Alone);
-
     // Helper Properties
     let properties = properties(&input);
 
@@ -18,10 +16,6 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     // Names
     let replica_name = input.ident;
-    let replica_builder_name = Ident::new(
-        (replica_name.to_string() + "Builder").as_str(),
-        Span::call_site(),
-    );
     let protocol_kind_name = format_ident!("{}Kind", protocol_name);
     let enum_name = format_ident!("{}Property", replica_name);
 
@@ -57,7 +51,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, ReplicaBuilder, PropertyMutate, ReplicateSafe, PropertyMutator,
+        use naia_shared::{DiffMask, PropertyMutate, ReplicateSafe, PropertyMutator,
             Protocolize, ReplicaDynRef, ReplicaDynMut, serde::{BitReader, BitWrite, Serde}, NetEntityHandleConverter};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
         mod internal {
@@ -66,24 +60,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
         #property_enum_definition
 
-        #hashtag[derive(Clone)]
-        pub struct #replica_builder_name {
-            kind: #protocol_kind_name,
-        }
-        impl ReplicaBuilder<#protocol_name> for #replica_builder_name {
-            fn kind(&self) -> #protocol_kind_name {
-                return self.kind;
-            }
-            fn build(&self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> #protocol_name {
-                return #replica_name::read_to_type(reader, converter);
-            }
-        }
         impl #replica_name {
-            pub fn builder() -> Box<dyn ReplicaBuilder<#protocol_name>> {
-                return Box::new(#replica_builder_name {
-                    kind: Protocolize::kind_of::<#replica_name>(),
-                });
-            }
             #new_complete_method
             #read_to_type_method
         }
@@ -506,7 +483,7 @@ pub fn read_to_type_method(
     }
 
     return quote! {
-        fn read_to_type(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> #protocol_name {
+        pub fn read_to_type(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> #protocol_name {
             #prop_reads
 
             return #protocol_name::#replica_name(#replica_name {

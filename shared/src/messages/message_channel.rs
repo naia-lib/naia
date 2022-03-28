@@ -1,7 +1,7 @@
 use naia_serde::{BitReader, BitWriter};
 
 use crate::{
-    protocol::protocolize::Protocolize, types::MessageId, Manifest, NetEntityHandleConverter,
+    protocol::protocolize::Protocolize, types::MessageId, NetEntityHandleConverter,
 };
 
 pub trait ChannelSender<P: Protocolize> {
@@ -20,7 +20,6 @@ pub trait ChannelReceiver<P: Protocolize> {
     fn read_messages(
         &mut self,
         reader: &mut BitReader,
-        manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter,
     );
     fn receive_messages(&mut self) -> Vec<P>;

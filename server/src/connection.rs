@@ -7,7 +7,7 @@ use std::{
 use naia_shared::{
     sequence_greater_than,
     serde::{BitReader, BitWriter},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, Manifest,
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter,
     PacketType, PingManager, Protocolize, StandardHeader, Tick, TickBuffer, WorldRefType,
 };
 
@@ -64,7 +64,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     pub fn process_incoming_data(
         &mut self,
         server_and_client_tick_opt: Option<(Tick, Tick)>,
-        manifest: &Manifest<P>,
         reader: &mut BitReader,
         world_record: &WorldRecord<E, P::Kind>,
     ) {
@@ -75,7 +74,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
                 &server_tick,
                 &client_tick,
                 reader,
-                manifest,
                 &mut converter,
             );
         }
@@ -85,7 +83,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             let mut converter = EntityConverter::new(world_record, &self.entity_manager);
             self.base
                 .message_manager
-                .read_messages(reader, manifest, &mut converter);
+                .read_messages(reader, &mut converter);
         }
     }
 
