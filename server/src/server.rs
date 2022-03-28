@@ -12,7 +12,7 @@ use naia_shared::{
     ChannelIndex, EntityHandle, EntityHandleConverter, Tick,
 };
 pub use naia_shared::{
-    wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, Manifest,
+    wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator,
     NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType,
     Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
     WorldMutType, WorldRefType,
@@ -41,7 +41,7 @@ use super::{
 pub struct Server<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     // Config
     server_config: ServerConfig,
-    shared_config: SharedConfig<P, C>,
+    shared_config: SharedConfig<C>,
     socket: Socket,
     io: Io,
     heartbeat_timer: Timer,
@@ -66,7 +66,7 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
 
 impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     /// Create a new Server
-    pub fn new(server_config: &ServerConfig, shared_config: &SharedConfig<P, C>) -> Self {
+    pub fn new(server_config: &ServerConfig, shared_config: &SharedConfig<C>) -> Self {
         let socket = Socket::new(&shared_config.socket);
 
         let tick_manager = {
@@ -891,7 +891,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                         PacketType::ClientConnectRequest => {
                             match self
                                 .handshake_manager
-                                .recv_connect_request(&self.shared_config.manifest, &mut reader)
+                                .recv_connect_request(&mut reader)
                             {
                                 HandshakeResult::Success(auth_message_opt) => {
                                     if self.user_connections.contains_key(&address) {
@@ -950,7 +950,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                 // process data
                                 user_connection.process_incoming_data(
                                     server_and_client_tick_opt,
-                                    &self.shared_config.manifest,
                                     &mut reader,
                                     &self.world_record,
                                 );

@@ -13,7 +13,6 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let kind_enum_def = kind_enum(&kind_enum_name, &variants);
     let kind_of_method = kind_of_method();
     let type_to_kind_method = type_to_kind_method(&kind_enum_name, &variants);
-    let load_method = load_method(&protocol_name, &variants);
     let dyn_ref_method = dyn_ref_method(&protocol_name, &variants);
     let dyn_mut_method = dyn_mut_method(&protocol_name, &variants);
     let cast_method = cast_method(&protocol_name, &variants);
@@ -23,23 +22,21 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let extract_and_insert_method = extract_and_insert_method(&protocol_name, &variants);
     let write_method = write_method(&protocol_name, &variants);
     let write_partial_method = write_partial_method(&protocol_name, &variants);
+    let build_method = build_method(&kind_enum_name, &variants);
 
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}, sync::RwLock, collections::HashMap};
         use naia_shared::{ProtocolInserter, ProtocolKindType, ReplicateSafe,
-            DiffMask, ReplicaDynRef, ReplicaDynMut, Replicate, Manifest, derive_serde, serde,
+            DiffMask, ReplicaDynRef, ReplicaDynMut, Replicate, derive_serde, serde, serde::Serde,
             NetEntityHandleConverter};
 
         #kind_enum_def
-
-        impl #protocol_name {
-            #load_method
-        }
 
         impl Protocolize for #protocol_name {
             type Kind = #kind_enum_name;
             #kind_of_method
             #type_to_kind_method
+            #build_method
             #dyn_ref_method
             #dyn_mut_method
             #cast_method
@@ -163,6 +160,36 @@ fn type_to_kind_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
                     .get(&type_id)
                     .expect("type_to_kind_map not initialized correctly?")
                     .clone();
+            }
+        }
+    };
+}
+
+pub fn build_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
+
+    let mut variants_build = quote! {};
+
+    for variant in variants {
+        let variant_name = Ident::new(&variant.to_string(), Span::call_site());
+
+        // Variants build() match branch
+        {
+            let new_output_right = quote! {
+                #enum_name::#variant_name => #variant_name::read_to_type(reader, converter),
+            };
+            let new_output_result = quote! {
+                #variants_build
+                #new_output_right
+            };
+            variants_build = new_output_result;
+        }
+    }
+
+    return quote! {
+        fn build(reader: &mut serde::BitReader, converter: &dyn NetEntityHandleConverter) -> Self {
+            let protocol_kind: Self::Kind = Self::Kind::de(reader).unwrap();
+            match protocol_kind {
+                #variants_build
             }
         }
     };
@@ -321,31 +348,6 @@ pub fn clone_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream
             match self {
                 #variant_definitions
             }
-        }
-    };
-}
-
-pub fn load_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
-    let mut variant_definitions = quote! {};
-
-    for variant_name in variants {
-        let new_output_right = quote! {
-            manifest.register_replica(#variant_name::builder());
-        };
-        let new_output_result = quote! {
-            #variant_definitions
-            #new_output_right
-        };
-        variant_definitions = new_output_result;
-    }
-
-    return quote! {
-        pub fn load() -> Manifest<#protocol_name> {
-            let mut manifest = Manifest::<#protocol_name>::new();
-
-            #variant_definitions
-
-            manifest
         }
     };
 }

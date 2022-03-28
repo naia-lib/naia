@@ -1,5 +1,5 @@
 use crate::{DiffMask, NetEntityHandleConverter};
-use naia_serde::{BitWrite, Serde};
+use naia_serde::{BitReader, BitWrite, Serde};
 use std::{any::TypeId, hash::Hash};
 
 use super::{
@@ -16,6 +16,8 @@ pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
     fn kind_of<R: ReplicateSafe<Self>>() -> Self::Kind;
     /// Get kind from a type_id
     fn type_to_kind(type_id: TypeId) -> Self::Kind;
+    /// Build a new Replica
+    fn build(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Self;
     /// Get an immutable reference to the inner Component/Message as a
     /// Replicate trait object
     fn dyn_ref(&self) -> ReplicaDynRef<'_, Self>;

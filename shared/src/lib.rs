@@ -61,12 +61,10 @@ pub use protocol::{
         EntityConverter, EntityHandleConverter, EntityProperty, FakeEntityConverter,
         NetEntityConverter, NetEntityHandleConverter,
     },
-    manifest::Manifest,
     net_entity::NetEntity,
     property::Property,
     property_mutate::{PropertyMutate, PropertyMutator},
     protocolize::{ProtocolInserter, ProtocolKindType, Protocolize},
-    replica_builder::ReplicaBuilder,
     replica_ref::{
         ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef, ReplicaDynRefTrait,
         ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,

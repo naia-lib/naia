@@ -5,7 +5,7 @@ use naia_shared::{
     FakeEntityConverter,
 };
 pub use naia_shared::{
-    ConnectionConfig, Manifest, PacketType, ProtocolKindType, Protocolize, ReplicateSafe,
+    ConnectionConfig, PacketType, ProtocolKindType, Protocolize, ReplicateSafe,
     SharedConfig, StandardHeader, Timer, Timestamp as stamp_time, WorldMutType, WorldRefType,
 };
 

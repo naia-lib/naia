@@ -9,7 +9,7 @@ use naia_shared::{
     message_list_header,
     serde::{BitReader, Serde, UnsignedVariableInteger},
     BigMap, ChannelIndex, EntityActionType, EntityHandle, EntityHandleConverter,
-    FakeEntityConverter, Manifest, NetEntity, NetEntityHandleConverter, Protocolize, Tick,
+    FakeEntityConverter, NetEntity, NetEntityHandleConverter, Protocolize, Tick,
     WorldMutType,
 };
 
@@ -34,21 +34,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     pub fn read_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
-        manifest: &Manifest<P>,
         server_tick: Tick,
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
         let action_count = message_list_header::read(reader);
         for _ in 0..action_count {
-            self.read_action(world, manifest, server_tick, reader, event_stream);
+            self.read_action(world, server_tick, reader, event_stream);
         }
     }
 
     fn read_action<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
-        manifest: &Manifest<P>,
         server_tick: Tick,
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
@@ -65,8 +63,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     warn!("attempted to insert duplicate entity");
                     // continue reading, just don't do anything with the data
                     for _ in 0..components_num {
-                        let component_kind = P::Kind::de(reader).unwrap();
-                        manifest.create_replica(component_kind, reader, &FakeEntityConverter);
+                        P::build(reader, &FakeEntityConverter);
                     }
                 } else {
                     // set up entity
@@ -79,9 +76,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     let mut component_list: Vec<P::Kind> = Vec::new();
                     for _ in 0..components_num {
                         // Component Creation //
-                        let component_kind = P::Kind::de(reader).unwrap();
+                        let new_component = P::build(reader, self);
 
-                        let new_component = manifest.create_replica(component_kind, reader, self);
+                        let component_kind = new_component.dyn_ref().kind();
 
                         component_list.push(component_kind);
 
@@ -125,9 +122,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             // Add Component to Entity
             EntityActionType::InsertComponent => {
                 let net_entity = NetEntity::de(reader).unwrap();
-                let component_kind = P::Kind::de(reader).unwrap();
 
-                let new_component = manifest.create_replica(component_kind, reader, self);
+                let new_component = P::build(reader, self);
+
+                let component_kind = new_component.dyn_ref().kind();
 
                 if !self.local_to_world_entity.contains_key(&net_entity) {
                     // its possible we received a very late duplicate message

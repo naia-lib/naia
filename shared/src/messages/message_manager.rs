@@ -5,7 +5,7 @@ use naia_serde::{BitReader, BitWriter, Serde, UnsignedVariableInteger};
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
     protocol::{
-        entity_property::NetEntityHandleConverter, manifest::Manifest, protocolize::Protocolize,
+        entity_property::NetEntityHandleConverter, protocolize::Protocolize,
     },
     types::{MessageId, PacketIndex},
 };
@@ -144,7 +144,6 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     pub fn read_messages(
         &mut self,
         reader: &mut BitReader,
-        manifest: &Manifest<P>,
         converter: &dyn NetEntityHandleConverter) {
 
         // read channel count
@@ -154,7 +153,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             // read channel index
             let channel_index = C::de(reader).unwrap();
             if let Some(channel) = self.channel_receivers.get_mut(&channel_index) {
-                channel.read_messages(reader, manifest, converter);
+                channel.read_messages(reader, converter);
             }
         }
     }

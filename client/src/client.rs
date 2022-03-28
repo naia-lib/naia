@@ -4,7 +4,7 @@ use naia_client_socket::Socket;
 
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
-    ChannelIndex, ConnectionConfig, EntityHandle, EntityHandleConverter, Manifest, PacketType,
+    ChannelIndex, ConnectionConfig, EntityHandle, EntityHandleConverter, PacketType,
     PingConfig, PingIndex, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig,
     SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
@@ -20,7 +20,7 @@ use super::{
 pub struct Client<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     // Config
     client_config: ClientConfig,
-    shared_config: SharedConfig<P, C>,
+    shared_config: SharedConfig<C>,
     // Connection
     io: Io,
     server_connection: Option<Connection<P, E, C>>,
@@ -35,7 +35,7 @@ pub struct Client<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
 
 impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     /// Create a new Client
-    pub fn new(client_config: &ClientConfig, shared_config: &SharedConfig<P, C>) -> Self {
+    pub fn new(client_config: &ClientConfig, shared_config: &SharedConfig<C>) -> Self {
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
 
         let tick_manager = {
@@ -149,7 +149,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                     let receiving_tick = tick_manager.client_receiving_tick();
                     server_connection.process_buffered_packets(
                         &mut world,
-                        &self.shared_config.manifest,
                         receiving_tick,
                         &mut self.incoming_events,
                     );
@@ -157,7 +156,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             } else {
                 server_connection.process_buffered_packets(
                     &mut world,
-                    &self.shared_config.manifest,
                     0,
                     &mut self.incoming_events,
                 );

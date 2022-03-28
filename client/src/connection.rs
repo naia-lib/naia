@@ -2,7 +2,7 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_shared::{
     serde::{BitReader, BitWriter, OwnedBitReader},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, Manifest, PacketType,
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, PacketType,
     PingManager, Protocolize, StandardHeader, Tick, TickBuffer, WorldMutType,
 };
 
@@ -49,7 +49,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     pub fn process_buffered_packets<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
-        manifest: &Manifest<P>,
         receiving_tick: Tick,
         incoming_events: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
@@ -59,12 +58,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             // Read Messages
             self.base
                 .message_manager
-                .read_messages(&mut reader, manifest, &self.entity_manager);
+                .read_messages(&mut reader, &self.entity_manager);
 
             // Read Entity Actions
             self.entity_manager.read_actions(
                 world,
-                manifest,
                 server_tick,
                 &mut reader,
                 incoming_events,
