@@ -9,10 +9,8 @@ use std::{
 };
 
 use naia_shared::{
-    message_list_header,
-    serde::{
-        BitCounter, BitWrite, BitWriter, Serde, SignedVariableInteger, UnsignedVariableInteger,
-    },
+    message_list_header, sequence_greater_than,
+    serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
     wrapping_diff, ChannelIndex, DiffMask, EntityConverter, Instant, KeyGenerator, MessageId,
     MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize,
     ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
@@ -431,8 +429,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         if let Some(last_id) = last_id_opt {
             // write diff
             let id_diff = wrapping_diff(*last_id, *current_id);
-            // TODO: make this unsigned when we're able to send in ascending order
-            let id_diff_encoded = SignedVariableInteger::<3>::new(id_diff);
+            let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
             id_diff_encoded.ser(bit_writer);
         } else {
             // write message id
@@ -471,11 +468,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         // write EntityAction type
         action.as_type().ser(bit_writer);
 
+        // write message id
+        Self::write_message_id(bit_writer, last_written_id, action_id);
+
         match action {
             EntityAction::SpawnEntity(global_entity, _) => {
-                // write message id
-                Self::write_message_id(bit_writer, last_written_id, action_id);
-
                 // write local entity
                 let net_entity = self.entity_records.get(global_entity).unwrap().net_entity;
                 net_entity.ser(bit_writer);
@@ -522,9 +519,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 }
             }
             EntityAction::DespawnEntity(global_entity) => {
-                // write message id
-                Self::write_message_id(bit_writer, last_written_id, action_id);
-
                 // write local entity
                 let net_entity = self.entity_records.get(global_entity).unwrap().net_entity;
                 net_entity.ser(bit_writer);
@@ -537,9 +531,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 }
             }
             EntityAction::InsertComponent(global_entity, component_kind) => {
-                // write message id
-                Self::write_message_id(bit_writer, last_written_id, action_id);
-
                 // write local entity
                 let net_entity = self.entity_records.get(global_entity).unwrap().net_entity;
                 net_entity.ser(bit_writer);
@@ -572,9 +563,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 }
             }
             EntityAction::RemoveComponent(global_entity, component_kind) => {
-                // write message id
-                Self::write_message_id(bit_writer, last_written_id, action_id);
-
                 // write local entity
                 let net_entity = self.entity_records.get(global_entity).unwrap().net_entity;
                 net_entity.ser(bit_writer);
@@ -901,12 +889,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> QueuedEntityActions<P, E> {
     }
 
     pub fn push_new(&mut self, action: EntityAction<P, E>) {
-        self.list.push_back((self.next_send_message_id, action));
+        self.push_ordered(self.next_send_message_id, action);
         self.next_send_message_id = self.next_send_message_id.wrapping_add(1);
     }
 
     pub fn push_old(&mut self, message_id: MessageId, action: EntityAction<P, E>) {
-        self.list.push_back((message_id, action));
+        self.push_ordered(message_id, action);
     }
 
     pub fn pop(&mut self) -> Option<(MessageId, EntityAction<P, E>)> {
@@ -919,6 +907,28 @@ impl<P: Protocolize, E: Copy + Eq + Hash> QueuedEntityActions<P, E> {
 
     pub fn get(&self, index: usize) -> Option<&(MessageId, EntityAction<P, E>)> {
         return self.list.get(index);
+    }
+
+    fn push_ordered(&mut self, message_id: MessageId, action: EntityAction<P, E>) {
+        let mut index = 0;
+
+        loop {
+            if index < self.list.len() {
+                let (old_message_id, _) = self.list.get(index).unwrap();
+                if *old_message_id == message_id {
+                    panic!("should never get here, how can duplicate actions get added to this?");
+                }
+                if sequence_greater_than(*old_message_id, message_id) {
+                    self.list.insert(index, (message_id, action));
+                    break;
+                }
+            } else {
+                self.list.push_back((message_id, action));
+                break;
+            }
+
+            index += 1;
+        }
     }
 }
 
