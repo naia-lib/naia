@@ -56,12 +56,10 @@ impl UnorderedReliableReceiverRecord {
                 let next_message_id = self.oldest_received_message_id.wrapping_add(index as u16);
 
                 if next_message_id == message_id {
-                    self.received_messages
-                        .push_back((next_message_id, true));
+                    self.received_messages.push_back((next_message_id, true));
                     return true;
                 } else {
-                    self.received_messages
-                        .push_back((next_message_id, false));
+                    self.received_messages.push_back((next_message_id, false));
                     // keep filling up buffer
                     continue;
                 }
