@@ -18,7 +18,7 @@ use crate::{
     sequence_greater_than, sequence_less_than,
     serde::{BitCounter, BitWrite, BitWriter, Serde},
     types::{ShortMessageId, Tick},
-    wrapping_diff, Instant,
+    wrapping_diff, ChannelWriter, Instant,
 };
 
 pub struct ChannelTickBuffer<P: Protocolize> {
@@ -90,8 +90,8 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
 
     pub fn write_messages(
         &mut self,
-        converter: &dyn NetEntityHandleConverter,
-        writer: &mut BitWriter,
+        channel_writer: &dyn ChannelWriter<P>,
+        bit_writer: &mut BitWriter,
         host_tick: &Tick,
     ) -> Option<Vec<(Tick, ShortMessageId)>> {
         let mut message_count: u16 = 0;
@@ -99,9 +99,9 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         // Header
         {
             // Measure
-            let current_packet_size = writer.bit_count();
+            let current_packet_size = bit_writer.bit_count();
             if current_packet_size > MTU_SIZE_BITS {
-                message_list_header::write(writer, 0);
+                message_list_header::write(bit_writer, 0);
                 return None;
             }
 
@@ -113,7 +113,7 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
 
             // Check for overflow
             if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
-                message_list_header::write(writer, 0);
+                message_list_header::write(bit_writer, 0);
                 return None;
             }
 
@@ -127,7 +127,7 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
 
                 let (message_tick, messages) = self.next_send_messages.get(index).unwrap();
                 self.write_message(
-                    converter,
+                    channel_writer,
                     &mut counter,
                     &last_written_tick,
                     message_tick,
@@ -145,7 +145,7 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         }
 
         // Write header
-        message_list_header::write(writer, message_count);
+        message_list_header::write(bit_writer, message_count);
 
         // Messages
         {
@@ -157,8 +157,8 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
 
                 // Write message
                 let message_ids = self.write_message(
-                    converter,
-                    writer,
+                    channel_writer,
+                    bit_writer,
                     &last_written_tick,
                     &message_tick,
                     &messages,
@@ -174,10 +174,10 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
 
     /// Writes a Command into the Writer's internal buffer, which will
     /// eventually be put into the outgoing packet
-    fn write_message<S: BitWrite>(
+    fn write_message(
         &self,
-        converter: &dyn NetEntityHandleConverter,
-        writer: &mut S,
+        channel_writer: &dyn ChannelWriter<P>,
+        bit_writer: &mut dyn BitWrite,
         last_written_tick: &Tick,
         message_tick: &Tick,
         messages: &Vec<(ShortMessageId, P)>,
@@ -189,23 +189,20 @@ impl<P: Protocolize> ChannelTickBuffer<P> {
         // because packet tick is always larger than past ticks
         let message_tick_diff = wrapping_diff(*message_tick, *last_written_tick);
         let message_tick_diff_encoded = UnsignedVariableInteger::<3>::new(message_tick_diff);
-        message_tick_diff_encoded.ser(writer);
+        message_tick_diff_encoded.ser(bit_writer);
 
         // write number of messages
         let message_count = UnsignedVariableInteger::<3>::new(messages.len() as u64);
-        message_count.ser(writer);
+        message_count.ser(bit_writer);
 
         let mut last_id_written: ShortMessageId = 0;
         for (message_id, message) in messages {
             // write message id diff
             let id_diff = UnsignedVariableInteger::<2>::new(*message_id - last_id_written);
-            id_diff.ser(writer);
-
-            // write message kind
-            message.dyn_ref().kind().ser(writer);
+            id_diff.ser(bit_writer);
 
             // write payload
-            message.write(writer, converter);
+            channel_writer.write(bit_writer, message);
 
             // record id for output
             message_ids.push(*message_id);

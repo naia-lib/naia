@@ -166,7 +166,6 @@ fn type_to_kind_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
 }
 
 pub fn build_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
-
     let mut variants_build = quote! {};
 
     for variant in variants {
@@ -396,7 +395,7 @@ fn write_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     }
 
     return quote! {
-        fn write<S: serde::BitWrite>(&self, writer: &mut S, converter: &dyn NetEntityHandleConverter) {
+        fn write(&self, writer: &mut dyn serde::BitWrite, converter: &dyn NetEntityHandleConverter) {
             match self {
                 #variant_definitions
             }
@@ -421,7 +420,7 @@ fn write_partial_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenSt
     }
 
     return quote! {
-        fn write_partial<S: serde::BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S, converter: &dyn NetEntityHandleConverter) {
+        fn write_partial(&self, diff_mask: &DiffMask, writer: &mut dyn serde::BitWrite, converter: &dyn NetEntityHandleConverter) {
             match self {
                 #variant_definitions
             }

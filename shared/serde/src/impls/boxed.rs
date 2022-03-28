@@ -5,7 +5,7 @@ use crate::{
 };
 
 impl<T: Serde> Serde for Box<T> {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         (**self).ser(writer)
     }
 

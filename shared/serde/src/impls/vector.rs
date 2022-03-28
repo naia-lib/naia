@@ -8,7 +8,7 @@ use crate::{
 };
 
 impl<T: Serde> Serde for Vec<T> {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
         length.ser(writer);
         for item in self {
@@ -28,7 +28,7 @@ impl<T: Serde> Serde for Vec<T> {
 }
 
 impl<T: Serde> Serde for VecDeque<T> {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
         length.ser(writer);
         for item in self {

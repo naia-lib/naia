@@ -5,7 +5,7 @@ use crate::{
 };
 
 impl<T: Serde> Serde for Option<T> {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         if let Some(value) = self {
             writer.write_bit(true);
             value.ser(writer);

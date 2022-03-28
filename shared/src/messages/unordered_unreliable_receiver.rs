@@ -2,17 +2,16 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::BitReader;
 
-use crate::protocol::{
-    entity_property::NetEntityHandleConverter, protocolize::Protocolize,
+use super::{
+    message_channel::{ChannelReader, ChannelReceiver},
+    message_list_header::read,
 };
 
-use super::{message_channel::ChannelReceiver, message_list_header::read};
-
-pub struct UnorderedUnreliableReceiver<P: Protocolize> {
+pub struct UnorderedUnreliableReceiver<P> {
     incoming_messages: VecDeque<P>,
 }
 
-impl<P: Protocolize> UnorderedUnreliableReceiver<P> {
+impl<P> UnorderedUnreliableReceiver<P> {
     pub fn new() -> Self {
         Self {
             incoming_messages: VecDeque::new(),
@@ -21,11 +20,11 @@ impl<P: Protocolize> UnorderedUnreliableReceiver<P> {
 
     fn read_message(
         &mut self,
-        reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
+        channel_reader: &dyn ChannelReader<P>,
+        bit_reader: &mut BitReader,
     ) -> P {
         // read payload
-        let new_message = P::build(reader, converter);
+        let new_message = channel_reader.read(bit_reader);
 
         return new_message;
     }
@@ -35,15 +34,11 @@ impl<P: Protocolize> UnorderedUnreliableReceiver<P> {
     }
 }
 
-impl<P: Protocolize> ChannelReceiver<P> for UnorderedUnreliableReceiver<P> {
-    fn read_messages(
-        &mut self,
-        reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
-    ) {
-        let message_count = read(reader);
+impl<P> ChannelReceiver<P> for UnorderedUnreliableReceiver<P> {
+    fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader) {
+        let message_count = read(bit_reader);
         for _x in 0..message_count {
-            let message = self.read_message(reader, converter);
+            let message = self.read_message(channel_reader, bit_reader);
             self.recv_message(message);
         }
     }

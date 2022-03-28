@@ -16,7 +16,7 @@ impl BigMapKey for EntityHandle {
 }
 
 impl Serde for EntityHandle {
-    fn ser<S: BitWrite>(&self, _: &mut S) {
+    fn ser(&self, _: &mut dyn BitWrite) {
         panic!("shouldn't call this");
     }
 

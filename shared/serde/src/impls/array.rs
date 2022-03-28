@@ -5,7 +5,7 @@ use crate::{
 };
 
 impl<T: Serde> Serde for &[T] {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         for item in *self {
             item.ser(writer);
         }
@@ -17,7 +17,7 @@ impl<T: Serde> Serde for &[T] {
 }
 
 impl<T: Serde, const N: usize> Serde for [T; N] {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         for item in self {
             item.ser(writer);
         }

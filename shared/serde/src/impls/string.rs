@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl Serde for String {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let length = UnsignedInteger::<9>::new(self.len() as u64);
         length.ser(writer);
         let bytes = self.as_bytes();

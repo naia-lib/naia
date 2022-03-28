@@ -33,7 +33,7 @@ impl<T: Serde> Property<T> {
     // Serialization / deserialization
 
     /// Writes contained value into outgoing byte stream
-    pub fn write<S: BitWrite>(&self, writer: &mut S) {
+    pub fn write(&self, writer: &mut dyn BitWrite) {
         self.inner.ser(writer);
     }
 

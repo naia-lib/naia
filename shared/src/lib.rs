@@ -47,7 +47,7 @@ pub use messages::{
         ReliableSettings, TickBufferSettings,
     },
     channel_tick_buffer::ChannelTickBuffer,
-    message_channel::{ChannelReceiver, ChannelSender},
+    message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     message_list_header,
     message_manager::MessageManager,
     reliable_sender::ReliableSender,
@@ -64,6 +64,7 @@ pub use protocol::{
     net_entity::NetEntity,
     property::Property,
     property_mutate::{PropertyMutate, PropertyMutator},
+    protocol_io::ProtocolIo,
     protocolize::{ProtocolInserter, ProtocolKindType, Protocolize},
     replica_ref::{
         ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef, ReplicaDynRefTrait,

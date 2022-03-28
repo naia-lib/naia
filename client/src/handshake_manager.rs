@@ -5,8 +5,8 @@ use naia_shared::{
     FakeEntityConverter,
 };
 pub use naia_shared::{
-    ConnectionConfig, PacketType, ProtocolKindType, Protocolize, ReplicateSafe,
-    SharedConfig, StandardHeader, Timer, Timestamp as stamp_time, WorldMutType, WorldRefType,
+    ConnectionConfig, PacketType, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig,
+    StandardHeader, Timer, Timestamp as stamp_time, WorldMutType, WorldRefType,
 };
 
 use super::io::Io;

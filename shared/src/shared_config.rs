@@ -4,7 +4,7 @@ use naia_socket_shared::SocketConfig;
 
 use crate::{
     connection::compression_config::CompressionConfig,
-    messages::channel_config::{ChannelConfig, ChannelIndex, DefaultChannels}
+    messages::channel_config::{ChannelConfig, ChannelIndex, DefaultChannels},
 };
 
 /// Contains Config properties which will be shared by Server and Client

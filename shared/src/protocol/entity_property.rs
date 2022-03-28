@@ -32,7 +32,7 @@ impl EntityProperty {
 
     // Serialization / deserialization
 
-    pub fn write<S: BitWrite>(&self, writer: &mut S, converter: &dyn NetEntityHandleConverter) {
+    pub fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
         (*self.handle_prop)
             .map(|handle| converter.handle_to_net_entity(&handle))
             .ser(writer);

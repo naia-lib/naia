@@ -4,15 +4,13 @@ use naia_serde::{BitReader, BitWriter, Serde, UnsignedVariableInteger};
 
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
-    protocol::{
-        entity_property::NetEntityHandleConverter, protocolize::Protocolize,
-    },
+    protocol::protocolize::Protocolize,
     types::{MessageId, PacketIndex},
 };
 
 use super::{
     channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
-    message_channel::{ChannelReceiver, ChannelSender},
+    message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     ordered_reliable_receiver::OrderedReliableReceiver,
     reliable_sender::ReliableSender,
     unordered_reliable_receiver::UnorderedReliableReceiver,
@@ -29,10 +27,8 @@ pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
 }
 
 impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
-
     /// Creates a new MessageManager
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
-
         // initialize all reliable channels
         let mut channel_senders = HashMap::<C, Box<dyn ChannelSender<P>>>::new();
         let mut channel_receivers = HashMap::<C, Box<dyn ChannelReceiver<P>>>::new();
@@ -109,9 +105,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
     pub fn write_messages(
         &mut self,
-        writer: &mut BitWriter,
+        channel_writer: &dyn ChannelWriter<P>,
+        bit_writer: &mut BitWriter,
         packet_index: PacketIndex,
-        converter: &dyn NetEntityHandleConverter,
     ) {
         let mut channels_to_write = Vec::new();
         for (channel_index, channel) in &self.channel_senders {
@@ -121,15 +117,15 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         }
 
         // write channel count
-        UnsignedVariableInteger::<3>::new(channels_to_write.len() as u64).ser(writer);
+        UnsignedVariableInteger::<3>::new(channels_to_write.len() as u64).ser(bit_writer);
 
         for channel_index in channels_to_write {
             let channel = self.channel_senders.get_mut(&channel_index).unwrap();
 
             // write channel index
-            channel_index.ser(writer);
+            channel_index.ser(bit_writer);
 
-            if let Some(message_ids) = channel.write_messages(converter, writer) {
+            if let Some(message_ids) = channel.write_messages(channel_writer, bit_writer) {
                 if !self.packet_to_message_map.contains_key(&packet_index) {
                     self.packet_to_message_map.insert(packet_index, Vec::new());
                 }
@@ -143,17 +139,17 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
     pub fn read_messages(
         &mut self,
-        reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter) {
-
+        channel_reader: &dyn ChannelReader<P>,
+        bit_reader: &mut BitReader,
+    ) {
         // read channel count
-        let channel_count = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
+        let channel_count = UnsignedVariableInteger::<3>::de(bit_reader).unwrap().get();
 
         for _ in 0..channel_count {
             // read channel index
-            let channel_index = C::de(reader).unwrap();
+            let channel_index = C::de(bit_reader).unwrap();
             if let Some(channel) = self.channel_receivers.get_mut(&channel_index) {
-                channel.read_messages(reader, converter);
+                channel.read_messages(channel_reader, bit_reader);
             }
         }
     }

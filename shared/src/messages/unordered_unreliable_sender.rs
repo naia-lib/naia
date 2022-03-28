@@ -1,20 +1,19 @@
 use std::collections::VecDeque;
 
-use naia_serde::{BitCounter, BitWrite, BitWriter, Serde};
+use naia_serde::{BitCounter, BitWrite, BitWriter};
 
-use crate::{
-    constants::MTU_SIZE_BITS,
-    protocol::{entity_property::NetEntityHandleConverter, protocolize::Protocolize},
-    types::MessageId,
+use crate::{constants::MTU_SIZE_BITS, types::MessageId};
+
+use super::{
+    message_channel::{ChannelSender, ChannelWriter},
+    message_list_header::write,
 };
 
-use super::{message_channel::ChannelSender, message_list_header::write};
-
-pub struct UnorderedUnreliableSender<P: Protocolize> {
+pub struct UnorderedUnreliableSender<P> {
     outgoing_messages: VecDeque<P>,
 }
 
-impl<P: Protocolize> UnorderedUnreliableSender<P> {
+impl<P> UnorderedUnreliableSender<P> {
     pub fn new() -> Self {
         Self {
             outgoing_messages: VecDeque::new(),
@@ -23,19 +22,15 @@ impl<P: Protocolize> UnorderedUnreliableSender<P> {
 
     fn write_message<S: BitWrite>(
         &self,
-        writer: &mut S,
-        converter: &dyn NetEntityHandleConverter,
-        message: &P)
-    {
-        // write message kind
-        message.dyn_ref().kind().ser(writer);
-
-        // write payload
-        message.write(writer, converter);
+        channel_writer: &dyn ChannelWriter<P>,
+        bit_writer: &mut S,
+        message: &P,
+    ) {
+        channel_writer.write(bit_writer, message);
     }
 }
 
-impl<P: Protocolize> ChannelSender<P> for UnorderedUnreliableSender<P> {
+impl<P> ChannelSender<P> for UnorderedUnreliableSender<P> {
     fn send_message(&mut self, message: P) {
         self.outgoing_messages.push_back(message);
     }
@@ -50,17 +45,17 @@ impl<P: Protocolize> ChannelSender<P> for UnorderedUnreliableSender<P> {
 
     fn write_messages(
         &mut self,
-        converter: &dyn NetEntityHandleConverter,
-        writer: &mut BitWriter,
+        channel_writer: &dyn ChannelWriter<P>,
+        bit_writer: &mut BitWriter,
     ) -> Option<Vec<MessageId>> {
         let mut message_count: u16 = 0;
 
         // Header
         {
             // Measure
-            let current_packet_size = writer.bit_count();
+            let current_packet_size = bit_writer.bit_count();
             if current_packet_size > MTU_SIZE_BITS {
-                write(writer, 0);
+                write(bit_writer, 0);
                 return None;
             }
 
@@ -72,7 +67,7 @@ impl<P: Protocolize> ChannelSender<P> for UnorderedUnreliableSender<P> {
 
             // Check for overflow
             if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
-                write(writer, 0);
+                write(bit_writer, 0);
                 return None;
             }
 
@@ -84,7 +79,7 @@ impl<P: Protocolize> ChannelSender<P> for UnorderedUnreliableSender<P> {
                 }
 
                 let message = self.outgoing_messages.get(index).unwrap();
-                self.write_message(&mut counter, converter, message);
+                self.write_message(channel_writer, &mut counter, message);
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
                 } else {
@@ -96,14 +91,14 @@ impl<P: Protocolize> ChannelSender<P> for UnorderedUnreliableSender<P> {
         }
 
         // Write header
-        write(writer, message_count);
+        write(bit_writer, message_count);
 
         // Messages
         {
             for _ in 0..message_count {
                 // Pop and write message
                 let message = self.outgoing_messages.pop_front().unwrap();
-                self.write_message(writer, converter, &message);
+                self.write_message(channel_writer, bit_writer, &message);
             }
             return None;
         }

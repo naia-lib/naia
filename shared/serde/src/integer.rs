@@ -65,7 +65,7 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8>
 impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
     for SerdeInteger<SIGNED, VARIABLE, BITS>
 {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let mut value: u128;
         let negative = self.inner < 0;
 

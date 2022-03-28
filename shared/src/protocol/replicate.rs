@@ -17,13 +17,13 @@ pub trait Replicate<P: Protocolize>: ReplicateSafe<P> {
     fn clone(&self) -> Self;
     /// Writes data into an outgoing byte stream, sufficient to completely
     /// recreate the Message/Component on the client
-    fn write<S: BitWrite>(&self, writer: &mut S, converter: &dyn NetEntityHandleConverter);
+    fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Message/Component on the client
-    fn write_partial<S: BitWrite>(
+    fn write_partial(
         &self,
         diff_mask: &DiffMask,
-        writer: &mut S,
+        writer: &mut dyn BitWrite,
         converter: &dyn NetEntityHandleConverter,
     );
 }
