@@ -239,19 +239,24 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
         let net_entity = NetEntity::de(reader).unwrap();
-        let component_kind = P::Kind::de(reader).unwrap();
 
-        if let Some(world_entity) = self.local_to_world_entity.get(&net_entity) {
-            // read incoming delta
-            world.component_read_partial(world_entity, &component_kind, reader, self);
+        let components_number = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
 
-            event_stream.push_back(Ok(Event::UpdateComponent(
-                server_tick,
-                *world_entity,
-                component_kind,
-            )));
-        } else {
-            panic!("attempting to update component for nonexistent entity");
+        for _ in 0..components_number {
+            let component_kind = P::Kind::de(reader).unwrap();
+
+            if let Some(world_entity) = self.local_to_world_entity.get(&net_entity) {
+                // read incoming delta
+                world.component_read_partial(world_entity, &component_kind, reader, self);
+
+                event_stream.push_back(Ok(Event::UpdateComponent(
+                    server_tick,
+                    *world_entity,
+                    component_kind,
+                )));
+            } else {
+                panic!("attempting to update component for nonexistent entity");
+            }
         }
     }
 }

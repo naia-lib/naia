@@ -300,6 +300,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     /// method, the Server will never communicate with it's connected
     /// Clients
     pub fn send_all_updates<W: WorldRefType<P, E>>(&mut self, world: W) {
+        let now = Instant::now();
+
         // update entity scopes
         self.update_entity_scopes(&world);
 
@@ -314,6 +316,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
             let rtt = connection.ping_manager.rtt;
 
             connection.send_outgoing_packets(
+                &now,
                 &mut self.io,
                 &world,
                 &self.world_record,
