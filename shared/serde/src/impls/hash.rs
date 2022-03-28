@@ -10,7 +10,7 @@ use std::{
 };
 
 impl<K: Serde + Eq + Hash> Serde for HashSet<K> {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
         length.ser(writer);
         for value in self {
@@ -31,7 +31,7 @@ impl<K: Serde + Eq + Hash> Serde for HashSet<K> {
 }
 
 impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
         length.ser(writer);
         for (key, value) in self {

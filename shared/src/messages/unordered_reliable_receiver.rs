@@ -2,15 +2,12 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::BitReader;
 
-use crate::{
-    protocol::{
-        entity_property::NetEntityHandleConverter, protocolize::Protocolize,
-    },
-    sequence_less_than,
-    types::MessageId,
-};
+use crate::{protocol::protocolize::Protocolize, sequence_less_than, types::MessageId};
 
-use super::{message_channel::ChannelReceiver, reliable_receiver::ReliableReceiver};
+use super::{
+    message_channel::{ChannelReader, ChannelReceiver},
+    reliable_receiver::ReliableReceiver,
+};
 
 pub struct UnorderedReliableReceiver<P: Protocolize> {
     oldest_waiting_message_id: MessageId,
@@ -99,12 +96,8 @@ impl<P: Protocolize> UnorderedReliableReceiver<P> {
 }
 
 impl<P: Protocolize> ChannelReceiver<P> for UnorderedReliableReceiver<P> {
-    fn read_messages(
-        &mut self,
-        reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
-    ) {
-        let id_w_msgs = ReliableReceiver::read_incoming_messages(reader, converter);
+    fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader) {
+        let id_w_msgs = ReliableReceiver::read_incoming_messages(channel_reader, bit_reader);
         for (id, message) in id_w_msgs {
             self.recv_message(id, message);
         }

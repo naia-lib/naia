@@ -4,26 +4,24 @@ use naia_serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger
 
 use naia_socket_shared::Instant;
 
-use crate::{
-    constants::MTU_SIZE_BITS,
-    messages::message_list_header,
-    protocol::{entity_property::NetEntityHandleConverter, protocolize::Protocolize},
-    types::MessageId,
-    wrapping_diff,
-};
+use crate::{constants::MTU_SIZE_BITS, types::MessageId, wrapping_diff};
 
-use super::{channel_config::ReliableSettings, message_channel::ChannelSender};
+use super::{
+    channel_config::ReliableSettings,
+    message_channel::{ChannelSender, ChannelWriter},
+    message_list_header,
+};
 
 // Sender
 
-pub struct ReliableSender<P: Protocolize> {
+pub struct ReliableSender<P> {
     rtt_resend_factor: f32,
     next_send_message_id: MessageId,
     sending_messages: VecDeque<Option<(MessageId, Option<Instant>, P)>>,
     next_send_messages: VecDeque<(MessageId, P)>,
 }
 
-impl<P: Protocolize> ReliableSender<P> {
+impl<P> ReliableSender<P> {
     pub fn new(reliable_settings: &ReliableSettings) -> Self {
         Self {
             rtt_resend_factor: reliable_settings.rtt_resend_factor,
@@ -33,10 +31,10 @@ impl<P: Protocolize> ReliableSender<P> {
         }
     }
 
-    fn write_outgoing_message<S: BitWrite>(
+    fn write_outgoing_message(
         &self,
-        converter: &dyn NetEntityHandleConverter,
-        writer: &mut S,
+        channel_writer: &dyn ChannelWriter<P>,
+        bit_writer: &mut dyn BitWrite,
         last_written_id: &Option<MessageId>,
         message_id: &MessageId,
         message: &P,
@@ -45,21 +43,17 @@ impl<P: Protocolize> ReliableSender<P> {
             // write message id diff
             let id_diff = wrapping_diff(*last_id, *message_id);
             let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
-            id_diff_encoded.ser(writer);
+            id_diff_encoded.ser(bit_writer);
         } else {
             // write message id
-            message_id.ser(writer);
+            message_id.ser(bit_writer);
         }
 
-        // write message kind
-        message.dyn_ref().kind().ser(writer);
-
-        // write payload
-        message.write(writer, converter);
+        channel_writer.write(bit_writer, message);
     }
 }
 
-impl<P: Protocolize> ChannelSender<P> for ReliableSender<P> {
+impl<P: Clone> ChannelSender<P> for ReliableSender<P> {
     fn send_message(&mut self, message: P) {
         self.sending_messages
             .push_back(Some((self.next_send_message_id, None, message)));
@@ -95,17 +89,17 @@ impl<P: Protocolize> ChannelSender<P> for ReliableSender<P> {
 
     fn write_messages(
         &mut self,
-        converter: &dyn NetEntityHandleConverter,
-        writer: &mut BitWriter,
+        channel_writer: &dyn ChannelWriter<P>,
+        bit_writer: &mut BitWriter,
     ) -> Option<Vec<MessageId>> {
         let mut message_count: u16 = 0;
 
         // Header
         {
             // Measure
-            let current_packet_size = writer.bit_count();
+            let current_packet_size = bit_writer.bit_count();
             if current_packet_size > MTU_SIZE_BITS {
-                message_list_header::write(writer, 0);
+                message_list_header::write(bit_writer, 0);
                 return None;
             }
 
@@ -117,7 +111,7 @@ impl<P: Protocolize> ChannelSender<P> for ReliableSender<P> {
 
             // Check for overflow
             if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
-                message_list_header::write(writer, 0);
+                message_list_header::write(bit_writer, 0);
                 return None;
             }
 
@@ -131,7 +125,7 @@ impl<P: Protocolize> ChannelSender<P> for ReliableSender<P> {
 
                 let (message_id, message) = self.next_send_messages.get(index).unwrap();
                 self.write_outgoing_message(
-                    converter,
+                    channel_writer,
                     &mut counter,
                     &last_written_id,
                     message_id,
@@ -149,7 +143,7 @@ impl<P: Protocolize> ChannelSender<P> for ReliableSender<P> {
         }
 
         // Write header
-        message_list_header::write(writer, message_count);
+        message_list_header::write(bit_writer, message_count);
 
         // Messages
         {
@@ -160,8 +154,8 @@ impl<P: Protocolize> ChannelSender<P> for ReliableSender<P> {
                 // Pop and write message
                 let (message_id, message) = self.next_send_messages.pop_front().unwrap();
                 self.write_outgoing_message(
-                    converter,
-                    writer,
+                    channel_writer,
+                    bit_writer,
                     &last_written_id,
                     &message_id,
                     &message,

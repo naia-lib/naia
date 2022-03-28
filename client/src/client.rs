@@ -4,9 +4,9 @@ use naia_client_socket::Socket;
 
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
-    ChannelIndex, ConnectionConfig, EntityHandle, EntityHandleConverter, PacketType,
-    PingConfig, PingIndex, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig,
-    SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    ChannelIndex, ConnectionConfig, EntityHandle, EntityHandleConverter, PacketType, PingConfig,
+    PingIndex, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, SocketConfig,
+    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -162,10 +162,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             }
 
             // receive messages
-            let messages = server_connection
-                .base
-                .message_manager
-                .receive_messages();
+            let messages = server_connection.base.message_manager.receive_messages();
             for (channel, message) in messages {
                 self.incoming_events
                     .push_back(Ok(Event::Message(channel, message)));

@@ -7,8 +7,8 @@ use std::{
 use naia_shared::{
     sequence_greater_than,
     serde::{BitReader, BitWriter},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter,
-    PacketType, PingManager, Protocolize, StandardHeader, Tick, TickBuffer, WorldRefType,
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, PacketType,
+    PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, TickBuffer, WorldRefType,
 };
 
 use super::{
@@ -64,26 +64,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     pub fn process_incoming_data(
         &mut self,
         server_and_client_tick_opt: Option<(Tick, Tick)>,
-        reader: &mut BitReader,
+        bit_reader: &mut BitReader,
         world_record: &WorldRecord<E, P::Kind>,
     ) {
         if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
             // Read Tick Buffered Messages
             let mut converter = EntityConverter::new(world_record, &self.entity_manager);
-            self.tick_buffer.read_messages(
-                &server_tick,
-                &client_tick,
-                reader,
-                &mut converter,
-            );
+            self.tick_buffer
+                .read_messages(&server_tick, &client_tick, bit_reader, &mut converter);
         }
 
         // Read Messages
         {
-            let mut converter = EntityConverter::new(world_record, &self.entity_manager);
+            let converter = EntityConverter::new(world_record, &self.entity_manager);
+            let channel_writer = ProtocolIo::new(&converter);
             self.base
                 .message_manager
-                .read_messages(reader, &mut converter);
+                .read_messages(&channel_writer, bit_reader);
         }
     }
 
@@ -131,33 +128,38 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         {
             let next_packet_index = self.base.next_packet_index();
 
-            let mut writer = BitWriter::new();
+            let mut bit_writer = BitWriter::new();
 
             // write header
             self.base
-                .write_outgoing_header(PacketType::Data, &mut writer);
+                .write_outgoing_header(PacketType::Data, &mut bit_writer);
 
             // write server tick
             if let Some(tick_manager) = tick_manager_opt {
-                tick_manager.write_server_tick(&mut writer);
+                tick_manager.write_server_tick(&mut bit_writer);
             }
 
             // write messages
             {
-                let mut converter = EntityConverter::new(world_record, &self.entity_manager);
+                let converter = EntityConverter::new(world_record, &self.entity_manager);
+                let channel_writer = ProtocolIo::new(&converter);
                 self.base.message_manager.write_messages(
-                    &mut writer,
+                    &channel_writer,
+                    &mut bit_writer,
                     next_packet_index,
-                    &mut converter,
                 );
             }
 
             // write entity actions
-            self.entity_manager
-                .write_actions(&mut writer, next_packet_index, world, world_record);
+            self.entity_manager.write_actions(
+                &mut bit_writer,
+                next_packet_index,
+                world,
+                world_record,
+            );
 
             // send packet
-            io.send_writer(&self.base.address, &mut writer);
+            io.send_writer(&self.base.address, &mut bit_writer);
 
             return true;
         }

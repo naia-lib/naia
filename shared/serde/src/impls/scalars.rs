@@ -7,7 +7,7 @@ use crate::{
 // Unit //
 
 impl Serde for () {
-    fn ser<S: BitWrite>(&self, _: &mut S) {}
+    fn ser(&self, _: &mut dyn BitWrite) {}
 
     fn de(_: &mut BitReader) -> Result<Self, SerdeErr> {
         Ok(())
@@ -46,7 +46,7 @@ mod unit_tests {
 // Boolean //
 
 impl Serde for bool {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         writer.write_bit(*self);
     }
 
@@ -92,7 +92,7 @@ mod bool_tests {
 // Characters //
 
 impl Serde for char {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let u32char = *self as u32;
         let bytes = unsafe { std::mem::transmute::<&u32, &[u8; 4]>(&u32char) };
         for byte in bytes {
@@ -161,7 +161,7 @@ mod char_tests {
 macro_rules! impl_serde_for {
     ($impl_type:ident) => {
         impl Serde for $impl_type {
-            fn ser<S: BitWrite>(&self, writer: &mut S) {
+            fn ser(&self, writer: &mut dyn BitWrite) {
                 let du8 = unsafe {
                     std::mem::transmute::<&$impl_type, &[u8; std::mem::size_of::<$impl_type>()]>(
                         &self,
@@ -204,7 +204,7 @@ impl_serde_for!(f64);
 
 // u8
 impl Serde for u8 {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         writer.write_byte(*self);
     }
 
@@ -215,7 +215,7 @@ impl Serde for u8 {
 
 // i8
 impl Serde for i8 {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let du8 = unsafe { std::mem::transmute::<&i8, &u8>(&self) };
         writer.write_byte(*du8);
     }
@@ -236,7 +236,7 @@ impl Serde for i8 {
 
 // usize
 impl Serde for usize {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let u64usize = *self as u64;
         let du8 = unsafe { std::mem::transmute::<&u64, &[u8; 8]>(&u64usize) };
         for byte in du8 {
@@ -263,7 +263,7 @@ impl Serde for usize {
 
 // isize
 impl Serde for isize {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let u64usize = *self as u64;
         let du8 = unsafe { std::mem::transmute::<&u64, &[u8; 8]>(&u64usize) };
         for byte in du8 {

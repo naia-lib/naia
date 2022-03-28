@@ -557,7 +557,7 @@ fn write_method(properties: &Vec<Property>) -> TokenStream {
     }
 
     return quote! {
-        fn write<S: BitWrite>(&self, writer: &mut S, converter: &dyn NetEntityHandleConverter) {
+        fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
             #output
         }
     };
@@ -602,7 +602,7 @@ fn write_partial_method(enum_name: &Ident, properties: &Vec<Property>) -> TokenS
     }
 
     return quote! {
-        fn write_partial<S: BitWrite>(&self, diff_mask: &DiffMask, writer: &mut S, converter: &dyn NetEntityHandleConverter) {
+        fn write_partial(&self, diff_mask: &DiffMask, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
             #output
         }
     };

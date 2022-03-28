@@ -2,24 +2,21 @@ use std::collections::VecDeque;
 
 use naia_serde::BitReader;
 
-use crate::{
-    protocol::{
-        entity_property::NetEntityHandleConverter, protocolize::Protocolize,
-    },
-    sequence_less_than,
-    types::MessageId,
-};
+use crate::{types::MessageId, wrapping_number::sequence_less_than};
 
-use super::{message_channel::ChannelReceiver, reliable_receiver::ReliableReceiver};
+use super::{
+    message_channel::{ChannelReader, ChannelReceiver},
+    reliable_receiver::ReliableReceiver,
+};
 
 // OrderedReliableReceiver
 
-pub struct OrderedReliableReceiver<P: Protocolize> {
+pub struct OrderedReliableReceiver<P> {
     oldest_waiting_message_id: MessageId,
     waiting_incoming_messages: VecDeque<(MessageId, Option<P>)>,
 }
 
-impl<P: Protocolize> OrderedReliableReceiver<P> {
+impl<P> OrderedReliableReceiver<P> {
     pub fn new() -> Self {
         Self {
             oldest_waiting_message_id: 0,
@@ -78,13 +75,9 @@ impl<P: Protocolize> OrderedReliableReceiver<P> {
     }
 }
 
-impl<P: Protocolize> ChannelReceiver<P> for OrderedReliableReceiver<P> {
-    fn read_messages(
-        &mut self,
-        reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
-    ) {
-        let id_w_msgs = ReliableReceiver::read_incoming_messages(reader, converter);
+impl<P> ChannelReceiver<P> for OrderedReliableReceiver<P> {
+    fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader) {
+        let id_w_msgs = ReliableReceiver::read_incoming_messages(channel_reader, bit_reader);
         for (id, message) in id_w_msgs {
             self.recv_message(id, message);
         }

@@ -12,10 +12,10 @@ use naia_shared::{
     ChannelIndex, EntityHandle, EntityHandleConverter, Tick,
 };
 pub use naia_shared::{
-    wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator,
-    NetEntity, PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType,
-    Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp,
-    WorldMutType, WorldRefType,
+    wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, NetEntity,
+    PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
+    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType,
+    WorldRefType,
 };
 
 use super::{
@@ -889,10 +889,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                             continue;
                         }
                         PacketType::ClientConnectRequest => {
-                            match self
-                                .handshake_manager
-                                .recv_connect_request(&mut reader)
-                            {
+                            match self.handshake_manager.recv_connect_request(&mut reader) {
                                 HandshakeResult::Success(auth_message_opt) => {
                                     if self.user_connections.contains_key(&address) {
                                         // send connectaccept response

@@ -21,7 +21,7 @@ impl Into<u16> for NetEntity {
 }
 
 impl serde::Serde for NetEntity {
-    fn ser<S: BitWrite>(&self, writer: &mut S) {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         UnsignedVariableInteger::<7>::new(self.0).ser(writer);
     }
 

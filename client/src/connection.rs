@@ -2,8 +2,8 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_shared::{
     serde::{BitReader, BitWriter, OwnedBitReader},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, PacketType,
-    PingManager, Protocolize, StandardHeader, Tick, TickBuffer, WorldMutType,
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, PacketType, PingManager,
+    ProtocolIo, Protocolize, StandardHeader, Tick, TickBuffer, WorldMutType,
 };
 
 use super::{
@@ -53,20 +53,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         incoming_events: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
-            let mut reader = owned_reader.borrow();
+            let mut bit_reader = owned_reader.borrow();
+
+            let channel_reader = ProtocolIo::new(&self.entity_manager);
 
             // Read Messages
             self.base
                 .message_manager
-                .read_messages(&mut reader, &self.entity_manager);
+                .read_messages(&channel_reader, &mut bit_reader);
 
             // Read Entity Actions
-            self.entity_manager.read_actions(
-                world,
-                server_tick,
-                &mut reader,
-                incoming_events,
-            );
+            self.entity_manager
+                .read_actions(world, server_tick, &mut bit_reader, incoming_events);
         }
     }
 
@@ -111,34 +109,36 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         {
             let next_packet_index = self.base.next_packet_index();
 
-            let mut writer = BitWriter::new();
+            let mut bit_writer = BitWriter::new();
 
             // write header
             self.base
-                .write_outgoing_header(PacketType::Data, &mut writer);
+                .write_outgoing_header(PacketType::Data, &mut bit_writer);
+
+            let channel_writer = ProtocolIo::new(&self.entity_manager);
 
             if let Some(tick_manager) = tick_manager_opt {
                 // write tick
-                let client_tick = tick_manager.write_client_tick(&mut writer);
+                let client_tick = tick_manager.write_client_tick(&mut bit_writer);
 
                 // write tick buffered messages
                 self.tick_buffer.write_messages(
-                    &mut writer,
+                    &channel_writer,
+                    &mut bit_writer,
                     next_packet_index,
-                    &self.entity_manager,
                     &client_tick,
                 );
             }
 
             // write messages
             self.base.message_manager.write_messages(
-                &mut writer,
+                &channel_writer,
+                &mut bit_writer,
                 next_packet_index,
-                &self.entity_manager,
             );
 
             // send packet
-            io.send_writer(&mut writer);
+            io.send_writer(&mut bit_writer);
 
             return true;
         }

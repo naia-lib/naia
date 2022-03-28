@@ -6,8 +6,8 @@ use naia_shared::ChannelIndex;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
     wrapping_diff, BaseConnection, ConnectionConfig, FakeEntityConverter, Instant, KeyGenerator,
-    PacketType, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
-    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType, WorldRefType,
+    PacketType, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize, Replicate,
+    ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType, WorldRefType,
 };
 
 use super::{cache_map::CacheMap, connection::Connection};
@@ -70,10 +70,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 3 of Handshake
-    pub fn recv_connect_request(
-        &mut self,
-        reader: &mut BitReader,
-    ) -> HandshakeResult<P> {
+    pub fn recv_connect_request(&mut self, reader: &mut BitReader) -> HandshakeResult<P> {
         // Verify that timestamp hash has been written by this
         // server instance
         if self.timestamp_validate(reader).is_some() {

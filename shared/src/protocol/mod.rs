@@ -5,6 +5,7 @@ pub mod entity_property;
 pub mod net_entity;
 pub mod property;
 pub mod property_mutate;
+pub mod protocol_io;
 pub mod protocolize;
 pub mod replica_ref;
 pub mod replicate;

@@ -6,7 +6,7 @@ use crate::{
 macro_rules! impl_reflect_tuple {
     {$($index:tt : $name:tt),*} => {
         impl<$($name : Serde,)*> Serde for ($($name,)*) {
-            fn ser<S: BitWrite>(&self, writer: &mut S) {
+            fn ser(&self, writer: &mut dyn BitWrite) {
                 $(self.$index.ser(writer);)*
             }
             fn de(reader: &mut BitReader) -> Result<($($name,)*), SerdeErr> {

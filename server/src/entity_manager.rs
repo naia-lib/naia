@@ -140,7 +140,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         channel: C,
         message: &R,
     ) {
-        self.delayed_entity_messages.queue_message(entities, channel, message.protocol_copy());
+        self.delayed_entity_messages
+            .queue_message(entities, channel, message.protocol_copy());
     }
 
     pub fn collect_outgoing_messages(
@@ -150,7 +151,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     ) {
         self.collect_resend_messages(rtt_millis);
         self.collect_component_updates();
-        self.delayed_entity_messages.collect_ready_messages(message_manager);
+        self.delayed_entity_messages
+            .collect_ready_messages(message_manager);
     }
 
     // Components
