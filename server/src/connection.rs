@@ -124,7 +124,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         tick_manager_opt: &Option<TickManager>,
     ) -> bool {
         if self.base.message_manager.has_outgoing_messages()
-            || self.entity_manager.has_outgoing_actions()
+            || self.entity_manager.has_outgoing_messages()
         {
             let next_packet_index = self.base.next_packet_index();
 
@@ -151,7 +151,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             }
 
             // write entity actions
-            self.entity_manager.write_actions(
+            self.entity_manager.write_all(
                 &mut bit_writer,
                 next_packet_index,
                 world,

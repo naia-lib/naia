@@ -25,19 +25,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     // Action Reader
-    pub fn read_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
+
+    pub fn read_all<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
         server_tick: Tick,
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
-        self.receiver_record.clear_sent_messages();
-        let mut last_read_id: Option<MessageId> = None;
-        let action_count = message_list_header::read(reader);
-        for _ in 0..action_count {
-            self.read_action(world, server_tick, reader, &mut last_read_id, event_stream);
-        }
+        self.read_actions(world, reader, event_stream);
+        self.read_updates(world, server_tick, reader, event_stream);
     }
 
     fn read_message_id(bit_reader: &mut BitReader, last_id_opt: &mut Option<MessageId>) -> MessageId {
@@ -55,10 +52,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         current_id
     }
 
+    fn read_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
+        &mut self,
+        world: &mut W,
+        reader: &mut BitReader,
+        event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
+    ) {
+        self.receiver_record.clear_sent_messages();
+        let mut last_read_id: Option<MessageId> = None;
+        let action_count = message_list_header::read(reader);
+        for _ in 0..action_count {
+            self.read_action(world, reader, &mut last_read_id, event_stream);
+        }
+    }
+
     fn read_action<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
-        server_tick: Tick,
         reader: &mut BitReader,
         last_read_id: &mut Option<MessageId>,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
@@ -174,24 +184,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                         .push_back(Ok(Event::InsertComponent(*world_entity, component_kind)));
                 }
             }
-            // Component Update
-            EntityActionType::UpdateComponent => {
-                let net_entity = NetEntity::de(reader).unwrap();
-                let component_kind = P::Kind::de(reader).unwrap();
-
-                if let Some(world_entity) = self.local_to_world_entity.get(&net_entity) {
-                    // read incoming delta
-                    world.component_read_partial(world_entity, &component_kind, reader, self);
-
-                    event_stream.push_back(Ok(Event::UpdateComponent(
-                        server_tick,
-                        *world_entity,
-                        component_kind,
-                    )));
-                } else {
-                    panic!("attempting to update component for nonexistent entity");
-                }
-            }
             // Component Removal
             EntityActionType::RemoveComponent => {
                 // read all data
@@ -223,6 +215,43 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     panic!("attempting to delete nonexistent component of entity");
                 }
             }
+        }
+    }
+
+    fn read_updates<W: WorldMutType<P, E>, C: ChannelIndex>(
+        &mut self,
+        world: &mut W,
+        server_tick: Tick,
+        reader: &mut BitReader,
+        event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
+    ) {
+        let update_count = message_list_header::read(reader);
+        for _ in 0..update_count {
+            self.read_update(world, server_tick, reader, event_stream);
+        }
+    }
+
+    fn read_update<W: WorldMutType<P, E>, C: ChannelIndex>(
+        &mut self,
+        world: &mut W,
+        server_tick: Tick,
+        reader: &mut BitReader,
+        event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
+    ) {
+        let net_entity = NetEntity::de(reader).unwrap();
+        let component_kind = P::Kind::de(reader).unwrap();
+
+        if let Some(world_entity) = self.local_to_world_entity.get(&net_entity) {
+            // read incoming delta
+            world.component_read_partial(world_entity, &component_kind, reader, self);
+
+            event_stream.push_back(Ok(Event::UpdateComponent(
+                server_tick,
+                *world_entity,
+                component_kind,
+            )));
+        } else {
+            panic!("attempting to update component for nonexistent entity");
         }
     }
 }

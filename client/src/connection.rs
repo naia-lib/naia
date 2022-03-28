@@ -64,7 +64,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
             // Read Entity Actions
             self.entity_manager
-                .read_actions(world, server_tick, &mut bit_reader, incoming_events);
+                .read_all(world, server_tick, &mut bit_reader, incoming_events);
         }
     }
 
