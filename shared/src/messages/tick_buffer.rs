@@ -12,7 +12,7 @@ use super::{
     channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
     channel_tick_buffer_receiver::ChannelTickBufferReceiver,
     channel_tick_buffer_sender::ChannelTickBufferSender,
-    message_channel::{ChannelWriter, ChannelReader},
+    message_channel::{ChannelReader, ChannelWriter},
 };
 
 pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {

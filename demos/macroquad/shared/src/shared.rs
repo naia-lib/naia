@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use naia_shared::{CompressionConfig, LinkConditionerConfig, SharedConfig, SocketConfig};
 
-use super::channels::{channels_init, Channels};
+use super::channels::{Channels, CHANNEL_CONFIG};
 
 pub fn shared_config() -> SharedConfig<Channels> {
     // Set tick rate to ~60 FPS
@@ -21,7 +21,7 @@ pub fn shared_config() -> SharedConfig<Channels> {
 
     return SharedConfig::new(
         SocketConfig::new(link_condition, None),
-        channels_init(),
+        CHANNEL_CONFIG,
         tick_interval,
         Some(CompressionConfig::new(
             None,

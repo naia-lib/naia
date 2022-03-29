@@ -1,6 +1,5 @@
 use naia_shared::{
-    derive_channels, Channel, ChannelConfig, ChannelDirection, ChannelMode, ReliableSettings,
-    TickBufferSettings,
+    derive_channels, Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings,
 };
 
 #[derive_channels]
@@ -9,23 +8,15 @@ pub enum Channels {
     EntityAssignment,
 }
 
-pub fn channels_init() -> ChannelConfig<Channels> {
-    let mut config = ChannelConfig::new();
-
-    config.add_channel(
-        Channels::PlayerCommand,
-        Channel::new(
-            ChannelMode::TickBuffered(TickBufferSettings::default()),
-            ChannelDirection::ClientToServer,
-        ),
-    );
-    config.add_channel(
-        Channels::EntityAssignment,
-        Channel::new(
-            ChannelMode::UnorderedReliable(ReliableSettings::default()),
-            ChannelDirection::ServerToClient,
-        ),
-    );
-
-    config
-}
+pub const CHANNEL_CONFIG: &'static [Channel<Channels>] = &[
+    Channel {
+        index: Channels::PlayerCommand,
+        direction: ChannelDirection::ClientToServer,
+        mode: ChannelMode::TickBuffered(TickBufferSettings::default()),
+    },
+    Channel {
+        index: Channels::EntityAssignment,
+        direction: ChannelDirection::ServerToClient,
+        mode: ChannelMode::UnorderedReliable(ReliableSettings::default()),
+    },
+];
