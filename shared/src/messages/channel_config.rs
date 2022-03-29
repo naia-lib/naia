@@ -1,17 +1,18 @@
 use std::{hash::Hash, time::Duration};
+use std::collections::HashMap;
 
-use crate::{derive_serde, serde, serde::Serde, vecmap::VecMap};
+use crate::{derive_serde, serde, serde::Serde};
 
 // ChannelConfig
 #[derive(Clone)]
 pub struct ChannelConfig<C: ChannelIndex> {
-    channels: VecMap<C, Channel<C>>,
+    channels: HashMap<C, Channel<C>>,
 }
 
 impl<C: ChannelIndex> ChannelConfig<C> {
     pub fn new(input: &[Channel<C>]) -> Self {
         let mut new_me = Self {
-            channels: VecMap::new(),
+            channels: HashMap::new(),
         };
 
         for channel in input {
@@ -22,18 +23,17 @@ impl<C: ChannelIndex> ChannelConfig<C> {
     }
 
     fn add_channel(&mut self, channel: Channel<C>) {
-        self.channels.dual_insert(channel.index.clone(), channel);
+        self.channels.insert(channel.index.clone(), channel);
     }
 
     pub fn channel(&self, channel_index: &C) -> &Channel<C> {
         return self
             .channels
-            .map
             .get(channel_index)
             .expect("Channel has not been registered in the config!");
     }
 
-    pub fn channels(&self) -> &VecMap<C, Channel<C>> {
+    pub fn channels(&self) -> &HashMap<C, Channel<C>> {
         return &self.channels;
     }
 }

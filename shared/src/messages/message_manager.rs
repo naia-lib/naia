@@ -33,8 +33,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         let mut channel_senders = HashMap::<C, Box<dyn ChannelSender<P>>>::new();
         let mut channel_receivers = HashMap::<C, Box<dyn ChannelReceiver<P>>>::new();
 
-        for channel_index in &channel_config.channels().vec {
-            let channel = channel_config.channels().map.get(channel_index).unwrap();
+        for (channel_index, channel) in channel_config.channels() {
             match &channel.mode {
                 ChannelMode::UnorderedUnreliable => {
                     channel_senders.insert(
