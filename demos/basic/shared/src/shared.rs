@@ -5,14 +5,14 @@ use naia_shared::{
 };
 
 pub fn shared_config() -> SharedConfig<DefaultChannels> {
-    let tick_interval = Some(Duration::from_millis(1000));
+    let tick_interval = Some(Duration::from_millis(800));
 
     // Simulate network conditions with this configuration property
     //let link_condition = Some(LinkConditionerConfig::average_condition());
 
     let link_condition = Some(LinkConditionerConfig {
-        incoming_latency: 750,
-        incoming_jitter: 500,
+        incoming_latency: 1200,
+        incoming_jitter: 800,
         incoming_loss: 0.8,
     });
 
