@@ -46,15 +46,11 @@ pub use messages::{
         Channel, ChannelConfig, ChannelDirection, ChannelIndex, ChannelMode, DefaultChannels,
         ReliableSettings, TickBufferSettings,
     },
-    channel_tick_buffer::ChannelTickBuffer,
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     message_list_header,
     message_manager::MessageManager,
-    reliable_sender::ReliableSender,
     tick_buffer::TickBuffer,
-    unordered_reliable_receiver::{UnorderedReliableReceiver, UnorderedReliableReceiverRecord},
-    unordered_unreliable_receiver::UnorderedUnreliableReceiver,
-    unordered_unreliable_sender::UnorderedUnreliableSender,
+    unordered_reliable_receiver::UnorderedReliableReceiverRecord,
 };
 pub use protocol::{
     diff_mask::DiffMask,

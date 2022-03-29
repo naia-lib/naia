@@ -148,6 +148,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         for _ in 0..channel_count {
             // read channel index
             let channel_index = C::de(bit_reader).unwrap();
+
+            // continue read inside channel
             if let Some(channel) = self.channel_receivers.get_mut(&channel_index) {
                 channel.read_messages(channel_reader, bit_reader);
             }
