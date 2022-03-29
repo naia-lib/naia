@@ -27,8 +27,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         let mut channel_senders = HashMap::new();
         let mut channel_receivers = HashMap::new();
 
-        for channel_index in &channel_config.channels().vec {
-            let channel = channel_config.channels().map.get(channel_index).unwrap();
+        for (channel_index, channel) in channel_config.channels() {
             match &channel.mode {
                 ChannelMode::TickBuffered(settings) => {
                     channel_senders.insert(
