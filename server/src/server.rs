@@ -163,7 +163,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
 
                 let messages = connection
                     .tick_buffer
-                    .collect_incoming_messages(&self.tick_manager.as_ref().unwrap().server_tick());
+                    .receive_messages(&self.tick_manager.as_ref().unwrap().server_tick());
                 for (channel, message) in messages {
                     self.incoming_events.push_back(Ok(Event::Message(
                         connection.user_key,

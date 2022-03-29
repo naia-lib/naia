@@ -1,5 +1,6 @@
 pub mod channel_config;
-pub mod channel_tick_buffer;
+pub mod channel_tick_buffer_receiver;
+pub mod channel_tick_buffer_sender;
 pub mod message_channel;
 pub mod message_list_header;
 pub mod message_manager;

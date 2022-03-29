@@ -68,20 +68,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         bit_reader: &mut BitReader,
         world_record: &WorldRecord<E, P::Kind>,
     ) {
+        // Read Tick Buffered Messages
         if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
-            // Read Tick Buffered Messages
-            let mut converter = EntityConverter::new(world_record, &self.entity_manager);
+            let converter = EntityConverter::new(world_record, &self.entity_manager);
+            let channel_reader = ProtocolIo::new(&converter);
             self.tick_buffer
-                .read_messages(&server_tick, &client_tick, bit_reader, &mut converter);
+                .read_messages(&server_tick, &client_tick, &channel_reader, bit_reader);
         }
 
         // Read Messages
         {
             let converter = EntityConverter::new(world_record, &self.entity_manager);
-            let channel_writer = ProtocolIo::new(&converter);
+            let channel_reader = ProtocolIo::new(&converter);
             self.base
                 .message_manager
-                .read_messages(&channel_writer, bit_reader);
+                .read_messages(&channel_reader, bit_reader);
         }
     }
 

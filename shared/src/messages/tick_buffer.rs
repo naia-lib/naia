@@ -1,61 +1,60 @@
 use std::collections::HashMap;
 
-use naia_serde::BitReader;
-
-use super::{
-    channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
-    channel_tick_buffer::ChannelTickBuffer,
-};
+use naia_serde::{BitReader, BitWriter, Serde, UnsignedVariableInteger};
 
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
-    protocol::{
-        entity_property::NetEntityHandleConverter, protocolize::Protocolize,
-        replicate::ReplicateSafe,
-    },
-    serde::BitWriter,
+    protocol::protocolize::Protocolize,
     types::{PacketIndex, ShortMessageId, Tick},
-    vecmap::VecMap,
-    ChannelWriter,
+};
+
+use super::{
+    channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
+    channel_tick_buffer_receiver::ChannelTickBufferReceiver,
+    channel_tick_buffer_sender::ChannelTickBufferSender,
+    message_channel::{ChannelWriter, ChannelReader},
 };
 
 pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
-    channels: VecMap<C, ChannelTickBuffer<P>>,
+    channel_senders: HashMap<C, ChannelTickBufferSender<P>>,
+    channel_receivers: HashMap<C, ChannelTickBufferReceiver<P>>,
     packet_to_channel_map: HashMap<PacketIndex, Vec<(C, Vec<(Tick, ShortMessageId)>)>>,
 }
 
 impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
         // initialize all tick buffer channels
-        let mut channels = VecMap::new();
+        let mut channel_senders = HashMap::new();
+        let mut channel_receivers = HashMap::new();
 
         for channel_index in &channel_config.channels().vec {
             let channel = channel_config.channels().map.get(channel_index).unwrap();
             match &channel.mode {
                 ChannelMode::TickBuffered(settings) => {
-                    let new_channel = ChannelTickBuffer::new(&settings);
-                    channels.dual_insert(channel_index.clone(), new_channel);
+                    channel_senders.insert(
+                        channel_index.clone(),
+                        ChannelTickBufferSender::new(&settings),
+                    );
+                    channel_receivers
+                        .insert(channel_index.clone(), ChannelTickBufferReceiver::new());
                 }
                 _ => {}
             }
         }
 
         TickBuffer {
-            channels,
+            channel_senders,
+            channel_receivers,
             packet_to_channel_map: HashMap::new(),
         }
     }
 
-    pub fn collect_incoming_messages(&mut self, host_tick: &Tick) -> Vec<(C, P)> {
-        let mut output = Vec::new();
-        for channel_index in &self.channels.vec {
-            let channel = self.channels.map.get_mut(channel_index).unwrap();
-            let mut messages = channel.collect_incoming_messages(host_tick);
-            for message in messages.drain(..) {
-                output.push((channel_index.clone(), message));
-            }
+    // Outgoing Messages
+
+    pub fn send_message(&mut self, host_tick: &Tick, channel_index: C, message: P) {
+        if let Some(channel) = self.channel_senders.get_mut(&channel_index) {
+            channel.send_message(host_tick, message);
         }
-        return output;
     }
 
     pub fn collect_outgoing_messages(
@@ -63,26 +62,13 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         client_sending_tick: &Tick,
         server_receivable_tick: &Tick,
     ) {
-        for channel_index in &self.channels.vec {
-            let channel = self.channels.map.get_mut(channel_index).unwrap();
+        for (_, channel) in &mut self.channel_senders {
             channel.collect_outgoing_messages(client_sending_tick, server_receivable_tick);
         }
     }
 
-    pub fn send_message<R: ReplicateSafe<P>>(
-        &mut self,
-        host_tick: &Tick,
-        channel_index: C,
-        message: &R,
-    ) {
-        if let Some(channel) = self.channels.map.get_mut(&channel_index) {
-            channel.send_message(host_tick, message);
-        }
-    }
-
     pub fn has_outgoing_messages(&self) -> bool {
-        for channel_index in &self.channels.vec {
-            let channel = self.channels.map.get(channel_index).unwrap();
+        for (_, channel) in &self.channel_senders {
             if channel.has_outgoing_messages() {
                 return true;
             }
@@ -97,18 +83,24 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         packet_index: PacketIndex,
         host_tick: &Tick,
     ) {
-        for channel_index in &self.channels.vec {
-            let channel = self.channels.map.get_mut(channel_index).unwrap();
+        let mut channels_to_write = Vec::new();
+        for (channel_index, channel) in &self.channel_senders {
+            if channel.has_outgoing_messages() {
+                channels_to_write.push(channel_index.clone());
+            }
+        }
+
+        // write channel count
+        UnsignedVariableInteger::<3>::new(channels_to_write.len() as u64).ser(bit_writer);
+
+        for channel_index in channels_to_write {
+            let channel = self.channel_senders.get_mut(&channel_index).unwrap();
+
+            // write channel index
+            channel_index.ser(bit_writer);
+
             if let Some(message_ids) = channel.write_messages(channel_writer, bit_writer, host_tick)
             {
-                // {
-                //     let mut messages_string = "".to_string();
-                //     for (tick, message_id) in &message_ids {
-                //         messages_string += &format!("(t{}, i{})", tick, message_id);
-                //     }
-                //     info!("Writing Packet ({}), with messages: [{}]", packet_index,
-                // messages_string); }
-
                 if !self.packet_to_channel_map.contains_key(&packet_index) {
                     self.packet_to_channel_map.insert(packet_index, Vec::new());
                 }
@@ -118,17 +110,38 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
         }
     }
 
+    // Incoming Messages
+
     pub fn read_messages(
         &mut self,
         host_tick: &Tick,
         remote_tick: &Tick,
-        reader: &mut BitReader,
-        converter: &mut dyn NetEntityHandleConverter,
+        channel_reader: &dyn ChannelReader<P>,
+        bit_reader: &mut BitReader,
     ) {
-        for channel_index in &self.channels.vec {
-            let channel = self.channels.map.get_mut(channel_index).unwrap();
-            channel.read_messages(host_tick, remote_tick, reader, converter);
+        // read channel count
+        let channel_count = UnsignedVariableInteger::<3>::de(bit_reader).unwrap().get();
+
+        for _ in 0..channel_count {
+            // read channel index
+            let channel_index = C::de(bit_reader).unwrap();
+
+            // continue read inside channel
+            if let Some(channel) = self.channel_receivers.get_mut(&channel_index) {
+                channel.read_messages(host_tick, remote_tick, channel_reader, bit_reader);
+            }
         }
+    }
+
+    pub fn receive_messages(&mut self, host_tick: &Tick) -> Vec<(C, P)> {
+        let mut output = Vec::new();
+        for (channel_index, channel) in &mut self.channel_receivers {
+            let mut messages = channel.receive_messages(host_tick);
+            for message in messages.drain(..) {
+                output.push((channel_index.clone(), message));
+            }
+        }
+        return output;
     }
 }
 
@@ -136,7 +149,7 @@ impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for TickBuffer<P, C> {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_channel_map.get(&packet_index) {
             for (channel_index, message_ids) in channel_list {
-                if let Some(channel) = self.channels.map.get_mut(channel_index) {
+                if let Some(channel) = self.channel_senders.get_mut(channel_index) {
                     for (tick, message_id) in message_ids {
                         channel.notify_message_delivered(tick, message_id);
                     }
