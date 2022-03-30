@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, time::Duration};
+use std::{collections::HashMap, hash::Hash};
 
 use crate::{derive_serde, serde, serde::Serde};
 
@@ -106,13 +106,13 @@ impl ReliableSettings {
 
 #[derive(Clone)]
 pub struct TickBufferSettings {
-    pub resend_interval: Duration,
+    pub tick_resend_factor: u8,
 }
 
 impl TickBufferSettings {
     pub const fn default() -> Self {
         Self {
-            resend_interval: Duration::from_millis(100),
+            tick_resend_factor: 1,
         }
     }
 }

@@ -1,6 +1,5 @@
-use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
+use std::{collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
-use crate::tick_buffer_sender::TickBufferSender;
 use naia_shared::{
     serde::{BitReader, BitWriter, OwnedBitReader},
     BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, HostType, PacketType,
@@ -9,14 +8,14 @@ use naia_shared::{
 
 use super::{
     entity_manager::EntityManager, error::NaiaClientError, event::Event, io::Io,
-    tick_manager::TickManager, tick_queue::TickQueue,
+    tick_buffer_sender::TickBufferSender, tick_manager::TickManager, tick_queue::TickQueue,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub base: BaseConnection<P, C>,
     pub entity_manager: EntityManager<P, E>,
     pub ping_manager: PingManager,
-    pub tick_buffer: TickBufferSender<P, C>,
+    pub tick_buffer: Option<TickBufferSender<P, C>>,
     jitter_buffer: TickQueue<OwnedBitReader>,
 }
 
@@ -25,12 +24,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         address: SocketAddr,
         connection_config: &ConnectionConfig,
         channel_config: &ChannelConfig<C>,
+        tick_duration: &Option<Duration>,
     ) -> Self {
+        let tick_buffer = match tick_duration {
+            Some(duration) => Some(TickBufferSender::new(channel_config, duration)),
+            None => None,
+        };
+
         return Connection {
             base: BaseConnection::new(address, HostType::Client, connection_config, channel_config),
             entity_manager: EntityManager::new(),
             ping_manager: PingManager::new(&connection_config.ping),
-            tick_buffer: TickBufferSender::new(channel_config),
+            tick_buffer,
             jitter_buffer: TickQueue::new(),
         };
     }
@@ -38,8 +43,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     // Incoming data
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
-        self.base
-            .process_incoming_header(header, &mut Some(&mut self.tick_buffer));
+        match &mut self.tick_buffer {
+            Some(tick_buffer) => self
+                .base
+                .process_incoming_header(header, &mut Some(tick_buffer)),
+            None => self.base.process_incoming_header(header, &mut None),
+        }
     }
 
     pub fn buffer_data_packet(&mut self, incoming_tick: Tick, reader: &mut BitReader) {
@@ -92,10 +101,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             .message_manager
             .collect_outgoing_messages(&self.ping_manager.rtt);
         if let Some(tick_manager) = tick_manager_opt {
-            self.tick_buffer.collect_outgoing_messages(
-                &tick_manager.client_sending_tick(),
-                &tick_manager.server_receivable_tick(),
-            );
+            self.tick_buffer
+                .as_mut()
+                .unwrap()
+                .collect_outgoing_messages(
+                    &tick_manager.client_sending_tick(),
+                    &tick_manager.server_receivable_tick(),
+                );
         }
     }
 
@@ -105,9 +117,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         io: &mut Io,
         tick_manager_opt: &Option<TickManager>,
     ) -> bool {
-        if self.base.message_manager.has_outgoing_messages()
-            || self.tick_buffer.has_outgoing_messages()
-        {
+        let tick_buffer_has_outgoing_messages = match &self.tick_buffer {
+            Some(tick_buffer) => tick_buffer.has_outgoing_messages(),
+            None => false,
+        };
+
+        if self.base.message_manager.has_outgoing_messages() || tick_buffer_has_outgoing_messages {
             let next_packet_index = self.base.next_packet_index();
 
             let mut bit_writer = BitWriter::new();
@@ -123,7 +138,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
                 let client_tick = tick_manager.write_client_tick(&mut bit_writer);
 
                 // write tick buffered messages
-                self.tick_buffer.write_messages(
+
+                self.tick_buffer.as_mut().unwrap().write_messages(
                     &channel_writer,
                     &mut bit_writer,
                     next_packet_index,
