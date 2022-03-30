@@ -17,13 +17,13 @@ pub trait Replicate<P: Protocolize>: ReplicateSafe<P> {
     fn clone(&self) -> Self;
     /// Writes data into an outgoing byte stream, sufficient to completely
     /// recreate the Message/Component on the client
-    fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
+    fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Message/Component on the client
     fn write_partial(
         &self,
         diff_mask: &DiffMask,
-        writer: &mut dyn BitWrite,
+        bit_writer: &mut dyn BitWrite,
         converter: &dyn NetEntityHandleConverter,
     );
 }
@@ -54,7 +54,7 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     fn set_mutator(&mut self, mutator: &PropertyMutator);
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
-    fn read_partial(&mut self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter);
+    fn read_partial(&mut self, bit_reader: &mut BitReader, converter: &dyn NetEntityHandleConverter);
     /// Returns whether has any EntityProperties
     fn has_entity_properties(&self) -> bool;
     /// Returns a list of Entities contained within the Replica's properties
