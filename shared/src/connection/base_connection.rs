@@ -12,6 +12,7 @@ use crate::{
     protocol::protocolize::Protocolize,
     types::PacketIndex,
 };
+use crate::types::HostType;
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig,
@@ -32,6 +33,7 @@ impl<P: Protocolize, C: ChannelIndex> BaseConnection<P, C> {
     /// Create a new BaseConnection, given the appropriate underlying managers
     pub fn new(
         address: SocketAddr,
+        host_type: HostType,
         connection_config: &ConnectionConfig,
         channel_config: &ChannelConfig<C>,
     ) -> Self {
@@ -40,7 +42,7 @@ impl<P: Protocolize, C: ChannelIndex> BaseConnection<P, C> {
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
             ack_manager: AckManager::new(),
-            message_manager: MessageManager::new(channel_config),
+            message_manager: MessageManager::new(host_type, channel_config),
         };
     }
 

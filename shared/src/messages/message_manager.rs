@@ -7,6 +7,7 @@ use crate::{
     protocol::protocolize::Protocolize,
     types::{MessageId, PacketIndex},
 };
+use crate::types::HostType;
 
 use super::{
     channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
@@ -28,21 +29,31 @@ pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
 
 impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Creates a new MessageManager
-    pub fn new(channel_config: &ChannelConfig<C>) -> Self {
+    pub fn new(host_type: HostType, channel_config: &ChannelConfig<C>) -> Self {
         // initialize all reliable channels
-        let mut channel_senders = HashMap::<C, Box<dyn ChannelSender<P>>>::new();
-        let mut channel_receivers = HashMap::<C, Box<dyn ChannelReceiver<P>>>::new();
 
+        // initialize senders
+        let mut channel_senders = HashMap::<C, Box<dyn ChannelSender<P>>>::new();
         for (channel_index, channel) in channel_config.channels() {
+
+            match &host_type {
+                HostType::Server => {
+                    if !channel.can_send_to_client() {
+                        continue;
+                    }
+                },
+                HostType::Client => {
+                    if !channel.can_send_to_server() {
+                        continue;
+                    }
+                }
+            }
+
             match &channel.mode {
                 ChannelMode::UnorderedUnreliable => {
                     channel_senders.insert(
                         channel_index.clone(),
                         Box::new(UnorderedUnreliableSender::new()),
-                    );
-                    channel_receivers.insert(
-                        channel_index.clone(),
-                        Box::new(UnorderedUnreliableReceiver::new()),
                     );
                 }
                 ChannelMode::UnorderedReliable(settings) => {
@@ -50,16 +61,48 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                         channel_index.clone(),
                         Box::new(ReliableSender::new(&settings)),
                     );
-                    channel_receivers.insert(
-                        channel_index.clone(),
-                        Box::new(UnorderedReliableReceiver::new()),
-                    );
                 }
                 ChannelMode::OrderedReliable(settings) => {
                     channel_senders.insert(
                         channel_index.clone(),
                         Box::new(ReliableSender::new(&settings)),
                     );
+                }
+                _ => {}
+            };
+        }
+
+        // initialize receivers
+        let mut channel_receivers = HashMap::<C, Box<dyn ChannelReceiver<P>>>::new();
+        for (channel_index, channel) in channel_config.channels() {
+
+            match &host_type {
+                HostType::Server => {
+                    if !channel.can_send_to_server() {
+                        continue;
+                    }
+                },
+                HostType::Client => {
+                    if !channel.can_send_to_client() {
+                        continue;
+                    }
+                }
+            }
+
+            match &channel.mode {
+                ChannelMode::UnorderedUnreliable => {
+                    channel_receivers.insert(
+                        channel_index.clone(),
+                        Box::new(UnorderedUnreliableReceiver::new()),
+                    );
+                }
+                ChannelMode::UnorderedReliable(_) => {
+                    channel_receivers.insert(
+                        channel_index.clone(),
+                        Box::new(UnorderedReliableReceiver::new()),
+                    );
+                }
+                ChannelMode::OrderedReliable(_) => {
                     channel_receivers.insert(
                         channel_index.clone(),
                         Box::new(OrderedReliableReceiver::new()),
