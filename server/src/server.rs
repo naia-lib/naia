@@ -28,6 +28,7 @@ use crate::{
         entity_ref::{EntityMut, EntityRef},
         entity_scope_map::EntityScopeMap,
         global_diff_handler::GlobalDiffHandler,
+        world_record::WorldRecord,
     },
     tick::tick_manager::TickManager,
 };
@@ -39,7 +40,6 @@ use super::{
     server_config::ServerConfig,
     user::{User, UserKey, UserMut, UserRef},
     user_scope::UserScopeMut,
-    world_record::WorldRecord,
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -571,7 +571,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
             //remove entity from user connection
             user_connection
                 .entity_manager
-                .despawn_entity(&self.world_record, entity);
+                .despawn_entity(entity);
         }
 
         // Clean up associated components
@@ -649,10 +649,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
         let component_kind = P::kind_of::<R>();
 
         // clean up component on all connections
+
         // TODO: should be able to make this more efficient by caching for every Entity
         // which scopes they are part of
         for (_, user_connection) in self.user_connections.iter_mut() {
-            //remove component from user connection
+            // remove component from user connection
             user_connection
                 .entity_manager
                 .remove_component(entity, &component_kind);
@@ -1055,7 +1056,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                         //remove entity from user connection
                         user_connection
                             .entity_manager
-                            .despawn_entity(&self.world_record, &removed_entity);
+                            .despawn_entity(&removed_entity);
                     }
                 }
             }
@@ -1092,7 +1093,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                         // remove entity from the connections local scope
                                         user_connection
                                             .entity_manager
-                                            .despawn_entity(&self.world_record, entity);
+                                            .despawn_entity(entity);
                                     }
                                 }
                             }

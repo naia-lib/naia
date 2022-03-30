@@ -6,6 +6,7 @@ use crate::protocol::{
     replica_ref::{ReplicaMutWrapper, ReplicaRefWrapper},
     replicate::{Replicate, ReplicateSafe},
 };
+use crate::ReplicaDynRefWrapper;
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
@@ -28,7 +29,7 @@ pub trait WorldRefType<P: Protocolize, E> {
         entity: &E,
     ) -> Option<ReplicaRefWrapper<'a, P, R>>;
     /// gets an entity's component, dynamically
-    fn component_of_kind(&self, entity: &E, component_kind: &P::Kind) -> Option<&P>;
+    fn component_of_kind<'a>(&'a self, entity: &E, component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>>;
 }
 
 /// Structures that implement the WorldMutType trait will be able to be loaded

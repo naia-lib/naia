@@ -1,9 +1,6 @@
 use hecs::{Entity, World};
 
-use naia_shared::{
-    DiffMask, PacketReader, ProtocolInserter, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper,
-    ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
-};
+use naia_shared::{serde::BitReader, NetEntityHandleConverter, ProtocolInserter, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -67,14 +64,14 @@ impl<'w, 'd, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w, 'd, P> {
         return has_component_of_kind::<P>(self.world, self.world_data, entity, component_kind);
     }
 
-    fn component<'a, R: ReplicateSafe<P>>(
-        &'a self,
+    fn component<R: ReplicateSafe<P>>(
+        &self,
         entity: &Entity,
-    ) -> Option<ReplicaRefWrapper<'a, P, R>> {
+    ) -> Option<ReplicaRefWrapper<P, R>> {
         return component::<P, R>(self.world, entity);
     }
 
-    fn component_of_kind(&self, entity: &Entity, component_kind: &P::Kind) -> Option<&P> {
+    fn component_of_kind<'a>(&'a self, entity: &Entity, component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>> {
         return component_of_kind(&self.world, self.world_data, entity, component_kind);
     }
 }
@@ -112,55 +109,27 @@ impl<'w, 'd, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w, 'd, P> {
         return has_component_of_kind::<P>(self.world, self.world_data, entity, component_kind);
     }
 
-    fn component<'a, R: ReplicateSafe<P>>(
-        &'a self,
+    fn component<R: ReplicateSafe<P>>(
+        &self,
         entity: &Entity,
-    ) -> Option<ReplicaRefWrapper<'a, P, R>> {
+    ) -> Option<ReplicaRefWrapper<P, R>> {
         return component::<P, R>(self.world, entity);
     }
 
-    fn component_of_kind(&self, entity: &Entity, component_kind: &P::Kind) -> Option<&P> {
+    fn component_of_kind<'a>(&'a self, entity: &Entity, component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>> {
         return component_of_kind(self.world, self.world_data, entity, component_kind);
     }
 }
 
 impl<'w, 'd, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
-    fn component_mut<'a, R: ReplicateSafe<P>>(
-        &'a mut self,
-        entity: &Entity,
-    ) -> Option<ReplicaMutWrapper<'a, P, R>> {
-        if let Ok(hecs_mut) = self.world.get_mut::<R>(*entity) {
-            let wrapper = ComponentMut(hecs_mut);
-            let component_mut = ReplicaMutWrapper::new(wrapper);
-            return Some(component_mut);
-        }
-        return None;
+    fn spawn_entity(&mut self) -> Entity {
+        return self.world.spawn(());
     }
 
-    fn component_read_partial(
-        &mut self,
-        entity: &Entity,
-        component_kind: &P::Kind,
-        diff_mask: &DiffMask,
-        reader: &mut PacketReader,
-        packet_index: PacketIndex,
-    ) {
-        if let Some(access) = self.world_data.component_access(component_kind) {
-            if let Some(mut component) = access.component_mut(self.world, entity) {
-                component.read_partial(diff_mask, reader, packet_index);
-            }
-        }
-    }
-
-    fn mirror_components(
-        &mut self,
-        mutable_entity: &Entity,
-        immutable_entity: &Entity,
-        component_kind: &P::Kind,
-    ) {
-        if let Some(accessor) = self.world_data.component_access(component_kind) {
-            accessor.mirror_components(self.world, mutable_entity, immutable_entity);
-        }
+    fn despawn_entity(&mut self, entity: &Entity) {
+        self.world
+            .despawn(*entity)
+            .expect("error despawning Entity");
     }
 
     fn component_kinds(&mut self, entity: &Entity) -> Vec<P::Kind> {
@@ -176,14 +145,41 @@ impl<'w, 'd, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
         return kinds;
     }
 
-    fn spawn_entity(&mut self) -> Entity {
-        return self.world.spawn(());
+    fn component_mut<R: ReplicateSafe<P>>(
+        &mut self,
+        entity: &Entity,
+    ) -> Option<ReplicaMutWrapper<P, R>> {
+        if let Ok(hecs_mut) = self.world.get_mut::<R>(*entity) {
+            let wrapper = ComponentMut(hecs_mut);
+            let component_mut = ReplicaMutWrapper::new(wrapper);
+            return Some(component_mut);
+        }
+        return None;
     }
 
-    fn despawn_entity(&mut self, entity: &Entity) {
-        self.world
-            .despawn(*entity)
-            .expect("error despawning Entity");
+    fn component_read_partial(
+        &mut self,
+        entity: &Entity,
+        component_kind: &P::Kind,
+        bit_reader: &mut BitReader,
+        converter: &dyn NetEntityHandleConverter,
+    ) {
+        if let Some(access) = self.world_data.component_access(component_kind) {
+            if let Some(mut component) = access.component_mut(self.world, entity) {
+                component.read_partial(bit_reader, converter);
+            }
+        }
+    }
+
+    fn mirror_components(
+        &mut self,
+        mutable_entity: &Entity,
+        immutable_entity: &Entity,
+        component_kind: &P::Kind,
+    ) {
+        if let Some(accessor) = self.world_data.component_access(component_kind) {
+            accessor.mirror_components(self.world, mutable_entity, immutable_entity);
+        }
     }
 
     fn insert_component<R: ReplicateSafe<P>>(&mut self, entity: &Entity, component_ref: R) {
@@ -260,7 +256,7 @@ fn component<'a, P: Protocolize, R: ReplicateSafe<P>>(
 
 fn component_of_kind<'a, P: Protocolize>(
     world: &'a World,
-    world_data: &WorldData<P>,
+    world_data: &'a WorldData<P>,
     entity: &Entity,
     component_kind: &P::Kind,
 ) -> Option<ReplicaDynRefWrapper<'a, P>> {

@@ -2,7 +2,7 @@ use log::info;
 
 use hecs::{Entity, World};
 
-use naia_hecs_client::{Client as NaiaClient, ClientConfig, WorldData};
+use naia_hecs_client::{Client as NaiaClient, ClientConfig, WorldData, shared::DefaultChannels};
 
 use naia_hecs_demo_shared::{
     protocol::{Auth, Protocol},
@@ -11,7 +11,7 @@ use naia_hecs_demo_shared::{
 
 use super::systems::{events::process_events, startup::app_init};
 
-pub type Client = NaiaClient<Protocol, Entity>;
+pub type Client = NaiaClient<Protocol, Entity, DefaultChannels>;
 
 pub struct App {
     pub client: Client,

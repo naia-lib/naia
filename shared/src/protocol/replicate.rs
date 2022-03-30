@@ -15,17 +15,6 @@ use super::{
 pub trait Replicate<P: Protocolize>: ReplicateSafe<P> {
     /// Returns a clone of self
     fn clone(&self) -> Self;
-    /// Writes data into an outgoing byte stream, sufficient to completely
-    /// recreate the Message/Component on the client
-    fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
-    /// Write data into an outgoing byte stream, sufficient only to update the
-    /// mutated Properties of the Message/Component on the client
-    fn write_partial(
-        &self,
-        diff_mask: &DiffMask,
-        bit_writer: &mut dyn BitWrite,
-        converter: &dyn NetEntityHandleConverter,
-    );
 }
 
 /// The part of Replicate which is object-safe
@@ -52,6 +41,17 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     /// of which Properties have been mutated, necessary to sync only the
     /// Properties that have changed with the client
     fn set_mutator(&mut self, mutator: &PropertyMutator);
+    /// Writes data into an outgoing byte stream, sufficient to completely
+    /// recreate the Message/Component on the client
+    fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
+    /// Write data into an outgoing byte stream, sufficient only to update the
+    /// mutated Properties of the Message/Component on the client
+    fn write_partial(
+        &self,
+        diff_mask: &DiffMask,
+        bit_writer: &mut dyn BitWrite,
+        converter: &dyn NetEntityHandleConverter,
+    );
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
     fn read_partial(&mut self, bit_reader: &mut BitReader, converter: &dyn NetEntityHandleConverter);

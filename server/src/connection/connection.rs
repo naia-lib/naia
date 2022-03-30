@@ -12,10 +12,9 @@ use naia_shared::{
 };
 
 use crate::{
-    protocol::{entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler},
+    protocol::{entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, world_record::WorldRecord},
     tick::{tick_buffer_receiver::TickBufferReceiver, tick_manager::TickManager},
     user::UserKey,
-    world_record::WorldRecord,
 };
 
 use super::io::Io;

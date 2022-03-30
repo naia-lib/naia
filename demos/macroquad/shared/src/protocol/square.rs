@@ -8,12 +8,6 @@ pub enum Color {
     Green,
 }
 
-impl Default for Color {
-    fn default() -> Self {
-        Color::Red
-    }
-}
-
 #[derive(Replicate)]
 #[protocol_path = "crate::protocol::Protocol"]
 pub struct Square {
