@@ -4,13 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    sequence_greater_than,
-    serde::{BitReader, BitWriter},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, Instant,
-    PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, TickBuffer,
-    WorldRefType,
-};
+use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter}, BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, Instant, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, TickBuffer, WorldRefType, HostType};
 
 use super::{
     entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, io::Io,
@@ -36,7 +30,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     ) -> Self {
         Connection {
             user_key: *user_key,
-            base: BaseConnection::new(user_address, connection_config, channel_config),
+            base: BaseConnection::new(user_address, HostType::Server, connection_config, channel_config),
             entity_manager: EntityManager::new(user_address, diff_handler),
             tick_buffer: TickBuffer::new(channel_config),
             ping_manager: PingManager::new(&connection_config.ping),

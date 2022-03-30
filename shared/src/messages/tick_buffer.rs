@@ -23,10 +23,9 @@ pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
 
 impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
-        // initialize all tick buffer channels
-        let mut channel_senders = HashMap::new();
-        let mut channel_receivers = HashMap::new();
 
+        // initialize senders
+        let mut channel_senders = HashMap::new();
         for (channel_index, channel) in channel_config.channels() {
             match &channel.mode {
                 ChannelMode::TickBuffered(settings) => {
@@ -34,6 +33,16 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
                         channel_index.clone(),
                         ChannelTickBufferSender::new(&settings),
                     );
+                }
+                _ => {}
+            }
+        }
+
+        // initialize receivers
+        let mut channel_receivers = HashMap::new();
+        for (channel_index, channel) in channel_config.channels() {
+            match &channel.mode {
+                ChannelMode::TickBuffered(_) => {
                     channel_receivers
                         .insert(channel_index.clone(), ChannelTickBufferReceiver::new());
                 }

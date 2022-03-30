@@ -1,10 +1,6 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
-use naia_shared::{
-    serde::{BitReader, BitWriter, OwnedBitReader},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, PacketType, PingManager,
-    ProtocolIo, Protocolize, StandardHeader, Tick, TickBuffer, WorldMutType,
-};
+use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, TickBuffer, WorldMutType, HostType};
 
 use super::{
     entity_manager::EntityManager, error::NaiaClientError, event::Event, io::Io,
@@ -26,7 +22,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         channel_config: &ChannelConfig<C>,
     ) -> Self {
         return Connection {
-            base: BaseConnection::new(address, connection_config, channel_config),
+            base: BaseConnection::new(address, HostType::Client, connection_config, channel_config),
             entity_manager: EntityManager::new(),
             ping_manager: PingManager::new(&connection_config.ping),
             tick_buffer: TickBuffer::new(channel_config),
