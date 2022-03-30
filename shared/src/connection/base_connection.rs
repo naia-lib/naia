@@ -10,9 +10,8 @@ use crate::{
         message_manager::MessageManager,
     },
     protocol::protocolize::Protocolize,
-    types::PacketIndex,
+    types::{HostType, PacketIndex},
 };
-use crate::types::HostType;
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig,

@@ -1,5 +1,4 @@
-use std::{hash::Hash, time::Duration};
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash, time::Duration};
 
 use crate::{derive_serde, serde, serde::Serde};
 

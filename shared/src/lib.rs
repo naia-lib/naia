@@ -48,7 +48,6 @@ pub use messages::{
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     message_list_header,
     message_manager::MessageManager,
-    tick_buffer::TickBuffer,
     unordered_reliable_receiver::UnorderedReliableReceiverRecord,
 };
 pub use protocol::{
@@ -73,9 +72,9 @@ pub use protocol::{
 };
 
 pub use bigmap::{BigMap, BigMapKey};
-pub use constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
+pub use constants::{MESSAGE_HISTORY_SIZE, MTU_SIZE_BITS, MTU_SIZE_BYTES};
 pub use key_generator::KeyGenerator;
 pub use shared_config::SharedConfig;
-pub use types::{MessageId, PacketIndex, Tick, HostType};
+pub use types::{HostType, MessageId, PacketIndex, ShortMessageId, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};

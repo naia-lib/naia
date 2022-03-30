@@ -5,9 +5,8 @@ use naia_serde::{BitReader, BitWriter, Serde, UnsignedVariableInteger};
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
     protocol::protocolize::Protocolize,
-    types::{MessageId, PacketIndex},
+    types::{HostType, MessageId, PacketIndex},
 };
-use crate::types::HostType;
 
 use super::{
     channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
@@ -35,13 +34,12 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         // initialize senders
         let mut channel_senders = HashMap::<C, Box<dyn ChannelSender<P>>>::new();
         for (channel_index, channel) in channel_config.channels() {
-
             match &host_type {
                 HostType::Server => {
                     if !channel.can_send_to_client() {
                         continue;
                     }
-                },
+                }
                 HostType::Client => {
                     if !channel.can_send_to_server() {
                         continue;
@@ -75,13 +73,12 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         // initialize receivers
         let mut channel_receivers = HashMap::<C, Box<dyn ChannelReceiver<P>>>::new();
         for (channel_index, channel) in channel_config.channels() {
-
             match &host_type {
                 HostType::Server => {
                     if !channel.can_send_to_server() {
                         continue;
                     }
-                },
+                }
                 HostType::Client => {
                     if !channel.can_send_to_client() {
                         continue;

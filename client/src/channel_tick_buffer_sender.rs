@@ -2,18 +2,11 @@ use std::{collections::VecDeque, time::Duration};
 
 use log::info;
 
-use naia_serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger};
-
-use crate::{
-    constants::{MESSAGE_HISTORY_SIZE, MTU_SIZE_BITS},
-    protocol::protocolize::Protocolize,
-    types::{ShortMessageId, Tick},
-    wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff},
-    Instant,
-};
-
-use super::{
-    channel_config::TickBufferSettings, message_channel::ChannelWriter, message_list_header,
+use naia_shared::{
+    message_list_header, sequence_greater_than, sequence_less_than,
+    serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+    wrapping_diff, ChannelWriter, Instant, Protocolize, ShortMessageId, Tick, TickBufferSettings,
+    MESSAGE_HISTORY_SIZE, MTU_SIZE_BITS,
 };
 
 pub struct ChannelTickBufferSender<P: Protocolize> {
