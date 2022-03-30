@@ -20,6 +20,7 @@ maintenance = { status = "actively-developed" }
 wbindgen = [ "naia-socket-shared/wbindgen" ]
 mquad = [ "naia-socket-shared/mquad" ]
 bevy_support = [ "bevy" ]
+zstd_support = [ "zstd" ]
 
 [dependencies]
 naia-socket-shared = { path = "../socket/shared" }
@@ -28,4 +29,4 @@ naia-serde = { version = "0.1", path = "serde" }
 log = "0.4"
 cfg-if = "1.0.0"
 bevy = { version = "0.6", default_features = false, optional = true }
-zstd = { git = "https://github.com/gyscos/zstd-rs", features = ["experimental"] }
+zstd = { version = "0.11.1", optional = true }

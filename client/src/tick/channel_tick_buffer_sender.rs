@@ -13,6 +13,7 @@ pub struct ChannelTickBufferSender<P: Protocolize> {
     sending_messages: OutgoingMessages<P>,
     next_send_messages: VecDeque<(Tick, Vec<(ShortMessageId, P)>)>,
     resend_interval: Duration,
+    resend_interval_millis: u32,
     last_sent: Instant,
 }
 
@@ -26,6 +27,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
             sending_messages: OutgoingMessages::new(),
             next_send_messages: VecDeque::new(),
             resend_interval,
+            resend_interval_millis: resend_interval.as_millis() as u32,
             last_sent: Instant::now(),
         }
     }
@@ -63,7 +65,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
         self.sending_messages.push(*host_tick, message);
 
         self.last_sent = Instant::now();
-        self.last_sent.subtract_duration(&self.resend_interval);
+        self.last_sent.subtract_millis(self.resend_interval_millis);
     }
 
     pub fn has_outgoing_messages(&self) -> bool {

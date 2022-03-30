@@ -29,8 +29,9 @@ impl Instant {
         self.inner += Duration::from_millis(millis.into());
     }
 
-    pub fn subtract_duration(&mut self, duration: &Duration) {
-        self.inner -= duration.clone();
+    /// Subtracts a given number of milliseconds to the Instant
+    pub fn subtract_millis(&mut self, millis: u32) {
+        self.inner -= Duration::from_millis(millis.into());
     }
 
     /// Returns inner Instant implementation

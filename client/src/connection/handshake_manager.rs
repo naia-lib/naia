@@ -33,7 +33,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
 
-        let pre_connection_timestamp = stamp_time::now().to_u64();
+        let pre_connection_timestamp = stamp_time::now();
 
         Self {
             handshake_timer,
