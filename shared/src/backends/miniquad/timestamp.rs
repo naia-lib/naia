@@ -6,8 +6,6 @@ pub struct Timestamp;
 
 impl Timestamp {
     pub fn now() -> u64 {
-        unsafe {
-            naia_now() as u64
-        }
+        unsafe { naia_now() as u64 }
     }
 }

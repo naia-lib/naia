@@ -3,13 +3,13 @@ use std::net::SocketAddr;
 use naia_serde::{BitWriter, Serde};
 
 use crate::{
+    backends::Timer,
     messages::{
         channel_config::{ChannelConfig, ChannelIndex},
         message_manager::MessageManager,
     },
     protocol::protocolize::Protocolize,
     types::{HostType, PacketIndex},
-    backends::Timer
 };
 
 use super::{
