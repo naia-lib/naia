@@ -20,17 +20,17 @@ cfg_if! {
     } else {}
 }
 
+mod backends;
 mod conditioned_packet_receiver;
 mod error;
-mod impls;
 mod io;
 mod packet_receiver;
 mod server_addr;
 
 pub use naia_socket_shared as shared;
 
+pub use backends::{PacketSender, Socket};
 pub use error::NaiaClientSocketError;
-pub use impls::{PacketSender, Socket};
 pub use packet_receiver::PacketReceiver;
 pub use server_addr::ServerAddr;
 
