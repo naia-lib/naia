@@ -25,15 +25,15 @@ pub use naia_server_socket::ServerAddrs;
 
 pub use naia_shared as shared;
 
-mod connection;
-mod protocol;
-mod tick;
 mod cache_map;
+mod connection;
 mod error;
 mod event;
+mod protocol;
 mod room;
 mod server;
 mod server_config;
+mod tick;
 mod user;
 mod user_scope;
 mod world_record;

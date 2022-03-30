@@ -9,11 +9,13 @@ pub use naia_shared::{
     StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
-use super::{
-    client_config::ClientConfig, connection::Connection, entity_ref::EntityRef,
-    error::NaiaClientError, event::Event, handshake_manager::HandshakeManager, io::Io,
-    tick_manager::TickManager,
+use crate::{
+    connection::{connection::Connection, handshake_manager::HandshakeManager, io::Io},
+    protocol::entity_ref::EntityRef,
+    tick::tick_manager::TickManager,
 };
+
+use super::{client_config::ClientConfig, error::NaiaClientError, event::Event};
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server

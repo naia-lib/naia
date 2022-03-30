@@ -6,10 +6,16 @@ use naia_shared::{
     PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldMutType,
 };
 
-use super::{
-    entity_manager::EntityManager, error::NaiaClientError, event::Event, io::Io,
-    tick_buffer_sender::TickBufferSender, tick_manager::TickManager, tick_queue::TickQueue,
+use crate::{
+    error::NaiaClientError,
+    event::Event,
+    protocol::entity_manager::EntityManager,
+    tick::{
+        tick_buffer_sender::TickBufferSender, tick_manager::TickManager, tick_queue::TickQueue,
+    },
 };
+
+use super::io::Io;
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub base: BaseConnection<P, C>,
