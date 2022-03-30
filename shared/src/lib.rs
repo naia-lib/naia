@@ -7,7 +7,7 @@
 extern crate cfg_if;
 
 pub use naia_socket_shared::{
-    Instant, LinkConditionerConfig, Random, SocketConfig, Timer, Timestamp,
+    Instant, LinkConditionerConfig, Random, SocketConfig
 };
 
 pub use naia_derive::*;
@@ -17,6 +17,7 @@ pub use serde::derive_serde;
 mod connection;
 mod messages;
 mod protocol;
+mod backends;
 
 mod bigmap;
 mod constants;
@@ -70,6 +71,7 @@ pub use protocol::{
     },
     replicate::{Replicate, ReplicateSafe},
 };
+pub use backends::{Timestamp, Timer};
 
 pub use bigmap::{BigMap, BigMapKey};
 pub use constants::{MESSAGE_HISTORY_SIZE, MTU_SIZE_BITS, MTU_SIZE_BYTES};

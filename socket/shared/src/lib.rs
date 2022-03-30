@@ -22,7 +22,7 @@ mod socket_config;
 mod time_queue;
 mod url_parse;
 
-pub use impls::{Instant, Random, Timer, Timestamp};
+pub use impls::{Instant, Random};
 pub use link_conditioner_config::LinkConditionerConfig;
 pub use socket_config::SocketConfig;
 pub use time_queue::TimeQueue;

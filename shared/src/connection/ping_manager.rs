@@ -2,9 +2,9 @@ use std::collections::VecDeque;
 
 use naia_serde::{BitReader, BitWriter, Serde};
 
-use naia_socket_shared::{Instant, Timer};
+use naia_socket_shared::Instant;
 
-use crate::wrapping_number::sequence_greater_than;
+use crate::{backends::Timer, wrapping_number::sequence_greater_than};
 
 use super::ping_config::PingConfig;
 

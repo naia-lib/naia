@@ -2,8 +2,6 @@ use std::net::SocketAddr;
 
 use naia_serde::{BitWriter, Serde};
 
-use naia_socket_shared::Timer;
-
 use crate::{
     messages::{
         channel_config::{ChannelConfig, ChannelIndex},
@@ -11,6 +9,7 @@ use crate::{
     },
     protocol::protocolize::Protocolize,
     types::{HostType, PacketIndex},
+    backends::Timer
 };
 
 use super::{
