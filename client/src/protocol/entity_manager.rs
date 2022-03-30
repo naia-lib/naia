@@ -11,7 +11,9 @@ use naia_shared::{
     WorldMutType,
 };
 
-use super::{entity_record::EntityRecord, error::NaiaClientError, event::Event};
+use crate::{error::NaiaClientError, event::Event};
+
+use super::entity_record::EntityRecord;
 
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
