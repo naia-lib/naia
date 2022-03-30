@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use naia_shared::{
     serde::{BitWriter, Serde, UnsignedVariableInteger},
@@ -14,7 +14,7 @@ pub struct TickBufferSender<P: Protocolize, C: ChannelIndex> {
 }
 
 impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
-    pub fn new(channel_config: &ChannelConfig<C>) -> Self {
+    pub fn new(channel_config: &ChannelConfig<C>, tick_duration: &Duration) -> Self {
         // initialize senders
         let mut channel_senders = HashMap::new();
         for (channel_index, channel) in channel_config.channels() {
@@ -22,7 +22,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
                 ChannelMode::TickBuffered(settings) => {
                     channel_senders.insert(
                         channel_index.clone(),
-                        ChannelTickBufferSender::new(&settings),
+                        ChannelTickBufferSender::new(tick_duration, &settings),
                     );
                 }
                 _ => {}

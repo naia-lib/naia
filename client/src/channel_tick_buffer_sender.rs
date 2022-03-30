@@ -17,11 +17,15 @@ pub struct ChannelTickBufferSender<P: Protocolize> {
 }
 
 impl<P: Protocolize> ChannelTickBufferSender<P> {
-    pub fn new(settings: &TickBufferSettings) -> Self {
+    pub fn new(tick_duration: &Duration, settings: &TickBufferSettings) -> Self {
+        let resend_interval = Duration::from_millis(
+            ((settings.tick_resend_factor as u128) * tick_duration.as_millis()) as u64,
+        );
+
         Self {
             sending_messages: OutgoingMessages::new(),
             next_send_messages: VecDeque::new(),
-            resend_interval: settings.resend_interval.clone(),
+            resend_interval,
             last_sent: Instant::now(),
         }
     }

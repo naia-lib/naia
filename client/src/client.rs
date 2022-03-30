@@ -200,9 +200,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             }
             if let Some(client_tick) = self.client_tick() {
                 let connection = self.server_connection.as_mut().unwrap();
-                connection
-                    .tick_buffer
-                    .send_message(&client_tick, channel, message.protocol_copy());
+                connection.tick_buffer.as_mut().unwrap().send_message(
+                    &client_tick,
+                    channel,
+                    message.protocol_copy(),
+                );
             }
         } else {
             if let Some(connection) = &mut self.server_connection {
@@ -422,6 +424,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                                     server_addr,
                                     &self.client_config.connection,
                                     &self.shared_config.channel,
+                                    &self.shared_config.tick_interval,
                                 ));
                                 self.incoming_events
                                     .push_back(Ok(Event::Connection(server_addr)));
