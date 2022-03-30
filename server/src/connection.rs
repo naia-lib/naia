@@ -4,18 +4,24 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter}, BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, Instant, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, TickBuffer, WorldRefType, HostType};
+use naia_shared::{
+    sequence_greater_than,
+    serde::{BitReader, BitWriter},
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, HostType,
+    Instant, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldRefType,
+};
 
 use super::{
     entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, io::Io,
-    tick_manager::TickManager, user::UserKey, world_record::WorldRecord,
+    tick_buffer_receiver::TickBufferReceiver, tick_manager::TickManager, user::UserKey,
+    world_record::WorldRecord,
 };
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub user_key: UserKey,
     pub base: BaseConnection<P, C>,
     pub entity_manager: EntityManager<P, E, C>,
-    pub tick_buffer: TickBuffer<P, C>,
+    pub tick_buffer: TickBufferReceiver<P, C>,
     pub last_received_tick: Tick,
     pub ping_manager: PingManager,
 }
@@ -30,9 +36,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     ) -> Self {
         Connection {
             user_key: *user_key,
-            base: BaseConnection::new(user_address, HostType::Server, connection_config, channel_config),
+            base: BaseConnection::new(
+                user_address,
+                HostType::Server,
+                connection_config,
+                channel_config,
+            ),
             entity_manager: EntityManager::new(user_address, diff_handler),
-            tick_buffer: TickBuffer::new(channel_config),
+            tick_buffer: TickBufferReceiver::new(channel_config),
             ping_manager: PingManager::new(&connection_config.ping),
             last_received_tick: 0,
         }

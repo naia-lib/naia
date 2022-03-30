@@ -1,6 +1,11 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
-use naia_shared::{serde::{BitReader, BitWriter, OwnedBitReader}, BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, TickBuffer, WorldMutType, HostType};
+use crate::tick_buffer_sender::TickBufferSender;
+use naia_shared::{
+    serde::{BitReader, BitWriter, OwnedBitReader},
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, HostType, PacketType,
+    PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldMutType,
+};
 
 use super::{
     entity_manager::EntityManager, error::NaiaClientError, event::Event, io::Io,
@@ -11,7 +16,7 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub base: BaseConnection<P, C>,
     pub entity_manager: EntityManager<P, E>,
     pub ping_manager: PingManager,
-    pub tick_buffer: TickBuffer<P, C>,
+    pub tick_buffer: TickBufferSender<P, C>,
     jitter_buffer: TickQueue<OwnedBitReader>,
 }
 
@@ -25,7 +30,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             base: BaseConnection::new(address, HostType::Client, connection_config, channel_config),
             entity_manager: EntityManager::new(),
             ping_manager: PingManager::new(&connection_config.ping),
-            tick_buffer: TickBuffer::new(channel_config),
+            tick_buffer: TickBufferSender::new(channel_config),
             jitter_buffer: TickQueue::new(),
         };
     }

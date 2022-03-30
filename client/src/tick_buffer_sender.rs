@@ -1,29 +1,20 @@
 use std::collections::HashMap;
 
-use naia_serde::{BitReader, BitWriter, Serde, UnsignedVariableInteger};
-
-use crate::{
-    connection::packet_notifiable::PacketNotifiable,
-    protocol::protocolize::Protocolize,
-    types::{PacketIndex, ShortMessageId, Tick},
+use naia_shared::{
+    serde::{BitWriter, Serde, UnsignedVariableInteger},
+    ChannelConfig, ChannelIndex, ChannelMode, ChannelWriter, PacketIndex, PacketNotifiable,
+    Protocolize, ShortMessageId, Tick,
 };
 
-use super::{
-    channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
-    channel_tick_buffer_receiver::ChannelTickBufferReceiver,
-    channel_tick_buffer_sender::ChannelTickBufferSender,
-    message_channel::{ChannelReader, ChannelWriter},
-};
+use super::channel_tick_buffer_sender::ChannelTickBufferSender;
 
-pub struct TickBuffer<P: Protocolize, C: ChannelIndex> {
+pub struct TickBufferSender<P: Protocolize, C: ChannelIndex> {
     channel_senders: HashMap<C, ChannelTickBufferSender<P>>,
-    channel_receivers: HashMap<C, ChannelTickBufferReceiver<P>>,
     packet_to_channel_map: HashMap<PacketIndex, Vec<(C, Vec<(Tick, ShortMessageId)>)>>,
 }
 
-impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
+impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
     pub fn new(channel_config: &ChannelConfig<C>) -> Self {
-
         // initialize senders
         let mut channel_senders = HashMap::new();
         for (channel_index, channel) in channel_config.channels() {
@@ -38,21 +29,8 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
             }
         }
 
-        // initialize receivers
-        let mut channel_receivers = HashMap::new();
-        for (channel_index, channel) in channel_config.channels() {
-            match &channel.mode {
-                ChannelMode::TickBuffered(_) => {
-                    channel_receivers
-                        .insert(channel_index.clone(), ChannelTickBufferReceiver::new());
-                }
-                _ => {}
-            }
-        }
-
-        TickBuffer {
+        Self {
             channel_senders,
-            channel_receivers,
             packet_to_channel_map: HashMap::new(),
         }
     }
@@ -117,43 +95,9 @@ impl<P: Protocolize, C: ChannelIndex> TickBuffer<P, C> {
             }
         }
     }
-
-    // Incoming Messages
-
-    pub fn read_messages(
-        &mut self,
-        host_tick: &Tick,
-        remote_tick: &Tick,
-        channel_reader: &dyn ChannelReader<P>,
-        bit_reader: &mut BitReader,
-    ) {
-        // read channel count
-        let channel_count = UnsignedVariableInteger::<3>::de(bit_reader).unwrap().get();
-
-        for _ in 0..channel_count {
-            // read channel index
-            let channel_index = C::de(bit_reader).unwrap();
-
-            // continue read inside channel
-            if let Some(channel) = self.channel_receivers.get_mut(&channel_index) {
-                channel.read_messages(host_tick, remote_tick, channel_reader, bit_reader);
-            }
-        }
-    }
-
-    pub fn receive_messages(&mut self, host_tick: &Tick) -> Vec<(C, P)> {
-        let mut output = Vec::new();
-        for (channel_index, channel) in &mut self.channel_receivers {
-            let mut messages = channel.receive_messages(host_tick);
-            for message in messages.drain(..) {
-                output.push((channel_index.clone(), message));
-            }
-        }
-        return output;
-    }
 }
 
-impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for TickBuffer<P, C> {
+impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for TickBufferSender<P, C> {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_channel_map.get(&packet_index) {
             for (channel_index, message_ids) in channel_list {

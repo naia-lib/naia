@@ -27,6 +27,7 @@ pub use naia_shared as shared;
 
 mod bandwidth_monitor;
 mod cache_map;
+mod channel_tick_buffer_receiver;
 mod connection;
 mod entity_action;
 mod entity_manager;
@@ -45,6 +46,7 @@ mod mut_channel;
 mod room;
 mod server;
 mod server_config;
+mod tick_buffer_receiver;
 mod tick_manager;
 mod user;
 mod user_diff_handler;

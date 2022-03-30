@@ -1,14 +1,10 @@
 use std::collections::{HashMap, VecDeque};
 
-use naia_serde::{BitReader, Serde, UnsignedVariableInteger};
-
-use crate::{
-    protocol::protocolize::Protocolize,
-    sequence_greater_than,
-    types::{ShortMessageId, Tick},
+use naia_shared::{
+    message_list_header, sequence_greater_than,
+    serde::{BitReader, Serde, UnsignedVariableInteger},
+    ChannelReader, Protocolize, ShortMessageId, Tick,
 };
-
-use super::{message_channel::ChannelReader, message_list_header};
 
 pub struct ChannelTickBufferReceiver<P: Protocolize> {
     incoming_messages: IncomingMessages<P>,
