@@ -23,6 +23,7 @@ features = [ "use-webrtc" ]
 use-udp = [ "naia-server-socket/use-udp" ]
 use-webrtc = [ "naia-server-socket/use-webrtc" ]
 bevy_support = ["naia-shared/bevy_support"]
+zstd_support = ["naia-shared/zstd_support"]
 
 [dependencies]
 naia-server-socket = { path = "../socket/server" }

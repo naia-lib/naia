@@ -20,6 +20,7 @@ maintenance = { status = "actively-developed" }
 wbindgen = [ "naia-client-socket/wbindgen", "naia-shared/wbindgen" ]
 mquad = [ "naia-client-socket/mquad", "naia-shared/mquad" ]
 bevy_support = ["naia-shared/bevy_support"]
+zstd_support = ["naia-shared/zstd_support"]
 
 [dependencies]
 naia-client-socket = { path = "../socket/client" }

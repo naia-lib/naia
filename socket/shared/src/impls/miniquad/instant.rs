@@ -42,8 +42,9 @@ impl Instant {
         self.inner += millis_f64;
     }
 
-    pub fn subtract_duration(&mut self, duration: &Duration) {
-        let millis_f64: f64 = duration.as_millis().into();
+    /// Subtracts a given number of milliseconds to the Instant
+    pub fn subtract_millis(&mut self, millis: u32) {
+        let millis_f64: f64 = millis.into();
         self.inner -= millis_f64;
     }
 }
