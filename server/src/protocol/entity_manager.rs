@@ -16,10 +16,12 @@ use naia_shared::{
     ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
 };
 
+use crate::world_record::WorldRecord;
+
 use super::{
     entity_action::EntityAction, entity_message_waitlist::EntityMessageWaitlist,
     global_diff_handler::GlobalDiffHandler, local_entity_record::LocalEntityRecord,
-    locality_status::LocalityStatus, user_diff_handler::UserDiffHandler, world_record::WorldRecord,
+    locality_status::LocalityStatus, user_diff_handler::UserDiffHandler,
 };
 
 const DROP_PACKET_RTT_FACTOR: f32 = 1.5;

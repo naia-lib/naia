@@ -1,15 +1,16 @@
 use std::{net::SocketAddr, panic, time::Duration};
 
 use naia_server_socket::{NaiaServerSocketError, PacketReceiver, PacketSender};
-use naia_shared::serde::{BitWriter, OwnedBitReader};
+
 pub use naia_shared::{
+    serde::{BitWriter, OwnedBitReader},
     wrapping_diff, BaseConnection, CompressionConfig, ConnectionConfig, Decoder, Encoder, Instant,
     KeyGenerator, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
     Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType,
     WorldRefType,
 };
 
-use crate::bandwidth_monitor::BandwidthMonitor;
+use super::bandwidth_monitor::BandwidthMonitor;
 
 pub struct Io {
     packet_sender: Option<PacketSender>,

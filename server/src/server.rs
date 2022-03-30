@@ -18,18 +18,25 @@ pub use naia_shared::{
     WorldRefType,
 };
 
+use crate::{
+    connection::{
+        connection::Connection,
+        handshake_manager::{HandshakeManager, HandshakeResult},
+        io::Io,
+    },
+    protocol::{
+        entity_ref::{EntityMut, EntityRef},
+        entity_scope_map::EntityScopeMap,
+        global_diff_handler::GlobalDiffHandler,
+    },
+    tick::tick_manager::TickManager,
+};
+
 use super::{
-    connection::Connection,
-    entity_ref::{EntityMut, EntityRef},
-    entity_scope_map::EntityScopeMap,
     error::NaiaServerError,
     event::Event,
-    global_diff_handler::GlobalDiffHandler,
-    handshake_manager::{HandshakeManager, HandshakeResult},
-    io::Io,
     room::{Room, RoomKey, RoomMut, RoomRef},
     server_config::ServerConfig,
-    tick_manager::TickManager,
     user::{User, UserKey, UserMut, UserRef},
     user_scope::UserScopeMut,
     world_record::WorldRecord,
