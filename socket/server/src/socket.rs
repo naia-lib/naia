@@ -4,7 +4,7 @@ use futures_util::SinkExt;
 
 use naia_socket_shared::SocketConfig;
 
-use crate::{executor, impls::Socket as AsyncSocket, io::Io};
+use crate::{backends::Socket as AsyncSocket, executor, io::Io};
 
 use super::{
     conditioned_packet_receiver::ConditionedPacketReceiverImpl,
