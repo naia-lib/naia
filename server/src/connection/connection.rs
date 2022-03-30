@@ -11,11 +11,14 @@ use naia_shared::{
     Instant, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldRefType,
 };
 
-use super::{
-    entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, io::Io,
-    tick_buffer_receiver::TickBufferReceiver, tick_manager::TickManager, user::UserKey,
+use crate::{
+    protocol::{entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler},
+    tick::{tick_buffer_receiver::TickBufferReceiver, tick_manager::TickManager},
+    user::UserKey,
     world_record::WorldRecord,
 };
+
+use super::io::Io;
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub user_key: UserKey,

@@ -25,35 +25,19 @@ pub use naia_server_socket::ServerAddrs;
 
 pub use naia_shared as shared;
 
-mod bandwidth_monitor;
-mod cache_map;
-mod channel_tick_buffer_receiver;
 mod connection;
-mod entity_action;
-mod entity_manager;
-mod entity_message_waitlist;
-mod entity_ref;
-mod entity_scope_map;
+mod protocol;
+mod tick;
+mod cache_map;
 mod error;
 mod event;
-mod global_diff_handler;
-mod global_entity_record;
-mod handshake_manager;
-mod io;
-mod local_entity_record;
-mod locality_status;
-mod mut_channel;
 mod room;
 mod server;
 mod server_config;
-mod tick_buffer_receiver;
-mod tick_manager;
 mod user;
-mod user_diff_handler;
 mod user_scope;
 mod world_record;
 
-pub use entity_ref::{EntityMut, EntityRef};
 pub use error::NaiaServerError;
 pub use event::Event;
 pub use room::{RoomKey, RoomMut, RoomRef};
@@ -63,5 +47,5 @@ pub use user::{User, UserKey, UserMut, UserRef};
 pub use user_scope::UserScopeMut;
 
 pub mod internal {
-    pub use crate::handshake_manager::{HandshakeManager, HandshakeResult};
+    pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeResult};
 }

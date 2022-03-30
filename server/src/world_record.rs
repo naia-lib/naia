@@ -2,7 +2,9 @@ use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{BigMap, EntityHandle, EntityHandleConverter, ProtocolKindType};
 
-use super::{global_entity_record::GlobalEntityRecord, room::RoomKey};
+use crate::protocol::global_entity_record::GlobalEntityRecord;
+
+use super::room::RoomKey;
 
 pub struct WorldRecord<E: Copy + Eq + Hash, K: ProtocolKindType> {
     entity_records: HashMap<E, GlobalEntityRecord<K>>,

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use naia_shared::{EntityHandle, ProtocolKindType};
 
-use super::room::RoomKey;
+use crate::room::RoomKey;
 
 pub struct GlobalEntityRecord<K: ProtocolKindType> {
     pub room_key: Option<RoomKey>,

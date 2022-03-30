@@ -2,15 +2,16 @@ use std::{collections::HashMap, hash::Hash, marker::PhantomData, net::SocketAddr
 
 use ring::{hmac, rand};
 
-use naia_shared::ChannelIndex;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
-    wrapping_diff, BaseConnection, ConnectionConfig, FakeEntityConverter, Instant, KeyGenerator,
-    PacketType, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize, Replicate,
-    ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType, WorldRefType,
+    wrapping_diff, BaseConnection, ChannelIndex, ConnectionConfig, FakeEntityConverter, Instant,
+    KeyGenerator, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
+    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType, WorldRefType,
 };
 
-use super::{cache_map::CacheMap, connection::Connection};
+use crate::cache_map::CacheMap;
+
+use super::connection::Connection;
 
 pub type Timestamp = u64;
 

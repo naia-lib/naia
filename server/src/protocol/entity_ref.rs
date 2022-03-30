@@ -5,7 +5,7 @@ use naia_shared::{
     WorldMutType, WorldRefType,
 };
 
-use super::{room::RoomKey, server::Server};
+use crate::{room::RoomKey, server::Server};
 
 // EntityRef
 
