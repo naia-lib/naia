@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use hecs::{Entity, World};
 
-use naia_hecs_server::{RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldData};
+use naia_hecs_server::{RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldData, shared::DefaultChannels};
 
 use naia_hecs_demo_shared::{protocol::Protocol, shared_config};
 
@@ -12,7 +12,7 @@ use super::systems::{
     tick::{check_scopes, march_and_mark, send_updates},
 };
 
-pub type Server = NaiaServer<Protocol, Entity>;
+pub type Server = NaiaServer<Protocol, Entity, DefaultChannels>;
 
 pub struct App {
     pub server: Server,

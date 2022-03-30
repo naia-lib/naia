@@ -16,9 +16,8 @@ use naia_shared::{
     ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
 };
 
-use crate::world_record::WorldRecord;
-
 use super::{
+    world_record::WorldRecord,
     entity_action::EntityAction, entity_message_waitlist::EntityMessageWaitlist,
     global_diff_handler::GlobalDiffHandler, local_entity_record::LocalEntityRecord,
     locality_status::LocalityStatus, user_diff_handler::UserDiffHandler,
@@ -34,10 +33,12 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     entity_generator: KeyGenerator<NetEntity>,
     entity_records: HashMap<E, LocalEntityRecord<P>>,
     local_to_global_entity_map: HashMap<NetEntity, E>,
+    delayed_entity_insertions: HashSet<E>,
     delayed_entity_deletions: HashSet<E>,
     delayed_entity_messages: EntityMessageWaitlist<P, E, C>,
     // Components
     diff_handler: UserDiffHandler<E, P::Kind>,
+    delayed_component_insertions: HashSet<(E, P::Kind)>,
     delayed_component_deletions: HashSet<(E, P::Kind)>,
     // Actions / updates / ect
     queued_actions: QueuedEntityActions<P, E>,
@@ -46,7 +47,6 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, P::Kind), DiffMask>)>,
     last_update_packet_index: PacketIndex,
     delivered_packets: VecDeque<PacketIndex>,
-    // reliable_action_sender: ReliableSender<P>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C> {
@@ -61,10 +61,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             entity_generator: KeyGenerator::new(),
             entity_records: HashMap::new(),
             local_to_global_entity_map: HashMap::new(),
+            delayed_entity_insertions: HashSet::new(),
             delayed_entity_deletions: HashSet::new(),
             delayed_entity_messages: EntityMessageWaitlist::new(),
             // Components
             diff_handler: UserDiffHandler::new(diff_handler),
+            delayed_component_insertions: HashSet::new(),
             delayed_component_deletions: HashSet::new(),
             // Actions / updates / ect
             queued_actions: QueuedEntityActions::new(),
@@ -79,7 +81,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     // Entities
 
     pub fn spawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, global_entity: &E) {
-        if !self.entity_records.contains_key(global_entity) {
+        if self.entity_records.contains_key(global_entity) {
+            match &self
+                .entity_records
+                .get(global_entity)
+                .unwrap()
+                .status
+            {
+                LocalityStatus::Creating => {
+                    self.delayed_entity_deletions.remove(global_entity);
+                }
+                LocalityStatus::Created => {
+                    panic!("spawned entity twice!");
+                }
+                LocalityStatus::Deleting => {
+                    // deletion in progress, queue a spawn right after
+                    self.delayed_entity_insertions.insert(*global_entity);
+                }
+            }
+        } else {
             // initialize entity
             if !world_record.has_entity(global_entity) {
                 panic!("entity nonexistant!");
@@ -98,29 +118,35 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
             self.queued_actions
                 .push_new(EntityAction::SpawnEntity(*global_entity, None));
-        } else {
-            panic!("added entity twice");
         }
     }
 
-    pub fn despawn_entity(&mut self, world_record: &WorldRecord<E, P::Kind>, global_entity: &E) {
-        if let Some(entity_status) = self
-            .entity_records
-            .get(global_entity)
-            .map(|entity_record| entity_record.status.clone())
-        {
-            match entity_status {
-                LocalityStatus::Creating => {
-                    // queue deletion action to be sent after creation
-                    self.delayed_entity_deletions.insert(*global_entity);
-                }
-                LocalityStatus::Created => {
-                    // send deletion action
-                    self.entity_delete(world_record, global_entity);
-                }
-                LocalityStatus::Deleting => {
-                    // deletion in progress, do nothing
-                }
+    pub fn despawn_entity(&mut self, global_entity: &E) {
+        if !self.entity_records.contains_key(global_entity) {
+            return;
+        }
+
+        let entity_record = self.entity_records.get_mut(global_entity).unwrap();
+
+        match entity_record.status {
+            LocalityStatus::Creating => {
+
+                // queue deletion action to be sent after creation
+                self.delayed_entity_deletions.insert(*global_entity);
+            }
+            LocalityStatus::Created => {
+
+                // change status
+                entity_record.status = LocalityStatus::Deleting;
+
+                // send deletion action
+                self.queued_actions
+                    .push_new(EntityAction::DespawnEntity(*global_entity));
+            }
+            LocalityStatus::Deleting => {
+
+                // deletion in progress, do nothing except de-queue waiting spawns
+                self.delayed_entity_insertions.remove(global_entity);
             }
         }
     }
@@ -148,17 +174,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             .queue_message(entities, channel, message.protocol_copy());
     }
 
-    pub fn collect_outgoing_messages(
-        &mut self,
-        rtt_millis: &f32,
-        message_manager: &mut MessageManager<P, C>,
-    ) {
-        self.collect_dropped_messages(rtt_millis);
-        self.delayed_entity_messages
-            .collect_ready_messages(message_manager);
-        self.collect_component_updates();
-    }
-
     // Components
 
     pub fn insert_component(&mut self, entity: &E, component_kind: &P::Kind) {
@@ -168,23 +183,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             );
         }
 
-        self.component_init(entity, component_kind);
-
         // checked this above
-        let entity_record = self.entity_records.get(&entity).unwrap();
-
-        match entity_record.status {
+        match self.entity_records.get(&entity).unwrap().status {
             LocalityStatus::Creating => {
                 // uncreated Components will be created after Entity is
                 // created
-            }
-            LocalityStatus::Created => {
-                // send InsertComponent action
-                self.queued_actions
-                    .push_new(EntityAction::InsertComponent(*entity, *component_kind));
+                return;
             }
             LocalityStatus::Deleting => {
                 // deletion in progress, do nothing
+                return;
+            }
+            LocalityStatus::Created => {
+                self.component_init(entity, component_kind);
             }
         }
     }
@@ -198,9 +209,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                     panic!("attempting to remove non-existent Component from Entity");
                 }
             } else {
-                panic!(
-                    "attempting to remove Component from Entity that does not exist for this connection"
-                );
+                // attempting to remove Component from Entity that does not exist for this connection
+                // just exit early since we call this method every time a component is removed
+                return;
             }
         };
 
@@ -212,10 +223,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             }
             LocalityStatus::Created => {
                 // send deletion action
-                self.component_delete(entity, component_kind);
+                let component_status = self
+                    .entity_records
+                    .get_mut(entity)
+                    .expect("attempting to get record of non-existent entity")
+                    .components
+                    .get_mut(component_kind)
+                    .expect("attempt to get status of non-existent component of entity");
+
+                *component_status = LocalityStatus::Deleting;
+
+                self.queued_actions
+                    .push_new(EntityAction::RemoveComponent(*entity, *component_kind));
             }
             LocalityStatus::Deleting => {
-                // deletion in progress, do nothing
+                // deletion in progress
+                // just ensure that if there's a delayed insertion, it's removed
+                self.delayed_component_insertions.remove(&(*entity, *component_kind));
             }
         }
     }
@@ -234,112 +258,147 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         self.write_updates(&now, writer, packet_index, world, world_record);
     }
 
-    // Ect..
-
     pub fn has_outgoing_messages(&self) -> bool {
         return self.queued_actions.len() != 0 || self.queued_updates.len() != 0;
+    }
+
+    pub fn collect_outgoing_messages(
+        &mut self,
+        rtt_millis: &f32,
+        message_manager: &mut MessageManager<P, C>,
+    ) {
+        self.collect_dropped_messages(rtt_millis);
+        self.delayed_entity_messages
+            .collect_ready_messages(message_manager);
+        self.collect_component_updates();
     }
 
     pub fn process_delivered_packets(&mut self, world_record: &WorldRecord<E, P::Kind>) {
         while let Some(packet_index) = self.delivered_packets.pop_front() {
             self.sent_updates.remove(&packet_index);
 
-            let mut deleted_components: Vec<(E, P::Kind)> = Vec::new();
+            let mut deleted_components: Vec<(E, P::Kind, bool)> = Vec::new();
 
             if let Some((_, delivered_actions_list)) = self.sent_actions.remove(&packet_index) {
                 for (_, delivered_action) in delivered_actions_list.into_iter() {
                     match delivered_action {
-                        EntityAction::RemoveComponent(global_entity, component_kind) => {
-                            deleted_components.push((global_entity, component_kind));
-                        }
                         EntityAction::SpawnEntity(global_entity, sent_components) => {
                             let mut component_list =
                                 sent_components.expect("sent components not initialized correctly");
                             let entity_record = self.entity_records.get_mut(&global_entity)
                                 .expect("created entity does not have a entity_record ... initialization error?");
 
+                            // set to status of Entity to Created
+                            entity_record.status = LocalityStatus::Created;
+
+                            // set status of Components to Created
+                            while let Some(component_kind) = component_list.pop() {
+                                if let Some(locality_status) =
+                                    entity_record.components.get_mut(&component_kind)
+                                {
+                                    *locality_status = LocalityStatus::Created;
+                                } else {
+                                    panic!("sent component has not been initialized!");
+                                }
+                            }
+
+                            // for any components on this entity that have not yet been created
+                            // initiate that now
+                            for component_kind in world_record.component_kinds(&global_entity) {
+                                if let Some(locality_status) =
+                                    entity_record.components.get(&component_kind)
+                                {
+                                    // check if component has been successfully created
+                                    // (perhaps through the previous entity_create operation)
+                                    if *locality_status == LocalityStatus::Creating {
+                                        self.queued_actions.push_new(
+                                            EntityAction::InsertComponent(
+                                                global_entity,
+                                                component_kind,
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+
+                            // update delayed entity message structure, to send any Entity
+                            // messages that have been waiting
+                            self.delayed_entity_messages.add_entity(&global_entity);
+
                             // do we need to delete this now?
                             if self.delayed_entity_deletions.remove(&global_entity) {
-                                self.entity_delete(world_record, &global_entity);
-                            } else {
-                                // set to status of Entity to Created
-                                entity_record.status = LocalityStatus::Created;
-
-                                // set status of Components to Created
-                                while let Some(component_kind) = component_list.pop() {
-                                    if let Some(locality_status) =
-                                        entity_record.components.get_mut(&component_kind)
-                                    {
-                                        *locality_status = LocalityStatus::Created;
-                                    } else {
-                                        panic!("sent component has not been initialized!");
-                                    }
-                                }
-
-                                // for any components on this entity that have not yet been created
-                                // initiate that now
-                                for component_kind in world_record.component_kinds(&global_entity) {
-                                    if let Some(locality_status) =
-                                        entity_record.components.get(&component_kind)
-                                    {
-                                        // check if component has been successfully created
-                                        // (perhaps through the previous entity_create operation)
-                                        if *locality_status == LocalityStatus::Creating {
-                                            self.queued_actions.push_new(
-                                                EntityAction::InsertComponent(
-                                                    global_entity,
-                                                    component_kind,
-                                                ),
-                                            );
-                                        }
-                                    }
-                                }
-
-                                // update delayed entity message structure, to send any Entity
-                                // messages that have been waiting
-                                self.delayed_entity_messages.add_entity(&global_entity);
+                                self.despawn_entity(&global_entity);
                             }
+
                         }
                         EntityAction::DespawnEntity(global_entity) => {
-                            let local_id =
-                                self.entity_records.get(&global_entity).unwrap().net_entity;
+                            let entity_record = self.entity_records.remove(&global_entity).unwrap();
+
+                            let local_id = entity_record.net_entity;
 
                             // actually delete the entity from local records
-                            self.entity_records.remove(&global_entity);
+
                             self.delayed_entity_messages.remove_entity(&global_entity);
                             self.local_to_global_entity_map.remove(&local_id);
                             self.entity_generator.recycle_key(&local_id);
+
+                            // clean up components
+                            for (component_kind, _) in entity_record.components {
+                                deleted_components.push((global_entity, component_kind, false));
+                            }
+
+                            // do we need to re-insert this now?
+                            if self.delayed_entity_insertions.remove(&global_entity) {
+                                self.spawn_entity(world_record, &global_entity);
+                            }
                         }
                         EntityAction::InsertComponent(global_entity, component_kind) => {
+                            if let Some(entity_record) =
+                                self.entity_records.get_mut(&global_entity)
+                            {
+                                if let Some(locality_status) =
+                                    entity_record.components.get_mut(&component_kind)
+                                {
+                                    *locality_status = LocalityStatus::Created;
+                                } else {
+                                    panic!("have not yet initiated component!");
+                                }
+                            } else {
+                                panic!("entity does not yet exist for this connection!");
+                            }
+
                             // do we need to delete this now?
                             if self
                                 .delayed_component_deletions
                                 .remove(&(global_entity, component_kind))
                             {
-                                self.component_delete(&global_entity, &component_kind);
-                            } else {
-                                // we do not need to delete just yet
-                                if let Some(entity_record) =
-                                    self.entity_records.get_mut(&global_entity)
-                                {
-                                    if let Some(locality_status) =
-                                        entity_record.components.get_mut(&component_kind)
-                                    {
-                                        *locality_status = LocalityStatus::Created;
-                                    } else {
-                                        panic!("have not yet initiated component!");
-                                    }
-                                } else {
-                                    panic!("entity does not yet exist for this connection!");
-                                }
+                                self.remove_component(&global_entity, &component_kind);
+                            }
+                        }
+                        EntityAction::RemoveComponent(global_entity, component_kind) => {
+
+                            if let Some(entity_record) = self.entity_records.get_mut(&global_entity) {
+                                entity_record.components.remove(&component_kind);
+                            }
+
+                            // do we need to delete this now?
+                            if self.delayed_component_insertions.remove(&(global_entity, component_kind)) {
+                                deleted_components.push((global_entity, component_kind, true));
+                            }
+                            else {
+                                deleted_components.push((global_entity, component_kind, false));
                             }
                         }
                     }
                 }
             }
 
-            for (entity, component_kind) in deleted_components {
-                self.component_cleanup(&entity, &component_kind);
+            for (entity, component_kind, insert_after) in deleted_components {
+                self.diff_handler.deregister_component(&entity, &component_kind);
+
+                if insert_after {
+                    self.insert_component(&entity, &component_kind);
+                }
             }
         }
     }
@@ -440,6 +499,29 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         *last_id_opt = Some(*current_id);
     }
 
+    fn can_write_action<W: WorldRefType<P, E>>(
+        &self,
+        world: &W,
+        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        action: &EntityAction<P, E>) -> bool
+    {
+        match action {
+            EntityAction::SpawnEntity(global_entity, _) => {
+                if !world_record.has_entity(global_entity) {
+                    return false;
+                }
+            }
+            EntityAction::InsertComponent(global_entity, component_kind) => {
+                if !world.has_component_of_kind(global_entity, component_kind) {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+
+        return true;
+    }
+
     fn write_action<W: WorldRefType<P, E>>(
         &mut self,
         world: &W,
@@ -449,6 +531,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         action_index: Option<usize>,
         last_written_id: &mut Option<MessageId>,
     ) {
+        // TODO: is there a better way to iterate than this?
         let is_writing: bool = action_index.is_none();
         let mut action_holder: Option<(MessageId, EntityAction<P, E>)> = None;
         if is_writing {
@@ -466,6 +549,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 self.queued_actions.get(open_action_index).as_ref().unwrap()
             }
         };
+
+        if !self.can_write_action(world, world_record, action) {
+            return;
+        }
 
         // write EntityAction type
         action.as_type().ser(bit_writer);
@@ -773,60 +860,37 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     fn component_init(&mut self, entity: &E, component_kind: &P::Kind) {
         if let Some(entity_record) = self.entity_records.get_mut(entity) {
             if entity_record.components.contains_key(component_kind) {
-                panic!("entity already has a component of the given type!");
+                match &entity_record.components.get(component_kind).unwrap() {
+                    LocalityStatus::Created => {
+                        panic!("component of this type already exists!");
+                    },
+                    LocalityStatus::Creating => {
+                        // any delayed deletion should be removed!
+                        self.delayed_component_deletions.remove(&(*entity, *component_kind));
+                    },
+                    LocalityStatus::Deleting => {
+                        // queue insertion action to be sent after deletion
+                        self.delayed_component_insertions
+                            .insert((*entity, *component_kind));
+                    },
+                }
+            } else {
+                // send action
+                self.queued_actions
+                    .push_new(EntityAction::InsertComponent(*entity, *component_kind));
+
+                // put into entity record
+                entity_record
+                    .components
+                    .insert(*component_kind, LocalityStatus::Creating);
+
+                // create DiffMask
+                self.diff_handler
+                    .register_component(&self.address, entity, component_kind);
             }
-            entity_record
-                .components
-                .insert(*component_kind, LocalityStatus::Creating);
         } else {
             panic!("entity does not exist!");
         }
-
-        // create DiffMask
-        self.diff_handler
-            .register_component(&self.address, entity, component_kind);
-    }
-
-    fn component_cleanup(&mut self, entity: &E, component_kind: &P::Kind) {
-        if let Some(entity_record) = self.entity_records.get_mut(entity) {
-            // actually delete the component from local records
-            entity_record.components.remove(component_kind);
-
-            self.diff_handler
-                .deregister_component(entity, component_kind);
-        } else {
-            panic!("attempting to clean up component from non-existent entity!")
-        }
-    }
-
-    fn entity_delete(&mut self, world_record: &WorldRecord<E, P::Kind>, entity: &E) {
-        if let Some(entity_record) = self.entity_records.get_mut(entity) {
-            entity_record.status = LocalityStatus::Deleting;
-
-            // Entity deletion IS Component deletion, so update those component records
-            // accordingly
-            for component_kind in world_record.component_kinds(entity) {
-                self.component_cleanup(entity, &component_kind);
-            }
-
-            self.queued_actions
-                .push_new(EntityAction::DespawnEntity(*entity));
-        }
-    }
-
-    fn component_delete(&mut self, entity: &E, component_kind: &P::Kind) {
-        let entity_record = self
-            .entity_records
-            .get_mut(entity)
-            .expect("attempting to get record of non-existent entity");
-        let component_status = entity_record
-            .components
-            .get_mut(component_kind)
-            .expect("attempt to get status of non-existent component of entity");
-        *component_status = LocalityStatus::Deleting;
-
-        self.queued_actions
-            .push_new(EntityAction::RemoveComponent(*entity, *component_kind));
     }
 
     fn notify_action_dropped(&mut self, dropped_packet_index: PacketIndex) {

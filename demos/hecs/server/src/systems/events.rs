@@ -8,8 +8,8 @@ pub fn process_events(app: &mut App) {
     for event in app.server.receive() {
         match event {
             Ok(Event::Authorization(user_key, Protocol::Auth(auth_message))) => {
-                let username = auth_message.username.get();
-                let password = auth_message.password.get();
+                let ref username = *auth_message.username;
+                let ref password = *auth_message.password;
                 if username == "charlie" && password == "12345" {
                     // Accept incoming connection
                     app.server.accept_connection(&user_key);

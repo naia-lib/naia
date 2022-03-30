@@ -36,7 +36,6 @@ mod server_config;
 mod tick;
 mod user;
 mod user_scope;
-mod world_record;
 
 pub use error::NaiaServerError;
 pub use event::Event;

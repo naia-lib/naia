@@ -12,13 +12,13 @@ pub fn march_and_mark(app: &mut App) {
     let mut entities_to_remove: Vec<Entity> = Vec::new();
 
     for (entity, position) in app.world.query_mut::<&mut Position>() {
-        let mut x = *position.x.get();
+        let mut x = *position.x;
         x += 1;
         if x > 125 {
             x = 0;
-            let mut y = *position.y.get();
+            let mut y = *position.y;
             y = y.wrapping_add(1);
-            position.y.set(y);
+            *position.y = y;
         }
         if x == 40 {
             entities_to_add.push(entity);
@@ -26,7 +26,7 @@ pub fn march_and_mark(app: &mut App) {
         if x == 75 {
             entities_to_remove.push(entity);
         }
-        position.x.set(x);
+        *position.x = x;
     }
 
     // add markers
@@ -63,7 +63,7 @@ pub fn check_scopes(app: &mut App) {
     for (_, user_key, entity) in server.scope_checks() {
         if let Ok(entity_ref) = world.entity(entity) {
             if let Some(position) = entity_ref.get::<Position>() {
-                let x = *position.x.get();
+                let x = *position.x;
 
                 if x >= 5 && x <= 100 {
                     server.user_scope(&user_key).include(&entity);
