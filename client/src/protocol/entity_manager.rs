@@ -224,6 +224,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     panic!("attempting to delete nonexistent component of entity");
                 }
             }
+            // Noop
+            EntityActionType::Noop => {
+                // this will advance the sliding window of action ids
+                self.receiver_record.should_receive_message(action_id);
+            }
         }
     }
 

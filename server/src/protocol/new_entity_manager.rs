@@ -102,7 +102,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NewEntityManager<P, E
 
         self.scope_world.insert(*entity, HashSet::new());
 
-        self.collect_actions_entity(entity);
+        self.make_diff_actions_entity(entity);
+
+        if !self.entity_to_net_entity_map.contains_key(entity) {
+            let new_net_entity = self.net_entity_generator.generate();
+            self.entity_to_net_entity_map.insert(*entity, new_net_entity);
+            self.net_entity_to_entity_map.insert(new_net_entity, *entity);
+        }
     }
 
     pub fn despawn_entity(&mut self, entity: &E) {
@@ -113,13 +119,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NewEntityManager<P, E
 
         self.scope_world.remove(entity);
 
-        self.collect_actions_entity(entity);
+        self.make_diff_actions_entity(entity);
     }
 
     pub fn insert_component(&mut self, entity: &E, component: &P::Kind) {
+        if !self.scope_world.contains_key(entity) {
+            // possibly this is a bad place to check
+            // but currently this is where we check that the scope has the entity
+            // before inserting the component
+            return;
+        }
+
         let components = self.scope_world
             .get(entity)
-            .expect("cannot insert component into non-existent entity!");
+            .unwrap();
         if components.contains(component) {
             // do nothing, already in scope
             return;
@@ -128,7 +141,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NewEntityManager<P, E
         let components = self.scope_world.get_mut(entity).unwrap();
         components.insert(*component);
 
-        self.collect_actions_component(entity, component);
+        self.make_diff_actions_component(entity, component);
+
+        if !self.diff_handler.component_is_registered(entity, component) {
+            self.diff_handler.register_component(&self.address, entity, component);
+        }
     }
 
     pub fn remove_component(&mut self, entity: &E, component: &P::Kind) {
@@ -143,7 +160,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NewEntityManager<P, E
         let components = self.scope_world.get_mut(entity).unwrap();
         components.remove(component);
 
-        self.collect_actions_component(entity, component);
+        self.make_diff_actions_component(entity, component);
     }
 
     pub fn scope_has_entity(&self, entity: &E) -> bool {
@@ -234,19 +251,32 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NewEntityManager<P, E
 
     // diffing world
 
-    fn collect_actions_entity(&mut self, entity: &E) {
+    fn make_diff_actions_entity(&mut self, entity: &E) {
         let scope_has_entity = self.scope_world.contains_key(entity);
         let remote_has_entity = self.remote_world.contains_key(entity);
 
         if scope_has_entity == remote_has_entity {
-            // remote is all synced up to scope, no need to continue
+            // already synced up
+            // remove sending action
+            if self.sending_entities.contains_key(entity) {
+                self.erase_sending_action_entity(entity);
+            }
+
+            // remove net entity if applicable
+            if !scope_has_entity && !remote_has_entity {
+                if self.entity_to_net_entity_map.contains_key(entity) {
+                    let net_entity = self.entity_to_net_entity_map.remove(entity).unwrap();
+                    self.net_entity_to_entity_map.remove(&net_entity);
+                }
+            }
+
             return;
         }
 
         return self.sync_new_action_entity(entity, scope_has_entity);
     }
 
-    fn collect_actions_component(&mut self, entity: &E, component: &P::Kind) {
+    fn make_diff_actions_component(&mut self, entity: &E, component: &P::Kind) {
         let scope_components = self.scope_world
             .get(entity)
             .expect("cannot collect component actions from non-existent entity!");
@@ -261,7 +291,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NewEntityManager<P, E
         let remote_has_component = remote_components.contains(component);
 
         if scope_has_component == remote_has_component {
-            // do nothing, already synced up
+            // already synced up
+            // remove sending action
+            let mut remove = false;
+            if let Some(component_set) = self.sending_components.get(entity) {
+                if component_set.contains_key(component) {
+                    remove = true;
+                }
+            }
+            if remove {
+                self.erase_sending_action_component(entity, component);
+            }
+
+            // deregister component from diff handler if applicable
+            if !scope_has_component && !remote_has_component {
+                if self.diff_handler.component_is_registered(entity, component) {
+                    self.diff_handler.deregister_component(entity, component);
+                }
+            }
+
             return;
         }
 
@@ -338,6 +386,111 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NewEntityManager<P, E
             .get_mut(&action_id)
             .expect("retrieved a nonexistent sending action!");
         *action = EntityAction::Noop;
+    }
+
+    // Processing delivered actions
+
+    fn remote_spawned_entity(&mut self, action_id: &ActionId, entity: &E) {
+        if !self.sending_actions.contains_key(action_id) {
+            // action has already been delivered before, ignore
+            return;
+        }
+        self.sending_actions.remove(action_id);
+
+        if self.remote_world.contains_key(entity) {
+            // who knows how this updated already .. best do nothing?
+        } else {
+            self.remote_world.insert(*entity, HashSet::new());
+
+            if !self.scope_world.contains_key(entity) {
+                // entity has despawned again... collect updates
+                self.make_diff_actions_entity(entity);
+            } else {
+                let mut scope_components = Vec::new();
+                {
+                    let scope_component_set = self.scope_world.get(entity).unwrap();
+                    for component in scope_component_set {
+                        scope_components.push(*component);
+                    }
+                }
+                for scope_component in scope_components {
+                    self.make_diff_actions_component(entity, &scope_component);
+                }
+            }
+        }
+    }
+
+    fn remote_despawned_entity(&mut self, action_id: &ActionId, entity: &E) {
+        if !self.sending_actions.contains_key(action_id) {
+            // action has already been delivered before, ignore
+            return;
+        }
+        self.sending_actions.remove(action_id);
+
+        if !self.remote_world.contains_key(entity) {
+            // who knows how this updated already .. best do nothing?
+        } else {
+            self.remote_world.remove(entity);
+            self.make_diff_actions_entity(entity);
+        }
+    }
+
+    fn remote_inserted_component(&mut self, action_id: &ActionId, entity: &E, component: &P::Kind) {
+        if !self.sending_actions.contains_key(action_id) {
+            // action has already been delivered before, ignore
+            return;
+        }
+        self.sending_actions.remove(action_id);
+
+        if !self.remote_world.contains_key(entity) {
+            // entity despawned on the remote... very odd
+            self.make_diff_actions_entity(entity);
+            return;
+        }
+
+        let remote_component_set = self.remote_world.get_mut(entity).unwrap();
+        remote_component_set.insert(*component);
+
+        if !self.scope_world.contains_key(entity) {
+            // entity despawned in the scope... very odd
+            self.make_diff_actions_entity(entity);
+            return;
+        }
+
+        self.make_diff_actions_component(entity, component);
+    }
+
+    fn remote_removed_component(&mut self, action_id: &ActionId, entity: &E, component: &P::Kind) {
+        if !self.sending_actions.contains_key(action_id) {
+            // action has already been delivered before, ignore
+            return;
+        }
+        self.sending_actions.remove(action_id);
+
+        if !self.remote_world.contains_key(entity) {
+            // entity despawned on the remote... very odd
+            self.make_diff_actions_entity(entity);
+            return;
+        }
+
+        let remote_component_set = self.remote_world.get_mut(entity).unwrap();
+        remote_component_set.remove(component);
+
+        if !self.scope_world.contains_key(entity) {
+            // entity despawned in the scope... very odd
+            self.make_diff_actions_entity(entity);
+            return;
+        }
+
+        self.make_diff_actions_component(entity, component);
+    }
+
+    fn remote_received_noop(&mut self, action_id: &ActionId) {
+        if !self.sending_actions.contains_key(action_id) {
+            // action has already been delivered before, ignore
+            return;
+        }
+        self.sending_actions.remove(action_id);
     }
 
     // Collecting
