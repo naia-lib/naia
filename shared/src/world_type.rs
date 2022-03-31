@@ -3,10 +3,9 @@ use naia_serde::BitReader;
 use crate::protocol::{
     entity_property::NetEntityHandleConverter,
     protocolize::{ProtocolInserter, Protocolize},
-    replica_ref::{ReplicaMutWrapper, ReplicaRefWrapper},
+    replica_ref::{ReplicaMutWrapper, ReplicaRefWrapper, ReplicaDynRefWrapper},
     replicate::{Replicate, ReplicateSafe},
 };
-use crate::ReplicaDynRefWrapper;
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
