@@ -69,7 +69,7 @@ impl UnorderedReliableReceiverRecord {
         }
     }
 
-    pub fn clear_sent_messages(&mut self) {
+    pub fn clear_received_messages(&mut self) {
         loop {
             let mut has_message = false;
             if let Some((_, true)) = self.received_messages.front() {
@@ -110,7 +110,7 @@ impl<P> ChannelReceiver<P> for UnorderedReliableReceiver<P> {
     }
 
     fn receive_messages(&mut self) -> Vec<P> {
-        self.record.clear_sent_messages();
+        self.record.clear_received_messages();
 
         mem::take(&mut self.ready_incoming_messages)
     }

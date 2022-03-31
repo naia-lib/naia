@@ -68,7 +68,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
-        self.receiver_record.clear_sent_messages();
+        self.receiver_record.clear_received_messages();
         let mut last_read_id: Option<MessageId> = None;
         let action_count = message_list_header::read(reader);
         for _ in 0..action_count {
