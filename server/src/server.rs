@@ -251,7 +251,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                     let all_entities_in_scope = {
                         entities
                             .iter()
-                            .all(|entity| connection.entity_manager.entity_in_scope(entity))
+                            .all(|entity| connection.entity_manager.has_synced_entity(entity))
                     };
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
@@ -428,17 +428,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
             return UserScopeMut::new(self, &user_key);
         }
         panic!("No User exists for given Key!");
-    }
-
-    /// Returns whether a given User has a particular Entity in-scope currently
-    pub fn user_scope_has_entity(&self, user_key: &UserKey, entity: &E) -> bool {
-        if let Some(user) = self.users.get(user_key) {
-            if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return user_connection.entity_manager.has_entity(entity);
-            }
-        }
-
-        return false;
     }
 
     // Rooms
@@ -630,12 +619,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
 
         // add component to connections already tracking entity
         for (_, user_connection) in self.user_connections.iter_mut() {
-            if user_connection.entity_manager.has_entity(entity) {
                 // insert component into user's connection
                 user_connection
                     .entity_manager
                     .insert_component(entity, &component_kind);
-            }
         }
     }
 
@@ -936,7 +923,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                         user_connection.base.mark_heard();
 
                         // Process incoming header
-                        user_connection.process_incoming_header(&self.world_record, &header);
+                        user_connection.process_incoming_header(&header);
 
                         match header.packet_type {
                             PacketType::Data => {
@@ -1071,7 +1058,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                 self.user_connections.get_mut(&user.address)
                             {
                                 let currently_in_scope =
-                                    user_connection.entity_manager.has_entity(entity);
+                                    user_connection.entity_manager.scope_has_entity(entity);
 
                                 let should_be_in_scope: bool;
                                 if let Some(in_scope) = self.entity_scope_map.get(user_key, entity)
@@ -1086,7 +1073,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                         // add entity to the connections local scope
                                         user_connection
                                             .entity_manager
-                                            .spawn_entity(&self.world_record, entity);
+                                            .spawn_entity(entity);
                                     }
                                 } else {
                                     if currently_in_scope {

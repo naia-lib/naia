@@ -12,17 +12,18 @@ use naia_shared::{
 };
 
 use crate::{
-    protocol::{entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, world_record::WorldRecord},
+    protocol::{global_diff_handler::GlobalDiffHandler, world_record::WorldRecord},
     tick::{tick_buffer_receiver::TickBufferReceiver, tick_manager::TickManager},
     user::UserKey,
 };
+use crate::protocol::new_entity_manager::NewEntityManager;
 
 use super::io::Io;
 
 pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub user_key: UserKey,
     pub base: BaseConnection<P, C>,
-    pub entity_manager: EntityManager<P, E, C>,
+    pub entity_manager: NewEntityManager<P, E, C>,
     pub tick_buffer: TickBufferReceiver<P, C>,
     pub last_received_tick: Tick,
     pub ping_manager: PingManager,
@@ -44,7 +45,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
                 connection_config,
                 channel_config,
             ),
-            entity_manager: EntityManager::new(user_address, diff_handler),
+            entity_manager: NewEntityManager::new(user_address, diff_handler),
             tick_buffer: TickBufferReceiver::new(channel_config),
             ping_manager: PingManager::new(&connection_config.ping),
             last_received_tick: 0,
@@ -55,12 +56,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
     pub fn process_incoming_header(
         &mut self,
-        world_record: &WorldRecord<E, P::Kind>,
         header: &StandardHeader,
     ) {
         self.base
             .process_incoming_header(header, &mut Some(&mut self.entity_manager));
-        self.entity_manager.process_delivered_packets(world_record);
+        self.entity_manager.process_delivered_packets();
     }
 
     pub fn recv_client_tick(&mut self, client_tick: Tick) {
@@ -103,7 +103,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         tick_manager_opt: &Option<TickManager>,
         rtt_millis: &f32,
     ) {
-        self.collect_outgoing_messages(rtt_millis);
+        self.collect_outgoing_messages(now, rtt_millis);
 
         let mut any_sent = false;
         loop {
@@ -118,9 +118,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         }
     }
 
-    fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
+    fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.entity_manager
-            .collect_outgoing_messages(rtt_millis, &mut self.base.message_manager);
+            .collect_outgoing_messages(now, rtt_millis, &mut self.base.message_manager);
         self.base
             .message_manager
             .collect_outgoing_messages(rtt_millis);
