@@ -129,10 +129,6 @@ impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
         return self.server.user_scope(user_key);
     }
 
-    pub fn user_scope_has_entity(&self, user_key: &UserKey, entity: &Entity) -> bool {
-        return self.server.user_scope_has_entity(user_key, entity);
-    }
-
     //// Rooms ////
 
     pub fn make_room(&mut self) -> RoomMut<P, Entity> {
