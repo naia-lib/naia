@@ -224,7 +224,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NewEntityManager<P, E
             // Actions
             if let Some((_, action_list)) = self.sent_actions.remove(&packet_index) {
                 for (action_id, action) in action_list {
-                    self.sending_actions.remove(&action_id);
                     match action {
                         EntityAction::SpawnEntity(entity) => {
                             self.remote_spawned_entity(&action_id, &entity);
@@ -379,13 +378,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NewEntityManager<P, E
 
         // remove currently sending action
         let component_set = self.sending_components.get_mut(entity).unwrap();
+
+        if !component_set.contains_key(component) {
+            // nothing is sending for this component, don't do anything
+            return;
+        }
         let action_id = component_set.remove(component).unwrap();
 
         // replace action in record with noop
-        let (_, action) = self.sending_actions
-            .get_mut(&action_id)
-            .expect("retrieved a nonexistent sending action!");
-        *action = EntityAction::Noop;
+        if let Some((_, action)) = self.sending_actions
+            .get_mut(&action_id) {
+            *action = EntityAction::Noop;
+        }
     }
 
     // Processing delivered actions
@@ -406,6 +410,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NewEntityManager<P, E
                 // entity has despawned again... collect updates
                 self.make_diff_actions_entity(entity);
             } else {
+                self.delayed_entity_messages.add_entity(entity);
+
                 let mut scope_components = Vec::new();
                 {
                     let scope_component_set = self.scope_world.get(entity).unwrap();
@@ -431,6 +437,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NewEntityManager<P, E
             // who knows how this updated already .. best do nothing?
         } else {
             self.remote_world.remove(entity);
+            self.delayed_entity_messages.remove_entity(entity);
             self.make_diff_actions_entity(entity);
         }
     }

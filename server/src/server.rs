@@ -1074,6 +1074,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                         user_connection
                                             .entity_manager
                                             .spawn_entity(entity);
+                                        // add components to connections local scope
+                                        for component_kind in self.world_record.component_kinds(entity) {
+                                            user_connection.entity_manager.insert_component(entity, &component_kind);
+                                        }
                                     }
                                 } else {
                                     if currently_in_scope {
