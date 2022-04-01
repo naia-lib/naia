@@ -47,18 +47,11 @@ impl Socket {
             addr_cell.clone(),
         );
 
-        let dropped_outgoing_messages = Rc::new(RefCell::new(VecDeque::new()));
+        let packet_sender = PacketSender::new(data_channel, addr_cell.clone());
+        let packet_receiver_impl = PacketReceiverImpl::new(message_queue.clone(), addr_cell.clone());
 
-        let packet_sender = PacketSender::new(
-            data_channel.clone(),
-            dropped_outgoing_messages.clone(),
-            addr_cell.clone(),
-        );
-        let packet_receiver = PacketReceiverImpl::new(message_queue.clone(), addr_cell.clone());
-
-        let sender = packet_sender.clone();
-        let receiver: Box<dyn PacketReceiverTrait> = {
-            let inner_receiver = Box::new(packet_receiver.clone());
+        let packet_receiver: Box<dyn PacketReceiverTrait> = {
+            let inner_receiver = Box::new(packet_receiver_impl);
             if let Some(config) = &self.config.link_condition {
                 Box::new(ConditionedPacketReceiver::new(inner_receiver, config))
             } else {
@@ -67,8 +60,8 @@ impl Socket {
         };
 
         self.io = Some(Io {
-            packet_sender: sender,
-            packet_receiver: PacketReceiver::new(receiver),
+            packet_sender,
+            packet_receiver: PacketReceiver::new(packet_receiver),
         });
     }
 

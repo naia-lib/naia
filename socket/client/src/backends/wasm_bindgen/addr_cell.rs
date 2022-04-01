@@ -19,7 +19,11 @@ impl AddrCell {
     }
 
     pub fn receive_candidate(&self, candidate_str: &str) {
-        self.cell.as_ref().borrow_mut().0 = candidate_to_addr(candidate_str);
+        self.cell
+            .as_ref()
+            .try_borrow_mut()
+            .expect("cannot borrow AddrCell.cell!")
+            .0 = candidate_to_addr(candidate_str);
     }
 
     pub fn get(&self) -> ServerAddr {

@@ -27,7 +27,12 @@ impl PacketReceiverImpl {
 
 impl PacketReceiverTrait for PacketReceiverImpl {
     fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
-        match self.message_queue.borrow_mut().pop_front() {
+        match self
+            .message_queue
+            .try_borrow_mut()
+            .expect("can't borrow 'message_queue' buffer!")
+            .pop_front()
+        {
             Some(payload) => {
                 self.last_payload = Some(payload);
                 return Ok(Some(self.last_payload.as_ref().unwrap()));
