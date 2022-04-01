@@ -83,20 +83,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         last_read_id: &mut Option<MessageId>,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
-        let message_type = EntityActionType::de(reader).unwrap();
+        let action_type = EntityActionType::de(reader).unwrap();
 
         let action_id = Self::read_message_id(reader, last_read_id);
 
-        match message_type {
+        match action_type {
             // Entity Creation
             EntityActionType::SpawnEntity => {
                 // read all data
                 let net_entity = NetEntity::de(reader).unwrap();
-                let components_num = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
-                let mut components = Vec::new();
-                for _ in 0..components_num {
-                    components.push(P::build(reader, self));
-                }
 
                 // test whether this is a duplicate message
                 if !self.receiver_record.should_receive_message(action_id) {
@@ -111,23 +106,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 self.local_to_world_entity.insert(net_entity, world_entity);
                 let entity_handle = self.handle_entity_map.insert(world_entity);
 
-                let mut entity_record = EntityRecord::new(net_entity, entity_handle);
+                self.entity_records
+                    .insert(world_entity, EntityRecord::new(net_entity, entity_handle));
 
-                // component init
-                let mut component_list: Vec<P::Kind> = Vec::new();
-                for component in components {
-                    let component_kind = component.dyn_ref().kind();
-
-                    entity_record.component_kinds.insert(component_kind);
-
-                    component_list.push(component_kind);
-
-                    component.extract_and_insert(&world_entity, world);
-                }
-
-                self.entity_records.insert(world_entity, entity_record);
-
-                event_stream.push_back(Ok(Event::SpawnEntity(world_entity, component_list)));
+                event_stream.push_back(Ok(Event::SpawnEntity(world_entity)));
             }
             // Entity Deletion
             EntityActionType::DespawnEntity => {
@@ -223,6 +205,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 } else {
                     panic!("attempting to delete nonexistent component of entity");
                 }
+            }
+            // Noop
+            EntityActionType::Noop => {
+                // this will advance the sliding window of action ids
+                self.receiver_record.should_receive_message(action_id);
             }
         }
     }

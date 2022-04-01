@@ -3,7 +3,7 @@ use naia_serde::BitReader;
 use crate::protocol::{
     entity_property::NetEntityHandleConverter,
     protocolize::{ProtocolInserter, Protocolize},
-    replica_ref::{ReplicaMutWrapper, ReplicaRefWrapper, ReplicaDynRefWrapper},
+    replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
     replicate::{Replicate, ReplicateSafe},
 };
 
@@ -28,7 +28,11 @@ pub trait WorldRefType<P: Protocolize, E> {
         entity: &E,
     ) -> Option<ReplicaRefWrapper<'a, P, R>>;
     /// gets an entity's component, dynamically
-    fn component_of_kind<'a>(&'a self, entity: &E, component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>>;
+    fn component_of_kind<'a>(
+        &'a self,
+        entity: &E,
+        component_kind: &P::Kind,
+    ) -> Option<ReplicaDynRefWrapper<'a, P>>;
 }
 
 /// Structures that implement the WorldMutType trait will be able to be loaded

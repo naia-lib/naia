@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use naia_shared::{serde::BitReader, BigMap, NetEntityHandleConverter, ProtocolInserter, Protocolize, ReplicaDynMutWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType, ReplicaDynRefWrapper};
+use naia_shared::{
+    serde::BitReader, BigMap, NetEntityHandleConverter, ProtocolInserter, Protocolize,
+    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
+    ReplicateSafe, WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -83,7 +87,11 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w, P> {
         return component(self.world, entity);
     }
 
-    fn component_of_kind<'a>(&'a self, entity: &Entity, component_type: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>> {
+    fn component_of_kind<'a>(
+        &'a self,
+        entity: &Entity,
+        component_type: &P::Kind,
+    ) -> Option<ReplicaDynRefWrapper<'a, P>> {
         return component_of_kind(self.world, entity, component_type);
     }
 }
@@ -109,7 +117,11 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w, P> {
         return component(self.world, entity);
     }
 
-    fn component_of_kind<'a>(&'a self, entity: &Entity, component_type: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>> {
+    fn component_of_kind<'a>(
+        &'a self,
+        entity: &Entity,
+        component_type: &P::Kind,
+    ) -> Option<ReplicaDynRefWrapper<'a, P>> {
         return component_of_kind(self.world, entity, component_type);
     }
 }

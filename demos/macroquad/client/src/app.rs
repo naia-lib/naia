@@ -183,13 +183,19 @@ impl App {
                         }
                     }
                 }
-                Ok(Event::SpawnEntity(entity, _)) => {
+                Ok(Event::SpawnEntity(entity)) => {
                     self.squares.insert(entity);
                     info!("spawned entity");
                 }
                 Ok(Event::DespawnEntity(entity)) => {
                     self.squares.remove(&entity);
                     info!("despawned entity");
+                }
+                Ok(Event::InsertComponent(entity, component)) => {
+                    info!("inserted component");
+                }
+                Ok(Event::RemoveComponent(entity, component)) => {
+                    info!("removed component");
                 }
                 Ok(Event::Message(
                     Channels::EntityAssignment,

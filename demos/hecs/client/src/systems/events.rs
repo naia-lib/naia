@@ -13,7 +13,7 @@ pub fn process_events(app: &mut App) {
             Ok(Event::Disconnection(server_address)) => {
                 info!("Client disconnected from: {}", server_address);
             }
-            Ok(Event::SpawnEntity(_, _)) => {
+            Ok(Event::SpawnEntity(_)) => {
                 info!("creation of entity");
             }
             Ok(Event::DespawnEntity(_)) => {

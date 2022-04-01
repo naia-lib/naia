@@ -37,6 +37,10 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> UserDiffHandler<E, K> {
         self.receivers.remove(&(*entity, *component_kind));
     }
 
+    pub fn component_is_registered(&self, entity: &E, component_kind: &K) -> bool {
+        return self.receivers.contains_key(&(*entity, *component_kind));
+    }
+
     // Diff masks
     pub fn diff_mask(&self, entity: &E, component_kind: &K) -> Option<RwLockReadGuard<DiffMask>> {
         if let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) {
