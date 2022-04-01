@@ -115,7 +115,7 @@ impl App {
                     let x = Random::gen_range_u32(0, 50) * 16;
                     let y = Random::gen_range_u32(0, 37) * 16;
 
-                    let square_color = match total_user_count % 3 {
+                    let square_color = match total_user_count % 4 {
                         0 => Color::Yellow,
                         1 => Color::Red,
                         2 => Color::Blue,

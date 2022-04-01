@@ -6,6 +6,19 @@
 #[macro_use]
 extern crate cfg_if;
 
+cfg_if! {
+    if #[cfg(all(target_arch = "wasm32", feature = "wbindgen", feature = "mquad"))]
+    {
+        // Use both protocols...
+        compile_error!("wasm target for 'naia_shared' crate requires either the 'wbindgen' OR 'mquad' feature to be enabled, you must pick one.");
+    }
+    else if #[cfg(all(target_arch = "wasm32", not(feature = "wbindgen"), not(feature = "mquad")))]
+    {
+        // Use no protocols...
+        compile_error!("wasm target for 'naia_shared' crate requires either the 'wbindgen' or 'mquad' feature to be enabled, you must pick one.");
+    }
+}
+
 pub use naia_socket_shared::{Instant, LinkConditionerConfig, Random, SocketConfig};
 
 pub use naia_derive::*;
