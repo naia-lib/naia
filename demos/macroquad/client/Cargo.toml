@@ -11,8 +11,6 @@ publish = false
 
 [dependencies]
 naia-client = { path = "../../../client", features = [ "mquad" ] }
-naia-demo-world = { path = "../../demo_utils/demo_world" }
 naia-macroquad-demo-shared = { path = "../shared" }
-macroquad = { version = "=0.3.0-alpha.12", features = [ "log-impl" ] }
-log = { version = "0.4" }
-simple_logger = { version = "2.0.0" }
+naia-demo-world = { path = "../../demo_utils/demo_world" }
+macroquad = { version = "=0.3.15" }

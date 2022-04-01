@@ -27,4 +27,3 @@ naia-client-socket = { path = "../socket/client" }
 naia-shared = { version = "0.8.0", path = "../shared" }
 cfg-if = "1.0.0"
 log = "0.4"
-#miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"] }
