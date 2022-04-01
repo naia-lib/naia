@@ -16,14 +16,10 @@ pub struct PacketSender {
 impl PacketSender {
     /// Create a new PacketSender, if supplied with the RtcDataChannel and a
     /// reference to a list of dropped messages
-    pub fn new(
-        data_channel: RtcDataChannel,
-        dropped_outgoing_messages: Rc<RefCell<VecDeque<Box<[u8]>>>>,
-        server_addr: AddrCell,
-    ) -> Self {
+    pub fn new(data_channel: RtcDataChannel, server_addr: AddrCell) -> Self {
         PacketSender {
             data_channel,
-            dropped_outgoing_messages,
+            dropped_outgoing_messages: Rc::new(RefCell::new(VecDeque::new())),
             server_addr,
         }
     }
@@ -36,14 +32,20 @@ impl PacketSender {
             log::info!("error when sending packet: {:?}", err);
 
             self.dropped_outgoing_messages
-                .borrow_mut()
+                .try_borrow_mut()
+                .expect("can't borrow dropped message buffer to add dropped message!")
                 .push_back(payload.into());
         }
     }
 
     fn resend_dropped_messages(&self) {
-        if let Some(dropped_packet) = self.dropped_outgoing_messages.borrow_mut().pop_front() {
-            self.send(&dropped_packet);
+        if let Ok(mut buffer) = self
+            .dropped_outgoing_messages
+            .try_borrow_mut() {
+            if let Some(dropped_packet) = buffer.pop_front()
+            {
+                self.send(&dropped_packet);
+            }
         }
     }
 

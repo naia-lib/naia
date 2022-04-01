@@ -100,7 +100,10 @@ pub fn webrtc_initialize(
                             let uarray: js_sys::Uint8Array = js_sys::Uint8Array::new(&arraybuf);
                             let mut body = vec![0; uarray.length() as usize];
                             uarray.copy_to(&mut body[..]);
-                            msg_queue_3.borrow_mut().push_back(body.into_boxed_slice());
+                            msg_queue_3
+                                .try_borrow_mut()
+                                .expect("can't borrow 'msg_queue_3' to retrieve message!")
+                                .push_back(body.into_boxed_slice());
                         }
                     });
                 let channel_onmsg_closure = Closure::wrap(channel_onmsg_func);

@@ -1,8 +1,8 @@
 use std::{collections::HashSet, time::Duration};
 
 use macroquad::prelude::{
-    clear_background, draw_rectangle, is_key_down, is_key_pressed, KeyCode, BLACK, BLUE, GREEN,
-    RED, WHITE, YELLOW, info
+    clear_background, draw_rectangle, info, is_key_down, is_key_pressed, KeyCode, BLACK, BLUE,
+    GREEN, RED, WHITE, YELLOW,
 };
 
 use naia_client::{
