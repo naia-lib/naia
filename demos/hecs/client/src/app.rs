@@ -2,7 +2,7 @@ use log::info;
 
 use hecs::{Entity, World};
 
-use naia_hecs_client::{Client as NaiaClient, ClientConfig, WorldData, shared::DefaultChannels};
+use naia_hecs_client::{shared::DefaultChannels, Client as NaiaClient, ClientConfig, WorldData};
 
 use naia_hecs_demo_shared::{
     protocol::{Auth, Protocol},

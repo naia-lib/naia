@@ -558,9 +558,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
         // are in each User's scope
         for (_, user_connection) in self.user_connections.iter_mut() {
             //remove entity from user connection
-            user_connection
-                .entity_manager
-                .despawn_entity(entity);
+            user_connection.entity_manager.despawn_entity(entity);
         }
 
         // Clean up associated components
@@ -619,10 +617,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
 
         // add component to connections already tracking entity
         for (_, user_connection) in self.user_connections.iter_mut() {
-                // insert component into user's connection
-                user_connection
-                    .entity_manager
-                    .insert_component(entity, &component_kind);
+            // insert component into user's connection
+            user_connection
+                .entity_manager
+                .insert_component(entity, &component_kind);
         }
     }
 
@@ -1071,20 +1069,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                                 if should_be_in_scope {
                                     if !currently_in_scope {
                                         // add entity to the connections local scope
-                                        user_connection
-                                            .entity_manager
-                                            .spawn_entity(entity);
+                                        user_connection.entity_manager.spawn_entity(entity);
                                         // add components to connections local scope
-                                        for component_kind in self.world_record.component_kinds(entity) {
-                                            user_connection.entity_manager.insert_component(entity, &component_kind);
+                                        for component_kind in
+                                            self.world_record.component_kinds(entity)
+                                        {
+                                            user_connection
+                                                .entity_manager
+                                                .insert_component(entity, &component_kind);
                                         }
                                     }
                                 } else {
                                     if currently_in_scope {
                                         // remove entity from the connections local scope
-                                        user_connection
-                                            .entity_manager
-                                            .despawn_entity(entity);
+                                        user_connection.entity_manager.despawn_entity(entity);
                                     }
                                 }
                             }
