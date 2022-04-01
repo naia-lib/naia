@@ -16,8 +16,8 @@ use super::{
 
 pub struct ReliableSender<P> {
     rtt_resend_factor: f32,
-    next_send_message_id: MessageId,
     sending_messages: VecDeque<Option<(MessageId, Option<Instant>, P)>>,
+    next_send_message_id: MessageId,
     next_send_messages: VecDeque<(MessageId, P)>,
 }
 

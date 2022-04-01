@@ -2,7 +2,10 @@ use std::collections::HashSet;
 
 use hecs::World;
 
-use naia_hecs_server::{ServerAddrs, ServerConfig, shared::{SharedConfig, DefaultChannels}, WorldData, WorldProxyMut};
+use naia_hecs_server::{
+    shared::{DefaultChannels, SharedConfig},
+    ServerAddrs, ServerConfig, WorldData, WorldProxyMut,
+};
 
 use naia_hecs_demo_shared::protocol::{Name, Position};
 

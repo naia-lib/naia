@@ -12,7 +12,10 @@ use naia_shared::{
 };
 
 use crate::{
-    protocol::{entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler, world_record::WorldRecord},
+    protocol::{
+        entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler,
+        world_record::WorldRecord,
+    },
     tick::{tick_buffer_receiver::TickBufferReceiver, tick_manager::TickManager},
     user::UserKey,
 };
@@ -53,14 +56,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
     // Incoming Data
 
-    pub fn process_incoming_header(
-        &mut self,
-        world_record: &WorldRecord<E, P::Kind>,
-        header: &StandardHeader,
-    ) {
+    pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         self.base
             .process_incoming_header(header, &mut Some(&mut self.entity_manager));
-        self.entity_manager.process_delivered_packets(world_record);
+        self.entity_manager.process_delivered_packets();
     }
 
     pub fn recv_client_tick(&mut self, client_tick: Tick) {
@@ -103,7 +102,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         tick_manager_opt: &Option<TickManager>,
         rtt_millis: &f32,
     ) {
-        self.collect_outgoing_messages(rtt_millis);
+        self.collect_outgoing_messages(now, rtt_millis);
 
         let mut any_sent = false;
         loop {
@@ -118,9 +117,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         }
     }
 
-    fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
-        self.entity_manager
-            .collect_outgoing_messages(rtt_millis, &mut self.base.message_manager);
+    fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+        self.entity_manager.collect_outgoing_messages(
+            now,
+            rtt_millis,
+            &mut self.base.message_manager,
+        );
         self.base
             .message_manager
             .collect_outgoing_messages(rtt_millis);
