@@ -1,6 +1,10 @@
 use hecs::{Entity, World};
 
-use naia_shared::{serde::BitReader, NetEntityHandleConverter, ProtocolInserter, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType};
+use naia_shared::{
+    serde::BitReader, NetEntityHandleConverter, ProtocolInserter, Protocolize,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+    WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -64,14 +68,15 @@ impl<'w, 'd, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w, 'd, P> {
         return has_component_of_kind::<P>(self.world, self.world_data, entity, component_kind);
     }
 
-    fn component<R: ReplicateSafe<P>>(
-        &self,
-        entity: &Entity,
-    ) -> Option<ReplicaRefWrapper<P, R>> {
+    fn component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
         return component::<P, R>(self.world, entity);
     }
 
-    fn component_of_kind<'a>(&'a self, entity: &Entity, component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>> {
+    fn component_of_kind<'a>(
+        &'a self,
+        entity: &Entity,
+        component_kind: &P::Kind,
+    ) -> Option<ReplicaDynRefWrapper<'a, P>> {
         return component_of_kind(&self.world, self.world_data, entity, component_kind);
     }
 }
@@ -109,14 +114,15 @@ impl<'w, 'd, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w, 'd, P> {
         return has_component_of_kind::<P>(self.world, self.world_data, entity, component_kind);
     }
 
-    fn component<R: ReplicateSafe<P>>(
-        &self,
-        entity: &Entity,
-    ) -> Option<ReplicaRefWrapper<P, R>> {
+    fn component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
         return component::<P, R>(self.world, entity);
     }
 
-    fn component_of_kind<'a>(&'a self, entity: &Entity, component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>> {
+    fn component_of_kind<'a>(
+        &'a self,
+        entity: &Entity,
+        component_kind: &P::Kind,
+    ) -> Option<ReplicaDynRefWrapper<'a, P>> {
         return component_of_kind(self.world, self.world_data, entity, component_kind);
     }
 }

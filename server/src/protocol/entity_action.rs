@@ -1,15 +1,15 @@
-use naia_shared::{EntityActionType, Protocolize};
+use naia_shared::{EntityActionType, ProtocolKindType};
 
-#[derive(Clone)]
-pub enum EntityAction<P: Protocolize, E: Copy> {
+#[derive(Clone, PartialEq, Eq)]
+pub enum EntityAction<K: ProtocolKindType, E: Copy> {
     SpawnEntity(E),
     DespawnEntity(E),
-    InsertComponent(E, P::Kind),
-    RemoveComponent(E, P::Kind),
+    InsertComponent(E, K),
+    RemoveComponent(E, K),
     Noop,
 }
 
-impl<P: Protocolize, E: Copy> EntityAction<P, E> {
+impl<K: ProtocolKindType, E: Copy> EntityAction<K, E> {
     pub fn as_type(&self) -> EntityActionType {
         match self {
             EntityAction::SpawnEntity(_) => EntityActionType::SpawnEntity,

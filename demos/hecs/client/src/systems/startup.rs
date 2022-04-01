@@ -1,6 +1,9 @@
 use hecs::World;
 
-use naia_hecs_client::{ClientConfig, shared::{DefaultChannels, SharedConfig}, WorldData};
+use naia_hecs_client::{
+    shared::{DefaultChannels, SharedConfig},
+    ClientConfig, WorldData,
+};
 
 use naia_hecs_demo_shared::protocol::Auth;
 

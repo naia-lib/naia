@@ -54,7 +54,11 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     );
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
-    fn read_partial(&mut self, bit_reader: &mut BitReader, converter: &dyn NetEntityHandleConverter);
+    fn read_partial(
+        &mut self,
+        bit_reader: &mut BitReader,
+        converter: &dyn NetEntityHandleConverter,
+    );
     /// Returns whether has any EntityProperties
     fn has_entity_properties(&self) -> bool;
     /// Returns a list of Entities contained within the Replica's properties

@@ -106,7 +106,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 self.local_to_world_entity.insert(net_entity, world_entity);
                 let entity_handle = self.handle_entity_map.insert(world_entity);
 
-                self.entity_records.insert(world_entity, EntityRecord::new(net_entity, entity_handle));
+                self.entity_records
+                    .insert(world_entity, EntityRecord::new(net_entity, entity_handle));
 
                 event_stream.push_back(Ok(Event::SpawnEntity(world_entity)));
             }
