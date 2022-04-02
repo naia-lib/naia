@@ -1,5 +1,7 @@
 use naia_shared::{EntityActionType, ProtocolKindType};
 
+use crate::protocol::entity_manager::ActionId;
+
 #[derive(Clone, PartialEq, Eq)]
 pub enum EntityAction<K: ProtocolKindType, E: Copy> {
     SpawnEntity(E),
@@ -22,9 +24,9 @@ impl<K: ProtocolKindType, E: Copy> EntityAction<K, E> {
 }
 
 pub enum EntityActionRecord<K: ProtocolKindType, E: Copy> {
-    SpawnEntity(E, Vec<K>),
-    DespawnEntity(E),
-    InsertComponent(E, K),
-    RemoveComponent(E, K),
-    Noop,
+    SpawnEntity(ActionId, E, Vec<K>),
+    DespawnEntity(ActionId, E),
+    InsertComponent(ActionId, E, K),
+    RemoveComponent(ActionId, E, K),
+    Noop(ActionId),
 }
