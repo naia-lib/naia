@@ -11,4 +11,4 @@ publish = false
 
 [dependencies]
 naia-socket-client-demo-app = { path = "../app", features = [ "mquad" ] }
-miniquad = { version = "=0.3.0-alpha.45", features = ["log-impl"] }
+miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"] }

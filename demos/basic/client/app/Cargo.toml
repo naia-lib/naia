@@ -17,4 +17,4 @@ naia-demo-world = { path = "../../../demo_utils/demo_world" }
 naia-basic-demo-shared = { path = "../../shared" }
 cfg-if = "=1.0.0"
 log = "0.4"
-miniquad = { version = "=0.3.0-alpha.45", features = ["log-impl"], optional = true }
+miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"], optional = true }
