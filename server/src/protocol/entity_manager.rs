@@ -8,18 +8,21 @@ use std::{
     time::Duration,
 };
 
-use crate::protocol::entity_action::EntityActionRecord;
 use naia_shared::{
-    message_list_header, sequence_greater_than,
+    message_list_header,
     serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
     wrapping_diff, ChannelIndex, DiffMask, EntityConverter, Instant, KeyGenerator, MessageId,
-    MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, ProtocolKindType,
-    Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
+    MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize,
+    ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
 };
 
+use crate::sequence_list::SequenceList;
+
 use super::{
-    entity_action::EntityAction, entity_message_waitlist::EntityMessageWaitlist,
-    global_diff_handler::GlobalDiffHandler, user_diff_handler::UserDiffHandler,
+    entity_action::{EntityAction, EntityActionRecord},
+    entity_message_waitlist::EntityMessageWaitlist,
+    global_diff_handler::GlobalDiffHandler,
+    user_diff_handler::UserDiffHandler,
     world_record::WorldRecord,
 };
 
@@ -38,10 +41,11 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     scope_world: HashMap<E, HashSet<P::Kind>>,
     remote_world: HashMap<E, HashSet<P::Kind>>,
     next_action_id: ActionId,
-    sending_actions: HashMap<ActionId, (Option<Instant>, EntityAction<P::Kind, E>)>,
+    action_map: HashMap<ActionId, EntityAction<P::Kind, E>>,
+    sending_actions: SequenceList<Option<Instant>>,
     sending_entities: HashMap<E, ActionId>,
     sending_components: HashMap<(E, P::Kind), ActionId>,
-    next_send_actions: NextSendActions<P::Kind, E>,
+    next_send_actions: Vec<ActionId>,
     sent_actions: SentActions<E, P::Kind>,
 
     // Updates
@@ -69,11 +73,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             // World
             scope_world: HashMap::new(),
             remote_world: HashMap::new(),
-            sending_actions: HashMap::new(),
+            action_map: HashMap::new(),
+            sending_actions: SequenceList::new(),
             sending_entities: HashMap::new(),
             sending_components: HashMap::new(),
             next_action_id: 0,
-            next_send_actions: NextSendActions::new(),
+            next_send_actions: Vec::new(),
             sent_actions: HashMap::new(),
 
             // Update
@@ -275,7 +280,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
         if self.sending_entities.contains_key(entity) {
             let old_action_id = self.sending_entities.get(entity).unwrap();
-            let (_, old_action) = self.sending_actions.get(old_action_id).unwrap();
+            let old_action = self.action_map.get(old_action_id).unwrap();
             if *old_action == new_action {
                 // change is already in progress
                 return;
@@ -285,8 +290,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         }
 
         let new_action_id = self.new_action_id();
-        self.sending_actions
-            .insert(new_action_id, (None, new_action));
+        self.action_map.insert(new_action_id, new_action);
+        self.sending_actions.push_from_back(new_action_id, None);
         self.sending_entities.insert(*entity, new_action_id);
     }
 
@@ -322,7 +327,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         };
 
         if let Some(old_action_id) = self.sending_components.get(&(*entity, *component)) {
-            let (_, old_action) = self.sending_actions.get(old_action_id).unwrap();
+            let old_action = self.action_map.get(old_action_id).unwrap();
             if *old_action == new_action {
                 // action is the same, no need to re-generate it
                 return;
@@ -332,8 +337,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         }
 
         let new_action_id = self.new_action_id();
-        self.sending_actions
-            .insert(new_action_id, (None, new_action));
+        self.action_map.insert(new_action_id, new_action);
+        self.sending_actions.push_from_back(new_action_id, None);
         self.sending_components
             .insert((*entity, *component), new_action_id);
     }
@@ -351,7 +356,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         let action_id = self.sending_entities.remove(entity).unwrap();
 
         // replace action in record with noop
-        let (_, action) = self.sending_actions.get_mut(&action_id).unwrap();
+        let action = self.action_map.get_mut(&action_id).unwrap();
         *action = EntityAction::Noop;
     }
 
@@ -363,14 +368,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             .unwrap();
 
         // replace action in record with noop
-        let (_, action) = self.sending_actions.get_mut(&action_id).unwrap();
+        let action = self.action_map.get_mut(&action_id).unwrap();
         *action = EntityAction::Noop;
     }
 
     // Erasing
 
     fn remove_action_entity(&mut self, action_id: &ActionId, entity: &E) {
-        self.sending_actions.remove(action_id);
+        self.action_map.remove(action_id);
+        self.sending_actions.remove_from_front(action_id);
 
         let mut remove = false;
         if let Some(current_action_id) = self.sending_entities.get(entity) {
@@ -384,7 +390,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     }
 
     fn remove_action_component(&mut self, action_id: &ActionId, entity: &E, component: &P::Kind) {
-        self.sending_actions.remove(action_id);
+        self.action_map.remove(action_id);
+        self.sending_actions.remove_from_front(action_id);
 
         let mut remove = false;
         if let Some(current_action_id) = self.sending_components.get(&(*entity, *component)) {
@@ -405,7 +412,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         entity: &E,
         components: Vec<P::Kind>,
     ) {
-        if !self.sending_actions.contains_key(action_id) {
+        if !self.action_map.contains_key(action_id) {
             // action has already been delivered before, ignore
             return;
         }
@@ -441,7 +448,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     }
 
     fn remote_despawned_entity(&mut self, action_id: &ActionId, entity: &E) {
-        if !self.sending_actions.contains_key(action_id) {
+        if !self.action_map.contains_key(action_id) {
             // action has already been delivered before, ignore
             return;
         }
@@ -468,7 +475,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     }
 
     fn remote_inserted_component(&mut self, action_id: &ActionId, entity: &E, component: &P::Kind) {
-        if !self.sending_actions.contains_key(action_id) {
+        if !self.action_map.contains_key(action_id) {
             // action has already been delivered before, ignore
             return;
         }
@@ -493,7 +500,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     }
 
     fn remote_removed_component(&mut self, action_id: &ActionId, entity: &E, component: &P::Kind) {
-        if !self.sending_actions.contains_key(action_id) {
+        if !self.action_map.contains_key(action_id) {
             // action has already been delivered before, ignore
             return;
         }
@@ -531,11 +538,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     }
 
     fn remote_received_noop(&mut self, action_id: &ActionId) {
-        if !self.sending_actions.contains_key(action_id) {
+        if !self.action_map.contains_key(action_id) {
             // action has already been delivered before, ignore
             return;
         }
-        self.sending_actions.remove(action_id);
+        self.action_map.remove(action_id);
+        self.sending_actions.remove_from_front(action_id);
     }
 
     // Collecting
@@ -561,7 +569,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
         // go through sending actions, if we haven't sent in a while, add message to
         // outgoing queue
-        for (action_id, (last_sent_opt, action)) in &mut self.sending_actions {
+        for (action_id, last_sent_opt) in self.sending_actions.iter_mut() {
             // check whether we should send outgoing actions in the next packet
             let mut should_send = false;
 
@@ -578,7 +586,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             }
 
             // put action into outgoing queue
-            self.next_send_actions.push(*action_id, action.clone());
+            self.next_send_actions.push(*action_id);
 
             *last_sent_opt = Some(now.clone());
         }
@@ -706,7 +714,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
     ) {
-        let mut message_count: u16 = 0;
+        let mut message_count = 0;
 
         // Header
         {
@@ -736,8 +744,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                     world_record,
                     packet_index,
                     &mut counter,
-                    Some(action_index),
+                    action_index,
                     &mut last_written_id,
+                    false,
                 );
                 if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
                     message_count += 1;
@@ -748,7 +757,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         }
 
         // Write header
-        message_list_header::write(writer, message_count);
+        message_list_header::write(writer, message_count as u64);
 
         if !self.sent_actions.contains_key(&packet_index) {
             self.sent_actions
@@ -759,19 +768,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         {
             let mut last_written_id: Option<ActionId> = None;
 
-            for _ in 0..message_count {
-                // Pop message
-
-                // Write message
+            // Write messages
+            for action_index in 0..message_count {
                 self.write_action(
                     world,
                     world_record,
                     packet_index,
                     writer,
-                    None,
+                    action_index,
                     &mut last_written_id,
+                    true,
                 );
             }
+
+            // Pop messages
+            self.next_send_actions.drain(..message_count);
         }
     }
 
@@ -781,30 +792,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
         packet_index: &PacketIndex,
         bit_writer: &mut dyn BitWrite,
-        action_index: Option<usize>,
+        action_index: usize,
         last_written_id: &mut Option<ActionId>,
+        is_writing: bool,
     ) {
-        // TODO: is there a better way to iterate than this?
-        let is_writing: bool = action_index.is_none();
-        let mut action_holder: Option<(ActionId, EntityAction<P::Kind, E>)> = None;
-        if is_writing {
-            action_holder = Some(
-                self.next_send_actions
-                    .pop()
-                    .expect("should be an action available to pop"),
-            );
-        }
-        let (action_id, action) = {
-            if is_writing {
-                action_holder.as_ref().unwrap()
-            } else {
-                let open_action_index = action_index.unwrap();
-                self.next_send_actions
-                    .get(open_action_index)
-                    .as_ref()
-                    .unwrap()
-            }
-        };
+        let action_id = self.next_send_actions.get(action_index).unwrap();
+        let action = self.action_map.get(action_id).unwrap();
 
         if !self.can_write_action(world, action) {
             return;
@@ -1092,54 +1085,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 self.diff_handler
                     .clear_diff_mask(global_entity, component_kind);
             }
-        }
-    }
-}
-
-// NextSendActions
-
-pub struct NextSendActions<K: ProtocolKindType, E: Copy + Eq + Hash> {
-    list: VecDeque<(ActionId, EntityAction<K, E>)>,
-}
-
-impl<K: ProtocolKindType, E: Copy + Eq + Hash> NextSendActions<K, E> {
-    pub fn new() -> Self {
-        Self {
-            list: VecDeque::new(),
-        }
-    }
-
-    pub fn pop(&mut self) -> Option<(ActionId, EntityAction<K, E>)> {
-        return self.list.pop_front();
-    }
-
-    pub fn len(&self) -> usize {
-        self.list.len()
-    }
-
-    pub fn get(&self, index: usize) -> Option<&(ActionId, EntityAction<K, E>)> {
-        return self.list.get(index);
-    }
-
-    pub fn push(&mut self, message_id: ActionId, action: EntityAction<K, E>) {
-        let mut index = 0;
-
-        loop {
-            if index < self.list.len() {
-                let (old_message_id, _) = self.list.get(index).unwrap();
-                if *old_message_id == message_id {
-                    panic!("should never get here, how can duplicate actions get added to this?");
-                }
-                if sequence_greater_than(*old_message_id, message_id) {
-                    self.list.insert(index, (message_id, action));
-                    break;
-                }
-            } else {
-                self.list.push_back((message_id, action));
-                break;
-            }
-
-            index += 1;
         }
     }
 }

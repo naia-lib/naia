@@ -1,15 +1,16 @@
 use naia_serde::{BitReader, BitWrite, Serde, UnsignedVariableInteger};
 
-pub fn write<S: BitWrite>(writer: &mut S, mut message_count: u16) {
-    let has_messages: bool = message_count > 0;
+pub fn write<S: BitWrite, T: Into<i128>>(writer: &mut S, message_count: T) {
+    let mut message_count_i128: i128 = message_count.into();
+    let has_messages: bool = message_count_i128 > 0;
     has_messages.ser(writer);
 
     // write number of messages
     if has_messages {
         // we already know messages isn't 0, so you can send the count as a value >= 1
-        message_count -= 1;
+        message_count_i128 -= 1;
 
-        let serde_count = UnsignedVariableInteger::<3>::new(message_count);
+        let serde_count = UnsignedVariableInteger::<3>::new(message_count_i128);
 
         serde_count.ser(writer);
     }
