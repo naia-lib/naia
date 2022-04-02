@@ -39,11 +39,8 @@ impl PacketSender {
     }
 
     fn resend_dropped_messages(&self) {
-        if let Ok(mut buffer) = self
-            .dropped_outgoing_messages
-            .try_borrow_mut() {
-            if let Some(dropped_packet) = buffer.pop_front()
-            {
+        if let Ok(mut buffer) = self.dropped_outgoing_messages.try_borrow_mut() {
+            if let Some(dropped_packet) = buffer.pop_front() {
                 self.send(&dropped_packet);
             }
         }

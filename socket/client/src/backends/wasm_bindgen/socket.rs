@@ -48,7 +48,8 @@ impl Socket {
         );
 
         let packet_sender = PacketSender::new(data_channel, addr_cell.clone());
-        let packet_receiver_impl = PacketReceiverImpl::new(message_queue.clone(), addr_cell.clone());
+        let packet_receiver_impl =
+            PacketReceiverImpl::new(message_queue.clone(), addr_cell.clone());
 
         let packet_receiver: Box<dyn PacketReceiverTrait> = {
             let inner_receiver = Box::new(packet_receiver_impl);

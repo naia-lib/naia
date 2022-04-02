@@ -16,7 +16,7 @@ pub enum Event<P: Protocolize, E: Copy, C: ChannelIndex> {
     /// passed to the Client on initialization
     Tick,
     /// Occurs when an Entity on the Server has come into scope for the Client
-    SpawnEntity(E),
+    SpawnEntity(E, Vec<P::Kind>),
     /// Occurs when an Entity on the Server has been destroyed, or left the
     /// Client's scope
     DespawnEntity(E),

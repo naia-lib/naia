@@ -92,6 +92,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             EntityActionType::SpawnEntity => {
                 // read all data
                 let net_entity = NetEntity::de(reader).unwrap();
+                let components_num = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
+                let mut components = Vec::new();
+                for _ in 0..components_num {
+                    components.push(P::build(reader, self));
+                }
 
                 // test whether this is a duplicate message
                 if !self.receiver_record.should_receive_message(action_id) {
@@ -106,10 +111,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 self.local_to_world_entity.insert(net_entity, world_entity);
                 let entity_handle = self.handle_entity_map.insert(world_entity);
 
-                self.entity_records
-                    .insert(world_entity, EntityRecord::new(net_entity, entity_handle));
+                let mut entity_record = EntityRecord::new(net_entity, entity_handle);
 
-                event_stream.push_back(Ok(Event::SpawnEntity(world_entity)));
+                // component init
+                let mut component_list: Vec<P::Kind> = Vec::new();
+                for component in components {
+                    let component_kind = component.dyn_ref().kind();
+
+                    entity_record.component_kinds.insert(component_kind);
+
+                    component_list.push(component_kind);
+
+                    component.extract_and_insert(&world_entity, world);
+                }
+
+                self.entity_records.insert(world_entity, entity_record);
+
+                event_stream.push_back(Ok(Event::SpawnEntity(world_entity, component_list)));
             }
             // Entity Deletion
             EntityActionType::DespawnEntity => {

@@ -20,3 +20,11 @@ impl<K: ProtocolKindType, E: Copy> EntityAction<K, E> {
         }
     }
 }
+
+pub enum EntityActionRecord<K: ProtocolKindType, E: Copy> {
+    SpawnEntity(E, Vec<K>),
+    DespawnEntity(E),
+    InsertComponent(E, K),
+    RemoveComponent(E, K),
+    Noop,
+}

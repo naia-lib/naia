@@ -181,7 +181,7 @@ impl App {
                         }
                     }
                 }
-                Ok(Event::SpawnEntity(entity)) => {
+                Ok(Event::SpawnEntity(entity, _)) => {
                     self.squares.insert(entity);
                     info!("spawned entity");
                 }
@@ -189,10 +189,10 @@ impl App {
                     self.squares.remove(&entity);
                     info!("despawned entity");
                 }
-                Ok(Event::InsertComponent(entity, component)) => {
+                Ok(Event::InsertComponent(_entity, _component)) => {
                     info!("inserted component");
                 }
-                Ok(Event::RemoveComponent(entity, component)) => {
+                Ok(Event::RemoveComponent(_entity, _component)) => {
                     info!("removed component");
                 }
                 Ok(Event::Message(
