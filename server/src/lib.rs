@@ -31,6 +31,7 @@ mod error;
 mod event;
 mod protocol;
 mod room;
+mod sequence_list;
 mod server;
 mod server_config;
 mod tick;
