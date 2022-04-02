@@ -17,4 +17,4 @@ naia-socket-demo-shared = { path = "../../shared" }
 naia-shared = { path = "../../../../shared" }
 cfg-if = "0.1.10"
 log = { version = "0.4", optional = true }
-miniquad = { version = "=0.3.0-alpha.45", features = ["log-impl"], optional = true }
+miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"], optional = true }
