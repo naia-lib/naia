@@ -8,7 +8,11 @@ pub fn shared_config() -> SharedConfig<DefaultChannels> {
     let tick_interval = Some(Duration::from_millis(50));
 
     // Simulate network conditions with this configuration property
-    let link_condition = Some(LinkConditionerConfig::average_condition());
+    let link_condition = Some(LinkConditionerConfig {
+        incoming_latency: 350,
+        incoming_jitter: 345,
+        incoming_loss: 0.5,
+    });
     return SharedConfig::new(
         SocketConfig::new(link_condition, None),
         &ChannelConfig::<DefaultChannels>::default(),

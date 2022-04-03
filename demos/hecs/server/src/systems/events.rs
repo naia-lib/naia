@@ -25,6 +25,7 @@ pub fn process_events(app: &mut App) {
                     .enter_room(&app.main_room_key)
                     .address();
                 info!("Naia Server connected to: {}", address);
+                app.has_user = true;
             }
             Ok(Event::Disconnection(_, user)) => {
                 info!("Naia Server disconnected from: {:?}", user.address);

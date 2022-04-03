@@ -24,7 +24,7 @@ impl<P> OrderedReliableReceiver<P> {
         }
     }
 
-    fn recv_message(&mut self, message_id: MessageId, message: P) {
+    pub fn buffer_message(&mut self, message_id: MessageId, message: P) {
         // moving from oldest incoming message to newest
         // compare existing slots and see if the message_id has been instantiated
         // already if it has, put the message into the slot
@@ -73,17 +73,8 @@ impl<P> OrderedReliableReceiver<P> {
             index += 1;
         }
     }
-}
 
-impl<P> ChannelReceiver<P> for OrderedReliableReceiver<P> {
-    fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader) {
-        let id_w_msgs = ReliableReceiver::read_incoming_messages(channel_reader, bit_reader);
-        for (id, message) in id_w_msgs {
-            self.recv_message(id, message);
-        }
-    }
-
-    fn receive_messages(&mut self) -> Vec<P> {
+    pub fn receive_messages(&mut self) -> Vec<P> {
         let mut output = Vec::new();
         loop {
             let mut has_message = false;
@@ -100,5 +91,18 @@ impl<P> ChannelReceiver<P> for OrderedReliableReceiver<P> {
             }
         }
         return output;
+    }
+}
+
+impl<P> ChannelReceiver<P> for OrderedReliableReceiver<P> {
+    fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader) {
+        let id_w_msgs = ReliableReceiver::read_incoming_messages(channel_reader, bit_reader);
+        for (id, message) in id_w_msgs {
+            self.buffer_message(id, message);
+        }
+    }
+
+    fn receive_messages(&mut self) -> Vec<P> {
+        return self.receive_messages();
     }
 }

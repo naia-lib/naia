@@ -7,26 +7,32 @@ use naia_hecs_demo_shared::protocol::{Marker, Position};
 use crate::app::App;
 
 pub fn march_and_mark(app: &mut App) {
+    if !app.has_user {
+        return;
+    }
     // march entities across the screen
     let mut entities_to_add: Vec<Entity> = Vec::new();
     let mut entities_to_remove: Vec<Entity> = Vec::new();
+    let mut entities_to_delete: Vec<Entity> = Vec::new();
 
     for (entity, position) in app.world.query_mut::<&mut Position>() {
-        let mut x = *position.x;
-        x += 1;
-        if x > 125 {
-            x = 0;
-            let mut y = *position.y;
-            y = y.wrapping_add(1);
-            *position.y = y;
-        }
-        if x == 40 {
+
+        *position.x += 1;
+
+        if *position.x == 100 {
             entities_to_add.push(entity);
         }
-        if x == 75 {
+        if *position.x == 150 {
             entities_to_remove.push(entity);
         }
-        *position.x = x;
+        if *position.x > 250 {
+            *position.x = 0;
+            if *position.y == 3 {
+                entities_to_delete.push(entity);
+            }
+            *position.y += 1;
+
+        }
     }
 
     // add markers
@@ -54,6 +60,10 @@ pub fn march_and_mark(app: &mut App) {
                 .remove_component::<Marker>();
         }
     }
+
+    while let Some(entity) = entities_to_delete.pop() {
+        app.server.entity_mut(app.world.proxy_mut(&mut app.world_data), &entity).despawn();
+    }
 }
 
 pub fn check_scopes(app: &mut App) {
@@ -65,7 +75,7 @@ pub fn check_scopes(app: &mut App) {
             if let Some(position) = entity_ref.get::<Position>() {
                 let x = *position.x;
 
-                if x >= 5 && x <= 100 {
+                if x >= 50 && x <= 200 {
                     server.user_scope(&user_key).include(&entity);
                 } else {
                     server.user_scope(&user_key).exclude(&entity);

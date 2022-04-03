@@ -39,7 +39,7 @@ pub fn app_init(
             count += 1;
 
             // Create Position component
-            let position_ref = Position::new((count * 4) as u8, 0);
+            let position_ref = Position::new((count * 5) as u8, 0);
 
             // Create Name component
             let name_ref = Name::new(first, last);
@@ -55,6 +55,7 @@ pub fn app_init(
     }
 
     App {
+        has_user: false,
         server,
         world,
         world_data,

@@ -17,6 +17,7 @@ use super::systems::{
 pub type Server = NaiaServer<Protocol, Entity, DefaultChannels>;
 
 pub struct App {
+    pub has_user: bool,
     pub server: Server,
     pub world: World,
     pub world_data: WorldData<Protocol>,
