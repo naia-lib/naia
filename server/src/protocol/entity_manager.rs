@@ -8,6 +8,7 @@ use std::{
 };
 
 use naia_shared::{message_list_header, serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, wrapping_diff, ChannelIndex, DiffMask, EntityConverter, Instant, KeyGenerator, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, OrderedReliableReceiver};
+use crate::protocol::sync_world::SyncWorld;
 
 use crate::sequence_list::SequenceList;
 
@@ -24,21 +25,19 @@ const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
 const ACTION_RECORD_TTL: Duration = Duration::from_secs(60);
 
 pub type ActionId = MessageId;
-pub type SentActions<E, K> = SequenceList<(Instant, Vec<EntityActionRecord<K, E>>)>;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     // World
-    scope_world: HashMap<E, HashSet<P::Kind>>,
-    remote_world: HashMap<E, HashSet<P::Kind>>,
+    syncing_world: SyncWorld<E, P::Kind>,
     next_action_id: ActionId,
     action_map: HashMap<ActionId, EntityAction<P::Kind, E>>,
     sending_actions: SequenceList<Option<Instant>>,
     sending_entities: HashMap<E, ActionId>,
     sending_components: HashMap<(E, P::Kind), ActionId>,
     next_send_actions: Vec<ActionId>,
-    sent_action_packets: SentActions<E, P::Kind>,
+    sent_action_packets: SequenceList<(Instant, Vec<EntityActionRecord<P::Kind, E>>)>,
     acked_actions: OrderedReliableReceiver<EntityActionRecord<P::Kind, E>>,
 
     // Updates
@@ -979,7 +978,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     }
 
     fn record_action_written(
-        sent_actions: &mut SentActions<E, P::Kind>,
+        sent_actions: &mut SequenceList<(Instant, Vec<EntityActionRecord<P::Kind, E>>)>,
         packet_index: &PacketIndex,
         action_record: EntityActionRecord<P::Kind, E>,
     ) {
