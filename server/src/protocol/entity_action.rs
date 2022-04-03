@@ -30,3 +30,15 @@ pub enum EntityActionRecord<K: ProtocolKindType, E: Copy> {
     RemoveComponent(ActionId, E, K),
     Noop(ActionId),
 }
+
+impl<K: ProtocolKindType, E: Copy> EntityActionRecord<K, E> {
+    pub fn id(&self) -> ActionId {
+        match self {
+            EntityActionRecord::SpawnEntity(id, _, _) => *id,
+            EntityActionRecord::DespawnEntity(id, _) => *id,
+            EntityActionRecord::InsertComponent(id, _, _) => *id,
+            EntityActionRecord::RemoveComponent(id, _, _) => *id,
+            EntityActionRecord::Noop(id) => *id,
+        }
+    }
+}

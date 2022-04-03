@@ -62,6 +62,7 @@ pub use messages::{
     message_list_header,
     message_manager::MessageManager,
     unordered_reliable_receiver::UnorderedReliableReceiverRecord,
+    ordered_reliable_receiver::OrderedReliableReceiver,
 };
 pub use protocol::{
     diff_mask::DiffMask,

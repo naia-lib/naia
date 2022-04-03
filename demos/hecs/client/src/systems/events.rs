@@ -14,16 +14,16 @@ pub fn process_events(app: &mut App) {
                 info!("Client disconnected from: {}", server_address);
             }
             Ok(Event::SpawnEntity(_, _)) => {
-                info!("creation of entity");
+                //info!("creation of entity");
             }
             Ok(Event::DespawnEntity(_)) => {
-                info!("deletion of entity");
+                //info!("deletion of entity");
             }
             Ok(Event::InsertComponent(_, _)) => {
-                info!("insert component into entity");
+                //info!("insert component into entity");
             }
             Ok(Event::RemoveComponent(_, _)) => {
-                info!("remove component from entity");
+                //info!("remove component from entity");
             }
             Ok(Event::Tick) => app.tick(),
             Err(err) => {
