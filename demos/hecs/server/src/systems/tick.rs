@@ -1,8 +1,8 @@
 use hecs::Entity;
 
-use naia_hecs_server::{WorldProxy, WorldProxyMut};
+use naia_hecs_server::{WorldProxy, WorldProxyMut, shared::Random};
 
-use naia_hecs_demo_shared::protocol::{Marker, Position};
+use naia_hecs_demo_shared::protocol::{Marker, Name, Position};
 
 use crate::app::App;
 
@@ -14,6 +14,7 @@ pub fn march_and_mark(app: &mut App) {
     let mut entities_to_add: Vec<Entity> = Vec::new();
     let mut entities_to_remove: Vec<Entity> = Vec::new();
     let mut entities_to_delete: Vec<Entity> = Vec::new();
+    let mut entities_to_respawn: Vec<Entity> = Vec::new();
 
     for (entity, position) in app.world.query_mut::<&mut Position>() {
         *position.x += 1;
@@ -30,6 +31,10 @@ pub fn march_and_mark(app: &mut App) {
                 entities_to_delete.push(entity);
             }
             *position.y += 1;
+        }
+
+        if Random::gen_range_u32(0, 200) < 2 {
+            entities_to_respawn.push(entity);
         }
     }
 
@@ -63,6 +68,35 @@ pub fn march_and_mark(app: &mut App) {
         app.server
             .entity_mut(app.world.proxy_mut(&mut app.world_data), &entity)
             .despawn();
+    }
+
+    while let Some(entity) = entities_to_respawn.pop() {
+
+        let first;
+        let last;
+        {
+            let entity_ref = app.server.entity(app.world.proxy(&mut app.world_data), &entity);
+            let old_name = entity_ref.component::<Name>().unwrap();
+            first = (*old_name.full).first.clone();
+            last = (*old_name.full).last.clone();
+        }
+
+        app.server
+            .entity_mut(app.world.proxy_mut(&mut app.world_data), &entity)
+            .despawn();
+
+        let position_ref = Position::new(0, 0);
+
+        // Create Name component
+        let name_ref = Name::new(&first, &last);
+
+        // Create an Entity
+        app.server
+            .spawn_entity(app.world.proxy_mut(&mut app.world_data))
+            .enter_room(&app.main_room_key)
+            .insert_component(position_ref)
+            .insert_component(name_ref)
+            .id();
     }
 }
 
