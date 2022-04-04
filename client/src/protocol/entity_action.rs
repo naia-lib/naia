@@ -5,4 +5,5 @@ pub enum EntityAction<P: Protocolize> {
     DespawnEntity(NetEntity),
     InsertComponent(NetEntity, P),
     RemoveComponent(NetEntity, P::Kind),
+    Noop,
 }
