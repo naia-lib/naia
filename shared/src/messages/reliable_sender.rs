@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, time::Duration};
+use std::{collections::VecDeque, mem, time::Duration};
 
 use naia_serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
@@ -7,7 +7,6 @@ use naia_socket_shared::Instant;
 use crate::{constants::MTU_SIZE_BITS, types::MessageId, wrapping_diff};
 
 use super::{
-    channel_config::ReliableSettings,
     message_channel::{ChannelSender, ChannelWriter},
     message_list_header,
 };
@@ -22,9 +21,9 @@ pub struct ReliableSender<P> {
 }
 
 impl<P> ReliableSender<P> {
-    pub fn new(reliable_settings: &ReliableSettings) -> Self {
+    pub fn new(rtt_resend_factor: f32) -> Self {
         Self {
-            rtt_resend_factor: reliable_settings.rtt_resend_factor,
+            rtt_resend_factor,
             next_send_message_id: 0,
             sending_messages: VecDeque::new(),
             next_send_messages: VecDeque::new(),
@@ -51,6 +50,60 @@ impl<P> ReliableSender<P> {
 
         channel_writer.write(bit_writer, message);
     }
+
+    pub fn cleanup_sent_messages(&mut self) {
+        // keep popping off Nones from the front of the Vec
+        loop {
+            let mut pop = false;
+            if let Some(message_opt) = self.sending_messages.front() {
+                if message_opt.is_none() {
+                    pop = true;
+                }
+            }
+            if pop {
+                self.sending_messages.pop_front();
+            } else {
+                break;
+            }
+        }
+    }
+
+    pub fn take_next_messages(&mut self) -> VecDeque<(MessageId, P)> {
+        mem::take(&mut self.next_send_messages)
+    }
+
+    // Called when a message has been delivered
+    // If this message has never been delivered before, will clear from the outgoing buffer
+    // and return the message previously there
+    pub fn deliver_message(&mut self, message_id: &MessageId) -> Option<P> {
+        let mut index = 0;
+        let mut found = false;
+
+        loop {
+            if index == self.sending_messages.len() {
+                return None;
+            }
+
+            if let Some(Some((old_message_id, _, _))) = self.sending_messages.get(index) {
+                if *message_id == *old_message_id {
+                    found = true;
+                }
+            }
+
+            if found {
+                // replace found message with nothing
+                let container = self.sending_messages.get_mut(index).unwrap();
+                let output = mem::replace(container, None);
+
+                self.cleanup_sent_messages();
+
+                // stop loop
+                return output.map(|(_, _, message)| message);
+            }
+
+            index += 1;
+        }
+    }
 }
 
 impl<P: Clone> ChannelSender<P> for ReliableSender<P> {
@@ -60,9 +113,8 @@ impl<P: Clone> ChannelSender<P> for ReliableSender<P> {
         self.next_send_message_id = self.next_send_message_id.wrapping_add(1);
     }
 
-    fn collect_messages(&mut self, rtt_millis: &f32) {
+    fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
-        let now = Instant::now();
 
         for message_opt in self.sending_messages.iter_mut() {
             if let Some((message_id, last_sent_opt, message)) = message_opt {
@@ -169,45 +221,6 @@ impl<P: Clone> ChannelSender<P> for ReliableSender<P> {
     }
 
     fn notify_message_delivered(&mut self, message_id: &MessageId) {
-        let mut index = 0;
-        let mut found = false;
-
-        loop {
-            if index == self.sending_messages.len() {
-                break;
-            }
-
-            if let Some(Some((old_message_id, _, _))) = self.sending_messages.get(index) {
-                if *message_id == *old_message_id {
-                    found = true;
-                }
-            }
-
-            if found {
-                // replace found message with nothing
-                let container = self.sending_messages.get_mut(index).unwrap();
-                *container = None;
-
-                // keep popping off Nones from the front of the Vec
-                loop {
-                    let mut pop = false;
-                    if let Some(message_opt) = self.sending_messages.front() {
-                        if message_opt.is_none() {
-                            pop = true;
-                        }
-                    }
-                    if pop {
-                        self.sending_messages.pop_front();
-                    } else {
-                        break;
-                    }
-                }
-
-                // stop loop
-                break;
-            }
-
-            index += 1;
-        }
+        self.deliver_message(message_id);
     }
 }

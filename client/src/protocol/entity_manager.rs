@@ -91,13 +91,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             EntityActionType::SpawnEntity => {
                 // read all data
                 let net_entity = NetEntity::de(reader).unwrap();
-                let components_num = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
-                let mut components = Vec::new();
-                for _ in 0..components_num {
-                    components.push(P::build(reader, self));
-                }
 
-                self.receiver.buffer_message(action_id, EntityAction::SpawnEntity(net_entity, components));
+                self.receiver.buffer_message(action_id, EntityAction::SpawnEntity(net_entity));
             }
             // Entity Deletion
             EntityActionType::DespawnEntity => {
@@ -122,10 +117,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                 self.receiver.buffer_message(action_id, EntityAction::RemoveComponent(net_entity, component_kind));
             }
-            // Noop
-            EntityActionType::Noop => {
-                self.receiver.buffer_message(action_id, EntityAction::Noop);
-            }
         }
     }
 
@@ -136,10 +127,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     ) {
         let mut incoming_actions = self.receiver.receive_messages();
 
-        for action in incoming_actions.drain(..) {
+        for action in incoming_actions {
             match action {
                 // Entity Creation
-                EntityAction::SpawnEntity(net_entity, components) => {
+                EntityAction::SpawnEntity(net_entity) => {
                     let e_u16: u16 = net_entity.into();
                     info!("spawn entity: {}", e_u16);
                     if self.local_to_world_entity.contains_key(&net_entity) {
@@ -151,23 +142,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     self.local_to_world_entity.insert(net_entity, world_entity);
                     let entity_handle = self.handle_entity_map.insert(world_entity);
 
-                    let mut entity_record = EntityRecord::new(net_entity, entity_handle);
-
-                    // component init
-                    let mut component_list: Vec<P::Kind> = Vec::new();
-                    for component in components {
-                        let component_kind = component.dyn_ref().kind();
-
-                        entity_record.component_kinds.insert(component_kind);
-
-                        component_list.push(component_kind);
-
-                        component.extract_and_insert(&world_entity, world);
-                    }
-
+                    let entity_record = EntityRecord::new(net_entity, entity_handle);
                     self.entity_records.insert(world_entity, entity_record);
 
-                    event_stream.push_back(Ok(Event::SpawnEntity(world_entity, component_list)));
+                    event_stream.push_back(Ok(Event::SpawnEntity(world_entity)));
                 }
                 // Entity Deletion
                 EntityAction::DespawnEntity(net_entity) => {
@@ -243,11 +221,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     } else {
                         panic!("attempting to delete nonexistent component of entity");
                     }
-                }
-                // Noop
-                EntityAction::Noop => {
-                    // do nothing
-                    info!("noop");
                 }
             }
         }
