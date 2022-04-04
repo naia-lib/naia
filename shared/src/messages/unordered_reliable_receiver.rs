@@ -12,7 +12,7 @@ use super::{
 pub struct UnorderedReliableReceiver<P> {
     oldest_received_message_id: MessageId,
     record: VecDeque<(MessageId, bool)>,
-    received_messages: Vec<P>
+    received_messages: Vec<P>,
 }
 
 impl<P> UnorderedReliableReceiver<P> {

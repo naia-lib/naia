@@ -1,6 +1,4 @@
-use naia_shared::{EntityActionType, ProtocolKindType};
-
-use crate::protocol::entity_manager::ActionId;
+use naia_shared::ProtocolKindType;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum EntityAction<E: Copy, K: ProtocolKindType> {
@@ -9,16 +7,4 @@ pub enum EntityAction<E: Copy, K: ProtocolKindType> {
     InsertComponent(E, K),
     RemoveComponent(E, K),
     Noop,
-}
-
-impl<E: Copy, K: ProtocolKindType> EntityAction<E, K> {
-    pub fn as_type(&self) -> EntityActionType {
-        match self {
-            EntityAction::SpawnEntity(_) => EntityActionType::SpawnEntity,
-            EntityAction::DespawnEntity(_) => EntityActionType::DespawnEntity,
-            EntityAction::InsertComponent(_, _) => EntityActionType::InsertComponent,
-            EntityAction::RemoveComponent(_, _) => EntityActionType::RemoveComponent,
-            EntityAction::Noop => EntityActionType::Noop,
-        }
-    }
 }

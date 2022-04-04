@@ -147,7 +147,8 @@ impl TickManager {
 
         // Calculate estimate of earliest tick Server could receive now
         let server_receivable_adjust_millis = rtt_average - jitter_limit;
-        self.server_receivable_tick_adjust = server_receivable_adjust_millis / self.tick_interval_millis;
+        self.server_receivable_tick_adjust =
+            server_receivable_adjust_millis / self.tick_interval_millis;
     }
 
     /// Gets the tick at which the Client is sending updates

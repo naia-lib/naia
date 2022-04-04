@@ -7,6 +7,5 @@ pub mod global_diff_handler;
 pub mod global_entity_record;
 pub mod mut_channel;
 pub mod user_diff_handler;
-pub mod world_record;
-pub mod sync_world;
 pub mod world_channel;
+pub mod world_record;

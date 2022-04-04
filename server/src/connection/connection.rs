@@ -167,7 +167,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
                 );
             }
 
-
             // write entity actions
             self.entity_manager.write_all(
                 now,

@@ -61,9 +61,9 @@ pub use messages::{
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     message_list_header,
     message_manager::MessageManager,
-    unordered_reliable_receiver::UnorderedReliableReceiver,
     ordered_reliable_receiver::OrderedReliableReceiver,
     reliable_sender::ReliableSender,
+    unordered_reliable_receiver::UnorderedReliableReceiver,
 };
 pub use protocol::{
     diff_mask::DiffMask,

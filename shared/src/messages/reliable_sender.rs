@@ -73,8 +73,8 @@ impl<P> ReliableSender<P> {
     }
 
     // Called when a message has been delivered
-    // If this message has never been delivered before, will clear from the outgoing buffer
-    // and return the message previously there
+    // If this message has never been delivered before, will clear from the outgoing
+    // buffer and return the message previously there
     pub fn deliver_message(&mut self, message_id: &MessageId) -> Option<P> {
         let mut index = 0;
         let mut found = false;
