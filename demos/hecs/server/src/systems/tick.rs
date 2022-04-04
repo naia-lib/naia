@@ -16,7 +16,6 @@ pub fn march_and_mark(app: &mut App) {
     let mut entities_to_delete: Vec<Entity> = Vec::new();
 
     for (entity, position) in app.world.query_mut::<&mut Position>() {
-
         *position.x += 1;
 
         if *position.x == 100 {
@@ -31,7 +30,6 @@ pub fn march_and_mark(app: &mut App) {
                 entities_to_delete.push(entity);
             }
             *position.y += 1;
-
         }
     }
 
@@ -62,7 +60,9 @@ pub fn march_and_mark(app: &mut App) {
     }
 
     while let Some(entity) = entities_to_delete.pop() {
-        app.server.entity_mut(app.world.proxy_mut(&mut app.world_data), &entity).despawn();
+        app.server
+            .entity_mut(app.world.proxy_mut(&mut app.world_data), &entity)
+            .despawn();
     }
 }
 

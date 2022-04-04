@@ -1,18 +1,22 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::collections::hash_set::Iter;
-use std::hash::Hash;
-use std::net::SocketAddr;
-use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::{
+    collections::{hash_set::Iter, HashMap, HashSet, VecDeque},
+    hash::Hash,
+    net::SocketAddr,
+    sync::{Arc, RwLock},
+};
 
-use naia_shared::{ChannelIndex, ChannelSender, KeyGenerator, NetEntity, OrderedReliableReceiver, Protocolize, ProtocolKindType, ReliableSender};
-use crate::protocol::entity_action::EntityAction;
-use crate::protocol::entity_manager::ActionId;
-use crate::protocol::entity_message_waitlist::EntityMessageWaitlist;
-use crate::protocol::global_diff_handler::GlobalDiffHandler;
-use crate::protocol::user_diff_handler::UserDiffHandler;
-use crate::sequence_list::SequenceList;
-use crate::server::Instant;
+use crate::{
+    protocol::{
+        entity_action::EntityAction, entity_manager::ActionId,
+        entity_message_waitlist::EntityMessageWaitlist, global_diff_handler::GlobalDiffHandler,
+        user_diff_handler::UserDiffHandler,
+    },
+    server::Instant,
+};
+use naia_shared::{
+    ChannelIndex, ChannelSender, KeyGenerator, NetEntity, OrderedReliableReceiver,
+    ProtocolKindType, Protocolize, ReliableSender,
+};
 
 const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
 
@@ -50,7 +54,10 @@ pub struct WorldChannel<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C> {
-    pub fn new(address: SocketAddr, diff_handler: &Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>) -> Self {
+    pub fn new(
+        address: SocketAddr,
+        diff_handler: &Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
+    ) -> Self {
         Self {
             host_world: CheckedMap::new(),
             remote_world: CheckedMap::new(),
@@ -78,7 +85,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
             true
         } else {
             false
-        }
+        };
     }
 
     // Channel Events
@@ -86,8 +93,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
     fn on_entity_channel_opening(&mut self, entity: &E) {
         // generate new net entity
         let new_net_entity = self.net_entity_generator.generate();
-        self.entity_to_net_entity_map.insert(*entity, new_net_entity);
-        self.net_entity_to_entity_map.insert(new_net_entity, *entity);
+        self.entity_to_net_entity_map
+            .insert(*entity, new_net_entity);
+        self.net_entity_to_entity_map
+            .insert(new_net_entity, *entity);
     }
 
     fn on_entity_channel_opened(&mut self, entity: &E) {
@@ -106,7 +115,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
     }
 
     fn on_component_channel_opened(&mut self, entity: &E, component: &P::Kind) {
-        self.diff_handler.register_component(&self.address, entity, component);
+        self.diff_handler
+            .register_component(&self.address, entity, component);
     }
 
     fn on_component_channel_closing(&mut self, entity: &E, component: &P::Kind) {
@@ -124,10 +134,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
         self.host_world.insert(*entity, CheckedSet::new());
 
         if let None = self.entity_channels.get(entity) {
-
             // spawn entity
-            self.entity_channels.insert(*entity, EntityChannel::Spawning);
-            self.outgoing_actions.send_message(EntityAction::SpawnEntity(*entity));
+            self.entity_channels
+                .insert(*entity, EntityChannel::Spawning);
+            self.outgoing_actions
+                .send_message(EntityAction::SpawnEntity(*entity));
             self.on_entity_channel_opening(entity);
         }
     }
@@ -155,8 +166,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
 
         if despawn {
             self.entity_channels.remove(entity);
-            self.entity_channels.insert(*entity, EntityChannel::Despawning);
-            self.outgoing_actions.send_message(EntityAction::DespawnEntity(*entity));
+            self.entity_channels
+                .insert(*entity, EntityChannel::Despawning);
+            self.outgoing_actions
+                .send_message(EntityAction::DespawnEntity(*entity));
             self.on_entity_channel_closing(entity);
 
             for component in removing_components {
@@ -178,12 +191,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
 
         components.insert(*component);
 
-        if let Some(EntityChannel::Spawned(component_channels)) = self.entity_channels.get_mut(entity) {
+        if let Some(EntityChannel::Spawned(component_channels)) =
+            self.entity_channels.get_mut(entity)
+        {
             if let None = component_channels.get(component) {
-
                 // insert component
                 component_channels.insert(*component, ComponentChannel::Inserting);
-                self.outgoing_actions.send_message(EntityAction::InsertComponent(*entity, *component));
+                self.outgoing_actions
+                    .send_message(EntityAction::InsertComponent(*entity, *component));
             }
         }
     }
@@ -201,13 +216,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
 
         components.remove(component);
 
-        if let Some(EntityChannel::Spawned(component_channels)) = self.entity_channels.get_mut(entity) {
+        if let Some(EntityChannel::Spawned(component_channels)) =
+            self.entity_channels.get_mut(entity)
+        {
             if let Some(ComponentChannel::Inserted) = component_channels.get(component) {
                 component_channels.remove(component);
 
                 // remove component
                 component_channels.insert(*component, ComponentChannel::Removing);
-                self.outgoing_actions.send_message(EntityAction::RemoveComponent(*entity, *component));
+                self.outgoing_actions
+                    .send_message(EntityAction::RemoveComponent(*entity, *component));
                 self.on_component_channel_closing(entity, component);
             }
         }
@@ -230,14 +248,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
                 for component in host_components.iter() {
                     // insert component
                     component_channels.insert(*component, ComponentChannel::Inserting);
-                    self.outgoing_actions.send_message(EntityAction::InsertComponent(*entity, *component));
+                    self.outgoing_actions
+                        .send_message(EntityAction::InsertComponent(*entity, *component));
                 }
-                self.entity_channels.insert(*entity, EntityChannel::Spawned(component_channels));
+                self.entity_channels
+                    .insert(*entity, EntityChannel::Spawned(component_channels));
                 self.on_entity_channel_opened(entity);
             } else {
                 // despawn entity
-                self.entity_channels.insert(*entity, EntityChannel::Despawning);
-                self.outgoing_actions.send_message(EntityAction::DespawnEntity(*entity));
+                self.entity_channels
+                    .insert(*entity, EntityChannel::Despawning);
+                self.outgoing_actions
+                    .send_message(EntityAction::DespawnEntity(*entity));
                 self.on_entity_channel_closing(entity);
             }
         } else {
@@ -259,8 +281,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
             // if entity is spawned in host, respawn entity channel
             if self.host_world.contains_key(entity) {
                 // spawn entity
-                self.entity_channels.insert(*entity, EntityChannel::Spawning);
-                self.outgoing_actions.send_message(EntityAction::SpawnEntity(*entity));
+                self.entity_channels
+                    .insert(*entity, EntityChannel::Spawning);
+                self.outgoing_actions
+                    .send_message(EntityAction::SpawnEntity(*entity));
                 self.on_entity_channel_opening(entity);
             }
         } else {
@@ -282,7 +306,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
 
         components.insert(*component);
 
-        if let Some(EntityChannel::Spawned(component_channels)) = self.entity_channels.get_mut(entity) {
+        if let Some(EntityChannel::Spawned(component_channels)) =
+            self.entity_channels.get_mut(entity)
+        {
             if let Some(ComponentChannel::Inserting) = component_channels.get(component) {
                 component_channels.remove(component);
 
@@ -294,7 +320,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
                 } else {
                     // if component doesn't exist in host, start removal
                     component_channels.insert(*component, ComponentChannel::Removing);
-                    self.outgoing_actions.send_message(EntityAction::RemoveComponent(*entity, *component));
+                    self.outgoing_actions
+                        .send_message(EntityAction::RemoveComponent(*entity, *component));
                     self.on_component_channel_closing(entity, component);
                 }
             } else {
@@ -316,7 +343,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
             panic!("should not be able to remove non-existent component in remote world");
         }
 
-        if let Some(EntityChannel::Spawned(component_channels)) = self.entity_channels.get_mut(entity) {
+        if let Some(EntityChannel::Spawned(component_channels)) =
+            self.entity_channels.get_mut(entity)
+        {
             if let ComponentChannel::Removing = component_channels.get(component).unwrap() {
                 component_channels.remove(component);
 
@@ -325,7 +354,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
                 if host_has_component {
                     // insert component
                     component_channels.insert(*component, ComponentChannel::Inserting);
-                    self.outgoing_actions.send_message(EntityAction::InsertComponent(*entity, *component));
+                    self.outgoing_actions
+                        .send_message(EntityAction::InsertComponent(*entity, *component));
                 }
             } else {
                 panic!("cannot remove component if component channel has not initiated removal");
@@ -372,22 +402,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
 
     // Collect
 
-    pub fn take_next_actions(&mut self, now: &Instant, rtt_millis: &f32) -> VecDeque<(ActionId, EntityAction<E, P::Kind>)> {
+    pub fn take_next_actions(
+        &mut self,
+        now: &Instant,
+        rtt_millis: &f32,
+    ) -> VecDeque<(ActionId, EntityAction<E, P::Kind>)> {
         self.outgoing_actions.collect_messages(now, rtt_millis);
         return self.outgoing_actions.take_next_messages();
     }
 
     pub fn collect_next_updates(&self) -> HashMap<E, HashSet<P::Kind>> {
-
         let mut output = HashMap::new();
 
         for (entity, entity_channel) in self.entity_channels.iter() {
             if let EntityChannel::Spawned(component_channels) = entity_channel {
                 for (component, component_channel) in component_channels.iter() {
                     if let ComponentChannel::Inserted = component_channel {
-
-                        if self.diff_handler.diff_mask_is_clear(entity, component)
-                        {
+                        if self.diff_handler.diff_mask_is_clear(entity, component) {
                             // no updates detected, do nothing
                             continue;
                         }
@@ -397,7 +428,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
                         }
                         let send_component_set = output.get_mut(entity).unwrap();
                         send_component_set.insert(*component);
-
                     }
                 }
             }
@@ -419,7 +449,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
 
 // CheckedMap
 pub struct CheckedMap<K: Eq + Hash, V> {
-    map: HashMap<K, V>
+    map: HashMap<K, V>,
 }
 
 impl<K: Eq + Hash, V> CheckedMap<K, V> {
@@ -464,7 +494,7 @@ impl<K: Eq + Hash, V> CheckedMap<K, V> {
 
 // CheckedSet
 pub struct CheckedSet<K: Eq + Hash> {
-    set: HashSet<K>
+    set: HashSet<K>,
 }
 
 impl<K: Eq + Hash> CheckedSet<K> {

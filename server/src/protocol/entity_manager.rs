@@ -7,18 +7,17 @@ use std::{
     time::Duration,
 };
 
-use naia_shared::{message_list_header, serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, wrapping_diff, ChannelIndex, DiffMask, EntityConverter, Instant, KeyGenerator, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, OrderedReliableReceiver, EntityActionType};
-use crate::protocol::sync_world::SyncWorld;
-use crate::protocol::world_channel::WorldChannel;
-
-use crate::sequence_list::SequenceList;
+use crate::{protocol::world_channel::WorldChannel, sequence_list::SequenceList};
+use naia_shared::{
+    message_list_header,
+    serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+    wrapping_diff, ChannelIndex, DiffMask, EntityActionType, EntityConverter, Instant, MessageId,
+    MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize,
+    ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
+};
 
 use super::{
-    entity_action::EntityAction,
-    entity_message_waitlist::EntityMessageWaitlist,
-    global_diff_handler::GlobalDiffHandler,
-    user_diff_handler::UserDiffHandler,
-    world_record::WorldRecord,
+    entity_action::EntityAction, global_diff_handler::GlobalDiffHandler, world_record::WorldRecord,
 };
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
@@ -40,7 +39,6 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     last_update_packet_index: PacketIndex,
 
     // Other
-    address: SocketAddr,
     delivered_packets: VecDeque<PacketIndex>,
 }
 
@@ -62,7 +60,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             last_update_packet_index: 0,
 
             // Other
-            address,
             delivered_packets: VecDeque::new(),
         }
     }
@@ -101,7 +98,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         channel: C,
         message: &R,
     ) {
-        self.world_channel.delayed_entity_messages.queue_message(entities, channel, message.protocol_copy());
+        self.world_channel.delayed_entity_messages.queue_message(
+            entities,
+            channel,
+            message.protocol_copy(),
+        );
     }
 
     // Writer
@@ -112,7 +113,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         rtt_millis: &f32,
         message_manager: &mut MessageManager<P, C>,
     ) {
-        self.world_channel.delayed_entity_messages.collect_ready_messages(message_manager);
+        self.world_channel
+            .delayed_entity_messages
+            .collect_ready_messages(message_manager);
 
         self.collect_dropped_update_packets(rtt_millis);
         self.collect_component_updates();
@@ -143,7 +146,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             self.sent_updates.remove(&packet_index);
 
             // Actions
-            if let Some((_, action_list)) = self.sent_action_packets.remove_scan_from_front(&packet_index) {
+            if let Some((_, action_list)) = self
+                .sent_action_packets
+                .remove_scan_from_front(&packet_index)
+            {
                 for (action_id, action) in action_list {
                     self.world_channel.action_delivered(action_id, action);
                 }
@@ -154,7 +160,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     // Collecting
 
     fn collect_dropped_action_packets(&mut self) {
-
         let mut pop = false;
 
         loop {
@@ -217,8 +222,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                     packet_index = packet_index.wrapping_add(1);
                 }
 
-                self.world_channel.diff_handler
-                    .or_diff_mask(&global_entity, &component_kind, &new_diff_mask);
+                self.world_channel.diff_handler.or_diff_mask(
+                    &global_entity,
+                    &component_kind,
+                    &new_diff_mask,
+                );
             }
         }
     }
@@ -299,7 +307,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         // Write header
         message_list_header::write(writer, message_count as u64);
 
-        if !self.sent_action_packets.contains_scan_from_back(packet_index) {
+        if !self
+            .sent_action_packets
+            .contains_scan_from_back(packet_index)
+        {
             self.sent_action_packets
                 .insert_scan_from_back(*packet_index, (now.clone(), Vec::new()));
         }
@@ -470,7 +481,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         sent_actions: &mut SequenceList<(Instant, Vec<(ActionId, EntityAction<E, P::Kind>)>)>,
         packet_index: &PacketIndex,
         action_id: &ActionId,
-        action: &EntityAction<E, P::Kind>
+        action: &EntityAction<E, P::Kind>,
     ) {
         let (_, sent_actions_list) = sent_actions.get_mut_scan_from_back(&packet_index).unwrap();
         sent_actions_list.push((*action_id, action.clone()));
@@ -582,7 +593,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             component_kind.ser(bit_writer);
 
             // get diff mask
-            let diff_mask = self.world_channel.diff_handler
+            let diff_mask = self
+                .world_channel
+                .diff_handler
                 .diff_mask(global_entity, component_kind)
                 .expect("DiffHandler does not have registered Component!")
                 .clone();
@@ -606,7 +619,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 sent_updates_map.insert((*global_entity, *component_kind), diff_mask);
 
                 // having copied the diff mask for this update, clear the component
-                self.world_channel.diff_handler
+                self.world_channel
+                    .diff_handler
                     .clear_diff_mask(global_entity, component_kind);
             }
         }
