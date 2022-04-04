@@ -201,9 +201,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
     fn dropped_update_cleanup(&mut self, dropped_packet_index: PacketIndex) {
         if let Some((_, diff_mask_map)) = self.sent_updates.remove(&dropped_packet_index) {
-            // non-guaranteed delivery actions
             for (component_index, diff_mask) in &diff_mask_map {
-                let (global_entity, component_kind) = component_index;
+                let (entity, component) = component_index;
+                if !self.world_channel.diff_handler.has_component(entity, component) {
+                    continue;
+                }
                 let mut new_diff_mask = diff_mask.clone();
 
                 // walk from dropped packet up to most recently sent packet
@@ -223,8 +225,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 }
 
                 self.world_channel.diff_handler.or_diff_mask(
-                    &global_entity,
-                    &component_kind,
+                    &entity,
+                    &component,
                     &new_diff_mask,
                 );
             }
