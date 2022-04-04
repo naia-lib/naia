@@ -42,8 +42,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
-        self.read_updates(world, server_tick, reader, event_stream);
         self.read_actions(world, reader, event_stream);
+        self.read_updates(world, server_tick, reader, event_stream);
     }
 
     fn read_message_id(
@@ -82,9 +82,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         reader: &mut BitReader,
         last_read_id: &mut Option<MessageId>,
     ) {
-        let action_type = EntityActionType::de(reader).unwrap();
 
         let action_id = Self::read_message_id(reader, last_read_id);
+
+        let action_type = EntityActionType::de(reader).unwrap();
 
         match action_type {
             // Entity Creation
@@ -116,6 +117,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 let component_kind = P::Kind::de(reader).unwrap();
 
                 self.receiver.buffer_message(action_id, EntityAction::RemoveComponent(net_entity, component_kind));
+            }
+            EntityActionType::Noop => {
+                self.receiver.buffer_message(action_id, EntityAction::Noop);
             }
         }
     }
@@ -221,6 +225,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     } else {
                         panic!("attempting to delete nonexistent component of entity");
                     }
+                }
+                EntityAction::Noop => {
+                    // do nothing
                 }
             }
         }

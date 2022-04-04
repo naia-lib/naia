@@ -102,14 +102,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
         // cleanup net entity
         let net_entity = self.entity_to_net_entity_map.remove(entity).unwrap();
         self.net_entity_to_entity_map.remove(&net_entity);
+        self.net_entity_generator.recycle_key(&net_entity);
     }
 
     fn on_component_channel_opened(&mut self, entity: &E, component: &P::Kind) {
-        //self.diff_handler.register_component(&self.address, entity, component);
+        self.diff_handler.register_component(&self.address, entity, component);
     }
 
     fn on_component_channel_closing(&mut self, entity: &E, component: &P::Kind) {
-        //self.diff_handler.deregister_component(entity, component);
+        self.diff_handler.deregister_component(entity, component);
     }
 
     // Host Updates
@@ -339,9 +340,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
 
     // Action Delivery
 
-    pub fn action_delivered(&mut self, action_id: &ActionId) {
-        if let Some(action) = self.outgoing_actions.deliver_message(action_id) {
-            self.delivered_actions.buffer_message(*action_id, action);
+    pub fn action_delivered(&mut self, action_id: ActionId, action: EntityAction<E, P::Kind>) {
+        if self.outgoing_actions.deliver_message(&action_id).is_some() {
+            self.delivered_actions.buffer_message(action_id, action);
             self.process_delivered_actions();
         }
     }
@@ -361,6 +362,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
                 }
                 EntityAction::RemoveComponent(entity, component) => {
                     self.remote_remove_component(&entity, &component);
+                }
+                EntityAction::Noop => {
+                    // do nothing
                 }
             }
         }

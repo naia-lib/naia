@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use naia_shared::{message_list_header, serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, wrapping_diff, ChannelIndex, DiffMask, EntityConverter, Instant, KeyGenerator, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, OrderedReliableReceiver};
+use naia_shared::{message_list_header, serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, wrapping_diff, ChannelIndex, DiffMask, EntityConverter, Instant, KeyGenerator, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, OrderedReliableReceiver, EntityActionType};
 use crate::protocol::sync_world::SyncWorld;
 use crate::protocol::world_channel::WorldChannel;
 
@@ -32,7 +32,7 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     // World
     world_channel: WorldChannel<P, E, C>,
     next_send_actions: VecDeque<(ActionId, EntityAction<E, P::Kind>)>,
-    sent_action_packets: SequenceList<(Instant, Vec<ActionId>)>,
+    sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<E, P::Kind>)>)>,
 
     // Updates
     next_send_updates: HashMap<E, HashSet<P::Kind>>,
@@ -133,8 +133,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
     ) {
-        self.write_updates(&now, writer, packet_index, world, world_record);
         self.write_actions(&now, writer, packet_index, world, world_record);
+        self.write_updates(&now, writer, packet_index, world, world_record);
     }
 
     pub fn process_delivered_packets(&mut self) {
@@ -144,8 +144,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
             // Actions
             if let Some((_, action_list)) = self.sent_action_packets.remove_scan_from_front(&packet_index) {
-                for action_id in action_list {
-                    self.world_channel.action_delivered(&action_id);
+                for (action_id, action) in action_list {
+                    self.world_channel.action_delivered(action_id, action);
                 }
             }
         }
@@ -246,23 +246,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         *last_id_opt = Some(*current_id);
     }
 
-    fn can_write_action<W: WorldRefType<P, E>>(
-        &self,
-        world: &W,
-        action: &EntityAction<E, P::Kind>,
-    ) -> bool {
-        match action {
-            EntityAction::InsertComponent(global_entity, component_kind) => {
-                if !world.has_component_of_kind(global_entity, component_kind) {
-                    return false;
-                }
-            }
-            _ => {}
-        }
-
-        return true;
-    }
-
     fn write_actions<W: WorldRefType<P, E>>(
         &mut self,
         now: &Instant,
@@ -355,18 +338,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     ) {
         let (action_id, action) = self.next_send_actions.get(action_index).unwrap();
 
-        if !self.can_write_action(world, action) {
-            return;
-        }
-
-        // write EntityAction type
-        action.as_type().ser(bit_writer);
-
         // write message id
         Self::write_action_id(bit_writer, last_written_id, action_id);
 
         match action {
             EntityAction::SpawnEntity(entity) => {
+                EntityActionType::SpawnEntity.ser(bit_writer);
+
                 // write net entity
                 self.world_channel
                     .entity_to_net_entity(entity)
@@ -381,10 +359,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                         &mut self.sent_action_packets,
                         packet_index,
                         action_id,
+                        action,
                     );
                 }
             }
             EntityAction::DespawnEntity(entity) => {
+                EntityActionType::DespawnEntity.ser(bit_writer);
+
                 // write net entity
                 self.world_channel
                     .entity_to_net_entity(entity)
@@ -393,48 +374,71 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    info!("write DepawnEntity({})", action_id);
+                    info!("write DespawnEntity({})", action_id);
 
                     Self::record_action_written(
                         &mut self.sent_action_packets,
                         packet_index,
-                        action_id
+                        action_id,
+                        action,
                     );
                 }
             }
             EntityAction::InsertComponent(entity, component) => {
-                // write net entity
-                self.world_channel
-                    .entity_to_net_entity(entity)
-                    .unwrap()
-                    .ser(bit_writer);
+                if !world.has_component_of_kind(entity, component) {
+                    EntityActionType::Noop.ser(bit_writer);
 
-                // write component kind
-                component.ser(bit_writer);
+                    // if we are actually writing this packet
+                    if is_writing {
+                        info!("write Noop({})", action_id);
 
-                // write component payload
-                let component_ref = world
-                    .component_of_kind(entity, component)
-                    .expect("Component does not exist in World");
+                        // add it to action record
+                        Self::record_action_written(
+                            &mut self.sent_action_packets,
+                            packet_index,
+                            action_id,
+                            &EntityAction::Noop,
+                        );
+                    }
+                } else {
+                    EntityActionType::InsertComponent.ser(bit_writer);
 
-                {
-                    let converter = EntityConverter::new(world_record, self);
-                    component_ref.write(bit_writer, &converter);
-                }
+                    // write net entity
+                    self.world_channel
+                        .entity_to_net_entity(entity)
+                        .unwrap()
+                        .ser(bit_writer);
 
-                // if we are actually writing this packet
-                if is_writing {
-                    info!("write InsertComponent({})", action_id);
+                    // write component kind
+                    component.ser(bit_writer);
 
-                    // add it to action record
-                    Self::record_action_written(
-                        &mut self.sent_action_packets,
-                        packet_index,
-                        action_id
-                    );
+                    // write component payload
+                    let component_ref = world
+                        .component_of_kind(entity, component)
+                        .expect("Component does not exist in World");
+
+                    {
+                        let converter = EntityConverter::new(world_record, self);
+                        component_ref.write(bit_writer, &converter);
+                    }
+
+                    // if we are actually writing this packet
+                    if is_writing {
+                        info!("write InsertComponent({})", action_id);
+
+                        // add it to action record
+                        Self::record_action_written(
+                            &mut self.sent_action_packets,
+                            packet_index,
+                            action_id,
+                            action,
+                        );
+                    }
                 }
             }
             EntityAction::RemoveComponent(entity, component) => {
+                EntityActionType::RemoveComponent.ser(bit_writer);
+
                 // write net entity
                 self.world_channel
                     .entity_to_net_entity(entity)
@@ -451,20 +455,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                     Self::record_action_written(
                         &mut self.sent_action_packets,
                         packet_index,
-                        action_id
+                        action_id,
+                        action,
                     );
                 }
+            }
+            EntityAction::Noop => {
+                panic!("should not ever get here");
             }
         }
     }
 
     fn record_action_written(
-        sent_actions: &mut SequenceList<(Instant, Vec<ActionId>)>,
+        sent_actions: &mut SequenceList<(Instant, Vec<(ActionId, EntityAction<E, P::Kind>)>)>,
         packet_index: &PacketIndex,
         action_id: &ActionId,
+        action: &EntityAction<E, P::Kind>
     ) {
         let (_, sent_actions_list) = sent_actions.get_mut_scan_from_back(&packet_index).unwrap();
-        sent_actions_list.push(*action_id);
+        sent_actions_list.push((*action_id, action.clone()));
     }
 
     fn write_updates<W: WorldRefType<P, E>>(

@@ -8,6 +8,7 @@ pub enum EntityAction<E: Copy, K: ProtocolKindType> {
     DespawnEntity(E),
     InsertComponent(E, K),
     RemoveComponent(E, K),
+    Noop,
 }
 
 impl<E: Copy, K: ProtocolKindType> EntityAction<E, K> {
@@ -17,6 +18,7 @@ impl<E: Copy, K: ProtocolKindType> EntityAction<E, K> {
             EntityAction::DespawnEntity(_) => EntityActionType::DespawnEntity,
             EntityAction::InsertComponent(_, _) => EntityActionType::InsertComponent,
             EntityAction::RemoveComponent(_, _) => EntityActionType::RemoveComponent,
+            EntityAction::Noop => EntityActionType::Noop,
         }
     }
 }
