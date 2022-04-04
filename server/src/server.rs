@@ -251,7 +251,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
                     let all_entities_in_scope = {
                         entities
                             .iter()
-                            .all(|entity| connection.entity_manager.has_synced_entity(entity))
+                            .all(|entity| connection.entity_manager.entity_channel_is_open(entity))
                     };
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
