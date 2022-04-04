@@ -125,7 +125,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         );
         self.base
             .message_manager
-            .collect_outgoing_messages(rtt_millis);
+            .collect_outgoing_messages(now, rtt_millis);
     }
 
     fn send_outgoing_packet<W: WorldRefType<P, E>>(

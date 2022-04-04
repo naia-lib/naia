@@ -1,10 +1,11 @@
 use naia_serde::{BitReader, BitWrite, BitWriter};
+use naia_socket_shared::Instant;
 
 use crate::types::MessageId;
 
 pub trait ChannelSender<P> {
     fn send_message(&mut self, message: P);
-    fn collect_messages(&mut self, rtt_millis: &f32);
+    fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32);
     fn has_messages(&self) -> bool;
     fn write_messages(
         &mut self,

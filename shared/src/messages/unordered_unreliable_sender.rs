@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 
 use naia_serde::{BitCounter, BitWrite, BitWriter};
+use naia_socket_shared::Instant;
 
 use crate::{constants::MTU_SIZE_BITS, types::MessageId};
 
@@ -35,7 +36,7 @@ impl<P> ChannelSender<P> for UnorderedUnreliableSender<P> {
         self.outgoing_messages.push_back(message);
     }
 
-    fn collect_messages(&mut self, _: &f32) {
+    fn collect_messages(&mut self, _: &Instant, _: &f32) {
         // not necessary for an unreliable channel
     }
 

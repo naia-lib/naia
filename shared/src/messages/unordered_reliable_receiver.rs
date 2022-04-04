@@ -9,22 +9,24 @@ use super::{
     reliable_receiver::ReliableReceiver,
 };
 
-pub struct UnorderedReliableReceiverRecord {
+pub struct UnorderedReliableReceiver<P> {
     oldest_received_message_id: MessageId,
-    received_messages: VecDeque<(MessageId, bool)>,
+    record: VecDeque<(MessageId, bool)>,
+    received_messages: Vec<P>
 }
 
-impl UnorderedReliableReceiverRecord {
+impl<P> UnorderedReliableReceiver<P> {
     pub fn new() -> Self {
         Self {
             oldest_received_message_id: 0,
-            received_messages: VecDeque::new(),
+            record: VecDeque::new(),
+            received_messages: Vec::new(),
         }
     }
 
     // Private methods
 
-    pub fn should_receive_message(&mut self, message_id: MessageId) -> bool {
+    pub fn buffer_message(&mut self, message_id: MessageId, message: P) {
         // moving from oldest incoming message to newest
         // compare existing slots and see if the message_id has been instantiated
         // already if it has, put the message into the slot
@@ -34,21 +36,22 @@ impl UnorderedReliableReceiverRecord {
 
         if sequence_less_than(message_id, self.oldest_received_message_id) {
             // already moved sliding window past this message id
-            return false;
+            return;
         }
 
         let mut index = 0;
 
         loop {
-            if index < self.received_messages.len() {
-                if let Some((old_message_id, old_message)) = self.received_messages.get_mut(index) {
+            if index < self.record.len() {
+                if let Some((old_message_id, old_message)) = self.record.get_mut(index) {
                     if *old_message_id == message_id {
                         if *old_message == false {
                             *old_message = true;
-                            return true;
+                            self.received_messages.push(message);
+                            return;
                         } else {
                             // already received this message
-                            return false;
+                            return;
                         }
                     }
                 }
@@ -56,11 +59,13 @@ impl UnorderedReliableReceiverRecord {
                 let next_message_id = self.oldest_received_message_id.wrapping_add(index as u16);
 
                 if next_message_id == message_id {
-                    self.received_messages.push_back((next_message_id, true));
-                    return true;
+                    self.record.push_back((next_message_id, true));
+                    self.received_messages.push(message);
+                    return;
                 } else {
-                    self.received_messages.push_back((next_message_id, false));
+                    self.record.push_back((next_message_id, false));
                     // keep filling up buffer
+                    index += 1;
                     continue;
                 }
             }
@@ -69,33 +74,23 @@ impl UnorderedReliableReceiverRecord {
         }
     }
 
-    pub fn clear_received_messages(&mut self) {
+    pub fn receive_messages(&mut self) -> Vec<P> {
+        // clear all received messages from record
         loop {
             let mut has_message = false;
-            if let Some((_, true)) = self.received_messages.front() {
+            if let Some((_, true)) = self.record.front() {
                 has_message = true;
             }
             if has_message {
-                self.received_messages.pop_front();
+                self.record.pop_front();
                 self.oldest_received_message_id = self.oldest_received_message_id.wrapping_add(1);
             } else {
                 break;
             }
         }
-    }
-}
 
-pub struct UnorderedReliableReceiver<P> {
-    record: UnorderedReliableReceiverRecord,
-    ready_incoming_messages: Vec<P>,
-}
-
-impl<P> UnorderedReliableReceiver<P> {
-    pub fn new() -> Self {
-        Self {
-            record: UnorderedReliableReceiverRecord::new(),
-            ready_incoming_messages: Vec::new(),
-        }
+        // return buffer
+        return mem::take(&mut self.received_messages);
     }
 }
 
@@ -103,15 +98,11 @@ impl<P> ChannelReceiver<P> for UnorderedReliableReceiver<P> {
     fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader) {
         let id_w_msgs = ReliableReceiver::read_incoming_messages(channel_reader, bit_reader);
         for (id, message) in id_w_msgs {
-            if self.record.should_receive_message(id) {
-                self.ready_incoming_messages.push(message);
-            }
+            self.buffer_message(id, message);
         }
     }
 
     fn receive_messages(&mut self) -> Vec<P> {
-        self.record.clear_received_messages();
-
-        mem::take(&mut self.ready_incoming_messages)
+        return self.receive_messages();
     }
 }

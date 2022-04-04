@@ -618,9 +618,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
         // add component to connections already tracking entity
         for (_, user_connection) in self.user_connections.iter_mut() {
             // insert component into user's connection
-            user_connection
-                .entity_manager
-                .insert_component(entity, &component_kind);
+            if user_connection.entity_manager.scope_has_entity(entity) {
+                user_connection
+                    .entity_manager
+                    .insert_component(entity, &component_kind);
+            }
         }
     }
 

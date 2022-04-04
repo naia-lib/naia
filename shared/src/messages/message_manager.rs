@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use naia_serde::{BitReader, BitWriter, Serde, UnsignedVariableInteger};
+use naia_socket_shared::Instant;
 
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
@@ -57,13 +58,13 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                 ChannelMode::UnorderedReliable(settings) => {
                     channel_senders.insert(
                         channel_index.clone(),
-                        Box::new(ReliableSender::new(&settings)),
+                        Box::new(ReliableSender::new(settings.rtt_resend_factor)),
                     );
                 }
                 ChannelMode::OrderedReliable(settings) => {
                     channel_senders.insert(
                         channel_index.clone(),
-                        Box::new(ReliableSender::new(&settings)),
+                        Box::new(ReliableSender::new(settings.rtt_resend_factor)),
                     );
                 }
                 _ => {}
@@ -125,9 +126,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         }
     }
 
-    pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
+    pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         for (_, channel) in &mut self.channel_senders {
-            channel.collect_messages(rtt_millis);
+            channel.collect_messages(now, rtt_millis);
         }
     }
 
