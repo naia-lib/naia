@@ -37,6 +37,10 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> UserDiffHandler<E, K> {
         self.receivers.remove(&(*entity, *component_kind));
     }
 
+    pub fn has_component(&self, entity: &E, component: &K) -> bool {
+        self.receivers.contains_key(&(*entity, *component))
+    }
+
     // Diff masks
     pub fn diff_mask(&self, entity: &E, component_kind: &K) -> Option<RwLockReadGuard<DiffMask>> {
         if let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) {
@@ -57,17 +61,13 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> UserDiffHandler<E, K> {
     }
 
     pub fn or_diff_mask(&mut self, entity: &E, component_kind: &K, other_mask: &DiffMask) {
-        if let Some(current_diff_mask) = self.receivers.get_mut(&(*entity, *component_kind)) {
-            current_diff_mask.or_mask(other_mask);
-        } else {
-            // Either this, or the component is not registered somehow..
-            warn!("attempting to retrieve a diff mask for a component which does not exist!");
-        }
+        let current_diff_mask = self.receivers.get_mut(&(*entity, *component_kind)).unwrap();
+        current_diff_mask.or_mask(other_mask);
+
     }
 
     pub fn clear_diff_mask(&mut self, entity: &E, component_kind: &K) {
-        if let Some(receiver) = self.receivers.get_mut(&(*entity, *component_kind)) {
+        let receiver = self.receivers.get_mut(&(*entity, *component_kind)).unwrap();
             receiver.clear_mask();
-        }
     }
 }
