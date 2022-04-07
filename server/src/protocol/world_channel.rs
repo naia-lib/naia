@@ -85,41 +85,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
         };
     }
 
-    // Channel Events
-
-    fn on_entity_channel_opening(&mut self, entity: &E) {
-        // generate new net entity
-        let new_net_entity = self.net_entity_generator.generate();
-        self.entity_to_net_entity_map
-            .insert(*entity, new_net_entity);
-        self.net_entity_to_entity_map
-            .insert(new_net_entity, *entity);
-    }
-
-    fn on_entity_channel_opened(&mut self, entity: &E) {
-        self.delayed_entity_messages.add_entity(entity);
-    }
-
-    fn on_entity_channel_closing(&mut self, entity: &E) {
-        self.delayed_entity_messages.remove_entity(entity);
-    }
-
-    fn on_entity_channel_closed(&mut self, entity: &E) {
-        // cleanup net entity
-        let net_entity = self.entity_to_net_entity_map.remove(entity).unwrap();
-        self.net_entity_to_entity_map.remove(&net_entity);
-        self.net_entity_generator.recycle_key(&net_entity);
-    }
-
-    fn on_component_channel_opened(&mut self, entity: &E, component: &P::Kind) {
-        self.diff_handler
-            .register_component(&self.address, entity, component);
-    }
-
-    fn on_component_channel_closing(&mut self, entity: &E, component: &P::Kind) {
-        self.diff_handler.deregister_component(entity, component);
-    }
-
     // Host Updates
 
     pub fn host_spawn_entity(&mut self, entity: &E) {
@@ -363,6 +328,41 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
         }
 
         components.remove(component);
+    }
+
+    // State Transition events
+
+    fn on_entity_channel_opening(&mut self, entity: &E) {
+        // generate new net entity
+        let new_net_entity = self.net_entity_generator.generate();
+        self.entity_to_net_entity_map
+            .insert(*entity, new_net_entity);
+        self.net_entity_to_entity_map
+            .insert(new_net_entity, *entity);
+    }
+
+    fn on_entity_channel_opened(&mut self, entity: &E) {
+        self.delayed_entity_messages.add_entity(entity);
+    }
+
+    fn on_entity_channel_closing(&mut self, entity: &E) {
+        self.delayed_entity_messages.remove_entity(entity);
+    }
+
+    fn on_entity_channel_closed(&mut self, entity: &E) {
+        // cleanup net entity
+        let net_entity = self.entity_to_net_entity_map.remove(entity).unwrap();
+        self.net_entity_to_entity_map.remove(&net_entity);
+        self.net_entity_generator.recycle_key(&net_entity);
+    }
+
+    fn on_component_channel_opened(&mut self, entity: &E, component: &P::Kind) {
+        self.diff_handler
+            .register_component(&self.address, entity, component);
+    }
+
+    fn on_component_channel_closing(&mut self, entity: &E, component: &P::Kind) {
+        self.diff_handler.deregister_component(entity, component);
     }
 
     // Action Delivery
