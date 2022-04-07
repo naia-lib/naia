@@ -13,11 +13,11 @@ use naia_shared::{
     serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
     wrapping_diff, ChannelIndex, DiffMask, EntityActionType, EntityConverter, Instant, MessageId,
     MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize,
-    ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
+    ReplicateSafe, WorldRefType, MTU_SIZE_BITS, EntityAction,
 };
 
 use super::{
-    entity_action::EntityAction, global_diff_handler::GlobalDiffHandler, world_record::WorldRecord,
+    global_diff_handler::GlobalDiffHandler, world_record::WorldRecord,
 };
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;

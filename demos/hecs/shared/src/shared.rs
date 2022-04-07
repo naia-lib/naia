@@ -5,7 +5,7 @@ use naia_shared::{
 };
 
 pub fn shared_config() -> SharedConfig<DefaultChannels> {
-    let tick_interval = Some(Duration::from_millis(50));
+    let tick_interval = Some(Duration::from_millis(25));
 
     // Simulate network conditions with this configuration property
     let link_condition = Some(LinkConditionerConfig {

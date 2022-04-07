@@ -84,6 +84,8 @@ pub use protocol::{
         ReplicaRefWrapper,
     },
     replicate::{Replicate, ReplicateSafe},
+    entity_action_receiver::EntityActionReceiver,
+    entity_action::EntityAction,
 };
 
 pub use bigmap::{BigMap, BigMapKey};

@@ -4,22 +4,18 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{
-    message_list_header,
-    serde::{BitReader, Serde, UnsignedVariableInteger},
-    BigMap, ChannelIndex, EntityActionType, EntityHandle, EntityHandleConverter, MessageId,
-    NetEntity, NetEntityHandleConverter, OrderedReliableReceiver, Protocolize, Tick, WorldMutType,
-};
+use naia_shared::{message_list_header, serde::{BitReader, Serde, UnsignedVariableInteger}, BigMap, ChannelIndex, EntityActionType, EntityHandle, EntityHandleConverter, MessageId, NetEntity, NetEntityHandleConverter, Protocolize, Tick, WorldMutType, EntityActionReceiver, EntityAction};
 
 use crate::{error::NaiaClientError, event::Event};
 
-use super::{entity_action::EntityAction, entity_record::EntityRecord};
+use super::entity_record::EntityRecord;
 
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord<P::Kind>>,
     local_to_world_entity: HashMap<NetEntity, E>,
     pub handle_entity_map: BigMap<EntityHandle, E>,
-    receiver: OrderedReliableReceiver<EntityAction<P>>,
+    receiver: EntityActionReceiver<NetEntity, P::Kind>,
+    received_components: HashMap<(NetEntity, P::Kind), P>,
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
@@ -28,7 +24,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             local_to_world_entity: HashMap::new(),
             entity_records: HashMap::new(),
             handle_entity_map: BigMap::new(),
-            receiver: OrderedReliableReceiver::new(),
+            receiver: EntityActionReceiver::new(),
+            received_components: HashMap::new(),
         }
     }
 
@@ -103,11 +100,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 // read all data
                 let net_entity = NetEntity::de(reader).unwrap();
                 let new_component = P::build(reader, self);
+                let new_component_kind = new_component.dyn_ref().kind();
 
                 self.receiver.buffer_message(
                     action_id,
-                    EntityAction::InsertComponent(net_entity, new_component),
+                    EntityAction::InsertComponent(net_entity, new_component_kind),
                 );
+                self.received_components.insert((net_entity, new_component_kind), new_component);
             }
             // Component Removal
             EntityActionType::RemoveComponent => {
@@ -181,10 +180,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     }
                 }
                 // Add Component to Entity
-                EntityAction::InsertComponent(net_entity, new_component) => {
+                EntityAction::InsertComponent(net_entity, component_kind) => {
                     let e_u16: u16 = net_entity.into();
                     info!("insert component for: {}", e_u16);
-                    let component_kind = new_component.dyn_ref().kind();
+                    let component = self.received_components.remove(&(net_entity, component_kind)).unwrap();
 
                     if !self.local_to_world_entity.contains_key(&net_entity) {
                         panic!(
@@ -198,7 +197,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
                         entity_record.component_kinds.insert(component_kind);
 
-                        new_component.extract_and_insert(world_entity, world);
+                        component.extract_and_insert(world_entity, world);
 
                         event_stream
                             .push_back(Ok(Event::InsertComponent(*world_entity, component_kind)));
