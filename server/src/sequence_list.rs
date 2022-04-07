@@ -143,8 +143,4 @@ impl<T> SequenceList<T> {
             index += 1;
         }
     }
-
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<(u16, T)> {
-        return self.list.iter_mut();
-    }
 }

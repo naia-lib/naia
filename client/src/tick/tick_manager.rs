@@ -99,7 +99,7 @@ impl TickManager {
 
     /// Using information from the Server and RTT/Jitter measurements, determine
     /// the appropriate future intended tick
-    fn record_server_tick(&mut self, server_tick: Tick, rtt_average: f32, jitter_deviation: f32) {
+    fn record_server_tick(&mut self, server_tick: Tick, rtt_average: f32, jitter_average: f32) {
         // make sure we only record server_ticks going FORWARD
 
         // tick diff
@@ -131,9 +131,8 @@ impl TickManager {
 
         // Calculate incoming & outgoing jitter buffer tick offsets
 
-        // This should correspond with a three-sigma limit of 99.7%
-        let jitter_limit = jitter_deviation * 3.0;
-        self.client_receiving_tick_adjust = (jitter_limit / self.tick_interval_millis) + 1.0;
+        let jitter_limit = jitter_average * 4.0;
+        self.client_receiving_tick_adjust = jitter_limit / self.tick_interval_millis;
 
         // NOTE: I've struggled multiple times with why rtt_average instead of
         // ping_average exists in this calculation, figured it out, then
@@ -144,13 +143,12 @@ impl TickManager {
         // By using rtt_average here, we are correcting for our late (and
         // lesser) self.server_tick value
         let client_sending_adjust_millis = self.minimum_latency.max(rtt_average + jitter_limit);
-        self.client_sending_tick_adjust =
-            (client_sending_adjust_millis / self.tick_interval_millis) + 1.0;
+        self.client_sending_tick_adjust = client_sending_adjust_millis / self.tick_interval_millis;
 
         // Calculate estimate of earliest tick Server could receive now
         let server_receivable_adjust_millis = rtt_average - jitter_limit;
         self.server_receivable_tick_adjust =
-            (server_receivable_adjust_millis / self.tick_interval_millis) + 1.0;
+            server_receivable_adjust_millis / self.tick_interval_millis;
     }
 
     /// Gets the tick at which the Client is sending updates

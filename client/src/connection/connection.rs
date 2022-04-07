@@ -2,7 +2,7 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
 use naia_shared::{
     serde::{BitReader, BitWriter, OwnedBitReader},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, HostType, PacketType,
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, HostType, Instant, PacketType,
     PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldMutType,
 };
 
@@ -103,9 +103,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     }
 
     fn collect_outgoing_messages(&mut self, tick_manager_opt: &Option<TickManager>) {
+        let now = Instant::now();
+
         self.base
             .message_manager
-            .collect_outgoing_messages(&self.ping_manager.rtt);
+            .collect_outgoing_messages(&now, &self.ping_manager.rtt);
+
         if let Some(tick_manager) = tick_manager_opt {
             self.tick_buffer
                 .as_mut()

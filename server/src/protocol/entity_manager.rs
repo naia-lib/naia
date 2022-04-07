@@ -1,5 +1,4 @@
 use std::{
-    borrow::Borrow,
     clone::Clone,
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
@@ -8,57 +7,38 @@ use std::{
     time::Duration,
 };
 
+use crate::{protocol::world_channel::WorldChannel, sequence_list::SequenceList};
 use naia_shared::{
     message_list_header,
     serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, ChannelIndex, DiffMask, EntityConverter, Instant, KeyGenerator, MessageId,
+    wrapping_diff, ChannelIndex, DiffMask, EntityActionType, EntityConverter, Instant, MessageId,
     MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize,
     ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
 };
 
-use crate::sequence_list::SequenceList;
-
 use super::{
-    entity_action::{EntityAction, EntityActionRecord},
-    entity_message_waitlist::EntityMessageWaitlist,
-    global_diff_handler::GlobalDiffHandler,
-    user_diff_handler::UserDiffHandler,
-    world_record::WorldRecord,
+    entity_action::EntityAction, global_diff_handler::GlobalDiffHandler, world_record::WorldRecord,
 };
 
-const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
-const DROP_PACKET_RTT_FACTOR: f32 = 1.5;
-const PACKET_RECORD_TTL: Duration = Duration::from_secs(60);
+const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
+const ACTION_RECORD_TTL: Duration = Duration::from_secs(60);
 
 pub type ActionId = MessageId;
-pub type SentActions<E, K> = SequenceList<(Instant, Vec<EntityActionRecord<K, E>>)>;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
 pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     // World
-    scope_world: HashMap<E, HashSet<P::Kind>>,
-    remote_world: HashMap<E, HashSet<P::Kind>>,
-    next_action_id: ActionId,
-    action_map: HashMap<ActionId, EntityAction<P::Kind, E>>,
-    sending_actions: SequenceList<Option<Instant>>,
-    sending_entities: HashMap<E, ActionId>,
-    sending_components: HashMap<(E, P::Kind), ActionId>,
-    next_send_actions: Vec<ActionId>,
-    sent_actions: SentActions<E, P::Kind>,
+    world_channel: WorldChannel<P, E, C>,
+    next_send_actions: VecDeque<(ActionId, EntityAction<E, P::Kind>)>,
+    sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<E, P::Kind>)>)>,
 
     // Updates
-    diff_handler: UserDiffHandler<E, P::Kind>,
     next_send_updates: HashMap<E, HashSet<P::Kind>>,
     sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, P::Kind), DiffMask>)>,
     last_update_packet_index: PacketIndex,
 
     // Other
-    address: SocketAddr,
-    net_entity_generator: KeyGenerator<NetEntity>,
-    entity_to_net_entity_map: HashMap<E, NetEntity>,
-    net_entity_to_entity_map: HashMap<NetEntity, E>,
-    delayed_entity_messages: EntityMessageWaitlist<P, E, C>,
     delivered_packets: VecDeque<PacketIndex>,
 }
 
@@ -70,28 +50,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     ) -> Self {
         EntityManager {
             // World
-            scope_world: HashMap::new(),
-            remote_world: HashMap::new(),
-            action_map: HashMap::new(),
-            sending_actions: SequenceList::new(),
-            sending_entities: HashMap::new(),
-            sending_components: HashMap::new(),
-            next_action_id: 0,
-            next_send_actions: Vec::new(),
-            sent_actions: SequenceList::new(),
+            world_channel: WorldChannel::new(address, diff_handler),
+            next_send_actions: VecDeque::new(),
+            sent_action_packets: SequenceList::new(),
 
             // Update
-            diff_handler: UserDiffHandler::new(diff_handler),
             next_send_updates: HashMap::new(),
             sent_updates: HashMap::new(),
             last_update_packet_index: 0,
 
             // Other
-            address,
-            net_entity_generator: KeyGenerator::new(),
-            net_entity_to_entity_map: HashMap::new(),
-            entity_to_net_entity_map: HashMap::new(),
-            delayed_entity_messages: EntityMessageWaitlist::new(),
             delivered_packets: VecDeque::new(),
         }
     }
@@ -99,82 +67,27 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     // World Scope
 
     pub fn spawn_entity(&mut self, entity: &E) {
-        if self.scope_world.contains_key(entity) {
-            // do nothing, already in scope
-            return;
-        }
-
-        self.scope_world.insert(*entity, HashSet::new());
-
-        self.diff_and_generate_actions_entity(entity);
-
-        if !self.entity_to_net_entity_map.contains_key(entity) {
-            let new_net_entity = self.net_entity_generator.generate();
-            self.entity_to_net_entity_map
-                .insert(*entity, new_net_entity);
-            self.net_entity_to_entity_map
-                .insert(new_net_entity, *entity);
-        }
+        self.world_channel.host_spawn_entity(entity);
     }
 
     pub fn despawn_entity(&mut self, entity: &E) {
-        if !self.scope_world.contains_key(entity) {
-            // do nothing, already not in scope
-            return;
-        }
-
-        self.scope_world.remove(entity);
-
-        self.diff_and_generate_actions_entity(entity);
+        self.world_channel.host_despawn_entity(entity);
     }
 
     pub fn insert_component(&mut self, entity: &E, component: &P::Kind) {
-        if !self.scope_world.contains_key(entity) {
-            // possibly this is a bad place to check
-            // but currently this is where we check that the scope has the entity
-            // before inserting the component
-            return;
-        }
-
-        let components = self.scope_world.get(entity).unwrap();
-        if components.contains(component) {
-            // do nothing, already in scope
-            return;
-        }
-
-        let components = self.scope_world.get_mut(entity).unwrap();
-        components.insert(*component);
-
-        self.diff_and_generate_actions_component(entity, component);
-
-        if !self.diff_handler.component_is_registered(entity, component) {
-            self.diff_handler
-                .register_component(&self.address, entity, component);
-        }
+        self.world_channel.host_insert_component(entity, component);
     }
 
     pub fn remove_component(&mut self, entity: &E, component: &P::Kind) {
-        let components = self
-            .scope_world
-            .get(entity)
-            .expect("cannot remove component from non-existent entity!");
-        if !components.contains(component) {
-            // do nothing, already not in scope
-            return;
-        }
-
-        let components = self.scope_world.get_mut(entity).unwrap();
-        components.remove(component);
-
-        self.diff_and_generate_actions_component(entity, component);
+        self.world_channel.host_remove_component(entity, component);
     }
 
     pub fn scope_has_entity(&self, entity: &E) -> bool {
-        return self.scope_world.contains_key(entity);
+        return self.world_channel.host_has_entity(entity);
     }
 
-    pub fn has_synced_entity(&self, entity: &E) -> bool {
-        return self.scope_world.contains_key(entity) && self.remote_world.contains_key(entity);
+    pub fn entity_channel_is_open(&self, entity: &E) -> bool {
+        return self.world_channel.entity_channel_is_open(entity);
     }
 
     // Messages
@@ -185,8 +98,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         channel: C,
         message: &R,
     ) {
-        self.delayed_entity_messages
-            .queue_message(entities, channel, message.protocol_copy());
+        self.world_channel.delayed_entity_messages.queue_message(
+            entities,
+            channel,
+            message.protocol_copy(),
+        );
     }
 
     // Writer
@@ -197,7 +113,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         rtt_millis: &f32,
         message_manager: &mut MessageManager<P, C>,
     ) {
-        self.delayed_entity_messages
+        self.world_channel
+            .delayed_entity_messages
             .collect_ready_messages(message_manager);
 
         self.collect_dropped_update_packets(rtt_millis);
@@ -229,338 +146,32 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             self.sent_updates.remove(&packet_index);
 
             // Actions
-            if let Some((_, action_list)) = self.sent_actions.remove_scan_from_front(&packet_index) {
-                for action in action_list {
-                    match action {
-                        EntityActionRecord::SpawnEntity(action_id, entity, components) => {
-                            self.remote_spawned_entity(&action_id, &entity, components);
-                        }
-                        EntityActionRecord::DespawnEntity(action_id, entity) => {
-                            self.remote_despawned_entity(&action_id, &entity);
-                        }
-                        EntityActionRecord::InsertComponent(action_id, entity, component) => {
-                            self.remote_inserted_component(&action_id, &entity, &component);
-                        }
-                        EntityActionRecord::RemoveComponent(action_id, entity, component) => {
-                            self.remote_removed_component(&action_id, &entity, &component);
-                        }
-                        EntityActionRecord::Noop(action_id) => {
-                            self.remote_received_noop(&action_id);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Private methods
-
-    // diffing world
-
-    fn diff_and_generate_actions_entity(&mut self, entity: &E) {
-        let scope_has_entity = self.scope_world.contains_key(entity);
-        let remote_has_entity = self.remote_world.contains_key(entity);
-
-        if scope_has_entity == remote_has_entity {
-            // already synced up
-            // remove sending action
-            if self.sending_entities.contains_key(entity) {
-                self.cancel_sending_entity(entity);
-            }
-
-            return;
-        }
-
-        // check whether change is already sending
-        let new_action = match scope_has_entity {
-            true => EntityAction::SpawnEntity(*entity),
-            false => EntityAction::DespawnEntity(*entity),
-        };
-
-        if self.sending_entities.contains_key(entity) {
-            let old_action_id = self.sending_entities.get(entity).unwrap();
-            let old_action = self.action_map.get(old_action_id).unwrap();
-            if *old_action == new_action {
-                // change is already in progress
-                return;
-            }
-
-            self.cancel_sending_entity(entity);
-        }
-
-        let new_action_id = self.new_action_id();
-        self.action_map.insert(new_action_id, new_action);
-        self.sending_actions.insert_scan_from_back(new_action_id, None);
-        self.sending_entities.insert(*entity, new_action_id);
-    }
-
-    fn diff_and_generate_actions_component(&mut self, entity: &E, component: &P::Kind) {
-        if !self.remote_world.contains_key(entity) {
-            // will update entity with correct components after it spawns
-            // do not collect actions here
-            return;
-        }
-
-        let scope_has_component = self
-            .scope_world
-            .get(entity)
-            .expect("cannot collect component actions from non-existent entity!")
-            .contains(component);
-        let remote_has_component = self.remote_world.get(entity).unwrap().contains(component);
-
-        if scope_has_component == remote_has_component {
-            // already synced up
-
-            // remove sending action
-            if self.sending_components.contains_key(&(*entity, *component)) {
-                self.cancel_sending_component(entity, component);
-            }
-
-            return;
-        }
-
-        // check whether change is already sending
-        let new_action = match scope_has_component {
-            true => EntityAction::InsertComponent(*entity, *component),
-            false => EntityAction::RemoveComponent(*entity, *component),
-        };
-
-        if let Some(old_action_id) = self.sending_components.get(&(*entity, *component)) {
-            let old_action = self.action_map.get(old_action_id).unwrap();
-            if *old_action == new_action {
-                // action is the same, no need to re-generate it
-                return;
-            }
-
-            self.cancel_sending_component(entity, component);
-        }
-
-        let new_action_id = self.new_action_id();
-        self.action_map.insert(new_action_id, new_action);
-        self.sending_actions.insert_scan_from_back(new_action_id, None);
-        self.sending_components
-            .insert((*entity, *component), new_action_id);
-    }
-
-    // Syncing Scope -> Remote, creating Actions
-
-    fn new_action_id(&mut self) -> ActionId {
-        let output = self.next_action_id;
-        self.next_action_id = self.next_action_id.wrapping_add(1);
-        output
-    }
-
-    fn cancel_sending_entity(&mut self, entity: &E) {
-        // remove currently sending action
-        let action_id = self.sending_entities.remove(entity).unwrap();
-
-        // replace action in record with noop
-        let action = self.action_map.get_mut(&action_id).unwrap();
-        *action = EntityAction::Noop;
-    }
-
-    fn cancel_sending_component(&mut self, entity: &E, component: &P::Kind) {
-        // remove currently sending action
-        let action_id = self
-            .sending_components
-            .remove(&(*entity, *component))
-            .unwrap();
-
-        // replace action in record with noop
-        let action = self.action_map.get_mut(&action_id).unwrap();
-        *action = EntityAction::Noop;
-    }
-
-    // Erasing
-
-    fn remove_action_entity(&mut self, action_id: &ActionId, entity: &E) {
-        self.action_map.remove(action_id);
-        self.sending_actions.remove_scan_from_front(action_id);
-
-        let mut remove = false;
-        if let Some(current_action_id) = self.sending_entities.get(entity) {
-            if *action_id == *current_action_id {
-                remove = true;
-            }
-        }
-        if remove {
-            self.sending_entities.remove(entity);
-        }
-    }
-
-    fn remove_action_component(&mut self, action_id: &ActionId, entity: &E, component: &P::Kind) {
-        self.action_map.remove(action_id);
-        self.sending_actions.remove_scan_from_front(action_id);
-
-        let mut remove = false;
-        if let Some(current_action_id) = self.sending_components.get(&(*entity, *component)) {
-            if *action_id == *current_action_id {
-                remove = true;
-            }
-        }
-        if remove {
-            self.sending_components.remove(&(*entity, *component));
-        }
-    }
-
-    // Processing delivered actions
-
-    fn remote_spawned_entity(
-        &mut self,
-        action_id: &ActionId,
-        entity: &E,
-        components: Vec<P::Kind>,
-    ) {
-        if !self.action_map.contains_key(action_id) {
-            // action has already been delivered before, ignore
-            return;
-        }
-        self.remove_action_entity(action_id, entity);
-
-        if self.remote_world.contains_key(entity) {
-            // who knows how this updated already .. best do nothing?
-        } else {
-            let mut component_set = HashSet::new();
-            for component in &components {
-                component_set.insert(*component);
-            }
-            self.remote_world.insert(*entity, component_set);
-
-            if !self.scope_world.contains_key(entity) {
-                // entity has despawned again... collect updates
-                self.diff_and_generate_actions_entity(entity);
-            } else {
-                self.delayed_entity_messages.add_entity(entity);
-
-                let mut scope_components = Vec::new();
-                {
-                    let scope_component_set = self.scope_world.get(entity).unwrap();
-                    for component in scope_component_set {
-                        scope_components.push(*component);
-                    }
-                }
-                for scope_component in scope_components {
-                    self.diff_and_generate_actions_component(entity, &scope_component);
-                }
-            }
-        }
-    }
-
-    fn remote_despawned_entity(&mut self, action_id: &ActionId, entity: &E) {
-        if !self.action_map.contains_key(action_id) {
-            // action has already been delivered before, ignore
-            return;
-        }
-        self.remove_action_entity(action_id, entity);
-
-        if !self.remote_world.contains_key(entity) {
-            // who knows how this updated already .. best do nothing?
-        } else {
-            self.remote_world.remove(entity);
-            self.delayed_entity_messages.remove_entity(entity);
-            self.diff_and_generate_actions_entity(entity);
-
-            // if we are truly done with this entity... remove
-
-            if !self.scope_world.contains_key(entity) && !self.sending_entities.contains_key(entity)
+            if let Some((_, action_list)) = self
+                .sent_action_packets
+                .remove_scan_from_front(&packet_index)
             {
-                // delete net entity map
-                if self.entity_to_net_entity_map.contains_key(entity) {
-                    let net_entity = self.entity_to_net_entity_map.remove(entity).unwrap();
-                    self.net_entity_to_entity_map.remove(&net_entity);
+                for (action_id, action) in action_list {
+                    self.world_channel.action_delivered(action_id, action);
                 }
             }
         }
-    }
-
-    fn remote_inserted_component(&mut self, action_id: &ActionId, entity: &E, component: &P::Kind) {
-        if !self.action_map.contains_key(action_id) {
-            // action has already been delivered before, ignore
-            return;
-        }
-        self.remove_action_component(action_id, entity, component);
-
-        if !self.remote_world.contains_key(entity) {
-            // entity despawned on the remote... very odd
-            self.diff_and_generate_actions_entity(entity);
-            return;
-        }
-
-        let remote_component_set = self.remote_world.get_mut(entity).unwrap();
-        remote_component_set.insert(*component);
-
-        if !self.scope_world.contains_key(entity) {
-            // entity despawned in the scope... very odd
-            self.diff_and_generate_actions_entity(entity);
-            return;
-        }
-
-        self.diff_and_generate_actions_component(entity, component);
-    }
-
-    fn remote_removed_component(&mut self, action_id: &ActionId, entity: &E, component: &P::Kind) {
-        if !self.action_map.contains_key(action_id) {
-            // action has already been delivered before, ignore
-            return;
-        }
-        self.remove_action_component(action_id, entity, component);
-
-        if !self.remote_world.contains_key(entity) {
-            // entity despawned on the remote... very odd
-            self.diff_and_generate_actions_entity(entity);
-            return;
-        }
-
-        let remote_component_set = self.remote_world.get_mut(entity).unwrap();
-        remote_component_set.remove(component);
-
-        if !self.scope_world.contains_key(entity) {
-            // entity despawned in the scope... very odd
-            self.diff_and_generate_actions_entity(entity);
-            return;
-        }
-
-        self.diff_and_generate_actions_component(entity, component);
-
-        // if we are truly done with this component .. deregister
-        // deregister component from diff handler if applicable
-        let scope_has_component = match self.scope_world.get(entity) {
-            Some(scope_components) => scope_components.contains(component),
-            None => false,
-        };
-        let sending_has_component = self.sending_components.contains_key(&(*entity, *component));
-        if !scope_has_component && !sending_has_component {
-            if self.diff_handler.component_is_registered(entity, component) {
-                self.diff_handler.deregister_component(entity, component);
-            }
-        }
-    }
-
-    fn remote_received_noop(&mut self, action_id: &ActionId) {
-        if !self.action_map.contains_key(action_id) {
-            // action has already been delivered before, ignore
-            return;
-        }
-        self.action_map.remove(action_id);
-        self.sending_actions.remove_scan_from_front(action_id);
     }
 
     // Collecting
 
     fn collect_dropped_action_packets(&mut self) {
-
         let mut pop = false;
 
         loop {
-            if let Some((_, (time_sent, _))) = self.sent_actions.front() {
-                if time_sent.elapsed() > PACKET_RECORD_TTL {
+            if let Some((_, (time_sent, _))) = self.sent_action_packets.front() {
+                if time_sent.elapsed() > ACTION_RECORD_TTL {
                     pop = true;
                 }
             } else {
                 return;
             }
             if pop {
-                self.sent_actions.pop_front();
+                self.sent_action_packets.pop_front();
             } else {
                 return;
             }
@@ -568,38 +179,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
     }
 
     fn collect_next_actions(&mut self, now: &Instant, rtt_millis: &f32) {
-        // TODO: make self.sending_actions an ascending list so that iteration order is
-        // from oldest -> newest action id
-
-        let resend_duration = Duration::from_millis((RESEND_ACTION_RTT_FACTOR * rtt_millis) as u64);
-
-        // go through sending actions, if we haven't sent in a while, add message to
-        // outgoing queue
-        for (action_id, last_sent_opt) in self.sending_actions.iter_mut() {
-            // check whether we should send outgoing actions in the next packet
-            let mut should_send = false;
-
-            if let Some(last_sent) = last_sent_opt {
-                if last_sent.elapsed() > resend_duration {
-                    should_send = true;
-                }
-            } else {
-                should_send = true;
-            }
-
-            if !should_send {
-                continue;
-            }
-
-            // put action into outgoing queue
-            self.next_send_actions.push(*action_id);
-
-            *last_sent_opt = Some(now.clone());
-        }
+        self.next_send_actions = self.world_channel.take_next_actions(now, rtt_millis);
     }
 
     fn collect_dropped_update_packets(&mut self, rtt_millis: &f32) {
-        let drop_duration = Duration::from_millis((DROP_PACKET_RTT_FACTOR * rtt_millis) as u64);
+        let drop_duration = Duration::from_millis((DROP_UPDATE_RTT_FACTOR * rtt_millis) as u64);
 
         {
             let mut dropped_packets = Vec::new();
@@ -617,10 +201,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
     fn dropped_update_cleanup(&mut self, dropped_packet_index: PacketIndex) {
         if let Some((_, diff_mask_map)) = self.sent_updates.remove(&dropped_packet_index) {
-            // non-guaranteed delivery actions
             for (component_index, diff_mask) in &diff_mask_map {
-                let (global_entity, component_kind) = component_index;
-                let mut new_diff_mask = diff_mask.borrow().clone();
+                let (entity, component) = component_index;
+                if !self.world_channel.diff_handler.has_component(entity, component) {
+                    continue;
+                }
+                let mut new_diff_mask = diff_mask.clone();
 
                 // walk from dropped packet up to most recently sent packet
                 if dropped_packet_index == self.last_update_packet_index {
@@ -631,49 +217,24 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 while packet_index != self.last_update_packet_index {
                     if let Some((_, diff_mask_map)) = self.sent_updates.get(&packet_index) {
                         if let Some(next_diff_mask) = diff_mask_map.get(&component_index) {
-                            new_diff_mask.nand(next_diff_mask.borrow().borrow());
+                            new_diff_mask.nand(next_diff_mask);
                         }
                     }
 
                     packet_index = packet_index.wrapping_add(1);
                 }
 
-                self.diff_handler
-                    .or_diff_mask(&global_entity, &component_kind, &new_diff_mask);
+                self.world_channel.diff_handler.or_diff_mask(
+                    &entity,
+                    &component,
+                    &new_diff_mask,
+                );
             }
         }
     }
 
     fn collect_component_updates(&mut self) {
-        for (global_entity, component_set) in self.remote_world.iter() {
-            if !self.scope_world.contains_key(global_entity) {
-                // this entity is about to be deleted, no sense sending updates in the meantime
-                continue;
-            }
-            for component_kind in component_set.iter() {
-                let scope_components = self.scope_world.get(global_entity).unwrap();
-                if !scope_components.contains(component_kind) {
-                    // this component is about to be deleted, no sense sending updates in the
-                    // meantime
-                    continue;
-                }
-
-                if self
-                    .diff_handler
-                    .diff_mask_is_clear(global_entity, component_kind)
-                {
-                    // no updates detected, do nothing
-                    continue;
-                }
-
-                if !self.next_send_updates.contains_key(global_entity) {
-                    self.next_send_updates
-                        .insert(*global_entity, HashSet::new());
-                }
-                let send_component_set = self.next_send_updates.get_mut(global_entity).unwrap();
-                send_component_set.insert(*component_kind);
-            }
-        }
+        self.next_send_updates = self.world_channel.collect_next_updates();
     }
 
     // Writing actions
@@ -693,23 +254,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
             current_id.ser(bit_writer);
         }
         *last_id_opt = Some(*current_id);
-    }
-
-    fn can_write_action<W: WorldRefType<P, E>>(
-        &self,
-        world: &W,
-        action: &EntityAction<P::Kind, E>,
-    ) -> bool {
-        match action {
-            EntityAction::InsertComponent(global_entity, component_kind) => {
-                if !world.has_component_of_kind(global_entity, component_kind) {
-                    return false;
-                }
-            }
-            _ => {}
-        }
-
-        return true;
     }
 
     fn write_actions<W: WorldRefType<P, E>>(
@@ -765,8 +309,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         // Write header
         message_list_header::write(writer, message_count as u64);
 
-        if !self.sent_actions.contains_scan_from_back(packet_index) {
-            self.sent_actions
+        if !self
+            .sent_action_packets
+            .contains_scan_from_back(packet_index)
+        {
+            self.sent_action_packets
                 .insert_scan_from_back(*packet_index, (now.clone(), Vec::new()));
         }
 
@@ -802,129 +349,112 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         last_written_id: &mut Option<ActionId>,
         is_writing: bool,
     ) {
-        let action_id = self.next_send_actions.get(action_index).unwrap();
-        let action = self.action_map.get(action_id).unwrap();
-
-        if !self.can_write_action(world, action) {
-            return;
-        }
-
-        // write EntityAction type
-        action.as_type().ser(bit_writer);
+        let (action_id, action) = self.next_send_actions.get(action_index).unwrap();
 
         // write message id
         Self::write_action_id(bit_writer, last_written_id, action_id);
 
         match action {
             EntityAction::SpawnEntity(entity) => {
-                if is_writing {
-                    info!("write SpawnEntity");
-                }
+                EntityActionType::SpawnEntity.ser(bit_writer);
+
                 // write net entity
-                self.entity_to_net_entity_map
-                    .get(entity)
+                self.world_channel
+                    .entity_to_net_entity(entity)
                     .unwrap()
                     .ser(bit_writer);
 
-                // get component list
-                let component_kinds = world_record.component_kinds(&entity);
-
-                // write number of components
-                let components_num =
-                    UnsignedVariableInteger::<3>::new(component_kinds.len() as i128);
-                components_num.ser(bit_writer);
-
-                for component_kind in &component_kinds {
-                    // write kind
-                    component_kind.ser(bit_writer);
-
-                    // write payload
-                    let component = world
-                        .component_of_kind(entity, &component_kind)
-                        .expect("Component does not exist in World");
-
-                    {
-                        let converter = EntityConverter::new(world_record, self);
-                        component.write(bit_writer, &converter);
-                    }
-
-                    // only clear diff mask if we are actually writing the packet
-                    if is_writing {
-                        self.diff_handler.clear_diff_mask(entity, &component_kind);
-                    }
-                }
-
                 // if we are writing to this packet, add it to record
                 if is_writing {
+                    info!("write SpawnEntity({})", action_id);
+
                     Self::record_action_written(
-                        &mut self.sent_actions,
+                        &mut self.sent_action_packets,
                         packet_index,
-                        EntityActionRecord::SpawnEntity(*action_id, *entity, component_kinds),
+                        action_id,
+                        action,
                     );
                 }
             }
             EntityAction::DespawnEntity(entity) => {
-                if is_writing {
-                    info!("write DepawnEntity");
-                }
+                EntityActionType::DespawnEntity.ser(bit_writer);
+
                 // write net entity
-                self.entity_to_net_entity_map
-                    .get(entity)
+                self.world_channel
+                    .entity_to_net_entity(entity)
                     .unwrap()
                     .ser(bit_writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
+                    info!("write DespawnEntity({})", action_id);
+
                     Self::record_action_written(
-                        &mut self.sent_actions,
+                        &mut self.sent_action_packets,
                         packet_index,
-                        EntityActionRecord::DespawnEntity(*action_id, *entity),
+                        action_id,
+                        action,
                     );
                 }
             }
             EntityAction::InsertComponent(entity, component) => {
-                if is_writing {
-                    info!("write InsertComponent");
-                }
-                // write net entity
-                self.entity_to_net_entity_map
-                    .get(entity)
-                    .unwrap()
-                    .ser(bit_writer);
+                if !world.has_component_of_kind(entity, component) {
+                    EntityActionType::Noop.ser(bit_writer);
 
-                // write component kind
-                component.ser(bit_writer);
+                    // if we are actually writing this packet
+                    if is_writing {
+                        info!("write Noop({})", action_id);
 
-                // write component payload
-                let component_ref = world
-                    .component_of_kind(entity, component)
-                    .expect("Component does not exist in World");
+                        // add it to action record
+                        Self::record_action_written(
+                            &mut self.sent_action_packets,
+                            packet_index,
+                            action_id,
+                            &EntityAction::Noop,
+                        );
+                    }
+                } else {
+                    EntityActionType::InsertComponent.ser(bit_writer);
 
-                {
-                    let converter = EntityConverter::new(world_record, self);
-                    component_ref.write(bit_writer, &converter);
-                }
+                    // write net entity
+                    self.world_channel
+                        .entity_to_net_entity(entity)
+                        .unwrap()
+                        .ser(bit_writer);
 
-                // if we are actually writing this packet
-                if is_writing {
-                    // clear the component's diff mask
-                    self.diff_handler.clear_diff_mask(&entity, component);
+                    // write component kind
+                    component.ser(bit_writer);
 
-                    // add it to action record
-                    Self::record_action_written(
-                        &mut self.sent_actions,
-                        packet_index,
-                        EntityActionRecord::InsertComponent(*action_id, *entity, *component),
-                    );
+                    // write component payload
+                    let component_ref = world
+                        .component_of_kind(entity, component)
+                        .expect("Component does not exist in World");
+
+                    {
+                        let converter = EntityConverter::new(world_record, self);
+                        component_ref.write(bit_writer, &converter);
+                    }
+
+                    // if we are actually writing this packet
+                    if is_writing {
+                        info!("write InsertComponent({})", action_id);
+
+                        // add it to action record
+                        Self::record_action_written(
+                            &mut self.sent_action_packets,
+                            packet_index,
+                            action_id,
+                            action,
+                        );
+                    }
                 }
             }
             EntityAction::RemoveComponent(entity, component) => {
-                if is_writing {
-                    info!("write RemoveComponent");
-                }
+                EntityActionType::RemoveComponent.ser(bit_writer);
+
                 // write net entity
-                self.entity_to_net_entity_map
-                    .get(entity)
+                self.world_channel
+                    .entity_to_net_entity(entity)
                     .unwrap()
                     .ser(bit_writer);
 
@@ -933,38 +463,30 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
+                    info!("write RemoveComponent({})", action_id);
+
                     Self::record_action_written(
-                        &mut self.sent_actions,
+                        &mut self.sent_action_packets,
                         packet_index,
-                        EntityActionRecord::RemoveComponent(*action_id, *entity, *component),
+                        action_id,
+                        action,
                     );
                 }
             }
             EntityAction::Noop => {
-                if is_writing {
-                    info!("write Noop");
-                }
-                // no need to write anything here
-
-                // if we are writing to this packet, add it to record
-                if is_writing {
-                    Self::record_action_written(
-                        &mut self.sent_actions,
-                        packet_index,
-                        EntityActionRecord::Noop(*action_id),
-                    );
-                }
+                panic!("should not ever get here");
             }
         }
     }
 
     fn record_action_written(
-        sent_actions: &mut SentActions<E, P::Kind>,
+        sent_actions: &mut SequenceList<(Instant, Vec<(ActionId, EntityAction<E, P::Kind>)>)>,
         packet_index: &PacketIndex,
-        action_record: EntityActionRecord<P::Kind, E>,
+        action_id: &ActionId,
+        action: &EntityAction<E, P::Kind>,
     ) {
         let (_, sent_actions_list) = sent_actions.get_mut_scan_from_back(&packet_index).unwrap();
-        sent_actions_list.push(action_record);
+        sent_actions_list.push((*action_id, action.clone()));
     }
 
     fn write_updates<W: WorldRefType<P, E>>(
@@ -1060,8 +582,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
         };
 
         // write net entity
-        self.entity_to_net_entity_map
-            .get(global_entity)
+        self.world_channel
+            .entity_to_net_entity(global_entity)
             .unwrap()
             .ser(bit_writer);
 
@@ -1074,6 +596,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 
             // get diff mask
             let diff_mask = self
+                .world_channel
                 .diff_handler
                 .diff_mask(global_entity, component_kind)
                 .expect("DiffHandler does not have registered Component!")
@@ -1098,7 +621,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
                 sent_updates_map.insert((*global_entity, *component_kind), diff_mask);
 
                 // having copied the diff mask for this update, clear the component
-                self.diff_handler
+                self.world_channel
+                    .diff_handler
                     .clear_diff_mask(global_entity, component_kind);
             }
         }
@@ -1120,15 +644,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NetEntityConverter<E>
 {
     fn entity_to_net_entity(&self, entity: &E) -> NetEntity {
         return *self
-            .entity_to_net_entity_map
-            .get(entity)
+            .world_channel
+            .entity_to_net_entity(entity)
             .expect("entity does not exist for this connection!");
     }
 
     fn net_entity_to_entity(&self, net_entity: &NetEntity) -> E {
         return *self
-            .net_entity_to_entity_map
-            .get(net_entity)
+            .world_channel
+            .net_entity_to_entity(net_entity)
             .expect("entity does not exist for this connection!");
     }
 }
