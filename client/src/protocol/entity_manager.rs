@@ -38,8 +38,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
-        self.read_actions(world, reader, event_stream);
         self.read_updates(world, server_tick, reader, event_stream);
+        self.read_actions(world, reader, event_stream);
     }
 
     fn read_message_id(
