@@ -181,7 +181,7 @@ impl App {
                         }
                     }
                 }
-                Ok(Event::SpawnEntity(entity, _)) => {
+                Ok(Event::SpawnEntity(entity)) => {
                     self.squares.insert(entity);
                     info!("spawned entity");
                 }

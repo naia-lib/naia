@@ -13,6 +13,6 @@ pub enum EntityActionType {
     InsertComponent,
     // Action indicating a Component to be deleted
     RemoveComponent,
-    // Action indicating nothing should be done, necessary to track outdated Action Packets
+    // Action indicating a non-operation
     Noop,
 }
