@@ -7,16 +7,13 @@ use std::{
 
 use crate::{
     protocol::{
-        entity_action::EntityAction, entity_manager::ActionId,
+        entity_manager::ActionId,
         entity_message_waitlist::EntityMessageWaitlist, global_diff_handler::GlobalDiffHandler,
         user_diff_handler::UserDiffHandler,
     },
     server::Instant,
 };
-use naia_shared::{
-    ChannelIndex, ChannelSender, KeyGenerator, NetEntity, OrderedReliableReceiver,
-    ProtocolKindType, Protocolize, ReliableSender,
-};
+use naia_shared::{ChannelIndex, ChannelSender, KeyGenerator, NetEntity, ProtocolKindType, Protocolize, ReliableSender, EntityActionReceiver, EntityAction};
 
 const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
 
@@ -43,7 +40,7 @@ pub struct WorldChannel<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     remote_world: CheckedMap<E, CheckedSet<P::Kind>>,
     entity_channels: CheckedMap<E, EntityChannel<P::Kind>>,
     outgoing_actions: ReliableSender<EntityAction<E, P::Kind>>,
-    delivered_actions: OrderedReliableReceiver<EntityAction<E, P::Kind>>,
+    delivered_actions: EntityActionReceiver<E, P::Kind>,
 
     address: SocketAddr,
     pub diff_handler: UserDiffHandler<E, P::Kind>,
@@ -63,7 +60,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C>
             remote_world: CheckedMap::new(),
             entity_channels: CheckedMap::new(),
             outgoing_actions: ReliableSender::new(RESEND_ACTION_RTT_FACTOR),
-            delivered_actions: OrderedReliableReceiver::new(),
+            delivered_actions: EntityActionReceiver::new(),
 
             address,
             diff_handler: UserDiffHandler::new(diff_handler),

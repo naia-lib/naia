@@ -1,4 +1,4 @@
-use naia_shared::ProtocolKindType;
+use super::protocolize::ProtocolKindType;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum EntityAction<E: Copy, K: ProtocolKindType> {
