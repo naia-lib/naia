@@ -59,7 +59,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         self.base
             .process_incoming_header(header, &mut Some(&mut self.entity_manager));
-        self.entity_manager.process_delivered_packets();
     }
 
     pub fn recv_client_tick(&mut self, client_tick: Tick) {

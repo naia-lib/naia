@@ -12,7 +12,7 @@ use super::{
 pub struct UnorderedReliableReceiver<P> {
     oldest_received_message_id: MessageId,
     record: VecDeque<(MessageId, bool)>,
-    received_messages: Vec<P>,
+    received_messages: Vec<(MessageId, P)>,
 }
 
 impl<P> UnorderedReliableReceiver<P> {
@@ -47,7 +47,7 @@ impl<P> UnorderedReliableReceiver<P> {
                     if *old_message_id == message_id {
                         if *old_message == false {
                             *old_message = true;
-                            self.received_messages.push(message);
+                            self.received_messages.push((*old_message_id, message));
                             return;
                         } else {
                             // already received this message
@@ -60,7 +60,7 @@ impl<P> UnorderedReliableReceiver<P> {
 
                 if next_message_id == message_id {
                     self.record.push_back((next_message_id, true));
-                    self.received_messages.push(message);
+                    self.received_messages.push((message_id, message));
                     return;
                 } else {
                     self.record.push_back((next_message_id, false));
@@ -74,7 +74,7 @@ impl<P> UnorderedReliableReceiver<P> {
         }
     }
 
-    pub fn receive_messages(&mut self) -> Vec<P> {
+    pub fn receive_messages(&mut self) -> Vec<(MessageId, P)> {
         // clear all received messages from record
         loop {
             let mut has_message = false;
@@ -103,6 +103,10 @@ impl<P> ChannelReceiver<P> for UnorderedReliableReceiver<P> {
     }
 
     fn receive_messages(&mut self) -> Vec<P> {
-        return self.receive_messages();
+        let mut output: Vec<P> = Vec::new();
+        for (_, message) in self.receive_messages() {
+            output.push(message);
+        }
+        output
     }
 }
