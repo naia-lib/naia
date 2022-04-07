@@ -37,7 +37,7 @@ impl ConnectionConfig {
 impl Default for ConnectionConfig {
     fn default() -> Self {
         Self {
-            disconnection_timeout_duration: Duration::from_secs(100),
+            disconnection_timeout_duration: Duration::from_secs(30),
             heartbeat_interval: Duration::from_secs(4),
             bandwidth_measure_duration: None,
             ping: PingConfig::default(),
