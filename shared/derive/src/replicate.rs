@@ -25,6 +25,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     // Replica Methods
     let new_complete_method = new_complete_method(&replica_name, &enum_name, &properties);
     let read_method = read_method(&protocol_name, &replica_name, &enum_name, &properties);
+    let read_update_method = read_update_method(&replica_name, &protocol_kind_name, &properties);
 
     // ReplicateSafe Derive Methods
     let diff_mask_size = {
@@ -42,7 +43,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let clone_method = clone_method(&replica_name, &properties);
     let mirror_method = mirror_method(&protocol_name, &replica_name, &properties);
     let set_mutator_method = set_mutator_method(&properties);
-    let read_partial_method = read_partial_method(&properties);
+    let read_partial_method = read_partial_method(&protocol_kind_name, &properties);
     let write_method = write_method(&properties);
     let write_partial_method = write_partial_method(&enum_name, &properties);
     let has_entity_properties = has_entity_properties_method(&properties);
@@ -50,8 +51,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{DiffMask, PropertyMutate, ReplicateSafe, PropertyMutator,
-            Protocolize, ReplicaDynRef, ReplicaDynMut, serde::{BitReader, BitWrite, Serde}, NetEntityHandleConverter};
+        use naia_shared::{DiffMask, PropertyMutate, ReplicateSafe, PropertyMutator, ComponentUpdate,
+            Protocolize, ReplicaDynRef, ReplicaDynMut, serde::{BitReader, BitWrite, BitWriter, OwnedBitReader, Serde}, NetEntityHandleConverter};
         use #protocol_path::{#protocol_name, #protocol_kind_name};
         mod internal {
             pub use naia_shared::{EntityProperty, EntityHandle};
@@ -62,6 +63,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         impl #replica_name {
             #new_complete_method
             #read_method
+            #read_update_method
         }
         impl ReplicateSafe<#protocol_name> for #replica_name {
             fn diff_mask_size(&self) -> u8 { #diff_mask_size }
@@ -492,7 +494,51 @@ pub fn read_method(
     };
 }
 
-fn read_partial_method(properties: &Vec<Property>) -> TokenStream {
+pub fn read_update_method(
+    replica_name: &Ident,
+    kind_name: &Ident,
+    properties: &Vec<Property>,
+) -> TokenStream {
+
+    let mut prop_read_writes = quote! {};
+    for property in properties.iter() {
+        let new_output_right = match property {
+            Property::Normal(property) => {
+                let field_type = &property.inner_type;
+                quote! {
+                    Property::<#field_type>::read_write(bit_reader, &mut update_writer);
+                }
+            }
+            Property::Entity(_) => {
+                quote! {
+                    EntityProperty::read_write(bit_reader, &mut update_writer);
+                }
+            }
+        };
+
+        let new_output_result = quote! {
+            #prop_read_writes
+            #new_output_right
+        };
+        prop_read_writes = new_output_result;
+    }
+
+    return quote! {
+        pub fn read_update(bit_reader: &mut BitReader) -> ComponentUpdate::<#kind_name> {
+
+            let mut update_writer = BitWriter::new();
+
+            #prop_read_writes
+
+            let (length, buffer) = update_writer.flush();
+            let owned_reader = OwnedBitReader::new(&buffer[..length]);
+
+            return ComponentUpdate::new(#kind_name::#replica_name, owned_reader);
+        }
+    };
+}
+
+fn read_partial_method(kind_name: &Ident, properties: &Vec<Property>) -> TokenStream {
     let mut output = quote! {};
 
     for property in properties.iter() {
@@ -523,7 +569,8 @@ fn read_partial_method(properties: &Vec<Property>) -> TokenStream {
     }
 
     return quote! {
-        fn read_partial(&mut self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) {
+        fn read_partial(&mut self, converter: &dyn NetEntityHandleConverter, mut update: ComponentUpdate<#kind_name>) {
+            let reader = &mut update.reader();
             #output
         }
     };

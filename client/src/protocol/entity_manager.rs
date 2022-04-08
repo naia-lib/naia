@@ -301,7 +301,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
             if let Some(world_entity) = self.local_to_world_entity.get(&net_entity) {
 
-                world.component_apply_update(world_entity, &component_kind, self, component_update);
+                world.component_apply_update(self, world_entity, &component_kind, component_update);
 
                 event_stream.push_back(Ok(Event::UpdateComponent(
                     server_tick,

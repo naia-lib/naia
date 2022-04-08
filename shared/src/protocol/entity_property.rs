@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use naia_serde::{BitReader, BitWrite, Serde};
+use naia_serde::{BitReader, BitWrite, BitWriter, Serde};
 
 use crate::{
     bigmap::BigMapKey,
@@ -53,6 +53,10 @@ impl EntityProperty {
             *new_prop.handle_prop = None;
             return new_prop;
         }
+    }
+
+    pub fn read_write(bit_reader: &mut BitReader, bit_writer: &mut BitWriter) {
+        Option::<NetEntity>::de(bit_reader).unwrap().ser(bit_writer);
     }
 
     pub fn read(&mut self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) {

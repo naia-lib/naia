@@ -1,8 +1,20 @@
-use naia_serde::{OwnedBitReader, Serde};
+use naia_serde::{BitReader, OwnedBitReader};
 
-use super::protocolize::{Protocolize, ProtocolKindType};
+use super::protocolize::ProtocolKindType;
 
 pub struct ComponentUpdate<K: ProtocolKindType> {
-    kind: K,
+    pub kind: K,
     buffer: OwnedBitReader
+}
+
+impl<K: ProtocolKindType> ComponentUpdate<K> {
+    pub fn new(kind: K, buffer: OwnedBitReader) -> Self {
+        Self {
+            kind, buffer,
+        }
+    }
+
+    pub fn reader(&self) -> BitReader {
+        return self.buffer.borrow();
+    }
 }

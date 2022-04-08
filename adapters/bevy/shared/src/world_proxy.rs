@@ -3,11 +3,7 @@ use bevy::ecs::{
     world::{Mut, World},
 };
 
-use naia_shared::{
-    serde::BitReader, NetEntityHandleConverter, ProtocolInserter, ProtocolKindType, Protocolize,
-    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe, WorldMutType,
-    WorldRefType,
-};
+use naia_shared::{serde::BitReader, NetEntityHandleConverter, ProtocolInserter, ProtocolKindType, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe, WorldMutType, WorldRefType, ComponentUpdate};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -172,16 +168,16 @@ impl<'w, P: 'static + Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
 
     fn component_apply_update(
         &mut self,
+        converter: &dyn NetEntityHandleConverter,
         entity: &Entity,
         component_kind: &P::Kind,
-        bit_reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
+        update: ComponentUpdate<P::Kind>,
     ) {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
                 if let Some(accessor) = data.component_access(component_kind) {
                     if let Some(mut component) = accessor.component_mut(world, entity) {
-                        component.read_partial(bit_reader, converter);
+                        component.read_partial(converter, update);
                     }
                 }
             });

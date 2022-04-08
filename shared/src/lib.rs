@@ -67,6 +67,7 @@ pub use messages::{
 };
 pub use protocol::{
     diff_mask::DiffMask,
+    component_update::ComponentUpdate,
     entity_action::EntityAction,
     entity_action_receiver::EntityActionReceiver,
     entity_action_type::EntityActionType,
