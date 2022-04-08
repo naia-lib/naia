@@ -1,6 +1,6 @@
 use hecs::Entity;
 
-use naia_hecs_server::{WorldProxy, WorldProxyMut, shared::Random};
+use naia_hecs_server::shared::Random;
 
 use naia_hecs_demo_shared::protocol::{Marker, Name, Position};
 
@@ -46,7 +46,7 @@ pub fn march_and_mark(app: &mut App) {
 
             // Add to Naia Server
             app.server
-                .entity_mut(app.world.proxy_mut(&mut app.world_data), &entity)
+                .entity_mut(&mut app.world, &entity)
                 .insert_component(marker);
 
             // Track that this entity has a Marker
@@ -59,14 +59,14 @@ pub fn march_and_mark(app: &mut App) {
         if app.has_marker.remove(&entity) {
             // Remove from Naia Server
             app.server
-                .entity_mut(app.world.proxy_mut(&mut app.world_data), &entity)
+                .entity_mut(&mut app.world, &entity)
                 .remove_component::<Marker>();
         }
     }
 
     while let Some(entity) = entities_to_delete.pop() {
         app.server
-            .entity_mut(app.world.proxy_mut(&mut app.world_data), &entity)
+            .entity_mut(&mut app.world, &entity)
             .despawn();
     }
 
@@ -75,14 +75,14 @@ pub fn march_and_mark(app: &mut App) {
         let first;
         let last;
         {
-            let entity_ref = app.server.entity(app.world.proxy(&mut app.world_data), &entity);
+            let entity_ref = app.server.entity(&app.world, &entity);
             let old_name = entity_ref.component::<Name>().unwrap();
             first = (*old_name.full).first.clone();
             last = (*old_name.full).last.clone();
         }
 
         app.server
-            .entity_mut(app.world.proxy_mut(&mut app.world_data), &entity)
+            .entity_mut(&mut app.world, &entity)
             .despawn();
 
         let position_ref = Position::new(0, 0);
@@ -92,7 +92,7 @@ pub fn march_and_mark(app: &mut App) {
 
         // Create an Entity
         app.server
-            .spawn_entity(app.world.proxy_mut(&mut app.world_data))
+            .spawn_entity(&mut app.world)
             .enter_room(&app.main_room_key)
             .insert_component(position_ref)
             .insert_component(name_ref)
@@ -123,6 +123,5 @@ pub fn send_updates(app: &mut App) {
     // VERY IMPORTANT! Calling this actually sends all update data
     // packets to all Clients that require it. If you don't call this
     // method, the Server will never communicate with it's connected Clients
-    app.server
-        .send_all_updates(app.world.proxy(&app.world_data));
+    app.server.send_all_updates(&app.world);
 }
