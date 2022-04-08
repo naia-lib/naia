@@ -1,4 +1,5 @@
 use std::{ops::DerefMut, sync::Mutex};
+use std::marker::PhantomData;
 
 use bevy::{
     app::{App, CoreStage, Plugin as PluginType},
@@ -10,23 +11,24 @@ use naia_server::{
     shared::{Protocolize, SharedConfig},
     Server, ServerConfig,
 };
+use naia_server::shared::ChannelIndex;
 
 use super::{
     events::{
-        AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEntityEvent, MessageEvent,
+        AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent,
     },
     resource::ServerResource,
     stage::{PrivateStage, Stage},
     systems::{before_receive_events, finish_tick, should_receive, should_tick},
 };
 
-struct PluginConfig<P: Protocolize> {
+struct PluginConfig<C: ChannelIndex> {
     server_config: ServerConfig,
-    shared_config: SharedConfig<P>,
+    shared_config: SharedConfig<C>,
 }
 
-impl<P: Protocolize> PluginConfig<P> {
-    pub fn new(server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
+impl<C: ChannelIndex> PluginConfig<C> {
+    pub fn new(server_config: ServerConfig, shared_config: SharedConfig<C>) -> Self {
         PluginConfig {
             server_config,
             shared_config,
@@ -34,23 +36,28 @@ impl<P: Protocolize> PluginConfig<P> {
     }
 }
 
-pub struct Plugin<P: Protocolize> {
-    config: Mutex<Option<PluginConfig<P>>>,
+pub struct Plugin<P: Protocolize, C: ChannelIndex> {
+    config: Mutex<Option<PluginConfig<C>>>,
+    phantom_p: PhantomData<P>,
 }
 
-impl<P: Protocolize> Plugin<P> {
-    pub fn new(server_config: ServerConfig, shared_config: SharedConfig<P>) -> Self {
+// unsafe impl<P: Protocolize, C: ChannelIndex> Send for Plugin<P, C> {}
+// unsafe impl<P: Protocolize, C: ChannelIndex> Sync for Plugin<P, C> {}
+
+impl<P: Protocolize, C: ChannelIndex> Plugin<P, C> {
+    pub fn new(server_config: ServerConfig, shared_config: SharedConfig<C>) -> Self {
         let config = PluginConfig::new(server_config, shared_config);
-        return Plugin {
+        return Self {
             config: Mutex::new(Some(config)),
+            phantom_p: PhantomData,
         };
     }
 }
 
-impl<P: Protocolize> PluginType for Plugin<P> {
+impl<P: Protocolize, C: ChannelIndex> PluginType for Plugin<P, C> {
     fn build(&self, app: &mut App) {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
-        let server = Server::<P, Entity>::new(config.server_config, config.shared_config);
+        let server = Server::<P, Entity, C>::new(&config.server_config, &config.shared_config);
 
         app
         // RESOURCES //
@@ -61,17 +68,16 @@ impl<P: Protocolize> PluginType for Plugin<P> {
             .add_event::<AuthorizationEvent<P>>()
             .add_event::<ConnectionEvent>()
             .add_event::<DisconnectionEvent>()
-            .add_event::<MessageEvent<P>>()
-            .add_event::<MessageEntityEvent<P>>()
+            .add_event::<MessageEvent<P, C>>()
         // STAGES //
             .add_stage_before(CoreStage::PreUpdate,
                               PrivateStage::BeforeReceiveEvents,
                               SystemStage::single_threaded()
-                                  .with_run_criteria(should_receive::<P>))
+                                  .with_run_criteria(should_receive::<P, C>))
             .add_stage_after(PrivateStage::BeforeReceiveEvents,
                              Stage::ReceiveEvents,
                              SystemStage::single_threaded()
-                                 .with_run_criteria(should_receive::<P>))
+                                 .with_run_criteria(should_receive::<P, C>))
             .add_stage_after(CoreStage::PostUpdate,
                               Stage::Tick,
                               SystemStage::single_threaded()
@@ -82,7 +88,7 @@ impl<P: Protocolize> PluginType for Plugin<P> {
                                  .with_run_criteria(should_tick))
         // SYSTEMS //
             .add_system_to_stage(PrivateStage::BeforeReceiveEvents,
-                                 before_receive_events::<P>.exclusive_system())
+                                 before_receive_events::<P, C>.exclusive_system())
             .add_system_to_stage(PrivateStage::AfterTick,
                                  finish_tick);
     }

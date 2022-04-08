@@ -34,7 +34,7 @@ impl<P> UnorderedUnreliableReceiver<P> {
     }
 }
 
-impl<P> ChannelReceiver<P> for UnorderedUnreliableReceiver<P> {
+impl<P: Send + Sync> ChannelReceiver<P> for UnorderedUnreliableReceiver<P> {
     fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader) {
         let message_count = read(bit_reader);
         for _x in 0..message_count {

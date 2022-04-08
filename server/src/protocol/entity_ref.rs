@@ -48,7 +48,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E,
 pub struct EntityMut<
     's,
     P: Protocolize,
-    E: Copy + Eq + Hash,
+    E: Copy + Eq + Hash + Send + Sync,
     W: WorldMutType<P, E>,
     C: ChannelIndex,
 > {
@@ -57,7 +57,7 @@ pub struct EntityMut<
     entity: E,
 }
 
-impl<'s, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>, C: ChannelIndex>
+impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<P, E>, C: ChannelIndex>
     EntityMut<'s, P, E, W, C>
 {
     pub(crate) fn new(server: &'s mut Server<P, E, C>, world: W, entity: &E) -> Self {

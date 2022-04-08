@@ -27,7 +27,7 @@ pub type ActionId = MessageId;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
-pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
     // World
     world_channel: WorldChannel<P, E, C>,
     next_send_actions: VecDeque<(ActionId, EntityAction<E, P::Kind>)>,
@@ -39,7 +39,7 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     last_update_packet_index: PacketIndex,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C> {
+impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityManager<P, E, C> {
     /// Create a new NewEntityManager, given the client's address
     pub fn new(
         address: SocketAddr,
@@ -624,7 +624,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityManager<P, E, C
 }
 
 // PacketNotifiable
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> PacketNotifiable
+impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> PacketNotifiable
     for EntityManager<P, E, C>
 {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
@@ -644,7 +644,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> PacketNotifiable
 }
 
 // NetEntityConverter
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> NetEntityConverter<E>
+impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> NetEntityConverter<E>
     for EntityManager<P, E, C>
 {
     fn entity_to_net_entity(&self, entity: &E) -> NetEntity {

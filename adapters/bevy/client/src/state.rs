@@ -5,23 +5,25 @@ use bevy::ecs::{
     world::World,
 };
 
-use naia_client::shared::Protocolize;
+use naia_client::shared::{ChannelIndex, Protocolize};
 
 use super::client::Client;
 
 // State
 
-pub struct State<P: Protocolize> {
+pub struct State<P: Protocolize, C: ChannelIndex> {
     phantom_p: PhantomData<P>,
+    phantom_c: PhantomData<C>,
 }
 
 // SAFE: only local state is accessed
-unsafe impl<P: Protocolize> SystemParamState for State<P> {
+unsafe impl<P: Protocolize, C: ChannelIndex> SystemParamState for State<P, C> {
     type Config = ();
 
     fn init(_world: &mut World, _system_state: &mut SystemMeta, _config: Self::Config) -> Self {
         State {
             phantom_p: PhantomData,
+            phantom_c: PhantomData,
         }
     }
 
@@ -30,8 +32,8 @@ unsafe impl<P: Protocolize> SystemParamState for State<P> {
     fn default_config() {}
 }
 
-impl<'world, 'state, P: Protocolize> SystemParamFetch<'world, 'state> for State<P> {
-    type Item = Client<'world, P>;
+impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParamFetch<'world, 'state> for State<P, C> {
+    type Item = Client<'world, P, C>;
 
     #[inline]
     unsafe fn get_param(

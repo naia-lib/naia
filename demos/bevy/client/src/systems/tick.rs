@@ -5,21 +5,22 @@ use bevy::ecs::{
 };
 
 use naia_bevy_client::{components::Predicted, Client};
+use naia_bevy_client::shared::DefaultChannels;
 
 use naia_bevy_demo_shared::protocol::Protocol;
 
 use crate::resources::Global;
 
 pub fn tick(
-    mut client: Client<Protocol>,
+    mut _client: Client<Protocol, DefaultChannels>,
     mut global: ResMut<Global>,
     q_player_position: Query<Entity, With<Predicted>>,
 ) {
     //All game logic should happen here, on a tick event
     //info!("tick");
 
-    if let Ok(entity) = q_player_position.get_single() {
-        if let Some(command) = global.queued_command.take() {
+    if let Ok(_entity) = q_player_position.get_single() {
+        if let Some(_command) = global.queued_command.take() {
             //client.send_command(&entity, command);
             unimplemented!();
         }

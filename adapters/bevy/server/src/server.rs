@@ -6,32 +6,29 @@ use bevy::ecs::{
     world::{Mut, World},
 };
 
-use naia_server::{
-    shared::{Protocolize, Replicate},
-    EntityRef, Event, NaiaServerError, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
-    ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
-};
+use naia_server::{shared::Protocolize, Event, NaiaServerError, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut, EntityRef};
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
+use naia_server::shared::{ChannelIndex, ReplicateSafe};
 
 use super::{commands::Command, entity_mut::EntityMut, state::State};
 
 // Server
 
-pub struct Server<'world, 'state, P: Protocolize> {
-    state: &'state mut State<P>,
+pub struct Server<'world, 'state, P: Protocolize, C: ChannelIndex> {
+    state: &'state mut State<P, C>,
     world: &'world World,
-    server: Mut<'world, NaiaServer<P, Entity>>,
+    server: Mut<'world, NaiaServer<P, Entity, C>>,
     phantom_p: PhantomData<P>,
 }
 
-impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
+impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, C> {
     // Public Methods //
 
-    pub fn new(state: &'state mut State<P>, world: &'world World) -> Self {
+    pub fn new(state: &'state mut State<P, C>, world: &'world World) -> Self {
         unsafe {
             let server = world
-                .get_resource_unchecked_mut::<NaiaServer<P, Entity>>()
+                .get_resource_unchecked_mut::<NaiaServer<P, Entity, C>>()
                 .expect("Naia Server has not been correctly initialized!");
 
             Self {
@@ -43,13 +40,13 @@ impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
         }
     }
 
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P, Entity>, NaiaServerError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P, C>, NaiaServerError>> {
         return self.server.receive();
     }
 
     //// Connections ////
 
-    pub fn listen(&mut self, server_addrs: ServerAddrs) {
+    pub fn listen(&mut self, server_addrs: &ServerAddrs) {
         self.server.listen(server_addrs);
     }
 
@@ -62,15 +59,15 @@ impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
     }
 
     //// Messages ////
-    pub fn send_message<R: Replicate<P>>(
+    pub fn send_message<R: ReplicateSafe<P>>(
         &mut self,
         user_key: &UserKey,
-        message_ref: &R,
-        guaranteed_delivery: bool,
+        channel: C,
+        message: &R,
     ) {
         return self
             .server
-            .send_message(user_key, message_ref, guaranteed_delivery);
+            .send_message(user_key, channel, message);
     }
 
     //// Updates ////
@@ -85,7 +82,7 @@ impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
 
     //// Entities ////
 
-    pub fn spawn<'a>(&'a mut self) -> EntityMut<'a, 'world, 'state, P> {
+    pub fn spawn<'a>(&'a mut self) -> EntityMut<'a, 'world, 'state, P, C> {
         let entity = self.world.entities().reserve_entity();
         self.server.spawn_entity_at(&entity);
         EntityMut::new(entity, self)
@@ -95,7 +92,7 @@ impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
         return self.server.entity(self.world.proxy(), entity);
     }
 
-    pub fn entity_mut<'a>(&'a mut self, entity: &Entity) -> EntityMut<'a, 'world, 'state, P> {
+    pub fn entity_mut<'a>(&'a mut self, entity: &Entity) -> EntityMut<'a, 'world, 'state, P, C> {
         EntityMut::new(*entity, self)
     }
 
@@ -109,11 +106,11 @@ impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
         return self.server.user_exists(user_key);
     }
 
-    pub fn user(&self, user_key: &UserKey) -> UserRef<P, Entity> {
+    pub fn user(&self, user_key: &UserKey) -> UserRef<P, Entity, C> {
         return self.server.user(user_key);
     }
 
-    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, Entity> {
+    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, Entity, C> {
         return self.server.user_mut(user_key);
     }
 
@@ -125,13 +122,13 @@ impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
         return self.server.users_count();
     }
 
-    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, Entity> {
+    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, Entity, C> {
         return self.server.user_scope(user_key);
     }
 
     //// Rooms ////
 
-    pub fn make_room(&mut self) -> RoomMut<P, Entity> {
+    pub fn make_room(&mut self) -> RoomMut<P, Entity, C> {
         return self.server.make_room();
     }
 
@@ -139,11 +136,11 @@ impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
         return self.server.room_exists(room_key);
     }
 
-    pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, Entity> {
+    pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, Entity, C> {
         return self.server.room(room_key);
     }
 
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, Entity> {
+    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, Entity, C> {
         return self.server.room_mut(room_key);
     }
 
@@ -167,7 +164,7 @@ impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
 
     // Crate-public methods
 
-    pub(crate) fn queue_command<C: Command<P>>(&mut self, command: C) {
+    pub(crate) fn queue_command<COMMAND: Command<P, C>>(&mut self, command: COMMAND) {
         self.state.push(command);
     }
 
@@ -184,6 +181,6 @@ impl<'world, 'state, P: Protocolize> Server<'world, 'state, P> {
     // Private methods
 }
 
-impl<'world, 'state, P: Protocolize> SystemParam for Server<'world, 'state, P> {
-    type Fetch = State<P>;
+impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParam for Server<'world, 'state, P, C> {
+    type Fetch = State<P, C>;
 }

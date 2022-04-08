@@ -3,7 +3,7 @@ use naia_socket_shared::Instant;
 
 use crate::types::MessageId;
 
-pub trait ChannelSender<P> {
+pub trait ChannelSender<P>: Send + Sync {
     fn send_message(&mut self, message: P);
     fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32);
     fn has_messages(&self) -> bool;
@@ -15,7 +15,7 @@ pub trait ChannelSender<P> {
     fn notify_message_delivered(&mut self, message_id: &MessageId);
 }
 
-pub trait ChannelReceiver<P> {
+pub trait ChannelReceiver<P>: Send + Sync {
     fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader);
     fn receive_messages(&mut self) -> Vec<P>;
 }

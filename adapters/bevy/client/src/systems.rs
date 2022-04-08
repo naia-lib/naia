@@ -9,6 +9,7 @@ use bevy::{
 };
 use naia_bevy_shared::WorldProxyMut;
 use naia_client::{shared::Protocolize, Client, Event};
+use naia_client::shared::ChannelIndex;
 
 use crate::events::{
     DespawnEntityEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent,
@@ -16,8 +17,8 @@ use crate::events::{
 
 use super::{components::Confirmed, resource::ClientResource};
 
-pub fn before_receive_events<P: Protocolize>(world: &mut World) {
-    world.resource_scope(|world, mut client: Mut<Client<P, Entity>>| {
+pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World) {
+    world.resource_scope(|world, mut client: Mut<Client<P, Entity, C>>| {
         world.resource_scope(|world, mut client_resource: Mut<ClientResource>| {
             let event_results = client.receive(world.proxy_mut());
 
@@ -25,19 +26,19 @@ pub fn before_receive_events<P: Protocolize>(world: &mut World) {
 
             unsafe {
                 let mut spawn_entity_event_writer = world
-                    .get_resource_unchecked_mut::<Events<SpawnEntityEvent<P>>>()
+                    .get_resource_unchecked_mut::<Events<SpawnEntityEvent>>()
                     .unwrap();
                 let mut despawn_entity_event_writer = world
                     .get_resource_unchecked_mut::<Events<DespawnEntityEvent>>()
                     .unwrap();
                 let mut insert_component_event_writer = world
-                    .get_resource_unchecked_mut::<Events<InsertComponentEvent<P>>>()
+                    .get_resource_unchecked_mut::<Events<InsertComponentEvent<P::Kind>>>()
                     .unwrap();
                 let mut remove_component_event_writer = world
                     .get_resource_unchecked_mut::<Events<RemoveComponentEvent<P>>>()
                     .unwrap();
                 let mut message_event_writer = world
-                    .get_resource_unchecked_mut::<Events<MessageEvent<P>>>()
+                    .get_resource_unchecked_mut::<Events<MessageEvent<P, C>>>()
                     .unwrap();
 
                 for event_result in event_results {
@@ -54,10 +55,10 @@ pub fn before_receive_events<P: Protocolize>(world: &mut World) {
                             client_resource.ticker.set();
                             continue;
                         }
-                        Ok(Event::SpawnEntity(entity, components)) => {
+                        Ok(Event::SpawnEntity(entity)) => {
                             entities_to_spawn.push(entity);
                             spawn_entity_event_writer
-                                .send(SpawnEntityEvent::<P>(entity, components));
+                                .send(SpawnEntityEvent(entity));
                         }
                         Ok(Event::DespawnEntity(entity)) => {
                             despawn_entity_event_writer.send(DespawnEntityEvent(entity));
@@ -70,11 +71,8 @@ pub fn before_receive_events<P: Protocolize>(world: &mut World) {
                             remove_component_event_writer
                                 .send(RemoveComponentEvent(entity, component));
                         }
-                        Ok(Event::Message(message)) => {
-                            message_event_writer.send(MessageEvent(message));
-                        }
-                        Ok(Event::MessageEntity(_, _)) => {
-                            unimplemented!();
+                        Ok(Event::Message(channel, message)) => {
+                            message_event_writer.send(MessageEvent(channel, message));
                         }
                         Ok(Event::UpdateComponent(_, _, _)) => {
                             unimplemented!();
@@ -127,7 +125,7 @@ pub fn finish_tick(mut resource: ResMut<ClientResource>) {
     resource.ticker.reset();
 }
 
-pub fn should_receive<P: Protocolize>(client: Res<Client<P, Entity>>) -> ShouldRun {
+pub fn should_receive<P: Protocolize, C: ChannelIndex>(client: Res<Client<P, Entity, C>>) -> ShouldRun {
     if client.is_connected() {
         ShouldRun::Yes
     } else {

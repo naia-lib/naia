@@ -45,7 +45,7 @@ use super::{
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
-pub struct Server<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+pub struct Server<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
     // Config
     server_config: ServerConfig,
     shared_config: SharedConfig<C>,
@@ -71,7 +71,7 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     tick_manager: Option<TickManager>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
+impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<P, E, C> {
     /// Create a new Server
     pub fn new(server_config: &ServerConfig, shared_config: &SharedConfig<C>) -> Self {
         let socket = Socket::new(&shared_config.socket);
@@ -1125,7 +1125,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Server<P, E, C> {
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter<E>
+impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityHandleConverter<E>
     for Server<P, E, C>
 {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
