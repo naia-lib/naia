@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
-use hecs::{Entity, World};
+use hecs::Entity;
 
 use naia_hecs_server::{
-    shared::DefaultChannels, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldData,
+    shared::DefaultChannels, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldWrapper as World,
 };
 
 use naia_hecs_demo_shared::{protocol::Protocol, shared_config};
@@ -19,8 +19,7 @@ pub type Server = NaiaServer<Protocol, Entity, DefaultChannels>;
 pub struct App {
     pub has_user: bool,
     pub server: Server,
-    pub world: World,
-    pub world_data: WorldData<Protocol>,
+    pub world: World<Protocol>,
     pub main_room_key: RoomKey,
     pub tick_count: u32,
     pub has_marker: HashSet<Entity>,
