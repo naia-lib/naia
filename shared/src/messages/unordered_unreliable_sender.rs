@@ -10,11 +10,11 @@ use super::{
     message_list_header::write,
 };
 
-pub struct UnorderedUnreliableSender<P> {
+pub struct UnorderedUnreliableSender<P: Send> {
     outgoing_messages: VecDeque<P>,
 }
 
-impl<P> UnorderedUnreliableSender<P> {
+impl<P: Send> UnorderedUnreliableSender<P> {
     pub fn new() -> Self {
         Self {
             outgoing_messages: VecDeque::new(),
@@ -31,7 +31,7 @@ impl<P> UnorderedUnreliableSender<P> {
     }
 }
 
-impl<P> ChannelSender<P> for UnorderedUnreliableSender<P> {
+impl<P: Send + Sync> ChannelSender<P> for UnorderedUnreliableSender<P> {
     fn send_message(&mut self, message: P) {
         self.outgoing_messages.push_back(message);
     }

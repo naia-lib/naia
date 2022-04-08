@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use bevy::ecs::entity::Entity;
 
 use naia_server::{
-    shared::{Protocolize, Replicate},
+    shared::{Protocolize, Replicate, ChannelIndex},
     Server,
 };
 
@@ -11,8 +11,8 @@ use naia_bevy_shared::WorldMut;
 
 // Command Trait
 
-pub trait Command<P: Protocolize>: Send + Sync + 'static {
-    fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: WorldMut);
+pub trait Command<P: Protocolize, C: ChannelIndex>: Send + Sync + 'static {
+    fn write(self: Box<Self>, server: &mut Server<P, Entity, C>, world: WorldMut);
 }
 
 //// Despawn Component ////
@@ -28,8 +28,8 @@ impl DespawnEntity {
     }
 }
 
-impl<P: Protocolize> Command<P> for DespawnEntity {
-    fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: WorldMut) {
+impl<P: Protocolize, C: ChannelIndex> Command<P, C> for DespawnEntity {
+    fn write(self: Box<Self>, server: &mut Server<P, Entity, C>, world: WorldMut) {
         server.entity_mut(world, &self.entity).despawn();
     }
 }
@@ -53,8 +53,8 @@ impl<P: Protocolize, R: Replicate<P>> InsertComponent<P, R> {
     }
 }
 
-impl<P: Protocolize, R: Replicate<P>> Command<P> for InsertComponent<P, R> {
-    fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: WorldMut) {
+impl<P: Protocolize, R: Replicate<P>, C: ChannelIndex> Command<P, C> for InsertComponent<P, R> {
+    fn write(self: Box<Self>, server: &mut Server<P, Entity, C>, world: WorldMut) {
         server
             .entity_mut(world, &self.entity)
             .insert_component(self.component);
@@ -80,8 +80,8 @@ impl<P: Protocolize, R: Replicate<P>> RemoveComponent<P, R> {
     }
 }
 
-impl<P: Protocolize, R: Replicate<P>> Command<P> for RemoveComponent<P, R> {
-    fn write(self: Box<Self>, server: &mut Server<P, Entity>, world: WorldMut) {
+impl<P: Protocolize, R: Replicate<P>, C: ChannelIndex> Command<P, C> for RemoveComponent<P, R> {
+    fn write(self: Box<Self>, server: &mut Server<P, Entity, C>, world: WorldMut) {
         server
             .entity_mut(world, &self.entity)
             .remove_component::<R>();

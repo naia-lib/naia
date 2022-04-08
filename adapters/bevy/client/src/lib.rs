@@ -1,4 +1,4 @@
-pub use naia_client::{shared::Random, ClientConfig};
+pub use naia_client::*;
 
 pub mod components;
 pub mod events;

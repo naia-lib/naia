@@ -35,7 +35,7 @@ pub enum EntityChannel<K: ProtocolKindType> {
 
 // WorldChannel
 
-pub struct WorldChannel<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+pub struct WorldChannel<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
     host_world: CheckedMap<E, CheckedSet<P::Kind>>,
     remote_world: CheckedMap<E, CheckedSet<P::Kind>>,
     entity_channels: CheckedMap<E, EntityChannel<P::Kind>>,
@@ -50,7 +50,7 @@ pub struct WorldChannel<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub delayed_entity_messages: EntityMessageWaitlist<P, E, C>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> WorldChannel<P, E, C> {
+impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldChannel<P, E, C> {
     pub fn new(
         address: SocketAddr,
         diff_handler: &Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,

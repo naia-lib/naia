@@ -1,29 +1,26 @@
 use bevy::{
-    ecs::system::{Query, ResMut},
+    ecs::system::ResMut,
     log::info,
     prelude::*,
 };
 
 use naia_bevy_server::{
-    events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEntityEvent},
-    Random, Server,
+    events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent},
+    shared::{DefaultChannels, Random}, Server,
 };
 
-use naia_bevy_demo_shared::{
-    behavior as shared_behavior,
-    protocol::{Color, ColorValue, Position, Protocol},
-};
+use naia_bevy_demo_shared::protocol::{Color, ColorValue, Position, Protocol};
 
 use crate::resources::Global;
 
 pub fn authorization_event(
     mut event_reader: EventReader<AuthorizationEvent<Protocol>>,
-    mut server: Server<Protocol>,
+    mut server: Server<Protocol, DefaultChannels>,
 ) {
     for event in event_reader.iter() {
         if let AuthorizationEvent(user_key, Protocol::Auth(auth_message)) = event {
-            let username = auth_message.username.get();
-            let password = auth_message.password.get();
+            let ref username = *auth_message.username;
+            let ref password = *auth_message.password;
             if username == "charlie" && password == "12345" {
                 // Accept incoming connection
                 server.accept_connection(&user_key);
@@ -37,7 +34,7 @@ pub fn authorization_event(
 
 pub fn connection_event<'world, 'state>(
     mut event_reader: EventReader<ConnectionEvent>,
-    mut server: Server<'world, 'state, Protocol>,
+    mut server: Server<'world, 'state, Protocol, DefaultChannels>,
     mut global: ResMut<Global>,
 ) {
     for event in event_reader.iter() {
@@ -80,8 +77,6 @@ pub fn connection_event<'world, 'state>(
             .insert(position)
             // Insert Color component
             .insert(color)
-            // Set Entity's owner to user
-            .send_message(&user_key, EntityAssignment::new(true))
             // return Entity id
             .id();
 
@@ -91,7 +86,7 @@ pub fn connection_event<'world, 'state>(
 
 pub fn disconnection_event(
     mut event_reader: EventReader<DisconnectionEvent>,
-    mut server: Server<Protocol>,
+    mut server: Server<Protocol, DefaultChannels>,
     mut global: ResMut<Global>,
 ) {
     for event in event_reader.iter() {
@@ -103,19 +98,6 @@ pub fn disconnection_event(
                 .entity_mut(&entity)
                 .leave_room(&global.main_room_key)
                 .despawn();
-        }
-    }
-}
-
-pub fn command_event(
-    mut event_reader: EventReader<MessageEntityEvent<Protocol>>,
-    mut q_player_position: Query<&mut Position>,
-) {
-    for event in event_reader.iter() {
-        if let MessageEntityEvent(_, entity, Protocol::KeyCommand(key_command)) = event {
-            if let Ok(mut position) = q_player_position.get_mut(*entity) {
-                shared_behavior::process_command(key_command, &mut position);
-            }
         }
     }
 }

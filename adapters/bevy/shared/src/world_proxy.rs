@@ -3,10 +3,8 @@ use bevy::ecs::{
     world::{Mut, World},
 };
 
-use naia_shared::{
-    DiffMask, PacketReader, ProtocolInserter, ProtocolKindType, Protocolize, ReplicaDynRefWrapper,
-    ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe, WorldMutType, WorldRefType,
-};
+use naia_shared::{ProtocolInserter, ProtocolKindType, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe, WorldMutType, WorldRefType, NetEntityHandleConverter};
+use naia_shared::serde::BitReader;
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -70,7 +68,7 @@ impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldRef<'w> {
         return component(self.world, entity);
     }
 
-    fn component_of_kind(&self, entity: &Entity, component_kind: &P::Kind) -> Option<&P> {
+    fn component_of_kind(&self, entity: &Entity, component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<P>> {
         return component_of_kind::<P>(self.world, entity, component_kind);
     }
 }
@@ -108,7 +106,7 @@ impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
         return component(self.world, entity);
     }
 
-    fn component_of_kind(&self, entity: &Entity, component_kind: &P::Kind) -> Option<&P> {
+    fn component_of_kind(&self, entity: &Entity, component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<P>> {
         return component_of_kind(self.world, entity, component_kind);
     }
 }
@@ -165,15 +163,14 @@ impl<'w, P: 'static + Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
         &mut self,
         entity: &Entity,
         component_kind: &P::Kind,
-        diff_mask: &DiffMask,
-        reader: &mut PacketReader,
-        packet_index: PacketIndex,
+        bit_reader: &mut BitReader,
+        converter: &dyn NetEntityHandleConverter,
     ) {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
                 if let Some(accessor) = data.component_access(component_kind) {
                     if let Some(mut component) = accessor.component_mut(world, entity) {
-                        component.read_partial(diff_mask, reader, packet_index);
+                        component.read_partial(bit_reader, converter);
                     }
                 }
             });

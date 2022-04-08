@@ -1,4 +1,5 @@
 use std::{ops::DerefMut, sync::Mutex};
+use std::marker::PhantomData;
 
 use bevy::{
     app::{App, CoreStage, Plugin as PluginType},
@@ -10,6 +11,7 @@ use naia_client::{
     shared::{Protocolize, SharedConfig},
     Client, ClientConfig,
 };
+use naia_client::shared::ChannelIndex;
 
 use crate::systems::should_receive;
 
@@ -26,13 +28,13 @@ use super::{
     },
 };
 
-struct PluginConfig<P: Protocolize> {
+struct PluginConfig<C: ChannelIndex> {
     client_config: ClientConfig,
-    shared_config: SharedConfig<P>,
+    shared_config: SharedConfig<C>,
 }
 
-impl<P: Protocolize> PluginConfig<P> {
-    pub fn new(client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
+impl<C: ChannelIndex> PluginConfig<C> {
+    pub fn new(client_config: ClientConfig, shared_config: SharedConfig<C>) -> Self {
         PluginConfig {
             client_config,
             shared_config,
@@ -40,23 +42,25 @@ impl<P: Protocolize> PluginConfig<P> {
     }
 }
 
-pub struct Plugin<P: Protocolize> {
-    config: Mutex<Option<PluginConfig<P>>>,
+pub struct Plugin<P: Protocolize, C: ChannelIndex> {
+    config: Mutex<Option<PluginConfig<C>>>,
+    phantom_p: PhantomData<P>
 }
 
-impl<P: Protocolize> Plugin<P> {
-    pub fn new(client_config: ClientConfig, shared_config: SharedConfig<P>) -> Self {
+impl<P: Protocolize, C: ChannelIndex> Plugin<P, C> {
+    pub fn new(client_config: ClientConfig, shared_config: SharedConfig<C>) -> Self {
         let config = PluginConfig::new(client_config, shared_config);
         return Plugin {
             config: Mutex::new(Some(config)),
+            phantom_p: PhantomData,
         };
     }
 }
 
-impl<P: Protocolize> PluginType for Plugin<P> {
+impl<P: Protocolize, C: ChannelIndex> PluginType for Plugin<P, C> {
     fn build(&self, app: &mut App) {
         let config = self.config.lock().unwrap().deref_mut().take().unwrap();
-        let client = Client::<P, Entity>::new(config.client_config, config.shared_config);
+        let client = Client::<P, Entity, C>::new(&config.client_config, &config.shared_config);
 
         app
         // RESOURCES //
@@ -64,22 +68,22 @@ impl<P: Protocolize> PluginType for Plugin<P> {
             .insert_resource(ClientResource::new())
             .insert_resource(WorldData::<P>::new())
         // EVENTS //
-            .add_event::<SpawnEntityEvent<P>>()
+            .add_event::<SpawnEntityEvent>()
             .add_event::<DespawnEntityEvent>()
-            .add_event::<InsertComponentEvent<P>>()
-            .add_event::<UpdateComponentEvent<P>>()
+            .add_event::<InsertComponentEvent<P::Kind>>()
+            .add_event::<UpdateComponentEvent<P::Kind>>()
             .add_event::<RemoveComponentEvent<P>>()
-            .add_event::<MessageEvent<P>>()
+            .add_event::<MessageEvent<P, C>>()
         // STAGES //
             // events //
             .add_stage_before(CoreStage::PreUpdate,
                               PrivateStage::BeforeReceiveEvents,
                               SystemStage::single_threaded()
-                                  .with_run_criteria(should_receive::<P>))
+                                  .with_run_criteria(should_receive::<P, C>))
             .add_stage_after(PrivateStage::BeforeReceiveEvents,
                              Stage::ReceiveEvents,
                              SystemStage::single_threaded()
-                                 .with_run_criteria(should_receive::<P>))
+                                 .with_run_criteria(should_receive::<P, C>))
             .add_stage_after(PrivateStage::BeforeReceiveEvents,
                               Stage::Connection,
                               SystemStage::single_threaded()
@@ -117,7 +121,7 @@ impl<P: Protocolize> PluginType for Plugin<P> {
                                  .with_run_criteria(should_tick))
             // SYSTEMS //
             .add_system_to_stage(PrivateStage::BeforeReceiveEvents,
-                                 before_receive_events::<P>.exclusive_system())
+                                 before_receive_events::<P, C>.exclusive_system())
             .add_system_to_stage(PrivateStage::AfterConnection,
                                  finish_connect)
             .add_system_to_stage(PrivateStage::AfterDisconnection,

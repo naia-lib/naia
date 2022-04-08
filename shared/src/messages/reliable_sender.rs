@@ -13,14 +13,14 @@ use super::{
 
 // Sender
 
-pub struct ReliableSender<P> {
+pub struct ReliableSender<P: Send + Sync> {
     rtt_resend_factor: f32,
     sending_messages: VecDeque<Option<(MessageId, Option<Instant>, P)>>,
     next_send_message_id: MessageId,
     next_send_messages: VecDeque<(MessageId, P)>,
 }
 
-impl<P> ReliableSender<P> {
+impl<P: Send + Sync> ReliableSender<P> {
     pub fn new(rtt_resend_factor: f32) -> Self {
         Self {
             rtt_resend_factor,
@@ -106,7 +106,7 @@ impl<P> ReliableSender<P> {
     }
 }
 
-impl<P: Clone> ChannelSender<P> for ReliableSender<P> {
+impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
     fn send_message(&mut self, message: P) {
         self.sending_messages
             .push_back(Some((self.next_send_message_id, None, message)));

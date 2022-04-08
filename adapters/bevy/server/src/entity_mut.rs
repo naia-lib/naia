@@ -4,6 +4,7 @@ use naia_server::{
     shared::{Protocolize, Replicate},
     RoomKey,
 };
+use naia_server::shared::ChannelIndex;
 
 use super::{
     commands::{DespawnEntity, InsertComponent, RemoveComponent},
@@ -12,13 +13,13 @@ use super::{
 
 // EntityMut
 
-pub struct EntityMut<'s, 'world, 'state, P: Protocolize> {
+pub struct EntityMut<'s, 'world, 'state, P: Protocolize, C: ChannelIndex> {
     entity: Entity,
-    server: &'s mut Server<'world, 'state, P>,
+    server: &'s mut Server<'world, 'state, P, C>,
 }
 
-impl<'s, 'world, 'state, P: Protocolize> EntityMut<'s, 'world, 'state, P> {
-    pub fn new(entity: Entity, server: &'s mut Server<'world, 'state, P>) -> Self {
+impl<'s, 'world, 'state, P: Protocolize, C: ChannelIndex> EntityMut<'s, 'world, 'state, P, C> {
+    pub fn new(entity: Entity, server: &'s mut Server<'world, 'state, P, C>) -> Self {
         return EntityMut { entity, server };
     }
 
@@ -63,7 +64,7 @@ impl<'s, 'world, 'state, P: Protocolize> EntityMut<'s, 'world, 'state, P> {
 
     // Exit
 
-    pub fn server(&mut self) -> &mut Server<'world, 'state, P> {
+    pub fn server(&mut self) -> &mut Server<'world, 'state, P, C> {
         self.server
     }
 }

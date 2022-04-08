@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
+
+use naia_bevy_server::{Server, ServerAddrs, shared::DefaultChannels};
+
 use naia_bevy_demo_shared::protocol::Protocol;
-use naia_bevy_server::{Server, ServerAddrs};
 
 use crate::resources::Global;
 
-pub fn init(mut commands: Commands, mut server: Server<Protocol>) {
+pub fn init(mut commands: Commands, mut server: Server<Protocol, DefaultChannels>) {
     info!("Naia Bevy Server Demo is running");
 
     // Naia Server initialization
@@ -22,7 +24,7 @@ pub fn init(mut commands: Commands, mut server: Server<Protocol>) {
         "http://127.0.0.1:14192",
     );
 
-    server.listen(server_addresses);
+    server.listen(&server_addresses);
 
     // Create a new, singular room, which will contain Users and Entities that they
     // can receive updates from

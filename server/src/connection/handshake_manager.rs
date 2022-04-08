@@ -100,7 +100,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         writer
     }
 
-    pub fn verify_disconnect_request<E: Copy + Eq + Hash, C: ChannelIndex>(
+    pub fn verify_disconnect_request<E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex>(
         &mut self,
         connection: &Connection<P, E, C>,
         reader: &mut BitReader,

@@ -100,12 +100,12 @@ use super::server::Server;
 
 // RoomRef
 
-pub struct RoomRef<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+pub struct RoomRef<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
     server: &'s Server<P, E, C>,
     key: RoomKey,
 }
 
-impl<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> RoomRef<'s, P, E, C> {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> RoomRef<'s, P, E, C> {
     pub fn new(server: &'s Server<P, E, C>, key: &RoomKey) -> Self {
         RoomRef { server, key: *key }
     }
@@ -136,12 +136,12 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> RoomRef<'s, P, E,
 }
 
 // RoomMut
-pub struct RoomMut<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+pub struct RoomMut<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
     server: &'s mut Server<P, E, C>,
     key: RoomKey,
 }
 
-impl<'s, P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> RoomMut<'s, P, E, C> {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> RoomMut<'s, P, E, C> {
     pub fn new(server: &'s mut Server<P, E, C>, key: &RoomKey) -> Self {
         RoomMut { server, key: *key }
     }

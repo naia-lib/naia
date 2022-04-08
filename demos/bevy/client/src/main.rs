@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, Stage};
+use naia_bevy_client::shared::DefaultChannels;
+use naia_bevy_demo_shared::protocol::Protocol;
 use naia_bevy_demo_shared::shared_config;
 
 mod resources;
@@ -12,7 +14,7 @@ fn main() {
 
     // Plugins
     app.add_plugins(DefaultPlugins)
-        .add_plugin(ClientPlugin::new(ClientConfig::default(), shared_config()));
+        .add_plugin(ClientPlugin::<Protocol, DefaultChannels>::new(ClientConfig::default(), shared_config()));
 
     app
     // Startup System
@@ -27,7 +29,7 @@ fn main() {
         events::disconnect_event)
     .add_system_to_stage(
         Stage::ReceiveEvents,
-        events::spawn_entity_event)
+        events::insert_component_event)
     .add_system_to_stage(
         Stage::Frame,
         input)

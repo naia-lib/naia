@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 
 use bevy::ecs::{
     entity::Entity,
@@ -6,7 +5,7 @@ use bevy::ecs::{
     world::{Mut, World},
 };
 
-use naia_server::{shared::Protocolize, Server as NaiaServer};
+use naia_server::{shared::{Protocolize, ChannelIndex}, Server as NaiaServer};
 
 use naia_bevy_shared::WorldProxyMut;
 
@@ -14,19 +13,18 @@ use super::{commands::Command, server::Server};
 
 // State
 
-pub struct State<P: Protocolize> {
-    commands: Vec<Box<dyn Command<P>>>,
-    phantom_p: PhantomData<P>,
+pub struct State<P: Protocolize, C: ChannelIndex> {
+    commands: Vec<Box<dyn Command<P, C>>>,
 }
 
-impl<P: Protocolize> State<P> {
+impl<P: Protocolize, C: ChannelIndex> State<P, C> {
     pub fn apply(&mut self, world: &mut World) {
         // Have to do this to get around 'world.flush()' only being crate-public
         world.spawn().despawn();
 
         // resource scope
         world.resource_scope(
-            |world: &mut World, mut server: Mut<NaiaServer<P, Entity>>| {
+            |world: &mut World, mut server: Mut<NaiaServer<P, Entity, C>>| {
                 // Process queued commands
                 for command in self.commands.drain(..) {
                     command.write(&mut server, world.proxy_mut());
@@ -36,24 +34,23 @@ impl<P: Protocolize> State<P> {
     }
 
     #[inline]
-    pub fn push_boxed(&mut self, command: Box<dyn Command<P>>) {
+    pub fn push_boxed(&mut self, command: Box<dyn Command<P, C>>) {
         self.commands.push(command);
     }
 
     #[inline]
-    pub fn push<T: Command<P>>(&mut self, command: T) {
+    pub fn push<T: Command<P, C>>(&mut self, command: T) {
         self.push_boxed(Box::new(command));
     }
 }
 
 // SAFE: only local state is accessed
-unsafe impl<P: Protocolize> SystemParamState for State<P> {
+unsafe impl<P: Protocolize, C: ChannelIndex> SystemParamState for State<P, C> {
     type Config = ();
 
     fn init(_world: &mut World, _system_state: &mut SystemMeta, _config: Self::Config) -> Self {
         State {
             commands: Vec::new(),
-            phantom_p: PhantomData,
         }
     }
 
@@ -64,8 +61,8 @@ unsafe impl<P: Protocolize> SystemParamState for State<P> {
     fn default_config() {}
 }
 
-impl<'world, 'state, P: Protocolize> SystemParamFetch<'world, 'state> for State<P> {
-    type Item = Server<'world, 'state, P>;
+impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParamFetch<'world, 'state> for State<P, C> {
+    type Item = Server<'world, 'state, P, C>;
 
     #[inline]
     unsafe fn get_param(

@@ -12,24 +12,26 @@ use naia_client::{
 };
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
+use naia_client::shared::ChannelIndex;
+use crate::shared::ReplicateSafe;
 
 use super::state::State;
 
 // Client
 
-pub struct Client<'a, P: Protocolize> {
+pub struct Client<'a, P: Protocolize, C: ChannelIndex> {
     world: &'a World,
-    client: Mut<'a, NaiaClient<P, Entity>>,
+    client: Mut<'a, NaiaClient<P, Entity, C>>,
     phantom_p: PhantomData<P>,
 }
 
-impl<'a, P: Protocolize> Client<'a, P> {
+impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
     // Public Methods //
 
     pub fn new(world: &'a World) -> Self {
         unsafe {
             let client = world
-                .get_resource_unchecked_mut::<NaiaClient<P, Entity>>()
+                .get_resource_unchecked_mut::<NaiaClient<P, Entity, C>>()
                 .expect("Naia Client has not been correctly initialized!");
 
             Self {
@@ -77,8 +79,8 @@ impl<'a, P: Protocolize> Client<'a, P> {
     }
 
     //// Messages ////
-    pub fn send_message<R: Replicate<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
-        return self.client.send_message(message_ref, guaranteed_delivery);
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+        return self.client.send_message(channel, message);
     }
 
     //// Entities ////
@@ -98,6 +100,6 @@ impl<'a, P: Protocolize> Client<'a, P> {
     }
 }
 
-impl<'a, P: Protocolize> SystemParam for Client<'a, P> {
-    type Fetch = State<P>;
+impl<'a, P: Protocolize, C: ChannelIndex> SystemParam for Client<'a, P, C> {
+    type Fetch = State<P, C>;
 }
