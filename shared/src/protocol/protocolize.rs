@@ -17,7 +17,7 @@ pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
     /// Get kind from a type_id
     fn type_to_kind(type_id: TypeId) -> Self::Kind;
     /// Build a new Replica
-    fn build(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Self;
+    fn read(bit_reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Self;
     /// Get an immutable reference to the inner Component/Message as a
     /// Replicate trait object
     fn dyn_ref(&self) -> ReplicaDynRef<'_, Self>;
@@ -35,13 +35,13 @@ pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
     fn extract_and_insert<N, X: ProtocolInserter<Self, N>>(&self, entity: &N, inserter: &mut X);
     /// Writes data into an outgoing byte stream, sufficient to completely
     /// recreate the Message/Component on the client
-    fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
+    fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Message/Component on the client
     fn write_partial(
         &self,
         diff_mask: &DiffMask,
-        writer: &mut dyn BitWrite,
+        bit_writer: &mut dyn BitWrite,
         converter: &dyn NetEntityHandleConverter,
     );
 }

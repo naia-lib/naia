@@ -129,8 +129,6 @@ impl<P: Protocolize> HandshakeManager<P> {
         if let Some(auth_message) = &self.auth_message {
             // write that we have auth
             true.ser(&mut writer);
-            // write auth kind
-            auth_message.dyn_ref().kind().ser(&mut writer);
             // write payload
             auth_message.write(&mut writer, &FakeEntityConverter);
         } else {
