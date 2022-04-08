@@ -1,8 +1,9 @@
+use std::collections::HashMap;
 use log::info;
 
-use hecs::{Entity, World};
+use hecs::Entity;
 
-use naia_hecs_client::{shared::DefaultChannels, Client as NaiaClient, ClientConfig, WorldData};
+use naia_hecs_client::{shared::DefaultChannels, Client as NaiaClient, ClientConfig, WorldWrapper as World};
 
 use naia_hecs_demo_shared::{
     protocol::{Auth, Protocol},
@@ -15,9 +16,10 @@ pub type Client = NaiaClient<Protocol, Entity, DefaultChannels>;
 
 pub struct App {
     pub client: Client,
-    pub world: World,
+    pub world: World<Protocol>,
     pub message_count: u32,
-    pub world_data: WorldData<Protocol>,
+    pub entity_to_id_map: HashMap<Entity, u32>,
+    pub next_id: u32,
 }
 
 impl App {

@@ -144,7 +144,7 @@ impl<P: Protocolize> WorldMutType<P, Entity> for &mut WorldWrapper<P> {
         return None;
     }
 
-    fn component_read_partial(
+    fn component_apply_update(
         &mut self,
         entity: &Entity,
         component_kind: &P::Kind,

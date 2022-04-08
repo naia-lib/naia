@@ -54,7 +54,7 @@ pub trait WorldMutType<P: Protocolize, E>: WorldRefType<P, E> + ProtocolInserter
         entity: &E,
     ) -> Option<ReplicaMutWrapper<'a, P, R>>;
     /// reads an incoming stream into a component
-    fn component_read_partial(
+    fn component_apply_update(
         &mut self,
         entity: &E,
         component_kind: &P::Kind,

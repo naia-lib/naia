@@ -60,16 +60,16 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
         return self.entity_records.contains_key(entity);
     }
 
-    pub fn component_kinds(&self, entity: &E) -> Vec<K> {
+    pub fn component_kinds(&self, entity: &E) -> Option<Vec<K>> {
         if !self.entity_records.contains_key(entity) {
-            panic!("entity does not exist!");
+            return None;
         }
 
         let component_kind_set = &self.entity_records.get(entity).unwrap().component_kinds;
-        return component_kind_set
+        return Some(component_kind_set
             .iter()
             .map(|kind_ref| *kind_ref)
-            .collect();
+            .collect());
     }
 
     // Rooms

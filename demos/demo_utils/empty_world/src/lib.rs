@@ -106,7 +106,7 @@ mod inner {
             unimplemented!()
         }
 
-        fn component_read_partial(&mut self, _: &EmptyEntity, _: &P::Kind, _: &mut BitReader) {
+        fn component_apply_update(&mut self, _: &EmptyEntity, _: &P::Kind, _: &mut BitReader) {
             unimplemented!()
         }
 
