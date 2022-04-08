@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use naia_bevy_server::{Server, ServerAddrs, shared::DefaultChannels};
+use naia_bevy_server::{shared::DefaultChannels, Server, ServerAddrs};
 
 use naia_bevy_demo_shared::protocol::Protocol;
 

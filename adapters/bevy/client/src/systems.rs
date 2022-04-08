@@ -7,9 +7,13 @@ use bevy::{
         world::{Mut, World},
     },
 };
+
+use naia_client::{
+    shared::{ChannelIndex, Protocolize},
+    Client, Event,
+};
+
 use naia_bevy_shared::WorldProxyMut;
-use naia_client::{shared::Protocolize, Client, Event};
-use naia_client::shared::ChannelIndex;
 
 use crate::events::{
     DespawnEntityEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent,
@@ -57,8 +61,7 @@ pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World)
                         }
                         Ok(Event::SpawnEntity(entity)) => {
                             entities_to_spawn.push(entity);
-                            spawn_entity_event_writer
-                                .send(SpawnEntityEvent(entity));
+                            spawn_entity_event_writer.send(SpawnEntityEvent(entity));
                         }
                         Ok(Event::DespawnEntity(entity)) => {
                             despawn_entity_event_writer.send(DespawnEntityEvent(entity));
@@ -125,7 +128,9 @@ pub fn finish_tick(mut resource: ResMut<ClientResource>) {
     resource.ticker.reset();
 }
 
-pub fn should_receive<P: Protocolize, C: ChannelIndex>(client: Res<Client<P, Entity, C>>) -> ShouldRun {
+pub fn should_receive<P: Protocolize, C: ChannelIndex>(
+    client: Res<Client<P, Entity, C>>,
+) -> ShouldRun {
     if client.is_connected() {
         ShouldRun::Yes
     } else {

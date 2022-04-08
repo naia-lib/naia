@@ -1,10 +1,9 @@
 use bevy::ecs::entity::Entity;
 
 use naia_server::{
-    shared::{Protocolize, Replicate},
+    shared::{ChannelIndex, Protocolize, Replicate},
     RoomKey,
 };
-use naia_server::shared::ChannelIndex;
 
 use super::{
     commands::{DespawnEntity, InsertComponent, RemoveComponent},

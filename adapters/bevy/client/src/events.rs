@@ -1,6 +1,6 @@
 use bevy::ecs::entity::Entity;
 
-use naia_client::shared::{ProtocolKindType, Protocolize, ChannelIndex};
+use naia_client::shared::{ChannelIndex, ProtocolKindType, Protocolize};
 
 pub struct SpawnEntityEvent(pub Entity);
 pub struct DespawnEntityEvent(pub Entity);

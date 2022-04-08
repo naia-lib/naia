@@ -6,10 +6,13 @@ use bevy::ecs::{
     world::{Mut, World},
 };
 
-use naia_server::{shared::Protocolize, Event, NaiaServerError, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut, EntityRef};
+use naia_server::{
+    shared::{ChannelIndex, Protocolize, ReplicateSafe},
+    EntityRef, Event, NaiaServerError, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
+    ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
+};
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
-use naia_server::shared::{ChannelIndex, ReplicateSafe};
 
 use super::{commands::Command, entity_mut::EntityMut, state::State};
 
@@ -65,9 +68,7 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, 
         channel: C,
         message: &R,
     ) {
-        return self
-            .server
-            .send_message(user_key, channel, message);
+        return self.server.send_message(user_key, channel, message);
     }
 
     //// Updates ////

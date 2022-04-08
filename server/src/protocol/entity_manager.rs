@@ -7,17 +7,18 @@ use std::{
     time::Duration,
 };
 
-use crate::{protocol::world_channel::WorldChannel, sequence_list::SequenceList};
 use naia_shared::{
     message_list_header,
     serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, ChannelIndex, DiffMask, EntityActionType, EntityConverter, Instant, MessageId,
-    MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize,
-    ReplicateSafe, WorldRefType, MTU_SIZE_BITS, EntityAction,
+    wrapping_diff, ChannelIndex, DiffMask, EntityAction, EntityActionType, EntityConverter,
+    Instant, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
+    PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
 };
 
+use crate::sequence_list::SequenceList;
+
 use super::{
-    global_diff_handler::GlobalDiffHandler, world_record::WorldRecord,
+    global_diff_handler::GlobalDiffHandler, world_channel::WorldChannel, world_record::WorldRecord,
 };
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 2.5;
@@ -180,7 +181,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         if let Some((_, diff_mask_map)) = self.sent_updates.remove(&dropped_packet_index) {
             for (component_index, diff_mask) in &diff_mask_map {
                 let (entity, component) = component_index;
-                if !self.world_channel.diff_handler.has_component(entity, component) {
+                if !self
+                    .world_channel
+                    .diff_handler
+                    .has_component(entity, component)
+                {
                     continue;
                 }
                 let mut new_diff_mask = diff_mask.clone();
@@ -201,11 +206,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                     packet_index = packet_index.wrapping_add(1);
                 }
 
-                self.world_channel.diff_handler.or_diff_mask(
-                    &entity,
-                    &component,
-                    &new_diff_mask,
-                );
+                self.world_channel
+                    .diff_handler
+                    .or_diff_mask(&entity, &component, &new_diff_mask);
             }
         }
     }
@@ -375,7 +378,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 }
             }
             EntityAction::InsertComponent(entity, component) => {
-                if !world.has_component_of_kind(entity, component) || !self.world_channel.entity_channel_is_open(entity) {
+                if !world.has_component_of_kind(entity, component)
+                    || !self.world_channel.entity_channel_is_open(entity)
+                {
                     EntityActionType::Noop.ser(bit_writer);
 
                     // if we are actually writing this packet

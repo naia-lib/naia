@@ -4,8 +4,7 @@ use bevy::ecs::{
     system::{Query, ResMut},
 };
 
-use naia_bevy_client::{components::Predicted, Client};
-use naia_bevy_client::shared::DefaultChannels;
+use naia_bevy_client::{components::Predicted, shared::DefaultChannels, Client};
 
 use naia_bevy_demo_shared::protocol::Protocol;
 

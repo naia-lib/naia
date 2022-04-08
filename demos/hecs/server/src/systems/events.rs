@@ -7,10 +7,8 @@ use crate::app::App;
 pub fn process_events(app: &mut App) {
     for event in app.server.receive() {
         match event {
-            Ok(Event::Authorization(user_key, Protocol::Auth(auth_message))) => {
-                let ref username = *auth_message.username;
-                let ref password = *auth_message.password;
-                if username == "charlie" && password == "12345" {
+            Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {
+                if *auth.username == "charlie" && *auth.password == "12345" {
                     // Accept incoming connection
                     app.server.accept_connection(&user_key);
                 } else {

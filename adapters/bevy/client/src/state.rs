@@ -32,7 +32,9 @@ unsafe impl<P: Protocolize, C: ChannelIndex> SystemParamState for State<P, C> {
     fn default_config() {}
 }
 
-impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParamFetch<'world, 'state> for State<P, C> {
+impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParamFetch<'world, 'state>
+    for State<P, C>
+{
     type Item = Client<'world, P, C>;
 
     #[inline]

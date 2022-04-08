@@ -5,15 +5,18 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use naia_shared::{
+    ChannelIndex, ChannelSender, EntityAction, EntityActionReceiver, KeyGenerator, NetEntity,
+    ProtocolKindType, Protocolize, ReliableSender,
+};
+
 use crate::{
     protocol::{
-        entity_manager::ActionId,
-        entity_message_waitlist::EntityMessageWaitlist, global_diff_handler::GlobalDiffHandler,
-        user_diff_handler::UserDiffHandler,
+        entity_manager::ActionId, entity_message_waitlist::EntityMessageWaitlist,
+        global_diff_handler::GlobalDiffHandler, user_diff_handler::UserDiffHandler,
     },
     server::Instant,
 };
-use naia_shared::{ChannelIndex, ChannelSender, KeyGenerator, NetEntity, ProtocolKindType, Protocolize, ReliableSender, EntityActionReceiver, EntityAction};
 
 const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
 

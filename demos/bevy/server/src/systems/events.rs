@@ -1,12 +1,9 @@
-use bevy::{
-    ecs::system::ResMut,
-    log::info,
-    prelude::*,
-};
+use bevy::{ecs::system::ResMut, log::info, prelude::*};
 
 use naia_bevy_server::{
     events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent},
-    shared::{DefaultChannels, Random}, Server,
+    shared::{DefaultChannels, Random},
+    Server,
 };
 
 use naia_bevy_demo_shared::protocol::{Color, ColorValue, Position, Protocol};
@@ -18,10 +15,8 @@ pub fn authorization_event(
     mut server: Server<Protocol, DefaultChannels>,
 ) {
     for event in event_reader.iter() {
-        if let AuthorizationEvent(user_key, Protocol::Auth(auth_message)) = event {
-            let ref username = *auth_message.username;
-            let ref password = *auth_message.password;
-            if username == "charlie" && password == "12345" {
+        if let AuthorizationEvent(user_key, Protocol::Auth(auth)) = event {
+            if *auth.username == "charlie" && *auth.password == "12345" {
                 // Accept incoming connection
                 server.accept_connection(&user_key);
             } else {

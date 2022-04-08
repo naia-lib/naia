@@ -1,4 +1,6 @@
 pub mod diff_mask;
+pub mod entity_action;
+pub mod entity_action_receiver;
 pub mod entity_action_type;
 pub mod entity_handle;
 pub mod entity_property;
@@ -9,5 +11,3 @@ pub mod protocol_io;
 pub mod protocolize;
 pub mod replica_ref;
 pub mod replicate;
-pub mod entity_action_receiver;
-pub mod entity_action;

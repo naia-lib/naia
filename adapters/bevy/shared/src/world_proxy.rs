@@ -3,8 +3,11 @@ use bevy::ecs::{
     world::{Mut, World},
 };
 
-use naia_shared::{ProtocolInserter, ProtocolKindType, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe, WorldMutType, WorldRefType, NetEntityHandleConverter};
-use naia_shared::serde::BitReader;
+use naia_shared::{
+    serde::BitReader, NetEntityHandleConverter, ProtocolInserter, ProtocolKindType, Protocolize,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe, WorldMutType,
+    WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -68,7 +71,11 @@ impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldRef<'w> {
         return component(self.world, entity);
     }
 
-    fn component_of_kind(&self, entity: &Entity, component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<P>> {
+    fn component_of_kind(
+        &self,
+        entity: &Entity,
+        component_kind: &P::Kind,
+    ) -> Option<ReplicaDynRefWrapper<P>> {
         return component_of_kind::<P>(self.world, entity, component_kind);
     }
 }
@@ -106,7 +113,11 @@ impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
         return component(self.world, entity);
     }
 
-    fn component_of_kind(&self, entity: &Entity, component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<P>> {
+    fn component_of_kind(
+        &self,
+        entity: &Entity,
+        component_kind: &P::Kind,
+    ) -> Option<ReplicaDynRefWrapper<P>> {
         return component_of_kind(self.world, entity, component_kind);
     }
 }

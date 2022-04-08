@@ -1,4 +1,7 @@
-use naia_server::{shared::{Protocolize, ChannelIndex}, User, UserKey};
+use naia_server::{
+    shared::{ChannelIndex, Protocolize},
+    User, UserKey,
+};
 
 pub struct AuthorizationEvent<P: Protocolize>(pub UserKey, pub P);
 pub struct ConnectionEvent(pub UserKey);

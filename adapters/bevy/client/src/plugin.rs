@@ -1,17 +1,17 @@
-use std::{ops::DerefMut, sync::Mutex};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 
 use bevy::{
     app::{App, CoreStage, Plugin as PluginType},
     ecs::schedule::SystemStage,
     prelude::*,
 };
-use naia_bevy_shared::WorldData;
+
 use naia_client::{
-    shared::{Protocolize, SharedConfig},
+    shared::{ChannelIndex, Protocolize, SharedConfig},
     Client, ClientConfig,
 };
-use naia_client::shared::ChannelIndex;
+
+use naia_bevy_shared::WorldData;
 
 use crate::systems::should_receive;
 
@@ -44,7 +44,7 @@ impl<C: ChannelIndex> PluginConfig<C> {
 
 pub struct Plugin<P: Protocolize, C: ChannelIndex> {
     config: Mutex<Option<PluginConfig<C>>>,
-    phantom_p: PhantomData<P>
+    phantom_p: PhantomData<P>,
 }
 
 impl<P: Protocolize, C: ChannelIndex> Plugin<P, C> {

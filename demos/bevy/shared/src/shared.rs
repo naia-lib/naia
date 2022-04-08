@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use naia_shared::{ChannelConfig, DefaultChannels, LinkConditionerConfig, SharedConfig, SocketConfig};
+use naia_shared::{
+    ChannelConfig, DefaultChannels, LinkConditionerConfig, SharedConfig, SocketConfig,
+};
 
 pub fn shared_config() -> SharedConfig<DefaultChannels> {
     let tick_interval = Some(Duration::from_millis(50));
@@ -16,5 +18,6 @@ pub fn shared_config() -> SharedConfig<DefaultChannels> {
         SocketConfig::new(link_condition, None),
         &ChannelConfig::<DefaultChannels>::default(),
         tick_interval,
-        None);
+        None,
+    );
 }

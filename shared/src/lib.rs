@@ -67,6 +67,8 @@ pub use messages::{
 };
 pub use protocol::{
     diff_mask::DiffMask,
+    entity_action::EntityAction,
+    entity_action_receiver::EntityActionReceiver,
     entity_action_type::EntityActionType,
     entity_handle::EntityHandle,
     entity_property::{
@@ -84,8 +86,6 @@ pub use protocol::{
         ReplicaRefWrapper,
     },
     replicate::{Replicate, ReplicateSafe},
-    entity_action_receiver::EntityActionReceiver,
-    entity_action::EntityAction,
 };
 
 pub use bigmap::{BigMap, BigMapKey};

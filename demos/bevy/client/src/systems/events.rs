@@ -10,7 +10,11 @@ use bevy::{
     transform::components::Transform,
 };
 
-use naia_bevy_client::{events::{InsertComponentEvent, SpawnEntityEvent}, Client, shared::DefaultChannels};
+use naia_bevy_client::{
+    events::{InsertComponentEvent, SpawnEntityEvent},
+    shared::DefaultChannels,
+    Client,
+};
 
 use naia_bevy_demo_shared::protocol::{Color, ColorValue, Protocol, ProtocolKind};
 

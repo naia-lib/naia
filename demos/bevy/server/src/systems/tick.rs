@@ -1,5 +1,4 @@
-
-use naia_bevy_server::{Server, shared::DefaultChannels};
+use naia_bevy_server::{shared::DefaultChannels, Server};
 
 use naia_bevy_demo_shared::protocol::Protocol;
 
