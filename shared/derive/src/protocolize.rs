@@ -22,7 +22,7 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let extract_and_insert_method = extract_and_insert_method(&protocol_name, &variants);
     let write_method = write_method(&protocol_name, &variants);
     let write_partial_method = write_partial_method(&protocol_name, &variants);
-    let build_method = build_method(&kind_enum_name, &variants);
+    let read_method = read_method(&kind_enum_name, &variants);
 
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}, sync::RwLock, collections::HashMap};
@@ -36,7 +36,7 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
             type Kind = #kind_enum_name;
             #kind_of_method
             #type_to_kind_method
-            #build_method
+            #read_method
             #dyn_ref_method
             #dyn_mut_method
             #cast_method
@@ -165,7 +165,7 @@ fn type_to_kind_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
     };
 }
 
-pub fn build_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
+pub fn read_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     let mut variants_build = quote! {};
 
     for variant in variants {
@@ -174,7 +174,7 @@ pub fn build_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
         // Variants build() match branch
         {
             let new_output_right = quote! {
-                #enum_name::#variant_name => #variant_name::read_to_type(reader, converter),
+                #enum_name::#variant_name => #variant_name::read(bit_reader, converter),
             };
             let new_output_result = quote! {
                 #variants_build
@@ -185,8 +185,8 @@ pub fn build_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     }
 
     return quote! {
-        fn build(reader: &mut serde::BitReader, converter: &dyn NetEntityHandleConverter) -> Self {
-            let protocol_kind: Self::Kind = Self::Kind::de(reader).unwrap();
+        fn read(bit_reader: &mut serde::BitReader, converter: &dyn NetEntityHandleConverter) -> Self {
+            let protocol_kind: Self::Kind = Self::Kind::de(bit_reader).unwrap();
             match protocol_kind {
                 #variants_build
             }

@@ -24,8 +24,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     // Replica Methods
     let new_complete_method = new_complete_method(&replica_name, &enum_name, &properties);
-    let read_to_type_method =
-        read_to_type_method(&protocol_name, &replica_name, &enum_name, &properties);
+    let read_method = read_method(&protocol_name, &replica_name, &enum_name, &properties);
 
     // ReplicateSafe Derive Methods
     let diff_mask_size = {
@@ -62,7 +61,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
         impl #replica_name {
             #new_complete_method
-            #read_to_type_method
+            #read_method
         }
         impl ReplicateSafe<#protocol_name> for #replica_name {
             fn diff_mask_size(&self) -> u8 { #diff_mask_size }
@@ -436,7 +435,7 @@ pub fn new_complete_method(
     };
 }
 
-pub fn read_to_type_method(
+pub fn read_method(
     protocol_name: &Ident,
     replica_name: &Ident,
     enum_name: &Ident,
@@ -463,14 +462,14 @@ pub fn read_to_type_method(
                 let field_type = &property.inner_type;
                 let uppercase_variant_name = &property.uppercase_variable_name;
                 quote! {
-                    let #field_name = Property::<#field_type>::new_read(reader, #enum_name::#uppercase_variant_name as u8);
+                    let #field_name = Property::<#field_type>::new_read(bit_reader, #enum_name::#uppercase_variant_name as u8);
                 }
             }
             Property::Entity(property) => {
                 let field_name = &property.variable_name;
                 let uppercase_variant_name = &property.uppercase_variable_name;
                 quote! {
-                    let #field_name = EntityProperty::new_read(reader, #enum_name::#uppercase_variant_name as u8, converter);
+                    let #field_name = EntityProperty::new_read(bit_reader, #enum_name::#uppercase_variant_name as u8, converter);
                 }
             }
         };
@@ -483,7 +482,7 @@ pub fn read_to_type_method(
     }
 
     return quote! {
-        pub fn read_to_type(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> #protocol_name {
+        pub fn read(bit_reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> #protocol_name {
             #prop_reads
 
             return #protocol_name::#replica_name(#replica_name {
@@ -531,34 +530,35 @@ fn read_partial_method(properties: &Vec<Property>) -> TokenStream {
 }
 
 fn write_method(properties: &Vec<Property>) -> TokenStream {
-    let mut output = quote! {};
+    let mut property_writes = quote! {};
 
     for property in properties.iter() {
         let new_output_right = match property {
             Property::Normal(property) => {
                 let field_name = &property.variable_name;
                 quote! {
-                    Property::write(&self.#field_name, writer);
+                    Property::write(&self.#field_name, bit_writer);
                 }
             }
             Property::Entity(property) => {
                 let field_name = &property.variable_name;
                 quote! {
-                    EntityProperty::write(&self.#field_name, writer, converter);
+                    EntityProperty::write(&self.#field_name, bit_writer, converter);
                 }
             }
         };
 
         let new_output_result = quote! {
-            #output
+            #property_writes
             #new_output_right
         };
-        output = new_output_result;
+        property_writes = new_output_result;
     }
 
     return quote! {
-        fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
-            #output
+        fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+            self.kind().ser(bit_writer);
+            #property_writes
         }
     };
 }

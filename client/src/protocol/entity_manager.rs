@@ -1,4 +1,3 @@
-use log::info;
 use std::{
     collections::{HashMap, VecDeque},
     hash::Hash,
@@ -105,7 +104,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             EntityActionType::InsertComponent => {
                 // read all data
                 let net_entity = NetEntity::de(reader).unwrap();
-                let new_component = P::build(reader, self);
+                let new_component = P::read(reader, self);
                 let new_component_kind = new_component.dyn_ref().kind();
 
                 self.receiver.buffer_message(
@@ -143,8 +142,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             match action {
                 // Entity Creation
                 EntityAction::SpawnEntity(net_entity) => {
-                    let e_u16: u16 = net_entity.into();
-                    info!("spawn entity: {}", e_u16);
+                    //let e_u16: u16 = net_entity.into();
+                    //info!("spawn entity: {}", e_u16);
+
                     if self.local_to_world_entity.contains_key(&net_entity) {
                         panic!("attempted to insert duplicate entity");
                     }
@@ -161,8 +161,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
                 // Entity Deletion
                 EntityAction::DespawnEntity(net_entity) => {
-                    let e_u16: u16 = net_entity.into();
-                    info!("despawn entity: {}", e_u16);
+                    //let e_u16: u16 = net_entity.into();
+                    //info!("despawn entity: {}", e_u16);
+
                     if let Some(world_entity) = self.local_to_world_entity.remove(&net_entity) {
                         if self.entity_records.remove(&world_entity).is_none() {
                             panic!("despawning an uninitialized entity");
@@ -188,8 +189,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
                 // Add Component to Entity
                 EntityAction::InsertComponent(net_entity, component_kind) => {
-                    let e_u16: u16 = net_entity.into();
-                    info!("insert component for: {}", e_u16);
+                    //let e_u16: u16 = net_entity.into();
+                    //info!("insert component for: {}", e_u16);
+
                     let component = self
                         .received_components
                         .remove(&(net_entity, component_kind))
@@ -215,8 +217,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 }
                 // Component Removal
                 EntityAction::RemoveComponent(net_entity, component_kind) => {
-                    let e_u16: u16 = net_entity.into();
-                    info!("remove component for: {}", e_u16);
+                    //let e_u16: u16 = net_entity.into();
+                    //info!("remove component for: {}", e_u16);
+
                     let world_entity = self
                         .local_to_world_entity
                         .get_mut(&net_entity)
