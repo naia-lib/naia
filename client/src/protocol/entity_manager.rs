@@ -3,13 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{
-    message_list_header,
-    serde::{BitReader, Serde, UnsignedVariableInteger},
-    BigMap, ChannelIndex, EntityAction, EntityActionReceiver, EntityActionType, EntityHandle,
-    EntityHandleConverter, MessageId, NetEntity, NetEntityHandleConverter, Protocolize, Tick,
-    WorldMutType,
-};
+use naia_shared::{message_list_header, serde::{BitReader, Serde, UnsignedVariableInteger}, BigMap, ChannelIndex, EntityActionReceiver, EntityActionType, EntityHandle, EntityHandleConverter, MessageId, NetEntity, NetEntityHandleConverter, Protocolize, Tick, WorldMutType, EntityAction};
 
 use crate::{error::NaiaClientError, event::Event};
 
@@ -86,11 +80,22 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         match action_type {
             // Entity Creation
             EntityActionType::SpawnEntity => {
-                // read all data
+                // read entity
                 let net_entity = NetEntity::de(reader).unwrap();
 
+                // read components
+                let components_num = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
+                let mut component_kinds = Vec::new();
+                for _ in 0..components_num {
+                    let new_component = P::read(reader, self);
+                    let new_component_kind = new_component.dyn_ref().kind();
+                    self.received_components.insert((net_entity, new_component_kind), new_component);
+                    component_kinds.push(new_component_kind);
+                }
+
                 self.receiver
-                    .buffer_message(action_id, EntityAction::SpawnEntity(net_entity));
+                    .buffer_action(action_id, EntityAction::SpawnEntity(net_entity, component_kinds));
+
             }
             // Entity Deletion
             EntityActionType::DespawnEntity => {
@@ -98,7 +103,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 let net_entity = NetEntity::de(reader).unwrap();
 
                 self.receiver
-                    .buffer_message(action_id, EntityAction::DespawnEntity(net_entity));
+                    .buffer_action(action_id, EntityAction::DespawnEntity(net_entity));
             }
             // Add Component to Entity
             EntityActionType::InsertComponent => {
@@ -107,7 +112,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 let new_component = P::read(reader, self);
                 let new_component_kind = new_component.dyn_ref().kind();
 
-                self.receiver.buffer_message(
+                self.receiver.buffer_action(
                     action_id,
                     EntityAction::InsertComponent(net_entity, new_component_kind),
                 );
@@ -120,13 +125,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 let net_entity = NetEntity::de(reader).unwrap();
                 let component_kind = P::Kind::de(reader).unwrap();
 
-                self.receiver.buffer_message(
+                self.receiver.buffer_action(
                     action_id,
                     EntityAction::RemoveComponent(net_entity, component_kind),
                 );
             }
             EntityActionType::Noop => {
-                self.receiver.buffer_message(action_id, EntityAction::Noop);
+                self.receiver.buffer_action(action_id, EntityAction::Noop);
             }
         }
     }
@@ -136,12 +141,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         world: &mut W,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
-        let incoming_actions = self.receiver.receive_messages();
+        let incoming_actions = self.receiver.receive_actions();
 
         for action in incoming_actions {
             match action {
-                // Entity Creation
-                EntityAction::SpawnEntity(net_entity) => {
+                EntityAction::SpawnEntity(net_entity, components) => {
+
                     //let e_u16: u16 = net_entity.into();
                     //info!("spawn entity: {}", e_u16);
 
@@ -153,14 +158,30 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     let world_entity = world.spawn_entity();
                     self.local_to_world_entity.insert(net_entity, world_entity);
                     let entity_handle = self.handle_entity_map.insert(world_entity);
-
-                    let entity_record = EntityRecord::new(net_entity, entity_handle);
-                    self.entity_records.insert(world_entity, entity_record);
+                    let mut entity_record = EntityRecord::new(net_entity, entity_handle);
 
                     event_stream.push_back(Ok(Event::SpawnEntity(world_entity)));
+
+                    // read component list
+                    for component_kind in components {
+                        let component = self
+                            .received_components
+                            .remove(&(net_entity, component_kind))
+                            .unwrap();
+
+                        entity_record.component_kinds.insert(component_kind);
+
+                        component.extract_and_insert(&world_entity, world);
+
+                        event_stream
+                            .push_back(Ok(Event::InsertComponent(world_entity, component_kind)));
+                    }
+                    //
+
+                    self.entity_records.insert(world_entity, entity_record);
                 }
-                // Entity Deletion
                 EntityAction::DespawnEntity(net_entity) => {
+
                     //let e_u16: u16 = net_entity.into();
                     //info!("despawn entity: {}", e_u16);
 
@@ -187,8 +208,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                         panic!("received message attempting to delete nonexistent entity");
                     }
                 }
-                // Add Component to Entity
                 EntityAction::InsertComponent(net_entity, component_kind) => {
+
                     //let e_u16: u16 = net_entity.into();
                     //info!("insert component for: {}", e_u16);
 
@@ -215,8 +236,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                             .push_back(Ok(Event::InsertComponent(*world_entity, component_kind)));
                     }
                 }
-                // Component Removal
                 EntityAction::RemoveComponent(net_entity, component_kind) => {
+
                     //let e_u16: u16 = net_entity.into();
                     //info!("remove component for: {}", e_u16);
 
@@ -273,19 +294,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         let components_number = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
 
         for _ in 0..components_number {
-            let component_kind = P::Kind::de(reader).unwrap();
+
+            // read incoming update
+            let component_update = P::read_update(reader);
+            let component_kind = component_update.kind;
 
             if let Some(world_entity) = self.local_to_world_entity.get(&net_entity) {
-                // read incoming delta
-                world.component_read_partial(world_entity, &component_kind, reader, self);
+
+                world.component_apply_update(world_entity, &component_kind, self, component_update);
 
                 event_stream.push_back(Ok(Event::UpdateComponent(
                     server_tick,
                     *world_entity,
                     component_kind,
                 )));
-            } else {
-                panic!("attempting to update component for nonexistent entity");
             }
         }
     }

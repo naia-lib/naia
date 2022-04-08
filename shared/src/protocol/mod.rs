@@ -11,3 +11,4 @@ pub mod protocol_io;
 pub mod protocolize;
 pub mod replica_ref;
 pub mod replicate;
+pub mod component_update;

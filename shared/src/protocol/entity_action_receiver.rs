@@ -4,10 +4,7 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::{
-    sequence_less_than, EntityAction, MessageId as ActionId, ProtocolKindType,
-    UnorderedReliableReceiver,
-};
+use crate::{sequence_less_than, MessageId as ActionId, ProtocolKindType, UnorderedReliableReceiver, EntityAction};
 
 pub struct EntityActionReceiver<E: Copy + Hash + Eq, K: ProtocolKindType> {
     receiver: UnorderedReliableReceiver<EntityAction<E, K>>,
@@ -22,11 +19,11 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityActionReceiver<E, K> {
         }
     }
 
-    pub fn buffer_message(&mut self, action_id: ActionId, action: EntityAction<E, K>) {
+    pub fn buffer_action(&mut self, action_id: ActionId, action: EntityAction<E, K>) {
         return self.receiver.buffer_message(action_id, action);
     }
 
-    pub fn receive_messages(&mut self) -> Vec<EntityAction<E, K>> {
+    pub fn receive_actions(&mut self) -> Vec<EntityAction<E, K>> {
         let mut outgoing_actions = Vec::new();
         let incoming_actions = self.receiver.receive_messages();
         for (action_id, action) in incoming_actions {
@@ -50,8 +47,8 @@ pub struct EntityChannel<E: Copy + Hash + Eq, K: ProtocolKindType> {
     last_canonical_id: Option<ActionId>,
     spawned: bool,
     components: HashMap<K, ComponentChannel<E, K>>,
-    waiting_spawns: OrderedIds,
-    waiting_despawns: OrderedIds,
+    waiting_spawns: OrderedIds<Vec<K>>,
+    waiting_despawns: OrderedIds<()>,
 }
 
 impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
@@ -73,8 +70,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
         outgoing_actions: &mut Vec<EntityAction<E, K>>,
     ) {
         match incoming_action {
-            EntityAction::SpawnEntity(_) => {
-                self.receive_spawn_entity_action(incoming_action_id, outgoing_actions);
+            EntityAction::SpawnEntity(_, components) => {
+                self.receive_spawn_entity_action(incoming_action_id, components, outgoing_actions);
             }
             EntityAction::DespawnEntity(_) => {
                 self.receive_despawn_entity_action(incoming_action_id, outgoing_actions);
@@ -100,6 +97,7 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
     pub fn receive_spawn_entity_action(
         &mut self,
         id: ActionId,
+        components: Vec<K>,
         outgoing_actions: &mut Vec<EntityAction<E, K>>,
     ) {
         // do not process any spawn OLDER than last received spawn id / despawn id
@@ -111,13 +109,13 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
 
         if !self.spawned {
             self.spawned = true;
-            outgoing_actions.push(EntityAction::SpawnEntity(self.entity));
+            outgoing_actions.push(EntityAction::SpawnEntity(self.entity, components));
 
             // pop ALL waiting spawns, despawns, inserts, and removes OLDER than spawn_id
             self.receive_canonical(id);
 
             // process any waiting spawns
-            if let Some(despawn_id) = self.waiting_despawns.inner.pop_front() {
+            if let Some((despawn_id, _)) = self.waiting_despawns.inner.pop_front() {
                 self.receive_despawn_entity_action(despawn_id, outgoing_actions);
             } else {
                 // process any waiting inserts
@@ -128,13 +126,13 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
                     }
                 }
 
-                for (id, component) in inserted_components {
+                for ((id, _), component) in inserted_components {
                     self.receive_insert_component_action(id, component, outgoing_actions);
                 }
             }
         } else {
             // buffer spawn for later
-            self.waiting_spawns.push_back(id);
+            self.waiting_spawns.push_back(id, components);
         }
     }
 
@@ -163,12 +161,12 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
             }
 
             // process any waiting spawns
-            if let Some(spawn_id) = self.waiting_spawns.inner.pop_front() {
-                self.receive_spawn_entity_action(spawn_id, outgoing_actions);
+            if let Some((spawn_id, components)) = self.waiting_spawns.inner.pop_front() {
+                self.receive_spawn_entity_action(spawn_id, components, outgoing_actions);
             }
         } else {
             // buffer despawn for later
-            self.waiting_despawns.push_back(id);
+            self.waiting_despawns.push_back(id, ());
         }
     }
 
@@ -208,12 +206,12 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
             component_state.receive_canonical(id);
 
             // process any waiting removes
-            if let Some(remove_id) = component_state.waiting_removes.inner.pop_front() {
+            if let Some((remove_id, _)) = component_state.waiting_removes.inner.pop_front() {
                 self.receive_remove_component_action(remove_id, component, outgoing_actions);
             }
         } else {
             // buffer insert
-            component_state.waiting_inserts.push_back(id);
+            component_state.waiting_inserts.push_back(id, ());
         }
     }
 
@@ -253,12 +251,12 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
             component_state.receive_canonical(id);
 
             // process any waiting inserts
-            if let Some(insert_id) = component_state.waiting_inserts.inner.pop_front() {
+            if let Some((insert_id, _)) = component_state.waiting_inserts.inner.pop_front() {
                 self.receive_insert_component_action(insert_id, component, outgoing_actions);
             }
         } else {
             // buffer remove
-            component_state.waiting_removes.push_back(id);
+            component_state.waiting_removes.push_back(id, ());
         }
     }
 
@@ -280,8 +278,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
 pub struct ComponentChannel<E: Copy + Hash + Eq, K: ProtocolKindType> {
     pub inserted: bool,
     pub last_canonical_id: Option<ActionId>,
-    pub waiting_inserts: OrderedIds,
-    pub waiting_removes: OrderedIds,
+    pub waiting_inserts: OrderedIds<()>,
+    pub waiting_removes: OrderedIds<()>,
 
     phantom_e: PhantomData<E>,
     phantom_k: PhantomData<K>,
@@ -309,12 +307,12 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> ComponentChannel<E, K> {
     }
 }
 
-pub struct OrderedIds {
+pub struct OrderedIds<P> {
     // front small, back big
-    inner: VecDeque<ActionId>,
+    inner: VecDeque<(ActionId, P)>,
 }
 
-impl OrderedIds {
+impl<P> OrderedIds<P> {
     pub fn new() -> Self {
         Self {
             inner: VecDeque::new(),
@@ -340,20 +338,20 @@ impl OrderedIds {
     //     }
     // }
 
-    pub fn push_back(&mut self, id: ActionId) {
+    pub fn push_back(&mut self, id: ActionId, item: P) {
         let mut index = self.inner.len();
 
         loop {
             if index == 0 {
-                self.inner.push_front(id);
+                self.inner.push_front((id, item));
                 return;
             }
 
             index -= 1;
 
-            let old_id = self.inner.get(index).unwrap();
+            let (old_id, _) = self.inner.get(index).unwrap();
             if sequence_less_than(*old_id, id) {
-                self.inner.insert(index + 1, id);
+                self.inner.insert(index + 1, (id, item));
                 return;
             }
         }
@@ -362,7 +360,7 @@ impl OrderedIds {
     pub fn pop_front_until_and_including(&mut self, id: ActionId) {
         let mut pop = false;
 
-        if let Some(old_id) = self.inner.front() {
+        if let Some((old_id, _)) = self.inner.front() {
             if *old_id == id {
                 pop = true;
             } else if sequence_less_than(*old_id, id) {

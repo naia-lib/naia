@@ -170,7 +170,7 @@ impl<'w, P: 'static + Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
         return None;
     }
 
-    fn component_read_partial(
+    fn component_apply_update(
         &mut self,
         entity: &Entity,
         component_kind: &P::Kind,
