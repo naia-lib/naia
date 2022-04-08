@@ -1,22 +1,20 @@
-use std::{ops::DerefMut, sync::Mutex};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 
 use bevy::{
     app::{App, CoreStage, Plugin as PluginType},
     ecs::schedule::SystemStage,
     prelude::*,
 };
-use naia_bevy_shared::WorldData;
+
 use naia_server::{
-    shared::{Protocolize, SharedConfig},
+    shared::{ChannelIndex, Protocolize, SharedConfig},
     Server, ServerConfig,
 };
-use naia_server::shared::ChannelIndex;
+
+use naia_bevy_shared::WorldData;
 
 use super::{
-    events::{
-        AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent,
-    },
+    events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
     resource::ServerResource,
     stage::{PrivateStage, Stage},
     systems::{before_receive_events, finish_tick, should_receive, should_tick},

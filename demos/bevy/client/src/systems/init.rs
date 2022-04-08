@@ -1,6 +1,7 @@
 use bevy::prelude::*;
-use naia_bevy_client::Client;
-use naia_bevy_client::shared::DefaultChannels;
+
+use naia_bevy_client::{shared::DefaultChannels, Client};
+
 use naia_bevy_demo_shared::protocol::{Auth, Protocol};
 
 use crate::resources::Global;

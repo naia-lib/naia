@@ -7,13 +7,13 @@ use bevy::{
         world::{Mut, World},
     },
 };
-use naia_server::{shared::Protocolize, Event, Server};
-use naia_server::shared::ChannelIndex;
+use naia_server::{
+    shared::{ChannelIndex, Protocolize},
+    Event, Server,
+};
 
 use super::{
-    events::{
-        AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent,
-    },
+    events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
     resource::ServerResource,
 };
 
@@ -52,7 +52,7 @@ pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World)
                             disconnect_event_writer.send(DisconnectionEvent(user_key, user));
                         }
                         Ok(Event::Message(user_key, channel, message)) => {
-                            message_event_writer.send(MessageEvent(user_key, channel,message));
+                            message_event_writer.send(MessageEvent(user_key, channel, message));
                         }
                         Err(_) => {}
                     }
@@ -74,7 +74,9 @@ pub fn finish_tick(mut resource: ResMut<ServerResource>) {
     resource.ticker.reset();
 }
 
-pub fn should_receive<P: Protocolize, C: ChannelIndex>(server: Res<Server<P, Entity, C>>) -> ShouldRun {
+pub fn should_receive<P: Protocolize, C: ChannelIndex>(
+    server: Res<Server<P, Entity, C>>,
+) -> ShouldRun {
     if server.is_listening() {
         ShouldRun::Yes
     } else {

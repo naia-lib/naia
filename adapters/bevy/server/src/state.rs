@@ -1,11 +1,13 @@
-
 use bevy::ecs::{
     entity::Entity,
     system::{SystemMeta, SystemParamFetch, SystemParamState},
     world::{Mut, World},
 };
 
-use naia_server::{shared::{Protocolize, ChannelIndex}, Server as NaiaServer};
+use naia_server::{
+    shared::{ChannelIndex, Protocolize},
+    Server as NaiaServer,
+};
 
 use naia_bevy_shared::WorldProxyMut;
 
@@ -61,7 +63,9 @@ unsafe impl<P: Protocolize, C: ChannelIndex> SystemParamState for State<P, C> {
     fn default_config() {}
 }
 
-impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParamFetch<'world, 'state> for State<P, C> {
+impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParamFetch<'world, 'state>
+    for State<P, C>
+{
     type Item = Server<'world, 'state, P, C>;
 
     #[inline]

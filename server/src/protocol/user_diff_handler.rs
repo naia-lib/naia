@@ -63,11 +63,10 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> UserDiffHandler<E, K> {
     pub fn or_diff_mask(&mut self, entity: &E, component_kind: &K, other_mask: &DiffMask) {
         let current_diff_mask = self.receivers.get_mut(&(*entity, *component_kind)).unwrap();
         current_diff_mask.or_mask(other_mask);
-
     }
 
     pub fn clear_diff_mask(&mut self, entity: &E, component_kind: &K) {
         let receiver = self.receivers.get_mut(&(*entity, *component_kind)).unwrap();
-            receiver.clear_mask();
+        receiver.clear_mask();
     }
 }

@@ -57,8 +57,13 @@ pub struct EntityMut<
     entity: E,
 }
 
-impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<P, E>, C: ChannelIndex>
-    EntityMut<'s, P, E, W, C>
+impl<
+        's,
+        P: Protocolize,
+        E: Copy + Eq + Hash + Send + Sync,
+        W: WorldMutType<P, E>,
+        C: ChannelIndex,
+    > EntityMut<'s, P, E, W, C>
 {
     pub(crate) fn new(server: &'s mut Server<P, E, C>, world: W, entity: &E) -> Self {
         EntityMut {

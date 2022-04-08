@@ -65,13 +65,10 @@ pub fn march_and_mark(app: &mut App) {
     }
 
     while let Some(entity) = entities_to_delete.pop() {
-        app.server
-            .entity_mut(&mut app.world, &entity)
-            .despawn();
+        app.server.entity_mut(&mut app.world, &entity).despawn();
     }
 
     while let Some(entity) = entities_to_respawn.pop() {
-
         let first;
         let last;
         {
@@ -81,9 +78,7 @@ pub fn march_and_mark(app: &mut App) {
             last = (*old_name.full).last.clone();
         }
 
-        app.server
-            .entity_mut(&mut app.world, &entity)
-            .despawn();
+        app.server.entity_mut(&mut app.world, &entity).despawn();
 
         let position_ref = Position::new(0, 0);
 

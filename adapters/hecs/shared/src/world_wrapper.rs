@@ -1,9 +1,17 @@
 use std::ops::{Deref, DerefMut};
 
 use hecs::{Entity, World};
-use naia_shared::{serde::BitReader, NetEntityHandleConverter, ProtocolInserter, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType};
 
-use crate::{component_ref::{ComponentMut, ComponentRef}, WorldData};
+use naia_shared::{
+    serde::BitReader, NetEntityHandleConverter, ProtocolInserter, Protocolize,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+    WorldMutType, WorldRefType,
+};
+
+use crate::{
+    component_ref::{ComponentMut, ComponentRef},
+    WorldData,
+};
 
 pub struct WorldWrapper<P: Protocolize> {
     pub inner: World,
@@ -191,7 +199,6 @@ impl<P: Protocolize> ProtocolInserter<P, Entity> for &mut WorldWrapper<P> {
         self.insert_component::<I>(entity, impl_ref);
     }
 }
-
 
 // private static methods
 

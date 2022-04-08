@@ -40,12 +40,12 @@ mod user_scope;
 
 pub use error::NaiaServerError;
 pub use event::Event;
+pub use protocol::entity_ref::EntityRef;
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;
 pub use server_config::ServerConfig;
 pub use user::{User, UserKey, UserMut, UserRef};
 pub use user_scope::UserScopeMut;
-pub use protocol::entity_ref::EntityRef;
 
 pub mod internal {
     pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeResult};

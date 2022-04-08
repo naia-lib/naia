@@ -7,13 +7,11 @@ use bevy::ecs::{
 };
 
 use naia_client::{
-    shared::{Protocolize, Replicate},
+    shared::{ChannelIndex, Protocolize, Replicate, ReplicateSafe},
     Client as NaiaClient, EntityRef,
 };
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
-use naia_client::shared::ChannelIndex;
-use crate::shared::ReplicateSafe;
 
 use super::state::State;
 

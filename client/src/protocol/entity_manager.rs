@@ -4,7 +4,13 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{message_list_header, serde::{BitReader, Serde, UnsignedVariableInteger}, BigMap, ChannelIndex, EntityActionType, EntityHandle, EntityHandleConverter, MessageId, NetEntity, NetEntityHandleConverter, Protocolize, Tick, WorldMutType, EntityActionReceiver, EntityAction};
+use naia_shared::{
+    message_list_header,
+    serde::{BitReader, Serde, UnsignedVariableInteger},
+    BigMap, ChannelIndex, EntityAction, EntityActionReceiver, EntityActionType, EntityHandle,
+    EntityHandleConverter, MessageId, NetEntity, NetEntityHandleConverter, Protocolize, Tick,
+    WorldMutType,
+};
 
 use crate::{error::NaiaClientError, event::Event};
 
@@ -106,7 +112,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     action_id,
                     EntityAction::InsertComponent(net_entity, new_component_kind),
                 );
-                self.received_components.insert((net_entity, new_component_kind), new_component);
+                self.received_components
+                    .insert((net_entity, new_component_kind), new_component);
             }
             // Component Removal
             EntityActionType::RemoveComponent => {
@@ -183,7 +190,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 EntityAction::InsertComponent(net_entity, component_kind) => {
                     let e_u16: u16 = net_entity.into();
                     info!("insert component for: {}", e_u16);
-                    let component = self.received_components.remove(&(net_entity, component_kind)).unwrap();
+                    let component = self
+                        .received_components
+                        .remove(&(net_entity, component_kind))
+                        .unwrap();
 
                     if !self.local_to_world_entity.contains_key(&net_entity) {
                         panic!(

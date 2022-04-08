@@ -1,7 +1,13 @@
-use std::collections::{HashMap, VecDeque};
-use std::hash::Hash;
-use std::marker::PhantomData;
-use crate::{EntityAction, MessageId as ActionId, UnorderedReliableReceiver, ProtocolKindType, sequence_less_than};
+use std::{
+    collections::{HashMap, VecDeque},
+    hash::Hash,
+    marker::PhantomData,
+};
+
+use crate::{
+    sequence_less_than, EntityAction, MessageId as ActionId, ProtocolKindType,
+    UnorderedReliableReceiver,
+};
 
 pub struct EntityActionReceiver<E: Copy + Hash + Eq, K: ProtocolKindType> {
     receiver: UnorderedReliableReceiver<EntityAction<E, K>>,
@@ -26,7 +32,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityActionReceiver<E, K> {
         for (action_id, action) in incoming_actions {
             if let Some(entity) = action.entity() {
                 if !self.entity_channels.contains_key(&entity) {
-                    self.entity_channels.insert(entity, EntityChannel::new(entity));
+                    self.entity_channels
+                        .insert(entity, EntityChannel::new(entity));
                 }
                 let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
                 entity_channel.receive_action(action_id, action, &mut outgoing_actions);
@@ -63,8 +70,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
         &mut self,
         incoming_action_id: ActionId,
         incoming_action: EntityAction<E, K>,
-        outgoing_actions: &mut Vec<EntityAction<E, K>>)
-    {
+        outgoing_actions: &mut Vec<EntityAction<E, K>>,
+    ) {
         match incoming_action {
             EntityAction::SpawnEntity(_) => {
                 self.receive_spawn_entity_action(incoming_action_id, outgoing_actions);
@@ -73,20 +80,28 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
                 self.receive_despawn_entity_action(incoming_action_id, outgoing_actions);
             }
             EntityAction::InsertComponent(_, component) => {
-                self.receive_insert_component_action(incoming_action_id, component, outgoing_actions);
+                self.receive_insert_component_action(
+                    incoming_action_id,
+                    component,
+                    outgoing_actions,
+                );
             }
             EntityAction::RemoveComponent(_, component) => {
-                self.receive_remove_component_action(incoming_action_id, component, outgoing_actions);
+                self.receive_remove_component_action(
+                    incoming_action_id,
+                    component,
+                    outgoing_actions,
+                );
             }
-            EntityAction::Noop => {},
+            EntityAction::Noop => {}
         }
     }
 
     pub fn receive_spawn_entity_action(
         &mut self,
         id: ActionId,
-        outgoing_actions: &mut Vec<EntityAction<E, K>>)
-    {
+        outgoing_actions: &mut Vec<EntityAction<E, K>>,
+    ) {
         // do not process any spawn OLDER than last received spawn id / despawn id
         if let Some(last_id) = self.last_canonical_id {
             if sequence_less_than(id, last_id) {
@@ -126,8 +141,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
     pub fn receive_despawn_entity_action(
         &mut self,
         id: ActionId,
-        outgoing_actions: &mut Vec<EntityAction<E, K>>)
-    {
+        outgoing_actions: &mut Vec<EntityAction<E, K>>,
+    ) {
         // do not process any despawn OLDER than last received spawn id / despawn id
         if let Some(last_id) = self.last_canonical_id {
             if sequence_less_than(id, last_id) {
@@ -161,8 +176,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
         &mut self,
         id: ActionId,
         component: K,
-        outgoing_actions: &mut Vec<EntityAction<E, K>>)
-    {
+        outgoing_actions: &mut Vec<EntityAction<E, K>>,
+    ) {
         // do not process any insert OLDER than last received spawn id / despawn id
         if let Some(last_id) = self.last_canonical_id {
             if sequence_less_than(id, last_id) {
@@ -171,11 +186,13 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
         }
 
         if !self.components.contains_key(&component) {
-            self.components.insert(component, ComponentChannel::new(self.last_canonical_id));
+            self.components
+                .insert(component, ComponentChannel::new(self.last_canonical_id));
         }
         let component_state = self.components.get_mut(&component).unwrap();
 
-        // do not process any insert OLDER than last received insert / remove id for this component
+        // do not process any insert OLDER than last received insert / remove id for
+        // this component
         if let Some(last_id) = component_state.last_canonical_id {
             if sequence_less_than(id, last_id) {
                 return;
@@ -186,7 +203,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
             component_state.inserted = true;
             outgoing_actions.push(EntityAction::InsertComponent(self.entity, component));
 
-            // pop ALL waiting inserts, and removes OLDER than insert_id (in reference to component)
+            // pop ALL waiting inserts, and removes OLDER than insert_id (in reference to
+            // component)
             component_state.receive_canonical(id);
 
             // process any waiting removes
@@ -203,8 +221,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
         &mut self,
         id: ActionId,
         component: K,
-        outgoing_actions: &mut Vec<EntityAction<E, K>>)
-    {
+        outgoing_actions: &mut Vec<EntityAction<E, K>>,
+    ) {
         // do not process any remove OLDER than last received spawn id / despawn id
         if let Some(last_id) = self.last_canonical_id {
             if sequence_less_than(id, last_id) {
@@ -213,11 +231,13 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
         }
 
         if !self.components.contains_key(&component) {
-            self.components.insert(component, ComponentChannel::new(self.last_canonical_id));
+            self.components
+                .insert(component, ComponentChannel::new(self.last_canonical_id));
         }
         let component_state = self.components.get_mut(&component).unwrap();
 
-        // do not process any remove OLDER than last received insert / remove id for this component
+        // do not process any remove OLDER than last received insert / remove id for
+        // this component
         if let Some(last_id) = component_state.last_canonical_id {
             if sequence_less_than(id, last_id) {
                 return;
@@ -228,7 +248,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
             component_state.inserted = false;
             outgoing_actions.push(EntityAction::RemoveComponent(self.entity, component));
 
-            // pop ALL waiting inserts, and removes OLDER than remove_id (in reference to component)
+            // pop ALL waiting inserts, and removes OLDER than remove_id (in reference to
+            // component)
             component_state.receive_canonical(id);
 
             // process any waiting inserts
@@ -290,7 +311,7 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> ComponentChannel<E, K> {
 
 pub struct OrderedIds {
     // front small, back big
-    inner: VecDeque<ActionId>
+    inner: VecDeque<ActionId>,
 }
 
 impl OrderedIds {
@@ -344,8 +365,7 @@ impl OrderedIds {
         if let Some(old_id) = self.inner.front() {
             if *old_id == id {
                 pop = true;
-            }
-            else if sequence_less_than(*old_id, id) {
+            } else if sequence_less_than(*old_id, id) {
                 pop = true;
             }
         }

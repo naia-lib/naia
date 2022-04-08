@@ -4,8 +4,7 @@ use hecs::World as HecsWorld;
 
 use naia_hecs_server::{
     shared::{DefaultChannels, SharedConfig},
-    ServerAddrs, ServerConfig,
-    WorldWrapper,
+    ServerAddrs, ServerConfig, WorldWrapper,
 };
 
 use naia_hecs_demo_shared::protocol::{Name, Position};
