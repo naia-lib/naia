@@ -1,4 +1,5 @@
-use naia_serde::BitReader;
+
+use crate::ComponentUpdate;
 
 use crate::protocol::{
     entity_property::NetEntityHandleConverter,
@@ -56,10 +57,10 @@ pub trait WorldMutType<P: Protocolize, E>: WorldRefType<P, E> + ProtocolInserter
     /// reads an incoming stream into a component
     fn component_apply_update(
         &mut self,
+        converter: &dyn NetEntityHandleConverter,
         entity: &E,
         component_kind: &P::Kind,
-        reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
+        update: ComponentUpdate<P::Kind>,
     );
     /// mirrors the state of the same component of two different entities
     /// (setting 1st entity's component to 2nd entity's component's state)

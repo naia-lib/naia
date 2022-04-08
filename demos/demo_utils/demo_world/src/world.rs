@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 
-use naia_shared::{
-    serde::BitReader, BigMap, NetEntityHandleConverter, ProtocolInserter, Protocolize,
-    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
-    ReplicateSafe, WorldMutType, WorldRefType,
-};
+use naia_shared::{BigMap, NetEntityHandleConverter, ProtocolInserter, Protocolize, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType, ComponentUpdate};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -146,13 +142,13 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
 
     fn component_apply_update(
         &mut self,
+        converter: &dyn NetEntityHandleConverter,
         entity: &Entity,
         component_kind: &P::Kind,
-        reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
+        update: ComponentUpdate<P::Kind>,
     ) {
         if let Some(mut component) = component_mut_of_kind(self.world, entity, component_kind) {
-            component.read_partial(reader, converter);
+            component.read_partial(converter, update);
         }
     }
 

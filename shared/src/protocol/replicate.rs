@@ -1,6 +1,7 @@
-use naia_serde::{BitReader, BitWrite};
+use naia_serde::BitWrite;
 
 use super::{
+    component_update::ComponentUpdate,
     diff_mask::DiffMask,
     entity_handle::EntityHandle,
     entity_property::NetEntityHandleConverter,
@@ -56,8 +57,8 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     /// Component with it's replica on the Server
     fn read_partial(
         &mut self,
-        bit_reader: &mut BitReader,
         converter: &dyn NetEntityHandleConverter,
+        update: ComponentUpdate<P::Kind>,
     );
     /// Returns whether has any EntityProperties
     fn has_entity_properties(&self) -> bool;

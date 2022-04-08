@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use naia_serde::{BitReader, BitWrite, Serde};
+use naia_serde::{BitReader, BitWrite, BitWriter, Serde};
 
 use crate::protocol::property_mutate::PropertyMutator;
 
@@ -47,6 +47,12 @@ impl<T: Serde> Property<T> {
             mutator: None,
             mutator_index,
         };
+    }
+
+    /// Reads from a stream and immediately writes to a stream
+    /// Used to buffer updates for later
+    pub fn read_write(bit_reader: &mut BitReader, bit_writer: &mut BitWriter) {
+        T::de(bit_reader).expect("Property read error.").ser(bit_writer);
     }
 
     /// Given a cursor into incoming packet data, updates the Property with the
