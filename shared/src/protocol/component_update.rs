@@ -4,14 +4,12 @@ use super::protocolize::ProtocolKindType;
 
 pub struct ComponentUpdate<K: ProtocolKindType> {
     pub kind: K,
-    buffer: OwnedBitReader
+    buffer: OwnedBitReader,
 }
 
 impl<K: ProtocolKindType> ComponentUpdate<K> {
     pub fn new(kind: K, buffer: OwnedBitReader) -> Self {
-        Self {
-            kind, buffer,
-        }
+        Self { kind, buffer }
     }
 
     pub fn reader(&self) -> BitReader {

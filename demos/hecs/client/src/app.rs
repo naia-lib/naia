@@ -1,9 +1,12 @@
 use std::collections::HashMap;
+
 use log::info;
 
 use hecs::Entity;
 
-use naia_hecs_client::{shared::DefaultChannels, Client as NaiaClient, ClientConfig, WorldWrapper as World};
+use naia_hecs_client::{
+    shared::DefaultChannels, Client as NaiaClient, ClientConfig, WorldWrapper as World,
+};
 
 use naia_hecs_demo_shared::{
     protocol::{Auth, Protocol},

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use naia_hecs_client::{
     shared::{DefaultChannels, SharedConfig},
-    ClientConfig, WorldWrapper as World
+    ClientConfig, WorldWrapper as World,
 };
 
 use naia_hecs_demo_shared::protocol::Auth;

@@ -1,6 +1,10 @@
 use hecs::{Entity, World};
 
-use naia_shared::{serde::BitReader, NetEntityHandleConverter, ProtocolInserter, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType, ComponentUpdate};
+use naia_shared::{
+    serde::BitReader, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+    WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -168,7 +172,7 @@ impl<'w, 'd, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
     ) {
         if let Some(access) = self.world_data.component_access(component_kind) {
             if let Some(mut component) = access.component_mut(self.world, entity) {
-                component.read_partial(converter, update);
+                component.read_apply_update(converter, update);
             }
         }
     }

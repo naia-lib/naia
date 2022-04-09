@@ -5,13 +5,16 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{ChannelIndex, ChannelSender, EntityActionReceiver, KeyGenerator, NetEntity, ProtocolKindType, Protocolize, ReliableSender, EntityAction};
+use naia_shared::{
+    ChannelIndex, ChannelSender, EntityAction, EntityActionReceiver, KeyGenerator, NetEntity,
+    ProtocolKindType, Protocolize, ReliableSender,
+};
 
 use crate::{
     protocol::{
-        entity_manager::ActionId, entity_message_waitlist::EntityMessageWaitlist,
-        global_diff_handler::GlobalDiffHandler, user_diff_handler::UserDiffHandler,
-        entity_action_event::EntityActionEvent,
+        entity_action_event::EntityActionEvent, entity_manager::ActionId,
+        entity_message_waitlist::EntityMessageWaitlist, global_diff_handler::GlobalDiffHandler,
+        user_diff_handler::UserDiffHandler,
     },
     server::Instant,
 };
@@ -206,19 +209,22 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
             self.entity_channels.remove(&entity);
 
             if self.host_world.contains_key(&entity) {
-
                 // initialize component channels
                 let mut component_channels = CheckedMap::new();
                 let host_components = self.host_world.get(&entity).unwrap();
 
-                let insert_status_components: HashSet<&P::Kind> = host_components.inner.union(&inserted_components).collect();
+                let insert_status_components: HashSet<&P::Kind> =
+                    host_components.inner.union(&inserted_components).collect();
 
                 for component in insert_status_components {
                     // change to inserting status
                     component_channels.insert(*component, ComponentChannel::Inserting);
                 }
 
-                let send_insert_action_components: HashSet<&P::Kind> = host_components.inner.difference(&inserted_components).collect();
+                let send_insert_action_components: HashSet<&P::Kind> = host_components
+                    .inner
+                    .difference(&inserted_components)
+                    .collect();
 
                 for component in send_insert_action_components {
                     // send insert action
@@ -234,7 +240,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
                 for component in &inserted_components {
                     self.remote_insert_component(entity, *component);
                 }
-
             } else {
                 // despawn entity
                 self.entity_channels
@@ -260,8 +265,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
             // if entity is spawned in host, respawn entity channel
             if self.host_world.contains_key(&entity) {
                 // spawn entity
-                self.entity_channels
-                    .insert(entity, EntityChannel::Spawning);
+                self.entity_channels.insert(entity, EntityChannel::Spawning);
                 self.outgoing_actions
                     .send_message(EntityActionEvent::SpawnEntity(entity));
                 self.on_entity_channel_opening(&entity);
@@ -396,7 +400,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
         for action in delivered_actions {
             match action {
                 EntityAction::SpawnEntity(entity, components) => {
-                    let component_set: HashSet<P::Kind> = components.iter().map(|kind| *kind).collect();
+                    let component_set: HashSet<P::Kind> =
+                        components.iter().map(|kind| *kind).collect();
                     self.remote_spawn_entity(entity, component_set);
                 }
                 EntityAction::DespawnEntity(entity) => {

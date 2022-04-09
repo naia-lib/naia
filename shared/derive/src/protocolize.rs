@@ -21,9 +21,9 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let cast_mut_method = cast_mut_method(&protocol_name, &variants);
     let extract_and_insert_method = extract_and_insert_method(&protocol_name, &variants);
     let write_method = write_method(&protocol_name, &variants);
-    let write_partial_method = write_partial_method(&protocol_name, &variants);
+    let write_update_method = write_update_method(&protocol_name, &variants);
     let read_method = read_method(&kind_enum_name, &variants);
-    let read_update_method = read_update_method(&kind_enum_name, &variants);
+    let read_create_update_method = read_create_update_method(&kind_enum_name, &variants);
 
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}, sync::RwLock, collections::HashMap};
@@ -38,7 +38,7 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
             #kind_of_method
             #type_to_kind_method
             #read_method
-            #read_update_method
+            #read_create_update_method
             #dyn_ref_method
             #dyn_mut_method
             #cast_method
@@ -46,7 +46,7 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
             #cast_mut_method
             #extract_and_insert_method
             #write_method
-            #write_partial_method
+            #write_update_method
         }
 
         impl Clone for #protocol_name {
@@ -196,7 +196,7 @@ pub fn read_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     };
 }
 
-pub fn read_update_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
+pub fn read_create_update_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     let mut variants_build = quote! {};
 
     for variant in variants {
@@ -205,7 +205,7 @@ pub fn read_update_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStre
         // Variants build() match branch
         {
             let new_output_right = quote! {
-                #enum_name::#variant_name => #variant_name::read_update(bit_reader),
+                #enum_name::#variant_name => #variant_name::read_create_update(bit_reader),
             };
             let new_output_result = quote! {
                 #variants_build
@@ -216,7 +216,7 @@ pub fn read_update_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStre
     }
 
     return quote! {
-        fn read_update(bit_reader: &mut serde::BitReader) -> ComponentUpdate<Self::Kind> {
+        fn read_create_update(bit_reader: &mut serde::BitReader) -> ComponentUpdate<Self::Kind> {
             let protocol_kind: Self::Kind = Self::Kind::de(bit_reader).unwrap();
             match protocol_kind {
                 #variants_build
@@ -434,13 +434,13 @@ fn write_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     };
 }
 
-fn write_partial_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
+fn write_update_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     let mut variant_definitions = quote! {};
 
     for variant_name in variants {
         let new_output_right = quote! {
             #protocol_name::#variant_name(replica) => {
-                replica.write_partial(diff_mask, writer, converter);
+                replica.write_update(diff_mask, writer, converter);
             }
         };
         let new_output_result = quote! {
@@ -451,7 +451,7 @@ fn write_partial_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenSt
     }
 
     return quote! {
-        fn write_partial(&self, diff_mask: &DiffMask, writer: &mut dyn serde::BitWrite, converter: &dyn NetEntityHandleConverter) {
+        fn write_update(&self, diff_mask: &DiffMask, writer: &mut dyn serde::BitWrite, converter: &dyn NetEntityHandleConverter) {
             match self {
                 #variant_definitions
             }

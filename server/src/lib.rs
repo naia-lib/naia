@@ -12,7 +12,6 @@
 
 extern crate cfg_if;
 
-#[macro_use]
 extern crate log;
 
 #[cfg(all(feature = "use-udp", feature = "use-webrtc"))]

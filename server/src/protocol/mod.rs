@@ -1,3 +1,4 @@
+pub mod entity_action_event;
 pub mod entity_manager;
 pub mod entity_message_waitlist;
 pub mod entity_ref;
@@ -8,4 +9,3 @@ pub mod mut_channel;
 pub mod user_diff_handler;
 pub mod world_channel;
 pub mod world_record;
-pub mod entity_action_event;

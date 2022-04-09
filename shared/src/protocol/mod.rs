@@ -1,3 +1,4 @@
+pub mod component_update;
 pub mod diff_mask;
 pub mod entity_action;
 pub mod entity_action_receiver;
@@ -11,4 +12,3 @@ pub mod protocol_io;
 pub mod protocolize;
 pub mod replica_ref;
 pub mod replicate;
-pub mod component_update;
