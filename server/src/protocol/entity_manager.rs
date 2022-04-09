@@ -7,12 +7,19 @@ use std::{
     time::Duration,
 };
 
-use naia_shared::{message_list_header, serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger}, wrapping_diff, ChannelIndex, DiffMask, EntityActionType, EntityConverter, Instant, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS, EntityAction};
+use naia_shared::{
+    message_list_header,
+    serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+    wrapping_diff, ChannelIndex, DiffMask, EntityAction, EntityActionType, EntityConverter,
+    Instant, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
+    PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
+};
 
 use crate::sequence_list::SequenceList;
 
 use super::{
-    global_diff_handler::GlobalDiffHandler, world_channel::WorldChannel, world_record::WorldRecord, entity_action_event::EntityActionEvent,
+    entity_action_event::EntityActionEvent, global_diff_handler::GlobalDiffHandler,
+    world_channel::WorldChannel, world_record::WorldRecord,
 };
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
@@ -351,7 +358,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 components_num.ser(bit_writer);
 
                 for component_kind in &component_kinds {
-
                     let converter = EntityConverter::new(world_record, self);
 
                     // write component payload
@@ -363,7 +369,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-
                     //info!("write SpawnEntity({})", action_id);
 
                     Self::record_action_written(
@@ -385,7 +390,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-
                     //info!("write DespawnEntity({})", action_id);
 
                     Self::record_action_written(
@@ -404,7 +408,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
                     // if we are actually writing this packet
                     if is_writing {
-
                         //info!("write Noop({})", action_id);
 
                         // add it to action record
@@ -434,7 +437,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
                     // if we are actually writing this packet
                     if is_writing {
-
                         //info!("write InsertComponent({})", action_id);
 
                         // add it to action record
@@ -453,7 +455,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
                     // if we are actually writing this packet
                     if is_writing {
-
                         //info!("write Noop({})", action_id);
 
                         // add it to action record
@@ -478,7 +479,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
                     // if we are writing to this packet, add it to record
                     if is_writing {
-
                         //info!("write RemoveComponent({})", action_id);
 
                         Self::record_action_written(
@@ -622,12 +622,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 world
                     .component_of_kind(entity, component_kind)
                     .expect("Component does not exist in World")
-                    .write_partial(&diff_mask, bit_writer, &converter);
+                    .write_update(&diff_mask, bit_writer, &converter);
             }
 
             ////////
             if is_writing {
-                info!("writing UpdateComponent");
+                //info!("writing UpdateComponent");
+
                 // place diff mask in a special transmission record - like map
                 self.last_update_packet_index = *packet_index;
 

@@ -3,7 +3,11 @@ use bevy::ecs::{
     world::{Mut, World},
 };
 
-use naia_shared::{serde::BitReader, NetEntityHandleConverter, ProtocolInserter, ProtocolKindType, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe, WorldMutType, WorldRefType, ComponentUpdate};
+use naia_shared::{
+    serde::BitReader, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter,
+    ProtocolKindType, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
+    ReplicateSafe, WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -177,7 +181,7 @@ impl<'w, P: 'static + Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
             .resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
                 if let Some(accessor) = data.component_access(component_kind) {
                     if let Some(mut component) = accessor.component_mut(world, entity) {
-                        component.read_partial(converter, update);
+                        component.read_apply_update(converter, update);
                     }
                 }
             });

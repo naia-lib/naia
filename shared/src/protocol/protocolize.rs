@@ -1,7 +1,8 @@
-use crate::{DiffMask, NetEntityHandleConverter};
-use naia_serde::{BitReader, BitWrite, Serde};
 use std::{any::TypeId, hash::Hash};
-use crate::protocol::component_update::ComponentUpdate;
+
+use naia_serde::{BitReader, BitWrite, Serde};
+
+use crate::{protocol::component_update::ComponentUpdate, DiffMask, NetEntityHandleConverter};
 
 use super::{
     replica_ref::{ReplicaDynMut, ReplicaDynRef},
@@ -20,7 +21,7 @@ pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
     /// Read from a bit stream to create a new Replica
     fn read(bit_reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Self;
     /// Read from a bit stream to create a new Component Update
-    fn read_update(bit_reader: &mut BitReader) -> ComponentUpdate<Self::Kind>;
+    fn read_create_update(bit_reader: &mut BitReader) -> ComponentUpdate<Self::Kind>;
     /// Get an immutable reference to the inner Component/Message as a
     /// Replicate trait object
     fn dyn_ref(&self) -> ReplicaDynRef<'_, Self>;
@@ -41,7 +42,7 @@ pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
     fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Message/Component on the client
-    fn write_partial(
+    fn write_update(
         &self,
         diff_mask: &DiffMask,
         bit_writer: &mut dyn BitWrite,

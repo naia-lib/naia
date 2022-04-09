@@ -47,7 +47,7 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Message/Component on the client
-    fn write_partial(
+    fn write_update(
         &self,
         diff_mask: &DiffMask,
         bit_writer: &mut dyn BitWrite,
@@ -55,7 +55,7 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     );
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
-    fn read_partial(
+    fn read_apply_update(
         &mut self,
         converter: &dyn NetEntityHandleConverter,
         update: ComponentUpdate<P::Kind>,

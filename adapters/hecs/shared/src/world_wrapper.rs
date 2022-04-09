@@ -2,7 +2,11 @@ use std::ops::{Deref, DerefMut};
 
 use hecs::{Entity, World};
 
-use naia_shared::{serde::BitReader, NetEntityHandleConverter, ProtocolInserter, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType, ComponentUpdate};
+use naia_shared::{
+    serde::BitReader, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+    WorldMutType, WorldRefType,
+};
 
 use crate::{
     component_ref::{ComponentMut, ComponentRef},
@@ -149,7 +153,7 @@ impl<P: Protocolize> WorldMutType<P, Entity> for &mut WorldWrapper<P> {
     ) {
         if let Some(access) = self.data.component_access(component_kind) {
             if let Some(mut component) = access.component_mut(&mut self.inner, entity) {
-                component.read_partial(bit_reader, converter);
+                component.read_apply_update(converter, update);
             }
         }
     }

@@ -15,6 +15,7 @@ pub fn process_events(app: &mut App) {
             }
             Ok(Event::SpawnEntity(entity)) => {
                 let new_id = app.next_id;
+                app.next_id = app.next_id.wrapping_add(1);
                 app.entity_to_id_map.insert(entity, new_id);
                 info!("creation of entity: {new_id}");
             }

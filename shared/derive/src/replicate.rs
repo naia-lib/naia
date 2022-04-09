@@ -25,7 +25,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     // Replica Methods
     let new_complete_method = new_complete_method(&replica_name, &enum_name, &properties);
     let read_method = read_method(&protocol_name, &replica_name, &enum_name, &properties);
-    let read_update_method = read_update_method(&replica_name, &protocol_kind_name, &properties);
+    let read_create_update_method =
+        read_create_update_method(&replica_name, &protocol_kind_name, &properties);
 
     // ReplicateSafe Derive Methods
     let diff_mask_size = {
@@ -43,9 +44,9 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let clone_method = clone_method(&replica_name, &properties);
     let mirror_method = mirror_method(&protocol_name, &replica_name, &properties);
     let set_mutator_method = set_mutator_method(&properties);
-    let read_partial_method = read_partial_method(&protocol_kind_name, &properties);
+    let read_apply_update_method = read_apply_update_method(&protocol_kind_name, &properties);
     let write_method = write_method(&properties);
-    let write_partial_method = write_partial_method(&enum_name, &properties);
+    let write_update_method = write_update_method(&enum_name, &properties);
     let has_entity_properties = has_entity_properties_method(&properties);
     let entities = entities_method(&properties);
 
@@ -63,7 +64,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         impl #replica_name {
             #new_complete_method
             #read_method
-            #read_update_method
+            #read_create_update_method
         }
         impl ReplicateSafe<#protocol_name> for #replica_name {
             fn diff_mask_size(&self) -> u8 { #diff_mask_size }
@@ -77,8 +78,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #mirror_method
             #set_mutator_method
             #write_method
-            #write_partial_method
-            #read_partial_method
+            #write_update_method
+            #read_apply_update_method
             #has_entity_properties
             #entities
         }
@@ -494,24 +495,35 @@ pub fn read_method(
     };
 }
 
-pub fn read_update_method(
+pub fn read_create_update_method(
     replica_name: &Ident,
     kind_name: &Ident,
     properties: &Vec<Property>,
 ) -> TokenStream {
-
     let mut prop_read_writes = quote! {};
     for property in properties.iter() {
         let new_output_right = match property {
             Property::Normal(property) => {
                 let field_type = &property.inner_type;
                 quote! {
-                    Property::<#field_type>::read_write(bit_reader, &mut update_writer);
+                    {
+                        let should_read = bool::de(bit_reader).unwrap();
+                        should_read.ser(&mut update_writer);
+                        if should_read {
+                            Property::<#field_type>::read_write(bit_reader, &mut update_writer);
+                        }
+                    }
                 }
             }
             Property::Entity(_) => {
                 quote! {
-                    EntityProperty::read_write(bit_reader, &mut update_writer);
+                    {
+                        let should_read = bool::de(bit_reader).unwrap();
+                        should_read.ser(&mut update_writer);
+                        if should_read {
+                            EntityProperty::read_write(bit_reader, &mut update_writer);
+                        }
+                    }
                 }
             }
         };
@@ -524,7 +536,7 @@ pub fn read_update_method(
     }
 
     return quote! {
-        pub fn read_update(bit_reader: &mut BitReader) -> ComponentUpdate::<#kind_name> {
+        pub fn read_create_update(bit_reader: &mut BitReader) -> ComponentUpdate::<#kind_name> {
 
             let mut update_writer = BitWriter::new();
 
@@ -538,7 +550,7 @@ pub fn read_update_method(
     };
 }
 
-fn read_partial_method(kind_name: &Ident, properties: &Vec<Property>) -> TokenStream {
+fn read_apply_update_method(kind_name: &Ident, properties: &Vec<Property>) -> TokenStream {
     let mut output = quote! {};
 
     for property in properties.iter() {
@@ -569,7 +581,7 @@ fn read_partial_method(kind_name: &Ident, properties: &Vec<Property>) -> TokenSt
     }
 
     return quote! {
-        fn read_partial(&mut self, converter: &dyn NetEntityHandleConverter, mut update: ComponentUpdate<#kind_name>) {
+        fn read_apply_update(&mut self, converter: &dyn NetEntityHandleConverter, mut update: ComponentUpdate<#kind_name>) {
             let reader = &mut update.reader();
             #output
         }
@@ -610,7 +622,7 @@ fn write_method(properties: &Vec<Property>) -> TokenStream {
     };
 }
 
-fn write_partial_method(enum_name: &Ident, properties: &Vec<Property>) -> TokenStream {
+fn write_update_method(enum_name: &Ident, properties: &Vec<Property>) -> TokenStream {
     let mut output = quote! {};
 
     for property in properties.iter() {
@@ -649,7 +661,7 @@ fn write_partial_method(enum_name: &Ident, properties: &Vec<Property>) -> TokenS
     }
 
     return quote! {
-        fn write_partial(&self, diff_mask: &DiffMask, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+        fn write_update(&self, diff_mask: &DiffMask, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
             #output
         }
     };

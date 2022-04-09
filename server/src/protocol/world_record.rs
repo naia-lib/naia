@@ -66,10 +66,12 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
         }
 
         let component_kind_set = &self.entity_records.get(entity).unwrap().component_kinds;
-        return Some(component_kind_set
-            .iter()
-            .map(|kind_ref| *kind_ref)
-            .collect());
+        return Some(
+            component_kind_set
+                .iter()
+                .map(|kind_ref| *kind_ref)
+                .collect(),
+        );
     }
 
     // Rooms
