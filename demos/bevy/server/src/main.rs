@@ -1,8 +1,8 @@
 use bevy::{log::LogPlugin, prelude::*};
 
-use naia_bevy_server::{shared::DefaultChannels, Plugin as ServerPlugin, ServerConfig, Stage};
+use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
 
-use naia_bevy_demo_shared::{protocol::Protocol, shared_config};
+use naia_bevy_demo_shared::{Channels, protocol::Protocol, shared_config};
 
 mod resources;
 mod systems;
@@ -19,7 +19,7 @@ fn main() {
     // Plugins
     .add_plugins(MinimalPlugins)
     .add_plugin(LogPlugin::default())
-    .add_plugin(ServerPlugin::<Protocol, DefaultChannels>::new(ServerConfig::default(), shared_config()))
+    .add_plugin(ServerPlugin::<Protocol, Channels>::new(ServerConfig::default(), shared_config()))
 
     // Startup System
     .add_startup_system(

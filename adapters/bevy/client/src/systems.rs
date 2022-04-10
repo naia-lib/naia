@@ -131,7 +131,7 @@ pub fn finish_tick(mut resource: ResMut<ClientResource>) {
 pub fn should_receive<P: Protocolize, C: ChannelIndex>(
     client: Res<Client<P, Entity, C>>,
 ) -> ShouldRun {
-    if client.is_connected() {
+    if client.is_connecting() {
         ShouldRun::Yes
     } else {
         ShouldRun::No

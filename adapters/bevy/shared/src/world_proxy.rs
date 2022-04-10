@@ -4,7 +4,7 @@ use bevy::ecs::{
 };
 
 use naia_shared::{
-    serde::BitReader, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter,
+    ComponentUpdate, NetEntityHandleConverter, ProtocolInserter,
     ProtocolKindType, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
     ReplicateSafe, WorldMutType, WorldRefType,
 };

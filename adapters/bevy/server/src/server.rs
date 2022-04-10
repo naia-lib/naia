@@ -7,12 +7,13 @@ use bevy::ecs::{
 };
 
 use naia_server::{
-    shared::{ChannelIndex, Protocolize, ReplicateSafe},
+    shared::{ChannelIndex, Protocolize, ReplicateSafe, EntityHandleConverter},
     EntityRef, Event, NaiaServerError, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
     ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
+use crate::shared::EntityHandle;
 
 use super::{commands::Command, entity_mut::EntityMut, state::State};
 
@@ -178,10 +179,18 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, 
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &Entity) {
         self.server.room_mut(room_key).remove_entity(entity);
     }
-
-    // Private methods
 }
 
 impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParam for Server<'world, 'state, P, C> {
     type Fetch = State<P, C>;
+}
+
+impl<'world, 'state, P: Protocolize, C: ChannelIndex> EntityHandleConverter<Entity> for Server<'world, 'state, P, C> {
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
+        return self.server.handle_to_entity(entity_handle);
+    }
+
+    fn entity_to_handle(&self, entity: &Entity) -> EntityHandle {
+        return self.server.entity_to_handle(entity);
+    }
 }

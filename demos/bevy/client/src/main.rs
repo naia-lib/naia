@@ -32,6 +32,9 @@ fn main() {
         events::disconnect_event)
     .add_system_to_stage(
         Stage::ReceiveEvents,
+        events::receive_message_event)
+    .add_system_to_stage(
+        Stage::ReceiveEvents,
         events::insert_component_event)
     .add_system_to_stage(
         Stage::Frame,
