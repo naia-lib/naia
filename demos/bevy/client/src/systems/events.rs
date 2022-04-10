@@ -11,10 +11,12 @@ use bevy::{
 };
 
 use naia_bevy_client::{
-    events::{InsertComponentEvent, SpawnEntityEvent},
+    events::InsertComponentEvent,
     shared::DefaultChannels,
     Client,
 };
+use naia_bevy_client::events::MessageEvent;
+use naia_bevy_demo_shared::Channels;
 
 use naia_bevy_demo_shared::protocol::{Color, ColorValue, Protocol, ProtocolKind};
 
@@ -26,6 +28,22 @@ pub fn connect_event(client: Client<Protocol, DefaultChannels>) {
 
 pub fn disconnect_event(client: Client<Protocol, DefaultChannels>) {
     info!("Client disconnected from: {}", client.server_address());
+}
+
+pub fn receive_message_event(
+    mut event_reader: EventReader<MessageEvent<ProtocolKind, Channels>>,
+) {
+    for event in event_reader.iter() {
+        match event {
+            MessageEvent(Channels::EntityAssignment, Protocol::EntityAssignment(message)) => {
+                todo!()
+            }
+            MessageEvent(Channels::PlayerCommand, Protocol::KeyCommand(command)) => {
+                todo!()
+            }
+            _ => {}
+        }
+    }
 }
 
 pub fn insert_component_event(

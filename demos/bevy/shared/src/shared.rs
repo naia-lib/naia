@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use naia_shared::{
-    ChannelConfig, DefaultChannels, LinkConditionerConfig, SharedConfig, SocketConfig,
-};
+use naia_shared::{LinkConditionerConfig, SharedConfig, SocketConfig};
 
-pub fn shared_config() -> SharedConfig<DefaultChannels> {
+use crate::channels::{CHANNEL_CONFIG, Channels};
+
+pub fn shared_config() -> SharedConfig<Channels> {
     let tick_interval = Some(Duration::from_millis(50));
 
     //  let link_condition = None;
@@ -16,7 +16,7 @@ pub fn shared_config() -> SharedConfig<DefaultChannels> {
     //  });
     return SharedConfig::new(
         SocketConfig::new(link_condition, None),
-        &ChannelConfig::<DefaultChannels>::default(),
+        CHANNEL_CONFIG,
         tick_interval,
         None,
     );
