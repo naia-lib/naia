@@ -15,7 +15,7 @@ pub trait Command<P: Protocolize, C: ChannelIndex>: Send + Sync + 'static {
     fn write(self: Box<Self>, server: &mut Server<P, Entity, C>, world: WorldMut);
 }
 
-//// Despawn Component ////
+//// Despawn Entity ////
 
 #[derive(Debug)]
 pub(crate) struct DespawnEntity {

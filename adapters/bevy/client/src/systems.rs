@@ -1,11 +1,9 @@
-use bevy::{
-    app::Events,
-    ecs::{
-        entity::Entity,
-        schedule::ShouldRun,
-        system::{Res, ResMut},
-        world::{Mut, World},
-    },
+use bevy::ecs::{
+    entity::Entity,
+    event::Events,
+    schedule::ShouldRun,
+    system::{Res, ResMut},
+    world::{Mut, World},
 };
 
 use naia_client::{

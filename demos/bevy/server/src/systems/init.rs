@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use naia_bevy_server::{shared::DefaultChannels, Server, ServerAddrs};
+use naia_bevy_server::{Server, ServerAddrs};
 
-use naia_bevy_demo_shared::protocol::Protocol;
+use naia_bevy_demo_shared::{protocol::Protocol, Channels};
 
 use crate::resources::Global;
 
-pub fn init(mut commands: Commands, mut server: Server<Protocol, DefaultChannels>) {
+pub fn init(mut commands: Commands, mut server: Server<Protocol, Channels>) {
     info!("Naia Bevy Server Demo is running");
 
     // Naia Server initialization

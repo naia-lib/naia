@@ -4,9 +4,9 @@ use bevy::ecs::{
 };
 
 use naia_shared::{
-    ComponentUpdate, NetEntityHandleConverter, ProtocolInserter,
-    ProtocolKindType, Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
-    ReplicateSafe, WorldMutType, WorldRefType,
+    ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, ProtocolKindType, Protocolize,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe, WorldMutType,
+    WorldRefType,
 };
 
 use super::{

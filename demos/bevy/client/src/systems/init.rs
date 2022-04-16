@@ -1,12 +1,15 @@
 use bevy::prelude::*;
 
-use naia_bevy_client::{shared::DefaultChannels, Client};
+use naia_bevy_client::Client;
 
-use naia_bevy_demo_shared::protocol::{Auth, Protocol};
+use naia_bevy_demo_shared::{
+    protocol::{Auth, Protocol},
+    Channels,
+};
 
 use crate::resources::Global;
 
-pub fn init(mut commands: Commands, mut client: Client<Protocol, DefaultChannels>) {
+pub fn init(mut commands: Commands, mut client: Client<Protocol, Channels>) {
     info!("Naia Bevy Client Demo started");
 
     client.auth(Auth::new("charlie", "12345"));

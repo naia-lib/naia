@@ -7,13 +7,13 @@ use bevy::ecs::{
 };
 
 use naia_server::{
-    shared::{ChannelIndex, Protocolize, ReplicateSafe, EntityHandleConverter},
+    shared::{ChannelIndex, EntityHandleConverter, Protocolize, ReplicateSafe},
     EntityRef, Event, NaiaServerError, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
     ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
-use naia_bevy_shared::{WorldProxy, WorldRef};
 use crate::shared::EntityHandle;
+use naia_bevy_shared::{WorldProxy, WorldRef};
 
 use super::{commands::Command, entity_mut::EntityMut, state::State};
 
@@ -185,7 +185,9 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParam for Server<'wo
     type Fetch = State<P, C>;
 }
 
-impl<'world, 'state, P: Protocolize, C: ChannelIndex> EntityHandleConverter<Entity> for Server<'world, 'state, P, C> {
+impl<'world, 'state, P: Protocolize, C: ChannelIndex> EntityHandleConverter<Entity>
+    for Server<'world, 'state, P, C>
+{
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
         return self.server.handle_to_entity(entity_handle);
     }

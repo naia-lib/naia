@@ -58,36 +58,41 @@ impl<P: Protocolize, C: ChannelIndex> PluginType for Plugin<P, C> {
         let server = Server::<P, Entity, C>::new(&config.server_config, &config.shared_config);
 
         app
-        // RESOURCES //
+            // RESOURCES //
             .insert_resource(server)
             .insert_resource(ServerResource::new())
             .insert_resource(WorldData::<P>::new())
-        // EVENTS //
+            // EVENTS //
             .add_event::<AuthorizationEvent<P>>()
             .add_event::<ConnectionEvent>()
             .add_event::<DisconnectionEvent>()
             .add_event::<MessageEvent<P, C>>()
-        // STAGES //
-            .add_stage_before(CoreStage::PreUpdate,
-                              PrivateStage::BeforeReceiveEvents,
-                              SystemStage::single_threaded()
-                                  .with_run_criteria(should_receive::<P, C>))
-            .add_stage_after(PrivateStage::BeforeReceiveEvents,
-                             Stage::ReceiveEvents,
-                             SystemStage::single_threaded()
-                                 .with_run_criteria(should_receive::<P, C>))
-            .add_stage_after(CoreStage::PostUpdate,
-                              Stage::Tick,
-                              SystemStage::single_threaded()
-                                 .with_run_criteria(should_tick))
-            .add_stage_after(Stage::Tick,
-                              PrivateStage::AfterTick,
-                              SystemStage::parallel()
-                                 .with_run_criteria(should_tick))
-        // SYSTEMS //
-            .add_system_to_stage(PrivateStage::BeforeReceiveEvents,
-                                 before_receive_events::<P, C>.exclusive_system())
-            .add_system_to_stage(PrivateStage::AfterTick,
-                                 finish_tick);
+            // STAGES //
+            .add_stage_before(
+                CoreStage::PreUpdate,
+                PrivateStage::BeforeReceiveEvents,
+                SystemStage::single_threaded().with_run_criteria(should_receive::<P, C>),
+            )
+            .add_stage_after(
+                PrivateStage::BeforeReceiveEvents,
+                Stage::ReceiveEvents,
+                SystemStage::single_threaded().with_run_criteria(should_receive::<P, C>),
+            )
+            .add_stage_after(
+                CoreStage::PostUpdate,
+                Stage::Tick,
+                SystemStage::single_threaded().with_run_criteria(should_tick),
+            )
+            .add_stage_after(
+                Stage::Tick,
+                PrivateStage::AfterTick,
+                SystemStage::parallel().with_run_criteria(should_tick),
+            )
+            // SYSTEMS //
+            .add_system_to_stage(
+                PrivateStage::BeforeReceiveEvents,
+                before_receive_events::<P, C>.exclusive_system(),
+            )
+            .add_system_to_stage(PrivateStage::AfterTick, finish_tick);
     }
 }

@@ -6,7 +6,10 @@ use naia_bevy_server::{
     Server,
 };
 
-use naia_bevy_demo_shared::{protocol::{Color, ColorValue, EntityAssignment, Position, Protocol}, Channels};
+use naia_bevy_demo_shared::{
+    protocol::{Color, ColorValue, EntityAssignment, Position, Protocol},
+    Channels,
+};
 
 use crate::resources::Global;
 
@@ -81,11 +84,7 @@ pub fn connection_event<'world, 'state>(
         let mut assignment_message = EntityAssignment::new(true);
         assignment_message.entity.set(&server, &entity);
 
-        server.send_message(
-            &user_key,
-            Channels::EntityAssignment,
-            &assignment_message,
-        );
+        server.send_message(&user_key, Channels::EntityAssignment, &assignment_message);
     }
 }
 
