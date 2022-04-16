@@ -1,12 +1,12 @@
-use std::{collections::HashSet, time::Duration};
+use std::collections::HashSet;
 
 use macroquad::prelude::{
-    clear_background, draw_rectangle, info, is_key_down, is_key_pressed, KeyCode, BLACK, BLUE,
+    clear_background, draw_rectangle, info, is_key_down, KeyCode, BLACK, BLUE,
     GREEN, RED, WHITE, YELLOW,
 };
 
 use naia_client::{
-    shared::{Protocolize, Replicate, Timer},
+    shared::Replicate, CommandHistory,
     Client as NaiaClient, ClientConfig, Event,
 };
 
@@ -17,8 +17,6 @@ use naia_macroquad_demo_shared::{
     protocol::{Auth, Color, KeyCommand, Protocol, Square},
     shared_config, Channels,
 };
-
-use crate::command_history::CommandHistory;
 
 type World = DemoWorld<Protocol>;
 type Client = NaiaClient<Protocol, Entity, Channels>;
@@ -46,19 +44,15 @@ pub struct App {
     squares: HashSet<Entity>,
     queued_command: Option<KeyCommand>,
     command_history: CommandHistory<KeyCommand>,
-    bandwidth_timer: Timer,
-    other_main_entity: Option<Entity>,
 }
 
 impl App {
     pub fn new() -> Self {
         info!("Naia Macroquad Client Demo started");
 
-        let mut client_config = ClientConfig::default();
-
-        client_config.connection.bandwidth_measure_duration = Some(Duration::from_secs(4));
-
-        let client = Client::new(&client_config, &shared_config());
+        let mut client = Client::new(&ClientConfig::default(), &shared_config());
+        client.auth(Auth::new("charlie", "12345"));
+        client.connect("http://127.0.0.1:14191");
 
         App {
             client,
@@ -67,38 +61,10 @@ impl App {
             squares: HashSet::new(),
             queued_command: None,
             command_history: CommandHistory::new(),
-            bandwidth_timer: Timer::new(Duration::from_secs(4)),
-            other_main_entity: None,
         }
     }
 
     pub fn update(&mut self) {
-        let q = is_key_pressed(KeyCode::Q);
-        let c = is_key_pressed(KeyCode::C);
-        if q {
-            if self.client.is_connected() {
-                return self.client.disconnect();
-            }
-        }
-        if c {
-            if self.client.is_disconnected() {
-                let auth = Auth::new("charlie", "12345");
-                self.client.auth(auth);
-                return self.client.connect("http://127.0.0.1:14191");
-            }
-        }
-
-        if self.client.is_connected() {
-            if self.bandwidth_timer.ringing() {
-                self.bandwidth_timer.reset();
-
-                info!(
-                    "Bandwidth: {} kbps outgoing",
-                    self.client.outgoing_bandwidth()
-                );
-            }
-        }
-
         self.input();
         self.receive_events();
         self.draw();
@@ -130,9 +96,6 @@ impl App {
                     key_command
                         .entity
                         .set(&self.client, &owned_entity.confirmed);
-                    if let Some(other_entity) = &self.other_main_entity {
-                        key_command.other_entity.set(&self.client, other_entity);
-                    }
                     self.queued_command = Some(key_command);
                 }
             }
@@ -201,32 +164,13 @@ impl App {
                 )) => {
                     let assign = *message.assign;
 
-                    let other_entity = message.other_entity.get(&self.client).unwrap();
-                    self.other_main_entity = Some(other_entity);
-
                     let entity = message.entity.get(&self.client).unwrap();
                     if assign {
                         info!("gave ownership of entity");
 
                         ////////////////////////////////
                         let mut world_mut = self.world.proxy_mut();
-                        let prediction_entity = world_mut.spawn_entity();
-
-                        // create copies of components //
-                        for component_kind in world_mut.component_kinds(&entity) {
-                            let mut component_copy_opt: Option<Protocol> = None;
-                            if let Some(component) =
-                                world_mut.component_of_kind(&entity, &component_kind)
-                            {
-                                component_copy_opt = Some(component.protocol_copy());
-                            }
-                            if let Some(component_copy) = component_copy_opt {
-                                component_copy
-                                    .extract_and_insert(&prediction_entity, &mut world_mut);
-                            }
-                        }
-                        ////////////////////////////////
-
+                        let prediction_entity = world_mut.duplicate_entity(&entity);
                         self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
                     } else {
                         let mut disowned: bool = false;

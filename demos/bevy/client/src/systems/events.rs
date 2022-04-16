@@ -39,8 +39,16 @@ pub fn receive_message_event(mut event_reader: EventReader<MessageEvent<Protocol
             MessageEvent(Channels::PlayerCommand, Protocol::KeyCommand(_command)) => {
                 todo!()
             }
-            _ => {
-                unimplemented!()
+            _ => {}
+        }
+    }
+}
+
+pub fn spawn_entity_event(mut _local: Commands, mut event_reader: EventReader<SpawnEntityEvent>) {
+    for event in event_reader.iter() {
+        match event {
+            SpawnEntityEvent(_entity) => {
+                info!("spawned entity");
             }
         }
     }
@@ -81,12 +89,4 @@ pub fn insert_component_event(
     }
 }
 
-pub fn spawn_entity_event(mut _local: Commands, mut event_reader: EventReader<SpawnEntityEvent>) {
-    for event in event_reader.iter() {
-        match event {
-            SpawnEntityEvent(entity) => {
-                info!("spawned!");
-            }
-        }
-    }
-}
+

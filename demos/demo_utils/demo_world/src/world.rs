@@ -200,6 +200,27 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         return self.world.entities.insert(component_map);
     }
 
+    fn duplicate_entity(&mut self, entity: &Entity) -> Entity {
+        let new_entity = self.spawn_entity();
+
+        // create copies of components //
+        for component_kind in self.component_kinds(&entity) {
+            let mut component_copy_opt: Option<P> = None;
+            if let Some(component) =
+            self.component_of_kind(&entity, &component_kind)
+            {
+                component_copy_opt = Some(component.protocol_copy());
+            }
+            if let Some(component_copy) = component_copy_opt {
+                component_copy
+                    .extract_and_insert(&new_entity, self);
+            }
+        }
+        ////////////////////////////////
+
+        new_entity
+    }
+
     fn despawn_entity(&mut self, entity: &Entity) {
         self.world.entities.remove(entity);
     }

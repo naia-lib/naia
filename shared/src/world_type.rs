@@ -42,6 +42,8 @@ pub trait WorldMutType<P: Protocolize, E>: WorldRefType<P, E> + ProtocolInserter
     // Entities
     /// spawn an entity
     fn spawn_entity(&mut self) -> E;
+    /// duplicate an entity
+    fn duplicate_entity(&mut self, entity: &E) -> E;
     /// despawn an entity
     fn despawn_entity(&mut self, entity: &E);
 

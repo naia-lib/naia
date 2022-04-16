@@ -12,6 +12,7 @@
 
 pub use naia_shared as shared;
 
+mod command_history;
 mod client;
 mod client_config;
 mod connection;
@@ -26,6 +27,7 @@ pub use client_config::ClientConfig;
 pub use error::NaiaClientError;
 pub use event::Event;
 pub use protocol::entity_ref::EntityRef;
+pub use command_history::CommandHistory;
 
 pub mod internal {
     pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeState};
