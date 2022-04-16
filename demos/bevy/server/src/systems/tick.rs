@@ -1,8 +1,9 @@
-use naia_bevy_server::{shared::DefaultChannels, Server};
+use naia_bevy_demo_shared::Channels;
+use naia_bevy_server::Server;
 
 use naia_bevy_demo_shared::protocol::Protocol;
 
-pub fn tick(mut server: Server<Protocol, DefaultChannels>) {
+pub fn tick(mut server: Server<Protocol, Channels>) {
     // All game logic should happen here, on a tick event
     //info!("tick");
 

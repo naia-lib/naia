@@ -48,10 +48,8 @@ impl<P: Protocolize, C: ChannelIndex> State<P, C> {
 
 // SAFE: only local state is accessed
 unsafe impl<P: Protocolize, C: ChannelIndex> SystemParamState for State<P, C> {
-    type Config = ();
-
-    fn init(_world: &mut World, _system_state: &mut SystemMeta, _config: Self::Config) -> Self {
-        State {
+    fn init(_world: &mut World, _system_meta: &mut SystemMeta) -> Self {
+        Self {
             commands: Vec::new(),
         }
     }
@@ -59,8 +57,6 @@ unsafe impl<P: Protocolize, C: ChannelIndex> SystemParamState for State<P, C> {
     fn apply(&mut self, world: &mut World) {
         self.apply(world);
     }
-
-    fn default_config() {}
 }
 
 impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParamFetch<'world, 'state>

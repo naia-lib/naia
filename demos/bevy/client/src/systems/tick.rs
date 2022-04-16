@@ -4,14 +4,14 @@ use bevy::ecs::{
     system::{Query, ResMut},
 };
 
-use naia_bevy_client::{components::Predicted, shared::DefaultChannels, Client};
+use naia_bevy_client::{components::Predicted, Client};
 
-use naia_bevy_demo_shared::protocol::Protocol;
+use naia_bevy_demo_shared::{protocol::Protocol, Channels};
 
 use crate::resources::Global;
 
 pub fn tick(
-    mut _client: Client<Protocol, DefaultChannels>,
+    mut _client: Client<Protocol, Channels>,
     mut global: ResMut<Global>,
     q_player_position: Query<Entity, With<Predicted>>,
 ) {

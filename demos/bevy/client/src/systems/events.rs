@@ -11,37 +11,37 @@ use bevy::{
 };
 
 use naia_bevy_client::{
-    events::InsertComponentEvent,
-    shared::DefaultChannels,
+    events::{InsertComponentEvent, MessageEvent, SpawnEntityEvent},
     Client,
 };
-use naia_bevy_client::events::MessageEvent;
-use naia_bevy_demo_shared::Channels;
 
-use naia_bevy_demo_shared::protocol::{Color, ColorValue, Protocol, ProtocolKind};
+use naia_bevy_demo_shared::{
+    protocol::{Color, ColorValue, Protocol, ProtocolKind},
+    Channels,
+};
 
 const SQUARE_SIZE: f32 = 32.0;
 
-pub fn connect_event(client: Client<Protocol, DefaultChannels>) {
+pub fn connect_event(client: Client<Protocol, Channels>) {
     info!("Client connected to: {}", client.server_address());
 }
 
-pub fn disconnect_event(client: Client<Protocol, DefaultChannels>) {
+pub fn disconnect_event(client: Client<Protocol, Channels>) {
     info!("Client disconnected from: {}", client.server_address());
 }
 
-pub fn receive_message_event(
-    mut event_reader: EventReader<MessageEvent<ProtocolKind, Channels>>,
-) {
+pub fn receive_message_event(mut event_reader: EventReader<MessageEvent<Protocol, Channels>>) {
     for event in event_reader.iter() {
         match event {
-            MessageEvent(Channels::EntityAssignment, Protocol::EntityAssignment(message)) => {
+            MessageEvent(Channels::EntityAssignment, Protocol::EntityAssignment(_message)) => {
                 todo!()
             }
-            MessageEvent(Channels::PlayerCommand, Protocol::KeyCommand(command)) => {
+            MessageEvent(Channels::PlayerCommand, Protocol::KeyCommand(_command)) => {
                 todo!()
             }
-            _ => {}
+            _ => {
+                unimplemented!()
+            }
         }
     }
 }
@@ -49,12 +49,12 @@ pub fn receive_message_event(
 pub fn insert_component_event(
     mut local: Commands,
     mut event_reader: EventReader<InsertComponentEvent<ProtocolKind>>,
-    q_color: Query<&Color>,
+    color_query: Query<&Color>,
 ) {
-    for InsertComponentEvent(entity, component_kind) in event_reader.iter() {
-        match component_kind {
-            ProtocolKind::Color => {
-                if let Ok(color) = q_color.get(*entity) {
+    for event in event_reader.iter() {
+        match event {
+            InsertComponentEvent(entity, ProtocolKind::Color) => {
+                if let Ok(color) = color_query.get(*entity) {
                     info!("add color to entity");
 
                     let color = {
@@ -77,6 +77,16 @@ pub fn insert_component_event(
                 }
             }
             _ => {}
+        }
+    }
+}
+
+pub fn spawn_entity_event(mut _local: Commands, mut event_reader: EventReader<SpawnEntityEvent>) {
+    for event in event_reader.iter() {
+        match event {
+            SpawnEntityEvent(entity) => {
+                info!("spawned!");
+            }
         }
     }
 }

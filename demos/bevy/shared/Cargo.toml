@@ -10,7 +10,7 @@ publish = false
 [features]
 
 [dependencies]
-bevy_ecs = { version = "0.6", default-features=false}
+bevy_ecs = { version = "0.7", default-features=false}
 naia-shared = { path = "../../../shared" }
 cfg-if = "=1.0.0"
 log = "0.4"

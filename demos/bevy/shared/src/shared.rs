@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use naia_shared::{LinkConditionerConfig, SharedConfig, SocketConfig};
 
-use crate::channels::{CHANNEL_CONFIG, Channels};
+use crate::channels::{Channels, CHANNEL_CONFIG};
 
 pub fn shared_config() -> SharedConfig<Channels> {
     let tick_interval = Some(Duration::from_millis(50));
