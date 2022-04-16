@@ -1,8 +1,6 @@
 use std::collections::VecDeque;
 
-use naia_client::shared::sequence_greater_than;
-
-type Tick = u16;
+use naia_shared::{sequence_greater_than, Tick};
 
 pub struct CommandHistory<T> {
     buffer: VecDeque<(Tick, T)>,

@@ -10,6 +10,7 @@ use naia_bevy_demo_shared::{
     protocol::{Color, ColorValue, EntityAssignment, Position, Protocol},
     Channels,
 };
+use naia_bevy_server::events::MessageEvent;
 
 use crate::resources::Global;
 
@@ -102,6 +103,17 @@ pub fn disconnection_event(
                 .entity_mut(&entity)
                 .leave_room(&global.main_room_key)
                 .despawn();
+        }
+    }
+}
+
+pub fn receive_message_event(mut event_reader: EventReader<MessageEvent<Protocol, Channels>>) {
+    for event in event_reader.iter() {
+        match event {
+            MessageEvent(_user_key, Channels::PlayerCommand, Protocol::KeyCommand(_command)) => {
+                todo!()
+            }
+            _ => {}
         }
     }
 }

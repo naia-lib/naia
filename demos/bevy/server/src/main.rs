@@ -27,6 +27,7 @@ fn main() {
         .add_system_to_stage(Stage::ReceiveEvents, events::authorization_event)
         .add_system_to_stage(Stage::ReceiveEvents, events::connection_event)
         .add_system_to_stage(Stage::ReceiveEvents, events::disconnection_event)
+        .add_system_to_stage(Stage::ReceiveEvents, events::receive_message_event)
         // Gameplay Loop on Tick
         .add_system_to_stage(Stage::Tick, tick)
         // Run App

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 use naia_server::{
     shared::{Random, Timer},
@@ -22,8 +22,6 @@ pub struct App {
     main_room_key: RoomKey,
     user_squares: HashMap<UserKey, Entity>,
     square_last_command: HashMap<Entity, KeyCommand>,
-    bandwidth_timer: Timer,
-    other_main_entity: Entity,
 }
 
 impl App {
@@ -42,11 +40,7 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        let mut server_config = ServerConfig::default();
-
-        server_config.connection.bandwidth_measure_duration = Some(Duration::from_secs(4));
-
-        let mut server = Server::new(&server_config, &shared_config());
+        let mut server = Server::new(&ServerConfig::default(), &shared_config());
         server.listen(&server_addresses);
 
         let mut world = World::new();
@@ -67,20 +61,10 @@ impl App {
             main_room_key,
             user_squares: HashMap::new(),
             square_last_command: HashMap::new(),
-            bandwidth_timer: Timer::new(Duration::from_secs(4)),
-            other_main_entity,
         }
     }
 
     pub fn update(&mut self) {
-        if self.bandwidth_timer.ringing() {
-            self.bandwidth_timer.reset();
-
-            info!(
-                "Bandwidth: {} kbps outgoing",
-                self.server.outgoing_bandwidth_total()
-            );
-        }
 
         for event in self.server.receive() {
             match event {
