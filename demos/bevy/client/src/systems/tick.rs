@@ -4,7 +4,7 @@ use bevy::ecs::{
     system::{Query, ResMut},
 };
 
-use naia_bevy_client::{components::Predicted, Client};
+use naia_bevy_client::Client;
 
 use naia_bevy_demo_shared::{protocol::Protocol, Channels};
 
@@ -13,7 +13,7 @@ use crate::resources::Global;
 pub fn tick(
     mut _client: Client<Protocol, Channels>,
     mut global: ResMut<Global>,
-    q_player_position: Query<Entity, With<Predicted>>,
+    q_player_position: Query<Entity>,
 ) {
     //All game logic should happen here, on a tick event
     //info!("tick");
