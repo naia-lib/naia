@@ -50,7 +50,7 @@ impl<'w> WorldRef<'w> {
     }
 }
 
-impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldRef<'w> {
+impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w> {
     fn has_entity(&self, entity: &Entity) -> bool {
         return has_entity(self.world, entity);
     }
@@ -92,7 +92,7 @@ impl<'w> WorldMut<'w> {
     }
 }
 
-impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
+impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
     fn has_entity(&self, entity: &Entity) -> bool {
         return has_entity(self.world, entity);
     }
@@ -122,7 +122,7 @@ impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
     }
 }
 
-impl<'w, P: 'static + Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
+impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
     fn spawn_entity(&mut self) -> Entity {
         let entity = self.world.spawn().id();
 
@@ -130,6 +130,27 @@ impl<'w, P: 'static + Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
         world_data.spawn_entity(&entity);
 
         return entity;
+    }
+
+    fn duplicate_entity(&mut self, entity: &Entity) -> Entity {
+        let new_entity = WorldMutType::<P, Entity>::spawn_entity(self);
+
+        // create copies of components //
+        for component_kind in WorldMutType::<P, Entity>::component_kinds(self, &entity) {
+            let mut component_copy_opt: Option<P> = None;
+            if let Some(component) =
+            self.component_of_kind(&entity, &component_kind)
+            {
+                component_copy_opt = Some(component.protocol_copy());
+            }
+            if let Some(component_copy) = component_copy_opt {
+                component_copy
+                    .extract_and_insert(&new_entity, self);
+            }
+        }
+        ////////////////////////////////
+
+        new_entity
     }
 
     fn despawn_entity(&mut self, entity: &Entity) {

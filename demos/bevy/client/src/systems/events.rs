@@ -1,7 +1,7 @@
 use bevy::{
     ecs::{
         event::EventReader,
-        system::{Commands, Query},
+        system::{Commands, Query, ResMut},
     },
     log::info,
     math::Vec2,
@@ -20,6 +20,8 @@ use naia_bevy_demo_shared::{
     Channels,
 };
 
+use crate::resources::{Global, OwnedEntity};
+
 const SQUARE_SIZE: f32 = 32.0;
 
 pub fn connect_event(client: Client<Protocol, Channels>) {
@@ -30,14 +32,52 @@ pub fn disconnect_event(client: Client<Protocol, Channels>) {
     info!("Client disconnected from: {}", client.server_address());
 }
 
-pub fn receive_message_event(mut event_reader: EventReader<MessageEvent<Protocol, Channels>>) {
+pub fn receive_message_event(
+    mut event_reader: EventReader<MessageEvent<Protocol, Channels>>,
+    mut local: Commands,
+    client: Client<Protocol, Channels>,
+    global: ResMut<Global>)
+{
     for event in event_reader.iter() {
         match event {
-            MessageEvent(Channels::EntityAssignment, Protocol::EntityAssignment(_message)) => {
-                todo!()
-            }
-            MessageEvent(Channels::PlayerCommand, Protocol::KeyCommand(_command)) => {
-                todo!()
+            MessageEvent(Channels::EntityAssignment, Protocol::EntityAssignment(message)) => {
+                let assign = *message.assign;
+
+                let entity = message.entity.get(&client).unwrap();
+                if assign {
+                    info!("gave ownership of entity");
+                    let prediction_entity = local.spawn().id();
+                    let components = client.entity(entity).
+
+                    for component_kind in self.component_kinds(&entity) {
+                        let mut component_copy_opt: Option<P> = None;
+                        if let Some(component) =
+                        self.component_of_kind(&entity, &component_kind)
+                        {
+                            component_copy_opt = Some(component.protocol_copy());
+                        }
+                        if let Some(component_copy) = component_copy_opt {
+                            component_copy
+                                .extract_and_insert(&new_entity, self);
+                        }
+                    }
+
+                    global.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
+                } else {
+                    let mut disowned: bool = false;
+                    if let Some(owned_entity) = &global.owned_entity {
+                        if owned_entity.confirmed == entity {
+                            self.world
+                                .proxy_mut()
+                                .despawn_entity(&owned_entity.predicted);
+                            disowned = true;
+                        }
+                    }
+                    if disowned {
+                        info!("removed ownership of entity");
+                        self.owned_entity = None;
+                    }
+                }
             }
             _ => {}
         }

@@ -1,6 +1,5 @@
 pub use naia_client::*;
 
-pub mod components;
 pub mod events;
 
 mod client;
@@ -9,6 +8,7 @@ mod resource;
 mod stage;
 mod state;
 mod systems;
+mod commands;
 
 pub use client::Client;
 pub use plugin::Plugin;

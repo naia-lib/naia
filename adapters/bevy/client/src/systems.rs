@@ -17,14 +17,12 @@ use crate::events::{
     DespawnEntityEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent,
 };
 
-use super::{components::Confirmed, resource::ClientResource};
+use super::resource::ClientResource;
 
 pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<Client<P, Entity, C>>| {
         world.resource_scope(|world, mut client_resource: Mut<ClientResource>| {
             let event_results = client.receive(world.proxy_mut());
-
-            let mut entities_to_spawn: Vec<Entity> = Vec::new();
 
             unsafe {
                 let mut spawn_entity_event_writer = world
@@ -58,7 +56,6 @@ pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World)
                             continue;
                         }
                         Ok(Event::SpawnEntity(entity)) => {
-                            entities_to_spawn.push(entity);
                             spawn_entity_event_writer.send(SpawnEntityEvent(entity));
                         }
                         Ok(Event::DespawnEntity(entity)) => {
@@ -81,10 +78,6 @@ pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World)
                         Err(_) => {}
                     }
                 }
-            }
-
-            for entity in entities_to_spawn {
-                world.entity_mut(entity).insert(Confirmed);
             }
         });
     });

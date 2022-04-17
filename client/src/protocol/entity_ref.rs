@@ -1,6 +1,6 @@
 use std::{hash::Hash, marker::PhantomData};
 
-use naia_shared::{Protocolize, ReplicaRefWrapper, ReplicateSafe, WorldRefType};
+use naia_shared::{Protocolize, ReplicaRefWrapper, ReplicateSafe, WorldMutType, WorldRefType};
 
 // EntityRef
 pub struct EntityRef<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> {
@@ -32,16 +32,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E,
 }
 
 // EntityMut
-// pub struct EntityMut<'c, P: Protocolize, E: Copy + Eq + Hash> {
-//     client: &'c mut Client<P, E>,
-//     entity: E,
-// }
-//
-// impl<'c, P: Protocolize, E: Copy + Eq + Hash> EntityMut<'c, P, E> {
-//     pub fn new(client: &'c mut Client<P, E>, entity: &E) -> Self {
-//         EntityMut {
-//             client,
-//             entity: *entity,
-//         }
-//     }
-// }
+pub struct EntityMut<P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> {
+    world: W,
+    entity: E,
+    phantom_p: PhantomData<P>,
+}
+
+impl<'c, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<P, E, W> {
+    pub fn new(world: W, entity: &E) -> Self {
+        EntityMut {
+            world,
+            entity: *entity,
+            phantom_p: PhantomData,
+        }
+    }
+}
