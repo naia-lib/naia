@@ -7,7 +7,6 @@ description = "Bit-level de/serialization for naia"
 documentation = "https://docs.rs/naia-serde"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
-readme = "../README.md"
 keywords = ["serialization", "bit", "binary", "networking", "gamedev"]
 categories = ["network-programming", "game-development", "wasm", "web-programming"]
 license = "MIT OR Apache-2.0"
