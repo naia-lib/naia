@@ -17,7 +17,7 @@ log = { version = "0.4" }
 cfg-if = { version = "1.0" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-simple_logger = { version = "2" }
+simple_logger = { version = "2.1", default-features = false, features = ["timestamps"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-logger = { version = "0.2" }
