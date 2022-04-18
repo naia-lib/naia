@@ -17,7 +17,7 @@ pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
     /// Get kind of Replicate type
     fn kind_of<R: ReplicateSafe<Self>>() -> Self::Kind;
     /// Get kind from a type_id
-    fn type_to_kind(type_id: TypeId) -> Self::Kind;
+    fn type_to_kind(type_id: TypeId) -> Option<Self::Kind>;
     /// Read from a bit stream to create a new Replica
     fn read(bit_reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Self;
     /// Read from a bit stream to create a new Component Update

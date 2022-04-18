@@ -124,8 +124,9 @@ impl<P: Protocolize> WorldMutType<P, Entity> for &mut WorldWrapper<P> {
 
         if let Ok(entity_ref) = self.inner.entity(*entity) {
             for component_type in entity_ref.component_types() {
-                let component_kind = P::type_to_kind(component_type);
-                kinds.push(component_kind);
+                if let Some(component_kind) = P::type_to_kind(component_type) {
+                    kinds.push(component_kind);
+                }
             }
         }
 

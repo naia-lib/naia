@@ -135,22 +135,23 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
     fn duplicate_entity(&mut self, entity: &Entity) -> Entity {
         let new_entity = WorldMutType::<P, Entity>::spawn_entity(self);
 
-        // create copies of components //
-        for component_kind in WorldMutType::<P, Entity>::component_kinds(self, &entity) {
+        WorldMutType::<P, Entity>::duplicate_components(self, &new_entity, entity);
+
+        new_entity
+    }
+
+    fn duplicate_components(&mut self, mutable_entity: &Entity, immutable_entity: &Entity) {
+        for component_kind in WorldMutType::<P, Entity>::component_kinds(self, &immutable_entity) {
             let mut component_copy_opt: Option<P> = None;
             if let Some(component) =
-            self.component_of_kind(&entity, &component_kind)
+            self.component_of_kind(&immutable_entity, &component_kind)
             {
                 component_copy_opt = Some(component.protocol_copy());
             }
             if let Some(component_copy) = component_copy_opt {
-                component_copy
-                    .extract_and_insert(&new_entity, self);
+                Protocolize::extract_and_insert(&component_copy, mutable_entity, self);
             }
         }
-        ////////////////////////////////
-
-        new_entity
     }
 
     fn despawn_entity(&mut self, entity: &Entity) {
@@ -172,8 +173,9 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
             let ref_type = component_info
                 .type_id()
                 .expect("Components need type_id to instantiate");
-            let kind = P::type_to_kind(ref_type);
-            kinds.push(kind);
+            if let Some(kind) = P::type_to_kind(ref_type) {
+                kinds.push(kind);
+            }
         }
 
         return kinds;
@@ -206,6 +208,12 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
                     }
                 }
             });
+    }
+
+    fn mirror_entities(&mut self, new_entity: &Entity, old_entity: &Entity) {
+        for component_kind in WorldMutType::<P, Entity>::component_kinds(self, &old_entity) {
+            WorldMutType::<P, Entity>::mirror_components(self, new_entity, old_entity, &component_kind);
+        }
     }
 
     fn mirror_components(

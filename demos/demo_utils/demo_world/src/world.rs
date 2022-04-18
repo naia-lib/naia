@@ -127,6 +127,50 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w, P> {
 }
 
 impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
+    fn spawn_entity(&mut self) -> Entity {
+        let component_map = HashMap::new();
+        return self.world.entities.insert(component_map);
+    }
+
+    fn duplicate_entity(&mut self, entity: &Entity) -> Entity {
+        let new_entity = self.spawn_entity();
+
+        self.duplicate_components(&new_entity, entity);
+
+        new_entity
+    }
+
+    fn duplicate_components(&mut self, new_entity: &Entity, old_entity: &Entity) {
+
+        for component_kind in self.component_kinds(&old_entity) {
+            let mut component_copy_opt: Option<P> = None;
+            if let Some(component) =
+            self.component_of_kind(&old_entity, &component_kind)
+            {
+                component_copy_opt = Some(component.protocol_copy());
+            }
+            if let Some(component_copy) = component_copy_opt {
+                Protocolize::extract_and_insert(&component_copy, new_entity, self);
+            }
+        }
+    }
+
+    fn despawn_entity(&mut self, entity: &Entity) {
+        self.world.entities.remove(entity);
+    }
+
+    fn component_kinds(&mut self, entity: &Entity) -> Vec<P::Kind> {
+        let mut output: Vec<P::Kind> = Vec::new();
+
+        if let Some(component_map) = self.world.entities.get(entity) {
+            for (component_kind, _) in component_map {
+                output.push(*component_kind);
+            }
+        }
+
+        return output;
+    }
+
     fn component_mut<R: ReplicateSafe<P>>(
         &mut self,
         entity: &Entity,
@@ -156,6 +200,12 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         }
     }
 
+    fn mirror_entities(&mut self, new_entity: &Entity, old_entity: &Entity) {
+        for component_kind in self.component_kinds(&old_entity) {
+            self.mirror_components(new_entity, old_entity, &component_kind);
+        }
+    }
+
     fn mirror_components(
         &mut self,
         mutable_entity: &Entity,
@@ -181,48 +231,6 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
                 }
             }
         }
-    }
-
-    fn component_kinds(&mut self, entity: &Entity) -> Vec<P::Kind> {
-        let mut output: Vec<P::Kind> = Vec::new();
-
-        if let Some(component_map) = self.world.entities.get(entity) {
-            for (component_kind, _) in component_map {
-                output.push(*component_kind);
-            }
-        }
-
-        return output;
-    }
-
-    fn spawn_entity(&mut self) -> Entity {
-        let component_map = HashMap::new();
-        return self.world.entities.insert(component_map);
-    }
-
-    fn duplicate_entity(&mut self, entity: &Entity) -> Entity {
-        let new_entity = self.spawn_entity();
-
-        // create copies of components //
-        for component_kind in self.component_kinds(&entity) {
-            let mut component_copy_opt: Option<P> = None;
-            if let Some(component) =
-            self.component_of_kind(&entity, &component_kind)
-            {
-                component_copy_opt = Some(component.protocol_copy());
-            }
-            if let Some(component_copy) = component_copy_opt {
-                component_copy
-                    .extract_and_insert(&new_entity, self);
-            }
-        }
-        ////////////////////////////////
-
-        new_entity
-    }
-
-    fn despawn_entity(&mut self, entity: &Entity) {
-        self.world.entities.remove(entity);
     }
 
     fn insert_component<R: ReplicateSafe<P>>(&mut self, entity: &Entity, component_ref: R) {

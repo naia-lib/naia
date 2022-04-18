@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use naia_server::{
-    shared::{Random, Timer},
+    shared::Random,
     Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
 };
 
@@ -43,21 +43,13 @@ impl App {
         let mut server = Server::new(&ServerConfig::default(), &shared_config());
         server.listen(&server_addresses);
 
-        let mut world = World::new();
-
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
         let main_room_key = server.make_room().key();
 
-        // Create a new main entity that we can use for testing
-        let other_main_entity = server
-            .spawn_entity(world.proxy_mut())
-            .enter_room(&main_room_key)
-            .id();
-
         App {
             server,
-            world,
+            world: World::new(),
             main_room_key,
             user_squares: HashMap::new(),
             square_last_command: HashMap::new(),
@@ -65,7 +57,6 @@ impl App {
     }
 
     pub fn update(&mut self) {
-
         for event in self.server.receive() {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {

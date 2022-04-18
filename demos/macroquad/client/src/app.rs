@@ -151,12 +151,15 @@ impl App {
                 Ok(Event::DespawnEntity(entity)) => {
                     self.squares.remove(&entity);
                     info!("despawned entity");
+                    // TODO: Sync up Predicted & Confirmed entities
                 }
                 Ok(Event::InsertComponent(_entity, _component)) => {
                     info!("inserted component");
+                    // TODO: Sync up Predicted & Confirmed entities
                 }
                 Ok(Event::RemoveComponent(_entity, _component)) => {
                     info!("removed component");
+                    // TODO: Sync up Predicted & Confirmed entities
                 }
                 Ok(Event::Message(
                     Channels::EntityAssignment,
@@ -167,10 +170,7 @@ impl App {
                     let entity = message.entity.get(&self.client).unwrap();
                     if assign {
                         info!("gave ownership of entity");
-
-                        ////////////////////////////////
-                        let mut world_mut = self.world.proxy_mut();
-                        let prediction_entity = world_mut.duplicate_entity(&entity);
+                        let prediction_entity = self.world.proxy_mut().duplicate_entity(&entity);
                         self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
                     } else {
                         let mut disowned: bool = false;
@@ -190,32 +190,19 @@ impl App {
                 }
                 Ok(Event::UpdateComponent(server_tick, updated_entity, _)) => {
                     if let Some(owned_entity) = &self.owned_entity {
-                        let mut world_mut = self.world.proxy_mut();
                         let server_entity = owned_entity.confirmed;
 
                         // If entity is owned
                         if updated_entity == server_entity {
                             let client_entity = owned_entity.predicted;
 
-                            // Set prediction to server authoritative Entity
-                            // go through all components to make prediction components = world
-                            // components
-                            for component_kind in world_mut.component_kinds(&server_entity) {
-                                world_mut.mirror_components(
-                                    &client_entity,
-                                    &server_entity,
-                                    &component_kind,
-                                );
-                            }
+                            // Set state of all components on Predicted & Confirmed entities to the authoritative Server state
+                            self.world.proxy_mut().mirror_entities(&client_entity, &server_entity);
 
-                            // Remove history of commands until current received tick
-                            self.command_history.remove_to_and_including(server_tick);
-
-                            // Replay all existing historical commands until current tick
-                            let mut command_iter = self.command_history.iter_mut();
-                            while let Some((_, command)) = command_iter.next() {
+                            let replay_commands = self.command_history.replays(&server_tick);
+                            for (_, command) in replay_commands {
                                 if let Some(mut square_ref) =
-                                    world_mut.component_mut::<Square>(&client_entity)
+                                self.world.proxy_mut().component_mut::<Square>(&client_entity)
                                 {
                                     shared_behavior::process_command(&command, &mut square_ref);
                                 }

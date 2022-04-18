@@ -13,3 +13,4 @@ mod commands;
 pub use client::Client;
 pub use plugin::Plugin;
 pub use stage::Stage;
+pub use commands::CommandsExt;
