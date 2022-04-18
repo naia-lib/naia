@@ -13,7 +13,10 @@ use naia_client::{
 
 use naia_bevy_shared::WorldProxyMut;
 
-use crate::events::{DespawnEntityEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent};
+use crate::events::{
+    DespawnEntityEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent,
+    UpdateComponentEvent,
+};
 
 use super::resource::ClientResource;
 

@@ -143,9 +143,7 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
     fn duplicate_components(&mut self, mutable_entity: &Entity, immutable_entity: &Entity) {
         for component_kind in WorldMutType::<P, Entity>::component_kinds(self, &immutable_entity) {
             let mut component_copy_opt: Option<P> = None;
-            if let Some(component) =
-            self.component_of_kind(&immutable_entity, &component_kind)
-            {
+            if let Some(component) = self.component_of_kind(&immutable_entity, &component_kind) {
                 component_copy_opt = Some(component.protocol_copy());
             }
             if let Some(component_copy) = component_copy_opt {
@@ -212,7 +210,12 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
 
     fn mirror_entities(&mut self, new_entity: &Entity, old_entity: &Entity) {
         for component_kind in WorldMutType::<P, Entity>::component_kinds(self, &old_entity) {
-            WorldMutType::<P, Entity>::mirror_components(self, new_entity, old_entity, &component_kind);
+            WorldMutType::<P, Entity>::mirror_components(
+                self,
+                new_entity,
+                old_entity,
+                &component_kind,
+            );
         }
     }
 

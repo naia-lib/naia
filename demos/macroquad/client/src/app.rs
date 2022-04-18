@@ -1,14 +1,11 @@
 use std::collections::HashSet;
 
 use macroquad::prelude::{
-    clear_background, draw_rectangle, info, is_key_down, KeyCode, BLACK, BLUE,
-    GREEN, RED, WHITE, YELLOW,
+    clear_background, draw_rectangle, info, is_key_down, KeyCode, BLACK, BLUE, GREEN, RED, WHITE,
+    YELLOW,
 };
 
-use naia_client::{
-    shared::Replicate, CommandHistory,
-    Client as NaiaClient, ClientConfig, Event,
-};
+use naia_client::{shared::Replicate, Client as NaiaClient, ClientConfig, CommandHistory, Event};
 
 use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
 
@@ -197,12 +194,16 @@ impl App {
                             let client_entity = owned_entity.predicted;
 
                             // Set state of all components on Predicted & Confirmed entities to the authoritative Server state
-                            self.world.proxy_mut().mirror_entities(&client_entity, &server_entity);
+                            self.world
+                                .proxy_mut()
+                                .mirror_entities(&client_entity, &server_entity);
 
                             let replay_commands = self.command_history.replays(&server_tick);
                             for (_, command) in replay_commands {
-                                if let Some(mut square_ref) =
-                                self.world.proxy_mut().component_mut::<Square>(&client_entity)
+                                if let Some(mut square_ref) = self
+                                    .world
+                                    .proxy_mut()
+                                    .component_mut::<Square>(&client_entity)
                                 {
                                     shared_behavior::process_command(&command, &mut square_ref);
                                 }
