@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use naia_shared::{CompressionConfig, LinkConditionerConfig, SharedConfig, SocketConfig};
+use naia_shared::{LinkConditionerConfig, SharedConfig, SocketConfig};
 
 use super::channels::{Channels, CHANNEL_CONFIG};
 
@@ -9,25 +9,17 @@ pub fn shared_config() -> SharedConfig<Channels> {
     let tick_interval = Some(Duration::from_millis(20));
 
     //let link_condition = None;
-    //let link_condition = Some(LinkConditionerConfig::average_condition());
-    let link_condition = Some(LinkConditionerConfig {
-        incoming_latency: 150,
-        incoming_jitter: 50,
-        incoming_loss: 0.1,
-    });
-
-    //let compression_dictionary = fs::read("dictionary.txt").expect("Error reading
-    // compression dictionary");
+    let link_condition = Some(LinkConditionerConfig::average_condition());
+    // let link_condition = Some(LinkConditionerConfig {
+    //     incoming_latency: 150,
+    //     incoming_jitter: 50,
+    //     incoming_loss: 0.1,
+    // });
 
     return SharedConfig::new(
         SocketConfig::new(link_condition, None),
         CHANNEL_CONFIG,
         tick_interval,
-        Some(CompressionConfig::new(
-            None,
-            //Some(CompressionMode::Dictionary(22, compression_dictionary)),
-            //Some(CompressionMode::Training(1000)),
-            None,
-        )),
+        None
     );
 }

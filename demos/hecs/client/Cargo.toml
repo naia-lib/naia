@@ -13,13 +13,13 @@ publish = false
 naia-hecs-client = { path = "../../../adapters/hecs/client", features = [ "wbindgen" ] }
 naia-hecs-demo-shared = { path = "../shared" }
 hecs = { version = "0.5" }
-log = "0.4"
-cfg-if = "=1.0.0"
+log = { version = "0.4" }
+cfg-if = { version = "1.0" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-simple_logger = { version = "2.0.0" }
+simple_logger = { version = "2" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-logger = { version = "0.2.0" }
-wasm-bindgen = { version = "0.2.45", features = [ "serde-serialize" ] }
-web-sys = { version = "0.3.4", features = [ 'Window' ] }
+wasm-logger = { version = "0.2" }
+wasm-bindgen = { version = "0.2", features = [ "serde-serialize" ] }
+web-sys = { version = "0.3", features = [ 'Window' ] }

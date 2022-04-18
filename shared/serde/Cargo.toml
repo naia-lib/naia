@@ -1,6 +1,6 @@
 [package]
 name = "naia-serde"
-version = "0.1.0"
+version = "0.10.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>", "Fedor <not.fl3@gmail.com>", "makepad <info@makepad.nl>"]
 workspace = "../.."
 description = "Bit-level de/serialization for naia"
@@ -19,6 +19,6 @@ maintenance = { status = "actively-developed" }
 [features]
 
 [dependencies]
-naia-serde-derive = { version = "=0.1.0", path = "derive" }
-log = "0.4"
-cfg-if = "=1.0.0"
+naia-serde-derive = { version = "0.10", path = "derive" }
+log = { version = "0.4" }
+cfg-if = { version = "1.0" }
