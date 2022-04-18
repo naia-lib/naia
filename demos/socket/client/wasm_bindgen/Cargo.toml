@@ -3,21 +3,21 @@ name = "naia-socket-client-demo-wb"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../../.."
-license = "MIT OR Apache-2.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
 publish = false
 
 [features]
 
 [dependencies]
 naia-socket-client-demo-app = { path = "../app", features = [ "wbindgen" ] }
-log = "0.4.6"
-cfg-if = "0.1.10"
+log = { version = "0.4" }
+cfg-if = { version = "1.0" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-simple_logger = { version = "2.0.0" }
+simple_logger = { version = "2" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-logger = { version = "0.2.0" }
-wasm-bindgen = { version = "0.2.45" }
-web_sys = { version = "0.3.22", package = "web-sys", features = [ "Window" ] }
+wasm-logger = { version = "0.2" }
+wasm-bindgen = { version = "0.2", features = [ "serde-serialize" ] }
+web-sys = { version = "0.3", features = [ 'Window' ] }

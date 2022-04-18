@@ -1,12 +1,12 @@
 use naia_server::{
-    shared::{DefaultChannels, Protocolize, WorldRefType},
+    shared::{DefaultChannels, Protocolize},
     Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
 };
 
 use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_basic_demo_shared::{
-    protocol::{Character, Protocol, StringMessage},
+    protocol::{Protocol, StringMessage},
     shared_config,
 };
 

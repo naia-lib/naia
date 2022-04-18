@@ -1,4 +1,5 @@
 use miniquad::*;
+
 use naia_basic_client_demo_app::App;
 
 struct Stage {

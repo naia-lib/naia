@@ -5,7 +5,8 @@ use naia_shared::{LinkConditionerConfig, SharedConfig, SocketConfig};
 use crate::channels::{Channels, CHANNEL_CONFIG};
 
 pub fn shared_config() -> SharedConfig<Channels> {
-    let tick_interval = Some(Duration::from_millis(50));
+    // Set tick rate to ~60 FPS
+    let tick_interval = Some(Duration::from_millis(20));
 
     //  let link_condition = None;
     let link_condition = Some(LinkConditionerConfig::average_condition());

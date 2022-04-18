@@ -5,7 +5,7 @@ use macroquad::prelude::{
     YELLOW,
 };
 
-use naia_client::{shared::Replicate, Client as NaiaClient, ClientConfig, CommandHistory, Event};
+use naia_client::{Client as NaiaClient, ClientConfig, CommandHistory, Event};
 
 use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
 

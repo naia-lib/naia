@@ -15,5 +15,5 @@ use-webrtc = [ "naia-server/use-webrtc" ]
 naia-server = { path = "../../../server" }
 naia-tickless-demo-shared = { path = "../shared" }
 naia-empty-world = { path = "../../demo_utils/empty_world" }
-log = "0.4"
-simple_logger = { version = "2.0.0" }
+log = { version = "0.4" }
+simple_logger = { version = "2" }
