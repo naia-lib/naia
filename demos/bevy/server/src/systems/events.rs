@@ -1,7 +1,7 @@
 use bevy::{ecs::system::ResMut, log::info, prelude::*};
 
 use naia_bevy_server::{
-    events::{AuthorizationEvent, MessageEvent, ConnectionEvent, DisconnectionEvent},
+    events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
     shared::Random,
     Server,
 };
@@ -112,9 +112,13 @@ pub fn receive_message_event(
     mut server: Server<Protocol, Channels>,
 ) {
     for event in event_reader.iter() {
-        if let MessageEvent(_user_key, Channels::PlayerCommand, Protocol::KeyCommand(key_command)) = event {
+        if let MessageEvent(_user_key, Channels::PlayerCommand, Protocol::KeyCommand(key_command)) =
+            event
+        {
             if let Some(entity) = &key_command.entity.get(&mut server) {
-                global.player_last_command.insert(*entity, key_command.clone());
+                global
+                    .player_last_command
+                    .insert(*entity, key_command.clone());
             }
         }
     }

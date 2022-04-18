@@ -11,14 +11,14 @@ use bevy::{
 };
 
 use naia_bevy_client::{
+    events::{InsertComponentEvent, MessageEvent, SpawnEntityEvent, UpdateComponentEvent},
     shared::{sequence_greater_than, Tick},
-    events::{UpdateComponentEvent, InsertComponentEvent, MessageEvent, SpawnEntityEvent},
-    Client, CommandsExt
+    Client, CommandsExt,
 };
 
 use naia_bevy_demo_shared::{
-    protocol::{Color, ColorValue, Protocol, ProtocolKind, Position},
     behavior as shared_behavior,
+    protocol::{Color, ColorValue, Position, Protocol, ProtocolKind},
     Channels,
 };
 
@@ -102,9 +102,9 @@ pub fn update_component_event(
         }
 
         if let Some(server_tick) = latest_tick {
-
-            if let Ok([server_position, mut client_position]) = position_query.get_many_mut([server_entity, client_entity]) {
-
+            if let Ok([server_position, mut client_position]) =
+                position_query.get_many_mut([server_entity, client_entity])
+            {
                 let replay_commands = global.command_history.replays(&server_tick);
 
                 // set to authoritative state
@@ -124,27 +124,29 @@ pub fn receive_message_event(
     mut event_reader: EventReader<MessageEvent<Protocol, Channels>>,
     mut local: Commands,
     mut global: ResMut<Global>,
-    client: Client<Protocol, Channels>
+    client: Client<Protocol, Channels>,
 ) {
     for event in event_reader.iter() {
-        if let MessageEvent(Channels::EntityAssignment, Protocol::EntityAssignment(message)) = event {
+        if let MessageEvent(Channels::EntityAssignment, Protocol::EntityAssignment(message)) = event
+        {
             let assign = *message.assign;
 
             let entity = message.entity.get(&client).unwrap();
             if assign {
                 info!("gave ownership of entity");
 
-                let prediction_entity = CommandsExt::<Protocol>::duplicate_entity(&mut local, entity)
-                    .insert_bundle(SpriteBundle {
-                        sprite: Sprite {
-                            custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                            color: BevyColor::WHITE,
+                let prediction_entity =
+                    CommandsExt::<Protocol>::duplicate_entity(&mut local, entity)
+                        .insert_bundle(SpriteBundle {
+                            sprite: Sprite {
+                                custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                                color: BevyColor::WHITE,
+                                ..Default::default()
+                            },
+                            transform: Transform::from_xyz(0.0, 0.0, 0.0),
                             ..Default::default()
-                        },
-                        transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                        ..Default::default()
-                    })
-                    .id();
+                        })
+                        .id();
 
                 global.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
             } else {
@@ -163,5 +165,3 @@ pub fn receive_message_event(
         }
     }
 }
-
-

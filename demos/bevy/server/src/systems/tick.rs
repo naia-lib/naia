@@ -2,7 +2,11 @@ use bevy::ecs::system::{Query, ResMut};
 
 use naia_bevy_server::Server;
 
-use naia_bevy_demo_shared::{Channels, protocol::{Protocol, Position}, behavior as shared_behavior};
+use naia_bevy_demo_shared::{
+    behavior as shared_behavior,
+    protocol::{Position, Protocol},
+    Channels,
+};
 
 use crate::resources::Global;
 

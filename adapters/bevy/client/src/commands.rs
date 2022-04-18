@@ -1,7 +1,13 @@
 use std::marker::PhantomData;
 
-use bevy::ecs::{entity::Entity, system::{Command, EntityCommands}, world::World};
-use bevy::prelude::Commands;
+use bevy::{
+    ecs::{
+        entity::Entity,
+        system::{Command, EntityCommands},
+        world::World,
+    },
+    prelude::Commands,
+};
 
 use naia_bevy_shared::WorldProxyMut;
 
@@ -39,14 +45,18 @@ impl<P: Protocolize> DuplicateComponents<P> {
         return Self {
             mutable_entity: new_entity,
             immutable_entity: old_entity,
-            phantom_p: PhantomData
+            phantom_p: PhantomData,
         };
     }
 }
 
 impl<P: Protocolize> Command for DuplicateComponents<P> {
     fn write(self, world: &mut World) {
-        WorldMutType::<P, Entity>::duplicate_components(&mut world.proxy_mut(), &self.mutable_entity, &self.immutable_entity);
+        WorldMutType::<P, Entity>::duplicate_components(
+            &mut world.proxy_mut(),
+            &self.mutable_entity,
+            &self.immutable_entity,
+        );
     }
 }
 
@@ -64,13 +74,17 @@ impl<P: Protocolize> MirrorEntities<P> {
         return Self {
             mutable_entity: new_entity,
             immutable_entity: old_entity,
-            phantom_p: PhantomData
+            phantom_p: PhantomData,
         };
     }
 }
 
 impl<P: Protocolize> Command for MirrorEntities<P> {
     fn write(self, world: &mut World) {
-        WorldMutType::<P, Entity>::mirror_entities(&mut world.proxy_mut(), &self.mutable_entity, &self.immutable_entity);
+        WorldMutType::<P, Entity>::mirror_entities(
+            &mut world.proxy_mut(),
+            &self.mutable_entity,
+            &self.immutable_entity,
+        );
     }
 }

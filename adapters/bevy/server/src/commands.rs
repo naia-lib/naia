@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use bevy::ecs::entity::Entity;
 
 use naia_server::{
-    shared::{ChannelIndex, Protocolize, ReplicateSafe, Replicate},
+    shared::{ChannelIndex, Protocolize, Replicate, ReplicateSafe},
     Server,
 };
 

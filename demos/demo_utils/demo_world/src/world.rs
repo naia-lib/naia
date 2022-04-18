@@ -141,12 +141,9 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
     }
 
     fn duplicate_components(&mut self, new_entity: &Entity, old_entity: &Entity) {
-
         for component_kind in self.component_kinds(&old_entity) {
             let mut component_copy_opt: Option<P> = None;
-            if let Some(component) =
-            self.component_of_kind(&old_entity, &component_kind)
-            {
+            if let Some(component) = self.component_of_kind(&old_entity, &component_kind) {
                 component_copy_opt = Some(component.protocol_copy());
             }
             if let Some(component_copy) = component_copy_opt {

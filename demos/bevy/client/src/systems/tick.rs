@@ -2,7 +2,11 @@ use bevy::ecs::system::{Query, ResMut};
 
 use naia_bevy_client::Client;
 
-use naia_bevy_demo_shared::{protocol::{Protocol, Position}, behavior as shared_behavior, Channels};
+use naia_bevy_demo_shared::{
+    behavior as shared_behavior,
+    protocol::{Position, Protocol},
+    Channels,
+};
 
 use crate::resources::Global;
 
@@ -14,10 +18,13 @@ pub fn tick(
     //All game logic should happen here, on a tick event
 
     if let Some(command) = global.queued_command.take() {
-        if let Some(predicted_entity) = global.owned_entity.as_ref().map(|owned_entity| owned_entity.predicted) {
+        if let Some(predicted_entity) = global
+            .owned_entity
+            .as_ref()
+            .map(|owned_entity| owned_entity.predicted)
+        {
             if let Some(client_tick) = client.client_tick() {
                 if global.command_history.can_insert(&client_tick) {
-
                     // Record command
                     global.command_history.insert(client_tick, command.clone());
 
