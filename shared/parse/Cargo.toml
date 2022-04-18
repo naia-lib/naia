@@ -1,8 +1,15 @@
 [package]
 name = "naia-parse"
 version = "0.10.0"
-authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+authors = ["connorcarpenter <connorcarpenter@gmail.com>", "Fedor <not.fl3@gmail.com>", "makepad <info@makepad.nl>"]
 workspace = "../.."
+description = "Parser for naia-serde & derive methods"
+documentation = "https://docs.rs/naia-serde"
+homepage = "https://github.com/naia-rs/naia"
+repository = "https://github.com/naia-rs/naia"
+readme = "../README.md"
+keywords = ["networking", "gamedev"]
+categories = ["network-programming", "game-development", "wasm", "web-programming"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
 
