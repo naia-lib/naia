@@ -12,11 +12,7 @@
 
 extern crate cfg_if;
 
-#[macro_use]
 extern crate log;
-
-#[macro_use]
-extern crate slotmap;
 
 #[cfg(all(feature = "use-udp", feature = "use-webrtc"))]
 compile_error!("Naia Server can only use UDP or WebRTC, you must pick one");
@@ -26,45 +22,30 @@ compile_error!("Naia Server requires either the 'use-udp' or 'use-webrtc' featur
 
 pub use naia_server_socket::ServerAddrs;
 
-pub use naia_shared::{
-    LinkConditionerConfig, ProtocolType, Random, ReplicaMutWrapper, Replicate, SharedConfig,
-    SocketConfig, WorldMutType, WorldRefType,
-};
+pub use naia_shared as shared;
 
-mod command_receiver;
+mod cache_map;
 mod connection;
-mod entity_action;
-mod entity_manager;
-mod entity_ref;
-mod entity_scope_map;
 mod error;
 mod event;
-mod global_diff_handler;
-mod global_entity_record;
-mod handshake_manager;
-mod io;
-mod keys;
-mod local_component_record;
-mod local_entity_record;
-mod locality_status;
-mod mut_channel;
-mod packet_writer;
-mod ping_manager;
+mod protocol;
 mod room;
+mod sequence_list;
 mod server;
 mod server_config;
-mod tick_manager;
+mod tick;
 mod user;
-mod user_diff_handler;
 mod user_scope;
-mod world_record;
 
-pub use entity_ref::{EntityMut, EntityRef};
 pub use error::NaiaServerError;
 pub use event::Event;
-pub use keys::ComponentKey;
-pub use room::{room_key::RoomKey, RoomMut, RoomRef};
+pub use protocol::entity_ref::EntityRef;
+pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;
 pub use server_config::ServerConfig;
-pub use user::{user_key::UserKey, User, UserMut, UserRef};
+pub use user::{User, UserKey, UserMut, UserRef};
 pub use user_scope::UserScopeMut;
+
+pub mod internal {
+    pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeResult};
+}

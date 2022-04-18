@@ -1,16 +1,21 @@
 use std::{hash::Hash, net::SocketAddr};
 
-use naia_shared::ProtocolType;
+use naia_shared::{BigMapKey, ChannelIndex, Protocolize};
 
-use crate::{RoomKey, Server, UserKey};
+use crate::{RoomKey, Server};
 
 // UserKey
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+pub struct UserKey(u64);
 
-#[allow(missing_docs)]
-#[allow(unused_doc_comments)]
-pub mod user_key {
-    // The Key used to get a reference of a User
-    new_key_type! { pub struct UserKey; }
+impl BigMapKey for UserKey {
+    fn to_u64(&self) -> u64 {
+        self.0
+    }
+
+    fn from_u64(value: u64) -> Self {
+        UserKey(value)
+    }
 }
 
 // User
@@ -28,13 +33,13 @@ impl User {
 
 // UserRef
 
-pub struct UserRef<'s, P: ProtocolType, E: Copy + Eq + Hash> {
-    server: &'s Server<P, E>,
+pub struct UserRef<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
+    server: &'s Server<P, E, C>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserRef<'s, P, E> {
-    pub fn new(server: &'s Server<P, E>, key: &UserKey) -> Self {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> UserRef<'s, P, E, C> {
+    pub fn new(server: &'s Server<P, E, C>, key: &UserKey) -> Self {
         UserRef { server, key: *key }
     }
 
@@ -43,18 +48,18 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserRef<'s, P, E> {
     }
 
     pub fn address(&self) -> SocketAddr {
-        return self.server.get_user_address(&self.key).unwrap();
+        return self.server.user_address(&self.key).unwrap();
     }
 }
 
 // UserMut
-pub struct UserMut<'s, P: ProtocolType, E: Copy + Eq + Hash> {
-    server: &'s mut Server<P, E>,
+pub struct UserMut<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
+    server: &'s mut Server<P, E, C>,
     key: UserKey,
 }
 
-impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserMut<'s, P, E> {
-    pub fn new(server: &'s mut Server<P, E>, key: &UserKey) -> Self {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> UserMut<'s, P, E, C> {
+    pub fn new(server: &'s mut Server<P, E, C>, key: &UserKey) -> Self {
         UserMut { server, key: *key }
     }
 
@@ -63,11 +68,11 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash> UserMut<'s, P, E> {
     }
 
     pub fn address(&self) -> SocketAddr {
-        return self.server.get_user_address(&self.key).unwrap();
+        return self.server.user_address(&self.key).unwrap();
     }
 
     pub fn disconnect(&mut self) {
-        self.server.user_force_disconnect(&self.key);
+        self.server.disconnect_user(&self.key);
     }
 
     // Rooms

@@ -1,9 +1,11 @@
 [package]
 name = "naia-basic-client-demo-mq"
-authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../../../.."
 edition = "2021"
 license = "MIT OR Apache-2.0"
+publish = false
 
 [[bin]]
 name = "naia-basic-client-demo-mq"
@@ -13,5 +15,5 @@ path = "src/main.rs"
 
 [dependencies]
 naia-basic-client-demo-app = { path = "../app", features = [ "mquad" ] }
-cfg-if = "0.1.10"
-miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"] }
+cfg-if = { version = "1.0" }
+miniquad = { version = "0.3.0-alpha.28", features = ["log-impl"] }

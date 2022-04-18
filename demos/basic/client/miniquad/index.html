@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>Naia Basic Client Demo - Miniquad</title>
+        <style>
+            html,
+            body,
+            canvas {
+                margin: 0px;
+                padding: 0px;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                position: absolute;
+                background: black;
+                z-index: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="glcanvas" tabindex='1'></canvas>
+        <script src="https://naia-rs.github.io/miniquad_gl.js"></script>
+        <script src="https://naia-rs.github.io/naia_socket.js"></script>
+        <script>load('./target/wasm_bg.wasm');</script>
+    </body>
+</html>

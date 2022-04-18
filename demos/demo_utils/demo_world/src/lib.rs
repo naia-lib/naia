@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate slotmap;
-
 pub use naia_shared::{WorldMutType, WorldRefType};
 
 mod component_ref;

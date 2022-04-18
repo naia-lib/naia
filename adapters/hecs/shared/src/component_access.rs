@@ -2,18 +2,18 @@ use std::{any::Any, marker::PhantomData};
 
 use hecs::{Entity, World};
 
-use naia_shared::{ProtocolType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
+use naia_shared::{Protocolize, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
 
 use super::component_ref::{ComponentDynMut, ComponentDynRef};
 
 // ComponentAccess
-pub trait ComponentAccess<P: ProtocolType> {
-    fn get_component<'w>(
+pub trait ComponentAccess<P: Protocolize> {
+    fn component<'w>(
         &self,
         world: &'w World,
         entity: &Entity,
     ) -> Option<ReplicaDynRefWrapper<'w, P>>;
-    fn get_component_mut<'w>(
+    fn component_mut<'w>(
         &self,
         world: &'w mut World,
         entity: &Entity,
@@ -28,12 +28,12 @@ pub trait ComponentAccess<P: ProtocolType> {
 }
 
 // ComponentAccessor
-pub struct ComponentAccessor<P: ProtocolType, R: ReplicateSafe<P>> {
+pub struct ComponentAccessor<P: Protocolize, R: ReplicateSafe<P>> {
     phantom_p: PhantomData<P>,
     phantom_r: PhantomData<R>,
 }
 
-impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccessor<P, R> {
+impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccessor<P, R> {
     pub fn new() -> Box<dyn Any> {
         let inner_box: Box<dyn ComponentAccess<P>> = Box::new(ComponentAccessor {
             phantom_p: PhantomData::<P>,
@@ -43,8 +43,8 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccessor<P, R> {
     }
 }
 
-impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
-    fn get_component<'w>(
+impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
+    fn component<'w>(
         &self,
         world: &'w World,
         entity: &Entity,
@@ -57,7 +57,7 @@ impl<P: ProtocolType, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAcces
         return None;
     }
 
-    fn get_component_mut<'w>(
+    fn component_mut<'w>(
         &self,
         world: &'w mut World,
         entity: &Entity,

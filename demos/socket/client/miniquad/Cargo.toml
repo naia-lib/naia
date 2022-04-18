@@ -1,0 +1,19 @@
+[package]
+name = "naia-socket-client-demo-mq"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../../../.."
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[[bin]]
+name = "naia-socket-client-demo-mq"
+path = "src/main.rs"
+
+[features]
+
+[dependencies]
+naia-socket-client-demo-app = { path = "../app", features = [ "mquad" ] }
+cfg-if = { version = "1.0" }
+miniquad = { version = "0.3.0-alpha.28", features = ["log-impl"] }

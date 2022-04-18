@@ -1,12 +1,14 @@
 use std::{thread, time::Duration};
 
-use naia_server::{Event, Server as NaiaServer, ServerAddrs, ServerConfig};
+use naia_server::{
+    shared::DefaultChannels, Event, Server as NaiaServer, ServerAddrs, ServerConfig,
+};
 
-use naia_tickless_demo_shared::{get_shared_config, Protocol, Text};
+use naia_tickless_demo_shared::{shared_config, Protocol, Text};
 
 use naia_empty_world::{EmptyEntity, EmptyWorldRef};
 
-type Server = NaiaServer<Protocol, EmptyEntity>;
+type Server = NaiaServer<Protocol, EmptyEntity, DefaultChannels>;
 
 pub struct App {
     server: Server,
@@ -19,21 +21,21 @@ impl App {
         let server_addresses = ServerAddrs::new(
             "127.0.0.1:14191"
                 .parse()
-                .expect("could not parse session address/port"),
+                .expect("could not parse Signaling address/port"),
             // IP Address to listen on for UDP WebRTC data channels
             "127.0.0.1:14192"
                 .parse()
                 .expect("could not parse WebRTC data address/port"),
             // The public WebRTC IP address to advertise
-            "http://127.0.0.1:14192"
+            "http://127.0.0.1:14192",
         );
 
         let mut server_config = ServerConfig::default();
         server_config.require_auth = false;
-        server_config.disconnection_timeout_duration = Duration::from_secs(30);
+        server_config.connection.disconnection_timeout_duration = Duration::from_secs(30);
 
-        let mut server = Server::new(server_config, get_shared_config());
-        server.listen(server_addresses);
+        let mut server = Server::new(&server_config, &shared_config());
+        server.listen(&server_addresses);
 
         App { server }
     }
@@ -49,15 +51,19 @@ impl App {
                 Ok(Event::Disconnection(_, user)) => {
                     info!("Naia Server disconnected from: {}", user.address);
                 }
-                Ok(Event::Message(user_key, Protocol::Text(text))) => {
-                    let client_message = text.value.get();
+                Ok(Event::Message(user_key, _, Protocol::Text(text))) => {
+                    let client_message: &String = &text.value;
                     info!("Server recv <- {}", client_message);
 
                     let new_message_contents = format!("Server Message ({})", client_message);
-                    info!("Server echo -> {}", new_message_contents);
+                    info!("Server send -> {}", new_message_contents);
 
                     let message = Text::new(&new_message_contents);
-                    self.server.send_message(&user_key, &message, true);
+                    self.server.send_message(
+                        &user_key,
+                        DefaultChannels::UnorderedReliable,
+                        &message,
+                    );
 
                     // Sleep the thread to keep the demo from being unintelligibly fast
                     let sleep_time = Duration::from_millis(500);

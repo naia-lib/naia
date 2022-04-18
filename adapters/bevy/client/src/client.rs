@@ -1,32 +1,36 @@
 use std::{marker::PhantomData, net::SocketAddr};
 
-use bevy::ecs::{
+use bevy_ecs::{
     entity::Entity,
     system::SystemParam,
     world::{Mut, World},
 };
 
-use naia_client::{Client as NaiaClient, EntityRef, ProtocolType, Replicate};
+use naia_client::{
+    shared::{ChannelIndex, Protocolize, ReplicateSafe},
+    Client as NaiaClient, EntityRef,
+};
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
+use naia_client::shared::{EntityHandle, EntityHandleConverter};
 
 use super::state::State;
 
 // Client
 
-pub struct Client<'a, P: ProtocolType> {
+pub struct Client<'a, P: Protocolize, C: ChannelIndex> {
     world: &'a World,
-    client: Mut<'a, NaiaClient<P, Entity>>,
+    client: Mut<'a, NaiaClient<P, Entity, C>>,
     phantom_p: PhantomData<P>,
 }
 
-impl<'a, P: ProtocolType> Client<'a, P> {
+impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
     // Public Methods //
 
     pub fn new(world: &'a World) -> Self {
         unsafe {
             let client = world
-                .get_resource_unchecked_mut::<NaiaClient<P, Entity>>()
+                .get_resource_unchecked_mut::<NaiaClient<P, Entity, C>>()
                 .expect("Naia Client has not been correctly initialized!");
 
             Self {
@@ -39,20 +43,24 @@ impl<'a, P: ProtocolType> Client<'a, P> {
 
     //// Connections ////
 
-    pub fn auth<R: Replicate<P>>(&mut self, auth: R) {
+    pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
         self.client.auth(auth);
     }
 
-    pub fn connect(&mut self, server_session_url: &str) {
-        self.client.connect(server_session_url);
+    pub fn connect(&mut self, server_address: &str) {
+        self.client.connect(server_address);
+    }
+
+    pub fn is_connected(&self) -> bool {
+        return self.client.is_connected();
+    }
+
+    pub fn is_connecting(&self) -> bool {
+        return self.client.is_connecting();
     }
 
     pub fn server_address(&self) -> SocketAddr {
         return self.client.server_address();
-    }
-
-    pub fn connected(&self) -> bool {
-        return self.client.connected();
     }
 
     pub fn rtt(&self) -> f32 {
@@ -70,12 +78,8 @@ impl<'a, P: ProtocolType> Client<'a, P> {
     }
 
     //// Messages ////
-    pub fn send_message<R: Replicate<P>>(&mut self, message_ref: &R, guaranteed_delivery: bool) {
-        return self.client.send_message(message_ref, guaranteed_delivery);
-    }
-
-    pub fn send_command<R: Replicate<P>>(&mut self, entity: &Entity, command: R) {
-        return self.client.send_command(entity, command);
+    pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+        return self.client.send_message(channel, message);
     }
 
     //// Entities ////
@@ -93,12 +97,18 @@ impl<'a, P: ProtocolType> Client<'a, P> {
     pub fn client_tick(&self) -> Option<u16> {
         return self.client.client_tick();
     }
-
-    pub fn server_tick(&self) -> Option<u16> {
-        return self.client.server_tick();
-    }
 }
 
-impl<'a, P: ProtocolType> SystemParam for Client<'a, P> {
-    type Fetch = State<P>;
+impl<'a, P: Protocolize, C: ChannelIndex> SystemParam for Client<'a, P, C> {
+    type Fetch = State<P, C>;
+}
+
+impl<'a, P: Protocolize, C: ChannelIndex> EntityHandleConverter<Entity> for Client<'a, P, C> {
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
+        return self.client.handle_to_entity(entity_handle);
+    }
+
+    fn entity_to_handle(&self, entity: &Entity) -> EntityHandle {
+        return self.client.entity_to_handle(entity);
+    }
 }

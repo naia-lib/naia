@@ -1,16 +1,17 @@
 use naia_server::{
-    Event, ProtocolType, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldRefType,
+    shared::{DefaultChannels, Protocolize},
+    Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
 };
 
 use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_basic_demo_shared::{
-    get_server_address, get_shared_config,
-    protocol::{Character, Protocol, StringMessage},
+    protocol::{Protocol, StringMessage},
+    shared_config,
 };
 
 type World = DemoWorld<Protocol>;
-type Server = NaiaServer<Protocol, Entity>;
+type Server = NaiaServer<Protocol, Entity, DefaultChannels>;
 
 pub struct App {
     server: Server,
@@ -20,11 +21,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn new<P: ProtocolType>() -> Self {
+    pub fn new<P: Protocolize>() -> Self {
         info!("Basic Naia Server Demo started");
 
         let server_addresses = ServerAddrs::new(
-            get_server_address(),
+            "127.0.0.1:14191"
+                .parse()
+                .expect("could not parse Signaling address/port"),
             // IP Address to listen on for UDP WebRTC data channels
             "127.0.0.1:14192"
                 .parse()
@@ -33,8 +36,8 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        let mut server = Server::new(ServerConfig::default(), get_shared_config());
-        server.listen(server_addresses);
+        let mut server = Server::new(&ServerConfig::default(), &shared_config());
+        server.listen(&server_addresses);
 
         let mut world = World::new();
 
@@ -43,29 +46,29 @@ impl App {
         let main_room_key = server.make_room().key();
 
         // Create 4 Character entities, with a range of X and name values
-        {
-            let mut count = 0;
-            for (first, last) in [
-                ("alpha", "red"),
-                ("bravo", "blue"),
-                ("charlie", "green"),
-                ("delta", "yellow"),
-            ]
-            .iter()
-            {
-                count += 1;
-
-                // Create a Character
-                let character = Character::new((count * 4) as u8, 0, first, last);
-                let character_key = server
-                    .spawn_entity(world.proxy_mut())
-                    .insert_component(character)
-                    .id();
-
-                // Add the Character Entity to the main Room
-                server.room_mut(&main_room_key).add_entity(&character_key);
-            }
-        }
+        // {
+        //     let mut count = 0;
+        //     for (first, last) in [
+        //         ("alpha", "red"),
+        //         ("bravo", "blue"),
+        //         ("charlie", "green"),
+        //         ("delta", "yellow"),
+        //     ]
+        //     .iter()
+        //     {
+        //         count += 1;
+        //
+        //         // Create a Character
+        //         let character = Character::new((count * 4) as u8, 0, first, last);
+        //         let character_key = server
+        //             .spawn_entity(world.proxy_mut())
+        //             .insert_component(character)
+        //             .id();
+        //
+        //         // Add the Character Entity to the main Room
+        //         server.room_mut(&main_room_key).add_entity(&character_key);
+        //     }
+        // }
 
         App {
             server,
@@ -79,9 +82,7 @@ impl App {
         for event in self.server.receive() {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {
-                    let username = auth.username.get();
-                    let password = auth.password.get();
-                    if username == "charlie" && password == "12345" {
+                    if *auth.username == "charlie" && *auth.password == "12345" {
                         // Accept incoming connection
                         self.server.accept_connection(&user_key);
                     } else {
@@ -101,8 +102,8 @@ impl App {
                 Ok(Event::Disconnection(_, user)) => {
                     info!("Naia Server disconnected from: {:?}", user.address);
                 }
-                Ok(Event::Message(user_key, Protocol::StringMessage(message))) => {
-                    let message_contents = message.contents.get();
+                Ok(Event::Message(user_key, _, Protocol::StringMessage(message))) => {
+                    let ref message_contents = *message.contents;
                     info!(
                         "Server recv from ({}) <- {}",
                         self.server.user(&user_key).address(),
@@ -122,37 +123,40 @@ impl App {
                         );
 
                         let new_message = StringMessage::new(new_message_contents);
-                        self.server.send_message(&user_key, &new_message, true);
+                        self.server.send_message(
+                            &user_key,
+                            DefaultChannels::UnorderedReliable,
+                            &new_message,
+                        );
                     }
 
-                    // Iterate through Characters, marching them from (0,0) to (20, N)
-                    for entity in self.server.entities(self.world.proxy()) {
-                        if let Some(mut character) = self
-                            .server
-                            .entity_mut(self.world.proxy_mut(), &entity)
-                            .component::<Character>()
-                        {
-                            character.step();
-                        }
-                    }
-
-                    // Update scopes of entities
-                    {
-                        let server = &mut self.server;
-                        let world = &self.world;
-                        for (_, user_key, entity) in server.scope_checks() {
-                            if let Some(character) =
-                                world.proxy().get_component::<Character>(&entity)
-                            {
-                                let x = *character.x.get();
-                                if x >= 5 && x <= 15 {
-                                    server.user_scope(&user_key).include(&entity);
-                                } else {
-                                    server.user_scope(&user_key).exclude(&entity);
-                                }
-                            }
-                        }
-                    }
+                    // // Iterate through Characters, marching them from (0,0) to (20, N)
+                    // for entity in self.server.entities(self.world.proxy()) {
+                    //     if let Some(mut character) = self
+                    //         .server
+                    //         .entity_mut(self.world.proxy_mut(), &entity)
+                    //         .component::<Character>()
+                    //     {
+                    //         character.step();
+                    //     }
+                    // }
+                    //
+                    // // Update scopes of entities
+                    // {
+                    //     let server = &mut self.server;
+                    //     let world = &self.world;
+                    //     for (_, user_key, entity) in server.scope_checks() {
+                    //         if let Some(character) =
+                    // world.proxy().component::<Character>(&entity) {
+                    //             let x = *character.x;
+                    //             if x >= 5 && x <= 15 {
+                    //                 server.user_scope(&user_key).include(&entity);
+                    //             } else {
+                    //                 server.user_scope(&user_key).exclude(&entity);
+                    //             }
+                    //         }
+                    //     }
+                    // }
 
                     // VERY IMPORTANT! Calling this actually sends all update data
                     // packets to all Clients that require it. If you don't call this

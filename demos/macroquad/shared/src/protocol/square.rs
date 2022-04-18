@@ -1,19 +1,11 @@
-use nanoserde::{DeBin, SerBin};
+use naia_shared::{derive_serde, serde, Property, Replicate};
 
-use naia_derive::Replicate;
-use naia_shared::Property;
-
-#[derive(Clone, PartialEq, DeBin, SerBin)]
+#[derive_serde]
 pub enum Color {
     Red,
     Blue,
     Yellow,
-}
-
-impl Default for Color {
-    fn default() -> Self {
-        Color::Red
-    }
+    Green,
 }
 
 #[derive(Replicate)]

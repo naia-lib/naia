@@ -4,19 +4,20 @@ mod inner {
     use std::marker::PhantomData;
 
     use naia_shared::{
-        DiffMask, PacketReader, ProtocolInserter, ProtocolType, ReplicaDynRefWrapper,
-        ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
+        ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
+        ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+        WorldMutType, WorldRefType,
     };
 
     pub type EmptyEntity = u8;
 
     // EmptyWorldRef //
 
-    pub struct EmptyWorldRef<P: ProtocolType> {
+    pub struct EmptyWorldRef<P: Protocolize> {
         phantom: PhantomData<P>,
     }
 
-    impl<P: ProtocolType> EmptyWorldRef<P> {
+    impl<P: Protocolize> EmptyWorldRef<P> {
         pub fn new() -> Self {
             Self {
                 phantom: PhantomData,
@@ -26,11 +27,11 @@ mod inner {
 
     // EmptyWorldMut //
 
-    pub struct EmptyWorldMut<P: ProtocolType> {
+    pub struct EmptyWorldMut<P: Protocolize> {
         phantom: PhantomData<P>,
     }
 
-    impl<P: ProtocolType> EmptyWorldMut<P> {
+    impl<P: Protocolize> EmptyWorldMut<P> {
         pub fn new() -> Self {
             Self {
                 phantom: PhantomData,
@@ -40,8 +41,8 @@ mod inner {
 
     // WorldRefType //
 
-    impl<P: ProtocolType> WorldRefType<P, EmptyEntity> for EmptyWorldRef<P> {
-        fn has_entity(&self, _: &EmptyEntity) -> bool {
+    impl<P: Protocolize> WorldRefType<P, EmptyEntity> for EmptyWorldRef<P> {
+        fn has_entity(&self, _entity: &EmptyEntity) -> bool {
             unimplemented!()
         }
 
@@ -49,32 +50,32 @@ mod inner {
             unimplemented!()
         }
 
-        fn has_component<R: ReplicateSafe<P>>(&self, _: &EmptyEntity) -> bool {
+        fn has_component<R: ReplicateSafe<P>>(&self, _entity: &EmptyEntity) -> bool {
             unimplemented!()
         }
 
-        fn has_component_of_kind(&self, _: &EmptyEntity, _: &P::Kind) -> bool {
+        fn has_component_of_kind(&self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> bool {
             unimplemented!()
         }
 
-        fn get_component<R: ReplicateSafe<P>>(
-            &self,
-            _: &EmptyEntity,
-        ) -> Option<ReplicaRefWrapper<P, R>> {
+        fn component<'a, R: ReplicateSafe<P>>(
+            &'a self,
+            _entity: &EmptyEntity,
+        ) -> Option<ReplicaRefWrapper<'a, P, R>> {
             unimplemented!()
         }
 
-        fn get_component_of_kind(
-            &self,
-            _: &EmptyEntity,
-            _: &P::Kind,
-        ) -> Option<ReplicaDynRefWrapper<'_, P>> {
+        fn component_of_kind<'a>(
+            &'a self,
+            _entity: &EmptyEntity,
+            _component_kind: &P::Kind,
+        ) -> Option<ReplicaDynRefWrapper<'a, P>> {
             unimplemented!()
         }
     }
 
-    impl<P: ProtocolType> WorldRefType<P, EmptyEntity> for EmptyWorldMut<P> {
-        fn has_entity(&self, _: &EmptyEntity) -> bool {
+    impl<P: Protocolize> WorldRefType<P, EmptyEntity> for EmptyWorldMut<P> {
+        fn has_entity(&self, _entity: &EmptyEntity) -> bool {
             unimplemented!()
         }
 
@@ -82,79 +83,111 @@ mod inner {
             unimplemented!()
         }
 
-        fn has_component<R: ReplicateSafe<P>>(&self, _: &EmptyEntity) -> bool {
+        fn has_component<R: ReplicateSafe<P>>(&self, _entity: &EmptyEntity) -> bool {
             unimplemented!()
         }
 
-        fn has_component_of_kind(&self, _: &EmptyEntity, _: &P::Kind) -> bool {
+        fn has_component_of_kind(&self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> bool {
             unimplemented!()
         }
 
-        fn get_component<R: ReplicateSafe<P>>(
-            &self,
-            _: &EmptyEntity,
-        ) -> Option<ReplicaRefWrapper<P, R>> {
+        fn component<'a, R: ReplicateSafe<P>>(
+            &'a self,
+            _entity: &EmptyEntity,
+        ) -> Option<ReplicaRefWrapper<'a, P, R>> {
             unimplemented!()
         }
 
-        fn get_component_of_kind(
-            &self,
-            _: &EmptyEntity,
-            _: &P::Kind,
-        ) -> Option<ReplicaDynRefWrapper<'_, P>> {
+        fn component_of_kind<'a>(
+            &'a self,
+            _entity: &EmptyEntity,
+            _component_kind: &P::Kind,
+        ) -> Option<ReplicaDynRefWrapper<'a, P>> {
             unimplemented!()
         }
     }
 
-    impl<P: ProtocolType> WorldMutType<P, EmptyEntity> for EmptyWorldMut<P> {
-        fn get_component_mut<R: ReplicateSafe<P>>(
-            &mut self,
-            _: &EmptyEntity,
-        ) -> Option<ReplicaMutWrapper<P, R>> {
-            unimplemented!()
-        }
-
-        fn component_read_partial(
-            &mut self,
-            _: &EmptyEntity,
-            _: &P::Kind,
-            _: &DiffMask,
-            _: &mut PacketReader,
-            _: u16,
-        ) {
-            unimplemented!()
-        }
-
-        fn mirror_components(&mut self, _: &EmptyEntity, _: &EmptyEntity, _: &P::Kind) {
-            unimplemented!()
-        }
-
-        fn get_component_kinds(&mut self, _: &EmptyEntity) -> Vec<P::Kind> {
-            unimplemented!()
-        }
-
+    impl<P: Protocolize> WorldMutType<P, EmptyEntity> for EmptyWorldMut<P> {
         fn spawn_entity(&mut self) -> EmptyEntity {
             unimplemented!()
         }
 
-        fn despawn_entity(&mut self, _: &EmptyEntity) {
+        fn duplicate_entity(&mut self, _entity: &EmptyEntity) -> EmptyEntity {
             unimplemented!()
         }
 
-        fn insert_component<R: ReplicateSafe<P>>(&mut self, _: &EmptyEntity, _: R) {
+        fn duplicate_components(
+            &mut self,
+            _mutable_entity: &EmptyEntity,
+            _immutable_entity: &EmptyEntity,
+        ) {
             unimplemented!()
         }
 
-        fn remove_component<R: Replicate<P>>(&mut self, _: &EmptyEntity) -> Option<R> {
+        fn despawn_entity(&mut self, _entity: &EmptyEntity) {
             unimplemented!()
         }
 
-        fn remove_component_of_kind(&mut self, _: &EmptyEntity, _: &P::Kind) -> Option<P> {
+        fn component_kinds(&mut self, _entity: &EmptyEntity) -> Vec<P::Kind> {
+            unimplemented!()
+        }
+
+        fn component_mut<'a, R: ReplicateSafe<P>>(
+            &'a mut self,
+            _entity: &EmptyEntity,
+        ) -> Option<ReplicaMutWrapper<'a, P, R>> {
+            unimplemented!()
+        }
+
+        fn component_apply_update(
+            &mut self,
+            _converter: &dyn NetEntityHandleConverter,
+            _entity: &EmptyEntity,
+            _component_kind: &P::Kind,
+            _update: ComponentUpdate<P::Kind>,
+        ) {
+            unimplemented!()
+        }
+
+        fn mirror_entities(
+            &mut self,
+            _mutable_entity: &EmptyEntity,
+            _immutable_entity: &EmptyEntity,
+        ) {
+            unimplemented!()
+        }
+
+        fn mirror_components(
+            &mut self,
+            _mutable_entity: &EmptyEntity,
+            _immutable_entity: &EmptyEntity,
+            _component_kind: &P::Kind,
+        ) {
+            unimplemented!()
+        }
+
+        fn insert_component<R: ReplicateSafe<P>>(
+            &mut self,
+            _entity: &EmptyEntity,
+            _component_ref: R,
+        ) {
+            unimplemented!()
+        }
+
+        fn remove_component<R: Replicate<P>>(&mut self, _entity: &EmptyEntity) -> Option<R> {
+            unimplemented!()
+        }
+
+        fn remove_component_of_kind(
+            &mut self,
+            _entity: &EmptyEntity,
+            _component_kind: &P::Kind,
+        ) -> Option<P> {
             unimplemented!()
         }
     }
 
-    impl<P: ProtocolType> ProtocolInserter<P, EmptyEntity> for EmptyWorldMut<P> {
+    impl<P: Protocolize> ProtocolInserter<P, EmptyEntity> for EmptyWorldMut<P> {
         fn insert<I: ReplicateSafe<P>>(&mut self, _: &EmptyEntity, _: I) {
             unimplemented!()
         }

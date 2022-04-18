@@ -1,8 +1,8 @@
-use naia_derive::ProtocolType;
+use naia_shared::Protocolize;
 
 use crate::text::Text;
 
-#[derive(ProtocolType)]
+#[derive(Protocolize)]
 pub enum Protocol {
     Text(Text),
 }

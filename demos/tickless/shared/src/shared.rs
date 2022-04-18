@@ -1,11 +1,10 @@
-use naia_shared::{LinkConditionerConfig, SharedConfig};
+use naia_shared::{ChannelConfig, DefaultChannels, SharedConfig, SocketConfig};
 
-use super::protocol::Protocol;
-
-pub fn get_shared_config() -> SharedConfig<Protocol> {
-    let tick_interval = None;
-
-    let link_condition = Some(LinkConditionerConfig::average_condition());
-
-    return SharedConfig::new(Protocol::load(), tick_interval, link_condition);
+pub fn shared_config() -> SharedConfig<DefaultChannels> {
+    return SharedConfig::new(
+        SocketConfig::new(None, None),
+        ChannelConfig::default(),
+        None,
+        None,
+    );
 }

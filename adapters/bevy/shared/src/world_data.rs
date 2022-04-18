@@ -3,19 +3,19 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use bevy::ecs::entity::Entity;
+use bevy_ecs::entity::Entity;
 
-use naia_shared::{ProtocolType, ReplicateSafe};
+use naia_shared::{Protocolize, ReplicateSafe};
 
 use super::component_access::{ComponentAccess, ComponentAccessor};
 
 #[derive(Debug)]
-pub struct WorldData<P: ProtocolType> {
+pub struct WorldData<P: Protocolize> {
     entities: HashSet<Entity>,
     kind_to_accessor_map: HashMap<P::Kind, Box<dyn Any>>,
 }
 
-impl<P: ProtocolType> WorldData<P> {
+impl<P: Protocolize> WorldData<P> {
     pub fn new() -> Self {
         WorldData {
             entities: HashSet::new(),
@@ -25,7 +25,7 @@ impl<P: ProtocolType> WorldData<P> {
 
     // Entities //
 
-    pub(crate) fn get_entities(&self) -> Vec<Entity> {
+    pub(crate) fn entities(&self) -> Vec<Entity> {
         let mut output = Vec::new();
 
         for entity in &self.entities {
@@ -45,7 +45,7 @@ impl<P: ProtocolType> WorldData<P> {
 
     // Components
 
-    pub(crate) fn get_component_access(
+    pub(crate) fn component_access(
         &self,
         component_kind: &P::Kind,
     ) -> Option<&Box<dyn ComponentAccess<P>>> {
@@ -65,5 +65,5 @@ impl<P: ProtocolType> WorldData<P> {
     }
 }
 
-unsafe impl<P: ProtocolType> Send for WorldData<P> {}
-unsafe impl<P: ProtocolType> Sync for WorldData<P> {}
+unsafe impl<P: Protocolize> Send for WorldData<P> {}
+unsafe impl<P: Protocolize> Sync for WorldData<P> {}

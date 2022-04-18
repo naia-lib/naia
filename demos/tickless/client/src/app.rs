@@ -1,10 +1,12 @@
-use naia_client::{Client as NaiaClient, ClientConfig, Event};
+use log::info;
 
-use naia_tickless_demo_shared::{get_shared_config, Protocol, Text};
+use naia_client::{shared::DefaultChannels, Client as NaiaClient, ClientConfig, Event};
+
+use naia_tickless_demo_shared::{shared_config, Protocol, Text};
 
 use naia_empty_world::{EmptyEntity, EmptyWorldMut};
 
-type Client = NaiaClient<Protocol, EmptyEntity>;
+type Client = NaiaClient<Protocol, EmptyEntity, DefaultChannels>;
 
 pub struct App {
     client: Client,
@@ -15,7 +17,7 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Tickless Client Demo started");
 
-        let mut client = Client::new(ClientConfig::default(), get_shared_config());
+        let mut client = Client::new(&ClientConfig::default(), &shared_config());
         client.connect("http://127.0.0.1:14191");
 
         App {
@@ -27,19 +29,20 @@ impl App {
     pub fn update(&mut self) {
         for event in self.client.receive(EmptyWorldMut::new()) {
             match event {
-                Ok(Event::Connection) => {
-                    info!("Client connected to: {}", self.client.server_address());
+                Ok(Event::Connection(server_address)) => {
+                    info!("Client connected to: {}", server_address);
 
                     self.send_simple_message();
                 }
-                Ok(Event::Disconnection) => {
-                    info!("Client disconnected from: {}", self.client.server_address());
+                Ok(Event::Disconnection(server_address)) => {
+                    info!("Client disconnected from: {}", server_address);
                 }
                 Ok(Event::Tick) => {
                     info!("TICK SHOULD NOT HAPPEN!");
                 }
-                Ok(Event::Message(Protocol::Text(text))) => {
-                    info!("Client recv <- {}", text.value.get());
+                Ok(Event::Message(_, Protocol::Text(text))) => {
+                    let incoming_message: &String = &text.value;
+                    info!("Client recv <- {}", incoming_message);
 
                     self.send_simple_message();
                 }
@@ -56,7 +59,8 @@ impl App {
         info!("Client send -> {}", message_contents);
 
         let message = Text::new(&message_contents);
-        self.client.send_message(&message, true);
+        self.client
+            .send_message(DefaultChannels::UnorderedReliable, &message);
         self.message_count = self.message_count.wrapping_add(1);
     }
 }

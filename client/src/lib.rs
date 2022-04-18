@@ -10,33 +10,25 @@
     unused_import_braces
 )]
 
+pub use naia_shared as shared;
+
 mod client;
 mod client_config;
-mod command_receiver;
+mod command_history;
 mod connection;
-mod connection_state;
-mod entity_action;
-mod entity_manager;
-mod entity_record;
-mod entity_ref;
+mod constants;
 mod error;
 mod event;
-mod handshake_manager;
-mod io;
-mod owned_entity;
-mod packet_writer;
-mod ping_manager;
-mod tick_manager;
-mod tick_queue;
-
-pub use naia_shared::{
-    wrapping_diff, Instant, LinkConditionerConfig, ProtocolType, Random, Replicate, SharedConfig,
-};
+mod protocol;
+mod tick;
 
 pub use client::Client;
 pub use client_config::ClientConfig;
-pub use entity_ref::EntityRef;
+pub use command_history::CommandHistory;
 pub use error::NaiaClientError;
 pub use event::Event;
-pub use naia_client_socket::Packet;
-pub use owned_entity::OwnedEntity;
+pub use protocol::entity_ref::EntityRef;
+
+pub mod internal {
+    pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeState};
+}

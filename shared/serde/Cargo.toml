@@ -1,0 +1,24 @@
+[package]
+name = "naia-serde"
+version = "0.10.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>", "Fedor <not.fl3@gmail.com>", "makepad <info@makepad.nl>"]
+workspace = "../.."
+description = "Bit-level de/serialization for naia"
+documentation = "https://docs.rs/naia-serde"
+homepage = "https://github.com/naia-rs/naia"
+repository = "https://github.com/naia-rs/naia"
+readme = "../README.md"
+keywords = ["serialization", "bit", "binary", "networking", "gamedev"]
+categories = ["network-programming", "game-development", "wasm", "web-programming"]
+license = "MIT OR Apache-2.0"
+edition = "2021"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[features]
+
+[dependencies]
+naia-serde-derive = { version = "0.10", path = "derive" }
+log = { version = "0.4" }
+cfg-if = { version = "1.0" }

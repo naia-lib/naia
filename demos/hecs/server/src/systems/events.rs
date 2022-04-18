@@ -7,10 +7,8 @@ use crate::app::App;
 pub fn process_events(app: &mut App) {
     for event in app.server.receive() {
         match event {
-            Ok(Event::Authorization(user_key, Protocol::Auth(auth_message))) => {
-                let username = auth_message.username.get();
-                let password = auth_message.password.get();
-                if username == "charlie" && password == "12345" {
+            Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {
+                if *auth.username == "charlie" && *auth.password == "12345" {
                     // Accept incoming connection
                     app.server.accept_connection(&user_key);
                 } else {
@@ -25,6 +23,7 @@ pub fn process_events(app: &mut App) {
                     .enter_room(&app.main_room_key)
                     .address();
                 info!("Naia Server connected to: {}", address);
+                app.has_user = true;
             }
             Ok(Event::Disconnection(_, user)) => {
                 info!("Naia Server disconnected from: {:?}", user.address);

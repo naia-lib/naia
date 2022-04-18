@@ -1,20 +1,29 @@
+#[macro_use]
 extern crate cfg_if;
-
 extern crate log;
 
-use log::LevelFilter;
+mod app_loop;
+use app_loop::start_loop;
+
 use naia_basic_client_demo_app::App;
-use simple_logger::SimpleLogger;
 
-mod loop_native;
+cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
 
-fn main() {
-    // Uncomment the line below to enable logging. You don't need it if something
-    // else (e.g. quicksilver) is logging for you
-    SimpleLogger::new()
-        .with_level(LevelFilter::Info)
-        .init()
-        .expect("A logger was already initialized");
+        fn main() {
+            wasm_logger::init(wasm_logger::Config::default());
 
-    loop_native::start_loop(&mut App::new());
+            start_loop(App::new());
+        }
+    } else {
+
+        fn main() {
+            simple_logger::SimpleLogger::new()
+                .with_level(log::LevelFilter::Info)
+                .init()
+                .expect("A logger was already initialized");
+
+            start_loop(App::new());
+        }
+    }
 }

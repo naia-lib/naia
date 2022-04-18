@@ -1,17 +1,10 @@
-use bevy::ecs::entity::Entity;
+use bevy_ecs::entity::Entity;
 
-use naia_client::{OwnedEntity as NaiaOwnedEntity, ProtocolType};
+use naia_client::shared::{ChannelIndex, ProtocolKindType, Protocolize, Tick};
 
-pub type OwnedEntity = NaiaOwnedEntity<Entity>;
-
-pub struct SpawnEntityEvent<P: ProtocolType>(pub Entity, pub Vec<P::Kind>);
+pub struct SpawnEntityEvent(pub Entity);
 pub struct DespawnEntityEvent(pub Entity);
-pub struct OwnEntityEvent(pub OwnedEntity);
-pub struct DisownEntityEvent(pub OwnedEntity);
-pub struct RewindEntityEvent(pub OwnedEntity);
-pub struct InsertComponentEvent<P: ProtocolType>(pub Entity, pub P::Kind);
-pub struct UpdateComponentEvent<P: ProtocolType>(pub Entity, pub P::Kind);
-pub struct RemoveComponentEvent<P: ProtocolType>(pub Entity, pub P);
-pub struct MessageEvent<P: ProtocolType>(pub P);
-pub struct NewCommandEvent<P: ProtocolType>(pub OwnedEntity, pub P);
-pub struct ReplayCommandEvent<P: ProtocolType>(pub OwnedEntity, pub P);
+pub struct InsertComponentEvent<K: ProtocolKindType>(pub Entity, pub K);
+pub struct UpdateComponentEvent<K: ProtocolKindType>(pub Tick, pub Entity, pub K);
+pub struct RemoveComponentEvent<P: Protocolize>(pub Entity, pub P);
+pub struct MessageEvent<P: Protocolize, C: ChannelIndex>(pub C, pub P);

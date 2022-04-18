@@ -1,6 +1,7 @@
 /// Returns whether or not a wrapping number is greater than another
-/// sequence_greater_than(1,2) will return false
 /// sequence_greater_than(2,1) will return true
+/// sequence_greater_than(1,2) will return false
+/// sequence_greater_than(1,1) will return false
 pub fn sequence_greater_than(s1: u16, s2: u16) -> bool {
     ((s1 > s2) && (s1 - s2 <= 32768)) || ((s1 < s2) && (s2 - s1 > 32768))
 }
@@ -8,6 +9,7 @@ pub fn sequence_greater_than(s1: u16, s2: u16) -> bool {
 /// Returns whether or not a wrapping number is greater than another
 /// sequence_less_than(1,2) will return true
 /// sequence_less_than(2,1) will return false
+/// sequence_less_than(1,1) will return false
 pub fn sequence_less_than(s1: u16, s2: u16) -> bool {
     sequence_greater_than(s2, s1)
 }
@@ -48,8 +50,43 @@ pub fn wrapping_diff(a: u16, b: u16) -> i16 {
 }
 
 #[cfg(test)]
+mod sequence_compare_tests {
+    use super::{sequence_greater_than, sequence_less_than};
+
+    #[test]
+    fn greater_is_greater() {
+        assert!(sequence_greater_than(2, 1));
+    }
+
+    #[test]
+    fn greater_is_not_equal() {
+        assert!(!sequence_greater_than(2, 2));
+    }
+
+    #[test]
+    fn greater_is_not_less() {
+        assert!(!sequence_greater_than(1, 2));
+    }
+
+    #[test]
+    fn less_is_less() {
+        assert!(sequence_less_than(1, 2));
+    }
+
+    #[test]
+    fn less_is_not_equal() {
+        assert!(!sequence_less_than(2, 2));
+    }
+
+    #[test]
+    fn less_is_not_greater() {
+        assert!(!sequence_less_than(2, 1));
+    }
+}
+
+#[cfg(test)]
 mod wrapping_diff_tests {
-    use crate::wrapping_number::wrapping_diff;
+    use super::wrapping_diff;
 
     #[test]
     fn simple() {
@@ -146,7 +183,7 @@ mod wrapping_diff_tests {
 
     #[test]
     fn medium_max_wrap_backwards() {
-        let diff: u16 = (std::u16::MAX / 2);
+        let diff: u16 = std::u16::MAX / 2;
         let a: u16 = std::u16::MAX;
         let b: u16 = a.wrapping_add(diff);
 

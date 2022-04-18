@@ -1,10 +1,7 @@
-use nanoserde::{DeBin, SerBin};
-
-use naia_derive::Replicate;
-use naia_shared::Property;
+use naia_shared::{derive_serde, serde, Property, Replicate};
 
 // Here's an example of a Custom Property
-#[derive(Default, PartialEq, Clone, DeBin, SerBin)]
+#[derive_serde]
 pub struct Fullname {
     pub first: String,
     pub last: String,
