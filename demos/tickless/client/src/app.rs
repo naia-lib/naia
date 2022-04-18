@@ -1,12 +1,12 @@
 use log::info;
 
-use naia_client::{Client as NaiaClient, ClientConfig, Event};
+use naia_client::{Client as NaiaClient, ClientConfig, Event, shared::DefaultChannels};
 
 use naia_tickless_demo_shared::{shared_config, Protocol, Text};
 
 use naia_empty_world::{EmptyEntity, EmptyWorldMut};
 
-type Client = NaiaClient<Protocol, EmptyEntity>;
+type Client = NaiaClient<Protocol, EmptyEntity, DefaultChannels>;
 
 pub struct App {
     client: Client,
@@ -40,7 +40,7 @@ impl App {
                 Ok(Event::Tick) => {
                     info!("TICK SHOULD NOT HAPPEN!");
                 }
-                Ok(Event::Message(Protocol::Text(text))) => {
+                Ok(Event::Message(_, Protocol::Text(text))) => {
                     let incoming_message: &String = &text.value;
                     info!("Client recv <- {}", incoming_message);
 
@@ -59,7 +59,7 @@ impl App {
         info!("Client send -> {}", message_contents);
 
         let message = Text::new(&message_contents);
-        self.client.send_message(&message, true);
+        self.client.send_message(DefaultChannels::UnorderedReliable, &message);
         self.message_count = self.message_count.wrapping_add(1);
     }
 }

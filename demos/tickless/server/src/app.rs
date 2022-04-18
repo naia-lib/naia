@@ -1,12 +1,12 @@
 use std::{thread, time::Duration};
 
-use naia_server::{Event, Server as NaiaServer, ServerAddrs, ServerConfig};
+use naia_server::{Event, Server as NaiaServer, ServerAddrs, ServerConfig, shared::DefaultChannels};
 
 use naia_tickless_demo_shared::{shared_config, Protocol, Text};
 
 use naia_empty_world::{EmptyEntity, EmptyWorldRef};
 
-type Server = NaiaServer<Protocol, EmptyEntity>;
+type Server = NaiaServer<Protocol, EmptyEntity, DefaultChannels>;
 
 pub struct App {
     server: Server,
@@ -49,7 +49,7 @@ impl App {
                 Ok(Event::Disconnection(_, user)) => {
                     info!("Naia Server disconnected from: {}", user.address);
                 }
-                Ok(Event::Message(user_key, Protocol::Text(text))) => {
+                Ok(Event::Message(user_key, _, Protocol::Text(text))) => {
                     let client_message: &String = &text.value;
                     info!("Server recv <- {}", client_message);
 
@@ -57,7 +57,7 @@ impl App {
                     info!("Server send -> {}", new_message_contents);
 
                     let message = Text::new(&new_message_contents);
-                    self.server.send_message(&user_key, &message, true);
+                    self.server.send_message(&user_key, DefaultChannels::UnorderedReliable, &message);
 
                     // Sleep the thread to keep the demo from being unintelligibly fast
                     let sleep_time = Duration::from_millis(500);

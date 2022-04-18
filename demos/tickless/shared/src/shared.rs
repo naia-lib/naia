@@ -1,12 +1,9 @@
-use naia_shared::{SharedConfig, SocketConfig};
+use naia_shared::{ChannelConfig, DefaultChannels, SharedConfig, SocketConfig};
 
-use super::protocol::Protocol;
-
-pub fn shared_config() -> SharedConfig<Protocol> {
+pub fn shared_config() -> SharedConfig<DefaultChannels> {
     return SharedConfig::new(
-        Protocol::load(),
         SocketConfig::new(None, None),
-        None,
+        ChannelConfig::default(),
         None,
         None,
     );

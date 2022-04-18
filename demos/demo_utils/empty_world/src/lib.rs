@@ -3,10 +3,7 @@ pub use inner::{EmptyEntity, EmptyWorldMut, EmptyWorldRef};
 mod inner {
     use std::marker::PhantomData;
 
-    use naia_shared::{
-        serde::BitReader, ProtocolInserter, Protocolize, ReplicaMutWrapper, ReplicaRefWrapper,
-        Replicate, ReplicateSafe, WorldMutType, WorldRefType,
-    };
+    use naia_shared::{ProtocolInserter, Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType, NetEntityHandleConverter, ComponentUpdate, ReplicaDynRefWrapper};
 
     pub type EmptyEntity = u8;
 
@@ -41,101 +38,104 @@ mod inner {
     // WorldRefType //
 
     impl<P: Protocolize> WorldRefType<P, EmptyEntity> for EmptyWorldRef<P> {
-        fn has_entity(&self, _: &EmptyEntity) -> bool {
-            unimplemented!()
+        fn has_entity(&self, _entity: &EmptyEntity) -> bool {
+            todo!()
         }
 
         fn entities(&self) -> Vec<EmptyEntity> {
-            unimplemented!()
+            todo!()
         }
 
-        fn has_component<R: ReplicateSafe<P>>(&self, _: &EmptyEntity) -> bool {
-            unimplemented!()
+        fn has_component<R: ReplicateSafe<P>>(&self, _entity: &EmptyEntity) -> bool {
+            todo!()
         }
 
-        fn has_component_of_kind(&self, _: &EmptyEntity, _: &P::Kind) -> bool {
-            unimplemented!()
+        fn has_component_of_kind(&self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> bool {
+            todo!()
         }
 
-        fn component<R: ReplicateSafe<P>>(
-            &self,
-            _: &EmptyEntity,
-        ) -> Option<ReplicaRefWrapper<P, R>> {
-            unimplemented!()
+        fn component<'a, R: ReplicateSafe<P>>(&'a self, _entity: &EmptyEntity) -> Option<ReplicaRefWrapper<'a, P, R>> {
+            todo!()
         }
 
-        fn component_of_kind(&self, _: &EmptyEntity, _: &P::Kind) -> Option<&P> {
-            unimplemented!()
+        fn component_of_kind<'a>(&'a self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>> {
+            todo!()
         }
     }
 
     impl<P: Protocolize> WorldRefType<P, EmptyEntity> for EmptyWorldMut<P> {
-        fn has_entity(&self, _: &EmptyEntity) -> bool {
-            unimplemented!()
+        fn has_entity(&self, _entity: &EmptyEntity) -> bool {
+            todo!()
         }
 
         fn entities(&self) -> Vec<EmptyEntity> {
-            unimplemented!()
+            todo!()
         }
 
-        fn has_component<R: ReplicateSafe<P>>(&self, _: &EmptyEntity) -> bool {
-            unimplemented!()
+        fn has_component<R: ReplicateSafe<P>>(&self, _entity: &EmptyEntity) -> bool {
+            todo!()
         }
 
-        fn has_component_of_kind(&self, _: &EmptyEntity, _: &P::Kind) -> bool {
-            unimplemented!()
+        fn has_component_of_kind(&self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> bool {
+            todo!()
         }
 
-        fn component<R: ReplicateSafe<P>>(
-            &self,
-            _: &EmptyEntity,
-        ) -> Option<ReplicaRefWrapper<P, R>> {
-            unimplemented!()
+        fn component<'a, R: ReplicateSafe<P>>(&'a self, _entity: &EmptyEntity) -> Option<ReplicaRefWrapper<'a, P, R>> {
+            todo!()
         }
 
-        fn component_of_kind(&self, _: &EmptyEntity, _: &P::Kind) -> Option<&P> {
-            unimplemented!()
+        fn component_of_kind<'a>(&'a self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>> {
+            todo!()
         }
     }
 
     impl<P: Protocolize> WorldMutType<P, EmptyEntity> for EmptyWorldMut<P> {
-        fn component_mut<R: ReplicateSafe<P>>(
-            &mut self,
-            _: &EmptyEntity,
-        ) -> Option<ReplicaMutWrapper<P, R>> {
-            unimplemented!()
-        }
-
-        fn component_apply_update(&mut self, _: &EmptyEntity, _: &P::Kind, _: &mut BitReader) {
-            unimplemented!()
-        }
-
-        fn mirror_components(&mut self, _: &EmptyEntity, _: &EmptyEntity, _: &P::Kind) {
-            unimplemented!()
-        }
-
-        fn component_kinds(&mut self, _: &EmptyEntity) -> Vec<P::Kind> {
-            unimplemented!()
-        }
-
         fn spawn_entity(&mut self) -> EmptyEntity {
-            unimplemented!()
+            todo!()
         }
 
-        fn despawn_entity(&mut self, _: &EmptyEntity) {
-            unimplemented!()
+        fn duplicate_entity(&mut self, _entity: &EmptyEntity) -> EmptyEntity {
+            todo!()
         }
 
-        fn insert_component<R: ReplicateSafe<P>>(&mut self, _: &EmptyEntity, _: R) {
-            unimplemented!()
+        fn duplicate_components(&mut self, _mutable_entity: &EmptyEntity, _immutable_entity: &EmptyEntity) {
+            todo!()
         }
 
-        fn remove_component<R: Replicate<P>>(&mut self, _: &EmptyEntity) -> Option<R> {
-            unimplemented!()
+        fn despawn_entity(&mut self, _entity: &EmptyEntity) {
+            todo!()
         }
 
-        fn remove_component_of_kind(&mut self, _: &EmptyEntity, _: &P::Kind) -> Option<P> {
-            unimplemented!()
+        fn component_kinds(&mut self, _entity: &EmptyEntity) -> Vec<P::Kind> {
+            todo!()
+        }
+
+        fn component_mut<'a, R: ReplicateSafe<P>>(&'a mut self, _entity: &EmptyEntity) -> Option<ReplicaMutWrapper<'a, P, R>> {
+            todo!()
+        }
+
+        fn component_apply_update(&mut self, _converter: &dyn NetEntityHandleConverter, _entity: &EmptyEntity, _component_kind: &P::Kind, _update: ComponentUpdate<P::Kind>) {
+            todo!()
+        }
+
+        fn mirror_entities(&mut self, _mutable_entity: &EmptyEntity, _immutable_entity: &EmptyEntity) {
+            todo!()
+        }
+
+        fn mirror_components(&mut self, _mutable_entity: &EmptyEntity, _immutable_entity: &EmptyEntity, _component_kind: &P::Kind) {
+            todo!()
+        }
+
+        fn insert_component<R: ReplicateSafe<P>>(&mut self, _entity: &EmptyEntity, _component_ref: R) {
+            todo!()
+        }
+
+        fn remove_component<R: Replicate<P>>(&mut self, _entity: &EmptyEntity) -> Option<R> {
+            todo!()
+        }
+
+        fn remove_component_of_kind(&mut self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> Option<P> {
+            todo!()
         }
     }
 
