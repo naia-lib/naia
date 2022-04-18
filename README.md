@@ -18,7 +18,7 @@ The API is heavily inspired by the [Nengi.js](https://github.com/timetocode/neng
 
 Thank very much to Kyren for support & [webrtc-unreliable](https://github.com/kyren/webrtc-unreliable), and to the [Laminar](https://github.com/amethyst/laminar) authors, for the cannibalized code within.
 
-Any help is very welcome, please get in touch! I'm still very new to Rust and this project is overly ambitious, and so I intend to be very open to any criticism / feedback in order to better this project.
+Any help is very welcome, please get in touch! I am open to any criticism / feedback in order to better this project.
 
 Currently guaranteed to work on Web & Linux, although Windows & MacOS have been reported working as well. Please file issues if you find inconsistencies and I'll do what I can.
 
