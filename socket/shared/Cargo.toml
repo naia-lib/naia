@@ -7,7 +7,6 @@ description = "Common data types shared between naia-server-socket & naia-client
 documentation = "https://docs.rs/naia-socket-shared"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
-readme = "../README.md"
 keywords = ["webrtc", "udp", "server", "gamedev", "networking"]
 categories = ["network-programming", "game-development", "wasm", "web-programming"]
 license = "MIT OR Apache-2.0"

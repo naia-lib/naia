@@ -7,7 +7,6 @@ description = "An abstraction to provide a common API over either a UDP socket o
 documentation = "https://docs.rs/naia-server-socket"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
-readme = "../README.md"
 keywords = ["webrtc", "udp", "server", "gamedev", "networking"]
 categories = ["network-programming", "game-development", "wasm", "web-programming"]
 license = "MIT OR Apache-2.0"
