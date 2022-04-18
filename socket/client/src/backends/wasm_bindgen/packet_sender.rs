@@ -1,15 +1,15 @@
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use std::collections::VecDeque;
 
-use web_sys::RtcDataChannel;
+use web_sys::{RtcDataChannel, RtcDataChannelState};
+
+use crate::server_addr::ServerAddr;
 
 use super::addr_cell::AddrCell;
-use crate::server_addr::ServerAddr;
 
 /// Handles sending messages to the Server for a given Client Socket
 #[derive(Clone)]
 pub struct PacketSender {
     data_channel: RtcDataChannel,
-    dropped_outgoing_messages: Rc<RefCell<VecDeque<Box<[u8]>>>>,
     server_addr: AddrCell,
 }
 
@@ -19,30 +19,14 @@ impl PacketSender {
     pub fn new(data_channel: RtcDataChannel, server_addr: AddrCell) -> Self {
         PacketSender {
             data_channel,
-            dropped_outgoing_messages: Rc::new(RefCell::new(VecDeque::new())),
             server_addr,
         }
     }
 
     /// Send a Packet to the Server
     pub fn send(&self, payload: &[u8]) {
-        self.resend_dropped_messages();
-
-        if let Err(err) = self.data_channel.send_with_u8_array(payload) {
-            log::info!("error when sending packet: {:?}", err);
-
-            self.dropped_outgoing_messages
-                .try_borrow_mut()
-                .expect("can't borrow dropped message buffer to add dropped message!")
-                .push_back(payload.into());
-        }
-    }
-
-    fn resend_dropped_messages(&self) {
-        if let Ok(mut buffer) = self.dropped_outgoing_messages.try_borrow_mut() {
-            if let Some(dropped_packet) = buffer.pop_front() {
-                self.send(&dropped_packet);
-            }
+        if self.data_channel.ready_state() == RtcDataChannelState::Open {
+            self.data_channel.send_with_u8_array(payload).unwrap();
         }
     }
 

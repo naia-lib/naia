@@ -39,103 +39,103 @@ mod inner {
 
     impl<P: Protocolize> WorldRefType<P, EmptyEntity> for EmptyWorldRef<P> {
         fn has_entity(&self, _entity: &EmptyEntity) -> bool {
-            todo!()
+            unimplemented!()
         }
 
         fn entities(&self) -> Vec<EmptyEntity> {
-            todo!()
+            unimplemented!()
         }
 
         fn has_component<R: ReplicateSafe<P>>(&self, _entity: &EmptyEntity) -> bool {
-            todo!()
+            unimplemented!()
         }
 
         fn has_component_of_kind(&self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> bool {
-            todo!()
+            unimplemented!()
         }
 
         fn component<'a, R: ReplicateSafe<P>>(&'a self, _entity: &EmptyEntity) -> Option<ReplicaRefWrapper<'a, P, R>> {
-            todo!()
+            unimplemented!()
         }
 
         fn component_of_kind<'a>(&'a self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>> {
-            todo!()
+            unimplemented!()
         }
     }
 
     impl<P: Protocolize> WorldRefType<P, EmptyEntity> for EmptyWorldMut<P> {
         fn has_entity(&self, _entity: &EmptyEntity) -> bool {
-            todo!()
+            unimplemented!()
         }
 
         fn entities(&self) -> Vec<EmptyEntity> {
-            todo!()
+            unimplemented!()
         }
 
         fn has_component<R: ReplicateSafe<P>>(&self, _entity: &EmptyEntity) -> bool {
-            todo!()
+            unimplemented!()
         }
 
         fn has_component_of_kind(&self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> bool {
-            todo!()
+            unimplemented!()
         }
 
         fn component<'a, R: ReplicateSafe<P>>(&'a self, _entity: &EmptyEntity) -> Option<ReplicaRefWrapper<'a, P, R>> {
-            todo!()
+            unimplemented!()
         }
 
         fn component_of_kind<'a>(&'a self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>> {
-            todo!()
+            unimplemented!()
         }
     }
 
     impl<P: Protocolize> WorldMutType<P, EmptyEntity> for EmptyWorldMut<P> {
         fn spawn_entity(&mut self) -> EmptyEntity {
-            todo!()
+            unimplemented!()
         }
 
         fn duplicate_entity(&mut self, _entity: &EmptyEntity) -> EmptyEntity {
-            todo!()
+            unimplemented!()
         }
 
         fn duplicate_components(&mut self, _mutable_entity: &EmptyEntity, _immutable_entity: &EmptyEntity) {
-            todo!()
+            unimplemented!()
         }
 
         fn despawn_entity(&mut self, _entity: &EmptyEntity) {
-            todo!()
+            unimplemented!()
         }
 
         fn component_kinds(&mut self, _entity: &EmptyEntity) -> Vec<P::Kind> {
-            todo!()
+            unimplemented!()
         }
 
         fn component_mut<'a, R: ReplicateSafe<P>>(&'a mut self, _entity: &EmptyEntity) -> Option<ReplicaMutWrapper<'a, P, R>> {
-            todo!()
+            unimplemented!()
         }
 
         fn component_apply_update(&mut self, _converter: &dyn NetEntityHandleConverter, _entity: &EmptyEntity, _component_kind: &P::Kind, _update: ComponentUpdate<P::Kind>) {
-            todo!()
+            unimplemented!()
         }
 
         fn mirror_entities(&mut self, _mutable_entity: &EmptyEntity, _immutable_entity: &EmptyEntity) {
-            todo!()
+            unimplemented!()
         }
 
         fn mirror_components(&mut self, _mutable_entity: &EmptyEntity, _immutable_entity: &EmptyEntity, _component_kind: &P::Kind) {
-            todo!()
+            unimplemented!()
         }
 
         fn insert_component<R: ReplicateSafe<P>>(&mut self, _entity: &EmptyEntity, _component_ref: R) {
-            todo!()
+            unimplemented!()
         }
 
         fn remove_component<R: Replicate<P>>(&mut self, _entity: &EmptyEntity) -> Option<R> {
-            todo!()
+            unimplemented!()
         }
 
         fn remove_component_of_kind(&mut self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> Option<P> {
-            todo!()
+            unimplemented!()
         }
     }
 

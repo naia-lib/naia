@@ -1,7 +1,7 @@
 use hecs::{Entity, World};
 
 use naia_shared::{
-    serde::BitReader, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
+    ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
     ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
     WorldMutType, WorldRefType,
 };
@@ -132,6 +132,26 @@ impl<'w, 'd, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
         return self.world.spawn(());
     }
 
+    fn duplicate_entity(&mut self, entity: &Entity) -> Entity {
+        let new_entity = WorldMutType::<P, Entity>::spawn_entity(self);
+
+        WorldMutType::<P, Entity>::duplicate_components(self, &new_entity, entity);
+
+        new_entity
+    }
+
+    fn duplicate_components(&mut self, mutable_entity: &Entity, immutable_entity: &Entity) {
+        for component_kind in WorldMutType::<P, Entity>::component_kinds(self, &immutable_entity) {
+            let mut component_copy_opt: Option<P> = None;
+            if let Some(component) = self.component_of_kind(&immutable_entity, &component_kind) {
+                component_copy_opt = Some(component.protocol_copy());
+            }
+            if let Some(component_copy) = component_copy_opt {
+                Protocolize::extract_and_insert(&component_copy, mutable_entity, self);
+            }
+        }
+    }
+
     fn despawn_entity(&mut self, entity: &Entity) {
         self.world
             .despawn(*entity)
@@ -175,6 +195,17 @@ impl<'w, 'd, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
             if let Some(mut component) = access.component_mut(self.world, entity) {
                 component.read_apply_update(converter, update);
             }
+        }
+    }
+
+    fn mirror_entities(&mut self, new_entity: &Entity, old_entity: &Entity) {
+        for component_kind in WorldMutType::<P, Entity>::component_kinds(self, &old_entity) {
+            WorldMutType::<P, Entity>::mirror_components(
+                self,
+                new_entity,
+                old_entity,
+                &component_kind,
+            );
         }
     }
 
