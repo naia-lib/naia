@@ -17,4 +17,4 @@ naia-hecs-demo-shared = { path = "../shared" }
 log = { version = "0.4" }
 simple_logger = { version = "2" }
 smol = { version = "1.2" }
-hecs = { version = "0.5" }
+hecs = { version = "0.7" }
