@@ -1,8 +1,8 @@
-use hecs::World;
+use std::collections::HashMap;
 
 use naia_hecs_client::{
     shared::{DefaultChannels, SharedConfig},
-    ClientConfig, WorldData,
+    ClientConfig, WorldWrapper as World,
 };
 
 use naia_hecs_demo_shared::protocol::Auth;
@@ -22,7 +22,8 @@ pub fn app_init(
     App {
         client,
         world: World::new(),
-        world_data: WorldData::new(),
         message_count: 0,
+        entity_to_id_map: HashMap::new(),
+        next_id: 0,
     }
 }

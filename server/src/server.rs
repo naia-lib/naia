@@ -562,7 +562,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         }
 
         // Clean up associated components
-        for component_kind in self.world_record.component_kinds(entity) {
+        for component_kind in self.world_record.component_kinds(entity).unwrap() {
             self.component_cleanup(entity, &component_kind);
         }
 
@@ -1074,7 +1074,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                         user_connection.entity_manager.spawn_entity(entity);
                                         // add components to connections local scope
                                         for component_kind in
-                                            self.world_record.component_kinds(entity)
+                                            self.world_record.component_kinds(entity).unwrap()
                                         {
                                             user_connection
                                                 .entity_manager

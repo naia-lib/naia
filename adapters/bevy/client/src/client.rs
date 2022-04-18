@@ -1,17 +1,18 @@
 use std::{marker::PhantomData, net::SocketAddr};
 
-use bevy::ecs::{
+use bevy_ecs::{
     entity::Entity,
     system::SystemParam,
     world::{Mut, World},
 };
 
 use naia_client::{
-    shared::{ChannelIndex, Protocolize, Replicate, ReplicateSafe},
+    shared::{ChannelIndex, Protocolize, ReplicateSafe},
     Client as NaiaClient, EntityRef,
 };
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
+use naia_client::shared::{EntityHandle, EntityHandleConverter};
 
 use super::state::State;
 
@@ -42,7 +43,7 @@ impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
 
     //// Connections ////
 
-    pub fn auth<R: Replicate<P>>(&mut self, auth: R) {
+    pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
         self.client.auth(auth);
     }
 
@@ -100,4 +101,14 @@ impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
 
 impl<'a, P: Protocolize, C: ChannelIndex> SystemParam for Client<'a, P, C> {
     type Fetch = State<P, C>;
+}
+
+impl<'a, P: Protocolize, C: ChannelIndex> EntityHandleConverter<Entity> for Client<'a, P, C> {
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
+        return self.client.handle_to_entity(entity_handle);
+    }
+
+    fn entity_to_handle(&self, entity: &Entity) -> EntityHandle {
+        return self.client.entity_to_handle(entity);
+    }
 }

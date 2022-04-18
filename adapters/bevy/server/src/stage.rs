@@ -1,4 +1,4 @@
-use bevy::ecs::schedule::StageLabel;
+use bevy_ecs::schedule::StageLabel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, StageLabel)]
 pub enum Stage {

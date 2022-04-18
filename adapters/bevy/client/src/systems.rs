@@ -1,11 +1,9 @@
-use bevy::{
-    app::Events,
-    ecs::{
-        entity::Entity,
-        schedule::ShouldRun,
-        system::{Res, ResMut},
-        world::{Mut, World},
-    },
+use bevy_ecs::{
+    entity::Entity,
+    event::Events,
+    schedule::ShouldRun,
+    system::{Res, ResMut},
+    world::{Mut, World},
 };
 
 use naia_client::{
@@ -17,16 +15,15 @@ use naia_bevy_shared::WorldProxyMut;
 
 use crate::events::{
     DespawnEntityEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent,
+    UpdateComponentEvent,
 };
 
-use super::{components::Confirmed, resource::ClientResource};
+use super::resource::ClientResource;
 
 pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<Client<P, Entity, C>>| {
         world.resource_scope(|world, mut client_resource: Mut<ClientResource>| {
             let event_results = client.receive(world.proxy_mut());
-
-            let mut entities_to_spawn: Vec<Entity> = Vec::new();
 
             unsafe {
                 let mut spawn_entity_event_writer = world
@@ -37,6 +34,9 @@ pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World)
                     .unwrap();
                 let mut insert_component_event_writer = world
                     .get_resource_unchecked_mut::<Events<InsertComponentEvent<P::Kind>>>()
+                    .unwrap();
+                let mut update_component_event_writer = world
+                    .get_resource_unchecked_mut::<Events<UpdateComponentEvent<P::Kind>>>()
                     .unwrap();
                 let mut remove_component_event_writer = world
                     .get_resource_unchecked_mut::<Events<RemoveComponentEvent<P>>>()
@@ -60,7 +60,6 @@ pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World)
                             continue;
                         }
                         Ok(Event::SpawnEntity(entity)) => {
-                            entities_to_spawn.push(entity);
                             spawn_entity_event_writer.send(SpawnEntityEvent(entity));
                         }
                         Ok(Event::DespawnEntity(entity)) => {
@@ -77,16 +76,13 @@ pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World)
                         Ok(Event::Message(channel, message)) => {
                             message_event_writer.send(MessageEvent(channel, message));
                         }
-                        Ok(Event::UpdateComponent(_, _, _)) => {
-                            unimplemented!();
+                        Ok(Event::UpdateComponent(tick, entity, component)) => {
+                            update_component_event_writer
+                                .send(UpdateComponentEvent(tick, entity, component));
                         }
                         Err(_) => {}
                     }
                 }
-            }
-
-            for entity in entities_to_spawn {
-                world.entity_mut(entity).insert(Confirmed);
             }
         });
     });
@@ -131,7 +127,7 @@ pub fn finish_tick(mut resource: ResMut<ClientResource>) {
 pub fn should_receive<P: Protocolize, C: ChannelIndex>(
     client: Res<Client<P, Entity, C>>,
 ) -> ShouldRun {
-    if client.is_connected() {
+    if client.is_connecting() {
         ShouldRun::Yes
     } else {
         ShouldRun::No

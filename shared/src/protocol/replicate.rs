@@ -1,6 +1,7 @@
-use naia_serde::{BitReader, BitWrite};
+use naia_serde::BitWrite;
 
 use super::{
+    component_update::ComponentUpdate,
     diff_mask::DiffMask,
     entity_handle::EntityHandle,
     entity_property::NetEntityHandleConverter,
@@ -12,10 +13,7 @@ use super::{
 /// A struct that implements Replicate is a Message/Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a
 /// remote host
-pub trait Replicate<P: Protocolize>: ReplicateSafe<P> {
-    /// Returns a clone of self
-    fn clone(&self) -> Self;
-}
+pub trait Replicate<P: Protocolize>: ReplicateSafe<P> + Clone {}
 
 /// The part of Replicate which is object-safe
 pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
@@ -46,7 +44,7 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Message/Component on the client
-    fn write_partial(
+    fn write_update(
         &self,
         diff_mask: &DiffMask,
         bit_writer: &mut dyn BitWrite,
@@ -54,10 +52,10 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     );
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
-    fn read_partial(
+    fn read_apply_update(
         &mut self,
-        bit_reader: &mut BitReader,
         converter: &dyn NetEntityHandleConverter,
+        update: ComponentUpdate<P::Kind>,
     );
     /// Returns whether has any EntityProperties
     fn has_entity_properties(&self) -> bool;
@@ -69,7 +67,7 @@ cfg_if! {
     if #[cfg(feature = "bevy_support")]
     {
         // Require that Bevy Component to be implemented
-        use bevy::{ecs::component::TableStorage, prelude::Component};
+        use bevy_ecs::component::{TableStorage, Component};
 
         pub trait ReplicateInner: Component<Storage = TableStorage> + Sync + Send + 'static {}
 

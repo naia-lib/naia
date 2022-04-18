@@ -21,12 +21,13 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let cast_mut_method = cast_mut_method(&protocol_name, &variants);
     let extract_and_insert_method = extract_and_insert_method(&protocol_name, &variants);
     let write_method = write_method(&protocol_name, &variants);
-    let write_partial_method = write_partial_method(&protocol_name, &variants);
-    let build_method = build_method(&kind_enum_name, &variants);
+    let write_update_method = write_update_method(&protocol_name, &variants);
+    let read_method = read_method(&kind_enum_name, &variants);
+    let read_create_update_method = read_create_update_method(&kind_enum_name, &variants);
 
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}, sync::RwLock, collections::HashMap};
-        use naia_shared::{ProtocolInserter, ProtocolKindType, ReplicateSafe,
+        use naia_shared::{ProtocolInserter, ProtocolKindType, ReplicateSafe, ComponentUpdate,
             DiffMask, ReplicaDynRef, ReplicaDynMut, Replicate, derive_serde, serde, serde::Serde,
             NetEntityHandleConverter};
 
@@ -36,7 +37,8 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
             type Kind = #kind_enum_name;
             #kind_of_method
             #type_to_kind_method
-            #build_method
+            #read_method
+            #read_create_update_method
             #dyn_ref_method
             #dyn_mut_method
             #cast_method
@@ -44,7 +46,7 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
             #cast_mut_method
             #extract_and_insert_method
             #write_method
-            #write_partial_method
+            #write_update_method
         }
 
         impl Clone for #protocol_name {
@@ -119,7 +121,7 @@ pub fn kind_enum(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
 fn kind_of_method() -> TokenStream {
     return quote! {
         fn kind_of<R: ReplicateSafe<Self>>() -> Self::Kind {
-            return Self::type_to_kind(TypeId::of::<R>());
+            return Self::type_to_kind(TypeId::of::<R>()).expect("type not initialized correctly");
         }
     };
 }
@@ -141,7 +143,7 @@ fn type_to_kind_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
     }
 
     return quote! {
-        fn type_to_kind(type_id: TypeId) -> Self::Kind {
+        fn type_to_kind(type_id: TypeId) -> Option<Self::Kind> {
             unsafe {
                 static mut TYPE_TO_KIND_MAP: Option<RwLock<HashMap<TypeId, #enum_name>>> = None;
 
@@ -158,14 +160,13 @@ fn type_to_kind_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
                     .unwrap()
                     .deref()
                     .get(&type_id)
-                    .expect("type_to_kind_map not initialized correctly?")
-                    .clone();
+                    .map(|kind| *kind);
             }
         }
     };
 }
 
-pub fn build_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
+pub fn read_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     let mut variants_build = quote! {};
 
     for variant in variants {
@@ -174,7 +175,7 @@ pub fn build_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
         // Variants build() match branch
         {
             let new_output_right = quote! {
-                #enum_name::#variant_name => #variant_name::read_to_type(reader, converter),
+                #enum_name::#variant_name => #variant_name::read(bit_reader, converter),
             };
             let new_output_result = quote! {
                 #variants_build
@@ -185,8 +186,37 @@ pub fn build_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     }
 
     return quote! {
-        fn build(reader: &mut serde::BitReader, converter: &dyn NetEntityHandleConverter) -> Self {
-            let protocol_kind: Self::Kind = Self::Kind::de(reader).unwrap();
+        fn read(bit_reader: &mut serde::BitReader, converter: &dyn NetEntityHandleConverter) -> Self {
+            let protocol_kind: Self::Kind = Self::Kind::de(bit_reader).unwrap();
+            match protocol_kind {
+                #variants_build
+            }
+        }
+    };
+}
+
+pub fn read_create_update_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
+    let mut variants_build = quote! {};
+
+    for variant in variants {
+        let variant_name = Ident::new(&variant.to_string(), Span::call_site());
+
+        // Variants build() match branch
+        {
+            let new_output_right = quote! {
+                #enum_name::#variant_name => #variant_name::read_create_update(bit_reader),
+            };
+            let new_output_result = quote! {
+                #variants_build
+                #new_output_right
+            };
+            variants_build = new_output_result;
+        }
+    }
+
+    return quote! {
+        fn read_create_update(bit_reader: &mut serde::BitReader) -> ComponentUpdate<Self::Kind> {
+            let protocol_kind: Self::Kind = Self::Kind::de(bit_reader).unwrap();
             match protocol_kind {
                 #variants_build
             }
@@ -403,13 +433,13 @@ fn write_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     };
 }
 
-fn write_partial_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
+fn write_update_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     let mut variant_definitions = quote! {};
 
     for variant_name in variants {
         let new_output_right = quote! {
             #protocol_name::#variant_name(replica) => {
-                replica.write_partial(diff_mask, writer, converter);
+                replica.write_update(diff_mask, writer, converter);
             }
         };
         let new_output_result = quote! {
@@ -420,7 +450,7 @@ fn write_partial_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenSt
     }
 
     return quote! {
-        fn write_partial(&self, diff_mask: &DiffMask, writer: &mut dyn serde::BitWrite, converter: &dyn NetEntityHandleConverter) {
+        fn write_update(&self, diff_mask: &DiffMask, writer: &mut dyn serde::BitWrite, converter: &dyn NetEntityHandleConverter) {
             match self {
                 #variant_definitions
             }

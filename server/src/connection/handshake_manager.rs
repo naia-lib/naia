@@ -83,7 +83,7 @@ impl<P: Protocolize> HandshakeManager<P> {
             }
 
             if has_auth {
-                let auth_message = P::build(reader, &FakeEntityConverter);
+                let auth_message = P::read(reader, &FakeEntityConverter);
                 return HandshakeResult::Success(Some(auth_message));
             } else {
                 return HandshakeResult::Success(None);

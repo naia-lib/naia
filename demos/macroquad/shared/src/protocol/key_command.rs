@@ -4,7 +4,6 @@ use naia_shared::{EntityProperty, Property, Replicate};
 #[protocol_path = "crate::protocol::Protocol"]
 pub struct KeyCommand {
     pub entity: EntityProperty,
-    pub other_entity: EntityProperty,
     pub w: Property<bool>,
     pub s: Property<bool>,
     pub a: Property<bool>,

@@ -3,9 +3,8 @@ use std::ops::{Deref, DerefMut};
 use hecs::{Entity, World};
 
 use naia_shared::{
-    serde::BitReader, NetEntityHandleConverter, ProtocolInserter, Protocolize,
-    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
-    WorldMutType, WorldRefType,
+    ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize, ReplicaDynRefWrapper,
+    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -113,6 +112,26 @@ impl<P: Protocolize> WorldMutType<P, Entity> for &mut WorldWrapper<P> {
         return self.inner.spawn(());
     }
 
+    fn duplicate_entity(&mut self, entity: &Entity) -> Entity {
+        let new_entity = WorldMutType::<P, Entity>::spawn_entity(self);
+
+        WorldMutType::<P, Entity>::duplicate_components(self, &new_entity, entity);
+
+        new_entity
+    }
+
+    fn duplicate_components(&mut self, mutable_entity: &Entity, immutable_entity: &Entity) {
+        for component_kind in WorldMutType::<P, Entity>::component_kinds(self, &immutable_entity) {
+            let mut component_copy_opt: Option<P> = None;
+            if let Some(component) = self.component_of_kind(&immutable_entity, &component_kind) {
+                component_copy_opt = Some(component.protocol_copy());
+            }
+            if let Some(component_copy) = component_copy_opt {
+                Protocolize::extract_and_insert(&component_copy, mutable_entity, self);
+            }
+        }
+    }
+
     fn despawn_entity(&mut self, entity: &Entity) {
         self.inner
             .despawn(*entity)
@@ -124,8 +143,9 @@ impl<P: Protocolize> WorldMutType<P, Entity> for &mut WorldWrapper<P> {
 
         if let Ok(entity_ref) = self.inner.entity(*entity) {
             for component_type in entity_ref.component_types() {
-                let component_kind = P::type_to_kind(component_type);
-                kinds.push(component_kind);
+                if let Some(component_kind) = P::type_to_kind(component_type) {
+                    kinds.push(component_kind);
+                }
             }
         }
 
@@ -144,17 +164,28 @@ impl<P: Protocolize> WorldMutType<P, Entity> for &mut WorldWrapper<P> {
         return None;
     }
 
-    fn component_read_partial(
+    fn component_apply_update(
         &mut self,
+        converter: &dyn NetEntityHandleConverter,
         entity: &Entity,
         component_kind: &P::Kind,
-        bit_reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
+        update: ComponentUpdate<P::Kind>,
     ) {
         if let Some(access) = self.data.component_access(component_kind) {
             if let Some(mut component) = access.component_mut(&mut self.inner, entity) {
-                component.read_partial(bit_reader, converter);
+                component.read_apply_update(converter, update);
             }
+        }
+    }
+
+    fn mirror_entities(&mut self, new_entity: &Entity, old_entity: &Entity) {
+        for component_kind in WorldMutType::<P, Entity>::component_kinds(self, &old_entity) {
+            WorldMutType::<P, Entity>::mirror_components(
+                self,
+                new_entity,
+                old_entity,
+                &component_kind,
+            );
         }
     }
 

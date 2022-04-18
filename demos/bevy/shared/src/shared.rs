@@ -1,11 +1,12 @@
 use std::time::Duration;
 
-use naia_shared::{
-    ChannelConfig, DefaultChannels, LinkConditionerConfig, SharedConfig, SocketConfig,
-};
+use naia_shared::{LinkConditionerConfig, SharedConfig, SocketConfig};
 
-pub fn shared_config() -> SharedConfig<DefaultChannels> {
-    let tick_interval = Some(Duration::from_millis(50));
+use crate::channels::{Channels, CHANNEL_CONFIG};
+
+pub fn shared_config() -> SharedConfig<Channels> {
+    // Set tick rate to ~60 FPS
+    let tick_interval = Some(Duration::from_millis(20));
 
     //  let link_condition = None;
     let link_condition = Some(LinkConditionerConfig::average_condition());
@@ -16,7 +17,7 @@ pub fn shared_config() -> SharedConfig<DefaultChannels> {
     //  });
     return SharedConfig::new(
         SocketConfig::new(link_condition, None),
-        &ChannelConfig::<DefaultChannels>::default(),
+        CHANNEL_CONFIG,
         tick_interval,
         None,
     );

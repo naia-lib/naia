@@ -53,11 +53,11 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> UserDiffHandler<E, K> {
     //        return self.receivers.contains_key(component_key);
     //    }
 
-    pub fn diff_mask_is_clear(&self, entity: &E, component_kind: &K) -> bool {
+    pub fn diff_mask_is_clear(&self, entity: &E, component_kind: &K) -> Option<bool> {
         if let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) {
-            return receiver.diff_mask_is_clear();
+            return Some(receiver.diff_mask_is_clear());
         }
-        return true;
+        return None;
     }
 
     pub fn or_diff_mask(&mut self, entity: &E, component_kind: &K, other_mask: &DiffMask) {

@@ -1,3 +1,4 @@
+pub mod component_update;
 pub mod diff_mask;
 pub mod entity_action;
 pub mod entity_action_receiver;

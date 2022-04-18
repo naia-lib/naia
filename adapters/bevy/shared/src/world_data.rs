@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use bevy::ecs::entity::Entity;
+use bevy_ecs::entity::Entity;
 
 use naia_shared::{Protocolize, ReplicateSafe};
 

@@ -66,6 +66,7 @@ pub use messages::{
     unordered_reliable_receiver::UnorderedReliableReceiver,
 };
 pub use protocol::{
+    component_update::ComponentUpdate,
     diff_mask::DiffMask,
     entity_action::EntityAction,
     entity_action_receiver::EntityActionReceiver,

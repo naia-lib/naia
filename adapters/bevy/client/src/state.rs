@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use bevy::ecs::{
+use bevy_ecs::{
     system::{SystemMeta, SystemParamFetch, SystemParamState},
     world::World,
 };
@@ -18,18 +18,12 @@ pub struct State<P: Protocolize, C: ChannelIndex> {
 
 // SAFE: only local state is accessed
 unsafe impl<P: Protocolize, C: ChannelIndex> SystemParamState for State<P, C> {
-    type Config = ();
-
-    fn init(_world: &mut World, _system_state: &mut SystemMeta, _config: Self::Config) -> Self {
-        State {
+    fn init(_world: &mut World, _system_meta: &mut SystemMeta) -> Self {
+        Self {
             phantom_p: PhantomData,
             phantom_c: PhantomData,
         }
     }
-
-    fn apply(&mut self, _world: &mut World) {}
-
-    fn default_config() {}
 }
 
 impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParamFetch<'world, 'state>
