@@ -13,10 +13,6 @@ default = [
     "bevy/render",
 ]
 
-[profile.release]
-lto = true
-opt-level = 's'
-
 [dependencies]
 naia-bevy-client = { path = "../../../adapters/bevy/client" }
 naia-bevy-demo-shared = { path = "../shared" }

@@ -1,6 +1,7 @@
-
-use bevy::ecs::system::{Res, ResMut};
-use bevy::input::{keyboard::KeyCode, Input};
+use bevy::{
+    ecs::system::{Res, ResMut},
+    input::{keyboard::KeyCode, Input},
+};
 
 use naia_bevy_client::Client;
 

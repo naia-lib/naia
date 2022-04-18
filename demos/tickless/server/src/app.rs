@@ -1,6 +1,8 @@
 use std::{thread, time::Duration};
 
-use naia_server::{Event, Server as NaiaServer, ServerAddrs, ServerConfig, shared::DefaultChannels};
+use naia_server::{
+    shared::DefaultChannels, Event, Server as NaiaServer, ServerAddrs, ServerConfig,
+};
 
 use naia_tickless_demo_shared::{shared_config, Protocol, Text};
 
@@ -57,7 +59,11 @@ impl App {
                     info!("Server send -> {}", new_message_contents);
 
                     let message = Text::new(&new_message_contents);
-                    self.server.send_message(&user_key, DefaultChannels::UnorderedReliable, &message);
+                    self.server.send_message(
+                        &user_key,
+                        DefaultChannels::UnorderedReliable,
+                        &message,
+                    );
 
                     // Sleep the thread to keep the demo from being unintelligibly fast
                     let sleep_time = Duration::from_millis(500);

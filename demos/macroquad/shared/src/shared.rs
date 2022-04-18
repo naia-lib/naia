@@ -20,6 +20,6 @@ pub fn shared_config() -> SharedConfig<Channels> {
         SocketConfig::new(link_condition, None),
         CHANNEL_CONFIG,
         tick_interval,
-        None
+        None,
     );
 }

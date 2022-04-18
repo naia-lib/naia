@@ -3,7 +3,11 @@ pub use inner::{EmptyEntity, EmptyWorldMut, EmptyWorldRef};
 mod inner {
     use std::marker::PhantomData;
 
-    use naia_shared::{ProtocolInserter, Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType, NetEntityHandleConverter, ComponentUpdate, ReplicaDynRefWrapper};
+    use naia_shared::{
+        ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
+        ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+        WorldMutType, WorldRefType,
+    };
 
     pub type EmptyEntity = u8;
 
@@ -54,11 +58,18 @@ mod inner {
             unimplemented!()
         }
 
-        fn component<'a, R: ReplicateSafe<P>>(&'a self, _entity: &EmptyEntity) -> Option<ReplicaRefWrapper<'a, P, R>> {
+        fn component<'a, R: ReplicateSafe<P>>(
+            &'a self,
+            _entity: &EmptyEntity,
+        ) -> Option<ReplicaRefWrapper<'a, P, R>> {
             unimplemented!()
         }
 
-        fn component_of_kind<'a>(&'a self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>> {
+        fn component_of_kind<'a>(
+            &'a self,
+            _entity: &EmptyEntity,
+            _component_kind: &P::Kind,
+        ) -> Option<ReplicaDynRefWrapper<'a, P>> {
             unimplemented!()
         }
     }
@@ -80,11 +91,18 @@ mod inner {
             unimplemented!()
         }
 
-        fn component<'a, R: ReplicateSafe<P>>(&'a self, _entity: &EmptyEntity) -> Option<ReplicaRefWrapper<'a, P, R>> {
+        fn component<'a, R: ReplicateSafe<P>>(
+            &'a self,
+            _entity: &EmptyEntity,
+        ) -> Option<ReplicaRefWrapper<'a, P, R>> {
             unimplemented!()
         }
 
-        fn component_of_kind<'a>(&'a self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> Option<ReplicaDynRefWrapper<'a, P>> {
+        fn component_of_kind<'a>(
+            &'a self,
+            _entity: &EmptyEntity,
+            _component_kind: &P::Kind,
+        ) -> Option<ReplicaDynRefWrapper<'a, P>> {
             unimplemented!()
         }
     }
@@ -98,7 +116,11 @@ mod inner {
             unimplemented!()
         }
 
-        fn duplicate_components(&mut self, _mutable_entity: &EmptyEntity, _immutable_entity: &EmptyEntity) {
+        fn duplicate_components(
+            &mut self,
+            _mutable_entity: &EmptyEntity,
+            _immutable_entity: &EmptyEntity,
+        ) {
             unimplemented!()
         }
 
@@ -110,23 +132,45 @@ mod inner {
             unimplemented!()
         }
 
-        fn component_mut<'a, R: ReplicateSafe<P>>(&'a mut self, _entity: &EmptyEntity) -> Option<ReplicaMutWrapper<'a, P, R>> {
+        fn component_mut<'a, R: ReplicateSafe<P>>(
+            &'a mut self,
+            _entity: &EmptyEntity,
+        ) -> Option<ReplicaMutWrapper<'a, P, R>> {
             unimplemented!()
         }
 
-        fn component_apply_update(&mut self, _converter: &dyn NetEntityHandleConverter, _entity: &EmptyEntity, _component_kind: &P::Kind, _update: ComponentUpdate<P::Kind>) {
+        fn component_apply_update(
+            &mut self,
+            _converter: &dyn NetEntityHandleConverter,
+            _entity: &EmptyEntity,
+            _component_kind: &P::Kind,
+            _update: ComponentUpdate<P::Kind>,
+        ) {
             unimplemented!()
         }
 
-        fn mirror_entities(&mut self, _mutable_entity: &EmptyEntity, _immutable_entity: &EmptyEntity) {
+        fn mirror_entities(
+            &mut self,
+            _mutable_entity: &EmptyEntity,
+            _immutable_entity: &EmptyEntity,
+        ) {
             unimplemented!()
         }
 
-        fn mirror_components(&mut self, _mutable_entity: &EmptyEntity, _immutable_entity: &EmptyEntity, _component_kind: &P::Kind) {
+        fn mirror_components(
+            &mut self,
+            _mutable_entity: &EmptyEntity,
+            _immutable_entity: &EmptyEntity,
+            _component_kind: &P::Kind,
+        ) {
             unimplemented!()
         }
 
-        fn insert_component<R: ReplicateSafe<P>>(&mut self, _entity: &EmptyEntity, _component_ref: R) {
+        fn insert_component<R: ReplicateSafe<P>>(
+            &mut self,
+            _entity: &EmptyEntity,
+            _component_ref: R,
+        ) {
             unimplemented!()
         }
 
@@ -134,7 +178,11 @@ mod inner {
             unimplemented!()
         }
 
-        fn remove_component_of_kind(&mut self, _entity: &EmptyEntity, _component_kind: &P::Kind) -> Option<P> {
+        fn remove_component_of_kind(
+            &mut self,
+            _entity: &EmptyEntity,
+            _component_kind: &P::Kind,
+        ) -> Option<P> {
             unimplemented!()
         }
     }

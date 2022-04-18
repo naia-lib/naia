@@ -1,7 +1,4 @@
-
-use bevy::ecs::system::Commands;
-use bevy::log::info;
-use bevy::render::camera::OrthographicCameraBundle;
+use bevy::{ecs::system::Commands, log::info, render::camera::OrthographicCameraBundle};
 
 use naia_bevy_client::Client;
 

@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 
 use bevy_app::{App, CoreStage, Plugin as PluginType};
-use bevy_ecs::{schedule::SystemStage, entity::Entity, system::IntoExclusiveSystem};
+use bevy_ecs::{entity::Entity, schedule::SystemStage, system::IntoExclusiveSystem};
 
 use naia_server::{
     shared::{ChannelIndex, Protocolize, SharedConfig},

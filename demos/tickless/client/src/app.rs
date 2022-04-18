@@ -1,6 +1,6 @@
 use log::info;
 
-use naia_client::{Client as NaiaClient, ClientConfig, Event, shared::DefaultChannels};
+use naia_client::{shared::DefaultChannels, Client as NaiaClient, ClientConfig, Event};
 
 use naia_tickless_demo_shared::{shared_config, Protocol, Text};
 
@@ -59,7 +59,8 @@ impl App {
         info!("Client send -> {}", message_contents);
 
         let message = Text::new(&message_contents);
-        self.client.send_message(DefaultChannels::UnorderedReliable, &message);
+        self.client
+            .send_message(DefaultChannels::UnorderedReliable, &message);
         self.message_count = self.message_count.wrapping_add(1);
     }
 }
