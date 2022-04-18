@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use bevy::ecs::{
+use bevy_ecs::{
     system::{SystemMeta, SystemParamFetch, SystemParamState},
     world::World,
 };

@@ -9,16 +9,18 @@ publish = false
 
 [features]
 default = [
-    "bevy/bevy_gltf",
     "bevy/bevy_winit",
     "bevy/render",
-    "bevy/png",
 ]
+
+[profile.release]
+lto = true
+opt-level = 's'
 
 [dependencies]
 naia-bevy-client = { path = "../../../adapters/bevy/client" }
 naia-bevy-demo-shared = { path = "../shared" }
-bevy = { version = "0.7", default-features=false }
 winit = { version = "0.26" }
 rand = { version = "0.7" }
 getrandom = { version="0.1", features=["wasm-bindgen"] }
+bevy = { version = "0.7", default-features=false }

@@ -1,4 +1,4 @@
-use bevy::ecs::{
+use bevy_ecs::{
     entity::Entity,
     event::Events,
     schedule::ShouldRun,

@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 use web_sys::{RtcDataChannel, RtcDataChannelState};
 
 use crate::server_addr::ServerAddr;

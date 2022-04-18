@@ -22,7 +22,7 @@ install_crate = {crate_name = "basic-http-server", binary = "basic-http-server",
 install_crate = {crate_name = "wasm-bindgen-cli", binary = "wasm-bindgen", test_arg="--help"}
 
 [tasks.cargo-build-web]
-args = ["build", "--target", "wasm32-unknown-unknown", "@@split(CARGO_RELEASE_ARGS, )"]
+args = ["build", "--target", "wasm32-unknown-unknown", "--release", "@@split(CARGO_RELEASE_ARGS, )"]
 command = "cargo"
 dependencies = ["install-target-wasm32-unknown-unknown"]
 

@@ -1,4 +1,5 @@
-use bevy::{ecs::system::ResMut, log::info, prelude::*};
+use bevy_ecs::{system::ResMut, event::EventReader};
+use bevy_log::info;
 
 use naia_bevy_server::{
     events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},

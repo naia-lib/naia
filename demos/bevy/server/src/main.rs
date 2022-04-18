@@ -1,4 +1,6 @@
-use bevy::{log::LogPlugin, prelude::*};
+use bevy_app::{App, ScheduleRunnerPlugin};
+use bevy_core::CorePlugin;
+use bevy_log::{LogPlugin, info};
 
 use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
 
@@ -15,7 +17,8 @@ fn main() {
     // Build App
     App::new()
         // Plugins
-        .add_plugins(MinimalPlugins)
+        .add_plugin(CorePlugin::default())
+        .add_plugin(ScheduleRunnerPlugin::default())
         .add_plugin(LogPlugin::default())
         .add_plugin(ServerPlugin::<Protocol, Channels>::new(
             ServerConfig::default(),

@@ -67,7 +67,7 @@ cfg_if! {
     if #[cfg(feature = "bevy_support")]
     {
         // Require that Bevy Component to be implemented
-        use bevy::{ecs::component::TableStorage, prelude::Component};
+        use bevy_ecs::component::{TableStorage, Component};
 
         pub trait ReplicateInner: Component<Storage = TableStorage> + Sync + Send + 'static {}
 

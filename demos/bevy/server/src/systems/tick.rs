@@ -1,4 +1,4 @@
-use bevy::ecs::system::{Query, ResMut};
+use bevy_ecs::system::{Query, ResMut};
 
 use naia_bevy_server::Server;
 
