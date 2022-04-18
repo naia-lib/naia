@@ -240,8 +240,8 @@ fn has_entity(world: &World, entity: &Entity) -> bool {
 fn entities(world: &World) -> Vec<Entity> {
     let mut output = Vec::new();
 
-    for (entity, _) in world.iter() {
-        output.push(entity);
+    for entity in world.iter() {
+        output.push(entity.entity());
     }
 
     return output;
