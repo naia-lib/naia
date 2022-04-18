@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use bevy_ecs::{
     entity::Entity,
-    system::{Command, EntityCommands, Commands},
+    system::{Command, Commands, EntityCommands},
     world::World,
 };
 

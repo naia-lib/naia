@@ -3,9 +3,8 @@ use std::ops::{Deref, DerefMut};
 use hecs::{Entity, World};
 
 use naia_shared::{
-    ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
-    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
-    WorldMutType, WorldRefType,
+    ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize, ReplicaDynRefWrapper,
+    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
 };
 
 use crate::{

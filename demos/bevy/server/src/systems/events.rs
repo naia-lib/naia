@@ -1,4 +1,4 @@
-use bevy_ecs::{system::ResMut, event::EventReader};
+use bevy_ecs::{event::EventReader, system::ResMut};
 use bevy_log::info;
 
 use naia_bevy_server::{

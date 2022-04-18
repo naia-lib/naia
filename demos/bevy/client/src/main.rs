@@ -1,4 +1,4 @@
-use bevy::{DefaultPlugins, app::App};
+use bevy::{app::App, DefaultPlugins};
 
 use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, Stage};
 

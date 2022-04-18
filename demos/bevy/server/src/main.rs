@@ -1,6 +1,6 @@
 use bevy_app::{App, ScheduleRunnerPlugin};
 use bevy_core::CorePlugin;
-use bevy_log::{LogPlugin, info};
+use bevy_log::{info, LogPlugin};
 
 use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
 
