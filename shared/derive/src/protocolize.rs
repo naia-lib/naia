@@ -121,7 +121,7 @@ pub fn kind_enum(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
 fn kind_of_method() -> TokenStream {
     return quote! {
         fn kind_of<R: ReplicateSafe<Self>>() -> Self::Kind {
-            return Self::type_to_kind(TypeId::of::<R>());
+            return Self::type_to_kind(TypeId::of::<R>()).expect("type not initialized correctly");
         }
     };
 }
@@ -143,7 +143,7 @@ fn type_to_kind_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
     }
 
     return quote! {
-        fn type_to_kind(type_id: TypeId) -> Self::Kind {
+        fn type_to_kind(type_id: TypeId) -> Option<Self::Kind> {
             unsafe {
                 static mut TYPE_TO_KIND_MAP: Option<RwLock<HashMap<TypeId, #enum_name>>> = None;
 
@@ -160,8 +160,7 @@ fn type_to_kind_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
                     .unwrap()
                     .deref()
                     .get(&type_id)
-                    .expect("type_to_kind_map not initialized correctly?")
-                    .clone();
+                    .map(|kind| *kind);
             }
         }
     };

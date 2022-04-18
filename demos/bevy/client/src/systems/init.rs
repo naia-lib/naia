@@ -19,7 +19,5 @@ pub fn init(mut commands: Commands, mut client: Client<Protocol, Channels>) {
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
 
     // Setup Colors
-    commands.insert_resource(Global {
-        queued_command: None,
-    });
+    commands.insert_resource(Global::new());
 }

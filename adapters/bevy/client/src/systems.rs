@@ -13,9 +13,7 @@ use naia_client::{
 
 use naia_bevy_shared::WorldProxyMut;
 
-use crate::events::{
-    DespawnEntityEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent,
-};
+use crate::events::{DespawnEntityEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent};
 
 use super::resource::ClientResource;
 
@@ -33,6 +31,9 @@ pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World)
                     .unwrap();
                 let mut insert_component_event_writer = world
                     .get_resource_unchecked_mut::<Events<InsertComponentEvent<P::Kind>>>()
+                    .unwrap();
+                let mut update_component_event_writer = world
+                    .get_resource_unchecked_mut::<Events<UpdateComponentEvent<P::Kind>>>()
                     .unwrap();
                 let mut remove_component_event_writer = world
                     .get_resource_unchecked_mut::<Events<RemoveComponentEvent<P>>>()
@@ -72,8 +73,9 @@ pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World)
                         Ok(Event::Message(channel, message)) => {
                             message_event_writer.send(MessageEvent(channel, message));
                         }
-                        Ok(Event::UpdateComponent(_, _, _)) => {
-                            unimplemented!();
+                        Ok(Event::UpdateComponent(tick, entity, component)) => {
+                            update_component_event_writer
+                                .send(UpdateComponentEvent(tick, entity, component));
                         }
                         Err(_) => {}
                     }

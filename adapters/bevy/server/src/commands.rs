@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use bevy::ecs::entity::Entity;
 
 use naia_server::{
-    shared::{ChannelIndex, Protocolize, Replicate},
+    shared::{ChannelIndex, Protocolize, ReplicateSafe, Replicate},
     Server,
 };
 
@@ -37,13 +37,13 @@ impl<P: Protocolize, C: ChannelIndex> Command<P, C> for DespawnEntity {
 //// Insert Component ////
 
 #[derive(Debug)]
-pub(crate) struct InsertComponent<P: Protocolize, R: Replicate<P>> {
+pub(crate) struct InsertComponent<P: Protocolize, R: ReplicateSafe<P>> {
     entity: Entity,
     component: R,
     phantom_p: PhantomData<P>,
 }
 
-impl<P: Protocolize, R: Replicate<P>> InsertComponent<P, R> {
+impl<P: Protocolize, R: ReplicateSafe<P>> InsertComponent<P, R> {
     pub fn new(entity: &Entity, component: R) -> Self {
         return InsertComponent {
             entity: *entity,
@@ -53,7 +53,7 @@ impl<P: Protocolize, R: Replicate<P>> InsertComponent<P, R> {
     }
 }
 
-impl<P: Protocolize, R: Replicate<P>, C: ChannelIndex> Command<P, C> for InsertComponent<P, R> {
+impl<P: Protocolize, R: ReplicateSafe<P>, C: ChannelIndex> Command<P, C> for InsertComponent<P, R> {
     fn write(self: Box<Self>, server: &mut Server<P, Entity, C>, world: WorldMut) {
         server
             .entity_mut(world, &self.entity)

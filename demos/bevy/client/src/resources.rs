@@ -23,3 +23,13 @@ pub struct Global {
     pub queued_command: Option<KeyCommand>,
     pub command_history: CommandHistory<KeyCommand>,
 }
+
+impl Global {
+    pub fn new() -> Self {
+        Self {
+            owned_entity: None,
+            queued_command: None,
+            command_history: CommandHistory::new(),
+        }
+    }
+}

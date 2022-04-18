@@ -13,10 +13,7 @@ use super::{
 /// A struct that implements Replicate is a Message/Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a
 /// remote host
-pub trait Replicate<P: Protocolize>: ReplicateSafe<P> {
-    /// Returns a clone of self
-    fn clone(&self) -> Self;
-}
+pub trait Replicate<P: Protocolize>: ReplicateSafe<P> + Clone {}
 
 /// The part of Replicate which is object-safe
 pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {

@@ -1,7 +1,7 @@
 use bevy::ecs::entity::Entity;
 
 use naia_server::{
-    shared::{ChannelIndex, Protocolize, Replicate},
+    shared::{ChannelIndex, Protocolize, ReplicateSafe, Replicate},
     RoomKey,
 };
 
@@ -35,7 +35,7 @@ impl<'s, 'world, 'state, P: Protocolize, C: ChannelIndex> EntityMut<'s, 'world, 
 
     // Components
 
-    pub fn insert<R: Replicate<P>>(&mut self, component: R) -> &mut Self {
+    pub fn insert<R: ReplicateSafe<P>>(&mut self, component: R) -> &mut Self {
         self.server
             .queue_command(InsertComponent::new(&self.entity, component));
         self

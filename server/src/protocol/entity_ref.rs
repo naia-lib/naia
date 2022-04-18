@@ -1,7 +1,7 @@
 use std::{hash::Hash, marker::PhantomData};
 
 use naia_shared::{
-    ChannelIndex, Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+    ChannelIndex, Protocolize, ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe, Replicate,
     WorldMutType, WorldRefType,
 };
 

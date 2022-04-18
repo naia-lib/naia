@@ -14,7 +14,6 @@ use crate::{
     protocol::entity_ref::EntityRef,
     tick::tick_manager::TickManager,
 };
-use crate::protocol::entity_ref::EntityMut;
 
 use super::{client_config::ClientConfig, error::NaiaClientError, event::Event};
 
@@ -221,22 +220,22 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     // Entities
 
-    /// Duplicates an Entity & all of it's Components
-    pub fn duplicate_entity<W: WorldMutType<P, E>>(&self, mut world: W, entity: &E) -> EntityRef<P, E, W> {
-        let new_entity = world.duplicate_entity(entity);
-        return EntityRef::new(world, &new_entity);
-    }
+    // /// Duplicates an Entity & all of it's Components
+    // pub fn duplicate_entity<W: WorldMutType<P, E>>(&self, mut world: W, entity: &E) -> EntityRef<P, E, W> {
+    //     let new_entity = world.duplicate_entity(entity);
+    //     return EntityRef::new(world, &new_entity);
+    // }
 
-    /// Syncs the state of two entities
-    pub fn mirror_entities<W: WorldMutType<P, E>>(&self, mut world: W, first_entity: &E, second_entity: &E) {
-        for component_kind in world.component_kinds(&first_entity) {
-            world.mirror_components(
-                &first_entity,
-                &second_entity,
-                &component_kind,
-            );
-        }
-    }
+    ///// Syncs the state of two entities
+    // pub fn mirror_entities<W: WorldMutType<P, E>>(&self, mut world: W, first_entity: &E, second_entity: &E) {
+    //     for component_kind in world.component_kinds(&first_entity) {
+    //         world.mirror_components(
+    //             &first_entity,
+    //             &second_entity,
+    //             &component_kind,
+    //         );
+    //     }
+    // }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// given Entity.
@@ -245,19 +244,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
         return EntityRef::new(world, &entity);
     }
 
-    /// Retrieves an EntityMut that exposes read and write operations for the
-    /// Entity.
-    /// Panics if the Entity does not exist.
-    pub fn entity_mut<W: WorldMutType<P, E>>(
-        &mut self,
-        world: W,
-        entity: &E,
-    ) -> EntityMut<P, E, W> {
-        if world.has_entity(entity) {
-            return EntityMut::new(world, &entity);
-        }
-        panic!("No Entity exists for given Key!");
-    }
+    // /// Retrieves an EntityMut that exposes read and write operations for the
+    // /// Entity.
+    // /// Panics if the Entity does not exist.
+    // pub fn entity_mut<W: WorldMutType<P, E>>(
+    //     &mut self,
+    //     world: W,
+    //     entity: &E,
+    // ) -> EntityMut<P, E, W> {
+    //     if world.has_entity(entity) {
+    //         return EntityMut::new(world, &entity);
+    //     }
+    //     panic!("No Entity exists for given Key!");
+    // }
 
     /// Return a list of all Entities
     pub fn entities<W: WorldRefType<P, E>>(&self, world: &W) -> Vec<E> {

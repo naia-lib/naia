@@ -83,7 +83,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #has_entity_properties
             #entities
         }
-        impl Replicate<#protocol_name> for #replica_name {
+        impl Clone for #replica_name {
             #clone_method
         }
     };
