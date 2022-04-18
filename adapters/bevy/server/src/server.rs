@@ -1,36 +1,38 @@
 use std::{collections::VecDeque, marker::PhantomData};
 
-use bevy::ecs::{
+use bevy_ecs::{
     entity::Entity,
     system::SystemParam,
     world::{Mut, World},
 };
 
 use naia_server::{
-    EntityRef, Event, NaiaServerError, ProtocolType, Replicate, RoomKey, RoomMut, RoomRef,
-    Server as NaiaServer, ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
+    shared::{ChannelIndex, EntityHandleConverter, Protocolize, ReplicateSafe},
+    EntityRef, Event, NaiaServerError, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
+    ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
+use crate::shared::EntityHandle;
 use naia_bevy_shared::{WorldProxy, WorldRef};
 
 use super::{commands::Command, entity_mut::EntityMut, state::State};
 
 // Server
 
-pub struct Server<'world, 'state, P: ProtocolType> {
-    state: &'state mut State<P>,
+pub struct Server<'world, 'state, P: Protocolize, C: ChannelIndex> {
+    state: &'state mut State<P, C>,
     world: &'world World,
-    server: Mut<'world, NaiaServer<P, Entity>>,
+    server: Mut<'world, NaiaServer<P, Entity, C>>,
     phantom_p: PhantomData<P>,
 }
 
-impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
+impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, C> {
     // Public Methods //
 
-    pub fn new(state: &'state mut State<P>, world: &'world World) -> Self {
+    pub fn new(state: &'state mut State<P, C>, world: &'world World) -> Self {
         unsafe {
             let server = world
-                .get_resource_unchecked_mut::<NaiaServer<P, Entity>>()
+                .get_resource_unchecked_mut::<NaiaServer<P, Entity, C>>()
                 .expect("Naia Server has not been correctly initialized!");
 
             Self {
@@ -42,13 +44,13 @@ impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
         }
     }
 
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P, Entity>, NaiaServerError>> {
+    pub fn receive(&mut self) -> VecDeque<Result<Event<P, C>, NaiaServerError>> {
         return self.server.receive();
     }
 
     //// Connections ////
 
-    pub fn listen(&mut self, server_addrs: ServerAddrs) {
+    pub fn listen(&mut self, server_addrs: &ServerAddrs) {
         self.server.listen(server_addrs);
     }
 
@@ -61,15 +63,13 @@ impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
     }
 
     //// Messages ////
-    pub fn send_message<R: Replicate<P>>(
+    pub fn send_message<R: ReplicateSafe<P>>(
         &mut self,
         user_key: &UserKey,
-        message_ref: &R,
-        guaranteed_delivery: bool,
+        channel: C,
+        message: &R,
     ) {
-        return self
-            .server
-            .send_message(user_key, message_ref, guaranteed_delivery);
+        return self.server.send_message(user_key, channel, message);
     }
 
     //// Updates ////
@@ -84,7 +84,7 @@ impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
 
     //// Entities ////
 
-    pub fn spawn<'a>(&'a mut self) -> EntityMut<'a, 'world, 'state, P> {
+    pub fn spawn<'a>(&'a mut self) -> EntityMut<'a, 'world, 'state, P, C> {
         let entity = self.world.entities().reserve_entity();
         self.server.spawn_entity_at(&entity);
         EntityMut::new(entity, self)
@@ -94,7 +94,7 @@ impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
         return self.server.entity(self.world.proxy(), entity);
     }
 
-    pub fn entity_mut<'a>(&'a mut self, entity: &Entity) -> EntityMut<'a, 'world, 'state, P> {
+    pub fn entity_mut<'a>(&'a mut self, entity: &Entity) -> EntityMut<'a, 'world, 'state, P, C> {
         EntityMut::new(*entity, self)
     }
 
@@ -108,11 +108,11 @@ impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
         return self.server.user_exists(user_key);
     }
 
-    pub fn user(&self, user_key: &UserKey) -> UserRef<P, Entity> {
+    pub fn user(&self, user_key: &UserKey) -> UserRef<P, Entity, C> {
         return self.server.user(user_key);
     }
 
-    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, Entity> {
+    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, Entity, C> {
         return self.server.user_mut(user_key);
     }
 
@@ -124,17 +124,13 @@ impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
         return self.server.users_count();
     }
 
-    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, Entity> {
+    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, Entity, C> {
         return self.server.user_scope(user_key);
-    }
-
-    pub fn user_scope_has_entity(&self, user_key: &UserKey, entity: &Entity) -> bool {
-        return self.server.user_scope_has_entity(user_key, entity);
     }
 
     //// Rooms ////
 
-    pub fn make_room(&mut self) -> RoomMut<P, Entity> {
+    pub fn make_room(&mut self) -> RoomMut<P, Entity, C> {
         return self.server.make_room();
     }
 
@@ -142,11 +138,11 @@ impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
         return self.server.room_exists(room_key);
     }
 
-    pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, Entity> {
+    pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, Entity, C> {
         return self.server.room(room_key);
     }
 
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, Entity> {
+    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, Entity, C> {
         return self.server.room_mut(room_key);
     }
 
@@ -170,14 +166,8 @@ impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
 
     // Crate-public methods
 
-    pub(crate) fn add<C: Command<P>>(&mut self, command: C) {
+    pub(crate) fn queue_command<COMMAND: Command<P, C>>(&mut self, command: COMMAND) {
         self.state.push(command);
-    }
-
-    // users
-
-    pub(crate) fn entity_disown(&mut self, entity: &Entity) {
-        self.server.worldless_entity_mut(entity).disown();
     }
 
     // rooms
@@ -189,10 +179,20 @@ impl<'world, 'state, P: ProtocolType> Server<'world, 'state, P> {
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &Entity) {
         self.server.room_mut(room_key).remove_entity(entity);
     }
-
-    // Private methods
 }
 
-impl<'world, 'state, P: ProtocolType> SystemParam for Server<'world, 'state, P> {
-    type Fetch = State<P>;
+impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParam for Server<'world, 'state, P, C> {
+    type Fetch = State<P, C>;
+}
+
+impl<'world, 'state, P: Protocolize, C: ChannelIndex> EntityHandleConverter<Entity>
+    for Server<'world, 'state, P, C>
+{
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
+        return self.server.handle_to_entity(entity_handle);
+    }
+
+    fn entity_to_handle(&self, entity: &Entity) -> EntityHandle {
+        return self.server.entity_to_handle(entity);
+    }
 }

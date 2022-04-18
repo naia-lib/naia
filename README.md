@@ -14,8 +14,6 @@ A cross-platform (including Wasm!) networking engine that intends to make multip
 
 naia helps you to easily define a common, shared Protocol that allows Server & Client to exchange information. Then, naia facilitates sending/receiving parts of that Protocol as reliable/unreliable Messages between Server & Client, and also keeps a pool of tracked Entities synced with each Client for whom they are "in-scope". Entities are "scoped" to Clients with whom they share the same Room, as well as being sufficiently customizable to, for example, only keep Entities persisted & synced while within a Client's viewport or according to some other criteria.
 
-It is built on top of [naia-socket](https://github.com/naia-rs/naia-socket), which provides a cross-platform unreliable & unordered transport layer.
-
 The API is heavily inspired by the [Nengi.js](https://github.com/timetocode/nengi) & [Colyseus](https://github.com/colyseus/colyseus) Javascript multiplayer networking libraries. The internals follow the [Tribes 2 Networking model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf) fairly closely.
 
 Thank very much to Kyren for support & [webrtc-unreliable](https://github.com/kyren/webrtc-unreliable), and to the [Laminar](https://github.com/amethyst/laminar) authors, for the cannibalized code within.
@@ -50,8 +48,6 @@ To run the UDP client demo on Linux: (that will be able to communicate with a UD
 To run the WebRTC client demo on Web: (that will be able to communicate with a WebRTC server)
 
     1. cargo install cargo-web  // should only need to do this once if you haven't already
-    2. Enter in your IP Address at the appropriate spot in /demos/basic/shared/src/lib.rs
-    3. cd /naia/demos/basic/client/wasm_bindgen
-    4. npm install              // should only need to do this once to install dependencies
-    5. npm run start            // this will open a web browser, and hot reload
-    6. Web page will be blank - check debug console to see communications from the server
+    2. cd /naia/demos/basic/client/wasm_bindgen
+    3. make serve
+    4. Web page will be blank - check debug console to see communications from the server

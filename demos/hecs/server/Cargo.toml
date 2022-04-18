@@ -2,10 +2,10 @@
 name = "naia-hecs-server-demo"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-workspace = "../../../"
-publish = false
+workspace = "../../.."
 edition = "2021"
 license = "MIT OR Apache-2.0"
+publish = false
 
 [features]
 use-udp = [ "naia-hecs-server/use-udp" ]
@@ -14,7 +14,7 @@ use-webrtc = [ "naia-hecs-server/use-webrtc" ]
 [dependencies]
 naia-hecs-server = { path = "../../../adapters/hecs/server" }
 naia-hecs-demo-shared = { path = "../shared" }
-log = "0.4"
-simple_logger = { version = "2.0.0" }
-smol = { version = "1.2.4" }
-hecs = { version = "0.5.2" }
+log = { version = "0.4" }
+simple_logger = { version = "2" }
+smol = { version = "1.2" }
+hecs = { version = "0.5" }

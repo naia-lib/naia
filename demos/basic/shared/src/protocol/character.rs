@@ -1,10 +1,7 @@
-use nanoserde::{DeBin, SerBin};
-
-use naia_derive::Replicate;
-use naia_shared::Property;
+use naia_shared::{derive_serde, serde, Property, Replicate};
 
 // Here's an example of a Custom Property
-#[derive(Default, PartialEq, Clone, DeBin, SerBin)]
+#[derive_serde]
 pub struct FullName {
     pub first: String,
     pub last: String,
@@ -31,16 +28,12 @@ impl Character {
     }
 
     pub fn step(&mut self) {
-        let mut x = *self.x.get();
-        x += 1;
-        if x > 20 {
-            x = 0;
+        *self.x += 1;
+        if *self.x > 20 {
+            *self.x = 0;
         }
-        if x % 3 == 0 {
-            let mut y = *self.y.get();
-            y = y.wrapping_add(1);
-            self.y.set(y);
+        if *self.x % 3 == 0 {
+            *self.y = self.y.wrapping_add(1);
         }
-        self.x.set(x);
     }
 }

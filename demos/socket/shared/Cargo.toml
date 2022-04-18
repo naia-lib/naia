@@ -1,0 +1,15 @@
+[package]
+name = "naia-socket-demo-shared"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../../.."
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[features]
+wbindgen = [ "naia-socket-shared/wbindgen" ]
+mquad = [ "naia-socket-shared/mquad" ]
+
+[dependencies]
+naia-socket-shared = { path = "../../../socket/shared" }

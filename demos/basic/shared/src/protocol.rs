@@ -1,4 +1,4 @@
-use naia_derive::ProtocolType;
+use naia_shared::Protocolize;
 
 mod auth;
 mod character;
@@ -8,7 +8,7 @@ pub use auth::Auth;
 pub use character::Character;
 pub use string_message::StringMessage;
 
-#[derive(ProtocolType)]
+#[derive(Protocolize)]
 pub enum Protocol {
     Character(Character),
     StringMessage(StringMessage),

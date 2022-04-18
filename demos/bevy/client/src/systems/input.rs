@@ -1,10 +1,22 @@
-use bevy::prelude::*;
+use bevy::{
+    ecs::system::{Res, ResMut},
+    input::{keyboard::KeyCode, Input},
+};
 
-use naia_bevy_demo_shared::protocol::KeyCommand;
+use naia_bevy_client::Client;
+
+use naia_bevy_demo_shared::{
+    protocol::{KeyCommand, Protocol},
+    Channels,
+};
 
 use crate::resources::Global;
 
-pub fn input(keyboard_input: Res<Input<KeyCode>>, mut global: ResMut<Global>) {
+pub fn input(
+    mut global: ResMut<Global>,
+    client: Client<Protocol, Channels>,
+    keyboard_input: Res<Input<KeyCode>>,
+) {
     let w = keyboard_input.pressed(KeyCode::W);
     let s = keyboard_input.pressed(KeyCode::S);
     let a = keyboard_input.pressed(KeyCode::A);
@@ -12,18 +24,22 @@ pub fn input(keyboard_input: Res<Input<KeyCode>>, mut global: ResMut<Global>) {
 
     if let Some(command) = &mut global.queued_command {
         if w {
-            command.w.set(true);
+            *command.w = true;
         }
         if s {
-            command.s.set(true);
+            *command.s = true;
         }
         if a {
-            command.a.set(true);
+            *command.a = true;
         }
         if d {
-            command.d.set(true);
+            *command.d = true;
         }
     } else {
-        global.queued_command = Some(KeyCommand::new(w, s, a, d));
+        if let Some(owned_entity) = &global.owned_entity {
+            let mut key_command = KeyCommand::new(w, s, a, d);
+            key_command.entity.set(&client, &owned_entity.confirmed);
+            global.queued_command = Some(key_command);
+        }
     }
 }

@@ -1,10 +1,13 @@
 use std::collections::HashSet;
 
-use hecs::{Entity, World};
+use hecs::Entity;
 
-use naia_hecs_server::{RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldData};
+use naia_hecs_server::{
+    shared::DefaultChannels, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
+    WorldWrapper as World,
+};
 
-use naia_hecs_demo_shared::{get_shared_config, protocol::Protocol};
+use naia_hecs_demo_shared::{protocol::Protocol, shared_config};
 
 use super::systems::{
     events::process_events,
@@ -12,12 +15,12 @@ use super::systems::{
     tick::{check_scopes, march_and_mark, send_updates},
 };
 
-pub type Server = NaiaServer<Protocol, Entity>;
+pub type Server = NaiaServer<Protocol, Entity, DefaultChannels>;
 
 pub struct App {
+    pub has_user: bool,
     pub server: Server,
-    pub world: World,
-    pub world_data: WorldData<Protocol>,
+    pub world: World<Protocol>,
     pub main_room_key: RoomKey,
     pub tick_count: u32,
     pub has_marker: HashSet<Entity>,
@@ -30,7 +33,7 @@ impl App {
         let server_addresses = ServerAddrs::new(
             "127.0.0.1:14191"
                 .parse()
-                .expect("could not parse session address/port"),
+                .expect("could not parse Signaling address/port"),
             // IP Address to listen on for UDP WebRTC data channels
             "127.0.0.1:14192"
                 .parse()
@@ -39,11 +42,7 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        app_init(
-            ServerConfig::default(),
-            get_shared_config(),
-            server_addresses,
-        )
+        app_init(ServerConfig::default(), shared_config(), server_addresses)
     }
 
     pub fn update(&mut self) {

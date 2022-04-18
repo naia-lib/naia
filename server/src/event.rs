@@ -1,10 +1,10 @@
-use naia_shared::ProtocolType;
+use naia_shared::{ChannelIndex, Protocolize};
 
-use super::user::{user_key::UserKey, User};
+use super::user::{User, UserKey};
 
 /// An Event that is emitted as a result of some communication with a Client, or
 /// a Tick event
-pub enum Event<P: ProtocolType, E> {
+pub enum Event<P: Protocolize, C: ChannelIndex> {
     /// Occurs when a Client attempts to establish a connection with the Server.
     /// Used accept or reject incoming Clients
     Authorization(UserKey, P),
@@ -19,8 +19,5 @@ pub enum Event<P: ProtocolType, E> {
     /// Server on initialization
     Tick,
     /// A Message emitted to the Server from a Client
-    Message(UserKey, P),
-    /// A Command emitted to the Server from a Client, related to some
-    /// user-assigned Entity
-    Command(UserKey, E, P),
+    Message(UserKey, C, P),
 }

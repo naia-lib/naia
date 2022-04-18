@@ -1,21 +1,22 @@
-use bevy::{
-    app::Events,
-    ecs::{
-        entity::Entity,
-        schedule::ShouldRun,
-        system::{Res, ResMut},
-        world::{Mut, World},
-    },
+use bevy_ecs::{
+    entity::Entity,
+    event::Events,
+    schedule::ShouldRun,
+    system::{Res, ResMut},
+    world::{Mut, World},
 };
-use naia_server::{Event, ProtocolType, Server};
+use naia_server::{
+    shared::{ChannelIndex, Protocolize},
+    Event, Server,
+};
 
 use super::{
-    events::{AuthorizationEvent, CommandEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
+    events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
     resource::ServerResource,
 };
 
-pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
-    world.resource_scope(|world, mut server: Mut<Server<P, Entity>>| {
+pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World) {
+    world.resource_scope(|world, mut server: Mut<Server<P, Entity, C>>| {
         world.resource_scope(|world, mut server_resource: Mut<ServerResource>| {
             let event_results = server.receive();
 
@@ -30,10 +31,7 @@ pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
                     .get_resource_unchecked_mut::<Events<DisconnectionEvent>>()
                     .unwrap();
                 let mut message_event_writer = world
-                    .get_resource_unchecked_mut::<Events<MessageEvent<P>>>()
-                    .unwrap();
-                let mut command_event_writer = world
-                    .get_resource_unchecked_mut::<Events<CommandEvent<P>>>()
+                    .get_resource_unchecked_mut::<Events<MessageEvent<P, C>>>()
                     .unwrap();
 
                 for event_result in event_results {
@@ -51,11 +49,8 @@ pub fn before_receive_events<P: ProtocolType>(world: &mut World) {
                         Ok(Event::Disconnection(user_key, user)) => {
                             disconnect_event_writer.send(DisconnectionEvent(user_key, user));
                         }
-                        Ok(Event::Message(user_key, message)) => {
-                            message_event_writer.send(MessageEvent(user_key, message));
-                        }
-                        Ok(Event::Command(user_key, entity, command)) => {
-                            command_event_writer.send(CommandEvent(user_key, entity, command));
+                        Ok(Event::Message(user_key, channel, message)) => {
+                            message_event_writer.send(MessageEvent(user_key, channel, message));
                         }
                         Err(_) => {}
                     }
@@ -77,7 +72,9 @@ pub fn finish_tick(mut resource: ResMut<ServerResource>) {
     resource.ticker.reset();
 }
 
-pub fn should_receive<P: ProtocolType>(server: Res<Server<P, Entity>>) -> ShouldRun {
+pub fn should_receive<P: Protocolize, C: ChannelIndex>(
+    server: Res<Server<P, Entity, C>>,
+) -> ShouldRun {
     if server.is_listening() {
         ShouldRun::Yes
     } else {

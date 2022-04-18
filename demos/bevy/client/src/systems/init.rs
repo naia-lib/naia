@@ -1,10 +1,15 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::Commands, log::info, render::camera::OrthographicCameraBundle};
+
 use naia_bevy_client::Client;
-use naia_bevy_demo_shared::protocol::{Auth, Protocol};
+
+use naia_bevy_demo_shared::{
+    protocol::{Auth, Protocol},
+    Channels,
+};
 
 use crate::resources::Global;
 
-pub fn init(mut commands: Commands, mut client: Client<Protocol>) {
+pub fn init(mut commands: Commands, mut client: Client<Protocol, Channels>) {
     info!("Naia Bevy Client Demo started");
 
     client.auth(Auth::new("charlie", "12345"));
@@ -14,7 +19,5 @@ pub fn init(mut commands: Commands, mut client: Client<Protocol>) {
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
 
     // Setup Colors
-    commands.insert_resource(Global {
-        queued_command: None,
-    });
+    commands.insert_resource(Global::new());
 }

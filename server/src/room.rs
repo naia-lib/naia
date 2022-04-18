@@ -3,15 +3,25 @@ use std::{
     hash::Hash,
 };
 
-use super::user::user_key::UserKey;
+use naia_shared::{BigMapKey, ChannelIndex};
 
-#[allow(missing_docs)]
-#[allow(unused_doc_comments)]
-pub mod room_key {
-    // The Key used to get a reference of a Room
-    new_key_type! { pub struct RoomKey; }
+use super::user::UserKey;
+
+// RoomKey
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+pub struct RoomKey(u64);
+
+impl BigMapKey for RoomKey {
+    fn to_u64(&self) -> u64 {
+        self.0
+    }
+
+    fn from_u64(value: u64) -> Self {
+        RoomKey(value)
+    }
 }
 
+// Room
 pub struct Room<E: Copy + Eq + Hash> {
     users: HashSet<UserKey>,
     entities: HashSet<E>,
@@ -84,21 +94,19 @@ impl<E: Copy + Eq + Hash> Room<E> {
 
 // room references
 
-use naia_shared::ProtocolType;
+use naia_shared::Protocolize;
 
 use super::server::Server;
 
-use room_key::RoomKey;
-
 // RoomRef
 
-pub struct RoomRef<'s, P: ProtocolType, E: Copy + Eq + Hash> {
-    server: &'s Server<P, E>,
+pub struct RoomRef<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
+    server: &'s Server<P, E, C>,
     key: RoomKey,
 }
 
-impl<'s, P: ProtocolType, E: Copy + Eq + Hash> RoomRef<'s, P, E> {
-    pub fn new(server: &'s Server<P, E>, key: &RoomKey) -> Self {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> RoomRef<'s, P, E, C> {
+    pub fn new(server: &'s Server<P, E, C>, key: &RoomKey) -> Self {
         RoomRef { server, key: *key }
     }
 
@@ -128,13 +136,13 @@ impl<'s, P: ProtocolType, E: Copy + Eq + Hash> RoomRef<'s, P, E> {
 }
 
 // RoomMut
-pub struct RoomMut<'s, P: ProtocolType, E: Copy + Eq + Hash> {
-    server: &'s mut Server<P, E>,
+pub struct RoomMut<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
+    server: &'s mut Server<P, E, C>,
     key: RoomKey,
 }
 
-impl<'s, P: ProtocolType, E: Copy + Eq + Hash> RoomMut<'s, P, E> {
-    pub fn new(server: &'s mut Server<P, E>, key: &RoomKey) -> Self {
+impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> RoomMut<'s, P, E, C> {
+    pub fn new(server: &'s mut Server<P, E, C>, key: &RoomKey) -> Self {
         RoomMut { server, key: *key }
     }
 

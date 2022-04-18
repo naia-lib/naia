@@ -16,8 +16,6 @@
 * [x] RTT estimations
 * [x] Client Tick events
 * [x] Synced Tick between Server/Client
-* [x] Support Client prediction of Entities
-* [x] Send consecutive copies of Messages (see Tribes 2 Networking Model's "MoveManager")
 
 ## Planned
 This list is not sorted by order of priority
@@ -37,7 +35,7 @@ This list is not sorted by order of priority
 * [ ] Bitwise (as opposed to current "Bytewise") reading/writing of messages, to save bandwidth
 * [ ] File-like API for streaming assets / caching on client
 
-## Planned for [naia-socket](https://github.com/naia-rs/naia-socket)
+## Planned for [naia-socket]
 
 These planned changes for naia-socket will bring new features to naia as well.
 

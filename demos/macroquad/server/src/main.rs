@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate log;
+extern crate naia_macroquad_demo_shared;
 
 use log::LevelFilter;
 use simple_logger::SimpleLogger;

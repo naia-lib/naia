@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8"/>
+        <title>Naia Socket Demo Client</title>
+    </head>
+    <body>
+        <script src="./target/wasm.js"></script>
+        <script>
+            async function run() {
+              await wasm_bindgen('./target/wasm_bg.wasm');
+            }
+            run();
+        </script>
+    </body>
+</html>

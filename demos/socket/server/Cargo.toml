@@ -1,0 +1,18 @@
+[package]
+name = "naia-server-socket-demo"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../../.."
+license = "MIT OR Apache-2.0"
+edition = "2021"
+publish = false
+
+[features]
+use-udp = [ "naia-server-socket/use-udp" ]
+use-webrtc = [ "naia-server-socket/use-webrtc" ]
+
+[dependencies]
+naia-server-socket = { path = "../../../socket/server" }
+naia-socket-demo-shared = { path = "../shared" }
+log = { version = "0.4" }
+simple_logger = { version = "2" }

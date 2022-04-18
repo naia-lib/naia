@@ -1,18 +1,25 @@
 use std::time::Duration;
 
-use naia_shared::{LinkConditionerConfig, SharedConfig};
+use naia_shared::{LinkConditionerConfig, SharedConfig, SocketConfig};
 
-use super::protocol::Protocol;
+use super::channels::{Channels, CHANNEL_CONFIG};
 
-pub fn get_shared_config() -> SharedConfig<Protocol> {
-    let tick_interval = Some(Duration::from_millis(50));
+pub fn shared_config() -> SharedConfig<Channels> {
+    // Set tick rate to ~60 FPS
+    let tick_interval = Some(Duration::from_millis(20));
 
     //let link_condition = None;
-    //let link_condition = Some(LinkConditionerConfig::average_condition());
-    let link_condition = Some(LinkConditionerConfig {
-        incoming_latency: 500,
-        incoming_jitter: 0,
-        incoming_loss: 0.0,
-    });
-    return SharedConfig::new(Protocol::load(), tick_interval, link_condition);
+    let link_condition = Some(LinkConditionerConfig::average_condition());
+    // let link_condition = Some(LinkConditionerConfig {
+    //     incoming_latency: 150,
+    //     incoming_jitter: 50,
+    //     incoming_loss: 0.1,
+    // });
+
+    return SharedConfig::new(
+        SocketConfig::new(link_condition, None),
+        CHANNEL_CONFIG,
+        tick_interval,
+        None,
+    );
 }

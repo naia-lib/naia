@@ -2,15 +2,14 @@
 name = "naia-tickless-demo-shared"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-publish = false
+workspace = "../../.."
 edition = "2021"
 license = "MIT OR Apache-2.0"
+publish = false
 
 [features]
 
 [dependencies]
 naia-shared = { path = "../../../shared" }
-naia-derive = { path = "../../../derive" }
-cfg-if = "0.1.10"
-log = "0.4"
-nanoserde = "0.1.17"
+cfg-if = { version = "1.0" }
+log = { version = "0.4" }

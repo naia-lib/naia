@@ -1,29 +1,33 @@
 [package]
 name = "naia-shared"
-version = "0.8.0"
+version = "0.10.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = ".."
 description = "Common functionality shared between naia-server & naia-client crates"
 documentation = "https://docs.rs/naia-shared"
 homepage = "https://github.com/naia-rs/naia"
 repository = "https://github.com/naia-rs/naia"
 readme = "../README.md"
 keywords = ["webrtc", "udp", "wasm", "networking", "gamedev"]
-license = "MIT OR Apache-2.0"
 categories = ["network-programming", "game-development", "wasm", "web-programming"]
+license = "MIT OR Apache-2.0"
 edition = "2021"
 
 [badges]
 maintenance = { status = "actively-developed" }
 
 [features]
-wbindgen = [ "naia-socket-shared/wbindgen" ]
+wbindgen = [ "naia-socket-shared/wbindgen", "js-sys" ]
 mquad = [ "naia-socket-shared/mquad" ]
-bevy_support = [ "bevy" ]
+bevy_support = [ "bevy_ecs" ]
+zstd_support = [ "zstd" ]
 
 [dependencies]
-naia-socket-shared = { version = "0.8" }
-byteorder = "1.3"
-log = "0.4"
-nanoserde = "0.1.29"
-cfg-if = "0.1.10"
-bevy = { version = "0.6", default_features = false, optional = true }
+naia-socket-shared = { version = "0.10", path = "../socket/shared" }
+naia-derive = { version = "0.10", path = "derive" }
+naia-serde = { version = "0.10", path = "serde" }
+log = { version = "0.4" }
+cfg-if = { version = "1.0" }
+js-sys = { version = "0.3", optional = true }
+bevy_ecs = { version = "0.7", default_features = false, optional = true }
+zstd = { version = "0.11.1", optional = true }

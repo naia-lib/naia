@@ -2,10 +2,10 @@
 name = "naia-bevy-server-demo"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-workspace = "../../../"
-publish = false
+workspace = "../../.."
 edition = "2021"
 license = "MIT OR Apache-2.0"
+publish = false
 
 [features]
 use-udp = [ "naia-bevy-server/use-udp" ]
@@ -14,4 +14,7 @@ use-webrtc = [ "naia-bevy-server/use-webrtc" ]
 [dependencies]
 naia-bevy-demo-shared = { path = "../shared" }
 naia-bevy-server = { path = "../../../adapters/bevy/server" }
-bevy = { version = "0.6", default-features=false }
+bevy_app = { version = "0.7", default-features=false }
+bevy_core = { version = "0.7", default-features=false }
+bevy_ecs = { version = "0.7", default-features=false }
+bevy_log = { version = "0.7", default-features=false }

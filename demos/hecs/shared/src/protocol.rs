@@ -1,4 +1,4 @@
-use naia_derive::ProtocolType;
+use naia_shared::Protocolize;
 
 mod auth;
 mod marker;
@@ -10,7 +10,7 @@ pub use marker::Marker;
 pub use name::Name;
 pub use position::Position;
 
-#[derive(ProtocolType)]
+#[derive(Protocolize)]
 pub enum Protocol {
     Auth(Auth),
     Name(Name),

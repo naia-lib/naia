@@ -1,20 +1,12 @@
 use bevy_ecs::prelude::Component;
-use nanoserde::{DeBin, SerBin};
 
-use naia_derive::Replicate;
-use naia_shared::Property;
+use naia_shared::{derive_serde, serde, Property, Replicate};
 
-#[derive(Clone, PartialEq, DeBin, SerBin)]
+#[derive_serde]
 pub enum ColorValue {
     Red,
     Blue,
     Yellow,
-}
-
-impl Default for ColorValue {
-    fn default() -> Self {
-        ColorValue::Red
-    }
 }
 
 #[derive(Component, Replicate)]

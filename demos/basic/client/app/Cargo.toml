@@ -2,9 +2,10 @@
 name = "naia-basic-client-demo-app"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-publish = false
+workspace = "../../../.."
 edition = "2021"
 license = "MIT OR Apache-2.0"
+publish = false
 
 [features]
 mquad = [ "naia-client/mquad", "naia-basic-demo-shared/mquad", "miniquad" ]
@@ -14,6 +15,6 @@ wbindgen = [ "naia-client/wbindgen", "naia-basic-demo-shared/wbindgen" ]
 naia-client = { path = "../../../../client" }
 naia-demo-world = { path = "../../../demo_utils/demo_world" }
 naia-basic-demo-shared = { path = "../../shared" }
-cfg-if = "0.1.10"
-log = "0.4"
-miniquad = { version = "=0.3.0-alpha.28", features = ["log-impl"], optional = true }
+cfg-if = { version = "1.0" }
+log = { version = "0.4" }
+miniquad = { version = "0.3.0-alpha.28", features = ["log-impl"], optional = true }

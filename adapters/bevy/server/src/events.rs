@@ -1,9 +1,9 @@
-use bevy::ecs::entity::Entity;
+use naia_server::{
+    shared::{ChannelIndex, Protocolize},
+    User, UserKey,
+};
 
-use naia_server::{ProtocolType, User, UserKey};
-
-pub struct AuthorizationEvent<P: ProtocolType>(pub UserKey, pub P);
+pub struct AuthorizationEvent<P: Protocolize>(pub UserKey, pub P);
 pub struct ConnectionEvent(pub UserKey);
 pub struct DisconnectionEvent(pub UserKey, pub User);
-pub struct MessageEvent<P: ProtocolType>(pub UserKey, pub P);
-pub struct CommandEvent<P: ProtocolType>(pub UserKey, pub Entity, pub P);
+pub struct MessageEvent<P: Protocolize, C: ChannelIndex>(pub UserKey, pub C, pub P);

@@ -1,8 +1,10 @@
 extern crate log;
-extern crate naia_derive;
 
 pub mod behavior;
 pub mod protocol;
 
+mod channels;
+pub use channels::Channels;
+
 mod shared;
-pub use shared::get_shared_config;
+pub use shared::shared_config;
