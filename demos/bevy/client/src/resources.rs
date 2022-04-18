@@ -1,4 +1,4 @@
-use bevy::prelude::Entity;
+use bevy::ecs::entity::Entity;
 
 use naia_bevy_client::CommandHistory;
 

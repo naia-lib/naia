@@ -1,4 +1,4 @@
-use bevy::ecs::{
+use bevy_ecs::{
     entity::Entity,
     world::{Mut, World},
 };

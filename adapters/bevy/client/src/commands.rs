@@ -1,12 +1,9 @@
 use std::marker::PhantomData;
 
-use bevy::{
-    ecs::{
-        entity::Entity,
-        system::{Command, EntityCommands},
-        world::World,
-    },
-    prelude::Commands,
+use bevy_ecs::{
+    entity::Entity,
+    system::{Command, EntityCommands, Commands},
+    world::World,
 };
 
 use naia_bevy_shared::WorldProxyMut;

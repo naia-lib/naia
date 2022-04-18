@@ -19,7 +19,7 @@ maintenance = { status = "actively-developed" }
 [features]
 wbindgen = [ "naia-socket-shared/wbindgen", "js-sys" ]
 mquad = [ "naia-socket-shared/mquad" ]
-bevy_support = [ "bevy" ]
+bevy_support = [ "bevy_ecs" ]
 zstd_support = [ "zstd" ]
 
 [dependencies]
@@ -29,5 +29,5 @@ naia-serde = { version = "0.10", path = "serde" }
 log = { version = "0.4" }
 cfg-if = { version = "1.0" }
 js-sys = { version = "0.3", optional = true }
-bevy = { version = "0.7", default_features = false, optional = true }
+bevy_ecs = { version = "0.7", default_features = false, optional = true }
 zstd = { version = "0.11.1", optional = true }

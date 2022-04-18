@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use bevy::prelude::Mut as BevyMut;
+use bevy_ecs::world::Mut as BevyMut;
 
 use naia_shared::{
     Protocolize, ReplicaDynMutTrait, ReplicaDynRefTrait, ReplicaMutTrait, ReplicaRefTrait,

@@ -1,14 +1,12 @@
-use bevy::{
-    ecs::{
+use bevy::ecs::{
         event::EventReader,
         system::{Commands, Query, ResMut},
-    },
-    log::info,
-    math::Vec2,
-    render::color::Color as BevyColor,
-    sprite::{Sprite, SpriteBundle},
-    transform::components::Transform,
-};
+    };
+use bevy::log::info;
+use bevy::math::Vec2;
+use bevy::render::color::Color as BevyColor;
+use bevy::sprite::{Sprite, SpriteBundle};
+use bevy::transform::components::Transform;
 
 use naia_bevy_client::{
     events::{InsertComponentEvent, MessageEvent, SpawnEntityEvent, UpdateComponentEvent},

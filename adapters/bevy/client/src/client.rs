@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, net::SocketAddr};
 
-use bevy::ecs::{
+use bevy_ecs::{
     entity::Entity,
     system::SystemParam,
     world::{Mut, World},

@@ -1,4 +1,4 @@
-use bevy::ecs::entity::Entity;
+use bevy_ecs::entity::Entity;
 
 use naia_client::shared::{ChannelIndex, ProtocolKindType, Protocolize, Tick};
 
