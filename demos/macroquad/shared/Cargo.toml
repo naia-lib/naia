@@ -11,5 +11,5 @@ publish = false
 
 [dependencies]
 naia-shared = { path = "../../../shared", features = ["mquad"] }
-cfg-if = "=1.0.0"
-log = "0.4"
+cfg-if = { version = "1.0" }
+log = { version = "0.4" }

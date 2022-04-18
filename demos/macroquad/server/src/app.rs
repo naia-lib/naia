@@ -1,8 +1,7 @@
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 use naia_server::{
-    shared::{Random, Timer},
-    Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
+    shared::Random, Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
 };
 
 use naia_demo_world::{Entity, World as DemoWorld};
@@ -22,8 +21,6 @@ pub struct App {
     main_room_key: RoomKey,
     user_squares: HashMap<UserKey, Entity>,
     square_last_command: HashMap<Entity, KeyCommand>,
-    bandwidth_timer: Timer,
-    other_main_entity: Entity,
 }
 
 impl App {
@@ -42,46 +39,23 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        let mut server_config = ServerConfig::default();
-
-        server_config.connection.bandwidth_measure_duration = Some(Duration::from_secs(4));
-
-        let mut server = Server::new(&server_config, &shared_config());
+        let mut server = Server::new(&ServerConfig::default(), &shared_config());
         server.listen(&server_addresses);
-
-        let mut world = World::new();
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
         let main_room_key = server.make_room().key();
 
-        // Create a new main entity that we can use for testing
-        let other_main_entity = server
-            .spawn_entity(world.proxy_mut())
-            .enter_room(&main_room_key)
-            .id();
-
         App {
             server,
-            world,
+            world: World::new(),
             main_room_key,
             user_squares: HashMap::new(),
             square_last_command: HashMap::new(),
-            bandwidth_timer: Timer::new(Duration::from_secs(4)),
-            other_main_entity,
         }
     }
 
     pub fn update(&mut self) {
-        if self.bandwidth_timer.ringing() {
-            self.bandwidth_timer.reset();
-
-            info!(
-                "Bandwidth: {} kbps outgoing",
-                self.server.outgoing_bandwidth_total()
-            );
-        }
-
         for event in self.server.receive() {
             match event {
                 Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {
@@ -138,11 +112,9 @@ impl App {
                     // Send an Entity Assignment message to the User that owns the Square
                     let mut assignment_message = EntityAssignment::new(true);
                     assignment_message.entity.set(&self.server, &entity_id);
-                    //eventually would like to do this like:
-                    //self.server.entity_property(assigment_message).set(&entity_id);
-                    assignment_message
-                        .other_entity
-                        .set(&self.server, &self.other_main_entity);
+
+                    // TODO: eventually would like to do this like:
+                    // self.server.entity_property(assigment_message).set(&entity_id);
 
                     self.server.send_message(
                         &user_key,

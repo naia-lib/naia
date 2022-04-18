@@ -1,18 +1,22 @@
-use bevy::{ecs::system::ResMut, log::info, prelude::*};
+use bevy_ecs::{event::EventReader, system::ResMut};
+use bevy_log::info;
 
 use naia_bevy_server::{
-    events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent},
-    shared::{DefaultChannels, Random},
+    events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
+    shared::Random,
     Server,
 };
 
-use naia_bevy_demo_shared::protocol::{Color, ColorValue, Position, Protocol};
+use naia_bevy_demo_shared::{
+    protocol::{Color, ColorValue, EntityAssignment, Position, Protocol},
+    Channels,
+};
 
 use crate::resources::Global;
 
 pub fn authorization_event(
     mut event_reader: EventReader<AuthorizationEvent<Protocol>>,
-    mut server: Server<Protocol, DefaultChannels>,
+    mut server: Server<Protocol, Channels>,
 ) {
     for event in event_reader.iter() {
         if let AuthorizationEvent(user_key, Protocol::Auth(auth)) = event {
@@ -29,8 +33,8 @@ pub fn authorization_event(
 
 pub fn connection_event<'world, 'state>(
     mut event_reader: EventReader<ConnectionEvent>,
-    mut server: Server<'world, 'state, Protocol, DefaultChannels>,
     mut global: ResMut<Global>,
+    mut server: Server<'world, 'state, Protocol, Channels>,
 ) {
     for event in event_reader.iter() {
         let ConnectionEvent(user_key) = event;
@@ -76,13 +80,19 @@ pub fn connection_event<'world, 'state>(
             .id();
 
         global.user_to_prediction_map.insert(*user_key, entity);
+
+        // Send an Entity Assignment message to the User that owns the Square
+        let mut assignment_message = EntityAssignment::new(true);
+        assignment_message.entity.set(&server, &entity);
+
+        server.send_message(&user_key, Channels::EntityAssignment, &assignment_message);
     }
 }
 
 pub fn disconnection_event(
     mut event_reader: EventReader<DisconnectionEvent>,
-    mut server: Server<Protocol, DefaultChannels>,
     mut global: ResMut<Global>,
+    mut server: Server<Protocol, Channels>,
 ) {
     for event in event_reader.iter() {
         let DisconnectionEvent(user_key, user) = event;
@@ -93,6 +103,24 @@ pub fn disconnection_event(
                 .entity_mut(&entity)
                 .leave_room(&global.main_room_key)
                 .despawn();
+        }
+    }
+}
+
+pub fn receive_message_event(
+    mut event_reader: EventReader<MessageEvent<Protocol, Channels>>,
+    mut global: ResMut<Global>,
+    mut server: Server<Protocol, Channels>,
+) {
+    for event in event_reader.iter() {
+        if let MessageEvent(_user_key, Channels::PlayerCommand, Protocol::KeyCommand(key_command)) =
+            event
+        {
+            if let Some(entity) = &key_command.entity.get(&mut server) {
+                global
+                    .player_last_command
+                    .insert(*entity, key_command.clone());
+            }
         }
     }
 }

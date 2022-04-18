@@ -1,6 +1,8 @@
-use crate::{DiffMask, NetEntityHandleConverter};
-use naia_serde::{BitReader, BitWrite, Serde};
 use std::{any::TypeId, hash::Hash};
+
+use naia_serde::{BitReader, BitWrite, Serde};
+
+use crate::{protocol::component_update::ComponentUpdate, DiffMask, NetEntityHandleConverter};
 
 use super::{
     replica_ref::{ReplicaDynMut, ReplicaDynRef},
@@ -15,9 +17,11 @@ pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
     /// Get kind of Replicate type
     fn kind_of<R: ReplicateSafe<Self>>() -> Self::Kind;
     /// Get kind from a type_id
-    fn type_to_kind(type_id: TypeId) -> Self::Kind;
-    /// Build a new Replica
-    fn build(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Self;
+    fn type_to_kind(type_id: TypeId) -> Option<Self::Kind>;
+    /// Read from a bit stream to create a new Replica
+    fn read(bit_reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Self;
+    /// Read from a bit stream to create a new Component Update
+    fn read_create_update(bit_reader: &mut BitReader) -> ComponentUpdate<Self::Kind>;
     /// Get an immutable reference to the inner Component/Message as a
     /// Replicate trait object
     fn dyn_ref(&self) -> ReplicaDynRef<'_, Self>;
@@ -35,13 +39,13 @@ pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
     fn extract_and_insert<N, X: ProtocolInserter<Self, N>>(&self, entity: &N, inserter: &mut X);
     /// Writes data into an outgoing byte stream, sufficient to completely
     /// recreate the Message/Component on the client
-    fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
+    fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Message/Component on the client
-    fn write_partial(
+    fn write_update(
         &self,
         diff_mask: &DiffMask,
-        writer: &mut dyn BitWrite,
+        bit_writer: &mut dyn BitWrite,
         converter: &dyn NetEntityHandleConverter,
     );
 }

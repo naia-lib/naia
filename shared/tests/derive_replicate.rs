@@ -40,7 +40,6 @@ fn read_write_protocol() {
 
     let in_1 = SomeProtocol::StringHolder(StringHolder::new("hello world", "goodbye world"));
 
-    in_1.dyn_ref().kind().ser(&mut writer);
     in_1.write(&mut writer);
 
     let (buffer_length, buffer) = writer.flush();

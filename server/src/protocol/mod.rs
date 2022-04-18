@@ -1,3 +1,4 @@
+pub mod entity_action_event;
 pub mod entity_manager;
 pub mod entity_message_waitlist;
 pub mod entity_ref;

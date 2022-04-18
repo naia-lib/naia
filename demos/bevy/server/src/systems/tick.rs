@@ -1,8 +1,20 @@
-use naia_bevy_server::{shared::DefaultChannels, Server};
+use bevy_ecs::system::{Query, ResMut};
 
-use naia_bevy_demo_shared::protocol::Protocol;
+use naia_bevy_server::Server;
 
-pub fn tick(mut server: Server<Protocol, DefaultChannels>) {
+use naia_bevy_demo_shared::{
+    behavior as shared_behavior,
+    protocol::{Position, Protocol},
+    Channels,
+};
+
+use crate::resources::Global;
+
+pub fn tick(
+    mut global: ResMut<Global>,
+    mut server: Server<Protocol, Channels>,
+    mut position_query: Query<&mut Position>,
+) {
     // All game logic should happen here, on a tick event
     //info!("tick");
 
@@ -16,6 +28,13 @@ pub fn tick(mut server: Server<Protocol, DefaultChannels>) {
 
         // And call this if Entity should NOT be in this scope.
         // server.user_scope(..).exclude(..);
+    }
+
+    // Process all received commands
+    for (entity, last_command) in global.player_last_command.drain() {
+        if let Ok(mut position) = position_query.get_mut(entity) {
+            shared_behavior::process_command(&last_command, &mut position);
+        }
     }
 
     // This is very important! Need to call this to actually send all update packets

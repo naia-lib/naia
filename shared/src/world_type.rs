@@ -1,10 +1,10 @@
-use naia_serde::BitReader;
+use crate::{ComponentUpdate, Replicate};
 
 use crate::protocol::{
     entity_property::NetEntityHandleConverter,
     protocolize::{ProtocolInserter, Protocolize},
     replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
-    replicate::{Replicate, ReplicateSafe},
+    replicate::ReplicateSafe,
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -42,6 +42,10 @@ pub trait WorldMutType<P: Protocolize, E>: WorldRefType<P, E> + ProtocolInserter
     // Entities
     /// spawn an entity
     fn spawn_entity(&mut self) -> E;
+    /// duplicate an entity
+    fn duplicate_entity(&mut self, entity: &E) -> E;
+    /// make it so one entity has all the same components as another
+    fn duplicate_components(&mut self, mutable_entity: &E, immutable_entity: &E);
     /// despawn an entity
     fn despawn_entity(&mut self, entity: &E);
 
@@ -54,13 +58,16 @@ pub trait WorldMutType<P: Protocolize, E>: WorldRefType<P, E> + ProtocolInserter
         entity: &E,
     ) -> Option<ReplicaMutWrapper<'a, P, R>>;
     /// reads an incoming stream into a component
-    fn component_read_partial(
+    fn component_apply_update(
         &mut self,
+        converter: &dyn NetEntityHandleConverter,
         entity: &E,
         component_kind: &P::Kind,
-        reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
+        update: ComponentUpdate<P::Kind>,
     );
+    /// mirrors the whole state of two different entities
+    /// (setting 1st entity's component to 2nd entity's component's state)
+    fn mirror_entities(&mut self, mutable_entity: &E, immutable_entity: &E);
     /// mirrors the state of the same component of two different entities
     /// (setting 1st entity's component to 2nd entity's component's state)
     fn mirror_components(

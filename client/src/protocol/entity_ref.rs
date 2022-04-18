@@ -31,17 +31,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E,
     }
 }
 
-// EntityMut
-// pub struct EntityMut<'c, P: Protocolize, E: Copy + Eq + Hash> {
-//     client: &'c mut Client<P, E>,
+// // EntityMut
+// pub struct EntityMut<P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> {
+//     world: W,
 //     entity: E,
+//     phantom_p: PhantomData<P>,
 // }
 //
-// impl<'c, P: Protocolize, E: Copy + Eq + Hash> EntityMut<'c, P, E> {
-//     pub fn new(client: &'c mut Client<P, E>, entity: &E) -> Self {
+// impl<'c, P: Protocolize, E: Copy + Eq + Hash, W: WorldMutType<P, E>> EntityMut<P, E, W> {
+//     pub fn new(world: W, entity: &E) -> Self {
 //         EntityMut {
-//             client,
+//             world,
 //             entity: *entity,
+//             phantom_p: PhantomData,
 //         }
 //     }
 // }

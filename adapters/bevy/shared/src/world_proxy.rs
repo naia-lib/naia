@@ -1,10 +1,10 @@
-use bevy::ecs::{
+use bevy_ecs::{
     entity::Entity,
     world::{Mut, World},
 };
 
 use naia_shared::{
-    serde::BitReader, NetEntityHandleConverter, ProtocolInserter, ProtocolKindType, Protocolize,
+    ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, ProtocolKindType, Protocolize,
     ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe, WorldMutType,
     WorldRefType,
 };
@@ -50,7 +50,7 @@ impl<'w> WorldRef<'w> {
     }
 }
 
-impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldRef<'w> {
+impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w> {
     fn has_entity(&self, entity: &Entity) -> bool {
         return has_entity(self.world, entity);
     }
@@ -92,7 +92,7 @@ impl<'w> WorldMut<'w> {
     }
 }
 
-impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
+impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
     fn has_entity(&self, entity: &Entity) -> bool {
         return has_entity(self.world, entity);
     }
@@ -122,7 +122,7 @@ impl<'w, P: 'static + Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
     }
 }
 
-impl<'w, P: 'static + Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
+impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
     fn spawn_entity(&mut self) -> Entity {
         let entity = self.world.spawn().id();
 
@@ -130,6 +130,26 @@ impl<'w, P: 'static + Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
         world_data.spawn_entity(&entity);
 
         return entity;
+    }
+
+    fn duplicate_entity(&mut self, entity: &Entity) -> Entity {
+        let new_entity = WorldMutType::<P, Entity>::spawn_entity(self);
+
+        WorldMutType::<P, Entity>::duplicate_components(self, &new_entity, entity);
+
+        new_entity
+    }
+
+    fn duplicate_components(&mut self, mutable_entity: &Entity, immutable_entity: &Entity) {
+        for component_kind in WorldMutType::<P, Entity>::component_kinds(self, &immutable_entity) {
+            let mut component_copy_opt: Option<P> = None;
+            if let Some(component) = self.component_of_kind(&immutable_entity, &component_kind) {
+                component_copy_opt = Some(component.protocol_copy());
+            }
+            if let Some(component_copy) = component_copy_opt {
+                Protocolize::extract_and_insert(&component_copy, mutable_entity, self);
+            }
+        }
     }
 
     fn despawn_entity(&mut self, entity: &Entity) {
@@ -151,8 +171,9 @@ impl<'w, P: 'static + Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
             let ref_type = component_info
                 .type_id()
                 .expect("Components need type_id to instantiate");
-            let kind = P::type_to_kind(ref_type);
-            kinds.push(kind);
+            if let Some(kind) = P::type_to_kind(ref_type) {
+                kinds.push(kind);
+            }
         }
 
         return kinds;
@@ -170,21 +191,32 @@ impl<'w, P: 'static + Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
         return None;
     }
 
-    fn component_read_partial(
+    fn component_apply_update(
         &mut self,
+        converter: &dyn NetEntityHandleConverter,
         entity: &Entity,
         component_kind: &P::Kind,
-        bit_reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
+        update: ComponentUpdate<P::Kind>,
     ) {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
                 if let Some(accessor) = data.component_access(component_kind) {
                     if let Some(mut component) = accessor.component_mut(world, entity) {
-                        component.read_partial(bit_reader, converter);
+                        component.read_apply_update(converter, update);
                     }
                 }
             });
+    }
+
+    fn mirror_entities(&mut self, new_entity: &Entity, old_entity: &Entity) {
+        for component_kind in WorldMutType::<P, Entity>::component_kinds(self, &old_entity) {
+            WorldMutType::<P, Entity>::mirror_components(
+                self,
+                new_entity,
+                old_entity,
+                &component_kind,
+            );
+        }
     }
 
     fn mirror_components(

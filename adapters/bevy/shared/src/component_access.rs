@@ -1,6 +1,6 @@
 use std::{any::Any, marker::PhantomData};
 
-use bevy::ecs::{entity::Entity, world::World};
+use bevy_ecs::{entity::Entity, world::World};
 
 use naia_shared::{Protocolize, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
 

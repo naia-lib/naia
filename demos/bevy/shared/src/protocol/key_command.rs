@@ -1,10 +1,11 @@
-use bevy_ecs::prelude::Component;
+use bevy_ecs::component::Component;
 
-use naia_shared::{Property, Replicate};
+use naia_shared::{EntityProperty, Property, Replicate};
 
 #[derive(Component, Replicate)]
 #[protocol_path = "crate::protocol::Protocol"]
 pub struct KeyCommand {
+    pub entity: EntityProperty,
     pub w: Property<bool>,
     pub s: Property<bool>,
     pub a: Property<bool>,

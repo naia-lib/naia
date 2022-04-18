@@ -151,10 +151,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
                 tick_manager.write_server_tick(&mut bit_writer);
             }
 
-            info!("-- packet: {} --", next_packet_index);
-            if self.base.message_manager.has_outgoing_messages() {
-                info!("writing some messages");
-            }
+            // info!("-- packet: {} --", next_packet_index);
+            // if self.base.message_manager.has_outgoing_messages() {
+            //     info!("writing some messages");
+            // }
+
             // write messages
             {
                 let converter = EntityConverter::new(world_record, &self.entity_manager);
@@ -174,7 +175,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
                 world,
                 world_record,
             );
-            info!("--------------\n");
+
+            //info!("--------------\n");
 
             // send packet
             io.send_writer(&self.base.address, &mut bit_writer);

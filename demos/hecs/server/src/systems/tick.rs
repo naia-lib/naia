@@ -42,7 +42,7 @@ pub fn march_and_mark(app: &mut App) {
     while let Some(entity) = entities_to_add.pop() {
         if !app.has_marker.contains(&entity) {
             // Create Marker component
-            let marker = Marker::new("new");
+            let marker = Marker::new();
 
             // Add to Naia Server
             app.server

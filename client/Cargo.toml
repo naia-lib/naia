@@ -1,6 +1,6 @@
 [package]
 name = "naia-client"
-version = "0.8.0"
+version = "0.10.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = ".."
 description = "Provides a cross-platform client that can send/receive messages to/from a server, and has a pool of in-scope entities/components that is synced with the server."
@@ -23,7 +23,7 @@ bevy_support = ["naia-shared/bevy_support"]
 zstd_support = ["naia-shared/zstd_support"]
 
 [dependencies]
-naia-client-socket = { path = "../socket/client" }
-naia-shared = { version = "0.8.0", path = "../shared" }
-cfg-if = "1.0.0"
-log = "0.4"
+naia-client-socket = { version = "0.10", path = "../socket/client" }
+naia-shared = { version = "0.10", path = "../shared" }
+cfg-if = { version = "1.0" }
+log = { version = "0.4" }

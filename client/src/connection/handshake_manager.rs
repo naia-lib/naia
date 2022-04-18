@@ -54,23 +54,25 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     // Give handshake manager the opportunity to send out messages to the server
     pub fn send(&mut self, io: &mut Io) {
-        if !self.handshake_timer.ringing() {
-            return;
-        }
-
-        self.handshake_timer.reset();
-
-        match self.connection_state {
-            HandshakeState::Connected => {
-                // do nothing, not necessary
+        if io.is_loaded() {
+            if !self.handshake_timer.ringing() {
+                return;
             }
-            HandshakeState::AwaitingChallengeResponse => {
-                let mut writer = self.write_challenge_request();
-                io.send_writer(&mut writer);
-            }
-            HandshakeState::AwaitingConnectResponse => {
-                let mut writer = self.write_connect_request();
-                io.send_writer(&mut writer);
+
+            self.handshake_timer.reset();
+
+            match self.connection_state {
+                HandshakeState::Connected => {
+                    // do nothing, not necessary
+                }
+                HandshakeState::AwaitingChallengeResponse => {
+                    let mut writer = self.write_challenge_request();
+                    io.send_writer(&mut writer);
+                }
+                HandshakeState::AwaitingConnectResponse => {
+                    let mut writer = self.write_connect_request();
+                    io.send_writer(&mut writer);
+                }
             }
         }
     }
@@ -129,8 +131,6 @@ impl<P: Protocolize> HandshakeManager<P> {
         if let Some(auth_message) = &self.auth_message {
             // write that we have auth
             true.ser(&mut writer);
-            // write auth kind
-            auth_message.dyn_ref().kind().ser(&mut writer);
             // write payload
             auth_message.write(&mut writer, &FakeEntityConverter);
         } else {

@@ -1,12 +1,12 @@
 [package]
 name = "naia-server-socket"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../.."
 description = "An abstraction to provide a common API over either a UDP socket or a service that can establish WebRTC connections"
 documentation = "https://docs.rs/naia-server-socket"
-homepage = "https://github.com/naia-rs/naia-socket"
-repository = "https://github.com/naia-rs/naia-socket"
+homepage = "https://github.com/naia-rs/naia"
+repository = "https://github.com/naia-rs/naia"
 readme = "../README.md"
 keywords = ["webrtc", "udp", "server", "gamedev", "networking"]
 categories = ["network-programming", "game-development", "wasm", "web-programming"]
@@ -24,9 +24,9 @@ use-udp = [ "async-io" ]
 use-webrtc = [ "webrtc-unreliable", "async-dup", "futures-core", "http" ]
 
 [dependencies]
-naia-socket-shared = { path = "../shared", version = "=0.9.0" }
+naia-socket-shared = { version = "0.10", path = "../shared" }
 log = { version = "0.4" }
-cfg-if = { version = "0.1.10" }
+cfg-if = { version = "1.0" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-util = { version = "0.3", features = ["sink"] }
 smol = { version = "1.2.4" }
