@@ -1,0 +1,121 @@
+name: Main
+on:
+  push:
+    branches-ignore:
+      - "releases/**"
+      - "dependabot/**"
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
+      - ".github/dependabot.yml"
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
+      - ".github/dependabot.yml"
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  # Servers have mutually exclusive features
+  test-servers:
+    strategy:
+      fail-fast: false
+      matrix:
+        features: [use-udp, use-webrtc]
+        package:
+          [
+            naia-server,
+            naia-hecs-server,
+            naia-bevy-server,
+            naia-macroquad-server-demo,
+            naia-tickless-server-demo,
+            naia-bevy-server-demo,
+            naia-basic-server-demo,
+            naia-server-socket-demo,
+            naia-hecs-server-demo,
+            naia-server-socket,
+          ]
+    name: Test servers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v1
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
+
+  test-other:
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          [
+            naia-client,
+            naia-hecs-shared,
+            naia-bevy-client,
+            naia-hecs-client,
+            naia-bevy-shared,
+            naia-macroquad-client-demo,
+            naia-macroquad-demo-shared,
+            naia-tickless-client-demo,
+            naia-tickless-demo-shared,
+            naia-basic-demo-shared,
+            naia-serde-derive,
+            naia-bevy-demo-shared,
+            naia-demo-world,
+            naia-empty-world,
+            naia-hecs-demo-shared,
+            naia-serde,
+            naia-bevy-client-demo,
+            naia-socket-client-demo-app,
+            naia-socket-client-demo-mq,
+            naia-socket-client-demo-wb,
+            naia-socket-demo-shared,
+            naia-basic-client-demo-app,
+            naia-basic-client-demo-mq,
+            naia-basic-client-demo-wb,
+            naia-hecs-client-demo,
+            naia-shared,
+            naia-test,
+            naia-parse,
+            naia-derive,
+            naia-socket-shared,
+            naia-client-socket,
+          ]
+    name: Test other
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libxi-dev libgl1-mesa-dev
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v1
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --package ${{ matrix.package }}
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Format
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
