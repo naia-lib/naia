@@ -25,7 +25,10 @@ mod some_replica {
     }
 }
 
-use naia_shared::{serde::{BitReader, BitWriter}, Protocolize, FakeEntityConverter};
+use naia_shared::{
+    serde::{BitReader, BitWriter},
+    FakeEntityConverter, Protocolize,
+};
 
 use some_protocol::SomeProtocol;
 use some_replica::StringHolder;
