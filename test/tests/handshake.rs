@@ -1,15 +1,11 @@
+use std::time::Duration;
+
+use naia_client::internal::{HandshakeManager as ClientHandshakeManager, HandshakeState};
+use naia_server::internal::{HandshakeManager as ServerHandshakeManager, HandshakeResult};
 use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
     PacketType, Protocolize, StandardHeader,
 };
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::Duration,
-};
-
-use naia_client::internal::{HandshakeManager as ClientHandshakeManager, HandshakeState};
-use naia_server::internal::{HandshakeManager as ServerHandshakeManager, HandshakeResult};
-
 use naia_test::{Auth, Protocol};
 
 #[test]
@@ -20,8 +16,6 @@ fn end_to_end_handshake_w_auth() {
     let mut message_buffer: [u8; 508];
     let mut writer: BitWriter;
     let mut reader: BitReader;
-
-    let test_socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
 
     // 0. set Client auth object
     let username = "charlie";
@@ -73,8 +67,8 @@ fn end_to_end_handshake_w_auth() {
     {
         reader = BitReader::new(&message_buffer[..message_length]);
         StandardHeader::de(&mut reader).unwrap();
-        let result = server.recv_connect_request(&Protocol::load(), &test_socket_addr, &mut reader);
-        if let HandshakeResult::AuthUser(auth_message) = result {
+        let result = server.recv_connect_request(&mut reader);
+        if let HandshakeResult::Success(Some(auth_message)) = result {
             let auth_replica = auth_message
                 .cast_ref::<Auth>()
                 .expect("did not construct protocol correctly...");
