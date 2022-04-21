@@ -1,13 +1,5 @@
 name: Main
 on:
-  push:
-    branches-ignore:
-      - "releases/**"
-      - "dependabot/**"
-    paths-ignore:
-      - "**.md"
-      - ".gitignore"
-      - ".github/dependabot.yml"
   pull_request:
     paths-ignore:
       - "**.md"

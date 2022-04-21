@@ -1,12 +1,5 @@
 name: Dependencies
 on:
-  push:
-    branches-ignore:
-      - 'dependabot/**'
-      - 'releases/**'
-    paths:
-      - 'Cargo.toml'
-      - 'deny.toml'
   pull_request:
     paths:
       - 'Cargo.toml'
