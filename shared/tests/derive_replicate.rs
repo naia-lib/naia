@@ -26,11 +26,11 @@ mod some_replica {
 }
 
 use naia_shared::{
-    serde::{BitReader, BitWriter, Serde},
-    Protocolize, Replicate,
+    serde::{BitReader, BitWriter},
+    FakeEntityConverter, Protocolize,
 };
 
-use some_protocol::{SomeProtocol, SomeProtocolKind};
+use some_protocol::SomeProtocol;
 use some_replica::StringHolder;
 
 #[test]
@@ -40,7 +40,7 @@ fn read_write_protocol() {
 
     let in_1 = SomeProtocol::StringHolder(StringHolder::new("hello world", "goodbye world"));
 
-    in_1.write(&mut writer);
+    in_1.write(&mut writer, &FakeEntityConverter);
 
     let (buffer_length, buffer) = writer.flush();
 
@@ -48,9 +48,7 @@ fn read_write_protocol() {
 
     let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-    let manifest = SomeProtocol::load();
-    let out_kind = SomeProtocolKind::de(&mut reader).unwrap();
-    let out_1 = manifest.create_replica(out_kind, &mut reader);
+    let out_1 = SomeProtocol::read(&mut reader, &FakeEntityConverter);
 
     let typed_in_1 = in_1.cast_ref::<StringHolder>().unwrap();
     let typed_out_1 = out_1.cast_ref::<StringHolder>().unwrap();

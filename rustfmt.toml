@@ -1,7 +1,0 @@
-imports_granularity='Crate'
-reorder_imports = true
-reorder_impl_items = true
-format_strings = false
-hard_tabs = false
-use_field_init_shorthand = true
-edition = "2021"

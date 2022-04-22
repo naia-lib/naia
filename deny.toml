@@ -1,0 +1,26 @@
+[advisories]
+unmaintained = "deny"
+yanked = "deny"
+notice = "deny"
+
+[licenses]
+copyleft = "deny"
+allow-osi-fsf-free = "either"
+
+[[licenses.clarify]]
+name = "stretch"
+expression = "MIT"
+license-files = []
+
+[[licenses.clarify]]
+name = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
