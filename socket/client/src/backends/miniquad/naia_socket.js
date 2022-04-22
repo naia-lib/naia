@@ -2,14 +2,12 @@ const naia_socket = {
     channel: null,
     encoder: new TextEncoder(),
     decoder: new TextDecoder("utf-8"),
-    dropped_outgoing_messages: [],
     js_objects: {},
     unique_js_id: 0,
 
     plugin: function (importObject) {
         importObject.env.naia_connect = function (address, rtc_path) { naia_socket.connect(address, rtc_path); };
         importObject.env.naia_send = function (message) { naia_socket.send(message); };
-        importObject.env.naia_resend_dropped_messages = function() { naia_socket.resend_dropped_messages(); };
         importObject.env.naia_create_string = function (buf, max_len) { return naia_socket.js_create_string(buf, max_len); };
         importObject.env.naia_unwrap_to_str = function (js_object, buf, max_len) { naia_socket.js_unwrap_to_str(js_object, buf, max_len); };
         importObject.env.naia_string_length = function (js_object) { return naia_socket.js_string_length(js_object); };
@@ -103,31 +101,6 @@ const naia_socket = {
         this.send_u8_array(message_string);
     },
 
-    resend_dropped_messages: function () {
-        if (this.channel && this.dropped_outgoing_messages.length > 0) {
-            let temp_array = this.dropped_outgoing_messages;
-            this.dropped_outgoing_messages = [];
-            for (let i = 0; i < temp_array.length; i+=1) {
-                this.send_u8_array(Uint8Array.from(temp_array[i]));
-            }
-        }
-    },
-
-    send_str: function (str) {
-        if (this.channel) {
-            try {
-                this.channel.send(this.encoder.encode(str));
-            }
-            catch(err) {
-                this.error("send_str() error. Adding to re-send queue.", err.message);
-                this.dropped_outgoing_messages.push(str);
-            }
-        }
-        else {
-            this.dropped_outgoing_messages.push(str);
-        }
-    },
-
     js_create_string: function (buf, max_len) {
         let string = UTF8ToString(buf, max_len);
         return this.js_object(string);
@@ -154,12 +127,10 @@ const naia_socket = {
                 this.channel.send(str);
             }
             catch(err) {
-                this.error("send_u8_array() error. Adding to re-send queue.", err.message);
-                this.dropped_outgoing_messages.push(Array.from(str));
+                this.error("error when sending u8 array over datachannel", err.message);
             }
-        }
-        else {
-            this.dropped_outgoing_messages.push(Array.from(str));
+        } else {
+            this.error("error: sending u8 array over uninitialized datachannel");
         }
     },
 
@@ -229,4 +200,4 @@ const naia_socket = {
     }
 };
 
-miniquad_add_plugin({ register_plugin: naia_socket.plugin });
+miniquad_add_plugin({ register_plugin: naia_socket.plugin, version: "0.10.0", name: "naia_socket" });

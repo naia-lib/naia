@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use macroquad::prelude::{
-    clear_background, draw_rectangle, info, is_key_down, KeyCode, BLACK, BLUE, GREEN, RED, WHITE,
+use macroquad::prelude::{info,
+    clear_background, draw_rectangle, is_key_down, KeyCode, BLACK, BLUE, GREEN, RED, WHITE,
     YELLOW,
 };
 

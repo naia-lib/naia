@@ -2,7 +2,7 @@ use crate::{
     error::NaiaClientSocketError, packet_receiver::PacketReceiverTrait, server_addr::ServerAddr,
 };
 
-use super::shared::{naia_resend_dropped_messages, ERROR_QUEUE, MESSAGE_QUEUE, SERVER_ADDR};
+use super::shared::{ERROR_QUEUE, MESSAGE_QUEUE, SERVER_ADDR};
 
 /// Handles receiving messages from the Server through a given Client Socket
 #[derive(Clone)]
@@ -21,8 +21,6 @@ impl PacketReceiverImpl {
 impl PacketReceiverTrait for PacketReceiverImpl {
     fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         unsafe {
-            naia_resend_dropped_messages();
-
             if let Some(msg_queue) = &mut MESSAGE_QUEUE {
                 if let Some(message) = msg_queue.pop_front() {
                     self.last_payload = Some(message);

@@ -1,5 +1,3 @@
-extern crate macroquad;
-
 use macroquad::prelude::*;
 
 mod app;

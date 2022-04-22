@@ -1,3 +1,12 @@
+#[no_mangle]
+pub extern "C" fn naia_socket_crate_version() -> u32 {
+    let major = dbg!(env!("CARGO_PKG_VERSION_MAJOR").parse::<u32>().unwrap());
+    let minor = env!("CARGO_PKG_VERSION_MINOR").parse::<u32>().unwrap();
+    let patch = dbg!(env!("CARGO_PKG_VERSION_PATCH").parse::<u32>().unwrap());
+
+    (major << 24) + (minor << 16) + patch
+}
+
 use std::collections::VecDeque;
 
 use crate::{server_addr::ServerAddr, wasm_utils::candidate_to_addr};
@@ -11,7 +20,6 @@ pub static mut SERVER_ADDR: ServerAddr = ServerAddr::Finding;
 extern "C" {
     pub fn naia_connect(server_socket_address: JsObject, rtc_path: JsObject);
     pub fn naia_send(message: JsObject);
-    pub fn naia_resend_dropped_messages();
     pub fn naia_free_object(js_object: JsObjectWeak);
     pub fn naia_create_string(buf: *const u8, max_len: u32) -> JsObject;
     pub fn naia_unwrap_to_str(js_object: JsObjectWeak, buf: *mut u8, max_len: u32);
