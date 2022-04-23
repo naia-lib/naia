@@ -6,11 +6,12 @@ cfg_if! {
 
         extern crate log;
 
+        mod app_loop;
+
         use wasm_bindgen::prelude::*;
 
         use naia_basic_client_demo_app::App;
 
-        mod app_loop;
         use app_loop::start_loop;
 
         #[wasm_bindgen(start)]
