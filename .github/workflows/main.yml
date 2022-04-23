@@ -15,7 +15,7 @@ env:
 
 jobs:
 
-  check-formatting:
+  check-format:
     name: Check Format
     runs-on: ubuntu-latest
     steps:
@@ -28,7 +28,7 @@ jobs:
           command: fmt
           args: -- --check
 
-  test-server-socket:
+  server-socket:
     strategy:
       fail-fast: false
       matrix:
@@ -37,7 +37,7 @@ jobs:
           [
             naia-server-socket,
           ]
-    name: Test Server Socket
+    name: Server Socket
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
@@ -46,14 +46,20 @@ jobs:
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
 
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --package ${{ matrix.package }} --features "${{ matrix.features }}" --no-deps -- -D warnings
+
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
 
-  test-servers:
-    name: Test Servers
+  servers:
+    name: Servers
     strategy:
       fail-fast: false
       matrix:
@@ -71,14 +77,20 @@ jobs:
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
 
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --package ${{ matrix.package }} --features "use-udp" --no-deps -- -D warnings
+
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --package ${{ matrix.package }} --features "use-udp"
 
-  test-clients-and-shared:
-    name: Test Clients
+  clients-and-shared:
+    name: Clients And Shared
     strategy:
       fail-fast: false
       matrix:
@@ -101,14 +113,20 @@ jobs:
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
 
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --package ${{ matrix.package }} --features "${{ matrix.features }}" --no-deps -- -D warnings
+
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
 
-  test:
-    name: Test all other crates
+  other:
+    name: Other
     strategy:
       fail-fast: false
       matrix:
@@ -132,14 +150,20 @@ jobs:
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
 
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --package ${{ matrix.package }} --no-deps -- -D warnings
+
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --package ${{ matrix.package }}
 
-  build-server-demos:
-    name: Build Server Demos
+  server-demos:
+    name: Server Demos
     strategy:
       fail-fast: false
       matrix:
@@ -159,14 +183,14 @@ jobs:
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
 
-      - name: Test
+      - name: Clippy
         uses: actions-rs/cargo@v1
         with:
-          command: build
-          args: --package ${{ matrix.package }} --features "use-udp"
+          command: clippy
+          args: --package ${{ matrix.package }} --features "use-udp" --no-deps -- -D warnings
 
-  build-client-demos:
-    name: Build Client Demos
+  client-demos:
+    name: Client Demos
     strategy:
       fail-fast: false
       matrix:
@@ -194,8 +218,8 @@ jobs:
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
 
-      - name: Test
+      - name: Clippy
         uses: actions-rs/cargo@v1
         with:
-          command: build
-          args: --package ${{ matrix.package }}
+          command: clippy
+          args: --package ${{ matrix.package }} --no-deps -- -D warnings
