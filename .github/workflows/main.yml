@@ -1,12 +1,19 @@
 name: Main
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     paths-ignore:
       - "**.md"
       - ".gitignore"
       - ".github/dependabot.yml"
+      -
 env:
   CARGO_TERM_COLOR: always
+
 jobs:
   # Servers have mutually exclusive features
   test-servers:
