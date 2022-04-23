@@ -23,8 +23,8 @@ pub struct App {
     square_last_command: HashMap<Entity, KeyCommand>,
 }
 
-impl App {
-    pub fn new() -> Self {
+impl Default for App {
+    fn default() -> Self {
         info!("Naia Macroquad Server Demo started");
 
         let server_addresses = ServerAddrs::new(
@@ -54,7 +54,9 @@ impl App {
             square_last_command: HashMap::new(),
         }
     }
+}
 
+impl App {
     pub fn update(&mut self) {
         for event in self.server.receive() {
             match event {

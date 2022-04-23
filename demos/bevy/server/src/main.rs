@@ -15,7 +15,7 @@ fn main() {
     info!("Naia Bevy Server Demo starting up");
 
     // Build App
-    App::new()
+    App::default()
         // Plugins
         .add_plugin(CorePlugin::default())
         .add_plugin(ScheduleRunnerPlugin::default())

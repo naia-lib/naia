@@ -7,8 +7,8 @@ pub struct App {
     packet_receiver: PacketReceiver,
 }
 
-impl App {
-    pub fn new() -> Self {
+impl Default for App {
+    fn default() -> Self {
         info!("Naia Server Socket Demo started");
 
         let server_address = ServerAddrs::new(
@@ -32,7 +32,9 @@ impl App {
             packet_receiver: socket.packet_receiver(),
         }
     }
+}
 
+impl App {
     pub fn update(&mut self) {
         match self.packet_receiver.receive() {
             Ok(Some((address, payload))) => {
