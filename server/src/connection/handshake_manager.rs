@@ -46,7 +46,6 @@ impl<P: Protocolize> HandshakeManager<P> {
     pub fn recv_challenge_request(&mut self, reader: &mut BitReader) -> BitWriter {
         let timestamp = Timestamp::de(reader).unwrap();
 
-        
         self.write_challenge_response(&timestamp)
     }
 

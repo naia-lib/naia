@@ -59,8 +59,7 @@ impl Socket {
         let conditioner_config = self.config.link_condition.clone();
 
         let receiver: Box<dyn PacketReceiverTrait> = {
-            let inner_receiver =
-                Box::new(PacketReceiverImpl::new(server_socket_addr, socket));
+            let inner_receiver = Box::new(PacketReceiverImpl::new(server_socket_addr, socket));
             if let Some(config) = &conditioner_config {
                 Box::new(ConditionedPacketReceiver::new(inner_receiver, config))
             } else {

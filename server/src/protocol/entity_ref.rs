@@ -110,8 +110,7 @@ impl<
     }
 
     pub fn remove_component<R: Replicate<P>>(&mut self) -> Option<R> {
-        self
-            .server
+        self.server
             .remove_component::<R, W>(&mut self.world, &self.entity)
     }
 

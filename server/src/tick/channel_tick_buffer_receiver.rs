@@ -115,7 +115,9 @@ impl<P: Protocolize> IncomingMessages<P> {
 
                 if let Some((existing_tick, existing_messages)) = self.buffer.get_mut(index) {
                     if *existing_tick == *message_tick {
-                        if let std::collections::hash_map::Entry::Vacant(e) = existing_messages.entry(message_id) {
+                        if let std::collections::hash_map::Entry::Vacant(e) =
+                            existing_messages.entry(message_id)
+                        {
                             e.insert(new_message);
                             //info!("inserting command at tick: {}", client_tick);
                             //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (map

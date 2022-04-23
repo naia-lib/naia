@@ -166,7 +166,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             channel_index.ser(bit_writer);
 
             if let Some(message_ids) = channel.write_messages(channel_writer, bit_writer) {
-                self.packet_to_message_map.entry(packet_index).or_insert_with(Vec::new);
+                self.packet_to_message_map
+                    .entry(packet_index)
+                    .or_insert_with(Vec::new);
                 let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
                 channel_list.push((channel_index.clone(), message_ids));
             }

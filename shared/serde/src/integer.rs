@@ -104,7 +104,6 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
                 writer.write_bit(value & 1 != 0);
                 value >>= 1;
             }
-            
         }
     }
 

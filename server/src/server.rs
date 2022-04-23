@@ -76,9 +76,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     pub fn new(server_config: &ServerConfig, shared_config: &SharedConfig<C>) -> Self {
         let socket = Socket::new(&shared_config.socket);
 
-        let tick_manager = {
-            shared_config.tick_interval.map(TickManager::new)
-        };
+        let tick_manager = { shared_config.tick_interval.map(TickManager::new) };
 
         Server {
             // Config
@@ -140,8 +138,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         }
 
         // loop through all connections, receive Messages
-        let mut user_addresses: Vec<SocketAddr> =
-            self.user_connections.keys().copied().collect();
+        let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
         fastrand::shuffle(&mut user_addresses);
 
         for user_address in &user_addresses {
@@ -309,8 +306,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         self.update_entity_scopes(&world);
 
         // loop through all connections, send packet
-        let mut user_addresses: Vec<SocketAddr> =
-            self.user_connections.keys().copied().collect();
+        let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
         fastrand::shuffle(&mut user_addresses);
 
         for user_address in user_addresses {

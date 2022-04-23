@@ -24,7 +24,6 @@ impl<P> UnorderedUnreliableReceiver<P> {
         bit_reader: &mut BitReader,
     ) -> P {
         // read payload
-        
 
         channel_reader.read(bit_reader)
     }

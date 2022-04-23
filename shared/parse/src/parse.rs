@@ -201,10 +201,7 @@ fn next_type<T: Iterator<Item = TokenTree>>(source: &mut Peekable<T>) -> Option<
     }
 }
 
-fn next_fields(
-    body: &mut Peekable<impl Iterator<Item = TokenTree>>,
-    named: bool,
-) -> Vec<Field> {
+fn next_fields(body: &mut Peekable<impl Iterator<Item = TokenTree>>, named: bool) -> Vec<Field> {
     let mut fields = vec![];
 
     loop {

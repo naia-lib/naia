@@ -31,7 +31,9 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityActionReceiver<E, K> {
         let incoming_actions = self.receiver.receive_messages();
         for (action_id, action) in incoming_actions {
             if let Some(entity) = action.entity() {
-                self.entity_channels.entry(entity).or_insert_with(|| EntityChannel::new(entity));
+                self.entity_channels
+                    .entry(entity)
+                    .or_insert_with(|| EntityChannel::new(entity));
                 let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
                 entity_channel.receive_action(action_id, action, &mut outgoing_actions);
             }

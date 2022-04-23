@@ -71,7 +71,8 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
     fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P> {
         return world
             .entity_mut(*entity)
-            .remove::<R>().map(|v| v.into_protocol());
+            .remove::<R>()
+            .map(|v| v.into_protocol());
     }
 
     fn mirror_components(

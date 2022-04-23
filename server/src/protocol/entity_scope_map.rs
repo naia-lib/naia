@@ -27,8 +27,12 @@ impl<E: Copy + Eq + Hash> EntityScopeMap<E> {
     }
 
     pub fn insert(&mut self, user_key: UserKey, entity: E, in_scope: bool) {
-        self.entities_of_user.entry(user_key).or_insert_with(|| HashSet::new());
-        self.users_of_entity.entry(entity).or_insert_with(HashSet::new);
+        self.entities_of_user
+            .entry(user_key)
+            .or_insert_with(|| HashSet::new());
+        self.users_of_entity
+            .entry(entity)
+            .or_insert_with(HashSet::new);
 
         self.entities_of_user
             .get_mut(&user_key)

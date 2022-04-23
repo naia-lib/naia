@@ -57,9 +57,7 @@ impl PacketReceiverTrait for PacketReceiverImpl {
                 }
                 Err(_) => Ok(None),
             },
-            Err(_) => {
-                Ok(None)
-            }
+            Err(_) => Ok(None),
         }
     }
 }

@@ -47,9 +47,7 @@ impl PacketReceiverTrait for PacketReceiverImpl {
                 //just didn't receive anything this time
                 Ok(None)
             }
-            Err(e) => {
-                Err(NaiaClientSocketError::Wrapped(Box::new(e)))
-            }
+            Err(e) => Err(NaiaClientSocketError::Wrapped(Box::new(e))),
         }
     }
 

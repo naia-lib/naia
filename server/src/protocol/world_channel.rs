@@ -400,8 +400,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
         for action in delivered_actions {
             match action {
                 EntityAction::SpawnEntity(entity, components) => {
-                    let component_set: HashSet<P::Kind> =
-                        components.iter().copied().collect();
+                    let component_set: HashSet<P::Kind> = components.iter().copied().collect();
                     self.remote_spawn_entity(entity, component_set);
                 }
                 EntityAction::DespawnEntity(entity) => {
