@@ -184,6 +184,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
             return true;
         }
 
-        return false;
+        false
     }
 }

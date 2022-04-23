@@ -23,11 +23,11 @@ impl<P: Protocolize> WorldData<P> {
         if let Some(accessor_any) = self.kind_to_accessor_map.get(component_kind) {
             return accessor_any.downcast_ref::<Box<dyn ComponentAccess<P>>>();
         }
-        return None;
+        None
     }
 
     pub(crate) fn has_kind(&self, component_kind: &P::Kind) -> bool {
-        return self.kind_to_accessor_map.contains_key(component_kind);
+        self.kind_to_accessor_map.contains_key(component_kind)
     }
 
     pub(crate) fn put_kind<R: ReplicateSafe<P>>(&mut self, component_kind: &P::Kind) {

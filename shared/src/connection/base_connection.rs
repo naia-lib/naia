@@ -35,13 +35,13 @@ impl<P: Protocolize, C: ChannelIndex> BaseConnection<P, C> {
         connection_config: &ConnectionConfig,
         channel_config: &ChannelConfig<C>,
     ) -> Self {
-        return BaseConnection {
+        BaseConnection {
             address,
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
             ack_manager: AckManager::new(),
             message_manager: MessageManager::new(host_type, channel_config),
-        };
+        }
     }
 
     // Heartbeats
@@ -49,12 +49,12 @@ impl<P: Protocolize, C: ChannelIndex> BaseConnection<P, C> {
     /// Record that a message has been sent (to prevent needing to send a
     /// heartbeat)
     pub fn mark_sent(&mut self) {
-        return self.heartbeat_timer.reset();
+        self.heartbeat_timer.reset()
     }
 
     /// Returns whether a heartbeat message should be sent
     pub fn should_send_heartbeat(&self) -> bool {
-        return self.heartbeat_timer.ringing();
+        self.heartbeat_timer.ringing()
     }
 
     // Timeouts
@@ -62,13 +62,13 @@ impl<P: Protocolize, C: ChannelIndex> BaseConnection<P, C> {
     /// Record that a message has been received from a remote host (to prevent
     /// disconnecting from the remote host)
     pub fn mark_heard(&mut self) {
-        return self.timeout_timer.reset();
+        self.timeout_timer.reset()
     }
 
     /// Returns whether this connection should be dropped as a result of a
     /// timeout
     pub fn should_drop(&self) -> bool {
-        return self.timeout_timer.ringing();
+        self.timeout_timer.ringing()
     }
 
     // Acks & Headers
@@ -82,7 +82,7 @@ impl<P: Protocolize, C: ChannelIndex> BaseConnection<P, C> {
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         self.ack_manager.process_incoming_header(
-            &header,
+            header,
             &mut self.message_manager,
             packet_notifiable,
         );
@@ -100,6 +100,6 @@ impl<P: Protocolize, C: ChannelIndex> BaseConnection<P, C> {
 
     /// Get the next outgoing packet's index
     pub fn next_packet_index(&self) -> PacketIndex {
-        return self.ack_manager.next_sender_packet_index();
+        self.ack_manager.next_sender_packet_index()
     }
 }

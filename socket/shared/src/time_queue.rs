@@ -24,13 +24,13 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
 
     /// Returns whether or not there is an item that is ready to be returned
     pub fn has_item(&self) -> bool {
-        if self.queue.len() == 0 {
+        if self.queue.is_empty() {
             return false;
         }
         if let Some(item) = self.queue.peek() {
             return item.instant <= Instant::now();
         }
-        return false;
+        false
     }
 
     /// Pops an item from the queue if the sufficient time has elapsed
@@ -40,17 +40,17 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
                 return Some(container.item);
             }
         }
-        return None;
+        None
     }
 
     /// Peeks at the top level item container on the queue
     pub fn peek_entry(&self) -> Option<&ItemContainer<T>> {
-        return self.queue.peek();
+        self.queue.peek()
     }
 
     /// Returns the length of the underlying queue
     pub fn len(&self) -> usize {
-        return self.queue.len();
+        self.queue.len()
     }
 }
 

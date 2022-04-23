@@ -15,10 +15,10 @@ pub fn shared_config() -> SharedConfig<Channels> {
     //      incoming_jitter: 1,
     //      incoming_loss: 0.0,
     //  });
-    return SharedConfig::new(
+    SharedConfig::new(
         SocketConfig::new(link_condition, None),
         CHANNEL_CONFIG,
         tick_interval,
         None,
-    );
+    )
 }

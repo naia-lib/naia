@@ -49,7 +49,7 @@ impl<T> SequenceBuffer<T> {
         self.entry_sequences[index] = Some(sequence_num);
         self.entries[index] = Some(entry);
 
-        return true;
+        true
     }
 
     /// Returns whether or not we have previously inserted an entry for the

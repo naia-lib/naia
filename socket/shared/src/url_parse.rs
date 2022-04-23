@@ -40,7 +40,7 @@ cfg_if! {
                         panic!("");
                     }
 
-                    return addr_list.first().expect(SOCKET_PARSE_FAIL_STR).clone();
+                    return *addr_list.first().expect(SOCKET_PARSE_FAIL_STR);
                 }
                 Err(err) => {
                     log::error!("URL -> SocketAddr parse fails with: {:?}", err);

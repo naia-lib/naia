@@ -35,12 +35,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E,
 
     /// Returns whether or not the Entity has an associated Component
     pub fn has_component<R: ReplicateSafe<P>>(&self) -> bool {
-        return self.world.has_component::<R>(&self.entity);
+        self.world.has_component::<R>(&self.entity)
     }
 
     /// Gets a Ref to a Component associated with the Entity
     pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ReplicaRefWrapper<P, R>> {
-        return self.world.component::<R>(&self.entity);
+        self.world.component::<R>(&self.entity)
     }
 }
 
@@ -84,11 +84,11 @@ impl<
     // Components
 
     pub fn has_component<R: ReplicateSafe<P>>(&self) -> bool {
-        return self.world.has_component::<R>(&self.entity);
+        self.world.has_component::<R>(&self.entity)
     }
 
     pub fn component<R: ReplicateSafe<P>>(&mut self) -> Option<ReplicaMutWrapper<P, R>> {
-        return self.world.component_mut::<R>(&self.entity);
+        self.world.component_mut::<R>(&self.entity)
     }
 
     pub fn insert_component<R: ReplicateSafe<P>>(&mut self, component_ref: R) -> &mut Self {
@@ -110,9 +110,9 @@ impl<
     }
 
     pub fn remove_component<R: Replicate<P>>(&mut self) -> Option<R> {
-        return self
+        self
             .server
-            .remove_component::<R, W>(&mut self.world, &self.entity);
+            .remove_component::<R, W>(&mut self.world, &self.entity)
     }
 
     // Rooms

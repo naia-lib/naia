@@ -26,7 +26,7 @@ impl<P> ReliableReceiver<P> {
             last_read_id = Some(id_w_msg.0);
             output.push(id_w_msg);
         }
-        return output;
+        output
     }
 
     fn read_incoming_message(
@@ -46,6 +46,6 @@ impl<P> ReliableReceiver<P> {
         // read payload
         let new_message = channel_reader.read(bit_reader);
 
-        return (message_id, new_message);
+        (message_id, new_message)
     }
 }

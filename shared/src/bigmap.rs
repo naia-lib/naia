@@ -29,11 +29,11 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {
-        return self.inner.get(&key.to_u64());
+        self.inner.get(&key.to_u64())
     }
 
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        return self.inner.get_mut(&key.to_u64());
+        self.inner.get_mut(&key.to_u64())
     }
 
     pub fn insert(&mut self, value: V) -> K {
@@ -46,11 +46,11 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        return self.inner.remove(&key.to_u64());
+        self.inner.remove(&key.to_u64())
     }
 
     pub fn contains_key(&self, key: &K) -> bool {
-        return self.inner.contains_key(&key.to_u64());
+        self.inner.contains_key(&key.to_u64())
     }
 
     pub fn iter<'a>(&'a self) -> Map<Iter<'_, u64, V>, fn((&'a u64, &'a V)) -> (K, &'a V)> {
@@ -70,6 +70,6 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     }
 
     pub fn len(&self) -> usize {
-        return self.inner.len();
+        self.inner.len()
     }
 }

@@ -33,7 +33,7 @@ pub struct PropertyMutator {
 impl PropertyMutator {
     pub fn new<M: PropertyMutate>(mutator: M) -> Self {
         let inner = Box::new(mutator);
-        return Self { inner };
+        Self { inner }
     }
 
     pub fn clone_new(&self) -> Self {
@@ -41,7 +41,7 @@ impl PropertyMutator {
         // PropertyMutateClone;
         let new_inner = self.inner.as_ref().clone_box();
 
-        return Self { inner: new_inner };
+        Self { inner: new_inner }
     }
 }
 

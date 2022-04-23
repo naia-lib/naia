@@ -27,8 +27,8 @@ pub fn read(reader: &mut BitReader) -> u16 {
         // we already know messages isn't 0, so you can send the count as a value >= 1
         message_count += 1;
 
-        return message_count;
+        message_count
     } else {
-        return 0;
+        0
     }
 }

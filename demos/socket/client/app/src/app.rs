@@ -47,7 +47,7 @@ impl App {
 
         match self.packet_receiver.receive() {
             Ok(Some(packet)) => {
-                let message_from_server = String::from_utf8_lossy(&packet);
+                let message_from_server = String::from_utf8_lossy(packet);
 
                 info!(
                     "Client recv <- {}: {}",

@@ -45,7 +45,7 @@ impl<P> UnorderedReliableReceiver<P> {
             if index < self.record.len() {
                 if let Some((old_message_id, old_message)) = self.record.get_mut(index) {
                     if *old_message_id == message_id {
-                        if *old_message == false {
+                        if !(*old_message) {
                             *old_message = true;
                             self.received_messages.push((*old_message_id, message));
                             return;
@@ -90,7 +90,7 @@ impl<P> UnorderedReliableReceiver<P> {
         }
 
         // return buffer
-        return mem::take(&mut self.received_messages);
+        mem::take(&mut self.received_messages)
     }
 }
 

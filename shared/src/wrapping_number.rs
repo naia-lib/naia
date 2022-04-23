@@ -29,22 +29,20 @@ pub fn wrapping_diff(a: u16, b: u16) -> i16 {
 
     let mut result = b - a;
     if result <= MAX && result >= MIN {
-        return result as i16;
-    } else {
-        if b > a {
-            result = b - (a + ADJUST);
-            if result <= MAX && result >= MIN {
-                return result as i16;
-            } else {
-                panic!("integer overflow, this shouldn't happen")
-            }
+        result as i16
+    } else if b > a {
+        result = b - (a + ADJUST);
+        if result <= MAX && result >= MIN {
+            result as i16
         } else {
-            result = (b + ADJUST) - a;
-            if result <= MAX && result >= MIN {
-                return result as i16;
-            } else {
-                panic!("integer overflow, this shouldn't happen")
-            }
+            panic!("integer overflow, this shouldn't happen")
+        }
+    } else {
+        result = (b + ADJUST) - a;
+        if result <= MAX && result >= MIN {
+            result as i16
+        } else {
+            panic!("integer overflow, this shouldn't happen")
         }
     }
 }
@@ -156,7 +154,7 @@ mod wrapping_diff_tests {
 
         let result = i32::from(wrapping_diff(a, b));
 
-        assert_eq!(result, i32::from(diff) * -1);
+        assert_eq!(result, -i32::from(diff));
     }
 
     #[test]
@@ -189,6 +187,6 @@ mod wrapping_diff_tests {
 
         let result = i32::from(wrapping_diff(b, a));
 
-        assert_eq!(result, i32::from(diff) * -1);
+        assert_eq!(result, -i32::from(diff));
     }
 }

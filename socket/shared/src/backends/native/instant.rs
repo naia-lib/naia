@@ -21,7 +21,7 @@ impl Instant {
 
     /// Returns time until the Instant occurs
     pub fn until(&self) -> Duration {
-        return self.inner.duration_since(std::time::Instant::now());
+        self.inner.duration_since(std::time::Instant::now())
     }
 
     /// Adds a given number of milliseconds to the Instant
@@ -36,6 +36,6 @@ impl Instant {
 
     /// Returns inner Instant implementation
     pub fn inner(&self) -> std::time::Instant {
-        return self.inner.clone();
+        self.inner
     }
 }

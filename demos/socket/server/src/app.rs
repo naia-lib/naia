@@ -36,7 +36,7 @@ impl App {
     pub fn update(&mut self) {
         match self.packet_receiver.receive() {
             Ok(Some((address, payload))) => {
-                let message_from_client = String::from_utf8_lossy(&payload);
+                let message_from_client = String::from_utf8_lossy(payload);
                 info!("Server recv <- {}: {}", address, message_from_client);
 
                 if message_from_client.eq(PING_MSG) {

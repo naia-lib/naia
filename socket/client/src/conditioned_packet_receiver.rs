@@ -54,7 +54,7 @@ impl PacketReceiverTrait for ConditionedPacketReceiver {
             self.last_payload = Some(self.time_queue.pop_item().unwrap());
             return Ok(Some(self.last_payload.as_ref().unwrap()));
         } else {
-            return Ok(None);
+            Ok(None)
         }
     }
 

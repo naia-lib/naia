@@ -12,7 +12,7 @@ pub struct ComponentRef<'a, T: HecsComponent>(pub HecsRef<'a, T>);
 
 impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for ComponentRef<'a, R> {
     fn to_ref(&self) -> &R {
-        return &self.0;
+        &self.0
     }
 }
 
@@ -21,13 +21,13 @@ pub struct ComponentMut<'a, T: HecsComponent>(pub HecsMut<'a, T>);
 
 impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for ComponentMut<'a, R> {
     fn to_ref(&self) -> &R {
-        return &self.0;
+        &self.0
     }
 }
 
 impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaMutTrait<P, R> for ComponentMut<'a, R> {
     fn to_mut(&mut self) -> &mut R {
-        return &mut self.0;
+        &mut self.0
     }
 }
 
@@ -36,7 +36,7 @@ pub struct ComponentDynRef<'a, T: HecsComponent>(pub HecsRef<'a, T>);
 
 impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaDynRefTrait<P> for ComponentDynRef<'a, R> {
     fn to_dyn_ref(&self) -> &dyn ReplicateSafe<P> {
-        return self.0.deref();
+        self.0.deref()
     }
 }
 
@@ -45,12 +45,12 @@ pub struct ComponentDynMut<'a, T: HecsComponent>(pub HecsMut<'a, T>);
 
 impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaDynRefTrait<P> for ComponentDynMut<'a, R> {
     fn to_dyn_ref(&self) -> &dyn ReplicateSafe<P> {
-        return self.0.deref();
+        self.0.deref()
     }
 }
 
 impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaDynMutTrait<P> for ComponentDynMut<'a, R> {
     fn to_dyn_mut(&mut self) -> &mut dyn ReplicateSafe<P> {
-        return self.0.deref_mut();
+        self.0.deref_mut()
     }
 }

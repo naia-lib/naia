@@ -45,11 +45,11 @@ impl<T> SequenceList<T> {
     // }
 
     pub fn front(&self) -> Option<&(u16, T)> {
-        return self.list.get(0);
+        self.list.get(0)
     }
 
     pub fn pop_front(&mut self) -> (u16, T) {
-        return self.list.remove(0);
+        self.list.remove(0)
     }
 
     pub fn contains_scan_from_back(&self, id: &u16) -> bool {
@@ -96,7 +96,7 @@ impl<T> SequenceList<T> {
         }
 
         let (_, item) = self.list.get_mut(index).unwrap();
-        return Some(item);
+        Some(item)
     }
 
     pub fn insert_scan_from_back(&mut self, id: u16, item: T) {

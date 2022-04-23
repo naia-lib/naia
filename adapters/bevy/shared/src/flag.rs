@@ -16,6 +16,6 @@ impl Flag {
     }
 
     pub fn is_set(&self) -> bool {
-        return self.set;
+        self.set
     }
 }

@@ -33,7 +33,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
             panic!("entity does not exist!");
         }
 
-        return self.entity_records.remove(entity);
+        self.entity_records.remove(entity)
     }
 
     pub fn add_component(&mut self, entity: &E, component_type: &K) {
@@ -57,7 +57,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
     // Access
 
     pub fn has_entity(&self, entity: &E) -> bool {
-        return self.entity_records.contains_key(entity);
+        self.entity_records.contains_key(entity)
     }
 
     pub fn component_kinds(&self, entity: &E) -> Option<Vec<K>> {
@@ -68,8 +68,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
         let component_kind_set = &self.entity_records.get(entity).unwrap().component_kinds;
         return Some(
             component_kind_set
-                .iter()
-                .map(|kind_ref| *kind_ref)
+                .iter().copied()
                 .collect(),
         );
     }
@@ -82,7 +81,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
                 return *room_key == actual_room_key;
             }
         }
-        return false;
+        false
     }
 
     pub(crate) fn entity_enter_room(&mut self, entity: &E, room_key: &RoomKey) {

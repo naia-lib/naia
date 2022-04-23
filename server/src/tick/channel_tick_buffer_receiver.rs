@@ -115,8 +115,8 @@ impl<P: Protocolize> IncomingMessages<P> {
 
                 if let Some((existing_tick, existing_messages)) = self.buffer.get_mut(index) {
                     if *existing_tick == *message_tick {
-                        if !existing_messages.contains_key(&message_id) {
-                            existing_messages.insert(message_id, new_message);
+                        if let std::collections::hash_map::Entry::Vacant(e) = existing_messages.entry(message_id) {
+                            e.insert(new_message);
                             //info!("inserting command at tick: {}", client_tick);
                             //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (map
                             // xzist)", server_tick, client_tick, owned_entity);
@@ -125,11 +125,9 @@ impl<P: Protocolize> IncomingMessages<P> {
                         } else {
                             return false;
                         }
-                    } else {
-                        if sequence_greater_than(*message_tick, *existing_tick) {
-                            // incoming client tick is larger than found tick ...
-                            insert = true;
-                        }
+                    } else if sequence_greater_than(*message_tick, *existing_tick) {
+                        // incoming client tick is larger than found tick ...
+                        insert = true;
                     }
                 }
 
@@ -155,7 +153,7 @@ impl<P: Protocolize> IncomingMessages<P> {
             }
         } else {
             // command is too late to insert in incoming message queue
-            return false;
+            false
         }
     }
 
@@ -194,6 +192,6 @@ impl<P: Protocolize> IncomingMessages<P> {
             }
         }
 
-        return output;
+        output
     }
 }

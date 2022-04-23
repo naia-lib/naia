@@ -34,7 +34,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> GlobalDiffHandler<E, K> {
         self.mut_receiver_builders
             .insert((*entity, *component_kind), builder);
 
-        return sender;
+        sender
     }
 
     pub fn deregister_component(&mut self, entity: &E, component_kind: &K) {
@@ -51,6 +51,6 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> GlobalDiffHandler<E, K> {
         if let Some(builder) = self.mut_receiver_builders.get(&(*entity, *component_kind)) {
             return builder.build(addr);
         }
-        return None;
+        None
     }
 }

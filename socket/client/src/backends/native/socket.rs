@@ -60,7 +60,7 @@ impl Socket {
 
         let receiver: Box<dyn PacketReceiverTrait> = {
             let inner_receiver =
-                Box::new(PacketReceiverImpl::new(server_socket_addr, socket.clone()));
+                Box::new(PacketReceiverImpl::new(server_socket_addr, socket));
             if let Some(config) = &conditioner_config {
                 Box::new(ConditionedPacketReceiver::new(inner_receiver, config))
             } else {
@@ -71,7 +71,7 @@ impl Socket {
         info!("UDP client listening on socket: {}", local_addr);
 
         self.io = Some(Io {
-            packet_sender: packet_sender.clone(),
+            packet_sender,
             packet_receiver: PacketReceiver::new(receiver),
         });
     }
@@ -105,10 +105,10 @@ pub fn find_my_ip_address() -> Option<IpAddr> {
     let ip = local_ipaddress::get().unwrap_or_default();
 
     if let Ok(addr) = ip.parse::<Ipv4Addr>() {
-        return Some(IpAddr::V4(addr));
+        Some(IpAddr::V4(addr))
     } else if let Ok(addr) = ip.parse::<Ipv6Addr>() {
-        return Some(IpAddr::V6(addr));
+        Some(IpAddr::V6(addr))
     } else {
-        return None;
+        None
     }
 }

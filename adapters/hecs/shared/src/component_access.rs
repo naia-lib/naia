@@ -39,7 +39,7 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccessor<P, R> {
             phantom_p: PhantomData::<P>,
             phantom_r: PhantomData::<R>,
         });
-        return Box::new(inner_box);
+        Box::new(inner_box)
     }
 }
 
@@ -54,7 +54,7 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
             let component_dyn_ref = ReplicaDynRefWrapper::new(wrapper);
             return Some(component_dyn_ref);
         }
-        return None;
+        None
     }
 
     fn component_mut<'w>(
@@ -67,13 +67,13 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
             let component_dyn_mut = ReplicaDynMutWrapper::new(wrapper);
             return Some(component_dyn_mut);
         }
-        return None;
+        None
     }
 
     fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P> {
-        return world
+        world
             .remove_one::<R>(*entity)
-            .map_or(None, |v| Some(v.into_protocol()));
+            .map_or(None, |v| Some(v.into_protocol()))
     }
 
     fn mirror_components(

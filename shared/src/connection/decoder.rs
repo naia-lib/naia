@@ -62,7 +62,7 @@ cfg_if! {
 
             pub fn decode(&mut self, payload: &[u8]) -> &[u8] {
                 self.result = payload.to_vec();
-                return &self.result;
+                &self.result
             }
         }
     }

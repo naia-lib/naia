@@ -19,7 +19,7 @@ impl<'a, P: Protocolize, R: ReplicateSafe<P>> ComponentRef<'a, P, R> {
 
 impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for ComponentRef<'a, P, R> {
     fn to_ref(&self) -> &R {
-        return &self.inner;
+        self.inner
     }
 }
 
@@ -40,12 +40,12 @@ impl<'a, P: Protocolize, R: ReplicateSafe<P>> ComponentMut<'a, P, R> {
 
 impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for ComponentMut<'a, P, R> {
     fn to_ref(&self) -> &R {
-        return &self.inner;
+        self.inner
     }
 }
 
 impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaMutTrait<P, R> for ComponentMut<'a, P, R> {
     fn to_mut(&mut self) -> &mut R {
-        return &mut self.inner;
+        &mut self.inner
     }
 }

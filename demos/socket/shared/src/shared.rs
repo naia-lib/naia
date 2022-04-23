@@ -13,5 +13,5 @@ pub fn shared_config() -> SocketConfig {
     //        incoming_corruption: 0.0
     //    });
 
-    return SocketConfig::new(link_condition, None);
+    SocketConfig::new(link_condition, None)
 }

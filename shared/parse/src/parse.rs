@@ -82,7 +82,7 @@ pub fn next_visibility_modifier(
         }
     }
 
-    return None;
+    None
 }
 
 pub fn next_punct(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Option<String> {
@@ -92,7 +92,7 @@ pub fn next_punct(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Opt
         return Some(punct);
     }
 
-    return None;
+    None
 }
 
 pub fn next_exact_punct(
@@ -107,7 +107,7 @@ pub fn next_exact_punct(
         }
     }
 
-    return None;
+    None
 }
 
 pub fn next_eof<T: Iterator>(source: &mut Peekable<T>) -> Option<()> {
@@ -145,8 +145,8 @@ pub fn debug_current_token(source: &mut Peekable<impl Iterator<Item = TokenTree>
     println!("{:?}", source.peek());
 }
 
-fn next_type<T: Iterator<Item = TokenTree>>(mut source: &mut Peekable<T>) -> Option<Type> {
-    let group = next_group(&mut source);
+fn next_type<T: Iterator<Item = TokenTree>>(source: &mut Peekable<T>) -> Option<Type> {
+    let group = next_group(source);
     if group.is_some() {
         let mut group = group.unwrap().stream().into_iter().peekable();
 
@@ -163,24 +163,24 @@ fn next_type<T: Iterator<Item = TokenTree>>(mut source: &mut Peekable<T>) -> Opt
     }
 
     // read a path like a::b::c::d
-    let mut ty = next_ident(&mut source)?;
-    while let Some(_) = next_exact_punct(&mut source, ":") {
-        let _second_colon = next_exact_punct(&mut source, ":").expect("Expecting second :");
+    let mut ty = next_ident(source)?;
+    while next_exact_punct(source, ":").is_some() {
+        let _second_colon = next_exact_punct(source, ":").expect("Expecting second :");
 
-        let next_ident = next_ident(&mut source).expect("Expecting next path part after ::");
+        let next_ident = next_ident(source).expect("Expecting next path part after ::");
         ty.push_str(&format!("::{}", next_ident));
     }
 
-    let angel_bracket = next_exact_punct(&mut source, "<");
+    let angel_bracket = next_exact_punct(source, "<");
     if angel_bracket.is_some() {
         let mut generic_type = next_type(source).expect("Expecting generic argument");
-        while let Some(_comma) = next_exact_punct(&mut source, ",") {
+        while let Some(_comma) = next_exact_punct(source, ",") {
             let next_ty = next_type(source).expect("Expecting generic argument");
             generic_type.path.push_str(&format!(", {}", next_ty.path));
         }
 
         let _closing_bracket =
-            next_exact_punct(&mut source, ">").expect("Expecting closing generic bracket");
+            next_exact_punct(source, ">").expect("Expecting closing generic bracket");
 
         if ty == "Option" {
             Some(Type {
@@ -202,28 +202,28 @@ fn next_type<T: Iterator<Item = TokenTree>>(mut source: &mut Peekable<T>) -> Opt
 }
 
 fn next_fields(
-    mut body: &mut Peekable<impl Iterator<Item = TokenTree>>,
+    body: &mut Peekable<impl Iterator<Item = TokenTree>>,
     named: bool,
 ) -> Vec<Field> {
     let mut fields = vec![];
 
     loop {
-        if next_eof(&mut body).is_some() {
+        if next_eof(body).is_some() {
             break;
         }
 
-        let _visibility = next_visibility_modifier(&mut body);
+        let _visibility = next_visibility_modifier(body);
         let field_name = if named {
-            let field_name = next_ident(&mut body).expect("Field name expected");
+            let field_name = next_ident(body).expect("Field name expected");
 
-            let _ = next_exact_punct(&mut body, ":").expect("Delimeter after field name expected");
+            let _ = next_exact_punct(body, ":").expect("Delimeter after field name expected");
             Some(field_name)
         } else {
             None
         };
 
-        let ty = next_type(&mut body).expect("Expected field type");
-        let _punct = next_punct(&mut body);
+        let ty = next_type(body).expect("Expected field type");
+        let _punct = next_punct(body);
 
         fields.push(Field {
             vis: Visibility::Public,
@@ -234,14 +234,14 @@ fn next_fields(
     fields
 }
 
-fn next_struct(mut source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Struct {
-    let struct_name = next_ident(&mut source).expect("Unnamed structs are not supported");
+fn next_struct(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Struct {
+    let struct_name = next_ident(source).expect("Unnamed structs are not supported");
 
-    let group = next_group(&mut source);
+    let group = next_group(source);
     // unit struct
     if group.is_none() {
         // skip ; at the end of struct like this: "struct Foo;"
-        let _ = next_punct(&mut source);
+        let _ = next_punct(source);
 
         return Struct {
             name: struct_name,
@@ -261,8 +261,8 @@ fn next_struct(mut source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> St
     let mut body = group.stream().into_iter().peekable();
     let fields = next_fields(&mut body, !tuple);
 
-    if tuple == true {
-        next_exact_punct(&mut source, ";").expect("Expected ; on the end of tuple struct");
+    if tuple {
+        next_exact_punct(source, ";").expect("Expected ; on the end of tuple struct");
     }
 
     Struct {
@@ -272,10 +272,10 @@ fn next_struct(mut source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> St
     }
 }
 
-fn next_enum(mut source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Enum {
-    let enum_name = next_ident(&mut source).expect("Unnamed enums are not supported");
+fn next_enum(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Enum {
+    let enum_name = next_ident(source).expect("Unnamed enums are not supported");
 
-    let group = next_group(&mut source);
+    let group = next_group(source);
     // unit enum
     if group.is_none() {
         return Enum {

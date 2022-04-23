@@ -24,7 +24,7 @@ impl DiffMask {
             return Some(byte & (1 << adjusted_index) != 0);
         }
 
-        return None;
+        None
     }
 
     /// Sets the bit at the specified position within the DiffMask
@@ -53,17 +53,17 @@ impl DiffMask {
                 return false;
             }
         }
-        return true;
+        true
     }
 
     /// Get the number of bytes required to represent the DiffMask
     pub fn byte_number(&self) -> u8 {
-        return self.mask.len() as u8;
+        self.mask.len() as u8
     }
 
     /// Gets a byte at the specified index in the DiffMask
     pub fn byte(&self, index: usize) -> u8 {
-        return self.mask[index];
+        self.mask[index]
     }
 
     /// Performs a NAND operation on the DiffMask, with another DiffMask
@@ -142,11 +142,11 @@ mod single_byte_tests {
         mask.set_bit(6, true);
         mask.set_bit(4, false);
 
-        assert!(mask.bit(0).unwrap() == true);
-        assert!(mask.bit(1).unwrap() == false);
-        assert!(mask.bit(2).unwrap() == true);
-        assert!(mask.bit(4).unwrap() == false);
-        assert!(mask.bit(6).unwrap() == true);
+        assert!(mask.bit(0).unwrap());
+        assert!(!mask.bit(1).unwrap());
+        assert!(mask.bit(2).unwrap());
+        assert!(!mask.bit(4).unwrap());
+        assert!(mask.bit(6).unwrap());
     }
 
     #[test]
@@ -160,10 +160,10 @@ mod single_byte_tests {
 
         mask.clear();
 
-        assert!(mask.bit(0).unwrap() == false);
-        assert!(mask.bit(2).unwrap() == false);
-        assert!(mask.bit(4).unwrap() == false);
-        assert!(mask.bit(6).unwrap() == false);
+        assert!(!mask.bit(0).unwrap());
+        assert!(!mask.bit(2).unwrap());
+        assert!(!mask.bit(4).unwrap());
+        assert!(!mask.bit(6).unwrap());
     }
 
     #[test]
@@ -172,11 +172,11 @@ mod single_byte_tests {
 
         mask.set_bit(2, true);
 
-        assert!(mask.is_clear() == false);
+        assert!(!mask.is_clear());
 
         mask.set_bit(2, false);
 
-        assert!(mask.is_clear() == true);
+        assert!(mask.is_clear());
     }
 
     #[test]
@@ -204,10 +204,10 @@ mod single_byte_tests {
 
         mask_a.nand(&mask_b);
 
-        assert!(mask_a.bit(0).unwrap() == false);
-        assert!(mask_a.bit(1).unwrap() == false);
-        assert!(mask_a.bit(2).unwrap() == true);
-        assert!(mask_a.bit(3).unwrap() == false);
+        assert!(!mask_a.bit(0).unwrap());
+        assert!(!mask_a.bit(1).unwrap());
+        assert!(mask_a.bit(2).unwrap());
+        assert!(!mask_a.bit(3).unwrap());
     }
 
     #[test]
@@ -222,11 +222,11 @@ mod single_byte_tests {
 
         mask_a.or(&mask_b);
 
-        assert!(mask_a.bit(0).unwrap() == false);
-        assert!(mask_a.bit(1).unwrap() == true);
-        assert!(mask_a.bit(2).unwrap() == true);
-        assert!(mask_a.bit(3).unwrap() == true);
-        assert!(mask_a.bit(4).unwrap() == false);
+        assert!(!mask_a.bit(0).unwrap());
+        assert!(mask_a.bit(1).unwrap());
+        assert!(mask_a.bit(2).unwrap());
+        assert!(mask_a.bit(3).unwrap());
+        assert!(!mask_a.bit(4).unwrap());
     }
 
     #[test]
@@ -237,9 +237,9 @@ mod single_byte_tests {
 
         let mask_b = mask_a.clone();
 
-        assert!(mask_b.bit(1).unwrap() == true);
-        assert!(mask_b.bit(3).unwrap() == false);
-        assert!(mask_b.bit(4).unwrap() == true);
+        assert!(mask_b.bit(1).unwrap());
+        assert!(!mask_b.bit(3).unwrap());
+        assert!(mask_b.bit(4).unwrap());
     }
 }
 
@@ -257,11 +257,11 @@ mod double_byte_tests {
         mask.set_bit(12, true);
         mask.set_bit(8, false);
 
-        assert!(mask.bit(0).unwrap() == true);
-        assert!(mask.bit(4).unwrap() == true);
-        assert!(mask.bit(8).unwrap() == false);
-        assert!(mask.bit(12).unwrap() == true);
-        assert!(mask.bit(13).unwrap() == false);
+        assert!(mask.bit(0).unwrap());
+        assert!(mask.bit(4).unwrap());
+        assert!(!mask.bit(8).unwrap());
+        assert!(mask.bit(12).unwrap());
+        assert!(!mask.bit(13).unwrap());
     }
 
     #[test]
@@ -275,10 +275,10 @@ mod double_byte_tests {
 
         mask.clear();
 
-        assert!(mask.bit(0).unwrap() == false);
-        assert!(mask.bit(4).unwrap() == false);
-        assert!(mask.bit(8).unwrap() == false);
-        assert!(mask.bit(12).unwrap() == false);
+        assert!(!mask.bit(0).unwrap());
+        assert!(!mask.bit(4).unwrap());
+        assert!(!mask.bit(8).unwrap());
+        assert!(!mask.bit(12).unwrap());
     }
 
     #[test]
@@ -287,11 +287,11 @@ mod double_byte_tests {
 
         mask.set_bit(9, true);
 
-        assert!(mask.is_clear() == false);
+        assert!(!mask.is_clear());
 
         mask.set_bit(9, false);
 
-        assert!(mask.is_clear() == true);
+        assert!(mask.is_clear());
     }
 
     #[test]
@@ -322,15 +322,15 @@ mod double_byte_tests {
 
         mask_a.nand(&mask_b);
 
-        assert!(mask_a.bit(0).unwrap() == false);
-        assert!(mask_a.bit(1).unwrap() == false);
-        assert!(mask_a.bit(2).unwrap() == true);
-        assert!(mask_a.bit(3).unwrap() == false);
+        assert!(!mask_a.bit(0).unwrap());
+        assert!(!mask_a.bit(1).unwrap());
+        assert!(mask_a.bit(2).unwrap());
+        assert!(!mask_a.bit(3).unwrap());
 
-        assert!(mask_a.bit(8).unwrap() == false);
-        assert!(mask_a.bit(9).unwrap() == false);
-        assert!(mask_a.bit(10).unwrap() == true);
-        assert!(mask_a.bit(11).unwrap() == false);
+        assert!(!mask_a.bit(8).unwrap());
+        assert!(!mask_a.bit(9).unwrap());
+        assert!(mask_a.bit(10).unwrap());
+        assert!(!mask_a.bit(11).unwrap());
     }
 
     #[test]
@@ -345,11 +345,11 @@ mod double_byte_tests {
 
         mask_a.or(&mask_b);
 
-        assert!(mask_a.bit(0).unwrap() == false);
-        assert!(mask_a.bit(4).unwrap() == true);
-        assert!(mask_a.bit(8).unwrap() == true);
-        assert!(mask_a.bit(12).unwrap() == true);
-        assert!(mask_a.bit(15).unwrap() == false);
+        assert!(!mask_a.bit(0).unwrap());
+        assert!(mask_a.bit(4).unwrap());
+        assert!(mask_a.bit(8).unwrap());
+        assert!(mask_a.bit(12).unwrap());
+        assert!(!mask_a.bit(15).unwrap());
     }
 
     #[test]
@@ -360,9 +360,9 @@ mod double_byte_tests {
 
         let mask_b = mask_a.clone();
 
-        assert!(mask_b.bit(2).unwrap() == true);
-        assert!(mask_b.bit(4).unwrap() == false);
-        assert!(mask_b.bit(9).unwrap() == false);
-        assert!(mask_b.bit(10).unwrap() == true);
+        assert!(mask_b.bit(2).unwrap());
+        assert!(!mask_b.bit(4).unwrap());
+        assert!(!mask_b.bit(9).unwrap());
+        assert!(mask_b.bit(10).unwrap());
     }
 }
