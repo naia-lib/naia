@@ -129,10 +129,6 @@ jobs:
       - name: Clone repo
         uses: actions/checkout@v3
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends libxi-dev libgl1-mesa-dev
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
 
@@ -176,10 +172,9 @@ jobs:
       matrix:
         package:
           [
-            # These seem to have linking issues only in GH Actions ...
-            # naia-macroquad-client-demo,
-            # naia-basic-client-demo-mq,
-            # naia-socket-client-demo-mq,
+            naia-macroquad-client-demo,
+            naia-basic-client-demo-mq,
+            naia-socket-client-demo-mq,
             naia-bevy-client-demo,
             naia-hecs-client-demo,
             naia-basic-client-demo-wb,
@@ -190,6 +185,11 @@ jobs:
     steps:
       - name: Clone repo
         uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libxi-dev libgl1-mesa-dev
 
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
