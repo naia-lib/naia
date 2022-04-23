@@ -176,7 +176,7 @@ jobs:
       matrix:
         package:
           [
-            naia-macroquad-client-demo,
+            # naia-macroquad-client-demo, # seems to have a linking issue only in GH Actions ...
             naia-bevy-client-demo,
             naia-hecs-client-demo,
             naia-basic-demo-client-mq,
