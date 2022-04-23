@@ -223,3 +223,30 @@ jobs:
         with:
           command: clippy
           args: --package ${{ matrix.package }} --no-deps -- -D warnings
+
+  client-wasm-demos:
+    name: Client WASM Demos
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          [
+            naia-basic-client-demo-wb,
+            naia-socket-client-demo-wb,
+          ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v1
+
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --package ${{ matrix.package }} --target wasm32-unknown-unknown --lib --no-deps -- -D warnings
