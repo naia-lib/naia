@@ -17,14 +17,14 @@ pub struct Character {
 
 impl Character {
     pub fn new(x: u8, y: u8, first: &str, last: &str) -> Self {
-        return Character::new_complete(
+        Character::new_complete(
             x,
             y,
             FullName {
                 first: first.to_string(),
                 last: last.to_string(),
             },
-        );
+        )
     }
 
     pub fn step(&mut self) {

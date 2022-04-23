@@ -30,7 +30,7 @@ pub fn channels_impl(
         .parse()
         .unwrap();
 
-        return output;
+        output
     } else {
         unimplemented!("Only enums are supported");
     }

@@ -9,14 +9,16 @@ pub struct WorldRecord<E: Copy + Eq + Hash, K: ProtocolKindType> {
     handle_entity_map: BigMap<EntityHandle, E>,
 }
 
-impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
-    pub fn new() -> Self {
+impl<E: Copy + Eq + Hash, K: ProtocolKindType> Default for WorldRecord<E, K> {
+    fn default() -> Self {
         Self {
-            entity_records: HashMap::new(),
-            handle_entity_map: BigMap::new(),
+            entity_records: HashMap::default(),
+            handle_entity_map: BigMap::default(),
         }
     }
+}
 
+impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
     // Sync w/ World & Server
 
     pub fn spawn_entity(&mut self, entity: &E) {

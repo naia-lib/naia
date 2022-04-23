@@ -32,7 +32,7 @@ pub struct ComponentAccessor<P: Protocolize, R: ReplicateSafe<P>> {
 }
 
 impl<P: 'static + Protocolize, R: ReplicateSafe<P>> ComponentAccessor<P, R> {
-    pub fn new() -> Box<dyn Any> {
+    pub fn create() -> Box<dyn Any> {
         let inner_box: Box<dyn ComponentAccess<P>> = Box::new(ComponentAccessor {
             phantom_p: PhantomData::<P>,
             phantom_r: PhantomData::<R>,

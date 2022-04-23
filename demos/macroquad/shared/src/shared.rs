@@ -16,10 +16,10 @@ pub fn shared_config() -> SharedConfig<Channels> {
     //     incoming_loss: 0.1,
     // });
 
-    return SharedConfig::new(
+    SharedConfig::new(
         SocketConfig::new(link_condition, None),
         CHANNEL_CONFIG,
         tick_interval,
         None,
-    );
+    )
 }

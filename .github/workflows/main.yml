@@ -15,7 +15,7 @@ env:
 
 jobs:
 
-  format_check:
+  check-format:
     name: Check Format
     runs-on: ubuntu-latest
     steps:
@@ -28,7 +28,7 @@ jobs:
           command: fmt
           args: -- --check
 
-  test-server-socket:
+  server-socket:
     strategy:
       fail-fast: false
       matrix:
@@ -37,7 +37,7 @@ jobs:
           [
             naia-server-socket,
           ]
-    name: Test Server Socket
+    name: Server Socket
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
@@ -46,14 +46,20 @@ jobs:
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
 
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --package ${{ matrix.package }} --features "${{ matrix.features }}" --no-deps -- -D warnings
+
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
 
-  test-servers:
-    name: Test Servers
+  servers:
+    name: Servers
     strategy:
       fail-fast: false
       matrix:
@@ -71,14 +77,20 @@ jobs:
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
 
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --package ${{ matrix.package }} --features "use-udp" --no-deps -- -D warnings
+
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --package ${{ matrix.package }} --features "use-udp"
 
-  test-clients-and-shared:
-    name: Test Clients
+  clients-and-shared:
+    name: Clients And Shared
     strategy:
       fail-fast: false
       matrix:
@@ -101,14 +113,20 @@ jobs:
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
 
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --package ${{ matrix.package }} --features "${{ matrix.features }}" --no-deps -- -D warnings
+
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
 
-  test:
-    name: Test all other crates
+  other:
+    name: Other
     strategy:
       fail-fast: false
       matrix:
@@ -129,12 +147,14 @@ jobs:
       - name: Clone repo
         uses: actions/checkout@v3
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends libxi-dev libgl1-mesa-dev
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
+
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --package ${{ matrix.package }} --no-deps -- -D warnings
 
       - name: Test
         uses: actions-rs/cargo@v1
@@ -142,8 +162,8 @@ jobs:
           command: test
           args: --package ${{ matrix.package }}
 
-  build-server-demos:
-    name: Build Server Demos
+  server-demos:
+    name: Server Demos
     strategy:
       fail-fast: false
       matrix:
@@ -163,23 +183,22 @@ jobs:
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
 
-      - name: Test
+      - name: Clippy
         uses: actions-rs/cargo@v1
         with:
-          command: build
-          args: --package ${{ matrix.package }} --features "use-udp"
+          command: clippy
+          args: --package ${{ matrix.package }} --features "use-udp" --no-deps -- -D warnings
 
-  build-client-demos:
-    name: Build Client Demos
+  client-demos:
+    name: Client Demos
     strategy:
       fail-fast: false
       matrix:
         package:
           [
-            # These seem to have linking issues only in GH Actions ...
-            # naia-macroquad-client-demo,
-            # naia-basic-client-demo-mq,
-            # naia-socket-client-demo-mq,
+            naia-macroquad-client-demo,
+            naia-basic-client-demo-mq,
+            naia-socket-client-demo-mq,
             naia-bevy-client-demo,
             naia-hecs-client-demo,
             naia-basic-client-demo-wb,
@@ -191,11 +210,16 @@ jobs:
       - name: Clone repo
         uses: actions/checkout@v3
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libxi-dev libgl1-mesa-dev
+
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
 
-      - name: Test
+      - name: Clippy
         uses: actions-rs/cargo@v1
         with:
-          command: build
-          args: --package ${{ matrix.package }}
+          command: clippy
+          args: --package ${{ matrix.package }} --no-deps -- -D warnings

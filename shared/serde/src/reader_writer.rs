@@ -10,14 +10,9 @@ pub trait BitWrite {
 
 // BitCounter
 
+#[derive(Default)]
 pub struct BitCounter {
     count: u16,
-}
-
-impl BitCounter {
-    pub fn new() -> Self {
-        Self { count: 0 }
-    }
 }
 
 impl BitWrite for BitCounter {
@@ -43,8 +38,8 @@ pub struct BitWriter {
     buffer_index: usize,
 }
 
-impl BitWriter {
-    pub fn new() -> Self {
+impl Default for BitWriter {
+    fn default() -> Self {
         Self {
             scratch: 0,
             scratch_index: 0,
@@ -52,7 +47,9 @@ impl BitWriter {
             buffer_index: 0,
         }
     }
+}
 
+impl BitWriter {
     pub fn flush(&mut self) -> (usize, [u8; MAX_BUFFER_SIZE]) {
         if self.scratch_index > 0 {
             self.buffer[self.buffer_index] =
@@ -208,7 +205,7 @@ mod tests {
     fn read_write_1_bit() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         writer.write_bit(true);
 
@@ -216,14 +213,14 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert_eq!(true, reader.read_bit());
+        assert!(reader.read_bit());
     }
 
     #[test]
     fn read_write_3_bits() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         writer.write_bit(false);
         writer.write_bit(true);
@@ -233,16 +230,16 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(reader.read_bit());
     }
 
     #[test]
     fn read_write_8_bits() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         writer.write_bit(false);
         writer.write_bit(true);
@@ -258,22 +255,22 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(reader.read_bit());
 
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(!reader.read_bit());
     }
 
     #[test]
     fn read_write_13_bits() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         writer.write_bit(false);
         writer.write_bit(true);
@@ -296,29 +293,29 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(reader.read_bit());
 
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(!reader.read_bit());
 
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(reader.read_bit());
 
-        assert_eq!(true, reader.read_bit());
+        assert!(reader.read_bit());
     }
 
     #[test]
     fn read_write_16_bits() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         writer.write_bit(false);
         writer.write_bit(true);
@@ -344,32 +341,32 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(reader.read_bit());
 
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(!reader.read_bit());
 
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(reader.read_bit());
 
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(false, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
-        assert_eq!(true, reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(!reader.read_bit());
+        assert!(reader.read_bit());
+        assert!(reader.read_bit());
     }
 
     #[test]
     fn read_write_1_byte() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         writer.write_byte(123);
 
@@ -384,7 +381,7 @@ mod tests {
     fn read_write_5_bytes() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         writer.write_byte(48);
         writer.write_byte(151);

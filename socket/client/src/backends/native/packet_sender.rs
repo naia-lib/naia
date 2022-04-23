@@ -25,12 +25,13 @@ impl PacketSender {
     /// Send a Packet to the Server
     pub fn send(&self, payload: &[u8]) {
         //send it
-        if let Err(_) = self
+        if self
             .local_socket
             .as_ref()
             .lock()
             .unwrap()
             .send_to(payload, self.server_addr)
+            .is_err()
         {
             //TODO: handle this error
         }

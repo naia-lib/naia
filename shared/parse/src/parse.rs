@@ -147,15 +147,13 @@ pub fn debug_current_token(source: &mut Peekable<impl Iterator<Item = TokenTree>
 
 fn next_type<T: Iterator<Item = TokenTree>>(source: &mut Peekable<T>) -> Option<Type> {
     let group = next_group(source);
-    if group.is_some() {
-        let mut group = group.unwrap().stream().into_iter().peekable();
-
+    if let Some(group) = group {
         let mut tuple_type = Type {
             is_option: false,
             path: "".to_string(),
         };
 
-        while let Some(next_ty) = next_type(&mut group) {
+        while let Some(next_ty) = next_type(&mut group.stream().into_iter().peekable()) {
             tuple_type.path.push_str(&format!("{}, ", next_ty.path));
         }
 
@@ -338,19 +336,15 @@ pub fn parse_data(input: TokenStream) -> Data {
         pub_or_type
     };
 
-    let res;
-
-    match type_keyword.as_str() {
-        "struct" => {
-            res = Data::Struct(next_struct(&mut source));
-        }
+    let res = match type_keyword.as_str() {
+        "struct" => Data::Struct(next_struct(&mut source)),
         "enum" => {
             let enum_ = next_enum(&mut source);
-            res = Data::Enum(enum_);
+            Data::Enum(enum_)
         }
         "union" => unimplemented!("Unions are not supported"),
         unexpected => panic!("Unexpected keyword: {}", unexpected),
-    }
+    };
 
     assert!(
         source.next().is_none(),

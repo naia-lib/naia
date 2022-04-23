@@ -14,17 +14,21 @@ pub struct EntityMessageWaitlist<P: Protocolize, E: Copy + Eq + Hash, C: Channel
     ready_messages: Vec<(C, P)>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist<P, E, C> {
-    pub fn new() -> Self {
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Default
+    for EntityMessageWaitlist<P, E, C>
+{
+    fn default() -> Self {
         Self {
-            messages: HashMap::new(),
-            message_handle_store: KeyGenerator::new(),
-            waiting_entities: HashMap::new(),
-            in_scope_entities: HashSet::new(),
-            ready_messages: Vec::new(),
+            messages: HashMap::default(),
+            message_handle_store: KeyGenerator::default(),
+            waiting_entities: HashMap::default(),
+            in_scope_entities: HashSet::default(),
+            ready_messages: Vec::default(),
         }
     }
+}
 
+impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist<P, E, C> {
     pub fn queue_message(&mut self, entities: Vec<E>, channel: C, message: P) {
         let new_handle = self.message_handle_store.generate();
 

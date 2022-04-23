@@ -15,7 +15,7 @@ pub fn shared_config() -> SharedConfig<DefaultChannels> {
     });
     return SharedConfig::new(
         SocketConfig::new(link_condition, None),
-        &ChannelConfig::<DefaultChannels>::default(),
+        ChannelConfig::<DefaultChannels>::default(),
         tick_interval,
         None,
     );

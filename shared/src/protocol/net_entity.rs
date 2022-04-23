@@ -8,15 +8,15 @@ use naia_serde::{BitReader, BitWrite, SerdeErr, UnsignedVariableInteger};
 #[derive(Copy, Eq, Hash, Clone, PartialEq)]
 pub struct NetEntity(u16);
 
-impl From<u16> for NetEntity {
-    fn from(value: u16) -> Self {
-        NetEntity(value)
+impl From<NetEntity> for u16 {
+    fn from(entity: NetEntity) -> u16 {
+        entity.0
     }
 }
 
-impl Into<u16> for NetEntity {
-    fn into(self) -> u16 {
-        self.0
+impl From<u16> for NetEntity {
+    fn from(value: u16) -> Self {
+        NetEntity(value)
     }
 }
 

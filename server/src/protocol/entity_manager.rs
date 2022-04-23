@@ -33,10 +33,12 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: C
     // World
     world_channel: WorldChannel<P, E, C>,
     next_send_actions: VecDeque<(ActionId, EntityActionEvent<E, P::Kind>)>,
+    #[allow(clippy::type_complexity)]
     sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<E, P::Kind>)>)>,
 
     // Updates
     next_send_updates: HashMap<E, HashSet<P::Kind>>,
+    #[allow(clippy::type_complexity)]
     sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, P::Kind), DiffMask>)>,
     last_update_packet_index: PacketIndex,
 }
@@ -257,7 +259,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 return;
             }
 
-            let mut counter = BitCounter::new();
+            let mut counter = BitCounter::default();
             message_list_header::write(&mut counter, 123);
 
             // Check for overflow
@@ -321,6 +323,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn write_action<W: WorldRefType<P, E>>(
         &mut self,
         world: &W,
@@ -493,6 +496,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn record_action_written(
         sent_actions: &mut SequenceList<(Instant, Vec<(ActionId, EntityAction<E, P::Kind>)>)>,
         packet_index: &PacketIndex,
@@ -522,7 +526,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 return;
             }
 
-            let mut counter = BitCounter::new();
+            let mut counter = BitCounter::default();
             message_list_header::write(&mut counter, 123);
 
             // Check for overflow

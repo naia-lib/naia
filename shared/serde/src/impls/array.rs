@@ -47,7 +47,7 @@ mod tests {
     #[test]
     fn read_write() {
         // Write
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         let in_1: [i32; 4] = [5, 11, 52, 8];
         let in_2: [bool; 3] = [true, false, true];

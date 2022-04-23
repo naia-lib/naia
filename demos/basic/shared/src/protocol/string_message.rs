@@ -8,6 +8,6 @@ pub struct StringMessage {
 
 impl StringMessage {
     pub fn new(contents: String) -> Self {
-        return StringMessage::new_complete(contents);
+        StringMessage::new_complete(contents)
     }
 }

@@ -32,18 +32,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         channel_config: &ChannelConfig<C>,
         tick_duration: &Option<Duration>,
     ) -> Self {
-        let tick_buffer = match tick_duration {
-            Some(duration) => Some(TickBufferSender::new(channel_config, duration)),
-            None => None,
-        };
+        let tick_buffer = tick_duration
+            .as_ref()
+            .map(|duration| TickBufferSender::new(channel_config, duration));
 
-        return Connection {
+        Connection {
             base: BaseConnection::new(address, HostType::Client, connection_config, channel_config),
-            entity_manager: EntityManager::new(),
+            entity_manager: EntityManager::default(),
             ping_manager: PingManager::new(&connection_config.ping),
             tick_buffer,
             jitter_buffer: TickQueue::new(),
-        };
+        }
     }
 
     // Incoming data
@@ -134,7 +133,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         if self.base.message_manager.has_outgoing_messages() || tick_buffer_has_outgoing_messages {
             let next_packet_index = self.base.next_packet_index();
 
-            let mut bit_writer = BitWriter::new();
+            let mut bit_writer = BitWriter::default();
 
             // write header
             self.base
@@ -169,6 +168,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             return true;
         }
 
-        return false;
+        false
     }
 }

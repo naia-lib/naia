@@ -83,11 +83,8 @@ impl Socket {
                     }
                 },
                 Next::ToClientMessage((address, payload)) => {
-                    match self.socket.send_to(&payload, address).await {
-                        Err(_) => {
-                            return Err(NaiaServerSocketError::SendError(address));
-                        }
-                        _ => {}
+                    if (self.socket.send_to(&payload, address).await).is_err() {
+                        return Err(NaiaServerSocketError::SendError(address));
                     }
                 }
             }

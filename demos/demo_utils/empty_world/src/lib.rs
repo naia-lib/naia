@@ -17,8 +17,8 @@ mod inner {
         phantom: PhantomData<P>,
     }
 
-    impl<P: Protocolize> EmptyWorldRef<P> {
-        pub fn new() -> Self {
+    impl<P: Protocolize> Default for EmptyWorldRef<P> {
+        fn default() -> Self {
             Self {
                 phantom: PhantomData,
             }
@@ -31,8 +31,8 @@ mod inner {
         phantom: PhantomData<P>,
     }
 
-    impl<P: Protocolize> EmptyWorldMut<P> {
-        pub fn new() -> Self {
+    impl<P: Protocolize> Default for EmptyWorldMut<P> {
+        fn default() -> Self {
             Self {
                 phantom: PhantomData,
             }

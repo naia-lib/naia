@@ -24,13 +24,13 @@ impl<T> TickQueue<T> {
 
     /// Returns whether or not there is an item that is ready to be returned
     fn has_item(&self, current_tick: Tick) -> bool {
-        if self.queue.len() == 0 {
+        if self.queue.is_empty() {
             return false;
         }
         if let Some(item) = self.queue.peek() {
             return current_tick == item.tick || sequence_greater_than(current_tick, item.tick);
         }
-        return false;
+        false
     }
 
     /// Pops an item from the queue if the tick has elapsed
@@ -40,7 +40,7 @@ impl<T> TickQueue<T> {
                 return Some((container.tick, container.item));
             }
         }
-        return None;
+        None
     }
 }
 
@@ -52,7 +52,7 @@ pub struct ItemContainer<T> {
 
 impl<T> PartialEq for ItemContainer<T> {
     fn eq(&self, other: &Self) -> bool {
-        return self.tick == other.tick;
+        self.tick == other.tick
     }
 }
 
@@ -63,11 +63,11 @@ impl<T> Ord for ItemContainer<T> {
         if self.tick == other.tick {
             return Ordering::Equal;
         }
-        return if sequence_greater_than(other.tick, self.tick) {
+        if sequence_greater_than(other.tick, self.tick) {
             Ordering::Greater
         } else {
             Ordering::Less
-        };
+        }
     }
 }
 

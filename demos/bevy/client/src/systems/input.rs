@@ -35,11 +35,9 @@ pub fn input(
         if d {
             *command.d = true;
         }
-    } else {
-        if let Some(owned_entity) = &global.owned_entity {
-            let mut key_command = KeyCommand::new(w, s, a, d);
-            key_command.entity.set(&client, &owned_entity.confirmed);
-            global.queued_command = Some(key_command);
-        }
+    } else if let Some(owned_entity) = &global.owned_entity {
+        let mut key_command = KeyCommand::new(w, s, a, d);
+        key_command.entity.set(&client, &owned_entity.confirmed);
+        global.queued_command = Some(key_command);
     }
 }

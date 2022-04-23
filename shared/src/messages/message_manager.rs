@@ -97,13 +97,13 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                 ChannelMode::UnorderedReliable(_) => {
                     channel_receivers.insert(
                         channel_index.clone(),
-                        Box::new(UnorderedReliableReceiver::new()),
+                        Box::new(UnorderedReliableReceiver::default()),
                     );
                 }
                 ChannelMode::OrderedReliable(_) => {
                     channel_receivers.insert(
                         channel_index.clone(),
-                        Box::new(OrderedReliableReceiver::new()),
+                        Box::new(OrderedReliableReceiver::default()),
                     );
                 }
                 _ => {}
@@ -127,7 +127,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     }
 
     pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
-        for (_, channel) in &mut self.channel_senders {
+        for channel in self.channel_senders.values_mut() {
             channel.collect_messages(now, rtt_millis);
         }
     }
@@ -135,7 +135,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     /// Returns whether the Manager has queued Messages that can be transmitted
     /// to the remote host
     pub fn has_outgoing_messages(&self) -> bool {
-        for (_, channel) in &self.channel_senders {
+        for channel in self.channel_senders.values() {
             if channel.has_messages() {
                 return true;
             }

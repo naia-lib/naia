@@ -49,7 +49,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     pub fn is_connected(&self) -> bool {
-        return self.connection_state == HandshakeState::Connected;
+        self.connection_state == HandshakeState::Connected
     }
 
     // Give handshake manager the opportunity to send out messages to the server
@@ -83,20 +83,16 @@ impl<P: Protocolize> HandshakeManager<P> {
         match header.packet_type {
             PacketType::ServerChallengeResponse => {
                 self.recv_challenge_response(reader);
-                return false;
+                false
             }
-            PacketType::ServerConnectResponse => {
-                return self.recv_connect_response();
-            }
-            _ => {
-                return false;
-            }
+            PacketType::ServerConnectResponse => self.recv_connect_response(),
+            _ => false,
         }
     }
 
     // Step 1 of Handshake
     pub fn write_challenge_request(&self) -> BitWriter {
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
         StandardHeader::new(PacketType::ClientChallengeRequest, 0, 0, 0).ser(&mut writer);
 
         self.pre_connection_timestamp.ser(&mut writer);
@@ -120,7 +116,7 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     // Step 3 of Handshake
     pub fn write_connect_request(&self) -> BitWriter {
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0).ser(&mut writer);
 
@@ -145,12 +141,12 @@ impl<P: Protocolize> HandshakeManager<P> {
     pub fn recv_connect_response(&mut self) -> bool {
         let was_not_connected = self.connection_state != HandshakeState::Connected;
         self.connection_state = HandshakeState::Connected;
-        return was_not_connected;
+        was_not_connected
     }
 
     // Send 10 disconnect packets
     pub fn write_disconnect(&self) -> BitWriter {
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
         StandardHeader::new(PacketType::Disconnect, 0, 0, 0).ser(&mut writer);
         self.write_signed_timestamp(&mut writer);
         writer

@@ -31,12 +31,14 @@ pub trait PacketReceiverTrait: PacketReceiverClone + Send + Sync {
 /// Used to receive packets from the Server Socket
 #[derive(Clone)]
 pub struct PacketReceiverImpl {
+    #[allow(clippy::type_complexity)]
     channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
     last_payload: Option<Box<[u8]>>,
 }
 
 impl PacketReceiverImpl {
     /// Creates a new PacketReceiver
+    #[allow(clippy::type_complexity)]
     pub fn new(
         channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
     ) -> Self {

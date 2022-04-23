@@ -60,7 +60,7 @@ impl<P: Send + Sync> ChannelSender<P> for UnorderedUnreliableSender<P> {
                 return None;
             }
 
-            let mut counter = BitCounter::new();
+            let mut counter = BitCounter::default();
 
             //TODO: message_count is inaccurate here and may be different than final, does
             // this matter?

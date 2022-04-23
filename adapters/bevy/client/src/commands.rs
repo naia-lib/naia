@@ -39,11 +39,11 @@ pub(crate) struct DuplicateComponents<P: Protocolize> {
 
 impl<P: Protocolize> DuplicateComponents<P> {
     pub fn new(new_entity: Entity, old_entity: Entity) -> Self {
-        return Self {
+        Self {
             mutable_entity: new_entity,
             immutable_entity: old_entity,
             phantom_p: PhantomData,
-        };
+        }
     }
 }
 
@@ -68,11 +68,11 @@ pub(crate) struct MirrorEntities<P: Protocolize> {
 
 impl<P: Protocolize> MirrorEntities<P> {
     pub fn new(new_entity: Entity, old_entity: Entity) -> Self {
-        return Self {
+        Self {
             mutable_entity: new_entity,
             immutable_entity: old_entity,
             phantom_p: PhantomData,
-        };
+        }
     }
 }
 

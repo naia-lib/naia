@@ -40,13 +40,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     pub fn new(client_config: &ClientConfig, shared_config: &SharedConfig<C>) -> Self {
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
 
-        let tick_manager = {
-            if let Some(duration) = shared_config.tick_interval {
-                Some(TickManager::new(duration, client_config.minimum_latency))
-            } else {
-                None
-            }
-        };
+        let tick_manager = shared_config
+            .tick_interval
+            .map(|duration| TickManager::new(duration, client_config.minimum_latency));
 
         Client {
             // Config
@@ -131,11 +127,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
         self.maintain_socket();
 
         // drop connection if necessary
-        if self.server_connection.is_some() {
-            if self.server_connection.as_ref().unwrap().base.should_drop() {
-                self.disconnect_internal();
-                return std::mem::take(&mut self.incoming_events);
-            }
+        if self.server_connection.is_some()
+            && self.server_connection.as_ref().unwrap().base.should_drop()
+        {
+            self.disconnect_internal();
+            return std::mem::take(&mut self.incoming_events);
         }
 
         // all other operations
@@ -181,7 +177,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             self.handshake_manager.send(&mut self.io);
         }
 
-        return std::mem::take(&mut self.incoming_events);
+        std::mem::take(&mut self.incoming_events)
     }
 
     // Messages
@@ -208,13 +204,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                     message.protocol_copy(),
                 );
             }
-        } else {
-            if let Some(connection) = &mut self.server_connection {
-                connection
-                    .base
-                    .message_manager
-                    .send_message(channel, message.protocol_copy());
-            }
+        } else if let Some(connection) = &mut self.server_connection {
+            connection
+                .base
+                .message_manager
+                .send_message(channel, message.protocol_copy());
         }
     }
 
@@ -241,7 +235,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     /// given Entity.
     /// Panics if the Entity does not exist.
     pub fn entity<W: WorldRefType<P, E>>(&self, world: W, entity: &E) -> EntityRef<P, E, W> {
-        return EntityRef::new(world, &entity);
+        EntityRef::new(world, entity)
     }
 
     // /// Retrieves an EntityMut that exposes read and write operations for the
@@ -260,24 +254,24 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     /// Return a list of all Entities
     pub fn entities<W: WorldRefType<P, E>>(&self, world: &W) -> Vec<E> {
-        return world.entities();
+        world.entities()
     }
 
     // Connection
 
     /// Get the address currently associated with the Server
     pub fn server_address(&self) -> SocketAddr {
-        return self.io.server_addr_unwrapped();
+        self.io.server_addr_unwrapped()
     }
 
     /// Gets the average Round Trip Time measured to the Server
     pub fn rtt(&self) -> f32 {
-        return self.server_connection.as_ref().unwrap().ping_manager.rtt;
+        self.server_connection.as_ref().unwrap().ping_manager.rtt
     }
 
     /// Gets the average Jitter measured in connection to the Server
     pub fn jitter(&self) -> f32 {
-        return self.server_connection.as_ref().unwrap().ping_manager.jitter;
+        self.server_connection.as_ref().unwrap().ping_manager.jitter
     }
 
     // Ticks
@@ -301,11 +295,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     // Bandwidth monitoring
     pub fn outgoing_bandwidth(&mut self) -> f32 {
-        return self.io.outgoing_bandwidth();
+        self.io.outgoing_bandwidth()
     }
 
     pub fn incoming_bandwidth(&mut self) -> f32 {
-        return self.io.incoming_bandwidth();
+        self.io.incoming_bandwidth()
     }
 
     // internal functions
@@ -317,7 +311,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
             // send heartbeats
             if server_connection.base.should_send_heartbeat() {
-                let mut writer = BitWriter::new();
+                let mut writer = BitWriter::default();
 
                 // write header
                 server_connection
@@ -336,7 +330,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
             // send pings
             if server_connection.ping_manager.should_send_ping() {
-                let mut writer = BitWriter::new();
+                let mut writer = BitWriter::default();
 
                 // write header
                 server_connection
@@ -406,7 +400,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                                 let ping_index = PingIndex::de(&mut reader).unwrap();
 
                                 // write pong payload
-                                let mut writer = BitWriter::new();
+                                let mut writer = BitWriter::default();
 
                                 // write header
                                 server_connection
@@ -511,7 +505,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     fn server_address_unwrapped(&self) -> SocketAddr {
         // NOTE: may panic if the connection is not yet established!
-        return self.io.server_addr_unwrapped();
+        self.io.server_addr_unwrapped()
     }
 }
 
@@ -523,7 +517,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter
             .server_connection
             .as_ref()
             .expect("cannot handle entity properties unless connection is established");
-        return connection.entity_manager.handle_to_entity(entity_handle);
+        connection.entity_manager.handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &E) -> EntityHandle {
@@ -531,6 +525,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter
             .server_connection
             .as_ref()
             .expect("cannot handle entity properties unless connection is established");
-        return connection.entity_manager.entity_to_handle(entity);
+        connection.entity_manager.entity_to_handle(entity)
     }
 }

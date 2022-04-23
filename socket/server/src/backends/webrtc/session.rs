@@ -106,7 +106,7 @@ async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpS
                         let (_, last) = str.split_at(16);
                         str = last.to_string();
                         content_length = str.parse::<usize>().ok();
-                    } else if str.len() == 0 {
+                    } else if str.is_empty() {
                         headers_read = true;
                     }
                 } else if str.starts_with(RTC_URL_PATH.get().unwrap()) {
@@ -188,24 +188,20 @@ impl<'a, R: AsyncBufRead + Unpin> Stream for RequestBuffer<'a, R> {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if self.add_newline {
             self.add_newline = false;
-            return Poll::Ready(Some(Ok(String::from(NEWLINE_STR))));
+            Poll::Ready(Some(Ok(String::from(NEWLINE_STR))))
         } else {
             unsafe {
-                loop {
-                    let mut_ref = Pin::new_unchecked(&mut self.buffer);
-                    match Stream::poll_next(mut_ref, cx) {
-                        Poll::Ready(Some(item)) => {
-                            self.add_newline = true;
-                            return Poll::Ready(Some(item));
-                        }
-                        Poll::Ready(None) => {
-                            return Poll::Ready(None);
-                        }
-                        Poll::Pending => {
-                            // TODO: This could be catastrophic.. I don't understand futures very
-                            // well!
-                            return Poll::Ready(None);
-                        }
+                let mut_ref = Pin::new_unchecked(&mut self.buffer);
+                match Stream::poll_next(mut_ref, cx) {
+                    Poll::Ready(Some(item)) => {
+                        self.add_newline = true;
+                        Poll::Ready(Some(item))
+                    }
+                    Poll::Ready(None) => Poll::Ready(None),
+                    Poll::Pending => {
+                        // TODO: This could be catastrophic.. I don't understand futures very
+                        // well!
+                        Poll::Ready(None)
                     }
                 }
             }

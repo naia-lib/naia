@@ -66,7 +66,7 @@ mod tests {
     #[test]
     fn read_write_hash_map() {
         // Write
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         let mut in_1 = HashMap::<i32, String>::new();
         in_1.insert(-7, "negative seven".to_string());
@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn read_write_hash_set() {
         // Write
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         let mut in_1 = HashSet::<i32>::new();
         in_1.insert(-7);

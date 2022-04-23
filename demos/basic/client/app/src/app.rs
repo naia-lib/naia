@@ -39,7 +39,7 @@ impl App {
 
         App {
             client,
-            world: World::new(),
+            world: World::default(),
             message_count: 0,
         }
     }

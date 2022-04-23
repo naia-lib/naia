@@ -22,7 +22,7 @@ impl ConditionedPacketReceiver {
         ConditionedPacketReceiver {
             inner_receiver,
             link_conditioner_config: link_conditioner_config.clone(),
-            time_queue: TimeQueue::new(),
+            time_queue: TimeQueue::default(),
             last_payload: None,
         }
     }

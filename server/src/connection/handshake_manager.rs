@@ -51,7 +51,7 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     // Step 2 of Handshake
     pub fn write_challenge_response(&mut self, timestamp: &Timestamp) -> BitWriter {
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
         StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0).ser(&mut writer);
         timestamp.ser(&mut writer);
 
@@ -94,7 +94,7 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     // Step 3 of Handshake
     pub fn write_connect_response(&self) -> BitWriter {
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
         StandardHeader::new(PacketType::ServerConnectResponse, 0, 0, 0).ser(&mut writer);
         writer
     }

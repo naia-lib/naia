@@ -19,7 +19,7 @@ pub struct EntityMut<'s, 'world, 'state, P: Protocolize, C: ChannelIndex> {
 
 impl<'s, 'world, 'state, P: Protocolize, C: ChannelIndex> EntityMut<'s, 'world, 'state, P, C> {
     pub fn new(entity: Entity, server: &'s mut Server<'world, 'state, P, C>) -> Self {
-        return EntityMut { entity, server };
+        EntityMut { entity, server }
     }
 
     #[inline]

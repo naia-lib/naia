@@ -45,7 +45,7 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, 
     }
 
     pub fn receive(&mut self) -> VecDeque<Result<Event<P, C>, NaiaServerError>> {
-        return self.server.receive();
+        self.server.receive()
     }
 
     //// Connections ////
@@ -69,13 +69,13 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, 
         channel: C,
         message: &R,
     ) {
-        return self.server.send_message(user_key, channel, message);
+        self.server.send_message(user_key, channel, message)
     }
 
     //// Updates ////
 
     pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, Entity)> {
-        return self.server.scope_checks();
+        self.server.scope_checks()
     }
 
     pub fn send_all_updates(&mut self) {
@@ -105,63 +105,63 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, 
     //// Users ////
 
     pub fn user_exists(&self, user_key: &UserKey) -> bool {
-        return self.server.user_exists(user_key);
+        self.server.user_exists(user_key)
     }
 
     pub fn user(&self, user_key: &UserKey) -> UserRef<P, Entity, C> {
-        return self.server.user(user_key);
+        self.server.user(user_key)
     }
 
     pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, Entity, C> {
-        return self.server.user_mut(user_key);
+        self.server.user_mut(user_key)
     }
 
     pub fn user_keys(&self) -> Vec<UserKey> {
-        return self.server.user_keys();
+        self.server.user_keys()
     }
 
     pub fn users_count(&self) -> usize {
-        return self.server.users_count();
+        self.server.users_count()
     }
 
     pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, Entity, C> {
-        return self.server.user_scope(user_key);
+        self.server.user_scope(user_key)
     }
 
     //// Rooms ////
 
     pub fn make_room(&mut self) -> RoomMut<P, Entity, C> {
-        return self.server.make_room();
+        self.server.make_room()
     }
 
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
-        return self.server.room_exists(room_key);
+        self.server.room_exists(room_key)
     }
 
     pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, Entity, C> {
-        return self.server.room(room_key);
+        self.server.room(room_key)
     }
 
     pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, Entity, C> {
-        return self.server.room_mut(room_key);
+        self.server.room_mut(room_key)
     }
 
     pub fn room_keys(&self) -> Vec<RoomKey> {
-        return self.server.room_keys();
+        self.server.room_keys()
     }
 
     pub fn rooms_count(&self) -> usize {
-        return self.server.rooms_count();
+        self.server.rooms_count()
     }
 
     //// Ticks ////
 
     pub fn client_tick(&self, user_key: &UserKey) -> Option<u16> {
-        return self.server.client_tick(user_key);
+        self.server.client_tick(user_key)
     }
 
     pub fn server_tick(&self) -> Option<u16> {
-        return self.server.server_tick();
+        self.server.server_tick()
     }
 
     // Crate-public methods
@@ -189,10 +189,10 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> EntityHandleConverter<Enti
     for Server<'world, 'state, P, C>
 {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
-        return self.server.handle_to_entity(entity_handle);
+        self.server.handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &Entity) -> EntityHandle {
-        return self.server.entity_to_handle(entity);
+        self.server.entity_to_handle(entity)
     }
 }

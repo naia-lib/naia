@@ -18,6 +18,6 @@ pub struct Square {
 
 impl Square {
     pub fn new(x: u16, y: u16, color: Color) -> Self {
-        return Square::new_complete(x, y, color);
+        Square::new_complete(x, y, color)
     }
 }

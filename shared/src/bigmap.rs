@@ -19,15 +19,17 @@ pub struct BigMap<K: BigMapKey, V> {
     phantom_k: PhantomData<K>,
 }
 
-impl<K: BigMapKey, V> BigMap<K, V> {
-    pub fn new() -> Self {
+impl<K: BigMapKey, V> Default for BigMap<K, V> {
+    fn default() -> Self {
         Self {
-            inner: HashMap::new(),
+            inner: HashMap::default(),
             current_index: 0,
             phantom_k: PhantomData,
         }
     }
+}
 
+impl<K: BigMapKey, V> BigMap<K, V> {
     pub fn get(&self, key: &K) -> Option<&V> {
         self.inner.get(&key.to_u64())
     }
@@ -53,6 +55,7 @@ impl<K: BigMapKey, V> BigMap<K, V> {
         self.inner.contains_key(&key.to_u64())
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn iter<'a>(&'a self) -> Map<Iter<'_, u64, V>, fn((&'a u64, &'a V)) -> (K, &'a V)> {
         return self
             .inner
@@ -60,6 +63,7 @@ impl<K: BigMapKey, V> BigMap<K, V> {
             .map(|(key, value)| (K::from_u64(*key), value));
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn iter_mut<'a>(
         &'a mut self,
     ) -> Map<IterMut<'_, u64, V>, fn((&'a u64, &'a mut V)) -> (K, &'a mut V)> {
@@ -71,5 +75,9 @@ impl<K: BigMapKey, V> BigMap<K, V> {
 
     pub fn len(&self) -> usize {
         self.inner.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
     }
 }

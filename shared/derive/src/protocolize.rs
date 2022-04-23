@@ -64,7 +64,7 @@ pub fn variants(data: &Data) -> Vec<Ident> {
             variants.push(variant.ident.clone());
         }
     }
-    return variants;
+    variants
 }
 
 pub fn kind_enum(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {

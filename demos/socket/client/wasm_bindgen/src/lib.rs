@@ -1,15 +1,16 @@
 #[macro_use]
 extern crate cfg_if;
 
-mod app_loop;
-
-use app_loop::start_loop;
-use naia_socket_client_demo_app::App;
-
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
 
+        mod app_loop;
+
         use wasm_bindgen::prelude::*;
+
+        use naia_socket_client_demo_app::App;
+
+        use app_loop::start_loop;
 
         #[wasm_bindgen(start)]
         pub fn main() -> Result<(), JsValue> {

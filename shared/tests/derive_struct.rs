@@ -16,7 +16,7 @@ use some_struct::SomeStruct;
 #[test]
 fn read_write_struct() {
     // Write
-    let mut writer = BitWriter::new();
+    let mut writer = BitWriter::default();
 
     let in_1 = SomeStruct {
         some_string: "Hello world!".to_string(),

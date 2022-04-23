@@ -34,14 +34,13 @@ impl<P> ReliableReceiver<P> {
         bit_reader: &mut BitReader,
         last_read_id: &Option<MessageId>,
     ) -> (MessageId, P) {
-        let message_id: MessageId;
-        if let Some(last_id) = last_read_id {
+        let message_id: MessageId = if let Some(last_id) = last_read_id {
             let id_diff = UnsignedVariableInteger::<3>::de(bit_reader).unwrap().get() as MessageId;
-            message_id = last_id.wrapping_add(id_diff);
+            last_id.wrapping_add(id_diff)
         } else {
             // read message id
-            message_id = MessageId::de(bit_reader).unwrap();
-        }
+            MessageId::de(bit_reader).unwrap()
+        };
 
         // read payload
         let new_message = channel_reader.read(bit_reader);
