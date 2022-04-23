@@ -10,30 +10,21 @@ on:
       - "**.md"
       - ".gitignore"
       - ".github/dependabot.yml"
-      -
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Servers have mutually exclusive features
-  test-servers:
+
+  test-server-socket:
     strategy:
       fail-fast: false
       matrix:
-        features: [use-udp, use-webrtc]
+        features: [ use-udp, use-webrtc ]
         package:
           [
-            naia-server,
-            naia-hecs-server,
-            naia-bevy-server,
-            naia-macroquad-server-demo,
-            naia-bevy-server-demo,
-            naia-basic-server-demo,
-            naia-server-socket-demo,
-            naia-hecs-server-demo,
             naia-server-socket,
           ]
-    name: Test servers
+    name: Test Server Socket
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
@@ -48,7 +39,37 @@ jobs:
           command: test
           args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
 
-  test-other:
+  test-servers:
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          [
+            naia-server,
+            naia-hecs-server,
+            naia-bevy-server,
+            naia-macroquad-server-demo,
+            naia-bevy-server-demo,
+            naia-basic-server-demo,
+            naia-server-socket-demo,
+            naia-hecs-server-demo,
+          ]
+    name: Test Servers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v1
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --package ${{ matrix.package }} --features "use-udp"
+
+  test:
     strategy:
       fail-fast: false
       matrix:
@@ -84,7 +105,7 @@ jobs:
             naia-socket-shared,
             naia-client-socket,
           ]
-    name: Test other
+    name: Test All (non-Server)
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
@@ -104,7 +125,7 @@ jobs:
           args: --package ${{ matrix.package }}
 
   format:
-    name: Format
+    name: Check Format
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
@@ -117,6 +138,7 @@ jobs:
           args: -- --check
 
   clippy_check:
+    name: Check Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
