@@ -79,11 +79,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
     }
 
     pub fn scope_has_entity(&self, entity: &E) -> bool {
-        return self.world_channel.host_has_entity(entity);
+        self.world_channel.host_has_entity(entity)
     }
 
     pub fn entity_channel_is_open(&self, entity: &E) -> bool {
-        return self.world_channel.entity_channel_is_open(entity);
+        self.world_channel.entity_channel_is_open(entity)
     }
 
     // Messages
@@ -122,7 +122,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
     }
 
     pub fn has_outgoing_messages(&self) -> bool {
-        return self.next_send_actions.len() != 0 || self.next_send_updates.len() != 0;
+        !self.next_send_actions.is_empty() || !self.next_send_updates.is_empty()
     }
 
     pub fn write_all<W: WorldRefType<P, E>>(
@@ -133,8 +133,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
     ) {
-        self.write_updates(&now, writer, packet_index, world, world_record);
-        self.write_actions(&now, writer, packet_index, world, world_record);
+        self.write_updates(now, writer, packet_index, world, world_record);
+        self.write_actions(now, writer, packet_index, world, world_record);
     }
 
     // Collecting
@@ -200,7 +200,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 let mut packet_index = dropped_packet_index.wrapping_add(1);
                 while packet_index != self.last_update_packet_index {
                     if let Some((_, diff_mask_map)) = self.sent_updates.get(&packet_index) {
-                        if let Some(next_diff_mask) = diff_mask_map.get(&component_index) {
+                        if let Some(next_diff_mask) = diff_mask_map.get(component_index) {
                             new_diff_mask.nand(next_diff_mask);
                         }
                     }
@@ -210,7 +210,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
                 self.world_channel
                     .diff_handler
-                    .or_diff_mask(&entity, &component, &new_diff_mask);
+                    .or_diff_mask(entity, component, &new_diff_mask);
             }
         }
     }
@@ -347,7 +347,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                     .ser(bit_writer);
 
                 // get component list
-                let component_kinds = match world_record.component_kinds(&entity) {
+                let component_kinds = match world_record.component_kinds(entity) {
                     Some(kind_list) => kind_list,
                     None => Vec::new(),
                 };
@@ -362,7 +362,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
                     // write component payload
                     world
-                        .component_of_kind(entity, &component_kind)
+                        .component_of_kind(entity, component_kind)
                         .expect("Component does not exist in World")
                         .write(bit_writer, &converter);
                 }
@@ -499,7 +499,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         action_id: &ActionId,
         action_record: EntityAction<E, P::Kind>,
     ) {
-        let (_, sent_actions_list) = sent_actions.get_mut_scan_from_back(&packet_index).unwrap();
+        let (_, sent_actions_list) = sent_actions.get_mut_scan_from_back(packet_index).unwrap();
         sent_actions_list.push((*action_id, action_record));
     }
 
@@ -532,7 +532,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
             }
 
             // Find how many messages will fit into the packet
-            let all_update_entities: Vec<E> = self.next_send_updates.keys().map(|e| *e).collect();
+            let all_update_entities: Vec<E> = self.next_send_updates.keys().copied().collect();
 
             for update_entity in all_update_entities {
                 self.write_update(
@@ -554,7 +554,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         // Write header
         message_list_header::write(writer, update_entities.len() as u16);
 
-        if !self.sent_updates.contains_key(&packet_index) {
+        if !self.sent_updates.contains_key(packet_index) {
             self.sent_updates
                 .insert(*packet_index, (now.clone(), HashMap::new()));
         }

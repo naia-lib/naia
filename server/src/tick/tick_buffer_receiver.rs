@@ -59,6 +59,6 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferReceiver<P, C> {
                 output.push((channel_index.clone(), message));
             }
         }
-        return output;
+        output
     }
 }

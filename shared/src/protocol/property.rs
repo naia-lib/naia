@@ -17,11 +17,11 @@ pub struct Property<T: Serde> {
 impl<T: Serde> Property<T> {
     /// Create a new Property
     pub fn new(value: T, mutator_index: u8) -> Property<T> {
-        return Property::<T> {
+        Property::<T> {
             inner: value,
             mutator: None,
             mutator_index,
-        };
+        }
     }
 
     /// Set value to the value of another Property, queues for update if value
@@ -42,11 +42,11 @@ impl<T: Serde> Property<T> {
     pub fn new_read(reader: &mut BitReader, mutator_index: u8) -> Self {
         let inner = Self::read_inner(reader);
 
-        return Property::<T> {
+        Property::<T> {
             inner,
             mutator: None,
             mutator_index,
-        };
+        }
     }
 
     /// Reads from a stream and immediately writes to a stream
@@ -64,14 +64,14 @@ impl<T: Serde> Property<T> {
     }
 
     fn read_inner(reader: &mut BitReader) -> T {
-        return T::de(reader).expect("Property read error.");
+        T::de(reader).expect("Property read error.")
     }
 
     // Comparison
 
     /// Compare to another property
     pub fn equals(&self, other: &Property<T>) -> bool {
-        return self.inner == other.inner;
+        self.inner == other.inner
     }
 
     // Internal
@@ -98,6 +98,6 @@ impl<T: Serde> DerefMut for Property<T> {
         if let Some(mutator) = &mut self.mutator {
             mutator.mutate(self.mutator_index);
         }
-        return &mut self.inner;
+        &mut self.inner
     }
 }

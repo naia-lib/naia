@@ -1,4 +1,9 @@
 name: Main
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     paths-ignore:
@@ -7,26 +12,32 @@ on:
       - ".github/dependabot.yml"
 env:
   CARGO_TERM_COLOR: always
+
 jobs:
-  # Servers have mutually exclusive features
-  test-servers:
+
+  format_check:
+    name: Check Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Format
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
+
+  test-server-socket:
     strategy:
       fail-fast: false
       matrix:
-        features: [use-udp, use-webrtc]
+        features: [ use-udp, use-webrtc ]
         package:
           [
-            naia-server,
-            naia-hecs-server,
-            naia-bevy-server,
-            naia-macroquad-server-demo,
-            naia-bevy-server-demo,
-            naia-basic-server-demo,
-            naia-server-socket-demo,
-            naia-hecs-server-demo,
             naia-server-socket,
           ]
-    name: Test servers
+    name: Test Server Socket
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
@@ -41,43 +52,78 @@ jobs:
           command: test
           args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
 
-  test-other:
+  test-servers:
+    name: Test Servers
     strategy:
       fail-fast: false
       matrix:
         package:
           [
+            naia-server,
+            naia-hecs-server,
+            naia-bevy-server,
+          ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v1
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --package ${{ matrix.package }} --features "use-udp"
+
+  test-clients-and-shared:
+    name: Test Clients
+    strategy:
+      fail-fast: false
+      matrix:
+        features: [ mquad, wbindgen ]
+        package:
+          [
+            naia-client-socket,
+            naia-socket-shared,
             naia-client,
-            naia-hecs-shared,
-            naia-bevy-client,
+            naia-shared,
             naia-hecs-client,
+            naia-hecs-shared,
+          ]
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v1
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
+
+  test:
+    name: Test all other crates
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          [
+            naia-bevy-client,
             naia-bevy-shared,
-            naia-macroquad-client-demo,
-            naia-macroquad-demo-shared,
-            naia-basic-demo-shared,
             naia-serde-derive,
-            naia-bevy-demo-shared,
             naia-demo-world,
             naia-empty-world,
-            naia-hecs-demo-shared,
             naia-serde,
-            naia-bevy-client-demo,
-            naia-socket-client-demo-app,
-            naia-socket-client-demo-mq,
-            naia-socket-client-demo-wb,
-            naia-socket-demo-shared,
-            naia-basic-client-demo-app,
-            naia-basic-client-demo-mq,
-            naia-basic-client-demo-wb,
-            naia-hecs-client-demo,
-            naia-shared,
             naia-test,
             naia-parse,
             naia-derive,
-            naia-socket-shared,
-            naia-client-socket,
           ]
-    name: Test other
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
@@ -96,15 +142,60 @@ jobs:
           command: test
           args: --package ${{ matrix.package }}
 
-  format:
-    name: Format
+  build-server-demos:
+    name: Build Server Demos
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          [
+            naia-macroquad-server-demo,
+            naia-bevy-server-demo,
+            naia-basic-server-demo,
+            naia-server-socket-demo,
+            naia-hecs-server-demo,
+          ]
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
         uses: actions/checkout@v3
 
-      - name: Format
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v1
+
+      - name: Test
         uses: actions-rs/cargo@v1
         with:
-          command: fmt
-          args: -- --check
+          command: build
+          args: --package ${{ matrix.package }} --features "use-udp"
+
+  build-client-demos:
+    name: Build Client Demos
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          [
+            # These seem to have linking issues only in GH Actions ...
+            # naia-macroquad-client-demo,
+            # naia-basic-client-demo-mq,
+            # naia-socket-client-demo-mq,
+            naia-bevy-client-demo,
+            naia-hecs-client-demo,
+            naia-basic-client-demo-wb,
+            naia-socket-client-demo-wb,
+          ]
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v1
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --package ${{ matrix.package }}

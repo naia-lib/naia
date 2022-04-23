@@ -48,7 +48,7 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Use
     }
 
     pub fn address(&self) -> SocketAddr {
-        return self.server.user_address(&self.key).unwrap();
+        self.server.user_address(&self.key).unwrap()
     }
 }
 
@@ -68,7 +68,7 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Use
     }
 
     pub fn address(&self) -> SocketAddr {
-        return self.server.user_address(&self.key).unwrap();
+        self.server.user_address(&self.key).unwrap()
     }
 
     pub fn disconnect(&mut self) {

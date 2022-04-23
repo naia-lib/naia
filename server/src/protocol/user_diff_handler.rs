@@ -46,7 +46,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> UserDiffHandler<E, K> {
         if let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) {
             return receiver.mask();
         }
-        return None;
+        None
     }
 
     //    pub fn has_diff_mask(&self, component_key: &ComponentKey) -> bool {
@@ -57,7 +57,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> UserDiffHandler<E, K> {
         if let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) {
             return Some(receiver.diff_mask_is_clear());
         }
-        return None;
+        None
     }
 
     pub fn or_diff_mask(&mut self, entity: &E, component_kind: &K, other_mask: &DiffMask) {

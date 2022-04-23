@@ -105,20 +105,20 @@ impl Serde for char {
         for index in 0..4 {
             bytes[index] = reader.read_byte();
         }
-        let mut container = [0 as u32];
+        let mut container = [0_u32];
         unsafe {
             std::ptr::copy_nonoverlapping(
-                bytes.as_ptr().offset(0 as isize) as *const u32,
+                bytes.as_ptr().offset(0_isize) as *const u32,
                 container.as_mut_ptr() as *mut u32,
                 1,
             )
         }
 
-        return if let Some(inner_char) = char::from_u32(container[0]) {
+        if let Some(inner_char) = char::from_u32(container[0]) {
             Ok(inner_char)
         } else {
             Err(SerdeErr {})
-        };
+        }
     }
 }
 
@@ -216,13 +216,13 @@ impl Serde for u8 {
 // i8
 impl Serde for i8 {
     fn ser(&self, writer: &mut dyn BitWrite) {
-        let du8 = unsafe { std::mem::transmute::<&i8, &u8>(&self) };
+        let du8 = unsafe { std::mem::transmute::<&i8, &u8>(self) };
         writer.write_byte(*du8);
     }
 
     fn de(reader: &mut BitReader) -> Result<i8, SerdeErr> {
         let byte = [reader.read_byte()];
-        let mut container = [0 as i8];
+        let mut container = [0_i8];
         unsafe {
             std::ptr::copy_nonoverlapping(
                 byte.as_ptr() as *const i8,
@@ -249,10 +249,10 @@ impl Serde for usize {
         for index in 0..8 {
             byte_array[index] = reader.read_byte();
         }
-        let mut container = [0 as u64];
+        let mut container = [0_u64];
         unsafe {
             std::ptr::copy_nonoverlapping(
-                byte_array.as_ptr().offset(0 as isize) as *const u64,
+                byte_array.as_ptr().offset(0_isize) as *const u64,
                 container.as_mut_ptr() as *mut u64,
                 1,
             )
@@ -276,10 +276,10 @@ impl Serde for isize {
         for index in 0..8 {
             byte_array[index] = reader.read_byte();
         }
-        let mut container = [0 as u64];
+        let mut container = [0_u64];
         unsafe {
             std::ptr::copy_nonoverlapping(
-                byte_array.as_ptr().offset(0 as isize) as *const u64,
+                byte_array.as_ptr().offset(0_isize) as *const u64,
                 container.as_mut_ptr() as *mut u64,
                 1,
             )

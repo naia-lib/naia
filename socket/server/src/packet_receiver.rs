@@ -18,7 +18,7 @@ impl PacketReceiver {
 
     /// Receives a packet from the Server Socket
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, NaiaServerSocketError> {
-        return self.inner.receive();
+        self.inner.receive()
     }
 }
 
@@ -55,11 +55,9 @@ impl PacketReceiverTrait for PacketReceiverImpl {
                     self.last_payload = Some(payload);
                     return Ok(Some((address, self.last_payload.as_ref().unwrap())));
                 }
-                Err(_) => return Ok(None),
+                Err(_) => Ok(None),
             },
-            Err(_) => {
-                return Ok(None);
-            }
+            Err(_) => Ok(None),
         }
     }
 }

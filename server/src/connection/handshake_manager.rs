@@ -46,8 +46,7 @@ impl<P: Protocolize> HandshakeManager<P> {
     pub fn recv_challenge_request(&mut self, reader: &mut BitReader) -> BitWriter {
         let timestamp = Timestamp::de(reader).unwrap();
 
-        let writer = self.write_challenge_response(&timestamp);
-        writer
+        self.write_challenge_response(&timestamp)
     }
 
     // Step 2 of Handshake
@@ -84,12 +83,12 @@ impl<P: Protocolize> HandshakeManager<P> {
 
             if has_auth {
                 let auth_message = P::read(reader, &FakeEntityConverter);
-                return HandshakeResult::Success(Some(auth_message));
+                HandshakeResult::Success(Some(auth_message))
             } else {
-                return HandshakeResult::Success(None);
+                HandshakeResult::Success(None)
             }
         } else {
-            return HandshakeResult::Invalid;
+            HandshakeResult::Invalid
         }
     }
 
@@ -116,7 +115,7 @@ impl<P: Protocolize> HandshakeManager<P> {
             }
         }
 
-        return false;
+        false
     }
 
     pub fn delete_user(&mut self, address: &SocketAddr) {
@@ -136,9 +135,9 @@ impl<P: Protocolize> HandshakeManager<P> {
             &digest_bytes,
         );
         if validation_result.is_err() {
-            return None;
+            None
         } else {
-            return Some(timestamp);
+            Some(timestamp)
         }
     }
 }

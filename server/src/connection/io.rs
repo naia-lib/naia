@@ -26,29 +26,21 @@ impl Io {
         bandwidth_measure_duration: &Option<Duration>,
         compression_config: &Option<CompressionConfig>,
     ) -> Self {
-        let outgoing_bandwidth_monitor =
-            bandwidth_measure_duration.map(|duration| BandwidthMonitor::new(duration));
-        let incoming_bandwidth_monitor =
-            bandwidth_measure_duration.map(|duration| BandwidthMonitor::new(duration));
+        let outgoing_bandwidth_monitor = bandwidth_measure_duration.map(BandwidthMonitor::new);
+        let incoming_bandwidth_monitor = bandwidth_measure_duration.map(BandwidthMonitor::new);
 
-        let outgoing_encoder = compression_config
-            .as_ref()
-            .map(|config| {
-                config
-                    .server_to_client
-                    .as_ref()
-                    .map(|mode| Encoder::new(mode.clone()))
-            })
-            .flatten();
-        let incoming_decoder = compression_config
-            .as_ref()
-            .map(|config| {
-                config
-                    .client_to_server
-                    .as_ref()
-                    .map(|mode| Decoder::new(mode.clone()))
-            })
-            .flatten();
+        let outgoing_encoder = compression_config.as_ref().and_then(|config| {
+            config
+                .server_to_client
+                .as_ref()
+                .map(|mode| Encoder::new(mode.clone()))
+        });
+        let incoming_decoder = compression_config.as_ref().and_then(|config| {
+            config
+                .client_to_server
+                .as_ref()
+                .map(|mode| Decoder::new(mode.clone()))
+        });
 
         Io {
             packet_sender: None,
@@ -80,7 +72,7 @@ impl Io {
 
         // Compression
         if let Some(encoder) = &mut self.outgoing_encoder {
-            payload = encoder.encode(&payload);
+            payload = encoder.encode(payload);
         }
 
         // Bandwidth monitoring
@@ -115,7 +107,7 @@ impl Io {
                     payload = decoder.decode(payload);
                 }
 
-                return Ok(Some((address, OwnedBitReader::new(payload))));
+                Ok(Some((address, OwnedBitReader::new(payload))))
             }
             Ok(None) => Ok(None),
             Err(err) => Err(err),

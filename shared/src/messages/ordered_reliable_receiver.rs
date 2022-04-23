@@ -90,7 +90,7 @@ impl<P> OrderedReliableReceiver<P> {
                 break;
             }
         }
-        return output;
+        output
     }
 }
 
@@ -103,6 +103,6 @@ impl<P: Send + Sync> ChannelReceiver<P> for OrderedReliableReceiver<P> {
     }
 
     fn receive_messages(&mut self) -> Vec<P> {
-        return self.receive_messages();
+        self.receive_messages()
     }
 }

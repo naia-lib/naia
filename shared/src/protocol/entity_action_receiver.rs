@@ -23,7 +23,7 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityActionReceiver<E, K> {
     }
 
     pub fn buffer_action(&mut self, action_id: ActionId, action: EntityAction<E, K>) {
-        return self.receiver.buffer_message(action_id, action);
+        self.receiver.buffer_message(action_id, action)
     }
 
     pub fn receive_actions(&mut self) -> Vec<EntityAction<E, K>> {
@@ -31,10 +31,9 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityActionReceiver<E, K> {
         let incoming_actions = self.receiver.receive_messages();
         for (action_id, action) in incoming_actions {
             if let Some(entity) = action.entity() {
-                if !self.entity_channels.contains_key(&entity) {
-                    self.entity_channels
-                        .insert(entity, EntityChannel::new(entity));
-                }
+                self.entity_channels
+                    .entry(entity)
+                    .or_insert_with(|| EntityChannel::new(entity));
                 let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
                 entity_channel.receive_action(action_id, action, &mut outgoing_actions);
             }
@@ -186,9 +185,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
             }
         }
 
-        if !self.components.contains_key(&component) {
-            self.components
-                .insert(component, ComponentChannel::new(self.last_canonical_id));
+        if let std::collections::hash_map::Entry::Vacant(e) = self.components.entry(component) {
+            e.insert(ComponentChannel::new(self.last_canonical_id));
         }
         let component_state = self.components.get_mut(&component).unwrap();
 
@@ -231,9 +229,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
             }
         }
 
-        if !self.components.contains_key(&component) {
-            self.components
-                .insert(component, ComponentChannel::new(self.last_canonical_id));
+        if let std::collections::hash_map::Entry::Vacant(e) = self.components.entry(component) {
+            e.insert(ComponentChannel::new(self.last_canonical_id));
         }
         let component_state = self.components.get_mut(&component).unwrap();
 

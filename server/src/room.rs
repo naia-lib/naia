@@ -40,7 +40,7 @@ impl<E: Copy + Eq + Hash> Room<E> {
     // Users
 
     pub(crate) fn has_user(&self, user_key: &UserKey) -> bool {
-        return self.users.contains(user_key);
+        self.users.contains(user_key)
     }
 
     pub(crate) fn subscribe_user(&mut self, user_key: &UserKey) {
@@ -55,11 +55,11 @@ impl<E: Copy + Eq + Hash> Room<E> {
     }
 
     pub(crate) fn user_keys(&self) -> Iter<UserKey> {
-        return self.users.iter();
+        self.users.iter()
     }
 
     pub(crate) fn users_count(&self) -> usize {
-        return self.users.len();
+        self.users.len()
     }
 
     // Entities
@@ -73,22 +73,22 @@ impl<E: Copy + Eq + Hash> Room<E> {
             for user_key in self.users.iter() {
                 self.entity_removal_queue.push_back((*user_key, *entity));
             }
-            return true;
+            true
         } else {
             panic!("Room does not contain Entity");
         }
     }
 
     pub(crate) fn entities(&self) -> Iter<E> {
-        return self.entities.iter();
+        self.entities.iter()
     }
 
     pub(crate) fn pop_entity_removal_queue(&mut self) -> Option<(UserKey, E)> {
-        return self.entity_removal_queue.pop_front();
+        self.entity_removal_queue.pop_front()
     }
 
     pub(crate) fn entities_count(&self) -> usize {
-        return self.entities.len();
+        self.entities.len()
     }
 }
 
@@ -117,21 +117,21 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
     // Users
 
     pub fn has_user(&self, user_key: &UserKey) -> bool {
-        return self.server.room_has_user(&self.key, user_key);
+        self.server.room_has_user(&self.key, user_key)
     }
 
     pub fn users_count(&self) -> usize {
-        return self.server.room_users_count(&self.key);
+        self.server.room_users_count(&self.key)
     }
 
     // Entities
 
     pub fn has_entity(&self, entity: &E) -> bool {
-        return self.server.room_has_entity(&self.key, entity);
+        self.server.room_has_entity(&self.key, entity)
     }
 
     pub fn entities_count(&self) -> usize {
-        return self.server.room_entities_count(&self.key);
+        self.server.room_entities_count(&self.key)
     }
 }
 
@@ -157,7 +157,7 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
     // Users
 
     pub fn has_user(&self, user_key: &UserKey) -> bool {
-        return self.server.room_has_user(&self.key, user_key);
+        self.server.room_has_user(&self.key, user_key)
     }
 
     pub fn add_user(&mut self, user_key: &UserKey) -> &mut Self {
@@ -173,13 +173,13 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
     }
 
     pub fn users_count(&self) -> usize {
-        return self.server.room_users_count(&self.key);
+        self.server.room_users_count(&self.key)
     }
 
     // Entities
 
     pub fn has_entity(&self, entity: &E) -> bool {
-        return self.server.room_has_entity(&self.key, entity);
+        self.server.room_has_entity(&self.key, entity)
     }
 
     pub fn add_entity(&mut self, entity: &E) -> &mut Self {
@@ -195,6 +195,6 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
     }
 
     pub fn entities_count(&self) -> usize {
-        return self.server.room_entities_count(&self.key);
+        self.server.room_entities_count(&self.key)
     }
 }

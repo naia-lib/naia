@@ -95,6 +95,6 @@ impl Socket {
     }
 
     pub fn sender(&self) -> mpsc::Sender<(SocketAddr, Box<[u8]>)> {
-        return self.to_client_sender.clone();
+        self.to_client_sender.clone()
     }
 }

@@ -38,7 +38,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist
         }
 
         self.messages
-            .insert(new_handle, (entities, channel.clone(), message));
+            .insert(new_handle, (entities, channel, message));
     }
 
     pub fn add_entity(&mut self, entity: &E) {
@@ -78,7 +78,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist
                 let mut remove = false;
                 if let Some(message_set) = self.waiting_entities.get_mut(&entity) {
                     message_set.remove(&outgoing_message_handle);
-                    if message_set.len() == 0 {
+                    if message_set.is_empty() {
                         remove = true;
                     }
                 }

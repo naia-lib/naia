@@ -1,4 +1,9 @@
 name: Dependencies
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     paths:
@@ -7,7 +12,9 @@ on:
   schedule:
     - cron: '0 0 * * 0'
 env:
+
   CARGO_TERM_COLOR: always
+
 jobs:
   dependencies:
     name: Check dependencies

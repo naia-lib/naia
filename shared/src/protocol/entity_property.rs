@@ -47,11 +47,11 @@ impl EntityProperty {
             let handle = converter.net_entity_to_handle(&net_entity);
             let mut new_prop = Self::new(mutator_index);
             *new_prop.handle_prop = Some(handle);
-            return new_prop;
+            new_prop
         } else {
             let mut new_prop = Self::new(mutator_index);
             *new_prop.handle_prop = None;
-            return new_prop;
+            new_prop
         }
     }
 
@@ -77,7 +77,7 @@ impl EntityProperty {
             }
             return false;
         }
-        return other.handle_prop.is_none();
+        other.handle_prop.is_none()
     }
 
     // Internal
@@ -143,11 +143,11 @@ impl<'a, 'b, E: Eq + Copy + Hash> EntityConverter<'a, 'b, E> {
 impl<'a, 'b, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityConverter<'a, 'b, E> {
     fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity {
         let entity = self.handle_converter.handle_to_entity(entity_handle);
-        return self.net_entity_converter.entity_to_net_entity(&entity);
+        self.net_entity_converter.entity_to_net_entity(&entity)
     }
 
     fn net_entity_to_handle(&self, net_entity: &NetEntity) -> EntityHandle {
         let entity = self.net_entity_converter.net_entity_to_entity(net_entity);
-        return self.handle_converter.entity_to_handle(&entity);
+        self.handle_converter.entity_to_handle(&entity)
     }
 }

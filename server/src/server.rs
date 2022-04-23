@@ -76,13 +76,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     pub fn new(server_config: &ServerConfig, shared_config: &SharedConfig<C>) -> Self {
         let socket = Socket::new(&shared_config.socket);
 
-        let tick_manager = {
-            if let Some(duration) = shared_config.tick_interval {
-                Some(TickManager::new(duration))
-            } else {
-                None
-            }
-        };
+        let tick_manager = { shared_config.tick_interval.map(TickManager::new) };
 
         Server {
             // Config
@@ -144,8 +138,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         }
 
         // loop through all connections, receive Messages
-        let mut user_addresses: Vec<SocketAddr> =
-            self.user_connections.keys().map(|addr| *addr).collect();
+        let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
         fastrand::shuffle(&mut user_addresses);
 
         for user_address in &user_addresses {
@@ -183,7 +176,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             self.incoming_events.push_back(Ok(Event::Tick));
         }
 
-        return std::mem::take(&mut self.incoming_events);
+        std::mem::take(&mut self.incoming_events)
     }
 
     // Connections
@@ -196,7 +189,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                 &self.server_config.connection,
                 &self.shared_config.channel,
                 user.address,
-                &user_key,
+                user_key,
                 &self.diff_handler,
             );
             // send connectaccept response
@@ -244,7 +237,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                     let entities: Vec<E> = message
                         .entities()
                         .iter()
-                        .map(|handle| self.world_record.handle_to_entity(&handle))
+                        .map(|handle| self.world_record.handle_to_entity(handle))
                         .collect();
 
                     // check whether all entities are in scope for the connection
@@ -300,7 +293,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             }
         }
 
-        return list;
+        list
     }
 
     /// Sends all update messages to all Clients. If you don't call this
@@ -313,8 +306,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         self.update_entity_scopes(&world);
 
         // loop through all connections, send packet
-        let mut user_addresses: Vec<SocketAddr> =
-            self.user_connections.keys().map(|addr| *addr).collect();
+        let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
         fastrand::shuffle(&mut user_addresses);
 
         for user_address in user_addresses {
@@ -341,12 +333,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         let entity = world.spawn_entity();
         self.spawn_entity_init(&entity);
 
-        return EntityMut::new(self, world, &entity);
+        EntityMut::new(self, world, &entity)
     }
 
     /// Creates a new Entity with a specific id
     pub fn spawn_entity_at(&mut self, entity: &E) {
-        self.spawn_entity_init(&entity);
+        self.spawn_entity_init(entity);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -354,7 +346,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Panics if the Entity does not exist.
     pub fn entity<W: WorldRefType<P, E>>(&self, world: W, entity: &E) -> EntityRef<P, E, W> {
         if world.has_entity(entity) {
-            return EntityRef::new(world, &entity);
+            return EntityRef::new(world, entity);
         }
         panic!("No Entity exists for given Key!");
     }
@@ -368,21 +360,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         entity: &E,
     ) -> EntityMut<P, E, W, C> {
         if world.has_entity(entity) {
-            return EntityMut::new(self, world, &entity);
+            return EntityMut::new(self, world, entity);
         }
         panic!("No Entity exists for given Key!");
     }
 
     /// Gets a Vec of all Entities in the given World
     pub fn entities<W: WorldRefType<P, E>>(&self, world: W) -> Vec<E> {
-        return world.entities();
+        world.entities()
     }
 
     // Users
 
     /// Returns whether or not a User exists for the given RoomKey
     pub fn user_exists(&self, user_key: &UserKey) -> bool {
-        return self.users.contains_key(user_key);
+        self.users.contains_key(user_key)
     }
 
     /// Retrieves an UserRef that exposes read-only operations for the User
@@ -390,7 +382,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Panics if the user does not exist.
     pub fn user(&self, user_key: &UserKey) -> UserRef<P, E, C> {
         if self.users.contains_key(user_key) {
-            return UserRef::new(self, &user_key);
+            return UserRef::new(self, user_key);
         }
         panic!("No User exists for given Key!");
     }
@@ -400,7 +392,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Returns None if the user does not exist.
     pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, E, C> {
         if self.users.contains_key(user_key) {
-            return UserMut::new(self, &user_key);
+            return UserMut::new(self, user_key);
         }
         panic!("No User exists for given Key!");
     }
@@ -413,19 +405,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             output.push(user_key);
         }
 
-        return output;
+        output
     }
 
     /// Get the number of Users currently connected
     pub fn users_count(&self) -> usize {
-        return self.users.len();
+        self.users.len()
     }
 
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
     pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, E, C> {
         if self.users.contains_key(user_key) {
-            return UserScopeMut::new(self, &user_key);
+            return UserScopeMut::new(self, user_key);
         }
         panic!("No User exists for given Key!");
     }
@@ -438,12 +430,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     pub fn make_room(&mut self) -> RoomMut<P, E, C> {
         let new_room = Room::new();
         let room_key = self.rooms.insert(new_room);
-        return RoomMut::new(self, &room_key);
+        RoomMut::new(self, &room_key)
     }
 
     /// Returns whether or not a Room exists for the given RoomKey
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
-        return self.rooms.contains_key(room_key);
+        self.rooms.contains_key(room_key)
     }
 
     /// Retrieves an RoomMut that exposes read and write operations for the
@@ -474,7 +466,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             output.push(key);
         }
 
-        return output;
+        output
     }
 
     /// Get a count of how many Rooms currently exist
@@ -491,7 +483,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                 return Some(user_connection.last_received_tick);
             }
         }
-        return None;
+        None
     }
 
     /// Gets the current tick of the Server
@@ -504,19 +496,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     // Bandwidth monitoring
     pub fn outgoing_bandwidth_total(&mut self) -> f32 {
-        return self.io.outgoing_bandwidth_total();
+        self.io.outgoing_bandwidth_total()
     }
 
     pub fn incoming_bandwidth_total(&mut self) -> f32 {
-        return self.io.incoming_bandwidth_total();
+        self.io.incoming_bandwidth_total()
     }
 
     pub fn outgoing_bandwidth_to_client(&mut self, address: &SocketAddr) -> f32 {
-        return self.io.outgoing_bandwidth_to_client(address);
+        self.io.outgoing_bandwidth_to_client(address)
     }
 
     pub fn incoming_bandwidth_from_client(&mut self, address: &SocketAddr) -> f32 {
-        return self.io.incoming_bandwidth_from_client(address);
+        self.io.incoming_bandwidth_from_client(address)
     }
 
     // Ping
@@ -527,7 +519,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                 return Some(user_connection.ping_manager.rtt);
             }
         }
-        return None;
+        None
     }
 
     /// Gets the average Jitter measured in connection to the given User's
@@ -538,7 +530,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                 return Some(user_connection.ping_manager.jitter);
             }
         }
-        return None;
+        None
     }
 
     // Crate-Public methods
@@ -650,7 +642,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         self.component_cleanup(entity, &component_kind);
 
         // remove from world
-        return world.remove_component::<R>(entity);
+        world.remove_component::<R>(entity)
     }
 
     //// Users
@@ -660,7 +652,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         if let Some(user) = self.users.get(user_key) {
             return Some(user.address);
         }
-        return None;
+        None
     }
 
     /// All necessary cleanup, when they're actually gone...
@@ -673,7 +665,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                 // TODO: cache this?
                 // Clean up all user data
                 for (_, room) in self.rooms.iter_mut() {
-                    room.unsubscribe_user(&user_key);
+                    room.unsubscribe_user(user_key);
                 }
 
                 if self.io.bandwidth_monitor_enabled() {
@@ -684,7 +676,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             }
         }
 
-        return None;
+        None
     }
 
     //// Rooms
@@ -700,9 +692,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             // actually remove the room from the collection
             self.rooms.remove(room_key);
 
-            return true;
+            true
         } else {
-            return false;
+            false
         }
     }
 
@@ -714,7 +706,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         if let Some(room) = self.rooms.get(room_key) {
             return room.has_user(user_key);
         }
-        return false;
+        false
     }
 
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
@@ -738,7 +730,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         if let Some(room) = self.rooms.get(room_key) {
             return room.users_count();
         }
-        return 0;
+        0
     }
 
     //////// entities
@@ -746,7 +738,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Returns whether or not an Entity is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity: &E) -> bool {
-        return self.world_record.entity_is_in_room(entity, room_key);
+        self.world_record.entity_is_in_room(entity, room_key)
     }
 
     /// Add an Entity to a Room associated with the given RoomKey.
@@ -774,7 +766,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Remove all Entities from a Room, associated with the given RoomKey
     fn room_remove_all_entities(&mut self, room_key: &RoomKey) {
         if let Some(room) = self.rooms.get_mut(room_key) {
-            let entities: Vec<E> = room.entities().map(|entity_ref| *entity_ref).collect();
+            let entities: Vec<E> = room.entities().copied().collect();
             for entity in entities {
                 room.remove_entity(&entity);
                 self.world_record.entity_leave_rooms(&entity);
@@ -787,7 +779,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         if let Some(room) = self.rooms.get(room_key) {
             return room.entities_count();
         }
-        return 0;
+        0
     }
 
     // Private methods
@@ -1081,11 +1073,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                                 .insert_component(entity, &component_kind);
                                         }
                                     }
-                                } else {
-                                    if currently_in_scope {
-                                        // remove entity from the connections local scope
-                                        user_connection.entity_manager.despawn_entity(entity);
-                                    }
+                                } else if currently_in_scope {
+                                    // remove entity from the connections local scope
+                                    user_connection.entity_manager.despawn_entity(entity);
                                 }
                             }
                         }
@@ -1129,10 +1119,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityH
     for Server<P, E, C>
 {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
-        return self.world_record.handle_to_entity(entity_handle);
+        self.world_record.handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &E) -> EntityHandle {
-        return self.world_record.entity_to_handle(entity);
+        self.world_record.entity_to_handle(entity)
     }
 }

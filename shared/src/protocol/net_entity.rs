@@ -27,6 +27,6 @@ impl serde::Serde for NetEntity {
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let value = UnsignedVariableInteger::<7>::de(reader).unwrap().get();
-        return Ok(NetEntity(value as u16));
+        Ok(NetEntity(value as u16))
     }
 }

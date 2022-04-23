@@ -16,7 +16,7 @@ impl PacketReceiver {
 
     /// Receives a packet from the Client Socket
     pub fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
-        return self.inner.receive();
+        self.inner.receive()
     }
 
     /// Get the Server's Socket address

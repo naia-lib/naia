@@ -34,22 +34,20 @@ impl PacketReceiverTrait for PacketReceiverImpl {
         match self.local_socket.as_ref().lock().unwrap().recv_from(buffer) {
             Ok((recv_len, address)) => {
                 if address == self.server_addr {
-                    return Ok(Some(&buffer[..recv_len]));
+                    Ok(Some(&buffer[..recv_len]))
                 } else {
                     let err_message = format!(
                         "Received packet from unknown sender with a socket address of: {}",
                         address
                     );
-                    return Err(NaiaClientSocketError::Message(err_message.to_string()));
+                    Err(NaiaClientSocketError::Message(err_message))
                 }
             }
             Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                 //just didn't receive anything this time
-                return Ok(None);
+                Ok(None)
             }
-            Err(e) => {
-                return Err(NaiaClientSocketError::Wrapped(Box::new(e)));
-            }
+            Err(e) => Err(NaiaClientSocketError::Wrapped(Box::new(e))),
         }
     }
 

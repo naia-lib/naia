@@ -33,7 +33,7 @@ impl<C: ChannelIndex> ChannelConfig<C> {
     }
 
     pub fn channels(&self) -> &HashMap<C, Channel<C>> {
-        return &self.channels;
+        &self.channels
     }
 }
 
@@ -71,7 +71,7 @@ impl<C: ChannelIndex> Channel<C> {
     }
 
     pub fn tick_buffered(&self) -> bool {
-        return self.mode.tick_buffered();
+        self.mode.tick_buffered()
     }
 
     pub fn can_send_to_server(&self) -> bool {
@@ -161,7 +161,7 @@ impl ChannelConfig<DefaultChannels> {
     }
 }
 
-const DEFAULT_CHANNEL_CONFIG: &'static [Channel<DefaultChannels>] = &[
+const DEFAULT_CHANNEL_CONFIG: &[Channel<DefaultChannels>] = &[
     Channel {
         index: DefaultChannels::UnorderedUnreliable,
         direction: ChannelDirection::Bidirectional,

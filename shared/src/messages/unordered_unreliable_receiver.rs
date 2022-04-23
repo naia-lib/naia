@@ -24,9 +24,8 @@ impl<P> UnorderedUnreliableReceiver<P> {
         bit_reader: &mut BitReader,
     ) -> P {
         // read payload
-        let new_message = channel_reader.read(bit_reader);
 
-        return new_message;
+        channel_reader.read(bit_reader)
     }
 
     fn recv_message(&mut self, message: P) {

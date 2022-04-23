@@ -13,6 +13,6 @@ impl<K: ProtocolKindType> ComponentUpdate<K> {
     }
 
     pub fn reader(&self) -> BitReader {
-        return self.buffer.borrow();
+        self.buffer.borrow()
     }
 }

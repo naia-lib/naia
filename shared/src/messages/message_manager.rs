@@ -140,7 +140,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     pub fn write_messages(
@@ -166,9 +166,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             channel_index.ser(bit_writer);
 
             if let Some(message_ids) = channel.write_messages(channel_writer, bit_writer) {
-                if !self.packet_to_message_map.contains_key(&packet_index) {
-                    self.packet_to_message_map.insert(packet_index, Vec::new());
-                }
+                self.packet_to_message_map
+                    .entry(packet_index)
+                    .or_insert_with(Vec::new);
                 let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
                 channel_list.push((channel_index.clone(), message_ids));
             }
@@ -204,7 +204,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                 output.push((channel_index.clone(), message));
             }
         }
-        return output;
+        output
     }
 }
 

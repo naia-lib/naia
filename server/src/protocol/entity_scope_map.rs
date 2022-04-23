@@ -23,16 +23,16 @@ impl<E: Copy + Eq + Hash> EntityScopeMap<E> {
     pub fn get(&self, user_key: &UserKey, entity: &E) -> Option<&bool> {
         let key = (*user_key, *entity);
 
-        return self.main_map.get(&key);
+        self.main_map.get(&key)
     }
 
     pub fn insert(&mut self, user_key: UserKey, entity: E, in_scope: bool) {
-        if !self.entities_of_user.contains_key(&user_key) {
-            self.entities_of_user.insert(user_key, HashSet::new());
-        }
-        if !self.users_of_entity.contains_key(&entity) {
-            self.users_of_entity.insert(entity, HashSet::new());
-        }
+        self.entities_of_user
+            .entry(user_key)
+            .or_insert_with(|| HashSet::new());
+        self.users_of_entity
+            .entry(entity)
+            .or_insert_with(HashSet::new);
 
         self.entities_of_user
             .get_mut(&user_key)

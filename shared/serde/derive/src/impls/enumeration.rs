@@ -2,13 +2,13 @@ use crate::parse::Enum;
 
 fn bits_needed_for(max_value: usize) -> u8 {
     let mut bits = 1;
-    while (2 as usize).pow(bits) <= max_value {
+    while 2_usize.pow(bits) <= max_value {
         bits += 1;
     }
     if bits >= 256 {
         panic!("cannot encode a number in more than 255 bits!");
     }
-    return bits as u8;
+    bits as u8
 }
 
 pub fn derive_serde_enum(enum_: &Enum) -> String {
@@ -21,7 +21,7 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
         let variant_name = &variant.name;
 
         // Unit Variant
-        if variant.fields.len() == 0 {
+        if variant.fields.is_empty() {
             l!(ser_variants, "Self::{} => {{", variant_name);
 
             // INDEX
@@ -36,7 +36,7 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
             l!(ser_variants, "},");
         }
         // Struct Variant
-        else if variant.tuple == false {
+        else if !variant.tuple {
             l!(ser_variants, "Self::{} {{", variant.name);
             for field in &variant.fields {
                 l!(ser_variants, "{}, ", field.field_name.as_ref().unwrap());
@@ -62,7 +62,7 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
             l!(ser_variants, "}");
         }
         // Tuple Variant
-        else if variant.tuple == true {
+        else if variant.tuple {
             l!(ser_variants, "Self::{} (", variant.name);
             for (n, _) in variant.fields.iter().enumerate() {
                 l!(ser_variants, "f{}, ", n);
@@ -91,11 +91,11 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
         let variant_index = format!("{}u16", index);
 
         // Unit Variant
-        if variant.fields.len() == 0 {
+        if variant.fields.is_empty() {
             l!(de_variants, "{} => Self::{},", variant_index, variant.name);
         }
         // Struct Variant
-        else if variant.tuple == false {
+        else if !variant.tuple {
             l!(
                 de_variants,
                 "{} => Self::{} {{",
@@ -112,7 +112,7 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
             l!(de_variants, "},");
         }
         // Tuple Variant
-        else if variant.tuple == true {
+        else if variant.tuple {
             l!(de_variants, "{} => Self::{} (", variant_index, variant.name);
             for _ in &variant.fields {
                 l!(de_variants, "Serde::de(reader)?,");

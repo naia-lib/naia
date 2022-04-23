@@ -27,7 +27,7 @@ impl<K: From<u16> + Into<u16> + Copy> KeyGenerator<K> {
 
         let output = self.next_new_local_key;
         self.next_new_local_key += 1;
-        return K::from(output);
+        K::from(output)
     }
 
     /// Recycle a used key, freeing it up

@@ -75,12 +75,12 @@ impl Socket {
 
         let receiver: Box<dyn PacketReceiverTrait> = match &conditioner_config {
             Some(config) => Box::new(ConditionedPacketReceiverImpl::new(
-                from_client_receiver.clone(),
+                from_client_receiver,
                 config,
             )),
-            None => Box::new(PacketReceiverImpl::new(from_client_receiver.clone())),
+            None => Box::new(PacketReceiverImpl::new(from_client_receiver)),
         };
-        let sender = PacketSender::new(to_client_sender.clone());
+        let sender = PacketSender::new(to_client_sender);
 
         self.io = Some(Io {
             packet_sender: sender,

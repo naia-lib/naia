@@ -63,13 +63,13 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
     }
 
     pub fn has_item(&self) -> bool {
-        if self.queue.len() == 0 {
+        if self.queue.is_empty() {
             return false;
         }
         if let Some(item) = self.queue.peek() {
             return item.instant.elapsed() > self.duration;
         }
-        return false;
+        false
     }
 
     pub fn pop_item(&mut self) -> Option<T> {
@@ -78,7 +78,7 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
                 return Some(container.item);
             }
         }
-        return None;
+        None
     }
 }
 

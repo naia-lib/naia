@@ -41,7 +41,7 @@ impl<P: Send + Sync> ChannelSender<P> for UnorderedUnreliableSender<P> {
     }
 
     fn has_messages(&self) -> bool {
-        return self.outgoing_messages.len() != 0;
+        !self.outgoing_messages.is_empty()
     }
 
     fn write_messages(
@@ -101,7 +101,7 @@ impl<P: Send + Sync> ChannelSender<P> for UnorderedUnreliableSender<P> {
                 let message = self.outgoing_messages.pop_front().unwrap();
                 self.write_message(channel_writer, bit_writer, &message);
             }
-            return None;
+            None
         }
     }
 

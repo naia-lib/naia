@@ -93,7 +93,7 @@ impl<P: Send + Sync> ReliableSender<P> {
             if found {
                 // replace found message with nothing
                 let container = self.sending_messages.get_mut(index).unwrap();
-                let output = mem::replace(container, None);
+                let output = container.take();
 
                 self.cleanup_sent_messages();
 
@@ -136,7 +136,7 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
     }
 
     fn has_messages(&self) -> bool {
-        return self.next_send_messages.len() != 0;
+        !self.next_send_messages.is_empty()
     }
 
     fn write_messages(
@@ -216,7 +216,7 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
                 message_ids.push(message_id);
                 last_written_id = Some(message_id);
             }
-            return Some(message_ids);
+            Some(message_ids)
         }
     }
 

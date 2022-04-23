@@ -35,7 +35,7 @@ impl TickManager {
             self.current_tick = self.current_tick.wrapping_add(1);
             return true;
         }
-        return false;
+        false
     }
 
     /// Gets the current tick on the host

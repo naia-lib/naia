@@ -75,7 +75,7 @@ impl BitWriter {
 
 impl BitWrite for BitWriter {
     fn write_bit(&mut self, bit: bool) {
-        self.scratch = self.scratch << 1;
+        self.scratch <<= 1;
 
         if bit {
             self.scratch |= 1;
@@ -96,12 +96,12 @@ impl BitWrite for BitWriter {
         let mut temp = byte;
         for _ in 0..8 {
             self.write_bit(temp & 1 != 0);
-            temp = temp >> 1;
+            temp >>= 1;
         }
     }
 
     fn bit_count(&self) -> u16 {
-        return ((self.buffer_index * 8) + (self.scratch_index as usize)) as u16;
+        ((self.buffer_index * 8) + (self.scratch_index as usize)) as u16
     }
 }
 
@@ -132,7 +132,7 @@ impl<'b> BitReader<'b> {
     }
 
     pub(crate) fn read_bit(&mut self) -> bool {
-        if self.state.scratch_index <= 0 {
+        if self.state.scratch_index == 0 {
             if self.state.buffer_index == self.buffer.len() {
                 panic!("no more bytes to read");
             }
@@ -145,7 +145,7 @@ impl<'b> BitReader<'b> {
 
         let value = self.state.scratch & 1;
 
-        self.state.scratch = self.state.scratch >> 1;
+        self.state.scratch >>= 1;
 
         self.state.scratch_index -= 1;
 
@@ -156,12 +156,12 @@ impl<'b> BitReader<'b> {
         let mut output = 0;
         for _ in 0..7 {
             if self.read_bit() {
-                output = output | 128;
+                output |= 128;
             }
-            output = output >> 1;
+            output >>= 1;
         }
         if self.read_bit() {
-            output = output | 128;
+            output |= 128;
         }
         output
     }

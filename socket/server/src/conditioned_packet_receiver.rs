@@ -57,7 +57,7 @@ impl PacketReceiverTrait for ConditionedPacketReceiverImpl {
             self.last_payload = Some(payload);
             return Ok(Some((address, self.last_payload.as_ref().unwrap())));
         } else {
-            return Ok(None);
+            Ok(None)
         }
     }
 }

@@ -10,7 +10,7 @@ pub struct ReplicaDynRef<'b, P: Protocolize> {
 
 impl<'b, P: Protocolize> ReplicaDynRef<'b, P> {
     pub fn new(inner: &'b dyn ReplicateSafe<P>) -> Self {
-        return Self { inner };
+        Self { inner }
     }
 }
 
@@ -25,7 +25,7 @@ impl<P: Protocolize> Deref for ReplicaDynRef<'_, P> {
 
 impl<'a, P: Protocolize> ReplicaDynRefTrait<P> for ReplicaDynRef<'a, P> {
     fn to_dyn_ref(&self) -> &dyn ReplicateSafe<P> {
-        return self.inner;
+        self.inner
     }
 }
 
@@ -37,7 +37,7 @@ pub struct ReplicaDynMut<'b, P: Protocolize> {
 
 impl<'b, P: Protocolize> ReplicaDynMut<'b, P> {
     pub fn new(inner: &'b mut dyn ReplicateSafe<P>) -> Self {
-        return Self { inner };
+        Self { inner }
     }
 }
 
@@ -59,13 +59,13 @@ impl<P: Protocolize> DerefMut for ReplicaDynMut<'_, P> {
 
 impl<'a, P: Protocolize> ReplicaDynRefTrait<P> for ReplicaDynMut<'a, P> {
     fn to_dyn_ref(&self) -> &dyn ReplicateSafe<P> {
-        return self.inner;
+        self.inner
     }
 }
 
 impl<'a, P: Protocolize> ReplicaDynMutTrait<P> for ReplicaDynMut<'a, P> {
     fn to_dyn_mut(&mut self) -> &mut dyn ReplicateSafe<P> {
-        return self.inner;
+        self.inner
     }
 }
 
@@ -83,9 +83,9 @@ pub struct ReplicaRefWrapper<'a, P: Protocolize, R: ReplicateSafe<P>> {
 
 impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaRefWrapper<'a, P, R> {
     pub fn new<I: ReplicaRefTrait<P, R> + 'a>(inner: I) -> Self {
-        return Self {
+        Self {
             inner: Box::new(inner),
-        };
+        }
     }
 }
 
@@ -111,9 +111,9 @@ pub struct ReplicaMutWrapper<'a, P: Protocolize, R: ReplicateSafe<P>> {
 
 impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaMutWrapper<'a, P, R> {
     pub fn new<I: ReplicaMutTrait<P, R> + 'a>(inner: I) -> Self {
-        return Self {
+        Self {
             inner: Box::new(inner),
-        };
+        }
     }
 }
 
@@ -143,9 +143,9 @@ pub struct ReplicaDynRefWrapper<'a, P: Protocolize> {
 
 impl<'a, P: Protocolize> ReplicaDynRefWrapper<'a, P> {
     pub fn new<I: ReplicaDynRefTrait<P> + 'a>(inner: I) -> Self {
-        return Self {
+        Self {
             inner: Box::new(inner),
-        };
+        }
     }
 }
 
@@ -169,9 +169,9 @@ pub struct ReplicaDynMutWrapper<'a, P: Protocolize> {
 
 impl<'a, P: Protocolize> ReplicaDynMutWrapper<'a, P> {
     pub fn new<I: ReplicaDynMutTrait<P> + 'a>(inner: I) -> Self {
-        return Self {
+        Self {
             inner: Box::new(inner),
-        };
+        }
     }
 }
 

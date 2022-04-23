@@ -44,7 +44,7 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8>
                 );
             }
             if inner < 0 && SIGNED {
-                let min_value: i128 = (2_i128.pow(BITS as u32)) * -1;
+                let min_value: i128 = -(2_i128.pow(BITS as u32));
                 if inner <= min_value {
                     panic!(
                         "with {} bits, can't encode number less than {}",
@@ -73,7 +73,7 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
             // 1 if negative, 0 if positive
             writer.write_bit(negative);
             if negative {
-                value = (self.inner * -1) as u128;
+                value = -self.inner as u128;
             } else {
                 value = self.inner as u128;
             }
@@ -93,7 +93,7 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
 
                 for _ in 0..BITS {
                     writer.write_bit(value & 1 != 0);
-                    value = value >> 1;
+                    value >>= 1;
                 }
                 if !proceed {
                     return;
@@ -102,9 +102,8 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
         } else {
             for _ in 0..BITS {
                 writer.write_bit(value & 1 != 0);
-                value = value >> 1;
+                value >>= 1;
             }
-            return;
         }
     }
 
@@ -124,20 +123,20 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
                 for _ in 0..BITS {
                     total_bits += 1;
 
-                    output = output << 1;
+                    output <<= 1;
 
                     if reader.read_bit() {
-                        output = output | 1;
+                        output |= 1;
                     }
                 }
 
                 if !proceed {
-                    output = output << (128 - total_bits);
+                    output <<= 128 - total_bits;
                     output = output.reverse_bits();
 
                     let value: i128 = output as i128;
                     if negative {
-                        return Ok(SerdeInteger::new_unchecked(value * -1));
+                        return Ok(SerdeInteger::new_unchecked(-value));
                     } else {
                         return Ok(SerdeInteger::new_unchecked(value));
                     }
@@ -147,21 +146,21 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
             let mut output: u128 = 0;
 
             for _ in 0..BITS {
-                output = output << 1;
+                output <<= 1;
 
                 if reader.read_bit() {
-                    output = output | 1;
+                    output |= 1;
                 }
             }
 
-            output = output << (128 - BITS);
+            output <<= 128 - BITS;
             output = output.reverse_bits();
 
             let value: i128 = output as i128;
             if negative {
-                return Ok(SerdeInteger::new_unchecked(value * -1));
+                Ok(SerdeInteger::new_unchecked(-value))
             } else {
-                return Ok(SerdeInteger::new_unchecked(value));
+                Ok(SerdeInteger::new_unchecked(value))
             }
         }
     }

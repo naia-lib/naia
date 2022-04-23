@@ -78,7 +78,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
     // Main
 
     pub fn host_has_entity(&self, entity: &E) -> bool {
-        return self.host_world.contains_key(entity);
+        self.host_world.contains_key(entity)
     }
 
     pub fn entity_channel_is_open(&self, entity: &E) -> bool {
@@ -160,7 +160,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
         if let Some(EntityChannel::Spawned(component_channels)) =
             self.entity_channels.get_mut(entity)
         {
-            if let None = component_channels.get(component) {
+            if component_channels.get(component).is_none() {
                 // insert component
                 component_channels.insert(*component, ComponentChannel::Inserting);
                 self.outgoing_actions
@@ -400,8 +400,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
         for action in delivered_actions {
             match action {
                 EntityAction::SpawnEntity(entity, components) => {
-                    let component_set: HashSet<P::Kind> =
-                        components.iter().map(|kind| *kind).collect();
+                    let component_set: HashSet<P::Kind> = components.iter().copied().collect();
                     self.remote_spawn_entity(entity, component_set);
                 }
                 EntityAction::DespawnEntity(entity) => {
@@ -428,7 +427,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
         rtt_millis: &f32,
     ) -> VecDeque<(ActionId, EntityActionEvent<E, P::Kind>)> {
         self.outgoing_actions.collect_messages(now, rtt_millis);
-        return self.outgoing_actions.take_next_messages();
+        self.outgoing_actions.take_next_messages()
     }
 
     pub fn collect_next_updates(&self) -> HashMap<E, HashSet<P::Kind>> {
@@ -462,11 +461,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
     // Net Entity Conversions
 
     pub fn entity_to_net_entity(&self, entity: &E) -> Option<&NetEntity> {
-        return self.entity_to_net_entity_map.get(entity);
+        self.entity_to_net_entity_map.get(entity)
     }
 
     pub fn net_entity_to_entity(&self, net_entity: &NetEntity) -> Option<&E> {
-        return self.net_entity_to_entity_map.get(net_entity);
+        self.net_entity_to_entity_map.get(net_entity)
     }
 }
 
@@ -483,15 +482,15 @@ impl<K: Eq + Hash, V> CheckedMap<K, V> {
     }
 
     pub fn contains_key(&self, key: &K) -> bool {
-        return self.inner.contains_key(key);
+        self.inner.contains_key(key)
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {
-        return self.inner.get(key);
+        self.inner.get(key)
     }
 
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        return self.inner.get_mut(key);
+        self.inner.get_mut(key)
     }
 
     pub fn insert(&mut self, key: K, value: V) {
@@ -503,7 +502,7 @@ impl<K: Eq + Hash, V> CheckedMap<K, V> {
     }
 
     pub fn remove(&mut self, key: &K) {
-        if !self.inner.contains_key(&key) {
+        if !self.inner.contains_key(key) {
             panic!("Cannot remove value for key with non-existent value. Check whether map contains key first.")
         }
 
@@ -511,7 +510,7 @@ impl<K: Eq + Hash, V> CheckedMap<K, V> {
     }
 
     pub fn iter(&self) -> std::collections::hash_map::Iter<K, V> {
-        return self.inner.iter();
+        self.inner.iter()
     }
 }
 
@@ -528,7 +527,7 @@ impl<K: Eq + Hash> CheckedSet<K> {
     }
 
     pub fn contains(&self, key: &K) -> bool {
-        return self.inner.contains(key);
+        self.inner.contains(key)
     }
 
     pub fn insert(&mut self, key: K) {

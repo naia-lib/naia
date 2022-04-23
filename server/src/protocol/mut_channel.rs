@@ -30,14 +30,14 @@ impl MutChannel {
     }
 
     pub fn new_sender(&self) -> MutSender {
-        return MutSender::new(self);
+        MutSender::new(self)
     }
 
     pub fn new_receiver(&self, addr: &SocketAddr) -> Option<MutReceiver> {
         if let Ok(mut data) = self.data.as_ref().write() {
             return data.new_receiver(addr);
         }
-        return None;
+        None
     }
 
     pub fn send(&self, diff: u8) -> bool {
@@ -45,7 +45,7 @@ impl MutChannel {
             data.send(diff);
             return true;
         }
-        return false;
+        false
     }
 }
 
@@ -64,12 +64,12 @@ impl MutChannelData {
 
     pub fn new_receiver(&mut self, addr: &SocketAddr) -> Option<MutReceiver> {
         if let Some(recvr) = self.recv_map.get(addr) {
-            return Some(recvr.clone());
+            Some(recvr.clone())
         } else {
             let q = MutReceiver::new(self.diff_mask_length);
             self.recv_map.insert(*addr, q.clone());
 
-            return Some(q);
+            Some(q)
         }
     }
 
@@ -101,7 +101,7 @@ impl MutReceiver {
         if let Ok(mask) = self.mask.as_ref().read() {
             return mask.is_clear();
         }
-        return true;
+        true
     }
 
     pub fn mutate(&self, diff: u8) {
@@ -156,6 +156,6 @@ impl MutReceiverBuilder {
     }
 
     pub fn build(&self, addr: &SocketAddr) -> Option<MutReceiver> {
-        return self.channel.new_receiver(addr);
+        self.channel.new_receiver(addr)
     }
 }

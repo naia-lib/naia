@@ -139,7 +139,7 @@ cfg_if! {
 
             pub fn encode(&mut self, payload: &[u8]) -> &[u8] {
                 self.result = payload.to_vec();
-                return &self.result;
+                &self.result
             }
         }
     }
