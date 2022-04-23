@@ -1,16 +1,16 @@
 <!doctype html>
 <html lang="en">
-  <head>
-      <meta charset="utf-8"/>
-      <title>Naia + Hecs Demo Client</title>
-  </head>
-  <body>
-      <script src="./target/wasm.js"></script>
-      <script>
-          async function run() {
-            await wasm_bindgen('./target/wasm_bg.wasm');
-          }
-          run();
-      </script>
-  </body>
+    <head>
+        <meta charset="utf-8"/>
+        <title>Naia + Hecs Demo Client</title>
+    </head>
+    <body>
+        <script type="module">
+            import app from "./target/app.js";
+            async function start() {
+                await app();
+            }
+            start();
+        </script>
+    </body>
 </html>

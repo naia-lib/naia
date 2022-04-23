@@ -5,12 +5,12 @@
         <title>Naia Basic Client Demo - Wasm-Bindgen</title>
     </head>
     <body>
-        <script src="./target/wasm.js"></script>
-        <script>
-            async function run() {
-              await wasm_bindgen('./target/wasm_bg.wasm');
+        <script type="module">
+            import app from "./target/app.js";
+            async function start() {
+                await app();
             }
-            run();
+            start();
         </script>
     </body>
 </html>

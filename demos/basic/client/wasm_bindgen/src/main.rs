@@ -1,21 +1,14 @@
 #[macro_use]
 extern crate cfg_if;
-extern crate log;
-
-mod app_loop;
-use app_loop::start_loop;
-
-use naia_basic_client_demo_app::App;
 
 cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
+    if #[cfg(not(target_arch = "wasm32"))] {
+        extern crate log;
 
-        fn main() {
-            wasm_logger::init(wasm_logger::Config::default());
+        use naia_basic_client_demo_app::App;
 
-            start_loop(App::new());
-        }
-    } else {
+        mod app_loop;
+        use app_loop::start_loop;
 
         fn main() {
             simple_logger::SimpleLogger::new()

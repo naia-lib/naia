@@ -39,7 +39,4 @@ members = [
     "demos/socket/client/app",
     "demos/socket/client/wasm_bindgen",
     "demos/socket/client/miniquad",
-    "demos/tickless/server",
-    "demos/tickless/shared",
-    "demos/tickless/client",
-    ]
+]

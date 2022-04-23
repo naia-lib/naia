@@ -14,7 +14,7 @@ use naia_client::{
 use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_basic_demo_shared::{
-    protocol::{Auth, Character, Protocol, StringMessage},
+    protocol::{Auth, Character, Protocol},
     shared_config,
 };
 
@@ -66,50 +66,50 @@ impl App {
                     // &string_message);
                     self.message_count += 1;
                 }
-                // Ok(Event::SpawnEntity(entity, _)) => {
-                //     if let Some(character) = self
-                //         .client
-                //         .entity(self.world.proxy(), &entity)
-                //         .component::<Character>()
-                //     {
-                //         info!(
-                //             "creation of Character - x: {}, y: {}, name: {} {}",
-                //             character.x.get(),
-                //             character.y.get(),
-                //             character.fullname.get().first,
-                //             character.fullname.get().last,
-                //         );
-                //     }
-                // }
-                // Ok(Event::UpdateComponent(_, entity, _)) => {
-                //     if let Some(character) = self
-                //         .client
-                //         .entity(self.world.proxy(), &entity)
-                //         .component::<Character>()
-                //     {
-                //         info!(
-                //             "update of Character - x: {}, y: {}, name: {} {}",
-                //             character.x.get(),
-                //             character.y.get(),
-                //             character.fullname.get().first,
-                //             character.fullname.get().last,
-                //         );
-                //     }
-                // }
-                // Ok(Event::RemoveComponent(_, component_protocol)) => {
-                //     if let Some(character) = component_protocol.cast_ref::<Character>() {
-                //         info!(
-                //             "data delete of Character - x: {}, y: {}, name: {} {}",
-                //             character.x.get(),
-                //             character.y.get(),
-                //             character.fullname.get().first,
-                //             character.fullname.get().last,
-                //         );
-                //     }
-                // }
-                // Ok(Event::DespawnEntity(_)) => {
-                //     info!("deletion of Character entity");
-                // }
+                Ok(Event::SpawnEntity(entity)) => {
+                    if let Some(character) = self
+                        .client
+                        .entity(self.world.proxy(), &entity)
+                        .component::<Character>()
+                    {
+                        info!(
+                            "creation of Character - x: {}, y: {}, name: {} {}",
+                            *character.x,
+                            *character.y,
+                            (*character.fullname).first,
+                            (*character.fullname).last,
+                        );
+                    }
+                }
+                Ok(Event::UpdateComponent(_, entity, _)) => {
+                    if let Some(character) = self
+                        .client
+                        .entity(self.world.proxy(), &entity)
+                        .component::<Character>()
+                    {
+                        info!(
+                            "update of Character - x: {}, y: {}, name: {} {}",
+                            *character.x,
+                            *character.y,
+                            (*character.fullname).first,
+                            (*character.fullname).last,
+                        );
+                    }
+                }
+                Ok(Event::RemoveComponent(_, component_protocol)) => {
+                    if let Some(character) = component_protocol.cast_ref::<Character>() {
+                        info!(
+                            "data delete of Character - x: {}, y: {}, name: {} {}",
+                            *character.x,
+                            *character.y,
+                            (*character.fullname).first,
+                            (*character.fullname).last,
+                        );
+                    }
+                }
+                Ok(Event::DespawnEntity(_)) => {
+                    info!("deletion of Character entity");
+                }
                 Ok(Event::Tick) => {
                     //info!("tick event");
                 }

@@ -1,15 +1,16 @@
-<html>
-  <head>
-    <meta charset="utf-8"/>
-    <title>Naia + Bevy Demo Client</title>
-  </head>
-  <script src="./target/wasm.js"></script>
-
-  <script>
-    async function run() {
-      await wasm_bindgen('./target/wasm_bg.wasm');
-    }
-
-    run();
-  </script>
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8"/>
+        <title>Naia + Bevy Demo Client</title>
+    </head>
+    <body>
+        <script type="module">
+            import app from "./target/app.js";
+            async function start() {
+                await app();
+            }
+            start();
+        </script>
+    </body>
 </html>

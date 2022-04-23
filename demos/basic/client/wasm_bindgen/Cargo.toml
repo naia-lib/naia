@@ -7,6 +7,15 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
+[[bin]]
+name = "app"
+path = "src/main.rs"
+
+[lib]
+name = "app"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
 [features]
 
 [dependencies]
