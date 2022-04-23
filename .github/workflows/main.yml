@@ -15,7 +15,7 @@ env:
 
 jobs:
 
-  format_check:
+  check-formatting:
     name: Check Format
     runs-on: ubuntu-latest
     steps:
