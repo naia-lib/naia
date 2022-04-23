@@ -15,6 +15,30 @@ env:
 
 jobs:
 
+  format_check:
+    name: Check Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Format
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
+
+  clippy_check:
+    name: Check Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - run: rustup component add clippy
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features
+
   test-server-socket:
     strategy:
       fail-fast: false
@@ -40,6 +64,7 @@ jobs:
           args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
 
   test-servers:
+    name: Test Servers
     strategy:
       fail-fast: false
       matrix:
@@ -48,13 +73,7 @@ jobs:
             naia-server,
             naia-hecs-server,
             naia-bevy-server,
-            naia-macroquad-server-demo,
-            naia-bevy-server-demo,
-            naia-basic-server-demo,
-            naia-server-socket-demo,
-            naia-hecs-server-demo,
           ]
-    name: Test Servers
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
@@ -69,43 +88,53 @@ jobs:
           command: test
           args: --package ${{ matrix.package }} --features "use-udp"
 
+  test-clients-and-shared:
+    name: Test Clients
+    strategy:
+      fail-fast: false
+      matrix:
+        features: [ mquad, wbindgen ]
+        package:
+          [
+            naia-client-socket,
+            naia-socket-shared,
+            naia-client,
+            naia-shared,
+            naia-hecs-client,
+            naia-hecs-shared,
+          ]
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v1
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
+
   test:
+    name: Test all other crates
     strategy:
       fail-fast: false
       matrix:
         package:
           [
-            naia-client,
-            naia-hecs-shared,
             naia-bevy-client,
-            naia-hecs-client,
             naia-bevy-shared,
-            naia-macroquad-client-demo,
-            naia-macroquad-demo-shared,
-            naia-basic-demo-shared,
             naia-serde-derive,
-            naia-bevy-demo-shared,
             naia-demo-world,
             naia-empty-world,
-            naia-hecs-demo-shared,
             naia-serde,
-            naia-bevy-client-demo,
-            naia-socket-client-demo-app,
-            naia-socket-client-demo-mq,
-            naia-socket-client-demo-wb,
-            naia-socket-demo-shared,
-            naia-basic-client-demo-app,
-            naia-basic-client-demo-mq,
-            naia-basic-client-demo-wb,
-            naia-hecs-client-demo,
-            naia-shared,
             naia-test,
             naia-parse,
             naia-derive,
-            naia-socket-shared,
-            naia-client-socket,
           ]
-    name: Test All (non-Server)
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
@@ -124,26 +153,81 @@ jobs:
           command: test
           args: --package ${{ matrix.package }}
 
-  format:
-    name: Check Format
+  build-server-demos:
+    name: Build Server Demos
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          [
+            naia-macroquad-server-demo,
+            naia-bevy-server-demo,
+            naia-basic-server-demo,
+            naia-server-socket-demo,
+            naia-hecs-server-demo,
+          ]
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
         uses: actions/checkout@v3
 
-      - name: Format
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v1
+
+      - name: Test
         uses: actions-rs/cargo@v1
         with:
-          command: fmt
-          args: -- --check
+          command: build
+          args: --package ${{ matrix.package }} --features "use-udp"
 
-  clippy_check:
-    name: Check Clippy
+  build-client-demos:
+    name: Build Client Demos
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          [
+            naia-macroquad-client-demo,
+            naia-bevy-client-demo,
+            naia-hecs-client-demo,
+          ]
+
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
-      - run: rustup component add clippy
-      - uses: actions-rs/clippy-check@v1
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v1
+
+      - name: Test
+        uses: actions-rs/cargo@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
+          command: build
+          args: --package ${{ matrix.package }}
+
+  build-multi-feature-client-demos:
+    name: Build Client Demos (w/ Multiple Features)
+    strategy:
+      fail-fast: false
+      matrix:
+        features: [ mquad, wbindgen ]
+        package:
+          [
+            naia-basic-demo-client,
+            naia-socket-demo-client,
+          ]
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v1
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
