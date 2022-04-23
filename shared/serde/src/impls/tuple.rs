@@ -41,7 +41,7 @@ mod tests {
     #[test]
     fn read_write() {
         // Write
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         let in_1 = (true, -7532, "Hello tuple!".to_string(), Some(5));
         #[allow(unused_parens)]

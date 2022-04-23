@@ -116,21 +116,19 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
     fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
 
-        for message_opt in self.sending_messages.iter_mut() {
-            if let Some((message_id, last_sent_opt, message)) = message_opt {
-                let mut should_send = false;
-                if let Some(last_sent) = last_sent_opt {
-                    if last_sent.elapsed() >= resend_duration {
-                        should_send = true;
-                    }
-                } else {
+        for (message_id, last_sent_opt, message) in self.sending_messages.iter_mut().flatten() {
+            let mut should_send = false;
+            if let Some(last_sent) = last_sent_opt {
+                if last_sent.elapsed() >= resend_duration {
                     should_send = true;
                 }
-                if should_send {
-                    self.next_send_messages
-                        .push_back((*message_id, message.clone()));
-                    *last_sent_opt = Some(now.clone());
-                }
+            } else {
+                should_send = true;
+            }
+            if should_send {
+                self.next_send_messages
+                    .push_back((*message_id, message.clone()));
+                *last_sent_opt = Some(now.clone());
             }
         }
     }
@@ -155,7 +153,7 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
                 return None;
             }
 
-            let mut counter = BitCounter::new();
+            let mut counter = BitCounter::default();
 
             //TODO: message_count is inaccurate here and may be different than final, does
             // this matter?

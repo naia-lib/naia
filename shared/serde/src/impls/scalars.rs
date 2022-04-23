@@ -26,7 +26,7 @@ mod unit_tests {
     #[test]
     fn read_write() {
         // Write
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         let in_unit = ();
 
@@ -67,7 +67,7 @@ mod bool_tests {
     #[test]
     fn read_write() {
         // Write
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         let in_1 = true;
         let in_2 = false;
@@ -102,8 +102,8 @@ impl Serde for char {
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let mut bytes = [0_u8; 4];
-        for index in 0..4 {
-            bytes[index] = reader.read_byte();
+        for byte in &mut bytes {
+            *byte = reader.read_byte();
         }
         let mut container = [0_u32];
         unsafe {
@@ -134,7 +134,7 @@ mod char_tests {
     #[test]
     fn read_write() {
         // Write
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         let in_1 = 'O';
         let in_2 = '!';
@@ -246,8 +246,8 @@ impl Serde for usize {
 
     fn de(reader: &mut BitReader) -> Result<usize, SerdeErr> {
         let mut byte_array = [0_u8; 8];
-        for index in 0..8 {
-            byte_array[index] = reader.read_byte();
+        for byte in &mut byte_array {
+            *byte = reader.read_byte();
         }
         let mut container = [0_u64];
         unsafe {
@@ -273,8 +273,8 @@ impl Serde for isize {
 
     fn de(reader: &mut BitReader) -> Result<isize, SerdeErr> {
         let mut byte_array = [0_u8; 8];
-        for index in 0..8 {
-            byte_array[index] = reader.read_byte();
+        for byte in &mut byte_array {
+            *byte = reader.read_byte();
         }
         let mut container = [0_u64];
         unsafe {
@@ -300,7 +300,7 @@ macro_rules! test_serde_for {
             };
 
             // Write
-            let mut writer = BitWriter::new();
+            let mut writer = BitWriter::default();
 
             let in_1: $impl_type = 123 as $impl_type;
 

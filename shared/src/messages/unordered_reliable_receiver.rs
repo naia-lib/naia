@@ -15,15 +15,17 @@ pub struct UnorderedReliableReceiver<P> {
     received_messages: Vec<(MessageId, P)>,
 }
 
-impl<P> UnorderedReliableReceiver<P> {
-    pub fn new() -> Self {
+impl<P> Default for UnorderedReliableReceiver<P> {
+    fn default() -> Self {
         Self {
             oldest_received_message_id: 0,
-            record: VecDeque::new(),
-            received_messages: Vec::new(),
+            record: VecDeque::default(),
+            received_messages: Vec::default(),
         }
     }
+}
 
+impl<P> UnorderedReliableReceiver<P> {
     // Private methods
 
     pub fn buffer_message(&mut self, message_id: MessageId, message: P) {

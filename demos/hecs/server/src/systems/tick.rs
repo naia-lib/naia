@@ -42,7 +42,7 @@ pub fn march_and_mark(app: &mut App) {
     while let Some(entity) = entities_to_add.pop() {
         if !app.has_marker.contains(&entity) {
             // Create Marker component
-            let marker = Marker::new();
+            let marker = Marker::default();
 
             // Add to Naia Server
             app.server
@@ -104,7 +104,7 @@ pub fn check_scopes(app: &mut App) {
             if let Some(position) = entity_ref.get::<Position>() {
                 let x = *position.x;
 
-                if x >= 50 && x <= 200 {
+                if (50..=200).contains(&x) {
                     server.user_scope(&user_key).include(&entity);
                 } else {
                     server.user_scope(&user_key).exclude(&entity);

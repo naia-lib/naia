@@ -16,14 +16,16 @@ pub struct OrderedReliableReceiver<P> {
     waiting_incoming_messages: VecDeque<(MessageId, Option<P>)>,
 }
 
-impl<P> OrderedReliableReceiver<P> {
-    pub fn new() -> Self {
+impl<P> Default for OrderedReliableReceiver<P> {
+    fn default() -> Self {
         Self {
             oldest_waiting_message_id: 0,
-            waiting_incoming_messages: VecDeque::new(),
+            waiting_incoming_messages: VecDeque::default(),
         }
     }
+}
 
+impl<P> OrderedReliableReceiver<P> {
     pub fn buffer_message(&mut self, message_id: MessageId, message: P) {
         // moving from oldest incoming message to newest
         // compare existing slots and see if the message_id has been instantiated

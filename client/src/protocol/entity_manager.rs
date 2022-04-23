@@ -23,17 +23,19 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash> {
     received_components: HashMap<(NetEntity, P::Kind), P>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
-    pub fn new() -> Self {
-        EntityManager {
-            local_to_world_entity: HashMap::new(),
-            entity_records: HashMap::new(),
-            handle_entity_map: BigMap::new(),
-            receiver: EntityActionReceiver::new(),
-            received_components: HashMap::new(),
+impl<P: Protocolize, E: Copy + Eq + Hash> Default for EntityManager<P, E> {
+    fn default() -> Self {
+        Self {
+            entity_records: HashMap::default(),
+            local_to_world_entity: HashMap::default(),
+            handle_entity_map: BigMap::default(),
+            receiver: EntityActionReceiver::default(),
+            received_components: HashMap::default(),
         }
     }
+}
 
+impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     // Action Reader
 
     pub fn read_all<W: WorldMutType<P, E>, C: ChannelIndex>(
@@ -51,15 +53,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         bit_reader: &mut BitReader,
         last_id_opt: &mut Option<MessageId>,
     ) -> MessageId {
-        let current_id;
-        if let Some(last_id) = last_id_opt {
+        let current_id = if let Some(last_id) = last_id_opt {
             // read diff
             let id_diff = UnsignedVariableInteger::<3>::de(bit_reader).unwrap().get() as MessageId;
-            current_id = last_id.wrapping_add(id_diff);
+            last_id.wrapping_add(id_diff)
         } else {
             // read message id
-            current_id = MessageId::de(bit_reader).unwrap();
-        }
+            MessageId::de(bit_reader).unwrap()
+        };
         *last_id_opt = Some(current_id);
         current_id
     }
@@ -231,7 +232,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     } else {
                         let world_entity = self.local_to_world_entity.get(&net_entity).unwrap();
 
-                        let entity_record = self.entity_records.get_mut(&world_entity).unwrap();
+                        let entity_record = self.entity_records.get_mut(world_entity).unwrap();
 
                         entity_record.component_kinds.insert(component_kind);
 
@@ -256,7 +257,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                     if entity_record.component_kinds.remove(&component_kind) {
                         // Get component for last change
                         let component = world
-                            .remove_component_of_kind(&world_entity, &component_kind)
+                            .remove_component_of_kind(world_entity, &component_kind)
                             .expect("Component already removed?");
 
                         // Generate event
@@ -338,7 +339,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityMan
             .get(entity_handle)
             .expect("no entity exists for the given handle!");
         let entity_record = self.entity_records.get(entity).unwrap();
-        return entity_record.net_entity;
+        entity_record.net_entity
     }
 
     fn net_entity_to_handle(&self, net_entity: &NetEntity) -> EntityHandle {
@@ -346,6 +347,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityMan
             .local_to_world_entity
             .get(net_entity)
             .expect("no entity exists associated with given net entity");
-        return self.entity_to_handle(entity);
+        self.entity_to_handle(entity)
     }
 }

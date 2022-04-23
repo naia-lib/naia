@@ -128,10 +128,7 @@ pub enum ChannelMode {
 
 impl ChannelMode {
     pub fn tick_buffered(&self) -> bool {
-        match self {
-            ChannelMode::TickBuffered(_) => true,
-            _ => false,
-        }
+        matches!(self, ChannelMode::TickBuffered(_))
     }
 }
 

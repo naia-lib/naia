@@ -60,7 +60,7 @@ mod tests {
     #[test]
     fn read_write_vec() {
         // Write
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         let in_1 = vec![5, 3, 2, 7];
         let in_2 = vec![false, false, true, false, true, true, false, true];
@@ -84,7 +84,7 @@ mod tests {
     #[test]
     fn read_write_vec_deque() {
         // Write
-        let mut writer = BitWriter::new();
+        let mut writer = BitWriter::default();
 
         let mut in_1 = VecDeque::<i32>::new();
         in_1.push_back(5);

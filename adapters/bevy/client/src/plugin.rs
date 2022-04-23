@@ -47,10 +47,10 @@ pub struct Plugin<P: Protocolize, C: ChannelIndex> {
 impl<P: Protocolize, C: ChannelIndex> Plugin<P, C> {
     pub fn new(client_config: ClientConfig, shared_config: SharedConfig<C>) -> Self {
         let config = PluginConfig::new(client_config, shared_config);
-        return Plugin {
+        Plugin {
             config: Mutex::new(Some(config)),
             phantom_p: PhantomData,
-        };
+        }
     }
 }
 
@@ -62,8 +62,8 @@ impl<P: Protocolize, C: ChannelIndex> PluginType for Plugin<P, C> {
         app
             // RESOURCES //
             .insert_resource(client)
-            .insert_resource(ClientResource::new())
-            .insert_resource(WorldData::<P>::new())
+            .init_resource::<ClientResource>()
+            .init_resource::<WorldData<P>>()
             // EVENTS //
             .add_event::<SpawnEntityEvent>()
             .add_event::<DespawnEntityEvent>()

@@ -48,7 +48,7 @@ impl App {
 
         App {
             server,
-            world: World::new(),
+            world: World::default(),
             main_room_key,
             user_squares: HashMap::new(),
             square_last_command: HashMap::new(),
@@ -101,7 +101,7 @@ impl App {
                         // Add Square component to Entity
                         .insert_component(Square::new(x as u16, y as u16, square_color))
                         // Add Marker component to Entity
-                        .insert_component(Marker::new())
+                        .insert_component(Marker::default())
                         .id();
 
                     // Associate new Entity with User that spawned it

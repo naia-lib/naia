@@ -12,6 +12,7 @@ use crate::{
     WorldData,
 };
 
+#[derive(Default)]
 pub struct WorldWrapper<P: Protocolize> {
     pub inner: World,
     data: WorldData<P>,
@@ -21,14 +22,14 @@ impl<P: Protocolize> WorldWrapper<P> {
     pub fn wrap(world: World) -> Self {
         Self {
             inner: world,
-            data: WorldData::new(),
+            data: WorldData::default(),
         }
     }
 
     pub fn new() -> Self {
         Self {
             inner: World::new(),
-            data: WorldData::new(),
+            data: WorldData::default(),
         }
     }
 }

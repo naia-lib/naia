@@ -24,7 +24,7 @@ pub(crate) struct DespawnEntity {
 
 impl DespawnEntity {
     pub fn new(entity: &Entity) -> Self {
-        return DespawnEntity { entity: *entity };
+        DespawnEntity { entity: *entity }
     }
 }
 
@@ -45,11 +45,11 @@ pub(crate) struct InsertComponent<P: Protocolize, R: ReplicateSafe<P>> {
 
 impl<P: Protocolize, R: ReplicateSafe<P>> InsertComponent<P, R> {
     pub fn new(entity: &Entity, component: R) -> Self {
-        return InsertComponent {
+        InsertComponent {
             entity: *entity,
             component,
             phantom_p: PhantomData,
-        };
+        }
     }
 }
 
@@ -72,11 +72,11 @@ pub(crate) struct RemoveComponent<P: Protocolize, R: Replicate<P>> {
 
 impl<P: Protocolize, R: Replicate<P>> RemoveComponent<P, R> {
     pub fn new(entity: &Entity) -> Self {
-        return RemoveComponent {
+        RemoveComponent {
             entity: *entity,
             phantom_p: PhantomData,
             phantom_r: PhantomData,
-        };
+        }
     }
 }
 

@@ -21,14 +21,15 @@ pub struct World<P: Protocolize> {
     pub entities: BigMap<Entity, HashMap<P::Kind, P>>,
 }
 
-impl<P: Protocolize> World<P> {
-    /// Create a new default World
-    pub fn new() -> Self {
-        World {
-            entities: BigMap::new(),
+impl<P: Protocolize> Default for World<P> {
+    fn default() -> Self {
+        Self {
+            entities: BigMap::default(),
         }
     }
+}
 
+impl<P: Protocolize> World<P> {
     /// Convert to WorldRef
     pub fn proxy<'w>(&'w self) -> WorldRef<'w, P> {
         WorldRef::<'w, P>::new(self)
@@ -160,7 +161,7 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         let mut output: Vec<P::Kind> = Vec::new();
 
         if let Some(component_map) = self.world.entities.get(entity) {
-            for (component_kind, _) in component_map {
+            for component_kind in component_map.keys() {
                 output.push(*component_kind);
             }
         }

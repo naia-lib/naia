@@ -9,6 +9,14 @@ pub struct WorldData<P: Protocolize> {
     kind_to_accessor_map: HashMap<P::Kind, Box<dyn Any>>,
 }
 
+impl<P: Protocolize> Default for WorldData<P> {
+    fn default() -> Self {
+        Self {
+            kind_to_accessor_map: HashMap::default(),
+        }
+    }
+}
+
 impl<P: Protocolize> WorldData<P> {
     pub fn new() -> Self {
         WorldData {
@@ -16,6 +24,7 @@ impl<P: Protocolize> WorldData<P> {
         }
     }
 
+    #[allow(clippy::borrowed_box)]
     pub(crate) fn component_access(
         &self,
         component_kind: &P::Kind,
@@ -32,7 +41,7 @@ impl<P: Protocolize> WorldData<P> {
 
     pub(crate) fn put_kind<R: ReplicateSafe<P>>(&mut self, component_kind: &P::Kind) {
         self.kind_to_accessor_map
-            .insert(*component_kind, ComponentAccessor::<P, R>::new());
+            .insert(*component_kind, ComponentAccessor::<P, R>::create());
     }
 }
 

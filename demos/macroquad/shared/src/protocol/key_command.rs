@@ -12,6 +12,6 @@ pub struct KeyCommand {
 
 impl KeyCommand {
     pub fn new(w: bool, s: bool, a: bool, d: bool) -> Self {
-        return KeyCommand::new_complete(w, s, a, d);
+        KeyCommand::new_complete(w, s, a, d)
     }
 }

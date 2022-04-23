@@ -22,10 +22,10 @@ pub fn authorization_event(
         if let AuthorizationEvent(user_key, Protocol::Auth(auth)) = event {
             if *auth.username == "charlie" && *auth.password == "12345" {
                 // Accept incoming connection
-                server.accept_connection(&user_key);
+                server.accept_connection(user_key);
             } else {
                 // Reject incoming connection
-                server.reject_connection(&user_key);
+                server.reject_connection(user_key);
             }
         }
     }
@@ -39,7 +39,7 @@ pub fn connection_event<'world, 'state>(
     for event in event_reader.iter() {
         let ConnectionEvent(user_key) = event;
         let address = server
-            .user_mut(&user_key)
+            .user_mut(user_key)
             // Add User to the main Room
             .enter_room(&global.main_room_key)
             // Get User's address for logging
@@ -85,7 +85,7 @@ pub fn connection_event<'world, 'state>(
         let mut assignment_message = EntityAssignment::new(true);
         assignment_message.entity.set(&server, &entity);
 
-        server.send_message(&user_key, Channels::EntityAssignment, &assignment_message);
+        server.send_message(user_key, Channels::EntityAssignment, &assignment_message);
     }
 }
 
@@ -98,7 +98,7 @@ pub fn disconnection_event(
         let DisconnectionEvent(user_key, user) = event;
         info!("Naia Server disconnected from: {:?}", user.address);
 
-        if let Some(entity) = global.user_to_prediction_map.remove(&user_key) {
+        if let Some(entity) = global.user_to_prediction_map.remove(user_key) {
             server
                 .entity_mut(&entity)
                 .leave_room(&global.main_room_key)
@@ -110,13 +110,13 @@ pub fn disconnection_event(
 pub fn receive_message_event(
     mut event_reader: EventReader<MessageEvent<Protocol, Channels>>,
     mut global: ResMut<Global>,
-    mut server: Server<Protocol, Channels>,
+    server: Server<Protocol, Channels>,
 ) {
     for event in event_reader.iter() {
         if let MessageEvent(_user_key, Channels::PlayerCommand, Protocol::KeyCommand(key_command)) =
             event
         {
-            if let Some(entity) = &key_command.entity.get(&mut server) {
+            if let Some(entity) = &key_command.entity.get(&server) {
                 global
                     .player_last_command
                     .insert(*entity, key_command.clone());

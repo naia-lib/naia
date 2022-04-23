@@ -93,15 +93,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             ping_timer: Timer::new(server_config.connection.ping.ping_interval),
             handshake_manager: HandshakeManager::new(server_config.require_auth),
             // Users
-            users: BigMap::new(),
+            users: BigMap::default(),
             user_connections: HashMap::new(),
             // Rooms
-            rooms: BigMap::new(),
+            rooms: BigMap::default(),
             // Entities
-            world_record: WorldRecord::new(),
+            world_record: WorldRecord::default(),
             entity_scope_map: EntityScopeMap::new(),
             // Components
-            diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
+            diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::default())),
             // Events
             incoming_events: VecDeque::new(),
             // Ticks
@@ -658,7 +658,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// All necessary cleanup, when they're actually gone...
     pub(crate) fn delete_user(&mut self, user_key: &UserKey) -> Option<User> {
         if let Some(user) = self.users.remove(user_key) {
-            if let Some(_) = self.user_connections.remove(&user.address) {
+            if self.user_connections.remove(&user.address).is_some() {
                 self.entity_scope_map.remove_user(user_key);
                 self.handshake_manager.delete_user(&user.address);
 
@@ -813,7 +813,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                 if connection.base.should_send_heartbeat() {
                     // Don't try to refactor this to self.internal_send, doesn't seem to
                     // work cause of iter_mut()
-                    let mut writer = BitWriter::new();
+                    let mut writer = BitWriter::default();
 
                     // write header
                     connection
@@ -839,7 +839,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             for (user_address, connection) in &mut self.user_connections.iter_mut() {
                 // send pings
                 if connection.ping_manager.should_send_ping() {
-                    let mut writer = BitWriter::new();
+                    let mut writer = BitWriter::default();
 
                     // write header
                     connection
@@ -968,7 +968,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                 let ping_index = u16::de(&mut reader).unwrap();
 
                                 // write pong payload
-                                let mut writer = BitWriter::new();
+                                let mut writer = BitWriter::default();
 
                                 // write header
                                 user_connection
@@ -1052,13 +1052,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                 let currently_in_scope =
                                     user_connection.entity_manager.scope_has_entity(entity);
 
-                                let should_be_in_scope: bool;
-                                if let Some(in_scope) = self.entity_scope_map.get(user_key, entity)
+                                let should_be_in_scope = if let Some(in_scope) =
+                                    self.entity_scope_map.get(user_key, entity)
                                 {
-                                    should_be_in_scope = *in_scope;
+                                    *in_scope
                                 } else {
-                                    should_be_in_scope = false;
-                                }
+                                    false
+                                };
 
                                 if should_be_in_scope {
                                     if !currently_in_scope {

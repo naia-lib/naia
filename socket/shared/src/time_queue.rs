@@ -9,14 +9,15 @@ pub struct TimeQueue<T: Eq + PartialEq> {
     queue: BinaryHeap<ItemContainer<T>>,
 }
 
-impl<T: Eq + PartialEq> TimeQueue<T> {
-    /// Create a new TimeQueue
-    pub fn new() -> Self {
-        TimeQueue {
-            queue: BinaryHeap::new(),
+impl<T: Eq + PartialEq> Default for TimeQueue<T> {
+    fn default() -> Self {
+        Self {
+            queue: BinaryHeap::default(),
         }
     }
+}
 
+impl<T: Eq + PartialEq> TimeQueue<T> {
     /// Adds an item to the queue marked by time
     pub fn add_item(&mut self, instant: Instant, item: T) {
         self.queue.push(ItemContainer { instant, item });
@@ -51,6 +52,11 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
     /// Returns the length of the underlying queue
     pub fn len(&self) -> usize {
         self.queue.len()
+    }
+
+    /// Checks if the underlying queue is empty
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
     }
 }
 

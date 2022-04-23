@@ -39,7 +39,7 @@ impl App {
         let mut server = Server::new(&ServerConfig::default(), &shared_config());
         server.listen(&server_addresses);
 
-        let mut world = World::new();
+        let mut world = World::default();
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
@@ -103,7 +103,7 @@ impl App {
                     info!("Naia Server disconnected from: {:?}", user.address);
                 }
                 Ok(Event::Message(user_key, _, Protocol::StringMessage(message))) => {
-                    let ref message_contents = *message.contents;
+                    let message_contents = &(*message.contents);
                     info!(
                         "Server recv from ({}) <- {}",
                         self.server.user(&user_key).address(),
@@ -148,7 +148,7 @@ impl App {
                         for (_, user_key, entity) in server.scope_checks() {
                             if let Some(character) = world.proxy().component::<Character>(&entity) {
                                 let x = *character.x;
-                                if x >= 5 && x <= 15 {
+                                if (5..=15).contains(&x) {
                                     server.user_scope(&user_key).include(&entity);
                                 } else {
                                     server.user_scope(&user_key).exclude(&entity);

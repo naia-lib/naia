@@ -9,6 +9,6 @@ pub struct Auth {
 
 impl Auth {
     pub fn new(username: &str, password: &str) -> Self {
-        return Auth::new_complete(username.to_string(), password.to_string());
+        Auth::new_complete(username.to_string(), password.to_string())
     }
 }

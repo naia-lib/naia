@@ -23,11 +23,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E,
     }
 
     pub fn has_component<R: ReplicateSafe<P>>(&self) -> bool {
-        return self.world.has_component::<R>(&self.entity);
+        self.world.has_component::<R>(&self.entity)
     }
 
     pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ReplicaRefWrapper<P, R>> {
-        return self.world.component::<R>(&self.entity);
+        self.world.component::<R>(&self.entity)
     }
 }
 

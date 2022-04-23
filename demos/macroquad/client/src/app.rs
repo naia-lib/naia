@@ -53,11 +53,11 @@ impl App {
 
         App {
             client,
-            world: World::new(),
+            world: World::default(),
             owned_entity: None,
             squares: HashSet::new(),
             queued_command: None,
-            command_history: CommandHistory::new(),
+            command_history: CommandHistory::default(),
         }
     }
 
@@ -111,11 +111,11 @@ impl App {
                 Ok(Event::Disconnection(server_address)) => {
                     info!("Client disconnected from: {}", server_address);
 
-                    self.world = World::new();
+                    self.world = World::default();
                     self.owned_entity = None;
                     self.squares = HashSet::new();
                     self.queued_command = None;
-                    self.command_history = CommandHistory::new();
+                    self.command_history = CommandHistory::default();
                 }
                 Ok(Event::Tick) => {
                     if let Some(owned_entity) = &self.owned_entity {

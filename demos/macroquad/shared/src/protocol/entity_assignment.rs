@@ -9,6 +9,6 @@ pub struct EntityAssignment {
 
 impl EntityAssignment {
     pub fn new(assign: bool) -> Self {
-        return EntityAssignment::new_complete(assign);
+        EntityAssignment::new_complete(assign)
     }
 }

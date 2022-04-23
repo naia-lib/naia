@@ -158,19 +158,17 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
                             if property_type == "EntityProperty" {
                                 fields.push(Property::entity(variable_name.clone()));
                                 continue;
-                            } else {
-                                if let PathArguments::AngleBracketed(angle_args) =
-                                    &property_seg.arguments
+                            } else if let PathArguments::AngleBracketed(angle_args) =
+                                &property_seg.arguments
+                            {
+                                if let Some(GenericArgument::Type(inner_type)) =
+                                    angle_args.args.first()
                                 {
-                                    if let Some(GenericArgument::Type(inner_type)) =
-                                        angle_args.args.first()
-                                    {
-                                        fields.push(Property::normal(
-                                            variable_name.clone(),
-                                            inner_type.clone(),
-                                        ));
-                                        continue;
-                                    }
+                                    fields.push(Property::normal(
+                                        variable_name.clone(),
+                                        inner_type.clone(),
+                                    ));
+                                    continue;
                                 }
                             }
                         }
@@ -187,26 +185,23 @@ fn protocol_path(input: &DeriveInput) -> (Path, Ident) {
     let mut path_result: Option<Result<Path>> = None;
 
     let attrs = &input.attrs;
-    for option in attrs.into_iter() {
+    for option in attrs {
         let option = option.parse_meta().unwrap();
-        match option {
-            Meta::NameValue(meta_name_value) => {
-                let path = meta_name_value.path;
-                let lit = meta_name_value.lit;
-                if let Some(ident) = path.get_ident() {
-                    if ident == "protocol_path" {
-                        if let Lit::Str(lit_str) = lit {
-                            path_result = Some(lit_str.parse());
-                        }
+        if let Meta::NameValue(meta_name_value) = option {
+            let path = meta_name_value.path;
+            let lit = meta_name_value.lit;
+            if let Some(ident) = path.get_ident() {
+                if ident == "protocol_path" {
+                    if let Lit::Str(lit_str) = lit {
+                        path_result = Some(lit_str.parse());
                     }
                 }
             }
-            _ => {}
         }
     }
 
     if let Some(Ok(path)) = path_result {
-        let mut new_path = path.clone();
+        let mut new_path = path;
         if let Some(last_seg) = new_path.segments.pop() {
             let name = last_seg.into_value().ident;
             if let Some(second_seg) = new_path.segments.pop() {
@@ -219,8 +214,8 @@ fn protocol_path(input: &DeriveInput) -> (Path, Ident) {
     panic!("When deriving 'Replicate' you MUST specify the path of the accompanying protocol. IE: '#[protocol_path = \"crate::MyProtocol\"]'");
 }
 
-fn property_enum(enum_name: &Ident, properties: &Vec<Property>) -> TokenStream {
-    if properties.len() == 0 {
+fn property_enum(enum_name: &Ident, properties: &[Property]) -> TokenStream {
+    if properties.is_empty() {
         return quote! {
             enum #enum_name {}
         };
@@ -228,22 +223,19 @@ fn property_enum(enum_name: &Ident, properties: &Vec<Property>) -> TokenStream {
 
     let hashtag = Punct::new('#', Spacing::Alone);
 
-    let mut variant_index: u8 = 0;
     let mut variant_list = quote! {};
 
-    for property in properties {
+    for (index, property) in properties.iter().enumerate() {
         let uppercase_variant_name = property.uppercase_variable_name();
 
         let new_output_right = quote! {
-            #uppercase_variant_name = #variant_index,
+            #uppercase_variant_name = #index as u8,
         };
         let new_output_result = quote! {
             #variant_list
             #new_output_right
         };
         variant_list = new_output_result;
-
-        variant_index += 1;
     }
 
     return quote! {
@@ -286,7 +278,7 @@ pub fn dyn_mut_method(protocol_name: &Ident) -> TokenStream {
     };
 }
 
-fn clone_method(replica_name: &Ident, properties: &Vec<Property>) -> TokenStream {
+fn clone_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
     let mut output = quote! {};
     let mut entity_property_output = quote! {};
 
@@ -329,7 +321,7 @@ fn clone_method(replica_name: &Ident, properties: &Vec<Property>) -> TokenStream
 fn mirror_method(
     protocol_name: &Ident,
     replica_name: &Ident,
-    properties: &Vec<Property>,
+    properties: &[Property],
 ) -> TokenStream {
     let mut output = quote! {};
 
@@ -354,7 +346,7 @@ fn mirror_method(
     };
 }
 
-fn set_mutator_method(properties: &Vec<Property>) -> TokenStream {
+fn set_mutator_method(properties: &[Property]) -> TokenStream {
     let mut output = quote! {};
 
     for property in properties.iter() {
@@ -379,7 +371,7 @@ fn set_mutator_method(properties: &Vec<Property>) -> TokenStream {
 pub fn new_complete_method(
     replica_name: &Ident,
     enum_name: &Ident,
-    properties: &Vec<Property>,
+    properties: &[Property],
 ) -> TokenStream {
     let mut args = quote! {};
     for property in properties.iter() {
@@ -443,7 +435,7 @@ pub fn read_method(
     protocol_name: &Ident,
     replica_name: &Ident,
     enum_name: &Ident,
-    properties: &Vec<Property>,
+    properties: &[Property],
 ) -> TokenStream {
     let mut prop_names = quote! {};
     for property in properties.iter() {
@@ -499,7 +491,7 @@ pub fn read_method(
 pub fn read_create_update_method(
     replica_name: &Ident,
     kind_name: &Ident,
-    properties: &Vec<Property>,
+    properties: &[Property],
 ) -> TokenStream {
     let mut prop_read_writes = quote! {};
     for property in properties.iter() {
@@ -539,7 +531,7 @@ pub fn read_create_update_method(
     return quote! {
         pub fn read_create_update(bit_reader: &mut BitReader) -> ComponentUpdate::<#kind_name> {
 
-            let mut update_writer = BitWriter::new();
+            let mut update_writer = BitWriter::default();
 
             #prop_read_writes
 
@@ -551,7 +543,7 @@ pub fn read_create_update_method(
     };
 }
 
-fn read_apply_update_method(kind_name: &Ident, properties: &Vec<Property>) -> TokenStream {
+fn read_apply_update_method(kind_name: &Ident, properties: &[Property]) -> TokenStream {
     let mut output = quote! {};
 
     for property in properties.iter() {
@@ -589,7 +581,7 @@ fn read_apply_update_method(kind_name: &Ident, properties: &Vec<Property>) -> To
     };
 }
 
-fn write_method(properties: &Vec<Property>) -> TokenStream {
+fn write_method(properties: &[Property]) -> TokenStream {
     let mut property_writes = quote! {};
 
     for property in properties.iter() {
@@ -623,7 +615,7 @@ fn write_method(properties: &Vec<Property>) -> TokenStream {
     };
 }
 
-fn write_update_method(enum_name: &Ident, properties: &Vec<Property>) -> TokenStream {
+fn write_update_method(enum_name: &Ident, properties: &[Property]) -> TokenStream {
     let mut output = quote! {};
 
     for property in properties.iter() {
@@ -668,7 +660,7 @@ fn write_update_method(enum_name: &Ident, properties: &Vec<Property>) -> TokenSt
     };
 }
 
-fn has_entity_properties_method(properties: &Vec<Property>) -> TokenStream {
+fn has_entity_properties_method(properties: &[Property]) -> TokenStream {
     for property in properties.iter() {
         if let Property::Entity(_) = property {
             return quote! {
@@ -686,7 +678,7 @@ fn has_entity_properties_method(properties: &Vec<Property>) -> TokenStream {
     };
 }
 
-fn entities_method(properties: &Vec<Property>) -> TokenStream {
+fn entities_method(properties: &[Property]) -> TokenStream {
     let mut body = quote! {};
 
     for property in properties.iter() {

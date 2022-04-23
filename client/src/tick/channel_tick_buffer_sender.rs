@@ -45,8 +45,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
             self.last_sent = Instant::now();
 
             // Loop through outstanding messages and add them to the outgoing list
-            let mut iter = self.sending_messages.iter();
-            while let Some((message_tick, message_map)) = iter.next() {
+            for (message_tick, message_map) in self.sending_messages.iter() {
                 if sequence_greater_than(*message_tick, *client_sending_tick) {
                     //info!("found message that is more recent than client sending tick! (how?)");
                     break;
@@ -69,7 +68,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
     }
 
     pub fn has_outgoing_messages(&self) -> bool {
-        return self.next_send_messages.len() != 0;
+        !self.next_send_messages.is_empty()
     }
 
     // Tick Buffer Message Writing
@@ -91,7 +90,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
                 return None;
             }
 
-            let mut counter = BitCounter::new();
+            let mut counter = BitCounter::default();
 
             //TODO: message_count is inaccurate here and may be different than final, does
             // this matter?
@@ -154,7 +153,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
                     output.push((message_tick, message_id));
                 }
             }
-            return Some(output);
+            Some(output)
         }
     }
 
@@ -195,7 +194,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
             last_id_written = *message_id;
         }
 
-        return message_ids;
+        message_ids
     }
 
     pub fn notify_message_delivered(&mut self, tick: &Tick, message_id: &ShortMessageId) {
@@ -219,14 +218,12 @@ impl<P: Protocolize> MessageMap<P> {
 
     pub fn collect_messages(&self) -> Vec<(ShortMessageId, P)> {
         let mut output = Vec::new();
-        let mut index = 0;
-        for message_opt in &self.list {
+        for (index, message_opt) in self.list.iter().enumerate() {
             if let Some(message) = message_opt {
-                output.push((index, message.clone()));
+                output.push((index as u8, message.clone()));
             }
-            index += 1;
         }
-        return output;
+        output
     }
 
     pub fn remove(&mut self, message_id: &ShortMessageId) {
@@ -236,7 +233,7 @@ impl<P: Protocolize> MessageMap<P> {
     }
 
     pub fn len(&self) -> usize {
-        return self.list.len();
+        self.list.len()
     }
 }
 
@@ -316,7 +313,7 @@ impl<P: Protocolize> OutgoingMessages<P> {
             if let Some((old_tick, message_map)) = self.buffer.get_mut(index) {
                 if *old_tick == *tick {
                     // found it!
-                    message_map.remove(&message_id);
+                    message_map.remove(message_id);
                     //info!("removed delivered message! tick: {}, msg_id: {}", tick, msg_id);
                     if message_map.len() == 0 {
                         remove = true;

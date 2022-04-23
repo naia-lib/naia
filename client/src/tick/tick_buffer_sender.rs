@@ -10,6 +10,7 @@ use super::channel_tick_buffer_sender::ChannelTickBufferSender;
 
 pub struct TickBufferSender<P: Protocolize, C: ChannelIndex> {
     channel_senders: HashMap<C, ChannelTickBufferSender<P>>,
+    #[allow(clippy::type_complexity)]
     packet_to_channel_map: HashMap<PacketIndex, Vec<(C, Vec<(Tick, ShortMessageId)>)>>,
 }
 
@@ -18,14 +19,11 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
         // initialize senders
         let mut channel_senders = HashMap::new();
         for (channel_index, channel) in channel_config.channels() {
-            match &channel.mode {
-                ChannelMode::TickBuffered(settings) => {
-                    channel_senders.insert(
-                        channel_index.clone(),
-                        ChannelTickBufferSender::new(tick_duration, &settings),
-                    );
-                }
-                _ => {}
+            if let ChannelMode::TickBuffered(settings) = &channel.mode {
+                channel_senders.insert(
+                    channel_index.clone(),
+                    ChannelTickBufferSender::new(tick_duration, settings),
+                );
             }
         }
 
@@ -48,18 +46,18 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
         client_sending_tick: &Tick,
         server_receivable_tick: &Tick,
     ) {
-        for (_, channel) in &mut self.channel_senders {
+        for channel in self.channel_senders.values_mut() {
             channel.collect_outgoing_messages(client_sending_tick, server_receivable_tick);
         }
     }
 
     pub fn has_outgoing_messages(&self) -> bool {
-        for (_, channel) in &self.channel_senders {
+        for channel in self.channel_senders.values() {
             if channel.has_outgoing_messages() {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     pub fn write_messages(
@@ -87,9 +85,9 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
 
             if let Some(message_ids) = channel.write_messages(channel_writer, bit_writer, host_tick)
             {
-                if !self.packet_to_channel_map.contains_key(&packet_index) {
-                    self.packet_to_channel_map.insert(packet_index, Vec::new());
-                }
+                self.packet_to_channel_map
+                    .entry(packet_index)
+                    .or_insert_with(Vec::new);
                 let channel_list = self.packet_to_channel_map.get_mut(&packet_index).unwrap();
                 channel_list.push((channel_index.clone(), message_ids));
             }

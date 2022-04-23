@@ -52,34 +52,34 @@ impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
     }
 
     pub fn is_connected(&self) -> bool {
-        return self.client.is_connected();
+        self.client.is_connected()
     }
 
     pub fn is_connecting(&self) -> bool {
-        return self.client.is_connecting();
+        self.client.is_connecting()
     }
 
     pub fn server_address(&self) -> SocketAddr {
-        return self.client.server_address();
+        self.client.server_address()
     }
 
     pub fn rtt(&self) -> f32 {
-        return self.client.rtt();
+        self.client.rtt()
     }
 
     pub fn jitter(&self) -> f32 {
-        return self.client.jitter();
+        self.client.jitter()
     }
 
     // Interpolation
 
     pub fn interpolation(&self) -> Option<f32> {
-        return self.client.interpolation();
+        self.client.interpolation()
     }
 
     //// Messages ////
     pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
-        return self.client.send_message(channel, message);
+        self.client.send_message(channel, message)
     }
 
     //// Entities ////
@@ -95,7 +95,7 @@ impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
     //// Ticks ////
 
     pub fn client_tick(&self) -> Option<u16> {
-        return self.client.client_tick();
+        self.client.client_tick()
     }
 }
 
@@ -105,10 +105,10 @@ impl<'a, P: Protocolize, C: ChannelIndex> SystemParam for Client<'a, P, C> {
 
 impl<'a, P: Protocolize, C: ChannelIndex> EntityHandleConverter<Entity> for Client<'a, P, C> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
-        return self.client.handle_to_entity(entity_handle);
+        self.client.handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &Entity) -> EntityHandle {
-        return self.client.entity_to_handle(entity);
+        self.client.entity_to_handle(entity)
     }
 }

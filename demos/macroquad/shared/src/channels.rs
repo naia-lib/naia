@@ -8,7 +8,7 @@ pub enum Channels {
     EntityAssignment,
 }
 
-pub const CHANNEL_CONFIG: &'static [Channel<Channels>] = &[
+pub const CHANNEL_CONFIG: &[Channel<Channels>] = &[
     Channel {
         index: Channels::PlayerCommand,
         direction: ChannelDirection::ClientToServer,

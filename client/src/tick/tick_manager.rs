@@ -155,7 +155,7 @@ impl TickManager {
     pub fn client_sending_tick(&self) -> Tick {
         let mut output = self.server_tick_estimate() + self.client_sending_tick_adjust;
         wrap_f32(&mut output);
-        return output.round() as Tick;
+        output.round() as Tick
     }
 
     /// Gets the tick at which to receive messages from the Server (after jitter
@@ -163,14 +163,14 @@ impl TickManager {
     pub fn client_receiving_tick(&self) -> Tick {
         let mut output = self.server_tick_estimate() - self.client_receiving_tick_adjust;
         wrap_f32(&mut output);
-        return output.round() as Tick;
+        output.round() as Tick
     }
 
     /// Gets the earliest tick the Server may be able to receive Client messages
     pub fn server_receivable_tick(&self) -> Tick {
         let mut output = self.server_tick_estimate() + self.server_receivable_tick_adjust;
         wrap_f32(&mut output);
-        return output.round() as Tick;
+        output.round() as Tick
     }
 
     fn server_tick_estimate(&self) -> f32 {

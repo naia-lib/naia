@@ -6,13 +6,15 @@ pub struct CommandHistory<T: Clone> {
     buffer: VecDeque<(Tick, T)>,
 }
 
-impl<T: Clone> CommandHistory<T> {
-    pub fn new() -> Self {
-        CommandHistory {
-            buffer: VecDeque::new(),
+impl<T: Clone> Default for CommandHistory<T> {
+    fn default() -> Self {
+        Self {
+            buffer: VecDeque::default(),
         }
     }
+}
 
+impl<T: Clone> CommandHistory<T> {
     pub fn replays(&mut self, start_tick: &Tick) -> Vec<(Tick, T)> {
         // Remove history of commands until current received tick
         self.remove_to_and_including(*start_tick);
@@ -60,6 +62,6 @@ impl<T: Clone> CommandHistory<T> {
                 return false;
             }
         }
-        return true;
+        true
     }
 }

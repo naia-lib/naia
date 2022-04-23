@@ -89,15 +89,13 @@ impl Socket {
                     }
                 },
                 Next::ToClientMessage((address, payload)) => {
-                    match self
+                    if (self
                         .rtc_server
                         .send(&payload, MessageType::Binary, &address)
-                        .await
+                        .await)
+                        .is_err()
                     {
-                        Err(_) => {
-                            return Err(NaiaServerSocketError::SendError(address));
-                        }
-                        _ => {}
+                        return Err(NaiaServerSocketError::SendError(address));
                     }
                 }
             }
@@ -105,7 +103,7 @@ impl Socket {
     }
 
     pub fn sender(&self) -> mpsc::Sender<(SocketAddr, Box<[u8]>)> {
-        return self.to_client_sender.clone();
+        self.to_client_sender.clone()
     }
 }
 
@@ -119,7 +117,7 @@ impl RtcServer {
             .await
             .expect("could not start RTC server");
 
-        return RtcServer { inner };
+        RtcServer { inner }
     }
 
     pub fn session_endpoint(&self) -> SessionEndpoint {

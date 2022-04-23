@@ -16,12 +16,8 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferReceiver<P, C> {
         // initialize receivers
         let mut channel_receivers = HashMap::new();
         for (channel_index, channel) in channel_config.channels() {
-            match &channel.mode {
-                ChannelMode::TickBuffered(_) => {
-                    channel_receivers
-                        .insert(channel_index.clone(), ChannelTickBufferReceiver::new());
-                }
-                _ => {}
+            if let ChannelMode::TickBuffered(_) = channel.mode {
+                channel_receivers.insert(channel_index.clone(), ChannelTickBufferReceiver::new());
             }
         }
 

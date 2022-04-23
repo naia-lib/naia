@@ -64,14 +64,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
             remote_world: CheckedMap::new(),
             entity_channels: CheckedMap::new(),
             outgoing_actions: ReliableSender::new(RESEND_ACTION_RTT_FACTOR),
-            delivered_actions: EntityActionReceiver::new(),
+            delivered_actions: EntityActionReceiver::default(),
 
             address,
             diff_handler: UserDiffHandler::new(diff_handler),
-            net_entity_generator: KeyGenerator::new(),
+            net_entity_generator: KeyGenerator::default(),
             net_entity_to_entity_map: HashMap::new(),
             entity_to_net_entity_map: HashMap::new(),
-            delayed_entity_messages: EntityMessageWaitlist::new(),
+            delayed_entity_messages: EntityMessageWaitlist::default(),
         }
     }
 
@@ -82,11 +82,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
     }
 
     pub fn entity_channel_is_open(&self, entity: &E) -> bool {
-        return if let Some(EntityChannel::Spawned(_)) = self.entity_channels.get(entity) {
-            true
-        } else {
-            false
-        };
+        matches!(
+            self.entity_channels.get(entity),
+            Some(EntityChannel::Spawned(_))
+        )
     }
 
     // Host Updates
@@ -99,7 +98,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
 
         self.host_world.insert(*entity, CheckedSet::new());
 
-        if let None = self.entity_channels.get(entity) {
+        if self.entity_channels.get(entity).is_none() {
             // spawn entity
             self.entity_channels
                 .insert(*entity, EntityChannel::Spawning);

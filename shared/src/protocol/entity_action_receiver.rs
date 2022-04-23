@@ -14,14 +14,16 @@ pub struct EntityActionReceiver<E: Copy + Hash + Eq, K: ProtocolKindType> {
     entity_channels: HashMap<E, EntityChannel<E, K>>,
 }
 
-impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityActionReceiver<E, K> {
-    pub fn new() -> Self {
+impl<E: Copy + Hash + Eq, K: ProtocolKindType> Default for EntityActionReceiver<E, K> {
+    fn default() -> Self {
         Self {
-            receiver: UnorderedReliableReceiver::new(),
-            entity_channels: HashMap::new(),
+            receiver: UnorderedReliableReceiver::default(),
+            entity_channels: HashMap::default(),
         }
     }
+}
 
+impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityActionReceiver<E, K> {
     pub fn buffer_action(&mut self, action_id: ActionId, action: EntityAction<E, K>) {
         self.receiver.buffer_message(action_id, action)
     }
@@ -158,7 +160,7 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
             self.receive_canonical(id);
 
             // set all component channels to 'inserted = false'
-            for (_, value) in &mut self.components {
+            for value in self.components.values_mut() {
                 value.inserted = false;
             }
 
@@ -264,7 +266,7 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
         // pop ALL waiting spawns, despawns, inserts, and removes OLDER than id
         self.waiting_spawns.pop_front_until_and_including(id);
         self.waiting_despawns.pop_front_until_and_including(id);
-        for (_, component_state) in &mut self.components {
+        for component_state in self.components.values_mut() {
             component_state.receive_canonical(id);
         }
 
@@ -361,9 +363,7 @@ impl<P> OrderedIds<P> {
         let mut pop = false;
 
         if let Some((old_id, _)) = self.inner.front() {
-            if *old_id == id {
-                pop = true;
-            } else if sequence_less_than(*old_id, id) {
+            if *old_id == id || sequence_less_than(*old_id, id) {
                 pop = true;
             }
         }
