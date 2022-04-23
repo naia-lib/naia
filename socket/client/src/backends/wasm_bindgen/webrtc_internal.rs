@@ -91,7 +91,7 @@ pub fn webrtc_initialize(
             channel.set_binary_type(RtcDataChannelType::Arraybuffer);
 
             let channel_2 = channel.clone();
-            let msg_queue_2 = msg_queue.clone();
+            let msg_queue_2 = msg_queue;
             let channel_onopen_func: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
                 let msg_queue_3 = msg_queue_2.clone();
                 let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> =
@@ -123,7 +123,7 @@ pub fn webrtc_initialize(
             onerror_callback.forget();
 
             let peer_2 = peer.clone();
-            let addr_cell_2 = addr_cell.clone();
+            let addr_cell_2 = addr_cell;
             let server_url_msg = Rc::new(RefCell::new(server_url_str));
             let peer_offer_func: Box<dyn FnMut(JsValue)> = Box::new(move |e: JsValue| {
                 let session_description = e.into();
@@ -244,7 +244,7 @@ pub fn webrtc_initialize(
             peer_offer_callback.forget();
             peer_error_callback.forget();
 
-            return channel;
+            channel
         }
         Err(err) => {
             info!("Error creating new RtcPeerConnection. Error: {:?}", err);

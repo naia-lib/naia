@@ -35,11 +35,9 @@ impl PacketReceiverTrait for PacketReceiverImpl {
         {
             Some(payload) => {
                 self.last_payload = Some(payload);
-                return Ok(Some(self.last_payload.as_ref().unwrap()));
+                Ok(Some(self.last_payload.as_ref().unwrap()))
             }
-            None => {
-                return Ok(None);
-            }
+            None => Ok(None),
         }
     }
 

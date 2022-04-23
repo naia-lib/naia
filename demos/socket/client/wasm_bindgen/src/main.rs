@@ -16,7 +16,7 @@ cfg_if! {
                 .init()
                 .expect("A logger was already initialized");
 
-            start_loop(App::new());
+            start_loop(App::default());
         }
     }
 }

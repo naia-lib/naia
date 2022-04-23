@@ -18,7 +18,7 @@ impl Instant {
         let inner_duration = Date::now() - self.inner;
         let seconds: u64 = (inner_duration as u64) / 1000;
         let nanos: u32 = ((inner_duration as u32) % 1000) * 1000000;
-        return Duration::new(seconds, nanos);
+        Duration::new(seconds, nanos)
     }
 
     /// Returns time until the Instant occurs
@@ -26,7 +26,7 @@ impl Instant {
         let inner_duration = self.inner - Date::now();
         let seconds: u64 = (inner_duration as u64) / 1000;
         let nanos: u32 = ((inner_duration as u32) % 1000) * 1000000;
-        return Duration::new(seconds, nanos);
+        Duration::new(seconds, nanos)
     }
 
     /// Adds a given number of milliseconds to the Instant
@@ -44,14 +44,16 @@ impl Instant {
 
 impl Eq for Instant {}
 
+#[allow(clippy::derive_ord_xor_partial_ord)]
 impl Ord for Instant {
     fn cmp(&self, other: &Self) -> Ordering {
+        // TODO: Use epsilon?
         if self.inner == other.inner {
-            return Ordering::Equal;
+            Ordering::Equal
         } else if self.inner < other.inner {
-            return Ordering::Less;
+            Ordering::Less
         } else {
-            return Ordering::Greater;
+            Ordering::Greater
         }
     }
 }

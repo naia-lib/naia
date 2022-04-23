@@ -17,7 +17,7 @@ impl EventHandlerFree for Stage {
 }
 
 fn main() {
-    let app = App::new();
+    let app = App::default();
     miniquad::start(conf::Conf::default(), |ctx| {
         UserData::free(Stage { ctx, app })
     });

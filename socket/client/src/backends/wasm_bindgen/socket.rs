@@ -39,7 +39,7 @@ impl Socket {
 
         let server_url = parse_server_url(server_session_url);
 
-        let addr_cell = AddrCell::new();
+        let addr_cell = AddrCell::default();
         let message_queue = Rc::new(RefCell::new(VecDeque::new()));
         let data_channel = webrtc_initialize(
             format!("{}{}", server_url, self.config.rtc_endpoint_path.clone()),
@@ -48,8 +48,7 @@ impl Socket {
         );
 
         let packet_sender = PacketSender::new(data_channel, addr_cell.clone());
-        let packet_receiver_impl =
-            PacketReceiverImpl::new(message_queue.clone(), addr_cell.clone());
+        let packet_receiver_impl = PacketReceiverImpl::new(message_queue, addr_cell);
 
         let packet_receiver: Box<dyn PacketReceiverTrait> = {
             let inner_receiver = Box::new(packet_receiver_impl);

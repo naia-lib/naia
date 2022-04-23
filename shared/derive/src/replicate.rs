@@ -103,6 +103,7 @@ pub struct EntityProperty {
     pub uppercase_variable_name: Ident,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum Property {
     Normal(NormalProperty),
     Entity(EntityProperty),

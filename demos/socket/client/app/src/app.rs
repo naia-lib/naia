@@ -22,8 +22,8 @@ pub struct App {
     server_addr_str: Option<String>,
 }
 
-impl App {
-    pub fn new() -> App {
+impl Default for App {
+    fn default() -> App {
         info!("Naia Client Socket Demo started");
 
         let mut socket = Socket::new(&shared_config());
@@ -37,7 +37,9 @@ impl App {
             server_addr_str: None,
         }
     }
+}
 
+impl App {
     pub fn update(&mut self) {
         if self.server_addr_str.is_none() {
             if let ServerAddr::Found(addr) = self.packet_receiver.server_addr() {
