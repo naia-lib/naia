@@ -363,8 +363,10 @@ impl<P> OrderedIds<P> {
         if let Some((old_id, _)) = self.inner.front() {
             if *old_id == id {
                 pop = true;
-            } else if sequence_less_than(*old_id, id) {
-                pop = true;
+            } else {
+                if sequence_less_than(*old_id, id) {
+                    pop = true;
+                }
             }
         }
 

@@ -28,17 +28,6 @@ jobs:
           command: fmt
           args: -- --check
 
-  clippy_check:
-    name: Check Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - run: rustup component add clippy
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
-
   test-server-socket:
     strategy:
       fail-fast: false
@@ -190,6 +179,10 @@ jobs:
             naia-macroquad-client-demo,
             naia-bevy-client-demo,
             naia-hecs-client-demo,
+            naia-basic-demo-client-mq,
+            naia-basic-demo-client-wb,
+            naia-socket-demo-client-mq,
+            naia-socket-demo-client-wb,
           ]
 
     runs-on: ubuntu-latest
@@ -205,29 +198,3 @@ jobs:
         with:
           command: build
           args: --package ${{ matrix.package }}
-
-  build-multi-feature-client-demos:
-    name: Build Client Demos (w/ Multiple Features)
-    strategy:
-      fail-fast: false
-      matrix:
-        features: [ mquad, wbindgen ]
-        package:
-          [
-            naia-basic-demo-client,
-            naia-socket-demo-client,
-          ]
-
-    runs-on: ubuntu-latest
-    steps:
-      - name: Clone repo
-        uses: actions/checkout@v3
-
-      - name: Cache crates
-        uses: Swatinem/rust-cache@v1
-
-      - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --package ${{ matrix.package }} --features "${{ matrix.features }}"

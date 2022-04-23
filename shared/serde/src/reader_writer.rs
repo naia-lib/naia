@@ -132,7 +132,7 @@ impl<'b> BitReader<'b> {
     }
 
     pub(crate) fn read_bit(&mut self) -> bool {
-        if self.state.scratch_index <= 0 {
+        if self.state.scratch_index == 0 {
             if self.state.buffer_index == self.buffer.len() {
                 panic!("no more bytes to read");
             }
