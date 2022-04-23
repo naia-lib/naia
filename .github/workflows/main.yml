@@ -179,10 +179,10 @@ jobs:
             # naia-macroquad-client-demo, # seems to have a linking issue only in GH Actions ...
             naia-bevy-client-demo,
             naia-hecs-client-demo,
-            naia-basic-demo-client-mq,
-            naia-basic-demo-client-wb,
-            naia-socket-demo-client-mq,
-            naia-socket-demo-client-wb,
+            naia-basic-client-demo-mq,
+            naia-basic-client-demo-wb,
+            naia-socket-client-demo-mq,
+            naia-socket-client-demo-wb,
           ]
 
     runs-on: ubuntu-latest
