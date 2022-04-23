@@ -6,10 +6,9 @@ use naia_server::{
 use naia_demo_world::{Entity, World as DemoWorld, WorldRefType};
 
 use naia_basic_demo_shared::{
-    protocol::{Protocol, StringMessage},
+    protocol::{Character, Protocol, StringMessage},
     shared_config,
 };
-use naia_basic_demo_shared::protocol::Character;
 
 type World = DemoWorld<Protocol>;
 type Server = NaiaServer<Protocol, Entity, DefaultChannels>;
@@ -147,8 +146,7 @@ impl App {
                         let server = &mut self.server;
                         let world = &self.world;
                         for (_, user_key, entity) in server.scope_checks() {
-                            if let Some(character) =
-                            world.proxy().component::<Character>(&entity) {
+                            if let Some(character) = world.proxy().component::<Character>(&entity) {
                                 let x = *character.x;
                                 if x >= 5 && x <= 15 {
                                     server.user_scope(&user_key).include(&entity);
