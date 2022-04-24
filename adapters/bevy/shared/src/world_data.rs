@@ -4,7 +4,7 @@ use std::{
     default::Default,
 };
 
-use bevy_ecs::entity::Entity;
+use bevy_ecs::{world::{FromWorld, World}, entity::Entity};
 
 use naia_shared::{Protocolize, ReplicateSafe};
 
@@ -15,8 +15,11 @@ pub struct WorldData<P: Protocolize> {
     kind_to_accessor_map: HashMap<P::Kind, Box<dyn Any>>,
 }
 
-impl<P: Protocolize> Default for WorldData<P> {
-    fn default() -> Self {
+unsafe impl<P: Protocolize> Send for WorldData<P> {}
+unsafe impl<P: Protocolize> Sync for WorldData<P> {}
+
+impl<P: Protocolize> FromWorld for WorldData<P> {
+    fn from_world(_world: &mut World) -> Self {
         Self {
             entities: HashSet::default(),
             kind_to_accessor_map: HashMap::default(),
@@ -67,6 +70,3 @@ impl<P: Protocolize> WorldData<P> {
             .insert(*component_kind, ComponentAccessor::<P, R>::create());
     }
 }
-
-unsafe impl<P: Protocolize> Send for WorldData<P> {}
-unsafe impl<P: Protocolize> Sync for WorldData<P> {}
