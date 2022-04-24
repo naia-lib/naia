@@ -4,7 +4,6 @@ use naia_shared::{ChannelIndex, Protocolize, Tick};
 
 /// An Event that is be emitted by the Client, usually as a result of some
 /// communication with the Server
-#[derive(Debug)]
 pub enum Event<P: Protocolize, E: Copy, C: ChannelIndex> {
     /// Occurs when the Client has successfully established a connection with
     /// the Server

@@ -8,14 +8,12 @@ use proc_macro::{Delimiter, Group, TokenStream, TokenTree};
 
 use std::iter::Peekable;
 
-#[derive(Debug)]
 pub struct Attribute {
     pub name: String,
     pub tokens: Vec<String>,
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
 pub enum Visibility {
     Public,
     Crate,
@@ -23,7 +21,6 @@ pub enum Visibility {
     Private,
 }
 
-#[derive(Debug)]
 pub struct Field {
     pub vis: Visibility,
     pub field_name: Option<String>,
@@ -31,27 +28,23 @@ pub struct Field {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
 pub struct Type {
     pub is_option: bool,
     pub path: String,
 }
 
-#[derive(Debug)]
 pub struct Struct {
     pub name: String,
     pub tuple: bool,
     pub fields: Vec<Field>,
 }
 
-#[derive(Debug)]
 pub struct EnumVariant {
     pub name: String,
     pub tuple: bool,
     pub fields: Vec<Field>,
 }
 
-#[derive(Debug)]
 pub struct Enum {
     pub name: String,
     pub variants: Vec<EnumVariant>,

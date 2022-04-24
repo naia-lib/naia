@@ -4,7 +4,6 @@ use naia_shared::{Protocolize, ReplicateSafe};
 
 use super::component_access::{ComponentAccess, ComponentAccessor};
 
-#[derive(Debug)]
 pub struct WorldData<P: Protocolize> {
     kind_to_accessor_map: HashMap<P::Kind, Box<dyn Any>>,
 }

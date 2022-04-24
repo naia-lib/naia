@@ -1,3 +1,5 @@
+use std::default::Default;
+
 use bevy::ecs::entity::Entity;
 
 use naia_bevy_client::CommandHistory;

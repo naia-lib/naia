@@ -9,7 +9,6 @@ pub trait BitWrite {
 }
 
 // BitCounter
-
 #[derive(Default)]
 pub struct BitCounter {
     count: u16,
