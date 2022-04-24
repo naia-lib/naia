@@ -14,7 +14,7 @@ fn main() {
         .init()
         .expect("A logger was already initialized");
 
-    let mut app = App::new();
+    let mut app = App::default();
     loop {
         app.update();
     }

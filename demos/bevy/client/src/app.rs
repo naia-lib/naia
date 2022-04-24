@@ -7,7 +7,7 @@ use naia_bevy_demo_shared::{protocol::Protocol, shared_config, Channels};
 use crate::systems::{events, init, input, sync, tick};
 
 pub fn run() {
-    App::new()
+    App::default()
         // Plugins
         .add_plugins(DefaultPlugins)
         .add_plugin(ClientPlugin::<Protocol, Channels>::new(

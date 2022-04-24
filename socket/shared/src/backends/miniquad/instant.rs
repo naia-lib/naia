@@ -22,7 +22,7 @@ impl Instant {
             let inner_duration = naia_now() - self.inner;
             let seconds: u64 = (inner_duration as u64) / 1000;
             let nanos: u32 = ((inner_duration as u32) % 1000) * 1000000;
-            return Duration::new(seconds, nanos);
+            Duration::new(seconds, nanos)
         }
     }
 
@@ -32,7 +32,7 @@ impl Instant {
             let inner_duration = self.inner - naia_now();
             let seconds: u64 = (inner_duration as u64) / 1000;
             let nanos: u32 = ((inner_duration as u32) % 1000) * 1000000;
-            return Duration::new(seconds, nanos);
+            Duration::new(seconds, nanos)
         }
     }
 
@@ -51,14 +51,16 @@ impl Instant {
 
 impl Eq for Instant {}
 
+#[allow(clippy::derive_ord_xor_partial_ord)]
 impl Ord for Instant {
     fn cmp(&self, other: &Self) -> Ordering {
+        // TODO: Use epsilon?
         if self.inner == other.inner {
-            return Ordering::Equal;
+            Ordering::Equal
         } else if self.inner < other.inner {
-            return Ordering::Less;
+            Ordering::Less
         } else {
-            return Ordering::Greater;
+            Ordering::Greater
         }
     }
 }

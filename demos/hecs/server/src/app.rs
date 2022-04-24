@@ -26,8 +26,8 @@ pub struct App {
     pub has_marker: HashSet<Entity>,
 }
 
-impl App {
-    pub fn new() -> Self {
+impl Default for App {
+    fn default() -> Self {
         info!("Naia Hecs Server Demo started");
 
         let server_addresses = ServerAddrs::new(
@@ -44,7 +44,9 @@ impl App {
 
         app_init(ServerConfig::default(), shared_config(), server_addresses)
     }
+}
 
+impl App {
     pub fn update(&mut self) {
         process_events(self);
     }

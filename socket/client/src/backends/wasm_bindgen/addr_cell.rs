@@ -11,13 +11,15 @@ pub struct AddrCell {
     cell: Rc<RefCell<MaybeAddr>>,
 }
 
-impl AddrCell {
-    pub fn new() -> Self {
+impl Default for AddrCell {
+    fn default() -> Self {
         AddrCell {
             cell: Rc::new(RefCell::new(MaybeAddr(ServerAddr::Finding))),
         }
     }
+}
 
+impl AddrCell {
     pub fn receive_candidate(&self, candidate_str: &str) {
         self.cell
             .as_ref()

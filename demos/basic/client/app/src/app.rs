@@ -27,8 +27,8 @@ pub struct App {
     message_count: u32,
 }
 
-impl App {
-    pub fn new() -> Self {
+impl Default for App {
+    fn default() -> Self {
         info!("Basic Naia Client Demo started");
 
         let auth = Auth::new("charlie", "12345");
@@ -43,7 +43,9 @@ impl App {
             message_count: 0,
         }
     }
+}
 
+impl App {
     pub fn update(&mut self) {
         for event in self.client.receive(self.world.proxy_mut()) {
             match event {
@@ -54,7 +56,7 @@ impl App {
                     info!("Client disconnected from: {}", server_address);
                 }
                 Ok(Event::Message(_, Protocol::StringMessage(message))) => {
-                    let ref message_contents = *message.contents;
+                    let message_contents = &(*message.contents);
                     info!("Client recv <- {}", message_contents);
 
                     // let new_message_contents = format!("Client Message ({})",

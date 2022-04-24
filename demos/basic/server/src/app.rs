@@ -1,6 +1,5 @@
 use naia_server::{
-    shared::{DefaultChannels, Protocolize},
-    Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
+    shared::DefaultChannels, Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
 };
 
 use naia_demo_world::{Entity, World as DemoWorld, WorldRefType};
@@ -20,8 +19,8 @@ pub struct App {
     tick_count: u32,
 }
 
-impl App {
-    pub fn new<P: Protocolize>() -> Self {
+impl Default for App {
+    fn default() -> Self {
         info!("Basic Naia Server Demo started");
 
         let server_addresses = ServerAddrs::new(
@@ -77,7 +76,9 @@ impl App {
             tick_count: 0,
         }
     }
+}
 
+impl App {
     pub fn update(&mut self) {
         for event in self.server.receive() {
             match event {

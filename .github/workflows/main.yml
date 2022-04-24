@@ -50,13 +50,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --features "${{ matrix.features }}" --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --features ${{ matrix.features }} --no-deps -- -D warnings
 
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
+          args: --package ${{ matrix.package }} --features ${{ matrix.features }}
 
   servers:
     name: Servers
@@ -81,13 +81,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --features "use-udp" --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --features use-udp --no-deps -- -D warnings
 
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --package ${{ matrix.package }} --features "use-udp"
+          args: --package ${{ matrix.package }} --features use-udp
 
   clients-and-shared:
     name: Clients And Shared
@@ -117,13 +117,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --features "${{ matrix.features }}" --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --features ${{ matrix.features }} --no-deps -- -D warnings
 
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --package ${{ matrix.package }} --features "${{ matrix.features }}"
+          args: --package ${{ matrix.package }} --features ${{ matrix.features }}
 
   other:
     name: Other
@@ -187,13 +187,14 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --features "use-udp" --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --features use-udp --no-deps -- -D warnings
 
   client-demos:
     name: Client Demos
     strategy:
       fail-fast: false
       matrix:
+        target: [x86_64-unknown-linux-gnu]
         package:
           [
             naia-macroquad-client-demo,
@@ -204,16 +205,32 @@ jobs:
             naia-basic-client-demo-wb,
             naia-socket-client-demo-wb,
           ]
+        include:
+          - package: naia-basic-client-demo-wb
+            target: wasm32-unknown-unknown
+            additional-arguments: --lib
+          - package: naia-socket-client-demo-wb
+            target: wasm32-unknown-unknown
+            additional-arguments: --lib
+          - package: naia-basic-client-demo-mq
+            target: wasm32-unknown-unknown
+          - package: naia-socket-client-demo-mq
+            target: wasm32-unknown-unknown
 
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
         uses: actions/checkout@v3
 
-      - name: Install dependencies
+      - name: Install X11 and OpenGL dependencies
+        if: matrix.package == 'naia-macroquad-client-demo' || matrix.package == 'naia-basic-client-demo-mq' || matrix.package == 'naia-socket-client-demo-mq'
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends libxi-dev libgl1-mesa-dev
+
+      - name: Install wasm target
+        if: matrix.target == 'wasm32-unknown-unknown'
+        run: rustup target add wasm32-unknown-unknown
 
       - name: Cache crates
         uses: Swatinem/rust-cache@v1
@@ -222,4 +239,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --target ${{ matrix.target }} ${{ matrix.additional-arguments }} --no-deps -- -D warnings
