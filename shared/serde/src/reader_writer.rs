@@ -15,10 +15,9 @@ pub struct BitCounter {
 }
 
 impl BitCounter {
+    #![allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self {
-            count: 0,
-        }
+        Self { count: 0 }
     }
 }
 

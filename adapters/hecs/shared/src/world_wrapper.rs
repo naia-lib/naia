@@ -1,4 +1,7 @@
-use std::{ops::{Deref, DerefMut}, default::Default};
+use std::{
+    default::Default,
+    ops::{Deref, DerefMut},
+};
 
 use hecs::{Entity, World};
 

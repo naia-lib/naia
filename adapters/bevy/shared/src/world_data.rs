@@ -4,7 +4,10 @@ use std::{
     default::Default,
 };
 
-use bevy_ecs::{world::{FromWorld, World}, entity::Entity};
+use bevy_ecs::{
+    entity::Entity,
+    world::{FromWorld, World},
+};
 
 use naia_shared::{Protocolize, ReplicateSafe};
 
