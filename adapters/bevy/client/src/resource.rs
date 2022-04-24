@@ -1,3 +1,5 @@
+use std::default::Default;
+
 use naia_bevy_shared::Flag;
 
 #[derive(Default)]

@@ -4,7 +4,6 @@ use naia_shared::{sequence_greater_than, Tick};
 
 /// A queue for items marked by tick, will only ever pop items from the queue if
 /// the tick has elapsed
-#[derive(Debug)]
 pub struct TickQueue<T> {
     queue: BinaryHeap<ItemContainer<T>>,
 }
@@ -44,7 +43,6 @@ impl<T> TickQueue<T> {
     }
 }
 
-#[derive(Debug)]
 pub struct ItemContainer<T> {
     pub tick: Tick,
     pub item: T,

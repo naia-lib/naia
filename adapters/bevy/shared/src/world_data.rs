@@ -1,6 +1,7 @@
 use std::{
     any::Any,
     collections::{HashMap, HashSet},
+    default::Default,
 };
 
 use bevy_ecs::entity::Entity;
@@ -9,7 +10,6 @@ use naia_shared::{Protocolize, ReplicateSafe};
 
 use super::component_access::{ComponentAccess, ComponentAccessor};
 
-#[derive(Debug)]
 pub struct WorldData<P: Protocolize> {
     entities: HashSet<Entity>,
     kind_to_accessor_map: HashMap<P::Kind, Box<dyn Any>>,

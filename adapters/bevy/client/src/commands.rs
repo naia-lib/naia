@@ -30,7 +30,6 @@ impl<'w, 's, P: Protocolize> CommandsExt<'w, 's, P> for Commands<'w, 's> {
 
 //// DuplicateComponents Command ////
 
-#[derive(Debug)]
 pub(crate) struct DuplicateComponents<P: Protocolize> {
     mutable_entity: Entity,
     immutable_entity: Entity,
@@ -59,7 +58,6 @@ impl<P: Protocolize> Command for DuplicateComponents<P> {
 
 //// MirrorEntities Command ////
 
-#[derive(Debug)]
 pub(crate) struct MirrorEntities<P: Protocolize> {
     mutable_entity: Entity,
     immutable_entity: Entity,

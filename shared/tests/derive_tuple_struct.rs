@@ -1,7 +1,6 @@
 mod some_struct {
     use naia_shared::{derive_serde, serde};
 
-    #[derive(Debug)]
     #[derive_serde]
     pub struct SomeStruct(pub String, pub i16, pub bool);
 }

@@ -1,3 +1,5 @@
+use std::default::Default;
+
 #[derive(Default)]
 pub struct Flag {
     set: bool,

@@ -17,7 +17,6 @@ const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
 
 /// Keeps track of sent & received packets, and contains ack information that is
 /// copied into the standard header on each outgoing packet
-#[derive(Debug)]
 pub struct AckManager {
     // Local packet index which we'll bump each time we send a new packet over the network.
     next_packet_index: PacketIndex,
