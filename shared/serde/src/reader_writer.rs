@@ -9,16 +9,9 @@ pub trait BitWrite {
 }
 
 // BitCounter
-
+#[derive(Default)]
 pub struct BitCounter {
     count: u16,
-}
-
-impl BitCounter {
-    #![allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self { count: 0 }
-    }
 }
 
 impl BitWrite for BitCounter {

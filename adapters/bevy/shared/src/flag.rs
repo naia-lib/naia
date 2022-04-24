@@ -1,13 +1,9 @@
+#[derive(Default)]
 pub struct Flag {
     set: bool,
 }
 
 impl Flag {
-    #![allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self { set: false }
-    }
-
     pub fn set(&mut self) {
         self.set = true;
     }

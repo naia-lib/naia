@@ -9,7 +9,7 @@ pub struct ServerResource {
 impl Default for ServerResource {
     fn default() -> Self {
         Self {
-            ticker: Flag::new(),
+            ticker: Flag::default(),
         }
     }
 }

@@ -259,7 +259,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 return;
             }
 
-            let mut counter = BitCounter::new();
+            let mut counter = BitCounter::default();
             message_list_header::write(&mut counter, 123);
 
             // Check for overflow
@@ -526,7 +526,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 return;
             }
 
-            let mut counter = BitCounter::new();
+            let mut counter = BitCounter::default();
             message_list_header::write(&mut counter, 123);
 
             // Check for overflow
