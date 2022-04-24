@@ -1,6 +1,7 @@
 mod some_struct {
     use naia_shared::{derive_serde, serde};
 
+    #[derive(Debug)]
     #[derive_serde]
     pub struct SomeStruct {
         pub some_string: String,
@@ -10,6 +11,7 @@ mod some_struct {
 }
 
 use naia_shared::serde::{BitReader, BitWriter, Serde};
+
 use some_struct::SomeStruct;
 
 #[test]
