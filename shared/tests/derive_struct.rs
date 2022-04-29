@@ -11,6 +11,7 @@ mod some_struct {
 }
 
 use naia_shared::serde::{BitReader, BitWriter, Serde};
+
 use some_struct::SomeStruct;
 
 #[test]

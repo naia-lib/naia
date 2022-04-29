@@ -17,7 +17,6 @@ pub trait Command<P: Protocolize, C: ChannelIndex>: Send + Sync + 'static {
 
 //// Despawn Entity ////
 
-#[derive(Debug)]
 pub(crate) struct DespawnEntity {
     entity: Entity,
 }
@@ -36,7 +35,6 @@ impl<P: Protocolize, C: ChannelIndex> Command<P, C> for DespawnEntity {
 
 //// Insert Component ////
 
-#[derive(Debug)]
 pub(crate) struct InsertComponent<P: Protocolize, R: ReplicateSafe<P>> {
     entity: Entity,
     component: R,
@@ -63,7 +61,6 @@ impl<P: Protocolize, R: ReplicateSafe<P>, C: ChannelIndex> Command<P, C> for Ins
 
 //// Remove Component ////
 
-#[derive(Debug)]
 pub(crate) struct RemoveComponent<P: Protocolize, R: Replicate<P>> {
     entity: Entity,
     phantom_p: PhantomData<P>,

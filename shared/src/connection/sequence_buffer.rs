@@ -4,7 +4,6 @@ use crate::wrapping_number::{sequence_greater_than, sequence_less_than};
 pub type SequenceNumber = u16;
 
 /// Collection to store data of any kind.
-#[derive(Debug)]
 pub struct SequenceBuffer<T> {
     sequence_num: SequenceNumber,
     entry_sequences: Box<[Option<SequenceNumber>]>,
