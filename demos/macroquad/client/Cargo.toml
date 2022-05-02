@@ -13,4 +13,4 @@ publish = false
 naia-client = { path = "../../../client", features = [ "mquad" ] }
 naia-macroquad-demo-shared = { path = "../shared" }
 naia-demo-world = { path = "../../demo_utils/demo_world" }
-macroquad = { version = "=0.3.15", default-features = false }
+macroquad = { version = "=0.3.16", default-features = false }
