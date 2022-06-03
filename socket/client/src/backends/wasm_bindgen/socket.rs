@@ -1,8 +1,8 @@
 extern crate log;
 
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
-
 use naia_socket_shared::{parse_server_url, SocketConfig};
+
+use log::info;
 
 use crate::{
     conditioned_packet_receiver::ConditionedPacketReceiver,
@@ -11,8 +11,8 @@ use crate::{
 };
 
 use super::{
-    addr_cell::AddrCell, packet_receiver::PacketReceiverImpl, packet_sender::PacketSender,
-    webrtc_internal::webrtc_initialize,
+    packet_receiver::PacketReceiverImpl, packet_sender::PacketSender,
+    webrtc_internal::PeerConnection,
 };
 
 /// A client-side socket which communicates with an underlying unordered &
@@ -39,13 +39,13 @@ impl Socket {
 
         let server_url = parse_server_url(server_session_url);
 
-        let addr_cell = AddrCell::default();
-        let message_queue = Rc::new(RefCell::new(VecDeque::new()));
-        let data_channel = webrtc_initialize(
-            format!("{}{}", server_url, self.config.rtc_endpoint_path.clone()),
-            message_queue.clone(),
-            addr_cell.clone(),
-        );
+        let mut peer_connection = PeerConnection::new(format!("{}{}", server_url, self.config.rtc_endpoint_path.clone()));
+        peer_connection.on_find_addr(Box::new(move |socket_addr| {
+            info!("found socket_addr: {:?}", socket_addr);
+        }));
+        let mut data_channel = peer_connection.data_channel();
+        let addr_cell = peer_connection.addr_cell();
+        let message_queue = data_channel.initialize();
 
         let packet_sender = PacketSender::new(data_channel, addr_cell.clone());
         let packet_receiver_impl = PacketReceiverImpl::new(message_queue, addr_cell);

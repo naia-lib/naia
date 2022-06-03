@@ -2,7 +2,7 @@ use web_sys::{RtcDataChannel, RtcDataChannelState};
 
 use crate::server_addr::ServerAddr;
 
-use super::addr_cell::AddrCell;
+use super::{addr_cell::AddrCell, webrtc_internal::DataChannel};
 
 /// Handles sending messages to the Server for a given Client Socket
 #[derive(Clone)]
@@ -14,9 +14,9 @@ pub struct PacketSender {
 impl PacketSender {
     /// Create a new PacketSender, if supplied with the RtcDataChannel and a
     /// reference to a list of dropped messages
-    pub fn new(data_channel: RtcDataChannel, server_addr: AddrCell) -> Self {
+    pub fn new(data_channel: DataChannel, server_addr: AddrCell) -> Self {
         PacketSender {
-            data_channel,
+            data_channel: data_channel.inner,
             server_addr,
         }
     }
