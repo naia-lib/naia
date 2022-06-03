@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     packet_receiver::PacketReceiverImpl, packet_sender::PacketSender,
-    webrtc_internal::PeerConnection,
+    peer_connection::PeerConnection,
 };
 
 /// A client-side socket which communicates with an underlying unordered &

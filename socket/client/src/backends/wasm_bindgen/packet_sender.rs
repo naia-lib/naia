@@ -2,7 +2,7 @@ use web_sys::{RtcDataChannel, RtcDataChannelState};
 
 use crate::server_addr::ServerAddr;
 
-use super::{addr_cell::AddrCell, webrtc_internal::DataChannel};
+use super::{addr_cell::AddrCell, data_channel::DataChannel};
 
 /// Handles sending messages to the Server for a given Client Socket
 #[derive(Clone)]
