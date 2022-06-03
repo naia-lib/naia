@@ -3,7 +3,6 @@
 //! unreliable WebRTC datachannel on the browser
 
 #![deny(
-    missing_docs,
     unstable_features,
     unused_import_braces,
     unused_qualifications
@@ -29,7 +28,7 @@ mod server_addr;
 
 pub use naia_socket_shared as shared;
 
-pub use backends::{PacketSender, Socket};
+pub use backends::*;
 pub use error::NaiaClientSocketError;
 pub use packet_receiver::PacketReceiver;
 pub use server_addr::ServerAddr;

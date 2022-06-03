@@ -12,6 +12,8 @@ use web_sys::{
     RtcSessionDescriptionInit, XmlHttpRequest,
 };
 
+use naia_socket_shared::{SocketConfig, parse_server_url};
+
 use crate::ServerAddr;
 
 use super::addr_cell::AddrCell;
@@ -27,7 +29,11 @@ pub struct PeerConnection {
 }
 
 impl PeerConnection {
-    pub fn new(server_url_str: String) -> Self {
+    pub fn new(config: &SocketConfig, server_session_url: &str) -> Self {
+
+        let server_url = parse_server_url(server_session_url);
+        let server_url_str = format!("{}{}", server_url, config.rtc_endpoint_path.clone());
+
         let find_addr_func = Rc::new(RefCell::new(FindAddrFuncInner(Box::new(move |_| {}))));
         let addr_cell = AddrCell::default();
         let data_channel = Self::create_data_channel(server_url_str, addr_cell.clone(), find_addr_func.clone());

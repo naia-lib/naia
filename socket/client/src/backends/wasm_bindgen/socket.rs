@@ -1,6 +1,6 @@
 extern crate log;
 
-use naia_socket_shared::{parse_server_url, SocketConfig};
+use naia_socket_shared::SocketConfig;
 
 use log::info;
 
@@ -37,9 +37,7 @@ impl Socket {
             panic!("Socket already listening!");
         }
 
-        let server_url = parse_server_url(server_session_url);
-
-        let mut peer_connection = PeerConnection::new(format!("{}{}", server_url, self.config.rtc_endpoint_path.clone()));
+        let mut peer_connection = PeerConnection::new(&self.config, server_session_url);
         peer_connection.on_find_addr(Box::new(move |socket_addr| {
             info!("found socket_addr: {:?}", socket_addr);
         }));
