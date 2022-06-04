@@ -41,12 +41,11 @@ impl Socket {
         peer_connection.on_find_addr(Box::new(move |socket_addr| {
             info!("found socket_addr: {:?}", socket_addr);
         }));
-        let mut data_channel = peer_connection.data_channel();
+        let data_channel = peer_connection.data_channel();
         let addr_cell = peer_connection.addr_cell();
-        let message_queue = data_channel.initialize();
 
-        let packet_sender = PacketSender::new(data_channel, addr_cell.clone());
-        let packet_receiver_impl = PacketReceiverImpl::new(message_queue, addr_cell);
+        let packet_sender = PacketSender::new(data_channel.message_port.clone(), addr_cell.clone());
+        let packet_receiver_impl = PacketReceiverImpl::new(data_channel.message_queue.clone(), addr_cell);
 
         let packet_receiver: Box<dyn PacketReceiverTrait> = {
             let inner_receiver = Box::new(packet_receiver_impl);

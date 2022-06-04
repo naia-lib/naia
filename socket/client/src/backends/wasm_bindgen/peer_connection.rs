@@ -9,7 +9,7 @@ use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use web_sys::{
     ErrorEvent, ProgressEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit,
     RtcDataChannelType, RtcIceCandidate, RtcIceCandidateInit, RtcPeerConnection, RtcSdpType,
-    RtcSessionDescriptionInit, XmlHttpRequest,
+    RtcSessionDescriptionInit, XmlHttpRequest, RtcDataChannelState, MessageChannel, MessageEvent
 };
 
 use naia_socket_shared::{SocketConfig, parse_server_url};
@@ -242,7 +242,45 @@ impl PeerConnection {
                 peer_offer_callback.forget();
                 peer_error_callback.forget();
 
-                DataChannel { inner: channel }
+                // create message channel, get port
+                let message_channel = MessageChannel::new().expect("can't create message channel");
+                let worker_port = message_channel.port1();
+                let main_port = message_channel.port2();
+
+                // setup RtcDataChannel onmessage handler
+                let main_port_2 = main_port.clone();
+
+                let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> =
+                    Box::new(move |evt: MessageEvent| {
+                        main_port_2.post_message(&evt.data());
+                    });
+                let channel_onmsg_closure = Closure::wrap(channel_onmsg_func);
+
+                channel.set_onmessage(Some(channel_onmsg_closure.as_ref().unchecked_ref()));
+                channel_onmsg_closure.forget();
+
+                // setup main_port onmessage handler
+                let channel_2 = channel.clone();
+
+                let port_onmsg_func: Box<dyn FnMut(MessageEvent)> =
+                    Box::new(move |evt: MessageEvent| {
+                        if let Ok(uarray) = evt.data().dyn_into::<js_sys::Uint8Array>() {
+                            let mut body = vec![0; uarray.length() as usize];
+                            uarray.copy_to(&mut body[..]);
+
+                            if channel_2.ready_state() == RtcDataChannelState::Open {
+                                channel_2.send_with_u8_array(&body.into_boxed_slice()).unwrap();
+                            }
+                        }
+
+                    });
+                let port_onmsg_closure = Closure::wrap(port_onmsg_func);
+
+                main_port.set_onmessage(Some(port_onmsg_closure.as_ref().unchecked_ref()));
+                port_onmsg_closure.forget();
+
+                // return DataPort
+                DataChannel::new(worker_port)
             }
             Err(err) => {
                 info!("Error creating new RtcPeerConnection. Error: {:?}", err);
