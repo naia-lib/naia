@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     packet_receiver::PacketReceiverImpl, packet_sender::PacketSender,
-    peer_connection::PeerConnection,
+    data_channel::DataChannel,
 };
 
 /// A client-side socket which communicates with an underlying unordered &
@@ -37,12 +37,12 @@ impl Socket {
             panic!("Socket already listening!");
         }
 
-        let mut peer_connection = PeerConnection::new(&self.config, server_session_url);
-        peer_connection.on_find_addr(Box::new(move |socket_addr| {
+        let mut data_channel = DataChannel::new(&self.config, server_session_url);
+        data_channel.on_find_addr(Box::new(move |socket_addr| {
             info!("found socket_addr: {:?}", socket_addr);
         }));
-        let data_port = peer_connection.data_port();
-        let addr_cell = peer_connection.addr_cell();
+        let data_port = data_channel.data_port();
+        let addr_cell = data_channel.addr_cell();
 
         let packet_sender = PacketSender::new(data_port.message_port.clone(), addr_cell.clone());
         let packet_receiver_impl = PacketReceiverImpl::new(data_port.message_queue.clone(), addr_cell);

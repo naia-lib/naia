@@ -22,13 +22,13 @@ use super::{addr_cell::AddrCell, data_port::DataPort};
 pub struct FindAddrFuncInner(pub Box<dyn FnMut(SocketAddr)>);
 
 // PeerConnection
-pub struct PeerConnection {
+pub struct DataChannel {
     data_port: DataPort,
     addr_cell: AddrCell,
     find_addr_func: Rc<RefCell<FindAddrFuncInner>>,
 }
 
-impl PeerConnection {
+impl DataChannel {
     pub fn new(config: &SocketConfig, server_session_url: &str) -> Self {
 
         let server_url = parse_server_url(server_session_url);
