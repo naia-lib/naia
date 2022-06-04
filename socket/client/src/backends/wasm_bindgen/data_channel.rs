@@ -23,7 +23,8 @@ pub struct FindAddrFuncInner(pub Box<dyn FnMut(SocketAddr)>);
 
 // PeerConnection
 pub struct DataChannel {
-    data_port: DataPort,
+    server_session_url: String,
+    message_channel: MessageChannel,
     addr_cell: AddrCell,
     find_addr_func: Rc<RefCell<FindAddrFuncInner>>,
 }
@@ -32,16 +33,12 @@ impl DataChannel {
     pub fn new(config: &SocketConfig, server_session_url: &str) -> Self {
 
         let server_url = parse_server_url(server_session_url);
-        let server_url_str = format!("{}{}", server_url, config.rtc_endpoint_path.clone());
-
-        let find_addr_func = Rc::new(RefCell::new(FindAddrFuncInner(Box::new(move |_| {}))));
-        let addr_cell = AddrCell::default();
-        let data_port = Self::create_data_port(server_url_str, addr_cell.clone(), find_addr_func.clone());
 
         Self {
-            data_port,
-            addr_cell,
-            find_addr_func,
+            server_session_url: format!("{}{}", server_url, config.rtc_endpoint_path.clone()),
+            message_channel: MessageChannel::new().expect("can't create message channel"),
+            addr_cell: AddrCell::default(),
+            find_addr_func: Rc::new(RefCell::new(FindAddrFuncInner(Box::new(move |_| {})))),
         }
     }
 
@@ -50,7 +47,7 @@ impl DataChannel {
     }
 
     pub fn data_port(&self) -> DataPort {
-        self.data_port.clone()
+        DataPort::new(self.message_channel.port1())
     }
 
     pub fn on_find_addr(&mut self, func: Box<dyn FnMut(SocketAddr)>) {
@@ -62,11 +59,7 @@ impl DataChannel {
     }
 
     #[allow(unused_must_use)]
-    fn create_data_port(
-        server_url_str: String,
-        addr_cell: AddrCell,
-        addr_func: Rc<RefCell<FindAddrFuncInner>>,
-    ) -> DataPort {
+    pub fn start(&self) {
         // Set up Ice Servers
         let ice_server_config_urls = Array::new();
         ice_server_config_urls.push(&JsValue::from("stun:stun.l.google.com:19302"));
@@ -104,9 +97,9 @@ impl DataChannel {
                 onerror_callback.forget();
 
                 let peer_2 = peer.clone();
-                let addr_cell_2 = addr_cell;
-                let addr_func_2 = addr_func;
-                let server_url_msg = Rc::new(RefCell::new(server_url_str));
+                let addr_cell_2 = self.addr_cell.clone();
+                let addr_func_2 = self.find_addr_func.clone();
+                let server_url_msg = self.server_session_url.clone();
                 let peer_offer_func: Box<dyn FnMut(JsValue)> = Box::new(move |e: JsValue| {
                     let session_description = e.into();
                     let peer_3 = peer_2.clone();
@@ -117,7 +110,7 @@ impl DataChannel {
                         let request = XmlHttpRequest::new().expect("can't create new XmlHttpRequest");
 
                         request
-                            .open("POST", &server_url_msg_2.borrow())
+                            .open("POST", &server_url_msg_2)
                             .unwrap_or_else(|err| {
                                 info!(
                                 "WebSys, can't POST to server url. Original Error: {:?}",
@@ -243,9 +236,7 @@ impl DataChannel {
                 peer_error_callback.forget();
 
                 // create message channel, get port
-                let message_channel = MessageChannel::new().expect("can't create message channel");
-                let worker_port = message_channel.port1();
-                let main_port = message_channel.port2();
+                let main_port = self.message_channel.port2();
 
                 // setup RtcDataChannel onmessage handler
                 let main_port_2 = main_port.clone();
@@ -278,9 +269,6 @@ impl DataChannel {
 
                 main_port.set_onmessage(Some(port_onmsg_closure.as_ref().unchecked_ref()));
                 port_onmsg_closure.forget();
-
-                // return DataPort
-                DataPort::new(worker_port)
             }
             Err(err) => {
                 info!("Error creating new RtcPeerConnection. Error: {:?}", err);

@@ -46,6 +46,8 @@ impl Socket {
         let addr_cell = data_channel.addr_cell();
 
         self.setup_io(&data_port, &addr_cell);
+
+        data_channel.start();
     }
 
     // Creates a Socket from an underlying DataPort
