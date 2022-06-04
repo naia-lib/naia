@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     packet_receiver::PacketReceiverImpl, packet_sender::PacketSender,
-    data_channel::DataChannel,
+    data_channel::DataChannel, data_port::DataPort, addr_cell::AddrCell,
 };
 
 /// A client-side socket which communicates with an underlying unordered &
@@ -42,8 +42,28 @@ impl Socket {
             info!("found socket_addr: {:?}", socket_addr);
         }));
 
-        let packet_sender = PacketSender::new(&data_channel);
-        let packet_receiver_impl = PacketReceiverImpl::new(&data_channel);
+        let data_port = data_channel.data_port();
+        let addr_cell = data_channel.addr_cell();
+
+        self.setup_io(&data_port, &addr_cell);
+    }
+
+    // Creates a Socket from an underlying DataPort
+    pub fn connect_with_data_port(&mut self, data_port: &DataPort) {
+        if self.io.is_some() {
+            panic!("Socket already listening!");
+        }
+
+        self.setup_io(data_port, &AddrCell::default());
+    }
+
+    fn setup_io(&mut self, data_port: &DataPort, addr_cell: &AddrCell) {
+        if self.io.is_some() {
+            panic!("Socket already listening!");
+        }
+
+        let packet_sender = PacketSender::new(&data_port, &addr_cell);
+        let packet_receiver_impl = PacketReceiverImpl::new(&data_port, &addr_cell);
 
         let packet_receiver: Box<dyn PacketReceiverTrait> = {
             let inner_receiver = Box::new(packet_receiver_impl);
