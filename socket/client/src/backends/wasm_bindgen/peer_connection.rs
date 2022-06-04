@@ -16,14 +16,14 @@ use naia_socket_shared::{SocketConfig, parse_server_url};
 
 use crate::ServerAddr;
 
-use super::{addr_cell::AddrCell, data_channel::DataChannel};
+use super::{addr_cell::AddrCell, data_port::DataPort};
 
 // FindAddrFuncInner
 pub struct FindAddrFuncInner(pub Box<dyn FnMut(SocketAddr)>);
 
 // PeerConnection
 pub struct PeerConnection {
-    data_channel: DataChannel,
+    data_port: DataPort,
     addr_cell: AddrCell,
     find_addr_func: Rc<RefCell<FindAddrFuncInner>>,
 }
@@ -36,10 +36,10 @@ impl PeerConnection {
 
         let find_addr_func = Rc::new(RefCell::new(FindAddrFuncInner(Box::new(move |_| {}))));
         let addr_cell = AddrCell::default();
-        let data_channel = Self::create_data_channel(server_url_str, addr_cell.clone(), find_addr_func.clone());
+        let data_port = Self::create_data_port(server_url_str, addr_cell.clone(), find_addr_func.clone());
 
         Self {
-            data_channel,
+            data_port,
             addr_cell,
             find_addr_func,
         }
@@ -49,8 +49,8 @@ impl PeerConnection {
         self.addr_cell.clone()
     }
 
-    pub fn data_channel(&self) -> DataChannel {
-        self.data_channel.clone()
+    pub fn data_port(&self) -> DataPort {
+        self.data_port.clone()
     }
 
     pub fn on_find_addr(&mut self, func: Box<dyn FnMut(SocketAddr)>) {
@@ -62,11 +62,11 @@ impl PeerConnection {
     }
 
     #[allow(unused_must_use)]
-    fn create_data_channel(
+    fn create_data_port(
         server_url_str: String,
         addr_cell: AddrCell,
         addr_func: Rc<RefCell<FindAddrFuncInner>>,
-    ) -> DataChannel {
+    ) -> DataPort {
         // Set up Ice Servers
         let ice_server_config_urls = Array::new();
         ice_server_config_urls.push(&JsValue::from("stun:stun.l.google.com:19302"));
@@ -280,7 +280,7 @@ impl PeerConnection {
                 port_onmsg_closure.forget();
 
                 // return DataPort
-                DataChannel::new(worker_port)
+                DataPort::new(worker_port)
             }
             Err(err) => {
                 info!("Error creating new RtcPeerConnection. Error: {:?}", err);

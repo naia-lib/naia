@@ -1,6 +1,6 @@
 mod addr_cell;
 mod peer_connection;
-mod data_channel;
+mod data_port;
 
 mod packet_receiver;
 mod packet_sender;

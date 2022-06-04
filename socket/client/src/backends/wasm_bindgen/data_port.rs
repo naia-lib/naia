@@ -6,12 +6,12 @@ use web_sys::MessagePort;
 
 // DataChannel
 #[derive(Clone)]
-pub struct DataChannel {
+pub struct DataPort {
     pub message_port: MessagePort,
     pub message_queue: Rc<RefCell<VecDeque<Box<[u8]>>>>,
 }
 
-impl DataChannel {
+impl DataPort {
     pub fn new(message_port: MessagePort) -> Self {
         Self {
             message_port,
