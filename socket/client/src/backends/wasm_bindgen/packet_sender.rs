@@ -3,7 +3,7 @@ use web_sys::MessagePort;
 
 use crate::server_addr::ServerAddr;
 
-use super::addr_cell::AddrCell;
+use super::{addr_cell::AddrCell, data_channel::DataChannel};
 
 /// Handles sending messages to the Server for a given Client Socket
 #[derive(Clone)]
@@ -14,10 +14,10 @@ pub struct PacketSender {
 
 impl PacketSender {
     /// Create a new PacketSender
-    pub fn new(message_port: MessagePort, server_addr: AddrCell) -> Self {
+    pub fn new(data_channel: &DataChannel) -> Self {
         PacketSender {
-            message_port,
-            server_addr,
+            message_port: data_channel.data_port().message_port(),
+            server_addr: data_channel.addr_cell(),
         }
     }
 

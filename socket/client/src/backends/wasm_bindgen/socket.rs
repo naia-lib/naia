@@ -41,11 +41,9 @@ impl Socket {
         data_channel.on_find_addr(Box::new(move |socket_addr| {
             info!("found socket_addr: {:?}", socket_addr);
         }));
-        let data_port = data_channel.data_port();
-        let addr_cell = data_channel.addr_cell();
 
-        let packet_sender = PacketSender::new(data_port.message_port.clone(), addr_cell.clone());
-        let packet_receiver_impl = PacketReceiverImpl::new(data_port.message_queue.clone(), addr_cell);
+        let packet_sender = PacketSender::new(&data_channel);
+        let packet_receiver_impl = PacketReceiverImpl::new(&data_channel);
 
         let packet_receiver: Box<dyn PacketReceiverTrait> = {
             let inner_receiver = Box::new(packet_receiver_impl);
