@@ -5,7 +5,7 @@ use std::{cell::RefCell, rc::Rc, net::SocketAddr};
 use js_sys::{Array, Object, Reflect};
 use log::info;
 use tinyjson::JsonValue;
-use wasm_bindgen::{prelude::*, JsCast, JsValue};
+use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{
     ErrorEvent, ProgressEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit,
     RtcDataChannelType, RtcIceCandidate, RtcIceCandidateInit, RtcPeerConnection, RtcSdpType,
@@ -112,10 +112,7 @@ impl DataChannel {
                         request
                             .open("POST", &server_url_msg_2)
                             .unwrap_or_else(|err| {
-                                info!(
-                                "WebSys, can't POST to server url. Original Error: {:?}",
-                                err
-                            )
+                                info!("can't POST to server session url. {:?}", err)
                             });
 
                         let request_2 = request.clone();
@@ -263,7 +260,6 @@ impl DataChannel {
                                 channel_2.send_with_u8_array(&body.into_boxed_slice()).unwrap();
                             }
                         }
-
                     });
                 let port_onmsg_closure = Closure::wrap(port_onmsg_func);
 

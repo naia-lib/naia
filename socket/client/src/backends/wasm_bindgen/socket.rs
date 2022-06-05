@@ -2,8 +2,6 @@ extern crate log;
 
 use naia_socket_shared::SocketConfig;
 
-use log::info;
-
 use crate::{
     conditioned_packet_receiver::ConditionedPacketReceiver,
     io::Io,
@@ -37,10 +35,7 @@ impl Socket {
             panic!("Socket already listening!");
         }
 
-        let mut data_channel = DataChannel::new(&self.config, server_session_url);
-        data_channel.on_find_addr(Box::new(move |socket_addr| {
-            info!("found socket_addr: {:?}", socket_addr);
-        }));
+        let data_channel = DataChannel::new(&self.config, server_session_url);
 
         let data_port = data_channel.data_port();
         let addr_cell = data_channel.addr_cell();
