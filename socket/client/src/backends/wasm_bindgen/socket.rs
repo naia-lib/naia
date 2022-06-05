@@ -1,8 +1,8 @@
 extern crate log;
 
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use std::net::SocketAddr;
 
-use naia_socket_shared::{parse_server_url, SocketConfig};
+use naia_socket_shared::SocketConfig;
 
 use crate::{
     conditioned_packet_receiver::ConditionedPacketReceiver,
@@ -11,14 +11,15 @@ use crate::{
 };
 
 use super::{
-    addr_cell::AddrCell, packet_receiver::PacketReceiverImpl, packet_sender::PacketSender,
-    webrtc_internal::webrtc_initialize,
+    addr_cell::AddrCell, data_channel::DataChannel, data_port::DataPort,
+    packet_receiver::PacketReceiverImpl, packet_sender::PacketSender,
 };
 
 /// A client-side socket which communicates with an underlying unordered &
 /// unreliable protocol
 pub struct Socket {
     config: SocketConfig,
+    server_addr: AddrCell,
     io: Option<Io>,
 }
 
@@ -28,6 +29,7 @@ impl Socket {
         Socket {
             config: config.clone(),
             io: None,
+            server_addr: AddrCell::default(),
         }
     }
 
@@ -37,18 +39,39 @@ impl Socket {
             panic!("Socket already listening!");
         }
 
-        let server_url = parse_server_url(server_session_url);
+        let data_channel = DataChannel::new(&self.config, server_session_url);
 
-        let addr_cell = AddrCell::default();
-        let message_queue = Rc::new(RefCell::new(VecDeque::new()));
-        let data_channel = webrtc_initialize(
-            format!("{}{}", server_url, self.config.rtc_endpoint_path.clone()),
-            message_queue.clone(),
-            addr_cell.clone(),
-        );
+        let data_port = data_channel.data_port();
+        self.server_addr = data_channel.addr_cell();
 
-        let packet_sender = PacketSender::new(data_channel, addr_cell.clone());
-        let packet_receiver_impl = PacketReceiverImpl::new(message_queue, addr_cell);
+        self.setup_io(&data_port);
+
+        data_channel.start();
+    }
+
+    // Creates a Socket from an underlying DataPort.
+    // This is for use in apps running within a Web Worker.
+    pub fn connect_with_data_port(&mut self, data_port: &DataPort) {
+        if self.io.is_some() {
+            panic!("Socket already listening!");
+        }
+
+        self.setup_io(data_port);
+    }
+
+    // Sets the socket address associated with the Server.
+    // This is for use in apps running within a Web Worker.
+    pub fn set_server_addr(&mut self, socket_addr: &SocketAddr) {
+        self.server_addr.set_addr(socket_addr);
+    }
+
+    fn setup_io(&mut self, data_port: &DataPort) {
+        if self.io.is_some() {
+            panic!("Socket already listening!");
+        }
+
+        let packet_sender = PacketSender::new(&data_port, &self.server_addr);
+        let packet_receiver_impl = PacketReceiverImpl::new(&data_port, &self.server_addr);
 
         let packet_receiver: Box<dyn PacketReceiverTrait> = {
             let inner_receiver = Box::new(packet_receiver_impl);

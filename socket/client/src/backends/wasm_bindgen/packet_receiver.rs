@@ -1,9 +1,10 @@
 use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
-use super::addr_cell::AddrCell;
 use crate::{
     error::NaiaClientSocketError, packet_receiver::PacketReceiverTrait, server_addr::ServerAddr,
 };
+
+use super::{addr_cell::AddrCell, data_port::DataPort};
 
 /// Handles receiving messages from the Server through a given Client Socket
 #[derive(Clone)]
@@ -16,10 +17,10 @@ pub struct PacketReceiverImpl {
 impl PacketReceiverImpl {
     /// Create a new PacketReceiver, if supplied with the RtcDataChannel and a
     /// reference to a list of dropped messages
-    pub fn new(message_queue: Rc<RefCell<VecDeque<Box<[u8]>>>>, server_addr: AddrCell) -> Self {
+    pub fn new(data_port: &DataPort, addr_cell: &AddrCell) -> Self {
         PacketReceiverImpl {
-            message_queue,
-            server_addr,
+            message_queue: data_port.message_queue(),
+            server_addr: addr_cell.clone(),
             last_payload: None,
         }
     }
