@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, net::SocketAddr};
 
 use crate::{server_addr::ServerAddr, wasm_utils::candidate_to_addr};
 
@@ -20,6 +20,10 @@ impl Default for AddrCell {
 }
 
 impl AddrCell {
+    pub fn get(&self) -> ServerAddr {
+        self.cell.as_ref().borrow().0
+    }
+
     pub fn receive_candidate(&self, candidate_str: &str) {
         self.cell
             .as_ref()
@@ -28,7 +32,11 @@ impl AddrCell {
             .0 = candidate_to_addr(candidate_str);
     }
 
-    pub fn get(&self) -> ServerAddr {
-        self.cell.as_ref().borrow().0
+    pub fn set_addr(&mut self, addr: &SocketAddr) {
+        self.cell
+            .as_ref()
+            .try_borrow_mut()
+            .expect("cannot borrow AddrCell.cell!")
+            .0 = ServerAddr::Found(addr.clone());
     }
 }

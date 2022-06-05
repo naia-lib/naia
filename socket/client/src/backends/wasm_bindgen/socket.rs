@@ -1,5 +1,7 @@
 extern crate log;
 
+use std::net::SocketAddr;
+
 use naia_socket_shared::SocketConfig;
 
 use crate::{
@@ -17,6 +19,7 @@ use super::{
 /// unreliable protocol
 pub struct Socket {
     config: SocketConfig,
+    server_addr: AddrCell,
     io: Option<Io>,
 }
 
@@ -26,6 +29,7 @@ impl Socket {
         Socket {
             config: config.clone(),
             io: None,
+            server_addr: AddrCell::default(),
         }
     }
 
@@ -38,29 +42,36 @@ impl Socket {
         let data_channel = DataChannel::new(&self.config, server_session_url);
 
         let data_port = data_channel.data_port();
-        let addr_cell = data_channel.addr_cell();
+        self.server_addr = data_channel.addr_cell();
 
-        self.setup_io(&data_port, &addr_cell);
+        self.setup_io(&data_port);
 
         data_channel.start();
     }
 
-    // Creates a Socket from an underlying DataPort
+    // Creates a Socket from an underlying DataPort.
+    // This is for use in apps running within a Web Worker.
     pub fn connect_with_data_port(&mut self, data_port: &DataPort) {
         if self.io.is_some() {
             panic!("Socket already listening!");
         }
 
-        self.setup_io(data_port, &AddrCell::default());
+        self.setup_io(data_port);
     }
 
-    fn setup_io(&mut self, data_port: &DataPort, addr_cell: &AddrCell) {
+    // Sets the socket address associated with the Server.
+    // This is for use in apps running within a Web Worker.
+    pub fn set_server_addr(&mut self, socket_addr: &SocketAddr) {
+        self.server_addr.set_addr(socket_addr);
+    }
+
+    fn setup_io(&mut self, data_port: &DataPort) {
         if self.io.is_some() {
             panic!("Socket already listening!");
         }
 
-        let packet_sender = PacketSender::new(&data_port, &addr_cell);
-        let packet_receiver_impl = PacketReceiverImpl::new(&data_port, &addr_cell);
+        let packet_sender = PacketSender::new(&data_port, &self.server_addr);
+        let packet_receiver_impl = PacketReceiverImpl::new(&data_port, &self.server_addr);
 
         let packet_receiver: Box<dyn PacketReceiverTrait> = {
             let inner_receiver = Box::new(packet_receiver_impl);
