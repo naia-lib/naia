@@ -11,8 +11,8 @@ use crate::{
 };
 
 use super::{
+    addr_cell::AddrCell, data_channel::DataChannel, data_port::DataPort,
     packet_receiver::PacketReceiverImpl, packet_sender::PacketSender,
-    data_channel::DataChannel, data_port::DataPort, addr_cell::AddrCell,
 };
 
 /// A client-side socket which communicates with an underlying unordered &

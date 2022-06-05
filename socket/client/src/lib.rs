@@ -2,11 +2,7 @@
 //! A Socket abstraction over either a UDP socket on native Linux, or a
 //! unreliable WebRTC datachannel on the browser
 
-#![deny(
-    unstable_features,
-    unused_import_braces,
-    unused_qualifications
-)]
+#![deny(unstable_features, unused_import_braces, unused_qualifications)]
 
 extern crate log;
 

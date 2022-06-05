@@ -1,18 +1,18 @@
 extern crate log;
 
-use std::{cell::RefCell, rc::Rc, net::SocketAddr};
+use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use js_sys::{Array, Object, Reflect};
 use log::info;
 use tinyjson::JsonValue;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{
-    ErrorEvent, ProgressEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit,
-    RtcDataChannelType, RtcIceCandidate, RtcIceCandidateInit, RtcPeerConnection, RtcSdpType,
-    RtcSessionDescriptionInit, XmlHttpRequest, RtcDataChannelState, MessageChannel, MessageEvent
+    ErrorEvent, MessageChannel, MessageEvent, ProgressEvent, RtcConfiguration, RtcDataChannel,
+    RtcDataChannelInit, RtcDataChannelState, RtcDataChannelType, RtcIceCandidate,
+    RtcIceCandidateInit, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit, XmlHttpRequest,
 };
 
-use naia_socket_shared::{SocketConfig, parse_server_url};
+use naia_socket_shared::{parse_server_url, SocketConfig};
 
 use crate::ServerAddr;
 
@@ -31,7 +31,6 @@ pub struct DataChannel {
 
 impl DataChannel {
     pub fn new(config: &SocketConfig, server_session_url: &str) -> Self {
-
         let server_url = parse_server_url(server_session_url);
 
         Self {
@@ -107,7 +106,8 @@ impl DataChannel {
                     let addr_func_3 = addr_func_2.clone();
                     let server_url_msg_2 = server_url_msg.clone();
                     let peer_desc_func: Box<dyn FnMut(JsValue)> = Box::new(move |_: JsValue| {
-                        let request = XmlHttpRequest::new().expect("can't create new XmlHttpRequest");
+                        let request =
+                            XmlHttpRequest::new().expect("can't create new XmlHttpRequest");
 
                         request
                             .open("POST", &server_url_msg_2)
@@ -122,7 +122,8 @@ impl DataChannel {
                         let request_func: Box<dyn FnMut(ProgressEvent)> = Box::new(
                             move |_: ProgressEvent| {
                                 if request_2.status().unwrap() == 200 {
-                                    let response_string = request_2.response_text().unwrap().unwrap();
+                                    let response_string =
+                                        request_2.response_text().unwrap().unwrap();
 
                                     let session_response: JsSessionResponse =
                                         get_session_response(response_string.as_str());
@@ -141,10 +142,13 @@ impl DataChannel {
                                             addr_cell_5.receive_candidate(candidate_str);
                                             match addr_cell_5.get() {
                                                 ServerAddr::Found(socket_addr) => {
-                                                    addr_func_5.as_ref()
+                                                    addr_func_5
+                                                        .as_ref()
                                                         .try_borrow_mut()
                                                         .expect("cannot borrow FindAddrFunc!")
-                                                        .0(socket_addr);
+                                                        .0(
+                                                        socket_addr
+                                                    );
                                                 }
                                                 _ => {
                                                     info!("error, not parsing address correctly?");
@@ -208,7 +212,9 @@ impl DataChannel {
                         request_callback.forget();
 
                         request
-                            .send_with_opt_str(Some(peer_3.local_description().unwrap().sdp().as_str()))
+                            .send_with_opt_str(Some(
+                                peer_3.local_description().unwrap().sdp().as_str(),
+                            ))
                             .unwrap_or_else(|err| {
                                 info!("WebSys, can't sent request str. Original Error: {:?}", err)
                             });
@@ -257,7 +263,9 @@ impl DataChannel {
                             uarray.copy_to(&mut body[..]);
 
                             if channel_2.ready_state() == RtcDataChannelState::Open {
-                                channel_2.send_with_u8_array(&body.into_boxed_slice()).unwrap();
+                                channel_2
+                                    .send_with_u8_array(&body.into_boxed_slice())
+                                    .unwrap();
                             }
                         }
                     });

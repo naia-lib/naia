@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, net::SocketAddr};
+use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use crate::{server_addr::ServerAddr, wasm_utils::candidate_to_addr};
 
