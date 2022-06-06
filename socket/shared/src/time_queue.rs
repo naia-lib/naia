@@ -9,8 +9,8 @@ pub struct TimeQueue<T: Eq + PartialEq> {
     queue: BinaryHeap<ItemContainer<T>>,
 }
 
-impl<T: Eq + PartialEq> Default for TimeQueue<T> {
-    fn default() -> Self {
+impl<T: Eq + PartialEq> TimeQueue<T> {
+    pub fn new() -> Self {
         Self {
             queue: BinaryHeap::default(),
         }
