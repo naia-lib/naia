@@ -51,6 +51,10 @@ impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
         self.client.connect(server_address);
     }
 
+    pub fn disconnect(&mut self) {
+        self.client.disconnect();
+    }
+
     pub fn is_connected(&self) -> bool {
         self.client.is_connected()
     }
