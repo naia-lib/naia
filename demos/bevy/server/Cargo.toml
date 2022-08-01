@@ -16,5 +16,5 @@ naia-bevy-demo-shared = { path = "../shared" }
 naia-bevy-server = { path = "../../../adapters/bevy/server" }
 bevy_app = { version = "0.7", default-features=false }
 bevy_core = { version = "0.7", default-features=false }
-bevy_ecs = { version = "0.7", default-features=false }
+bevy_ecs = { version = "0.8", default-features=false }
 bevy_log = { version = "0.7", default-features=false }

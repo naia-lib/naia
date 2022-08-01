@@ -18,4 +18,4 @@ maintenance = { status = "actively-developed" }
 naia-client = { version = "0.10", path = "../../../client", features = ["bevy_support", "wbindgen"] }
 naia-bevy-shared = { version = "0.10.1", path = "../shared" }
 bevy_app = { version = "0.7", default-features=false }
-bevy_ecs = { version = "0.7", default-features=false }
+bevy_ecs = { version = "0.8", default-features=false }
