@@ -28,7 +28,7 @@ naia-bevy-demo-shared = { path = "../shared" }
 winit = { version = "0.26" }
 rand = { version = "0.8" }
 getrandom = { version="0.2", features=["wasm-bindgen"] }
-bevy = { version = "0.7", default-features=false }
+bevy = { version = "0.8", default-features=false }
 cfg-if = { version = "1.0" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
