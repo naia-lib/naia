@@ -47,6 +47,8 @@
       <excludeFolder url="file://$MODULE_DIR$/demos/basic/client/miniquad/target" />
       <excludeFolder url="file://$MODULE_DIR$/demos/hecs/client/target" />
       <excludeFolder url="file://$MODULE_DIR$/demos/macroquad/client/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/bevy/client/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/socket/client/miniquad/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
