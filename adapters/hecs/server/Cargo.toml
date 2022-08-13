@@ -1,6 +1,6 @@
 [package]
 name = "naia-hecs-server"
-version = "0.10.1"
+version = "0.10.2"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
 description = "Library to faciliate naia_server & Hecs interop"
