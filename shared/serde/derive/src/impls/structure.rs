@@ -1,5 +1,6 @@
 use crate::parse::Struct;
 
+#[allow(clippy::format_push_string)]
 pub fn derive_serde_struct(struct_: &Struct) -> String {
     let mut ser_body = String::new();
     let mut de_body = String::new();
