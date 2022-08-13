@@ -16,4 +16,4 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 naia-shared = { version = "0.10", path = "../../../shared", features = ["bevy_support", "wbindgen"] }
-bevy_ecs = { version = "0.7", default-features=false }
+bevy_ecs = { version = "0.8", default-features=false }
