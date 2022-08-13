@@ -43,6 +43,10 @@
       <sourceFolder url="file://$MODULE_DIR$/test/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/basic/client/wasm_bindgen/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/basic/client/miniquad/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/hecs/client/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/macroquad/client/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

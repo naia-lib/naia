@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Socket Demo Server [UDP] [RUN]" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run" />
-    <option name="workingDirectory" value="file://$PROJECT_DIR$/shared" />
+    <option name="command" value="run --features &quot;use-udp&quot;" />
+    <option name="workingDirectory" value="file://$PROJECT_DIR$/demos/socket/server" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />
     <option name="allFeatures" value="false" />

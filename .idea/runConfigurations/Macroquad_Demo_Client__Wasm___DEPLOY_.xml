@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Socket Demo Client [Wasm] [Deploy]" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run" />
-    <option name="workingDirectory" value="file://$PROJECT_DIR$/shared" />
+  <configuration default="false" name="Macroquad Demo Client [Wasm] [DEPLOY]" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="make serve" />
+    <option name="workingDirectory" value="file://$PROJECT_DIR$/demos/macroquad/client" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />
     <option name="allFeatures" value="false" />

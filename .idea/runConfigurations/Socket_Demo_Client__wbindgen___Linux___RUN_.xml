@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Basic Demo Client [wbindgen] [Wasm] [DEPLOY]" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="make serve" />
-    <option name="workingDirectory" value="file://$PROJECT_DIR$/demos/basic/client/wasm_bindgen" />
+  <configuration default="false" name="Socket Demo Client [wbindgen] [Linux] [RUN]" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="run" />
+    <option name="workingDirectory" value="file://$PROJECT_DIR$/demos/socket/client/wasm_bindgen" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />
     <option name="allFeatures" value="false" />

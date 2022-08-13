@@ -53,3 +53,9 @@ To run the WebRTC client demo on Web: (that will be able to communicate with a W
     3. cd /naia/demos/basic/client/wasm_bindgen
     4. make serve
     5. Web page will be blank - check debug console to see communications from the server
+
+### Known Issues
+
+To run a miniquad client you will require the following be installed
+
+    sudo apt-get install libxi-dev libgl1-mesa-dev
