@@ -31,7 +31,7 @@ web_sys = { version = "0.3", package = "web-sys", features = [
     "RtcPeerConnection", "RtcSdpType",  "RtcSessionDescription", "RtcSessionDescriptionInit",
     "XmlHttpRequest", "XmlHttpRequestEventTarget", "MessageEvent", "ProgressEvent", "ErrorEvent", "Blob" ], optional = true  }
 tinyjson = { version = "2.3", optional = true }
-miniquad = { version = "=0.3.0-alpha.45", features = ["log-impl"], optional = true }
+miniquad = { version = "=0.3.11", features = ["log-impl"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 local_ipaddress = { version = "0.1" }

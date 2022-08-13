@@ -16,4 +16,4 @@ path = "src/main.rs"
 [dependencies]
 naia-basic-client-demo-app = { path = "../app", features = [ "mquad" ] }
 cfg-if = { version = "1.0" }
-miniquad = { version = "=0.3.0-alpha.45", features = ["log-impl"] }
+miniquad = { version = "=0.3.11", features = ["log-impl"] }
