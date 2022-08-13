@@ -1,3 +1,5 @@
+
+#[allow(clippy::format_push_string)]
 macro_rules! l {
     ($target:ident, $line:expr) => {
         $target.push_str($line);
