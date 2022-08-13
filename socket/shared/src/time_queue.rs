@@ -9,6 +9,7 @@ pub struct TimeQueue<T: Eq + PartialEq> {
     queue: BinaryHeap<ItemContainer<T>>,
 }
 
+#[allow(clippy::new_without_default)]
 impl<T: Eq + PartialEq> TimeQueue<T> {
     pub fn new() -> Self {
         Self {

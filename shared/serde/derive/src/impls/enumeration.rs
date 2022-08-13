@@ -11,6 +11,7 @@ fn bits_needed_for(max_value: usize) -> u8 {
     bits as u8
 }
 
+#[allow(clippy::format_push_string)]
 pub fn derive_serde_enum(enum_: &Enum) -> String {
     let variant_number = enum_.variants.len();
     let bits_needed = bits_needed_for(variant_number);

@@ -1,7 +1,5 @@
 /target
 **/*.rs.bk
-.idea/*
-.idea
 /Cargo.lock
 node_modules
 /demos/basic/client/miniquad/target

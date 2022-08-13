@@ -1,6 +1,6 @@
 [package]
 name = "naia-hecs-server"
-version = "0.10.1"
+version = "0.10.2"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
 description = "Library to faciliate naia_server & Hecs interop"
@@ -24,4 +24,4 @@ use-webrtc = [ "naia-server/use-webrtc" ]
 [dependencies]
 naia-server = { version = "0.10", path = "../../../server" }
 naia-hecs-shared = { version = "0.10", path = "../shared" }
-hecs = { version = "0.7" }
+hecs = { version = "0.9" }

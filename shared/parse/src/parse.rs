@@ -147,6 +147,7 @@ fn next_type<T: Iterator<Item = TokenTree>>(source: &mut Peekable<T>) -> Option<
         };
 
         while let Some(next_ty) = next_type(&mut group.stream().into_iter().peekable()) {
+            #[allow(clippy::format_push_string)]
             tuple_type.path.push_str(&format!("{}, ", next_ty.path));
         }
 
@@ -159,6 +160,7 @@ fn next_type<T: Iterator<Item = TokenTree>>(source: &mut Peekable<T>) -> Option<
         let _second_colon = next_exact_punct(source, ":").expect("Expecting second :");
 
         let next_ident = next_ident(source).expect("Expecting next path part after ::");
+        #[allow(clippy::format_push_string)]
         ty.push_str(&format!("::{}", next_ident));
     }
 
@@ -167,6 +169,7 @@ fn next_type<T: Iterator<Item = TokenTree>>(source: &mut Peekable<T>) -> Option<
         let mut generic_type = next_type(source).expect("Expecting generic argument");
         while let Some(_comma) = next_exact_punct(source, ",") {
             let next_ty = next_type(source).expect("Expecting generic argument");
+            #[allow(clippy::format_push_string)]
             generic_type.path.push_str(&format!(", {}", next_ty.path));
         }
 

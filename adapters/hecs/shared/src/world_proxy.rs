@@ -175,7 +175,7 @@ impl<'w, 'd, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
         &mut self,
         entity: &Entity,
     ) -> Option<ReplicaMutWrapper<P, R>> {
-        if let Ok(hecs_mut) = self.world.get_mut::<R>(*entity) {
+        if let Ok(hecs_mut) = self.world.get::<&mut R>(*entity) {
             let wrapper = ComponentMut(hecs_mut);
             let component_mut = ReplicaMutWrapper::new(wrapper);
             return Some(component_mut);
@@ -266,7 +266,7 @@ fn entities(world: &World) -> Vec<Entity> {
 }
 
 fn has_component<P: Protocolize, R: ReplicateSafe<P>>(world: &World, entity: &Entity) -> bool {
-    let result = world.get::<R>(*entity);
+    let result = world.get::<&R>(*entity);
     result.is_ok()
 }
 
@@ -283,7 +283,7 @@ fn component<'a, P: Protocolize, R: ReplicateSafe<P>>(
     world: &'a World,
     entity: &Entity,
 ) -> Option<ReplicaRefWrapper<'a, P, R>> {
-    if let Ok(hecs_ref) = world.get::<R>(*entity) {
+    if let Ok(hecs_ref) = world.get::<&R>(*entity) {
         let wrapper = ComponentRef(hecs_ref);
         let component_ref = ReplicaRefWrapper::new(wrapper);
         return Some(component_ref);
