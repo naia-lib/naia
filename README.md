@@ -35,8 +35,9 @@ To run the UDP server demo on Linux: (that will be able to communicate with Linu
 
 To run the WebRTC server demo on Linux: (that will be able to communicate with Web clients)
 
-    1. cd /naia/demos/basic/server
-    2. cargo run --features "use-webrtc"
+    1. // go to (https://docs.rs/openssl/latest/openssl/) to install openssl on your machine
+    2. cd /naia/demos/basic/server
+    3. cargo run --features "use-webrtc"
 
 ### Client:
 
@@ -48,6 +49,13 @@ To run the UDP client demo on Linux: (that will be able to communicate with a UD
 To run the WebRTC client demo on Web: (that will be able to communicate with a WebRTC server)
 
     1. cargo install cargo-web  // should only need to do this once if you haven't already
-    2. cd /naia/demos/basic/client/wasm_bindgen
-    3. make serve
-    4. Web page will be blank - check debug console to see communications from the server
+    2. cargo install cargo-make // should only need to do this once if you haven't already
+    3. cd /naia/demos/basic/client/wasm_bindgen
+    4. make serve
+    5. Web page will be blank - check debug console to see communications from the server
+
+### Known Issues
+
+To run a miniquad client you will require the following be installed
+
+    sudo apt-get install libxi-dev libgl1-mesa-dev

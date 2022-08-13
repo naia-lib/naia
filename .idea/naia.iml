@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="CPP_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/adapters/bevy/client/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/adapters/bevy/server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/adapters/bevy/shared/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/adapters/hecs/client/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/adapters/hecs/server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/adapters/hecs/shared/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/client/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/basic/client/app/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/basic/client/miniquad/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/basic/client/wasm_bindgen/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/basic/server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/basic/shared/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/bevy/client/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/bevy/server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/bevy/shared/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/demo_utils/demo_world/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/demo_utils/empty_world/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/hecs/client/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/hecs/server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/hecs/shared/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/macroquad/client/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/macroquad/server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/macroquad/shared/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/socket/client/app/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/socket/client/miniquad/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/socket/client/wasm_bindgen/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/socket/server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/demos/socket/shared/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/shared/derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/shared/parse/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/shared/serde/derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/shared/serde/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/shared/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/shared/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/socket/client/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/socket/server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/socket/shared/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/test/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/test/tests" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/basic/client/wasm_bindgen/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/basic/client/miniquad/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/hecs/client/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/macroquad/client/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/bevy/client/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/socket/client/miniquad/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>
