@@ -49,7 +49,7 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
         world: &'w World,
         entity: &Entity,
     ) -> Option<ReplicaDynRefWrapper<'w, P>> {
-        if let Ok(hecs_ref) = world.get::<R>(*entity) {
+        if let Ok(hecs_ref) = world.get::<&R>(*entity) {
             let wrapper = ComponentDynRef(hecs_ref);
             let component_dyn_ref = ReplicaDynRefWrapper::new(wrapper);
             return Some(component_dyn_ref);
@@ -62,7 +62,7 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
         world: &'w mut World,
         entity: &Entity,
     ) -> Option<ReplicaDynMutWrapper<'w, P>> {
-        if let Ok(hecs_mut) = world.get_mut::<R>(*entity) {
+        if let Ok(hecs_mut) = world.get::<&mut R>(*entity) {
             let wrapper = ComponentDynMut(hecs_mut);
             let component_dyn_mut = ReplicaDynMutWrapper::new(wrapper);
             return Some(component_dyn_mut);
@@ -83,8 +83,8 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
         immutable_entity: &Entity,
     ) {
         unsafe {
-            if let Ok(immutable_component) = world.get_unchecked::<R>(*immutable_entity) {
-                if let Ok(mutable_component) = world.get_unchecked_mut::<R>(*mutable_entity) {
+            if let Ok(immutable_component) = world.get_unchecked::<&R>(*immutable_entity) {
+                if let Ok(mutable_component) = world.get_unchecked::<&mut R>(*mutable_entity) {
                     mutable_component.mirror(&immutable_component.protocol_copy());
                 }
             }

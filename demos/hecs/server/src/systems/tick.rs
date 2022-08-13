@@ -101,7 +101,7 @@ pub fn check_scopes(app: &mut App) {
     let world = &app.world;
     for (_, user_key, entity) in server.scope_checks() {
         if let Ok(entity_ref) = world.entity(entity) {
-            if let Some(position) = entity_ref.get::<Position>() {
+            if let Some(position) = entity_ref.get::<&Position>() {
                 let x = *position.x;
 
                 if (50..=200).contains(&x) {

@@ -20,4 +20,4 @@ mquad = [ "naia-shared/mquad" ]
 
 [dependencies]
 naia-shared = { version = "0.10", path = "../../../shared" }
-hecs = { version = "0.7" }
+hecs = { version = "0.9" }
