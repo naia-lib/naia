@@ -153,7 +153,7 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
                 return None;
             }
 
-            let mut counter = BitCounter::default();
+            let mut counter = BitCounter::new();
 
             //TODO: message_count is inaccurate here and may be different than final, does
             // this matter?
