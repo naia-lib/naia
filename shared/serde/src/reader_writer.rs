@@ -44,8 +44,8 @@ pub struct BitWriter {
     buffer_index: usize,
 }
 
-impl Default for BitWriter {
-    fn default() -> Self {
+impl BitWriter {
+    pub fn default() -> Self {
         Self {
             scratch: 0,
             scratch_index: 0,
