@@ -24,6 +24,6 @@ zstd_support = ["naia-shared/zstd_support"]
 
 [dependencies]
 naia-client-socket = { version = "0.11", path = "../socket/client" }
-naia-shared = { version = "0.10.2", path = "../shared" }
+naia-shared = { version = "0.10.3", path = "../shared" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }

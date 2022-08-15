@@ -1,6 +1,6 @@
 [package]
 name = "naia-shared"
-version = "0.10.2"
+version = "0.10.3"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = ".."
 description = "Common functionality shared between naia-server & naia-client crates"
