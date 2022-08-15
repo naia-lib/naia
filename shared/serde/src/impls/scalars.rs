@@ -26,7 +26,7 @@ mod unit_tests {
     #[test]
     fn read_write() {
         // Write
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         let in_unit = ();
 
@@ -67,7 +67,7 @@ mod bool_tests {
     #[test]
     fn read_write() {
         // Write
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         let in_1 = true;
         let in_2 = false;
@@ -134,7 +134,7 @@ mod char_tests {
     #[test]
     fn read_write() {
         // Write
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         let in_1 = 'O';
         let in_2 = '!';
@@ -300,7 +300,7 @@ macro_rules! test_serde_for {
             };
 
             // Write
-            let mut writer = BitWriter::default();
+            let mut writer = BitWriter::new();
 
             let in_1: $impl_type = 123 as $impl_type;
 

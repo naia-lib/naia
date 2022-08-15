@@ -532,7 +532,7 @@ pub fn read_create_update_method(
     return quote! {
         pub fn read_create_update(bit_reader: &mut BitReader) -> ComponentUpdate::<#kind_name> {
 
-            let mut update_writer = BitWriter::default();
+            let mut update_writer = BitWriter::new();
 
             #prop_read_writes
 

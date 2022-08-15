@@ -140,7 +140,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
         {
             let next_packet_index = self.base.next_packet_index();
 
-            let mut bit_writer = BitWriter::default();
+            let mut bit_writer = BitWriter::new();
 
             // write header
             self.base

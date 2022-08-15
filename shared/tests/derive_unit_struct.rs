@@ -12,7 +12,7 @@ use some_struct::SomeStruct;
 #[test]
 fn read_write_unit_struct() {
     // Write
-    let mut writer = BitWriter::default();
+    let mut writer = BitWriter::new();
 
     let in_1 = SomeStruct;
 

@@ -133,7 +133,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         if self.base.message_manager.has_outgoing_messages() || tick_buffer_has_outgoing_messages {
             let next_packet_index = self.base.next_packet_index();
 
-            let mut bit_writer = BitWriter::default();
+            let mut bit_writer = BitWriter::new();
 
             // write header
             self.base

@@ -311,7 +311,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
             // send heartbeats
             if server_connection.base.should_send_heartbeat() {
-                let mut writer = BitWriter::default();
+                let mut writer = BitWriter::new();
 
                 // write header
                 server_connection
@@ -330,7 +330,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
             // send pings
             if server_connection.ping_manager.should_send_ping() {
-                let mut writer = BitWriter::default();
+                let mut writer = BitWriter::new();
 
                 // write header
                 server_connection
@@ -400,7 +400,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                                 let ping_index = PingIndex::de(&mut reader).unwrap();
 
                                 // write pong payload
-                                let mut writer = BitWriter::default();
+                                let mut writer = BitWriter::new();
 
                                 // write header
                                 server_connection

@@ -90,7 +90,7 @@ fn end_to_end_handshake_w_auth() {
     // 7. Server send connect response
     {
         let header = StandardHeader::new(PacketType::ServerConnectResponse, 0, 0, 0);
-        writer = BitWriter::default();
+        writer = BitWriter::new();
         header.ser(&mut writer);
         let (length, buffer) = writer.flush();
         message_length = length;

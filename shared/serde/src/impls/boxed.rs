@@ -26,7 +26,7 @@ mod tests {
     #[test]
     fn read_write() {
         // Write
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         let in_1 = Box::new(123);
         let in_2 = Box::new(true);

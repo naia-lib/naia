@@ -12,7 +12,7 @@ use some_struct::SomeStruct;
 #[test]
 fn read_write_tuple_struct() {
     // Write
-    let mut writer = BitWriter::default();
+    let mut writer = BitWriter::new();
 
     let in_1 = SomeStruct("Hello world!".to_string(), 42, true);
     let in_2 = SomeStruct("Goodbye world!".to_string(), -42, false);

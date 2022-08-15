@@ -813,7 +813,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                 if connection.base.should_send_heartbeat() {
                     // Don't try to refactor this to self.internal_send, doesn't seem to
                     // work cause of iter_mut()
-                    let mut writer = BitWriter::default();
+                    let mut writer = BitWriter::new();
 
                     // write header
                     connection
@@ -839,7 +839,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             for (user_address, connection) in &mut self.user_connections.iter_mut() {
                 // send pings
                 if connection.ping_manager.should_send_ping() {
-                    let mut writer = BitWriter::default();
+                    let mut writer = BitWriter::new();
 
                     // write header
                     connection
@@ -968,7 +968,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                 let ping_index = u16::de(&mut reader).unwrap();
 
                                 // write pong payload
-                                let mut writer = BitWriter::default();
+                                let mut writer = BitWriter::new();
 
                                 // write header
                                 user_connection

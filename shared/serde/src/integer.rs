@@ -188,7 +188,7 @@ mod tests {
     #[test]
     fn read_write_unsigned() {
         // Write
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         let in_1 = UnsignedInteger::<7>::new(123);
         let in_2 = UnsignedInteger::<20>::new(535221);
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn read_write_signed() {
         // Write
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         let in_1 = SignedInteger::<10>::new(-668);
         let in_2 = SignedInteger::<20>::new(53);
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn read_write_unsigned_variable() {
         // Write
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         let in_1 = UnsignedVariableInteger::<3>::new(23);
         let in_2 = UnsignedVariableInteger::<5>::new(153);
@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn read_write_signed_variable() {
         // Write
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         let in_1 = SignedVariableInteger::<5>::new(-668);
         let in_2 = SignedVariableInteger::<6>::new(53735);

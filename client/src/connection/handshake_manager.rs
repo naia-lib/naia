@@ -92,7 +92,7 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     // Step 1 of Handshake
     pub fn write_challenge_request(&self) -> BitWriter {
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ClientChallengeRequest, 0, 0, 0).ser(&mut writer);
 
         self.pre_connection_timestamp.ser(&mut writer);
@@ -116,7 +116,7 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     // Step 3 of Handshake
     pub fn write_connect_request(&self) -> BitWriter {
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0).ser(&mut writer);
 
@@ -146,7 +146,7 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     // Send 10 disconnect packets
     pub fn write_disconnect(&self) -> BitWriter {
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Disconnect, 0, 0, 0).ser(&mut writer);
         self.write_signed_timestamp(&mut writer);
         writer

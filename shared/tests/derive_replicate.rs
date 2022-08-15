@@ -36,7 +36,7 @@ use some_replica::StringHolder;
 #[test]
 fn read_write_protocol() {
     // Write
-    let mut writer = BitWriter::default();
+    let mut writer = BitWriter::new();
 
     let in_1 = SomeProtocol::StringHolder(StringHolder::new("hello world", "goodbye world"));
 

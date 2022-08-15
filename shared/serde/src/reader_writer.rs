@@ -45,7 +45,7 @@ pub struct BitWriter {
 }
 
 impl BitWriter {
-    pub fn default() -> Self {
+    pub fn new() -> Self {
         Self {
             scratch: 0,
             scratch_index: 0,
@@ -211,7 +211,7 @@ mod tests {
     fn read_write_1_bit() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         writer.write_bit(true);
 
@@ -226,7 +226,7 @@ mod tests {
     fn read_write_3_bits() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         writer.write_bit(false);
         writer.write_bit(true);
@@ -245,7 +245,7 @@ mod tests {
     fn read_write_8_bits() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         writer.write_bit(false);
         writer.write_bit(true);
@@ -276,7 +276,7 @@ mod tests {
     fn read_write_13_bits() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         writer.write_bit(false);
         writer.write_bit(true);
@@ -321,7 +321,7 @@ mod tests {
     fn read_write_16_bits() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         writer.write_bit(false);
         writer.write_bit(true);
@@ -372,7 +372,7 @@ mod tests {
     fn read_write_1_byte() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         writer.write_byte(123);
 
@@ -387,7 +387,7 @@ mod tests {
     fn read_write_5_bytes() {
         use crate::reader_writer::{BitReader, BitWrite, BitWriter};
 
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         writer.write_byte(48);
         writer.write_byte(151);

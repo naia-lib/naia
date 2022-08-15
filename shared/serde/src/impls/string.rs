@@ -40,7 +40,7 @@ mod tests {
     #[test]
     fn read_write() {
         // Write
-        let mut writer = BitWriter::default();
+        let mut writer = BitWriter::new();
 
         let in_1 = "Hello world!".to_string();
         let in_2 = "This is a string.".to_string();

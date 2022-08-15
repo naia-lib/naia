@@ -36,7 +36,7 @@ use some_enum_2::SomeEnum2;
 #[test]
 fn read_write_enum() {
     // Write
-    let mut writer = BitWriter::default();
+    let mut writer = BitWriter::new();
 
     let in_1 = SomeEnum::Variant2(true);
     let in_2 = SomeEnum::Variant1;
@@ -72,7 +72,7 @@ fn read_write_enum() {
 #[test]
 fn read_write_enum_2() {
     // Write
-    let mut writer = BitWriter::default();
+    let mut writer = BitWriter::new();
 
     let in_1 = SomeEnum2::Variant2;
     let in_2 = SomeEnum2::Variant1;
