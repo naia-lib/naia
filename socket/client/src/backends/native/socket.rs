@@ -1,13 +1,11 @@
 extern crate log;
 
-use std::{
-    net::UdpSocket,
-    sync::{Arc, Mutex},
-};
+use crossbeam::channel;
 
-use log::info;
+use webrtc_unreliable_client::{ServerAddr, Socket as RTCSocket};
+use naia_socket_shared::SocketConfig;
 
-use naia_socket_shared::{parse_server_url, url_to_socket_addr, SocketConfig};
+use tokio::runtime::Runtime;
 
 use crate::{
     conditioned_packet_receiver::ConditionedPacketReceiver,
@@ -39,27 +37,67 @@ impl Socket {
             panic!("Socket already listening!");
         }
 
-        let server_url = parse_server_url(server_session_url);
-        let server_socket_addr = url_to_socket_addr(&server_url);
+        let server_session_string = server_session_url.to_string();
 
-        let client_ip_address =
-            find_my_ip_address().expect("cannot find host's current IP address");
-
-        let socket = Arc::new(Mutex::new(UdpSocket::bind((client_ip_address, 0)).unwrap()));
-        socket
-            .as_ref()
-            .lock()
-            .unwrap()
-            .set_nonblocking(true)
-            .expect("can't set socket to non-blocking!");
-        let local_addr = socket.as_ref().lock().unwrap().local_addr().unwrap();
-
-        let packet_sender = PacketSender::new(server_socket_addr, socket.clone());
+        // Setup sync channels
+        let (from_server_sender, from_server_receiver) = channel::unbounded();
+        let (sender_sender, sender_receiver) = channel::bounded(1);
+        let (addr_sender, addr_receiver) = channel::bounded(1);
 
         let conditioner_config = self.config.link_condition.clone();
 
+        let runtime = Runtime::new().unwrap();
+        let _guard = runtime.enter();
+
+        tokio::spawn(async move {
+
+            let (addr_cell, to_server_sender, mut to_client_receiver) = RTCSocket::connect(&server_session_string).await;
+
+            sender_sender.send(to_server_sender).unwrap();
+            //TODO: handle result
+
+            let mut found_addr: Option<SocketAddr> = None;
+
+            loop {
+
+                if let Some(message) = to_client_receiver.recv().await {
+                    from_server_sender.send(message).unwrap();
+                    //TODO: handle result
+
+                    if found_addr.is_none() {
+                        if let ServerAddr::Found(addr) = addr_cell.get().await {
+                            addr_sender.send(addr).unwrap();
+                            //TODO: handle result
+                        }
+                    }
+                }
+            }
+        });
+
+        // Set up sender loop
+        let (to_server_sender, to_server_receiver) = channel::unbounded();
+
+        tokio::spawn(async move {
+            loop {
+                // Create async socket
+                if let Ok(mut async_sender) = sender_receiver.recv() {
+                    loop {
+                        if let Ok(msg) = to_server_receiver.recv() {
+                            async_sender.send(msg).await.unwrap();
+                            //TODO: handle result..
+                        }
+                    }
+                }
+            }
+        });
+
+        // Setup Packet Sender & Receiver
+        let addr_cell = AddrCell::new(addr_receiver);
+        let packet_sender = PacketSender::new(addr_cell.clone(), to_server_sender);
+        let packet_receiver_impl = PacketReceiverImpl::new(addr_cell, from_server_receiver);
+
         let receiver: Box<dyn PacketReceiverTrait> = {
-            let inner_receiver = Box::new(PacketReceiverImpl::new(server_socket_addr, socket));
+            let inner_receiver = Box::new(packet_receiver_impl);
             if let Some(config) = &conditioner_config {
                 Box::new(ConditionedPacketReceiver::new(inner_receiver, config))
             } else {
@@ -67,7 +105,6 @@ impl Socket {
             }
         };
 
-        info!("UDP client listening on socket: {}", local_addr);
 
         self.io = Some(Io {
             packet_sender,
@@ -97,7 +134,9 @@ impl Socket {
     }
 }
 
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use log::warn;
+use crate::backends::native::addr_cell::AddrCell;
 
 /// Helper method to find local IP address, if possible
 pub fn find_my_ip_address() -> Option<IpAddr> {

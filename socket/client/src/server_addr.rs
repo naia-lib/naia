@@ -8,3 +8,12 @@ pub enum ServerAddr {
     /// Client is still finding the server's socket address
     Finding,
 }
+
+impl ServerAddr {
+    pub fn is_found(&self) -> bool {
+        match self {
+            ServerAddr::Found(_) => true,
+            ServerAddr::Finding => false,
+        }
+    }
+}
