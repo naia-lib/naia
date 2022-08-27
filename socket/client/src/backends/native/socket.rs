@@ -1,13 +1,10 @@
 extern crate log;
 
-use std::{
-    net::UdpSocket,
-    sync::{Arc, Mutex},
-};
+use std::{future, thread};
 
-use log::info;
-
-use naia_socket_shared::{parse_server_url, url_to_socket_addr, SocketConfig};
+use naia_socket_shared::{parse_server_url, SocketConfig};
+use tokio::runtime::Builder;
+use webrtc_unreliable_client::Socket as RTCSocket;
 
 use crate::{
     conditioned_packet_receiver::ConditionedPacketReceiver,
@@ -39,35 +36,42 @@ impl Socket {
             panic!("Socket already listening!");
         }
 
-        let server_url = parse_server_url(server_session_url);
-        let server_socket_addr = url_to_socket_addr(&server_url);
-
-        let client_ip_address =
-            find_my_ip_address().expect("cannot find host's current IP address");
-
-        let socket = Arc::new(Mutex::new(UdpSocket::bind((client_ip_address, 0)).unwrap()));
-        socket
-            .as_ref()
-            .lock()
-            .unwrap()
-            .set_nonblocking(true)
-            .expect("can't set socket to non-blocking!");
-        let local_addr = socket.as_ref().lock().unwrap().local_addr().unwrap();
-
-        let packet_sender = PacketSender::new(server_socket_addr, socket.clone());
-
+        let server_session_string = format!(
+            "{}{}",
+            parse_server_url(server_session_url),
+            self.config.rtc_endpoint_path.clone()
+        );
         let conditioner_config = self.config.link_condition.clone();
 
+        let runtime = Builder::new_multi_thread().enable_all().build().unwrap();
+
+        let runtime_handle = runtime.handle().clone();
+
+        thread::Builder::new()
+            .name("tokio-main".to_string())
+            .spawn(move || {
+                let _guard = runtime.enter();
+                runtime.block_on(future::pending::<()>());
+            })
+            .expect("cannot spawn executor thread");
+
+        let _guard = runtime_handle.enter();
+
+        let (addr_cell, to_server_sender, to_client_receiver) =
+            runtime_handle.block_on(RTCSocket::connect(&server_session_string));
+
+        // Setup Packet Sender & Receiver
+        let packet_sender = PacketSender::new(addr_cell.clone(), to_server_sender);
+        let packet_receiver_impl = PacketReceiverImpl::new(addr_cell, to_client_receiver);
+
         let receiver: Box<dyn PacketReceiverTrait> = {
-            let inner_receiver = Box::new(PacketReceiverImpl::new(server_socket_addr, socket));
+            let inner_receiver = Box::new(packet_receiver_impl);
             if let Some(config) = &conditioner_config {
                 Box::new(ConditionedPacketReceiver::new(inner_receiver, config))
             } else {
                 inner_receiver
             }
         };
-
-        info!("UDP client listening on socket: {}", local_addr);
 
         self.io = Some(Io {
             packet_sender,
@@ -94,20 +98,5 @@ impl Socket {
             .expect("Socket is not connected yet! Call Socket.connect() before this.")
             .packet_receiver
             .clone();
-    }
-}
-
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-
-/// Helper method to find local IP address, if possible
-pub fn find_my_ip_address() -> Option<IpAddr> {
-    let ip = local_ipaddress::get().unwrap_or_default();
-
-    if let Ok(addr) = ip.parse::<Ipv4Addr>() {
-        Some(IpAddr::V4(addr))
-    } else if let Ok(addr) = ip.parse::<Ipv6Addr>() {
-        Some(IpAddr::V6(addr))
-    } else {
-        None
     }
 }

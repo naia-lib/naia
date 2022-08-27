@@ -239,44 +239,44 @@ fn property_enum(enum_name: &Ident, properties: &[Property]) -> TokenStream {
         variant_list = new_output_result;
     }
 
-    return quote! {
+    quote! {
         #hashtag[repr(u8)]
         enum #enum_name {
             #variant_list
         }
-    };
+    }
 }
 
 fn protocol_copy_method(protocol_name: &Ident, replica_name: &Ident) -> TokenStream {
-    return quote! {
+    quote! {
         fn protocol_copy(&self) -> #protocol_name {
             return #protocol_name::#replica_name(self.clone());
         }
-    };
+    }
 }
 
 fn into_protocol_method(protocol_name: &Ident, replica_name: &Ident) -> TokenStream {
-    return quote! {
+    quote! {
         fn into_protocol(self) -> #protocol_name {
             return #protocol_name::#replica_name(self);
         }
-    };
+    }
 }
 
 pub fn dyn_ref_method(protocol_name: &Ident) -> TokenStream {
-    return quote! {
+    quote! {
         fn dyn_ref(&self) -> ReplicaDynRef<'_, #protocol_name> {
             return ReplicaDynRef::new(self);
         }
-    };
+    }
 }
 
 pub fn dyn_mut_method(protocol_name: &Ident) -> TokenStream {
-    return quote! {
+    quote! {
         fn dyn_mut(&mut self) -> ReplicaDynMut<'_, #protocol_name> {
             return ReplicaDynMut::new(self);
         }
-    };
+    }
 }
 
 fn clone_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
@@ -310,13 +310,13 @@ fn clone_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
         };
     }
 
-    return quote! {
+    quote! {
         fn clone(&self) -> #replica_name {
             let mut new_clone = #replica_name::new_complete(#output);
             #entity_property_output
             return new_clone;
         }
-    };
+    }
 }
 
 fn mirror_method(
@@ -338,13 +338,13 @@ fn mirror_method(
         output = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn mirror(&mut self, other: &#protocol_name) {
             if let #protocol_name::#replica_name(replica) = other {
                 #output
             }
         }
-    };
+    }
 }
 
 fn set_mutator_method(properties: &[Property]) -> TokenStream {
@@ -362,11 +362,11 @@ fn set_mutator_method(properties: &[Property]) -> TokenStream {
         output = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn set_mutator(&mut self, mutator: &PropertyMutator) {
             #output
         }
-    };
+    }
 }
 
 pub fn new_complete_method(
@@ -423,13 +423,13 @@ pub fn new_complete_method(
         fields = new_output_result;
     }
 
-    return quote! {
+    quote! {
         pub fn new_complete(#args) -> #replica_name {
             #replica_name {
                 #fields
             }
         }
-    };
+    }
 }
 
 pub fn read_method(
@@ -478,7 +478,7 @@ pub fn read_method(
         prop_reads = new_output_result;
     }
 
-    return quote! {
+    quote! {
         pub fn read(bit_reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> #protocol_name {
             #prop_reads
 
@@ -486,7 +486,7 @@ pub fn read_method(
                 #prop_names
             });
         }
-    };
+    }
 }
 
 pub fn read_create_update_method(
@@ -529,7 +529,7 @@ pub fn read_create_update_method(
         prop_read_writes = new_output_result;
     }
 
-    return quote! {
+    quote! {
         pub fn read_create_update(bit_reader: &mut BitReader) -> ComponentUpdate::<#kind_name> {
 
             let mut update_writer = BitWriter::new();
@@ -541,7 +541,7 @@ pub fn read_create_update_method(
 
             return ComponentUpdate::new(#kind_name::#replica_name, owned_reader);
         }
-    };
+    }
 }
 
 fn read_apply_update_method(kind_name: &Ident, properties: &[Property]) -> TokenStream {
@@ -574,12 +574,12 @@ fn read_apply_update_method(kind_name: &Ident, properties: &[Property]) -> Token
         output = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn read_apply_update(&mut self, converter: &dyn NetEntityHandleConverter, mut update: ComponentUpdate<#kind_name>) {
             let reader = &mut update.reader();
             #output
         }
-    };
+    }
 }
 
 fn write_method(properties: &[Property]) -> TokenStream {
@@ -608,12 +608,12 @@ fn write_method(properties: &[Property]) -> TokenStream {
         property_writes = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
             self.kind().ser(bit_writer);
             #property_writes
         }
-    };
+    }
 }
 
 fn write_update_method(enum_name: &Ident, properties: &[Property]) -> TokenStream {
@@ -654,11 +654,11 @@ fn write_update_method(enum_name: &Ident, properties: &[Property]) -> TokenStrea
         output = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn write_update(&self, diff_mask: &DiffMask, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
             #output
         }
-    };
+    }
 }
 
 fn has_entity_properties_method(properties: &[Property]) -> TokenStream {
@@ -672,11 +672,11 @@ fn has_entity_properties_method(properties: &[Property]) -> TokenStream {
         }
     }
 
-    return quote! {
+    quote! {
         fn has_entity_properties(&self) -> bool {
             return false;
         }
-    };
+    }
 }
 
 fn entities_method(properties: &[Property]) -> TokenStream {
@@ -698,11 +698,11 @@ fn entities_method(properties: &[Property]) -> TokenStream {
         }
     }
 
-    return quote! {
+    quote! {
         fn entities(&self) -> Vec<internal::EntityHandle> {
             let mut output = Vec::new();
             #body
             return output;
         }
-    };
+    }
 }

@@ -4,7 +4,7 @@ use std::fmt;
 // the current state of a Property owned by a Replica.
 // The Property tracks whether it has been updated and needs to be synced
 // with the remote Client
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct DiffMask {
     mask: Vec<u8>,
 }

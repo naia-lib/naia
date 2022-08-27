@@ -133,7 +133,7 @@ impl ChannelMode {
 }
 
 // ChannelDirection
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum ChannelDirection {
     ClientToServer,
     ServerToClient,
@@ -141,7 +141,7 @@ pub enum ChannelDirection {
 }
 
 // Default Channels
-#[derive(Eq, Hash)]
+#[derive(Hash)]
 #[derive_serde]
 pub enum DefaultChannels {
     UnorderedUnreliable,

@@ -13,7 +13,7 @@ use super::io::Io;
 
 pub type Timestamp = u64;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum HandshakeState {
     AwaitingChallengeResponse,
     AwaitingConnectResponse,

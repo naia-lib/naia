@@ -14,10 +14,9 @@ pub struct BitCounter {
 }
 
 impl BitCounter {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self {
-            count: 0,
-        }
+        Self { count: 0 }
     }
 }
 
@@ -45,6 +44,7 @@ pub struct BitWriter {
 }
 
 impl BitWriter {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             scratch: 0,

@@ -31,13 +31,13 @@ More comprehensive documentation / tutorials are on their way, but for now, the 
 To run the UDP server demo on Linux: (that will be able to communicate with Linux clients)
 
     1. cd /naia/demos/basic/server
-    2. cargo run --features "use-udp"
+    2. cargo run
 
 To run the WebRTC server demo on Linux: (that will be able to communicate with Web clients)
 
     1. // go to (https://docs.rs/openssl/latest/openssl/) to install openssl on your machine
     2. cd /naia/demos/basic/server
-    3. cargo run --features "use-webrtc"
+    3. cargo run
 
 ### Client:
 

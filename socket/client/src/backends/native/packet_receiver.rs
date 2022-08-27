@@ -1,8 +1,7 @@
-use std::{
-    io::ErrorKind,
-    net::{SocketAddr, UdpSocket},
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
+use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
+
+use tokio::sync::mpsc::Receiver;
 
 use crate::{
     error::NaiaClientSocketError, packet_receiver::PacketReceiverTrait, server_addr::ServerAddr,
@@ -11,18 +10,18 @@ use crate::{
 /// Handles receiving messages from the Server through a given Client Socket
 #[derive(Clone)]
 pub struct PacketReceiverImpl {
-    server_addr: SocketAddr,
-    local_socket: Arc<Mutex<UdpSocket>>,
+    server_addr: AddrCell,
+    receiver_channel: Arc<Mutex<Receiver<Box<[u8]>>>>,
     receive_buffer: Vec<u8>,
 }
 
 impl PacketReceiverImpl {
     /// Create a new PacketReceiver, if supplied with the Server's address & a
     /// reference back to the parent Socket
-    pub fn new(server_addr: SocketAddr, local_socket: Arc<Mutex<UdpSocket>>) -> Self {
+    pub fn new(server_addr: AddrCell, receiver_channel: Receiver<Box<[u8]>>) -> Self {
         PacketReceiverImpl {
             server_addr,
-            local_socket,
+            receiver_channel: Arc::new(Mutex::new(receiver_channel)),
             receive_buffer: vec![0; 1472],
         }
     }
@@ -30,29 +29,21 @@ impl PacketReceiverImpl {
 
 impl PacketReceiverTrait for PacketReceiverImpl {
     fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
-        let buffer: &mut [u8] = self.receive_buffer.as_mut();
-        match self.local_socket.as_ref().lock().unwrap().recv_from(buffer) {
-            Ok((recv_len, address)) => {
-                if address == self.server_addr {
-                    Ok(Some(&buffer[..recv_len]))
-                } else {
-                    let err_message = format!(
-                        "Received packet from unknown sender with a socket address of: {}",
-                        address
-                    );
-                    Err(NaiaClientSocketError::Message(err_message))
-                }
+        if let Ok(mut receiver) = self.receiver_channel.lock() {
+            if let Ok(bytes) = receiver.try_recv() {
+                let length = bytes.len();
+                self.receive_buffer[..length].clone_from_slice(&bytes);
+                return Ok(Some(&self.receive_buffer[..length]));
             }
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                //just didn't receive anything this time
-                Ok(None)
-            }
-            Err(e) => Err(NaiaClientSocketError::Wrapped(Box::new(e))),
         }
+        Ok(None)
     }
 
     /// Get the Server's Socket address
     fn server_addr(&self) -> ServerAddr {
-        ServerAddr::Found(self.server_addr)
+        match self.server_addr.get() {
+            RTCServerAddr::Finding => ServerAddr::Finding,
+            RTCServerAddr::Found(addr) => ServerAddr::Found(addr),
+        }
     }
 }

@@ -32,7 +32,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        features: [ use-udp, use-webrtc ]
         package:
           [
             naia-server-socket,
@@ -50,13 +49,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --features ${{ matrix.features }} --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --no-deps -- -D warnings
 
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --package ${{ matrix.package }} --features ${{ matrix.features }}
+          args: --package ${{ matrix.package }}
 
   servers:
     name: Servers
@@ -81,13 +80,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --features use-udp --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --no-deps -- -D warnings
 
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --package ${{ matrix.package }} --features use-udp
+          args: --package ${{ matrix.package }}
 
   clients-and-shared:
     name: Clients And Shared
@@ -187,7 +186,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --features use-udp --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --no-deps -- -D warnings
 
   client-demos:
     name: Client Demos

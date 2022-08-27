@@ -15,24 +15,15 @@ edition = "2021"
 [badges]
 maintenance = { status = "actively-developed" }
 
-[package.metadata.docs.rs]
-features = [ "use-webrtc" ]
-
-[features]
-use-udp = [ "async-io" ]
-use-webrtc = [ "webrtc-unreliable", "async-dup", "futures-core", "http" ]
-
 [dependencies]
 naia-socket-shared = { version = "0.10", path = "../shared" }
 log = { version = "0.4" }
-cfg-if = { version = "1.0" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-util = { version = "0.3", features = ["sink"] }
 smol = { version = "1.2.4" }
 crossbeam = { version = "0.8" }
 once_cell = { version = "1.4.1" }
-async-io = { version = "1.1", optional = true }
-webrtc-unreliable = { version = "0.5.2", optional = true }
-async-dup = { version = "1.2.2", optional = true }
-futures-core = { version = "0.3", optional = true }
-http = { version = "0.2", optional = true }
+webrtc-unreliable = { version = "0.5.2" }
+async-dup = { version = "1.2.2" }
+futures-core = { version = "0.3" }
+http = { version = "0.2" }
