@@ -26,7 +26,7 @@ impl<T: Serde, const N: usize> Serde for [T; N] {
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         unsafe {
             let mut to = std::mem::MaybeUninit::<[T; N]>::uninit();
-            let top: *mut T = std::mem::transmute(&mut to);
+            let top: *mut T = &mut to as *mut std::mem::MaybeUninit<[T; N]> as *mut T;
             for c in 0..N {
                 top.add(c).write(Serde::de(reader)?);
             }
