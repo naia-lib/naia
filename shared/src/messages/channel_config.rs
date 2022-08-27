@@ -143,7 +143,8 @@ pub enum ChannelDirection {
 // Default Channels
 
 mod define_default_channels {
-    use crate::{derive_serde, serde};
+    use crate::{{derive_serde, serde}};
+    use super::ChannelIndex;
 
     #[derive(Hash)]
     #[derive_serde]
@@ -153,10 +154,10 @@ mod define_default_channels {
         OrderedReliable,
         TickBuffered,
     }
+
+    impl ChannelIndex for DefaultChannels {}
 }
 pub use define_default_channels::DefaultChannels;
-
-impl ChannelIndex for DefaultChannels {}
 
 impl ChannelConfig<DefaultChannels> {
     pub fn default() -> &'static [Channel<DefaultChannels>] {
