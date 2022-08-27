@@ -102,7 +102,7 @@ pub fn kind_enum(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     }
 
     return quote! {
-        #hashtag[derive(Hash, Eq, Copy, Debug)]
+        #hashtag[derive(Hash, Copy, Debug)]
         #hashtag[derive_serde]
         pub enum #enum_name {
             #variant_definitions

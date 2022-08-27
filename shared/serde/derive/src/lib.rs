@@ -25,7 +25,7 @@ pub fn derive_serde(
         _ => unimplemented!("Only structs and enums are supported"),
     };
 
-    let output = format!(
+    format!(
         "
         #[derive(Eq, PartialEq, Clone)]
         {define_string}
@@ -33,7 +33,5 @@ pub fn derive_serde(
         "
     )
     .parse()
-    .unwrap();
-
-    output
+    .unwrap()
 }
