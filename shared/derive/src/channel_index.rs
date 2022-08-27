@@ -15,8 +15,6 @@ pub fn channels_impl(
         let impl_string = derive_channel_enum(enum_);
         let enum_name = enum_.name.clone();
 
-        
-
         format!(
             "
             mod define_{enum_name} {{
