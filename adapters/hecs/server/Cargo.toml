@@ -14,13 +14,6 @@ edition = "2021"
 [badges]
 maintenance = { status = "actively-developed" }
 
-[package.metadata.docs.rs]
-features = [ "use-webrtc" ]
-
-[features]
-use-udp = [ "naia-server/use-udp" ]
-use-webrtc = [ "naia-server/use-webrtc" ]
-
 [dependencies]
 naia-server = { version = "0.10", path = "../../../server" }
 naia-hecs-shared = { version = "0.10", path = "../shared" }

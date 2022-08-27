@@ -7,10 +7,6 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
-[features]
-use-udp = [ "naia-hecs-server/use-udp" ]
-use-webrtc = [ "naia-hecs-server/use-webrtc" ]
-
 [dependencies]
 naia-hecs-server = { path = "../../../adapters/hecs/server" }
 naia-hecs-demo-shared = { path = "../shared" }

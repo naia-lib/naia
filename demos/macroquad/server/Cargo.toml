@@ -7,10 +7,6 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
-[features]
-use-udp = [ "naia-server/use-udp" ]
-use-webrtc = [ "naia-server/use-webrtc" ]
-
 [dependencies]
 naia-server = { path = "../../../server" }
 naia-demo-world = { path = "../../demo_utils/demo_world" }

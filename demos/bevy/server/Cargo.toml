@@ -7,10 +7,6 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
-[features]
-use-udp = [ "naia-bevy-server/use-udp" ]
-use-webrtc = [ "naia-bevy-server/use-webrtc" ]
-
 [dependencies]
 naia-bevy-demo-shared = { path = "../shared" }
 naia-bevy-server = { path = "../../../adapters/bevy/server" }

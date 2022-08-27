@@ -1,5 +1,5 @@
 use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::Sender;
 
 use crate::server_addr::ServerAddr;
 

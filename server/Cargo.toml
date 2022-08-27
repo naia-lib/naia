@@ -16,12 +16,7 @@ edition = "2021"
 [badges]
 maintenance = { status = "actively-developed" }
 
-[package.metadata.docs.rs]
-features = [ "use-webrtc" ]
-
 [features]
-use-udp = [ "naia-server-socket/use-udp" ]
-use-webrtc = [ "naia-server-socket/use-webrtc" ]
 bevy_support = ["naia-shared/bevy_support"]
 zstd_support = ["naia-shared/zstd_support"]
 
@@ -30,5 +25,4 @@ naia-server-socket = { version = "0.10", path = "../socket/server" }
 naia-shared = { version = "0.10.3", path = "../shared" }
 log = { version = "0.4" }
 ring = "0.16.15"
-cfg-if = { version = "1.0" }
 fastrand = "1.7.0"

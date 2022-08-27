@@ -49,6 +49,7 @@
       <excludeFolder url="file://$MODULE_DIR$/demos/macroquad/client/target" />
       <excludeFolder url="file://$MODULE_DIR$/demos/bevy/client/target" />
       <excludeFolder url="file://$MODULE_DIR$/demos/socket/client/miniquad/target" />
+      <excludeFolder url="file://$MODULE_DIR$/demos/socket/client/wasm_bindgen/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

@@ -1,12 +1,10 @@
 extern crate log;
 
 use std::{future, thread};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use log::warn;
 
-use webrtc_unreliable_client::{ServerAddr, Socket as RTCSocket};
+use webrtc_unreliable_client::Socket as RTCSocket;
 use naia_socket_shared::{parse_server_url, SocketConfig};
-use tokio::runtime::{Builder, Runtime};
+use tokio::runtime::Builder;
 
 use crate::{
     conditioned_packet_receiver::ConditionedPacketReceiver,
@@ -59,51 +57,7 @@ impl Socket {
 
         let _guard = runtime_handle.enter();
 
-        let (addr_cell, to_server_sender, mut to_client_receiver) = runtime_handle.block_on(RTCSocket::connect(&server_session_string));
-
-        // {
-        //     let detached = tokio::spawn(async move {
-        //         let (addr_cell, to_server_sender, mut to_client_receiver) = .await;
-        //
-        //         sender_sender.send(to_server_sender).unwrap();
-        //         //TODO: handle result
-        //
-        //         let mut found_addr: Option<SocketAddr> = None;
-        //
-        //         loop {
-        //             if let Some(message) = to_client_receiver.recv().await {
-        //                 from_server_sender.send(message).unwrap();
-        //                 //TODO: handle result
-        //
-        //                 if found_addr.is_none() {
-        //                     if let ServerAddr::Found(addr) = addr_cell.get().await {
-        //                         addr_sender.send(addr).unwrap();
-        //                         //TODO: handle result
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     });
-        // }
-        //
-        // // Set up sender loop
-        // let (to_server_sender, to_server_receiver) = channel::unbounded();
-        //
-        // {
-        //     let detached = tokio::spawn(async move {
-        //         loop {
-        //             // Create async socket
-        //             if let Ok(mut async_sender) = sender_receiver.recv() {
-        //                 loop {
-        //                     if let Ok(msg) = to_server_receiver.recv() {
-        //                         async_sender.send(msg).await.unwrap();
-        //                         //TODO: handle result..
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     });
-        // }
+        let (addr_cell, to_server_sender, to_client_receiver) = runtime_handle.block_on(RTCSocket::connect(&server_session_string));
 
         // Setup Packet Sender & Receiver
         let packet_sender = PacketSender::new(addr_cell.clone(), to_server_sender);
