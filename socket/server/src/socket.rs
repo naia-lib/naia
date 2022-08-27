@@ -45,12 +45,13 @@ impl Socket {
             // Create async socket
             let mut async_socket = AsyncSocket::listen(server_addrs_clone, config_clone).await;
 
-            sender_sender.send(async_socket.sender()).unwrap(); //TODO: handle result..
+            sender_sender.send(async_socket.sender()).unwrap();
+            //TODO: handle result..
 
             loop {
                 let out_message = async_socket.receive().await;
-                from_client_sender.send(out_message).unwrap(); //TODO: handle
-                                                               // result..
+                from_client_sender.send(out_message).unwrap();
+                //TODO: handle result..
             }
         })
         .detach();
@@ -64,8 +65,8 @@ impl Socket {
 
             loop {
                 if let Ok(msg) = to_client_receiver.recv() {
-                    async_sender.send(msg).await.unwrap(); //TODO: handle
-                                                           // result..
+                    async_sender.send(msg).await.unwrap();
+                    //TODO: handle result..
                 }
             }
         })

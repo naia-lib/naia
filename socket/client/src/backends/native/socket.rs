@@ -1,10 +1,9 @@
 extern crate log;
 
-use crossbeam::channel;
+use std::{future, thread};
 
 use webrtc_unreliable_client::{ServerAddr, Socket as RTCSocket};
 use naia_socket_shared::{parse_server_url, SocketConfig};
-
 use tokio::runtime::{Builder, Runtime};
 
 use crate::{
@@ -47,8 +46,25 @@ impl Socket {
 
         let conditioner_config = self.config.link_condition.clone();
 
+        let runtime = Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        let runtime_handle = runtime.handle().clone();
+
+        thread::Builder::new()
+            .name("tokio-main".to_string())
+            .spawn(move || {
+                let _guard = runtime.enter();
+                runtime.block_on(future::pending::<()>());
+            })
+            .expect("cannot spawn executor thread");
+
+        let _guard = runtime_handle.enter();
+
         {
-            let detached = runtime.spawn_blocking(async move {
+            let detached = tokio::spawn(async move {
                 let (addr_cell, to_server_sender, mut to_client_receiver) = RTCSocket::connect(&server_session_string).await;
 
                 sender_sender.send(to_server_sender).unwrap();
@@ -76,7 +92,7 @@ impl Socket {
         let (to_server_sender, to_server_receiver) = channel::unbounded();
 
         {
-            let detached = runtime.spawn_blocking(async move {
+            let detached = tokio::spawn(async move {
                 loop {
                     // Create async socket
                     if let Ok(mut async_sender) = sender_receiver.recv() {
