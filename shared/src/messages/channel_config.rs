@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{derive_serde, serde, serde::Serde};
+use crate::serde::Serde;
 
 // ChannelConfig
 #[derive(Clone)]
@@ -141,16 +141,22 @@ pub enum ChannelDirection {
 }
 
 // Default Channels
-#[derive(Hash)]
-#[derive_serde]
-pub enum DefaultChannels {
-    UnorderedUnreliable,
-    UnorderedReliable,
-    OrderedReliable,
-    TickBuffered,
-}
 
-impl ChannelIndex for DefaultChannels {}
+mod define_default_channels {
+    use crate::{derive_serde, serde, ChannelIndex};
+
+    #[derive(Hash)]
+    #[derive_serde]
+    pub enum DefaultChannels {
+        UnorderedUnreliable,
+        UnorderedReliable,
+        OrderedReliable,
+        TickBuffered,
+    }
+
+    impl ChannelIndex for DefaultChannels {}
+}
+pub use define_default_channels::DefaultChannels;
 
 impl ChannelConfig<DefaultChannels> {
     pub fn default() -> &'static [Channel<DefaultChannels>] {
