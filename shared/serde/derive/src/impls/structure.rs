@@ -38,6 +38,7 @@ pub fn derive_serde_struct(struct_: &Struct) -> String {
                     }})
                 }}
             }}
+            impl Eq for {name} {{ }}
         }}
         "
     )
