@@ -1,6 +1,6 @@
 [package]
 name = "naia-bevy-client"
-version = "0.10.2"
+version = "0.12.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
 description = "Library to faciliate naia_client & Bevy interop"
@@ -15,7 +15,7 @@ maintenance = { status = "actively-developed" }
 [features]
 
 [dependencies]
-naia-client = { version = "0.10.1", path = "../../../client", features = ["bevy_support", "wbindgen"] }
-naia-bevy-shared = { version = "0.10", path = "../shared" }
+naia-client = { version = "0.12.0", path = "../../../client", features = ["bevy_support", "wbindgen"] }
+naia-bevy-shared = { version = "0.12.0", path = "../shared" }
 bevy_app = { version = "0.8", default-features=false }
 bevy_ecs = { version = "0.8", default-features=false }

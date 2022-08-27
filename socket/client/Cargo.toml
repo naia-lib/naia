@@ -1,6 +1,6 @@
 [package]
 name = "naia-client-socket"
-version = "0.11.1"
+version = "0.12.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../.."
 description = "Abstraction to expose common API over a UDP socket on Linux, and a unreliable WebRTC datachannel on the browser"

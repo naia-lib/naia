@@ -1,6 +1,6 @@
 [package]
 name = "naia-server"
-version = "0.10.1"
+version = "0.12.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = ".."
 description = "A server that uses either UDP or WebRTC communication to send/receive messages to/from connected clients, and syncs registered Entities/Components to clients to whom they are in-scope."
@@ -21,8 +21,8 @@ bevy_support = ["naia-shared/bevy_support"]
 zstd_support = ["naia-shared/zstd_support"]
 
 [dependencies]
-naia-server-socket = { version = "0.10", path = "../socket/server" }
-naia-shared = { version = "0.10.3", path = "../shared" }
+naia-server-socket = { version = "0.12.0", path = "../socket/server" }
+naia-shared = { version = "0.12.0", path = "../shared" }
 log = { version = "0.4" }
 ring = "0.16.15"
 fastrand = "1.7.0"
