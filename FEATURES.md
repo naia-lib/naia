@@ -2,7 +2,7 @@
 
 ## Current
 
-* [x] UDP / WebRTC Server implementation
+* [x] WebRTC Server implementation
 * [x] Linux / Wasm Client implementation
 * [x] Heartbeats
 * [x] Host timeout detection
