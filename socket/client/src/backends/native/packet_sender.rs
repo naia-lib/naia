@@ -1,6 +1,6 @@
-use crossbeam::channel::Sender;
+use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
+use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::backends::native::addr_cell::AddrCell;
 use crate::server_addr::ServerAddr;
 
 /// Handles sending messages to the Server for a given Client Socket
@@ -22,12 +22,15 @@ impl PacketSender {
 
     /// Send a Packet to the Server
     pub fn send(&self, payload: &[u8]) {
-        let _result = self.sender_channel.send(payload.into());
+        let _result = self.sender_channel.blocking_send(payload.into());
         // TODO: handle result
     }
 
     /// Get the Server's Socket address
     pub fn server_addr(&self) -> ServerAddr {
-        return self.server_addr.get();
+        match self.server_addr.get() {
+            RTCServerAddr::Finding => ServerAddr::Finding,
+            RTCServerAddr::Found(addr) => ServerAddr::Found(addr)
+        }
     }
 }

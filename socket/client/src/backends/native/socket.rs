@@ -1,6 +1,8 @@
 extern crate log;
 
 use std::{future, thread};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use log::warn;
 
 use webrtc_unreliable_client::{ServerAddr, Socket as RTCSocket};
 use naia_socket_shared::{parse_server_url, SocketConfig};
@@ -38,12 +40,6 @@ impl Socket {
 
         let server_url = parse_server_url(server_session_url);
         let server_session_string = format!("{}{}", server_url, self.config.rtc_endpoint_path.clone()).to_string();
-
-        // Setup sync channels
-        let (from_server_sender, from_server_receiver) = channel::unbounded();
-        let (sender_sender, sender_receiver) = channel::bounded(1);
-        let (addr_sender, addr_receiver) = channel::bounded(1);
-
         let conditioner_config = self.config.link_condition.clone();
 
         let runtime = Builder::new_multi_thread()
@@ -63,54 +59,55 @@ impl Socket {
 
         let _guard = runtime_handle.enter();
 
-        {
-            let detached = tokio::spawn(async move {
-                let (addr_cell, to_server_sender, mut to_client_receiver) = RTCSocket::connect(&server_session_string).await;
+        let (addr_cell, to_server_sender, mut to_client_receiver) = runtime_handle.block_on(RTCSocket::connect(&server_session_string));
 
-                sender_sender.send(to_server_sender).unwrap();
-                //TODO: handle result
-
-                let mut found_addr: Option<SocketAddr> = None;
-
-                loop {
-                    if let Some(message) = to_client_receiver.recv().await {
-                        from_server_sender.send(message).unwrap();
-                        //TODO: handle result
-
-                        if found_addr.is_none() {
-                            if let ServerAddr::Found(addr) = addr_cell.get().await {
-                                addr_sender.send(addr).unwrap();
-                                //TODO: handle result
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Set up sender loop
-        let (to_server_sender, to_server_receiver) = channel::unbounded();
-
-        {
-            let detached = tokio::spawn(async move {
-                loop {
-                    // Create async socket
-                    if let Ok(mut async_sender) = sender_receiver.recv() {
-                        loop {
-                            if let Ok(msg) = to_server_receiver.recv() {
-                                async_sender.send(msg).await.unwrap();
-                                //TODO: handle result..
-                            }
-                        }
-                    }
-                }
-            });
-        }
+        // {
+        //     let detached = tokio::spawn(async move {
+        //         let (addr_cell, to_server_sender, mut to_client_receiver) = .await;
+        //
+        //         sender_sender.send(to_server_sender).unwrap();
+        //         //TODO: handle result
+        //
+        //         let mut found_addr: Option<SocketAddr> = None;
+        //
+        //         loop {
+        //             if let Some(message) = to_client_receiver.recv().await {
+        //                 from_server_sender.send(message).unwrap();
+        //                 //TODO: handle result
+        //
+        //                 if found_addr.is_none() {
+        //                     if let ServerAddr::Found(addr) = addr_cell.get().await {
+        //                         addr_sender.send(addr).unwrap();
+        //                         //TODO: handle result
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     });
+        // }
+        //
+        // // Set up sender loop
+        // let (to_server_sender, to_server_receiver) = channel::unbounded();
+        //
+        // {
+        //     let detached = tokio::spawn(async move {
+        //         loop {
+        //             // Create async socket
+        //             if let Ok(mut async_sender) = sender_receiver.recv() {
+        //                 loop {
+        //                     if let Ok(msg) = to_server_receiver.recv() {
+        //                         async_sender.send(msg).await.unwrap();
+        //                         //TODO: handle result..
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     });
+        // }
 
         // Setup Packet Sender & Receiver
-        let addr_cell = AddrCell::new(addr_receiver);
         let packet_sender = PacketSender::new(addr_cell.clone(), to_server_sender);
-        let packet_receiver_impl = PacketReceiverImpl::new(addr_cell, from_server_receiver);
+        let packet_receiver_impl = PacketReceiverImpl::new(addr_cell, to_client_receiver);
 
         let receiver: Box<dyn PacketReceiverTrait> = {
             let inner_receiver = Box::new(packet_receiver_impl);
@@ -147,22 +144,5 @@ impl Socket {
             .expect("Socket is not connected yet! Call Socket.connect() before this.")
             .packet_receiver
             .clone();
-    }
-}
-
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use log::warn;
-use crate::backends::native::addr_cell::AddrCell;
-
-/// Helper method to find local IP address, if possible
-pub fn find_my_ip_address() -> Option<IpAddr> {
-    let ip = local_ipaddress::get().unwrap_or_default();
-
-    if let Ok(addr) = ip.parse::<Ipv4Addr>() {
-        Some(IpAddr::V4(addr))
-    } else if let Ok(addr) = ip.parse::<Ipv6Addr>() {
-        Some(IpAddr::V6(addr))
-    } else {
-        None
     }
 }

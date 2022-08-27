@@ -34,14 +34,8 @@ tinyjson = { version = "2.3", optional = true }
 miniquad = { version = "=0.3.11", features = ["log-impl"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-local_ipaddress = { version = "0.1" }
-webrtc-unreliable-client = { version = "0.1.0" }
+webrtc-unreliable-client = { path = "../../../webrtc-unreliable-client/client" }
 tokio = { version = "1.15", features = ["full"] }
-once_cell = { version = "1.4.1" }
-futures-util = { version = "0.3", features = ["sink"] }
-pin-project = "1.0.12"
-futures = "0.3.23"
-crossbeam = { version = "0.8" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 regex = { version = "1.5" }
