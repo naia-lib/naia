@@ -46,6 +46,6 @@ impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for Componen
 
 impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaMutTrait<P, R> for ComponentMut<'a, P, R> {
     fn to_mut(&mut self) -> &mut R {
-        &mut self.inner
+        self.inner
     }
 }

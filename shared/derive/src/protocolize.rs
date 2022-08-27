@@ -101,7 +101,7 @@ pub fn kind_enum(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
         }
     }
 
-    return quote! {
+    quote! {
         #hashtag[derive(Hash, Copy, Debug)]
         #hashtag[derive_serde]
         pub enum #enum_name {
@@ -115,15 +115,15 @@ pub fn kind_enum(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
                 }
             }
         }
-    };
+    }
 }
 
 fn kind_of_method() -> TokenStream {
-    return quote! {
+    quote! {
         fn kind_of<R: ReplicateSafe<Self>>() -> Self::Kind {
             return Self::type_to_kind(TypeId::of::<R>()).expect("type not initialized correctly");
         }
-    };
+    }
 }
 
 fn type_to_kind_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
@@ -142,7 +142,7 @@ fn type_to_kind_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
         }
     }
 
-    return quote! {
+    quote! {
         fn type_to_kind(type_id: TypeId) -> Option<Self::Kind> {
             unsafe {
                 static mut TYPE_TO_KIND_MAP: Option<RwLock<HashMap<TypeId, #enum_name>>> = None;
@@ -163,7 +163,7 @@ fn type_to_kind_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
                     .map(|kind| *kind);
             }
         }
-    };
+    }
 }
 
 pub fn read_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
@@ -185,14 +185,14 @@ pub fn read_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
         }
     }
 
-    return quote! {
+    quote! {
         fn read(bit_reader: &mut serde::BitReader, converter: &dyn NetEntityHandleConverter) -> Self {
             let protocol_kind: Self::Kind = Self::Kind::de(bit_reader).unwrap();
             match protocol_kind {
                 #variants_build
             }
         }
-    };
+    }
 }
 
 pub fn read_create_update_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
@@ -214,14 +214,14 @@ pub fn read_create_update_method(enum_name: &Ident, variants: &Vec<Ident>) -> To
         }
     }
 
-    return quote! {
+    quote! {
         fn read_create_update(bit_reader: &mut serde::BitReader) -> ComponentUpdate<Self::Kind> {
             let protocol_kind: Self::Kind = Self::Kind::de(bit_reader).unwrap();
             match protocol_kind {
                 #variants_build
             }
         }
-    };
+    }
 }
 
 pub fn dyn_ref_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
@@ -240,13 +240,13 @@ pub fn dyn_ref_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStre
         variant_definitions = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn dyn_ref(&self) -> ReplicaDynRef<'_, Self> {
             match self {
                 #variant_definitions
             }
         }
-    };
+    }
 }
 
 pub fn dyn_mut_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
@@ -265,13 +265,13 @@ pub fn dyn_mut_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStre
         variant_definitions = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn dyn_mut(&mut self) -> ReplicaDynMut<'_, Self> {
             match self {
                 #variant_definitions
             }
         }
-    };
+    }
 }
 
 pub fn cast_ref_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
@@ -291,13 +291,13 @@ pub fn cast_ref_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStr
         variant_definitions = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn cast_ref<R: ReplicateSafe<Self>>(&self) -> Option<&R> {
             match self {
                 #variant_definitions
             }
         }
-    };
+    }
 }
 
 pub fn cast_mut_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
@@ -317,13 +317,13 @@ pub fn cast_mut_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStr
         variant_definitions = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn cast_mut<R: ReplicateSafe<Self>>(&mut self) -> Option<&mut R> {
             match self {
                 #variant_definitions
             }
         }
-    };
+    }
 }
 
 pub fn cast_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
@@ -345,7 +345,7 @@ pub fn cast_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
         variant_definitions = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn cast<R: Replicate<Self>>(self) -> Option<R> {
             match self {
                 #variant_definitions
@@ -353,7 +353,7 @@ pub fn cast_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream 
 
             return None;
         }
-    };
+    }
 }
 
 pub fn clone_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
@@ -372,13 +372,13 @@ pub fn clone_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream
         variant_definitions = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn clone(&self) -> Self {
             match self {
                 #variant_definitions
             }
         }
-    };
+    }
 }
 
 fn extract_and_insert_method(type_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
@@ -397,7 +397,7 @@ fn extract_and_insert_method(type_name: &Ident, variants: &Vec<Ident>) -> TokenS
         variant_definitions = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn extract_and_insert<E, I: ProtocolInserter<#type_name, E>>(&self,
                                       key: &E,
                                       inserter: &mut I) {
@@ -405,7 +405,7 @@ fn extract_and_insert_method(type_name: &Ident, variants: &Vec<Ident>) -> TokenS
                 #variant_definitions
             }
         }
-    };
+    }
 }
 
 fn write_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
@@ -424,13 +424,13 @@ fn write_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
         variant_definitions = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn write(&self, writer: &mut dyn serde::BitWrite, converter: &dyn NetEntityHandleConverter) {
             match self {
                 #variant_definitions
             }
         }
-    };
+    }
 }
 
 fn write_update_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
@@ -449,11 +449,11 @@ fn write_update_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStr
         variant_definitions = new_output_result;
     }
 
-    return quote! {
+    quote! {
         fn write_update(&self, diff_mask: &DiffMask, writer: &mut dyn serde::BitWrite, converter: &dyn NetEntityHandleConverter) {
             match self {
                 #variant_definitions
             }
         }
-    };
+    }
 }

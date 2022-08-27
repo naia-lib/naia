@@ -15,7 +15,9 @@ pub fn channels_impl(
         let impl_string = derive_channel_enum(enum_);
         let enum_name = enum_.name.clone();
 
-        let output = format!(
+        
+
+        format!(
             "
             mod define_{enum_name} {{
                 use naia_shared::{{derive_serde, serde, ChannelIndex}};
@@ -28,9 +30,7 @@ pub fn channels_impl(
             "
         )
         .parse()
-        .unwrap();
-
-        output
+        .unwrap()
     } else {
         unimplemented!("Only enums are supported");
     }
