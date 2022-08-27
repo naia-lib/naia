@@ -27,7 +27,7 @@ pub fn derive_serde(
 
     let output = format!(
         "
-        #[derive(PartialEq, Clone)]
+        #[derive(Eq, PartialEq, Clone)]
         {define_string}
         {impl_string}
         "

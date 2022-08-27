@@ -3,7 +3,7 @@
 
 use naia_serde::{BitReader, BitWrite, SerdeErr, UnsignedInteger};
 
-#[derive(Copy, Debug, Clone, PartialEq)]
+#[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub enum PacketType {
     // A packet containing Message/Entity/Component data
     Data,
@@ -60,8 +60,7 @@ impl crate::serde::Serde for PacketType {
             return Ok(PacketType::Data);
         }
 
-        let index = UnsignedInteger::<3>::de(reader).unwrap().get();
-        return match index {
+        match UnsignedInteger::<3>::de(reader).unwrap().get() {
             0 => Ok(PacketType::Heartbeat),
             1 => Ok(PacketType::ClientChallengeRequest),
             2 => Ok(PacketType::ServerChallengeResponse),
@@ -71,6 +70,6 @@ impl crate::serde::Serde for PacketType {
             6 => Ok(PacketType::Pong),
             7 => Ok(PacketType::Disconnect),
             _ => panic!("shouldn't happen, caught above"),
-        };
+        }
     }
 }

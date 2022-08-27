@@ -36,7 +36,7 @@ impl PacketReceiverTrait for PacketReceiverImpl {
                 return Ok(Some(&self.receive_buffer[..length]));
             }
         }
-        return Ok(None);
+        Ok(None)
     }
 
     /// Get the Server's Socket address

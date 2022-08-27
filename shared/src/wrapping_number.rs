@@ -28,18 +28,18 @@ pub fn wrapping_diff(a: u16, b: u16) -> i16 {
     let b: i32 = i32::from(b);
 
     let mut result = b - a;
-    if result <= MAX && result >= MIN {
+    if (MIN..=MAX).contains(&result) {
         result as i16
     } else if b > a {
         result = b - (a + ADJUST);
-        if result <= MAX && result >= MIN {
+        if (MIN..=MAX).contains(&result) {
             result as i16
         } else {
             panic!("integer overflow, this shouldn't happen")
         }
     } else {
         result = (b + ADJUST) - a;
-        if result <= MAX && result >= MIN {
+        if (MIN..=MAX).contains(&result) {
             result as i16
         } else {
             panic!("integer overflow, this shouldn't happen")

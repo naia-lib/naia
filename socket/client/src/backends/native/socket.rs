@@ -36,9 +36,11 @@ impl Socket {
             panic!("Socket already listening!");
         }
 
-        let server_url = parse_server_url(server_session_url);
-        let server_session_string =
-            format!("{}{}", server_url, self.config.rtc_endpoint_path.clone()).to_string();
+        let server_session_string = format!(
+            "{}{}",
+            parse_server_url(server_session_url),
+            self.config.rtc_endpoint_path.clone()
+        );
         let conditioner_config = self.config.link_condition.clone();
 
         let runtime = Builder::new_multi_thread().enable_all().build().unwrap();
