@@ -43,7 +43,7 @@ impl PacketReceiverTrait for PacketReceiverImpl {
     fn server_addr(&self) -> ServerAddr {
         match self.server_addr.get() {
             RTCServerAddr::Finding => ServerAddr::Finding,
-            RTCServerAddr::Found(addr) => ServerAddr::Found(addr)
+            RTCServerAddr::Found(addr) => ServerAddr::Found(addr),
         }
     }
 }

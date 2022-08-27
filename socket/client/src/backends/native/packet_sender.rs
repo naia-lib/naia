@@ -1,5 +1,5 @@
-use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
 use tokio::sync::mpsc::Sender;
+use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
 
 use crate::server_addr::ServerAddr;
 
@@ -30,7 +30,7 @@ impl PacketSender {
     pub fn server_addr(&self) -> ServerAddr {
         match self.server_addr.get() {
             RTCServerAddr::Finding => ServerAddr::Finding,
-            RTCServerAddr::Found(addr) => ServerAddr::Found(addr)
+            RTCServerAddr::Found(addr) => ServerAddr::Found(addr),
         }
     }
 }

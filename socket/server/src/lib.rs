@@ -14,13 +14,13 @@
 extern crate log;
 
 mod async_socket;
-mod session;
 mod conditioned_packet_receiver;
 mod error;
 mod io;
 mod packet_receiver;
 mod packet_sender;
 mod server_addrs;
+mod session;
 mod socket;
 
 /// Executor for Server

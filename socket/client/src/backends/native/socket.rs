@@ -2,9 +2,9 @@ extern crate log;
 
 use std::{future, thread};
 
-use webrtc_unreliable_client::Socket as RTCSocket;
 use naia_socket_shared::{parse_server_url, SocketConfig};
 use tokio::runtime::Builder;
+use webrtc_unreliable_client::Socket as RTCSocket;
 
 use crate::{
     conditioned_packet_receiver::ConditionedPacketReceiver,
@@ -37,13 +37,11 @@ impl Socket {
         }
 
         let server_url = parse_server_url(server_session_url);
-        let server_session_string = format!("{}{}", server_url, self.config.rtc_endpoint_path.clone()).to_string();
+        let server_session_string =
+            format!("{}{}", server_url, self.config.rtc_endpoint_path.clone()).to_string();
         let conditioner_config = self.config.link_condition.clone();
 
-        let runtime = Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        let runtime = Builder::new_multi_thread().enable_all().build().unwrap();
 
         let runtime_handle = runtime.handle().clone();
 
@@ -57,7 +55,8 @@ impl Socket {
 
         let _guard = runtime_handle.enter();
 
-        let (addr_cell, to_server_sender, to_client_receiver) = runtime_handle.block_on(RTCSocket::connect(&server_session_string));
+        let (addr_cell, to_server_sender, to_client_receiver) =
+            runtime_handle.block_on(RTCSocket::connect(&server_session_string));
 
         // Setup Packet Sender & Receiver
         let packet_sender = PacketSender::new(addr_cell.clone(), to_server_sender);
@@ -71,7 +70,6 @@ impl Socket {
                 inner_receiver
             }
         };
-
 
         self.io = Some(Io {
             packet_sender,

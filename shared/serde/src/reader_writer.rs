@@ -15,9 +15,7 @@ pub struct BitCounter {
 
 impl BitCounter {
     pub fn new() -> Self {
-        Self {
-            count: 0,
-        }
+        Self { count: 0 }
     }
 }
 
