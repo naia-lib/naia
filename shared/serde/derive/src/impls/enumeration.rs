@@ -144,7 +144,6 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
                     }})
                 }}
             }}
-            impl Eq for {name} {{ }}
         }}
         "
     )

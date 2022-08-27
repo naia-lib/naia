@@ -25,6 +25,8 @@ pub fn derive_serde(
         _ => unimplemented!("Only structs and enums are supported"),
     };
 
+    // NOTE: do not derive Eq below ..
+    // if clippy is bugging you about it, tell clippy this one is okay
     format!(
         "
         #[derive(PartialEq, Clone)]

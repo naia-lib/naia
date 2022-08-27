@@ -31,7 +31,6 @@ pub fn derive_serde_tuple_struct(struct_: &Struct) -> String {
                     }})
                 }}
             }}
-            impl Eq for {name} {{ }}
         }}
         "
     )
