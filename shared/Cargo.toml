@@ -24,8 +24,8 @@ zstd_support = [ "zstd" ]
 
 [dependencies]
 naia-socket-shared = { version = "0.10.1", path = "../socket/shared" }
-naia-derive = { path = "derive" }
-naia-serde = { path = "serde" }
+naia-derive = { version = "0.10", path = "derive" }
+naia-serde = { version = "0.10", path = "serde" }
 log = { version = "0.4" }
 cfg-if = { version = "1.0" }
 js-sys = { version = "0.3", optional = true }
