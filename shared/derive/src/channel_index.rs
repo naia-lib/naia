@@ -19,7 +19,7 @@ pub fn channels_impl(
             "
             mod define_{enum_name} {{
                 use naia_shared::{{derive_serde, serde, ChannelIndex}};
-                #[derive(Hash)]
+                #[derive(Hash, Eq)]
                 #[derive_serde]
                 {define_string}
                 {impl_string}
