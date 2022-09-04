@@ -29,7 +29,7 @@ pub fn start_session_server(
 ) {
     RTC_URL_PATH
         .set(format!("POST /{}", config.rtc_endpoint_path))
-        .unwrap();
+        .expect("unable to set the URL Path");
     executor::spawn(async move {
         listen(server_addrs, config, session_endpoint.clone()).await;
     })
@@ -44,16 +44,20 @@ async fn listen(
 ) {
     let socket_address = server_addrs.session_listen_addr;
 
-    let listener = Async::<TcpListener>::bind(socket_address).unwrap();
+    let listener = Async::<TcpListener>::bind(socket_address)
+        .expect("unable to bind a TCP Listener to the supplied socket address");
     info!(
         "Session initiator available at POST http://{}/{}",
-        listener.get_ref().local_addr().unwrap(),
+        listener.get_ref().local_addr().expect("Listener does not have a local address"),
         config.rtc_endpoint_path
     );
 
     loop {
         // Accept the next connection.
-        let (response_stream, _) = listener.accept().await.unwrap();
+        let (response_stream, _) = listener
+            .accept()
+            .await
+            .expect("was not able to accept the incoming stream from the listener");
 
         let session_endpoint_clone = session_endpoint.clone();
 
@@ -67,7 +71,10 @@ async fn listen(
 
 /// Reads a request from the client and sends it a response.
 async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpStream>>) {
-    let remote_addr = stream.get_ref().local_addr().unwrap();
+    let remote_addr = stream
+        .get_ref()
+        .local_addr()
+        .expect("stream does not have a local address");
     let mut success: bool = false;
     let mut headers_read: bool = false;
     let mut content_length: Option<usize> = None;
@@ -79,7 +86,7 @@ async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpS
     {
         let mut line: Vec<u8> = Vec::new();
         while let Some(byte) = bytes.next().await {
-            let byte = byte.unwrap();
+            let byte = byte.expect("unable to read a byte from incoming stream");
 
             if headers_read {
                 if let Some(content_length) = content_length {
@@ -98,7 +105,8 @@ async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpS
             if byte == b'\r' {
                 continue;
             } else if byte == b'\n' {
-                let mut str = String::from_utf8(line.clone()).unwrap();
+                let mut str = String::from_utf8(line.clone())
+                    .expect("unable to parse string from UTF-8 bytes");
                 line.clear();
 
                 if rtc_url_match {
@@ -109,7 +117,11 @@ async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpS
                     } else if str.is_empty() {
                         headers_read = true;
                     }
-                } else if str.starts_with(RTC_URL_PATH.get().unwrap()) {
+                } else if str.starts_with(
+                    RTC_URL_PATH
+                    .get()
+                    .expect("unable to retrieve URL path, was it not configured?")
+                ) {
                     rtc_url_match = true;
                 }
             } else {
@@ -137,7 +149,10 @@ async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpS
 
                     info!("Successful WebRTC session request from {}", remote_addr);
 
-                    stream.write_all(&out).await.unwrap();
+                    stream
+                        .write_all(&out)
+                        .await
+                        .expect("found an error while writing to a stream");
                 }
                 Err(err) => {
                     info!(
@@ -150,11 +165,11 @@ async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpS
     }
 
     if !success {
-        stream.write_all(RESPONSE_BAD).await.unwrap();
+        stream.write_all(RESPONSE_BAD).await.expect("found");
     }
 
-    stream.flush().await.unwrap();
-    stream.close().await.unwrap();
+    stream.flush().await.expect("unable to flush the stream");
+    stream.close().await.expect("unable to close the stream");
 }
 
 const RESPONSE_BAD: &[u8] = br#"
@@ -212,7 +227,7 @@ impl<'a, R: AsyncBufRead + Unpin> Stream for RequestBuffer<'a, R> {
 fn response_header_to_vec<T>(r: &Response<T>) -> Vec<u8> {
     let v = Vec::with_capacity(120);
     let mut c = std::io::Cursor::new(v);
-    write_response_header(r, &mut c).unwrap();
+    write_response_header(r, &mut c).expect("unable to write response header to stream");
     c.into_inner()
 }
 
