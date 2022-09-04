@@ -26,7 +26,7 @@ default = [
 [dependencies]
 naia-bevy-client = { path = "../../../adapters/bevy/client" }
 naia-bevy-demo-shared = { path = "../shared" }
-winit = { version = "0.26" }
+winit = { version = "0.27" }
 rand = { version = "0.8" }
 getrandom = { version="0.2", features=["wasm-bindgen"] }
 bevy = { version = "0.8", default-features=false }
