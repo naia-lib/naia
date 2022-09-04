@@ -7,10 +7,12 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
-[features]
+[[bin]]
+name = "app"
+path = "src/main.rs"
 
 [dependencies]
 naia-client = { path = "../../../client", features = [ "mquad" ] }
 naia-macroquad-demo-shared = { path = "../shared" }
 naia-demo-world = { path = "../../demo_utils/demo_world" }
-macroquad = { version = "=0.3.23", default-features = false }
+macroquad = { version = "0.3" }

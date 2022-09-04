@@ -3,20 +3,22 @@ command = "rustup"
 args = ["target", "install", "wasm32-unknown-unknown"]
 
 [tasks.install-basic-http-server]
-install_crate = {crate_name = "basic-http-server", binary = "basic-http-server", test_arg="--help"}
+install_crate = { crate_name = "basic-http-server", binary = "basic-http-server", test_arg="--help" }
 
-[tasks.install-wasm-pack]
-install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V" }
+[tasks.install-wasm-bindgen-cli]
+install_crate = { crate_name = "wasm-bindgen-cli", binary = "wasm-bindgen", test_arg="--help" }
 
-[tasks.build]
-command = "wasm-pack"
-args = ["build", "--target", "web", "--out-name", "app", "--out-dir", "target"]
-dependencies = ["install-wasm-pack", "install-target-wasm32-unknown-unknown", ]
+[tasks.cargo-build-wasm]
+command = "cargo"
+args = ["build", "--target", "wasm32-unknown-unknown", "--lib", "--target-dir", "target"]
+dependencies = ["install-target-wasm32-unknown-unknown"]
+
+[tasks.wasm-bindgen]
+command = "wasm-bindgen"
+args = ["--out-dir", "target", "--out-name", "app", "--target", "web", "--no-typescript", "target/wasm32-unknown-unknown/debug/app.wasm"]
+dependencies = ["cargo-build-wasm", "install-wasm-bindgen-cli"]
 
 [tasks.serve]
 command = "basic-http-server"
 args = ["-x"]
-dependencies = ["build", "install-basic-http-server"]
-
-[tasks.test]
-disabled = true
+dependencies = ["wasm-bindgen", "install-basic-http-server"]

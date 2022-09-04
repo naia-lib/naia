@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [[bin]]
-name = "naia-basic-client-demo-mq"
+name = "app"
 path = "src/main.rs"
 
 [features]
@@ -16,4 +16,4 @@ path = "src/main.rs"
 [dependencies]
 naia-basic-client-demo-app = { path = "../app", features = [ "mquad" ] }
 cfg-if = { version = "1.0" }
-miniquad = { version = "=0.3.12", features = ["log-impl"] }
+miniquad = { version = "0.3", features = ["log-impl"] }

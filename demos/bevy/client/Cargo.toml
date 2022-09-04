@@ -21,7 +21,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 naia-bevy-client = { path = "../../../adapters/bevy/client" }
 naia-bevy-demo-shared = { path = "../shared" }
-bevy = { version = "0.8", features = [ "bevy_asset", "bevy_winit", "render" ] }
+bevy = { version = "0.8", default-features = false, features = [ "bevy_asset", "bevy_winit", "render", "x11" ] }
 cfg-if = { version = "1.0" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
