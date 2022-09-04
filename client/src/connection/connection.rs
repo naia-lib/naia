@@ -111,7 +111,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         if let Some(tick_manager) = tick_manager_opt {
             self.tick_buffer
                 .as_mut()
-                .unwrap()
+                .expect("connection is not configured with a Tick Buffer")
                 .collect_outgoing_messages(
                     &tick_manager.client_sending_tick(),
                     &tick_manager.server_receivable_tick(),

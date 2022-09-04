@@ -126,16 +126,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
         // until none left
         self.maintain_socket();
 
-        // drop connection if necessary
-        if self.server_connection.is_some()
-            && self.server_connection.as_ref().unwrap().base.should_drop()
-        {
-            self.disconnect_internal();
-            return std::mem::take(&mut self.incoming_events);
-        }
-
         // all other operations
         if let Some(server_connection) = self.server_connection.as_mut() {
+
+            if server_connection.base.should_drop() {
+                self.disconnect_internal();
+                return std::mem::take(&mut self.incoming_events);
+            }
+
             let mut did_tick = false;
 
             // update current tick
@@ -193,16 +191,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
         let tick_buffered = channel_settings.tick_buffered();
 
         if tick_buffered {
-            if self.server_connection.is_none() {
-                return;
-            }
             if let Some(client_tick) = self.client_tick() {
-                let connection = self.server_connection.as_mut().unwrap();
-                connection.tick_buffer.as_mut().unwrap().send_message(
-                    &client_tick,
-                    channel,
-                    message.protocol_copy(),
-                );
+                if let Some(connection) = self.server_connection.as_mut() {
+                    connection.tick_buffer
+                        .as_mut()
+                        .expect("connection does not have a tick buffer")
+                        .send_message(
+                        &client_tick,
+                        channel,
+                        message.protocol_copy(),
+                    );
+                }
+            } else {
+                return;
             }
         } else if let Some(connection) = &mut self.server_connection {
             connection
@@ -214,43 +215,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     // Entities
 
-    // /// Duplicates an Entity & all of it's Components
-    // pub fn duplicate_entity<W: WorldMutType<P, E>>(&self, mut world: W, entity: &E) -> EntityRef<P, E, W> {
-    //     let new_entity = world.duplicate_entity(entity);
-    //     return EntityRef::new(world, &new_entity);
-    // }
-
-    ///// Syncs the state of two entities
-    // pub fn mirror_entities<W: WorldMutType<P, E>>(&self, mut world: W, first_entity: &E, second_entity: &E) {
-    //     for component_kind in world.component_kinds(&first_entity) {
-    //         world.mirror_components(
-    //             &first_entity,
-    //             &second_entity,
-    //             &component_kind,
-    //         );
-    //     }
-    // }
-
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// given Entity.
     /// Panics if the Entity does not exist.
     pub fn entity<W: WorldRefType<P, E>>(&self, world: W, entity: &E) -> EntityRef<P, E, W> {
         EntityRef::new(world, entity)
     }
-
-    // /// Retrieves an EntityMut that exposes read and write operations for the
-    // /// Entity.
-    // /// Panics if the Entity does not exist.
-    // pub fn entity_mut<W: WorldMutType<P, E>>(
-    //     &mut self,
-    //     world: W,
-    //     entity: &E,
-    // ) -> EntityMut<P, E, W> {
-    //     if world.has_entity(entity) {
-    //         return EntityMut::new(world, &entity);
-    //     }
-    //     panic!("No Entity exists for given Key!");
-    // }
 
     /// Return a list of all Entities
     pub fn entities<W: WorldRefType<P, E>>(&self, world: &W) -> Vec<E> {
@@ -266,12 +236,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     /// Gets the average Round Trip Time measured to the Server
     pub fn rtt(&self) -> f32 {
-        self.server_connection.as_ref().unwrap().ping_manager.rtt
+        self.server_connection
+            .as_ref()
+            .expect("it is expected that you should verify whether the client is connected before calling this method")
+            .ping_manager.rtt
     }
 
     /// Gets the average Jitter measured in connection to the Server
     pub fn jitter(&self) -> f32 {
-        self.server_connection.as_ref().unwrap().ping_manager.jitter
+        self.server_connection
+            .as_ref()
+            .expect("it is expected that you should verify whether the client is connected before calling this method")
+            .ping_manager.jitter
     }
 
     // Ticks
@@ -356,7 +332,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                     Ok(Some(mut reader)) => {
                         server_connection.base.mark_heard();
 
-                        let header = StandardHeader::de(&mut reader).unwrap();
+                        let header = StandardHeader::de(&mut reader)
+                            .expect("unable to parse header from incoming packet");
 
                         match header.packet_type {
                             PacketType::Data
@@ -397,7 +374,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                             }
                             PacketType::Ping => {
                                 // read incoming ping index
-                                let ping_index = PingIndex::de(&mut reader).unwrap();
+                                let ping_index = PingIndex::de(&mut reader)
+                                    .expect("unable to parse an index from Ping packet");
 
                                 // write pong payload
                                 let mut writer = BitWriter::new();

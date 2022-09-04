@@ -43,7 +43,10 @@ impl Socket {
         );
         let conditioner_config = self.config.link_condition.clone();
 
-        let runtime = Builder::new_multi_thread().enable_all().build().unwrap();
+        let runtime = Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("was not able to build the runtime");
 
         let runtime_handle = runtime.handle().clone();
 

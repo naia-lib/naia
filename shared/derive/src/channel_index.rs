@@ -28,7 +28,7 @@ pub fn channels_impl(
             "
         )
         .parse()
-        .unwrap()
+        .expect("unable to parse valid tokens from string")
     } else {
         unimplemented!("Only enums are supported");
     }
@@ -42,5 +42,5 @@ pub fn derive_channel_enum(enum_: &Enum) -> String {
         "
     )
     .parse()
-    .unwrap()
+    .expect("unable to parse valid tokens from string")
 }

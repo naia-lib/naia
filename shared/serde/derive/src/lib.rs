@@ -35,5 +35,5 @@ pub fn derive_serde(
         "
     )
     .parse()
-    .unwrap()
+    .expect("unable to parse valid tokens from string")
 }
