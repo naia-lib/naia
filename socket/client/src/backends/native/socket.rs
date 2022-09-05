@@ -1,9 +1,7 @@
 extern crate log;
 
-use std::{future, thread};
-
 use naia_socket_shared::{parse_server_url, SocketConfig};
-use tokio::runtime::Builder;
+
 use webrtc_unreliable_client::Socket as RTCSocket;
 
 use crate::{
@@ -11,6 +9,7 @@ use crate::{
     io::Io,
     packet_receiver::{PacketReceiver, PacketReceiverTrait},
 };
+use crate::backends::native::runtime::get_runtime;
 
 use super::{packet_receiver::PacketReceiverImpl, packet_sender::PacketSender};
 
@@ -43,25 +42,8 @@ impl Socket {
         );
         let conditioner_config = self.config.link_condition.clone();
 
-        let runtime = Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .expect("was not able to build the runtime");
-
-        let runtime_handle = runtime.handle().clone();
-
-        thread::Builder::new()
-            .name("tokio-main".to_string())
-            .spawn(move || {
-                let _guard = runtime.enter();
-                runtime.block_on(future::pending::<()>());
-            })
-            .expect("cannot spawn executor thread");
-
-        let _guard = runtime_handle.enter();
-
         let (addr_cell, to_server_sender, to_client_receiver) =
-            runtime_handle.block_on(RTCSocket::connect(&server_session_string));
+            get_runtime().block_on(RTCSocket::connect(&server_session_string));
 
         // Setup Packet Sender & Receiver
         let packet_sender = PacketSender::new(addr_cell.clone(), to_server_sender);

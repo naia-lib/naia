@@ -118,6 +118,12 @@ impl<P: Protocolize> HandshakeManager<P> {
         false
     }
 
+    pub fn write_reject_response(&self) -> BitWriter {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::ServerRejectResponse, 0, 0, 0).ser(&mut writer);
+        writer
+    }
+
     pub fn delete_user(&mut self, address: &SocketAddr) {
         self.address_to_timestamp_map.remove(address);
     }

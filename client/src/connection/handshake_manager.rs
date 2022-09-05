@@ -20,6 +20,11 @@ pub enum HandshakeState {
     Connected,
 }
 
+pub enum HandshakeResult {
+    Connected,
+    Rejected
+}
+
 pub struct HandshakeManager<P: Protocolize> {
     handshake_timer: Timer,
     pre_connection_timestamp: Timestamp,
@@ -78,15 +83,16 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Call this regularly so handshake manager can process incoming requests
-    pub fn recv(&mut self, reader: &mut BitReader) -> bool {
+    pub fn recv(&mut self, reader: &mut BitReader) -> Option<HandshakeResult> {
         let header = StandardHeader::de(reader).unwrap();
         match header.packet_type {
             PacketType::ServerChallengeResponse => {
                 self.recv_challenge_response(reader);
-                false
+                None
             }
             PacketType::ServerConnectResponse => self.recv_connect_response(),
-            _ => false,
+            PacketType::ServerRejectResponse => Some(HandshakeResult::Rejected),
+            _ => None,
         }
     }
 
@@ -138,10 +144,16 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 4 of Handshake
-    pub fn recv_connect_response(&mut self) -> bool {
+    pub fn recv_connect_response(&mut self) -> Option<HandshakeResult> {
+
         let was_not_connected = self.connection_state != HandshakeState::Connected;
+
         self.connection_state = HandshakeState::Connected;
-        was_not_connected
+
+        match was_not_connected {
+            true => Some(HandshakeResult::Connected),
+            false => None
+        }
     }
 
     // Send 10 disconnect packets

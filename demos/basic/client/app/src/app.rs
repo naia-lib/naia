@@ -31,7 +31,7 @@ impl Default for App {
     fn default() -> Self {
         info!("Basic Naia Client Demo started");
 
-        let auth = Auth::new("charlie", "12345");
+        let auth = Auth::new("ronald", "12345");
 
         let mut client = Client::new(&ClientConfig::default(), &shared_config());
         client.auth(auth);
@@ -51,6 +51,13 @@ impl App {
             match event {
                 Ok(Event::Connection(server_address)) => {
                     info!("Client connected to: {}", server_address);
+                }
+                Ok(Event::Unauthorized(server_address)) => {
+                    info!("Client received unauthorized response from: {}", server_address);
+                    // Now give the correct username / password
+                    let auth = Auth::new("charlie", "12345");
+                    self.client.auth(auth);
+                    self.client.connect("http://127.0.0.1:14191");
                 }
                 Ok(Event::Disconnection(server_address)) => {
                     info!("Client disconnected from: {}", server_address);

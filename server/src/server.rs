@@ -208,6 +208,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Rejects an incoming Client User, terminating their attempt to establish
     /// a connection with the Server
     pub fn reject_connection(&mut self, user_key: &UserKey) {
+        if let Some(user) = self.users.get(user_key) {
+            // send connect reject response
+            let mut writer = self.handshake_manager.write_reject_response();
+            self.io.send_writer(&user.address, &mut writer);
+            //
+        }
         self.delete_user(user_key);
     }
 

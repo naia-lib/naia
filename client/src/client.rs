@@ -10,7 +10,7 @@ pub use naia_shared::{
 };
 
 use crate::{
-    connection::{connection::Connection, handshake_manager::HandshakeManager, io::Io},
+    connection::{connection::Connection, handshake_manager::{HandshakeManager, HandshakeResult}, io::Io},
     protocol::entity_ref::EntityRef,
     tick::tick_manager::TickManager,
 };
@@ -66,11 +66,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
-        if !self.is_disconnected() {
-            panic!("Must call client.auth(..) BEFORE calling client.connect(..)");
-        }
-        self.handshake_manager
-            .set_auth_message(auth.into_protocol());
+        self.handshake_manager.set_auth_message(auth.into_protocol());
     }
 
     /// Connect to the given server address
@@ -422,17 +418,28 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                 loop {
                     match self.io.recv_reader() {
                         Ok(Some(mut reader)) => {
-                            if self.handshake_manager.recv(&mut reader) {
-                                // new connect!
-                                let server_addr = self.server_address_unwrapped();
-                                self.server_connection = Some(Connection::new(
-                                    server_addr,
-                                    &self.client_config.connection,
-                                    &self.shared_config.channel,
-                                    &self.shared_config.tick_interval,
-                                ));
-                                self.incoming_events
-                                    .push_back(Ok(Event::Connection(server_addr)));
+                            match self.handshake_manager.recv(&mut reader) {
+                                Some(HandshakeResult::Connected) => {
+                                    // new connect!
+                                    let server_addr = self.server_address_unwrapped();
+                                    self.server_connection = Some(Connection::new(
+                                        server_addr,
+                                        &self.client_config.connection,
+                                        &self.shared_config.channel,
+                                        &self.shared_config.tick_interval,
+                                    ));
+                                    self.incoming_events
+                                        .push_back(Ok(Event::Connection(server_addr)));
+                                }
+                                Some(HandshakeResult::Rejected) => {
+                                    let server_addr = self.server_address_unwrapped();
+                                    self.incoming_events.clear();
+                                    self.incoming_events
+                                        .push_back(Ok(Event::Unauthorized(server_addr)));
+                                    self.disconnect_cleanup();
+                                    return;
+                                }
+                                None => {}
                             }
                         }
                         Ok(None) => {
