@@ -8,8 +8,8 @@ pub enum Event<P: Protocolize, E: Copy, C: ChannelIndex> {
     /// Occurs when the Client has successfully established a connection with
     /// the Server
     Connection(SocketAddr),
-    /// Occurs when the Client receives notice that it was unable to Authenticate with the Server, and that new
-    Unauthorized(SocketAddr),
+    /// Occurs when the Client receives notice that it was unable to authenticate with the Server, and that new credentials should be given
+    Rejection(SocketAddr),
     /// Occurs when the Client has lost connection with the Server, usually as a
     /// result of a timeout
     Disconnection(SocketAddr),

@@ -7,4 +7,5 @@ pub struct ClientResource {
     pub ticker: Flag,
     pub connector: Flag,
     pub disconnector: Flag,
+    pub rejector: Flag,
 }

@@ -10,7 +10,7 @@ use naia_client::{
 
 use naia_bevy_shared::WorldData;
 
-use crate::systems::should_receive;
+use crate::systems::{finish_reject, should_receive, should_reject};
 
 use super::{
     events::{
@@ -103,6 +103,16 @@ impl<P: Protocolize, C: ChannelIndex> PluginType for Plugin<P, C> {
                 PrivateStage::AfterDisconnection,
                 SystemStage::parallel().with_run_criteria(should_disconnect),
             )
+            .add_stage_after(
+                PrivateStage::BeforeReceiveEvents,
+                Stage::Rejection,
+                SystemStage::single_threaded().with_run_criteria(should_reject),
+            )
+            .add_stage_after(
+                Stage::Rejection,
+                PrivateStage::AfterRejection,
+                SystemStage::parallel().with_run_criteria(should_reject),
+            )
             // frame //
             .add_stage_after(
                 CoreStage::PostUpdate,
@@ -137,6 +147,7 @@ impl<P: Protocolize, C: ChannelIndex> PluginType for Plugin<P, C> {
             )
             .add_system_to_stage(PrivateStage::AfterConnection, finish_connect)
             .add_system_to_stage(PrivateStage::AfterDisconnection, finish_disconnect)
+            .add_system_to_stage(PrivateStage::AfterRejection, finish_reject)
             .add_system_to_stage(PrivateStage::AfterTick, finish_tick);
     }
 }

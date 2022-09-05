@@ -435,7 +435,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                                     let server_addr = self.server_address_unwrapped();
                                     self.incoming_events.clear();
                                     self.incoming_events
-                                        .push_back(Ok(Event::Unauthorized(server_addr)));
+                                        .push_back(Ok(Event::Rejection(server_addr)));
                                     self.disconnect_cleanup();
                                     return;
                                 }

@@ -4,6 +4,7 @@ use bevy_ecs::schedule::StageLabel;
 pub enum Stage {
     Connection,
     Disconnection,
+    Rejection,
     ReceiveEvents,
     Tick,
     PreFrame,
@@ -17,4 +18,5 @@ pub enum PrivateStage {
     AfterTick,
     AfterConnection,
     AfterDisconnection,
+    AfterRejection,
 }

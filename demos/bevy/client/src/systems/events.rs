@@ -26,8 +26,13 @@ use crate::resources::{Global, OwnedEntity};
 
 const SQUARE_SIZE: f32 = 32.0;
 
-pub fn connect_event(client: Client<Protocol, Channels>) {
+pub fn connect_event(mut client: Client<Protocol, Channels>) {
     info!("Client connected to: {}", client.server_address());
+    client.disconnect();
+}
+
+pub fn reject_event(client: Client<Protocol, Channels>) {
+    info!("Client rejected from connecting to: {}", client.server_address());
 }
 
 pub fn disconnect_event(client: Client<Protocol, Channels>) {
