@@ -15,4 +15,4 @@ path = "src/main.rs"
 naia-client = { path = "../../../client", features = [ "mquad" ] }
 naia-macroquad-demo-shared = { path = "../shared" }
 naia-demo-world = { path = "../../demo_utils/demo_world" }
-macroquad = { version = "0.3" }
+macroquad = { version = "0.3.24" }
