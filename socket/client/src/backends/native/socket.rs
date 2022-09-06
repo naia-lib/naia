@@ -32,7 +32,7 @@ impl Socket {
     /// Connects to the given server address
     pub fn connect(&mut self, server_session_url: &str) {
         if self.io.is_some() {
-            panic!("Socket already listening!");
+            panic!("Socket already connected!");
         }
 
         let server_session_string = format!(
@@ -62,6 +62,20 @@ impl Socket {
             packet_sender,
             packet_receiver: PacketReceiver::new(receiver),
         });
+    }
+
+    /// Disconnects the Socket
+    pub fn disconnect(&mut self) {
+        if self.io.is_none() {
+            panic!("Socket is currently disconnected!");
+        }
+        self.io = None;
+        todo!()
+    }
+
+    /// Returns whether or not the Socket is currently connected to the server
+    pub fn is_connected(&self) -> bool {
+        self.io.is_some()
     }
 
     /// Gets a PacketSender which can be used to send packets through the Socket

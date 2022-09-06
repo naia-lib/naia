@@ -49,6 +49,20 @@ impl Socket {
         data_channel.start();
     }
 
+    /// Disconnects the Socket
+    pub fn disconnect(&mut self) {
+        if self.io.is_none() {
+            panic!("Socket is currently disconnected!");
+        }
+        self.io = None;
+        todo!()
+    }
+
+    /// Returns whether or not the Socket is currently connected to the server
+    pub fn is_connected(&self) -> bool {
+        self.io.is_some()
+    }
+
     // Creates a Socket from an underlying DataPort.
     // This is for use in apps running within a Web Worker.
     pub fn connect_with_data_port(&mut self, data_port: &DataPort) {

@@ -15,6 +15,7 @@ use naia_shared::Timer;
 use naia_socket_demo_shared::{shared_config, PING_MSG, PONG_MSG};
 
 pub struct App {
+    socket: Socket,
     packet_sender: PacketSender,
     packet_receiver: PacketReceiver,
     message_count: u8,
@@ -29,9 +30,13 @@ impl Default for App {
         let mut socket = Socket::new(&shared_config());
         socket.connect("http://127.0.0.1:14191");
 
+        let packet_sender = socket.packet_sender();
+        let packet_receiver = socket.packet_receiver();
+
         App {
-            packet_sender: socket.packet_sender(),
-            packet_receiver: socket.packet_receiver(),
+            socket,
+            packet_sender,
+            packet_receiver,
             message_count: 0,
             timer: Timer::new(Duration::from_secs(1)),
             server_addr_str: None,
@@ -41,6 +46,10 @@ impl Default for App {
 
 impl App {
     pub fn update(&mut self) {
+        if !self.socket.is_connected() {
+            return;
+        }
+
         if self.server_addr_str.is_none() {
             if let ServerAddr::Found(addr) = self.packet_receiver.server_addr() {
                 self.server_addr_str = Some(addr.to_string());
@@ -74,6 +83,9 @@ impl App {
                         info!("Client send -> {}: {}", server_addr, message_to_server);
 
                         self.packet_sender.send(message_to_server.as_bytes());
+                    } else {
+                        info!("Disconnecting..");
+                        self.socket.disconnect();
                     }
                 }
             }
