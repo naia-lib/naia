@@ -28,7 +28,7 @@ const SQUARE_SIZE: f32 = 32.0;
 
 pub fn connect_event(mut client: Client<Protocol, Channels>) {
     info!("Client connected to: {}", client.server_address());
-    client.disconnect();
+
 }
 
 pub fn reject_event(client: Client<Protocol, Channels>) {
