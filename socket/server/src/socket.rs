@@ -1,6 +1,5 @@
-use crossbeam::channel;
-
 use futures_util::SinkExt;
+use smol::channel;
 
 use naia_socket_shared::SocketConfig;
 
@@ -45,12 +44,12 @@ impl Socket {
             // Create async socket
             let mut async_socket = AsyncSocket::listen(server_addrs_clone, config_clone).await;
 
-            sender_sender.send(async_socket.sender()).unwrap();
+            sender_sender.send(async_socket.sender()).await.unwrap();
             //TODO: handle result..
 
             loop {
                 let out_message = async_socket.receive().await;
-                from_client_sender.send(out_message).unwrap();
+                from_client_sender.send(out_message).await.unwrap();
                 //TODO: handle result..
             }
         })
@@ -61,10 +60,10 @@ impl Socket {
 
         executor::spawn(async move {
             // Create async socket
-            let mut async_sender = sender_receiver.recv().unwrap();
+            let mut async_sender = sender_receiver.recv().await.unwrap();
 
             loop {
-                if let Ok(msg) = to_client_receiver.recv() {
+                if let Ok(msg) = to_client_receiver.recv().await {
                     async_sender.send(msg).await.unwrap();
                     //TODO: handle result..
                 }
