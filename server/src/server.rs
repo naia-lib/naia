@@ -885,7 +885,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                             continue;
                         }
                         PacketType::ClientConnectRequest => {
-                            match self.handshake_manager.recv_connect_request(&mut reader) {
+                            match self.handshake_manager.recv_connect_request(&address, &mut reader) {
                                 HandshakeResult::Success(auth_message_opt) => {
                                     if self.user_connections.contains_key(&address) {
                                         // send connectaccept response

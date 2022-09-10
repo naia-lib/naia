@@ -70,16 +70,18 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 3 of Handshake
-    pub fn recv_connect_request(&mut self, reader: &mut BitReader) -> HandshakeResult<P> {
+    pub fn recv_connect_request(&mut self, address: &SocketAddr, reader: &mut BitReader) -> HandshakeResult<P> {
         // Verify that timestamp hash has been written by this
         // server instance
-        if self.timestamp_validate(reader).is_some() {
+        if let Some(timestamp) = self.timestamp_validate(reader) {
             // Timestamp hash is validated, now start configured auth process
             let has_auth = bool::de(reader).unwrap();
 
             if has_auth != self.require_auth {
                 return HandshakeResult::Invalid;
             }
+
+            self.address_to_timestamp_map.insert(*address, timestamp);
 
             if has_auth {
                 let auth_message = P::read(reader, &FakeEntityConverter);
