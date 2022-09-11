@@ -22,7 +22,6 @@ pub struct App {
 }
 
 impl App {
-
     pub fn new() -> Self {
         info!("Basic Naia Server Demo started");
 
@@ -56,7 +55,7 @@ impl App {
                 ("charlie", "green"),
                 ("delta", "yellow"),
             ]
-                .iter()
+            .iter()
             {
                 count += 1;
 
@@ -99,9 +98,9 @@ impl App {
                     }
                     Ok(Event::Connection(user_key)) => {
                         info!(
-                        "Naia Server connected to: {}",
-                        self.server.user(&user_key).address()
-                    );
+                            "Naia Server connected to: {}",
+                            self.server.user(&user_key).address()
+                        );
                         self.server
                             .room_mut(&self.main_room_key)
                             .add_user(&user_key);
@@ -112,22 +111,23 @@ impl App {
                     Ok(Event::Message(user_key, _, Protocol::StringMessage(message))) => {
                         let message_contents = &(*message.contents);
                         info!(
-                        "Server recv from ({}) <- {}",
-                        self.server.user(&user_key).address(),
-                        message_contents
-                    );
+                            "Server recv from ({}) <- {}",
+                            self.server.user(&user_key).address(),
+                            message_contents
+                        );
                     }
                     Ok(Event::Tick) => {
                         // All game logic should happen here, on a tick event
 
                         // Message sending
                         for user_key in self.server.user_keys() {
-                            let new_message_contents = format!("Server Message ({})", self.tick_count);
+                            let new_message_contents =
+                                format!("Server Message ({})", self.tick_count);
                             info!(
-                            "Server send to   ({}) -> {}",
-                            self.server.user(&user_key).address(),
-                            new_message_contents
-                        );
+                                "Server send to   ({}) -> {}",
+                                self.server.user(&user_key).address(),
+                                new_message_contents
+                            );
 
                             let new_message = StringMessage::new(new_message_contents);
                             self.server.send_message(
@@ -153,7 +153,9 @@ impl App {
                             let server = &mut self.server;
                             let world = &self.world;
                             for (_, user_key, entity) in server.scope_checks() {
-                                if let Some(character) = world.proxy().component::<Character>(&entity) {
+                                if let Some(character) =
+                                    world.proxy().component::<Character>(&entity)
+                                {
                                     let x = *character.x;
                                     if (5..=15).contains(&x) {
                                         server.user_scope(&user_key).include(&entity);

@@ -22,7 +22,7 @@ pub enum HandshakeState {
 
 pub enum HandshakeResult {
     Connected,
-    Rejected
+    Rejected,
 }
 
 pub struct HandshakeManager<P: Protocolize> {
@@ -145,14 +145,13 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     // Step 4 of Handshake
     pub fn recv_connect_response(&mut self) -> Option<HandshakeResult> {
-
         let was_not_connected = self.connection_state != HandshakeState::Connected;
 
         self.connection_state = HandshakeState::Connected;
 
         match was_not_connected {
             true => Some(HandshakeResult::Connected),
-            false => None
+            false => None,
         }
     }
 

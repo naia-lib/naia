@@ -24,7 +24,6 @@ pub struct App {
 }
 
 impl App {
-
     pub fn new() -> Self {
         info!("Naia Macroquad Server Demo started");
 
@@ -139,10 +138,10 @@ impl App {
                         }
                     }
                     Ok(Event::Message(
-                           _,
-                           Channels::PlayerCommand,
-                           Protocol::KeyCommand(key_command),
-                       )) => {
+                        _,
+                        Channels::PlayerCommand,
+                        Protocol::KeyCommand(key_command),
+                    )) => {
                         if let Some(entity) = &key_command.entity.get(&self.server) {
                             self.square_last_command.insert(*entity, key_command);
                         }

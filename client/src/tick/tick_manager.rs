@@ -62,8 +62,7 @@ impl TickManager {
     }
 
     pub fn read_server_tick(&mut self, reader: &mut BitReader, rtt: f32, jitter: f32) -> Tick {
-        let server_tick = Tick::de(reader)
-            .expect("unable to read server tick from packet");
+        let server_tick = Tick::de(reader).expect("unable to read server tick from packet");
 
         self.record_server_tick(server_tick, rtt, jitter);
 

@@ -110,7 +110,7 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let mut negative: bool = false;
         if SIGNED {
-            negative = reader.read_bit();
+            negative = reader.read_bit()?;
         }
 
         if VARIABLE {
@@ -118,14 +118,14 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
             let mut output: u128 = 0;
 
             loop {
-                let proceed = reader.read_bit();
+                let proceed = reader.read_bit()?;
 
                 for _ in 0..BITS {
                     total_bits += 1;
 
                     output <<= 1;
 
-                    if reader.read_bit() {
+                    if reader.read_bit()? {
                         output |= 1;
                     }
                 }
@@ -148,7 +148,7 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
             for _ in 0..BITS {
                 output <<= 1;
 
-                if reader.read_bit() {
+                if reader.read_bit()? {
                     output |= 1;
                 }
             }

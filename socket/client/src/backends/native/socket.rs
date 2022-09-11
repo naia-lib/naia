@@ -4,12 +4,12 @@ use naia_socket_shared::{parse_server_url, SocketConfig};
 
 use webrtc_unreliable_client::Socket as RTCSocket;
 
+use crate::backends::native::runtime::get_runtime;
 use crate::{
     conditioned_packet_receiver::ConditionedPacketReceiver,
     io::Io,
     packet_receiver::{PacketReceiver, PacketReceiverTrait},
 };
-use crate::backends::native::runtime::get_runtime;
 
 use super::{packet_receiver::PacketReceiverImpl, packet_sender::PacketSender};
 

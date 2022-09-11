@@ -28,7 +28,6 @@ pub struct App {
 }
 
 impl App {
-
     pub fn default() -> Self {
         info!("Basic Naia Client Demo started");
 
@@ -52,7 +51,10 @@ impl App {
                     info!("Client connected to: {}", server_address);
                 }
                 Ok(Event::Rejection(server_address)) => {
-                    info!("Client received unauthorized response from: {}", server_address);
+                    info!(
+                        "Client received unauthorized response from: {}",
+                        server_address
+                    );
                     // Now give the correct username / password
                     let auth = Auth::new("charlie", "12345");
                     self.client.auth(auth);

@@ -48,7 +48,10 @@ async fn listen(
         .expect("unable to bind a TCP Listener to the supplied socket address");
     info!(
         "Session initiator available at POST http://{}/{}",
-        listener.get_ref().local_addr().expect("Listener does not have a local address"),
+        listener
+            .get_ref()
+            .local_addr()
+            .expect("Listener does not have a local address"),
         config.rtc_endpoint_path
     );
 
@@ -119,8 +122,8 @@ async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpS
                     }
                 } else if str.starts_with(
                     RTC_URL_PATH
-                    .get()
-                    .expect("unable to retrieve URL path, was it not configured?")
+                        .get()
+                        .expect("unable to retrieve URL path, was it not configured?"),
                 ) {
                     rtc_url_match = true;
                 }

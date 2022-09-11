@@ -70,7 +70,11 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 3 of Handshake
-    pub fn recv_connect_request(&mut self, address: &SocketAddr, reader: &mut BitReader) -> HandshakeResult<P> {
+    pub fn recv_connect_request(
+        &mut self,
+        address: &SocketAddr,
+        reader: &mut BitReader,
+    ) -> HandshakeResult<P> {
         // Verify that timestamp hash has been written by this
         // server instance
         if let Some(timestamp) = self.timestamp_validate(reader) {

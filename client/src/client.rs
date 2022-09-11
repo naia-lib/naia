@@ -10,7 +10,11 @@ pub use naia_shared::{
 };
 
 use crate::{
-    connection::{connection::Connection, handshake_manager::{HandshakeManager, HandshakeResult}, io::Io},
+    connection::{
+        connection::Connection,
+        handshake_manager::{HandshakeManager, HandshakeResult},
+        io::Io,
+    },
     protocol::entity_ref::EntityRef,
     tick::tick_manager::TickManager,
 };
@@ -66,7 +70,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
-        self.handshake_manager.set_auth_message(auth.into_protocol());
+        self.handshake_manager
+            .set_auth_message(auth.into_protocol());
     }
 
     /// Connect to the given server address
@@ -124,7 +129,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
         // all other operations
         if let Some(server_connection) = self.server_connection.as_mut() {
-
             if server_connection.base.should_drop() {
                 self.disconnect_internal();
                 return std::mem::take(&mut self.incoming_events);
@@ -189,14 +193,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
         if tick_buffered {
             if let Some(client_tick) = self.client_tick() {
                 if let Some(connection) = self.server_connection.as_mut() {
-                    connection.tick_buffer
+                    connection
+                        .tick_buffer
                         .as_mut()
                         .expect("connection does not have a tick buffer")
-                        .send_message(
-                        &client_tick,
-                        channel,
-                        message.protocol_copy(),
-                    );
+                        .send_message(&client_tick, channel, message.protocol_copy());
                 }
             } else {
                 return;

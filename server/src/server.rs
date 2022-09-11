@@ -874,7 +874,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                     let mut reader = owned_reader.borrow();
 
                     // Read header
-                    let header = StandardHeader::de(&mut reader).unwrap();
+                    let header_result = StandardHeader::de(&mut reader);
+                    if header_result.is_err() {
+                        // Received a malformed packet
+                        // TODO: increase suspicion against packet sender
+                        continue;
+                    }
+                    let header = header_result.unwrap();
 
                     // Handshake stuff
                     match header.packet_type {
@@ -885,7 +891,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                             continue;
                         }
                         PacketType::ClientConnectRequest => {
-                            match self.handshake_manager.recv_connect_request(&address, &mut reader) {
+                            match self
+                                .handshake_manager
+                                .recv_connect_request(&address, &mut reader)
+                            {
                                 HandshakeResult::Success(auth_message_opt) => {
                                     if self.user_connections.contains_key(&address) {
                                         // send connectaccept response
@@ -928,9 +937,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                 // read client tick
                                 let server_and_client_tick_opt = {
                                     if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                        let client_tick =
+                                        ////
+                                        let client_tick_result =
                                             tick_manager.read_client_tick(&mut reader);
+                                        if client_tick_result.is_err() {
+                                            // Received a malformed packet
+                                            // TODO: increase suspicion against packet sender
+                                            continue;
+                                        }
+                                        let client_tick = client_tick_result.unwrap();
                                         user_connection.recv_client_tick(client_tick);
+                                        ////
 
                                         let server_tick = tick_manager.server_tick();
 
@@ -959,15 +976,33 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                             PacketType::Heartbeat => {
                                 // read client tick, don't need to do anything else
                                 if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                    let client_tick = tick_manager.read_client_tick(&mut reader);
+                                    ////
+                                    let client_tick_result =
+                                        tick_manager.read_client_tick(&mut reader);
+                                    if client_tick_result.is_err() {
+                                        // Received a malformed packet
+                                        // TODO: increase suspicion against packet sender
+                                        continue;
+                                    }
+                                    let client_tick = client_tick_result.unwrap();
                                     user_connection.recv_client_tick(client_tick);
+                                    ////
                                 }
                             }
                             PacketType::Ping => {
                                 // read client tick
                                 if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                    let client_tick = tick_manager.read_client_tick(&mut reader);
+                                    ////
+                                    let client_tick_result =
+                                        tick_manager.read_client_tick(&mut reader);
+                                    if client_tick_result.is_err() {
+                                        // Received a malformed packet
+                                        // TODO: increase suspicion against packet sender
+                                        continue;
+                                    }
+                                    let client_tick = client_tick_result.unwrap();
                                     user_connection.recv_client_tick(client_tick);
+                                    ////
                                 }
 
                                 // read incoming ping index
@@ -996,8 +1031,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                             PacketType::Pong => {
                                 // read client tick
                                 if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                    let client_tick = tick_manager.read_client_tick(&mut reader);
+                                    ////
+                                    let client_tick_result =
+                                        tick_manager.read_client_tick(&mut reader);
+                                    if client_tick_result.is_err() {
+                                        // Received a malformed packet
+                                        // TODO: increase suspicion against packet sender
+                                        continue;
+                                    }
+                                    let client_tick = client_tick_result.unwrap();
                                     user_connection.recv_client_tick(client_tick);
+                                    ////
                                 }
 
                                 user_connection.ping_manager.process_pong(&mut reader);

@@ -73,7 +73,8 @@ pub fn march_and_mark(app: &mut App) {
         let last;
         {
             let entity_ref = app.server.entity(&app.world, &entity);
-            let old_name = entity_ref.component::<Name>()
+            let old_name = entity_ref
+                .component::<Name>()
                 .expect("entity does not have a Name component");
             first = (*old_name.full).first.clone();
             last = (*old_name.full).last.clone();

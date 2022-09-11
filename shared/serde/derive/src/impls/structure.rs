@@ -9,8 +9,10 @@ pub fn derive_serde_struct(struct_: &Struct) -> String {
         l!(
             ser_body,
             "self.{}.ser(writer);",
-            field.field_name.as_ref()
-            .expect("expected field to have a name")
+            field
+                .field_name
+                .as_ref()
+                .expect("expected field to have a name")
         );
     }
 
@@ -18,8 +20,10 @@ pub fn derive_serde_struct(struct_: &Struct) -> String {
         l!(
             de_body,
             "{}: Serde::de(reader)?,",
-            field.field_name.as_ref()
-            .expect("expected field to have a name")
+            field
+                .field_name
+                .as_ref()
+                .expect("expected field to have a name")
         );
     }
 

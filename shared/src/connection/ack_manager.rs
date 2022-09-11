@@ -31,7 +31,6 @@ pub struct AckManager {
 }
 
 impl AckManager {
-
     pub fn new() -> Self {
         Self {
             next_packet_index: 0,

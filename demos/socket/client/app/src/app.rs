@@ -24,7 +24,6 @@ pub struct App {
 }
 
 impl App {
-
     pub fn new() -> App {
         info!("Naia Client Socket Demo started");
 

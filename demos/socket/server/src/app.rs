@@ -10,7 +10,6 @@ pub struct App {
 }
 
 impl App {
-
     pub fn new() -> Self {
         info!("Naia Server Socket Demo started");
 

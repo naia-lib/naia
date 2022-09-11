@@ -26,7 +26,6 @@ pub struct App {
 }
 
 impl App {
-
     pub fn default() -> Self {
         info!("Naia Hecs Client Demo started");
 

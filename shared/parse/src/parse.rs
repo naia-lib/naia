@@ -123,10 +123,7 @@ pub fn next_ident(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Opt
 
 pub fn next_group(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Option<Group> {
     if let Some(TokenTree::Group(_)) = source.peek() {
-        let group = match source
-            .next()
-            .expect("expected to read another token")
-        {
+        let group = match source.next().expect("expected to read another token") {
             TokenTree::Group(group) => group,
             _ => unreachable!("just checked with peek()!"),
         };
@@ -233,9 +230,7 @@ fn next_struct(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Struct
 
     let group = next_group(source);
     // unit struct
-    if group.is_none() {
-
-    };
+    if group.is_none() {};
     if let Some(group) = group {
         let delimiter = group.delimiter();
         let tuple = match delimiter {

@@ -15,7 +15,7 @@ impl<T: Serde> Serde for Option<T> {
     }
 
     fn de(reader: &mut BitReader) -> Result<Option<T>, SerdeErr> {
-        if reader.read_bit() {
+        if reader.read_bit()? {
             Ok(Some(T::de(reader)?))
         } else {
             Ok(None)

@@ -44,7 +44,6 @@ pub struct App {
 }
 
 impl App {
-
     pub fn new() -> Self {
         info!("Naia Macroquad Client Demo started");
 
