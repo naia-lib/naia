@@ -73,13 +73,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             let channel_reader = ProtocolIo::new(&self.entity_manager);
 
             // Read Messages
-            self.base
-                .message_manager
-                .read_messages(&channel_reader, &mut bit_reader);
+            let messages_result = self.base.message_manager.read_messages(&channel_reader, &mut bit_reader);
+            if messages_result.is_err() {
+                // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
+                continue;
+            }
 
             // Read Entity Actions
-            self.entity_manager
-                .read_all(world, server_tick, &mut bit_reader, incoming_events);
+            let actions_result = self.entity_manager.read_all(world, server_tick, &mut bit_reader, incoming_events);
+            if actions_result.is_err() {
+                // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
+                continue;
+            }
         }
     }
 

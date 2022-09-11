@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use naia_serde::{BitReader, Serde, UnsignedVariableInteger};
+use naia_serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger};
 
 use crate::{
     messages::{message_channel::ChannelReader, message_list_header},
@@ -15,8 +15,8 @@ impl<P> ReliableReceiver<P> {
     pub fn read_incoming_messages(
         channel_reader: &dyn ChannelReader<P>,
         bit_reader: &mut BitReader,
-    ) -> Vec<(MessageId, P)> {
-        let message_count = message_list_header::read(bit_reader);
+    ) -> Result<Vec<(MessageId, P)>, SerdeErr> {
+        let message_count = message_list_header::read(bit_reader)?;
 
         let mut last_read_id: Option<MessageId> = None;
         let mut output = Vec::new();
@@ -26,7 +26,7 @@ impl<P> ReliableReceiver<P> {
             last_read_id = Some(id_w_msg.0);
             output.push(id_w_msg);
         }
-        output
+        Ok(output)
     }
 
     fn read_incoming_message(

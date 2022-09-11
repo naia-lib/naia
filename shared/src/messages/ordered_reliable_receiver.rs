@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use naia_serde::BitReader;
+use naia_serde::{BitReader, SerdeErr};
 
 use crate::{types::MessageId, wrapping_number::sequence_less_than};
 
@@ -97,11 +97,12 @@ impl<P> OrderedReliableReceiver<P> {
 }
 
 impl<P: Send + Sync> ChannelReceiver<P> for OrderedReliableReceiver<P> {
-    fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader) {
-        let id_w_msgs = ReliableReceiver::read_incoming_messages(channel_reader, bit_reader);
+    fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader) -> Result<(), SerdeErr> {
+        let id_w_msgs = ReliableReceiver::read_incoming_messages(channel_reader, bit_reader)?;
         for (id, message) in id_w_msgs {
             self.buffer_message(id, message);
         }
+        Ok(())
     }
 
     fn receive_messages(&mut self) -> Vec<P> {

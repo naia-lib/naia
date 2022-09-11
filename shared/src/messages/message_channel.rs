@@ -1,4 +1,4 @@
-use naia_serde::{BitReader, BitWrite, BitWriter};
+use naia_serde::{BitReader, BitWrite, BitWriter, SerdeErr};
 use naia_socket_shared::Instant;
 
 use crate::types::MessageId;
@@ -16,7 +16,7 @@ pub trait ChannelSender<P>: Send + Sync {
 }
 
 pub trait ChannelReceiver<P>: Send + Sync {
-    fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader);
+    fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader) -> Result<(), SerdeErr>;
     fn receive_messages(&mut self) -> Vec<P>;
 }
 

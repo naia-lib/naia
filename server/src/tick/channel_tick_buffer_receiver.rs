@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
     message_list_header, sequence_greater_than,
-    serde::{BitReader, Serde, UnsignedVariableInteger},
+    serde::{BitReader, Serde, UnsignedVariableInteger, SerdeErr},
     ChannelReader, Protocolize, ShortMessageId, Tick,
 };
 
@@ -27,12 +27,13 @@ impl<P: Protocolize> ChannelTickBufferReceiver<P> {
         remote_tick: &Tick,
         channel_reader: &dyn ChannelReader<P>,
         bit_reader: &mut BitReader,
-    ) {
+    ) -> Result<(), SerdeErr> {
         let mut last_read_tick = *remote_tick;
-        let message_count = message_list_header::read(bit_reader);
+        let message_count = message_list_header::read(bit_reader)?;
         for _ in 0..message_count {
             self.read_message(host_tick, &mut last_read_tick, channel_reader, bit_reader);
         }
+        Ok(())
     }
 
     /// Given incoming packet data, read transmitted Message and store

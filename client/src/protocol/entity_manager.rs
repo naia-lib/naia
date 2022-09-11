@@ -5,7 +5,7 @@ use std::{
 
 use naia_shared::{
     message_list_header,
-    serde::{BitReader, Serde, UnsignedVariableInteger},
+    serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
     BigMap, ChannelIndex, EntityAction, EntityActionReceiver, EntityActionType, EntityHandle,
     EntityHandleConverter, MessageId, NetEntity, NetEntityHandleConverter, Protocolize, Tick,
     WorldMutType,
@@ -44,9 +44,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         server_tick: Tick,
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
-    ) {
-        self.read_updates(world, server_tick, reader, event_stream);
-        self.read_actions(world, reader, event_stream);
+    ) -> Result<(), SerdeErr> {
+        self.read_updates(world, server_tick, reader, event_stream)?;
+        self.read_actions(world, reader, event_stream)?;
+        Ok(())
     }
 
     fn read_message_id(
@@ -70,13 +71,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         world: &mut W,
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
-    ) {
+    ) -> Result<(), SerdeErr> {
         let mut last_read_id: Option<MessageId> = None;
-        let action_count = message_list_header::read(reader);
+        let action_count = message_list_header::read(reader)?;
         for _ in 0..action_count {
             self.read_action(reader, &mut last_read_id);
         }
         self.process_incoming_actions(world, event_stream);
+        Ok(())
     }
 
     fn read_action(&mut self, reader: &mut BitReader, last_read_id: &mut Option<MessageId>) {
@@ -280,11 +282,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         server_tick: Tick,
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
-    ) {
-        let update_count = message_list_header::read(reader);
+    ) -> Result<(), SerdeErr> {
+        let update_count = message_list_header::read(reader)?;
         for _ in 0..update_count {
             self.read_update(world, server_tick, reader, event_stream);
         }
+        Ok(())
     }
 
     fn read_update<W: WorldMutType<P, E>, C: ChannelIndex>(

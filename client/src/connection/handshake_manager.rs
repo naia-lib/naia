@@ -84,7 +84,11 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     // Call this regularly so handshake manager can process incoming requests
     pub fn recv(&mut self, reader: &mut BitReader) -> Option<HandshakeResult> {
-        let header = StandardHeader::de(reader).unwrap();
+        let header_result = StandardHeader::de(reader);
+        if header_result.is_err() {
+            return None;
+        }
+        let header = header_result.unwrap();
         match header.packet_type {
             PacketType::ServerChallengeResponse => {
                 self.recv_challenge_response(reader);
@@ -109,10 +113,18 @@ impl<P: Protocolize> HandshakeManager<P> {
     // Step 2 of Handshake
     pub fn recv_challenge_response(&mut self, reader: &mut BitReader) {
         if self.connection_state == HandshakeState::AwaitingChallengeResponse {
-            let payload_timestamp = Timestamp::de(reader).unwrap();
+            let timestamp_result = Timestamp::de(reader);
+            if timestamp_result.is_err() {
+                return;
+            }
+            let timestamp = timestamp_result.unwrap();
 
-            if self.pre_connection_timestamp == payload_timestamp {
-                let digest_bytes: Vec<u8> = Vec::<u8>::de(reader).unwrap();
+            if self.pre_connection_timestamp == timestamp {
+                let digest_bytes_result = Vec::<u8>::de(reader);
+                if digest_bytes_result.is_err() {
+                    return;
+                }
+                let digest_bytes = digest_bytes_result.unwrap();
                 self.pre_connection_digest = Some(digest_bytes);
 
                 self.connection_state = HandshakeState::AwaitingConnectResponse;

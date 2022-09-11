@@ -58,12 +58,12 @@ impl crate::serde::Serde for PacketType {
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let is_data = bool::de(reader).unwrap();
+        let is_data = bool::de(reader)?;
         if is_data {
             return Ok(PacketType::Data);
         }
 
-        match UnsignedInteger::<4>::de(reader).unwrap().get() {
+        match UnsignedInteger::<4>::de(reader)?.get() {
             0 => Ok(PacketType::Heartbeat),
             1 => Ok(PacketType::ClientChallengeRequest),
             2 => Ok(PacketType::ServerChallengeResponse),

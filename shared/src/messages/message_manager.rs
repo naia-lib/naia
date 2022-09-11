@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_serde::{BitReader, BitWriter, Serde, UnsignedVariableInteger};
+use naia_serde::{BitReader, BitWriter, Serde, SerdeErr, UnsignedVariableInteger};
 use naia_socket_shared::Instant;
 
 use crate::{
@@ -181,7 +181,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         &mut self,
         channel_reader: &dyn ChannelReader<P>,
         bit_reader: &mut BitReader,
-    ) {
+    ) -> Result<(), SerdeErr> {
         // read channel count
         let channel_count = UnsignedVariableInteger::<3>::de(bit_reader).unwrap().get();
 
@@ -191,9 +191,11 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
             // continue read inside channel
             if let Some(channel) = self.channel_receivers.get_mut(&channel_index) {
-                channel.read_messages(channel_reader, bit_reader);
+                channel.read_messages(channel_reader, bit_reader)?;
             }
         }
+
+        Ok(())
     }
 
     pub fn receive_messages(&mut self) -> Vec<(C, P)> {

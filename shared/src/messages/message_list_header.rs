@@ -1,4 +1,4 @@
-use naia_serde::{BitReader, BitWrite, Serde, UnsignedVariableInteger};
+use naia_serde::{BitReader, BitWrite, Serde, SerdeErr, UnsignedVariableInteger};
 
 pub fn write<S: BitWrite, T: Into<i128>>(writer: &mut S, message_count: T) {
     let mut message_count_i128: i128 = message_count.into();
@@ -16,19 +16,19 @@ pub fn write<S: BitWrite, T: Into<i128>>(writer: &mut S, message_count: T) {
     }
 }
 
-pub fn read(reader: &mut BitReader) -> u16 {
-    let has_messages = bool::de(reader).unwrap();
+pub fn read(reader: &mut BitReader) -> Result<u16, SerdeErr> {
+    let has_messages = bool::de(reader)?;
 
     if has_messages {
-        let serde_count = UnsignedVariableInteger::<3>::de(reader).unwrap();
+        let serde_count = UnsignedVariableInteger::<3>::de(reader)?;
 
         let mut message_count = serde_count.get() as u16;
 
         // we already know messages isn't 0, so you can send the count as a value >= 1
         message_count += 1;
 
-        message_count
+        Ok(message_count)
     } else {
-        0
+        Ok(0)
     }
 }

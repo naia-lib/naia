@@ -885,9 +885,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                     // Handshake stuff
                     match header.packet_type {
                         PacketType::ClientChallengeRequest => {
-                            let mut writer =
-                                self.handshake_manager.recv_challenge_request(&mut reader);
-                            self.io.send_writer(&address, &mut writer);
+                            if let Ok(mut writer) = self.handshake_manager.recv_challenge_request(&mut reader) {
+                                self.io.send_writer(&address, &mut writer);
+                            }
                             continue;
                         }
                         PacketType::ClientConnectRequest => {
@@ -958,11 +958,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                 };
 
                                 // process data
-                                user_connection.process_incoming_data(
+                                let data_result = user_connection.process_incoming_data(
                                     server_and_client_tick_opt,
                                     &mut reader,
                                     &self.world_record,
                                 );
+                                if data_result.is_err() {
+                                    // Received a malformed packet
+                                    // TODO: increase suspicion against packet sender
+                                    continue;
+                                }
                             }
                             PacketType::Disconnect => {
                                 if self

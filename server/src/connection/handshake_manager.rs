@@ -3,7 +3,7 @@ use std::{collections::HashMap, hash::Hash, marker::PhantomData, net::SocketAddr
 use ring::{hmac, rand};
 
 pub use naia_shared::{
-    serde::{BitReader, BitWriter, Serde},
+    serde::{BitReader, BitWriter, Serde, SerdeErr},
     wrapping_diff, BaseConnection, ChannelIndex, ConnectionConfig, FakeEntityConverter, Instant,
     KeyGenerator, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
     Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType, WorldRefType,
@@ -43,10 +43,10 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 1 of Handshake
-    pub fn recv_challenge_request(&mut self, reader: &mut BitReader) -> BitWriter {
-        let timestamp = Timestamp::de(reader).unwrap();
+    pub fn recv_challenge_request(&mut self, reader: &mut BitReader) -> Result<BitWriter, SerdeErr> {
+        let timestamp = Timestamp::de(reader)?;
 
-        self.write_challenge_response(&timestamp)
+        Ok(self.write_challenge_response(&timestamp))
     }
 
     // Step 2 of Handshake
@@ -79,19 +79,21 @@ impl<P: Protocolize> HandshakeManager<P> {
         // server instance
         if let Some(timestamp) = self.timestamp_validate(reader) {
             // Timestamp hash is validated, now start configured auth process
-            let has_auth = bool::de(reader).unwrap();
+            if let Ok(has_auth) = bool::de(reader) {
+                if has_auth != self.require_auth {
+                    return HandshakeResult::Invalid;
+                }
 
-            if has_auth != self.require_auth {
-                return HandshakeResult::Invalid;
-            }
+                self.address_to_timestamp_map.insert(*address, timestamp);
 
-            self.address_to_timestamp_map.insert(*address, timestamp);
-
-            if has_auth {
-                let auth_message = P::read(reader, &FakeEntityConverter);
-                HandshakeResult::Success(Some(auth_message))
+                if has_auth {
+                    let auth_message = P::read(reader, &FakeEntityConverter);
+                    HandshakeResult::Success(Some(auth_message))
+                } else {
+                    HandshakeResult::Success(None)
+                }
             } else {
-                HandshakeResult::Success(None)
+                return HandshakeResult::Invalid;
             }
         } else {
             HandshakeResult::Invalid
@@ -136,11 +138,20 @@ impl<P: Protocolize> HandshakeManager<P> {
 
     fn timestamp_validate(&self, reader: &mut BitReader) -> Option<Timestamp> {
         // Read timestamp
-        let timestamp = Timestamp::de(reader).unwrap();
-        let digest_bytes: Vec<u8> = Vec::<u8>::de(reader).unwrap();
+        let timestamp_result = Timestamp::de(reader);
+        if timestamp_result.is_err() {
+            return None;
+        }
+        let timestamp = timestamp_result.unwrap();
 
-        // Verify that timestamp hash has been written by this
-        // server instance
+        // Read digest
+        let digest_bytes_result = Vec::<u8>::de(reader);
+        if digest_bytes_result.is_err() {
+            return None;
+        }
+        let digest_bytes = digest_bytes_result.unwrap();
+
+        // Verify that timestamp hash has been written by this server instance
         let validation_result = hmac::verify(
             &self.connection_hash_key,
             &timestamp.to_le_bytes(),

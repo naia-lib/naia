@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    serde::{BitReader, Serde, UnsignedVariableInteger},
+    serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
     ChannelConfig, ChannelIndex, ChannelMode, ChannelReader, Protocolize, Tick,
 };
 
@@ -32,7 +32,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferReceiver<P, C> {
         remote_tick: &Tick,
         channel_reader: &dyn ChannelReader<P>,
         bit_reader: &mut BitReader,
-    ) {
+    ) -> Result<(), SerdeErr> {
         // read channel count
         let channel_count = UnsignedVariableInteger::<3>::de(bit_reader).unwrap().get();
 
@@ -42,9 +42,11 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferReceiver<P, C> {
 
             // continue read inside channel
             if let Some(channel) = self.channel_receivers.get_mut(&channel_index) {
-                channel.read_messages(host_tick, remote_tick, channel_reader, bit_reader);
+                channel.read_messages(host_tick, remote_tick, channel_reader, bit_reader)?;
             }
         }
+
+        Ok(())
     }
 
     pub fn receive_messages(&mut self, host_tick: &Tick) -> Vec<(C, P)> {
