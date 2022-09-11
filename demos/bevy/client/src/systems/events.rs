@@ -26,7 +26,7 @@ use crate::resources::{Global, OwnedEntity};
 
 const SQUARE_SIZE: f32 = 32.0;
 
-pub fn connect_event(mut client: Client<Protocol, Channels>) {
+pub fn connect_event(client: Client<Protocol, Channels>) {
     info!("Client connected to: {}", client.server_address());
 
 }

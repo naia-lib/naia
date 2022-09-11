@@ -43,8 +43,9 @@ pub struct App {
     command_history: CommandHistory<KeyCommand>,
 }
 
-impl Default for App {
-    fn default() -> Self {
+impl App {
+
+    pub fn new() -> Self {
         info!("Naia Macroquad Client Demo started");
 
         let mut client = Client::new(&ClientConfig::default(), &shared_config());
@@ -60,9 +61,7 @@ impl Default for App {
             command_history: CommandHistory::default(),
         }
     }
-}
 
-impl App {
     pub fn update(&mut self) {
         self.input();
         self.receive_events();

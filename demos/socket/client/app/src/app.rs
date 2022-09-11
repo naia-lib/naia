@@ -23,8 +23,9 @@ pub struct App {
     server_addr_str: Option<String>,
 }
 
-impl Default for App {
-    fn default() -> App {
+impl App {
+
+    pub fn new() -> App {
         info!("Naia Client Socket Demo started");
 
         let mut socket = Socket::new(&shared_config());
@@ -42,9 +43,7 @@ impl Default for App {
             server_addr_str: None,
         }
     }
-}
 
-impl App {
     pub fn update(&mut self) {
         if !self.socket.is_connected() {
             return;

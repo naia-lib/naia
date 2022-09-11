@@ -16,6 +16,6 @@ impl EventHandler for Stage {
 }
 
 fn main() {
-    let app = App::default();
+    let app = App::new();
     miniquad::start(conf::Conf::default(), |_ctx| Box::new(Stage { app }));
 }

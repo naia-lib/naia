@@ -1,3 +1,5 @@
+use std::{thread::sleep, time::Duration};
+
 use naia_server_socket::{PacketReceiver, PacketSender, ServerAddrs, Socket};
 
 use naia_socket_demo_shared::{shared_config, PING_MSG, PONG_MSG};
@@ -7,8 +9,9 @@ pub struct App {
     packet_receiver: PacketReceiver,
 }
 
-impl Default for App {
-    fn default() -> Self {
+impl App {
+
+    pub fn new() -> Self {
         info!("Naia Server Socket Demo started");
 
         let server_address = ServerAddrs::new(
@@ -32,9 +35,7 @@ impl Default for App {
             packet_receiver: socket.packet_receiver(),
         }
     }
-}
 
-impl App {
     pub fn update(&mut self) {
         match self.packet_receiver.receive() {
             Ok(Some((address, payload))) => {
@@ -48,7 +49,10 @@ impl App {
                         .send(&address, message_to_client.as_bytes());
                 }
             }
-            Ok(None) => {}
+            Ok(None) => {
+                // If we don't sleep here, app will loop at 100% CPU until a new message comes in
+                sleep(Duration::from_millis(5));
+            }
             Err(error) => {
                 info!("Server Error: {}", error);
             }

@@ -5,7 +5,7 @@ use app::App;
 
 #[macroquad::main("NaiaMacroquadDemo")]
 async fn main() {
-    let mut app = App::default();
+    let mut app = App::new();
 
     loop {
         app.update();
