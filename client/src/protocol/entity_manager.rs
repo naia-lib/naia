@@ -53,17 +53,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     fn read_message_id(
         reader: &mut BitReader,
         last_id_opt: &mut Option<MessageId>,
-    ) -> MessageId {
+    ) -> Result<MessageId, SerdeErr> {
         let current_id = if let Some(last_id) = last_id_opt {
             // read diff
-            let id_diff = UnsignedVariableInteger::<3>::de(reader).unwrap().get() as MessageId;
+            let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageId;
             last_id.wrapping_add(id_diff)
         } else {
             // read message id
-            MessageId::de(reader).unwrap()
+            MessageId::de(reader)?
         };
         *last_id_opt = Some(current_id);
-        current_id
+        Ok(current_id)
     }
 
     fn read_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
@@ -82,7 +82,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     fn read_action(&mut self, reader: &mut BitReader, last_read_id: &mut Option<MessageId>) -> Result<(), SerdeErr> {
-        let action_id = Self::read_message_id(reader, last_read_id);
+        let action_id = Self::read_message_id(reader, last_read_id)?;
 
         let action_type = EntityActionType::de(reader)?;
 
