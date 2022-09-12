@@ -21,11 +21,11 @@ impl<P> UnorderedUnreliableReceiver<P> {
     fn read_message(
         &mut self,
         channel_reader: &dyn ChannelReader<P>,
-        bit_reader: &mut BitReader,
+        reader: &mut BitReader,
     ) -> P {
         // read payload
 
-        channel_reader.read(bit_reader)
+        channel_reader.read(reader)
     }
 
     fn recv_message(&mut self, message: P) {
@@ -34,10 +34,10 @@ impl<P> UnorderedUnreliableReceiver<P> {
 }
 
 impl<P: Send + Sync> ChannelReceiver<P> for UnorderedUnreliableReceiver<P> {
-    fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, bit_reader: &mut BitReader) -> Result<(), SerdeErr> {
-        let message_count = read(bit_reader)?;
+    fn read_messages(&mut self, channel_reader: &dyn ChannelReader<P>, reader: &mut BitReader) -> Result<(), SerdeErr> {
+        let message_count = read(reader)?;
         for _x in 0..message_count {
-            let message = self.read_message(channel_reader, bit_reader);
+            let message = self.read_message(channel_reader, reader);
             self.recv_message(message);
         }
         Ok(())

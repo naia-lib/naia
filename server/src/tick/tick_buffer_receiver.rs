@@ -31,18 +31,18 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferReceiver<P, C> {
         host_tick: &Tick,
         remote_tick: &Tick,
         channel_reader: &dyn ChannelReader<P>,
-        bit_reader: &mut BitReader,
+        reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read channel count
-        let channel_count = UnsignedVariableInteger::<3>::de(bit_reader).unwrap().get();
+        let channel_count = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
 
         for _ in 0..channel_count {
             // read channel index
-            let channel_index = C::de(bit_reader).unwrap();
+            let channel_index = C::de(reader).unwrap();
 
             // continue read inside channel
             if let Some(channel) = self.channel_receivers.get_mut(&channel_index) {
-                channel.read_messages(host_tick, remote_tick, channel_reader, bit_reader)?;
+                channel.read_messages(host_tick, remote_tick, channel_reader, reader)?;
             }
         }
 

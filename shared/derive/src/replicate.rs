@@ -459,14 +459,14 @@ pub fn read_method(
                 let field_type = &property.inner_type;
                 let uppercase_variant_name = &property.uppercase_variable_name;
                 quote! {
-                    let #field_name = Property::<#field_type>::new_read(bit_reader, #enum_name::#uppercase_variant_name as u8);
+                    let #field_name = Property::<#field_type>::new_read(reader, #enum_name::#uppercase_variant_name as u8);
                 }
             }
             Property::Entity(property) => {
                 let field_name = &property.variable_name;
                 let uppercase_variant_name = &property.uppercase_variable_name;
                 quote! {
-                    let #field_name = EntityProperty::new_read(bit_reader, #enum_name::#uppercase_variant_name as u8, converter);
+                    let #field_name = EntityProperty::new_read(reader, #enum_name::#uppercase_variant_name as u8, converter);
                 }
             }
         };
@@ -479,7 +479,7 @@ pub fn read_method(
     }
 
     quote! {
-        pub fn read(bit_reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> #protocol_name {
+        pub fn read(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> #protocol_name {
             #prop_reads
 
             return #protocol_name::#replica_name(#replica_name {
@@ -501,10 +501,10 @@ pub fn read_create_update_method(
                 let field_type = &property.inner_type;
                 quote! {
                     {
-                        let should_read = bool::de(bit_reader).unwrap();
+                        let should_read = bool::de(reader).unwrap();
                         should_read.ser(&mut update_writer);
                         if should_read {
-                            Property::<#field_type>::read_write(bit_reader, &mut update_writer);
+                            Property::<#field_type>::read_write(reader, &mut update_writer);
                         }
                     }
                 }
@@ -512,10 +512,10 @@ pub fn read_create_update_method(
             Property::Entity(_) => {
                 quote! {
                     {
-                        let should_read = bool::de(bit_reader).unwrap();
+                        let should_read = bool::de(reader).unwrap();
                         should_read.ser(&mut update_writer);
                         if should_read {
-                            EntityProperty::read_write(bit_reader, &mut update_writer);
+                            EntityProperty::read_write(reader, &mut update_writer);
                         }
                     }
                 }
@@ -530,7 +530,7 @@ pub fn read_create_update_method(
     }
 
     quote! {
-        pub fn read_create_update(bit_reader: &mut BitReader) -> ComponentUpdate::<#kind_name> {
+        pub fn read_create_update(reader: &mut BitReader) -> ComponentUpdate::<#kind_name> {
 
             let mut update_writer = BitWriter::new();
 

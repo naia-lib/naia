@@ -55,8 +55,8 @@ impl EntityProperty {
         }
     }
 
-    pub fn read_write(bit_reader: &mut BitReader, bit_writer: &mut BitWriter) {
-        Option::<NetEntity>::de(bit_reader).unwrap().ser(bit_writer);
+    pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) {
+        Option::<NetEntity>::de(reader).unwrap().ser(writer);
     }
 
     pub fn read(&mut self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) {

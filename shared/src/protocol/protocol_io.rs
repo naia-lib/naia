@@ -15,13 +15,13 @@ impl<'c> ProtocolIo<'c> {
 }
 
 impl<'c, P: Protocolize> ChannelWriter<P> for ProtocolIo<'c> {
-    fn write(&self, bit_writer: &mut dyn BitWrite, data: &P) {
-        data.write(bit_writer, self.converter);
+    fn write(&self, writer: &mut dyn BitWrite, data: &P) {
+        data.write(writer, self.converter);
     }
 }
 
 impl<'c, P: Protocolize> ChannelReader<P> for ProtocolIo<'c> {
-    fn read(&self, bit_reader: &mut BitReader) -> P {
-        P::read(bit_reader, self.converter)
+    fn read(&self, reader: &mut BitReader) -> P {
+        P::read(reader, self.converter)
     }
 }

@@ -51,10 +51,8 @@ impl<T: Serde> Property<T> {
 
     /// Reads from a stream and immediately writes to a stream
     /// Used to buffer updates for later
-    pub fn read_write(bit_reader: &mut BitReader, bit_writer: &mut BitWriter) {
-        T::de(bit_reader)
-            .expect("Property read error.")
-            .ser(bit_writer);
+    pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) {
+        T::de(reader).expect("Property read error.").ser(writer);
     }
 
     /// Given a cursor into incoming packet data, updates the Property with the

@@ -51,16 +51,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     }
 
     fn read_message_id(
-        bit_reader: &mut BitReader,
+        reader: &mut BitReader,
         last_id_opt: &mut Option<MessageId>,
     ) -> MessageId {
         let current_id = if let Some(last_id) = last_id_opt {
             // read diff
-            let id_diff = UnsignedVariableInteger::<3>::de(bit_reader).unwrap().get() as MessageId;
+            let id_diff = UnsignedVariableInteger::<3>::de(reader).unwrap().get() as MessageId;
             last_id.wrapping_add(id_diff)
         } else {
             // read message id
-            MessageId::de(bit_reader).unwrap()
+            MessageId::de(reader).unwrap()
         };
         *last_id_opt = Some(current_id);
         current_id
@@ -75,25 +75,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         let mut last_read_id: Option<MessageId> = None;
         let action_count = message_list_header::read(reader)?;
         for _ in 0..action_count {
-            self.read_action(reader, &mut last_read_id);
+            self.read_action(reader, &mut last_read_id)?;
         }
         self.process_incoming_actions(world, event_stream);
         Ok(())
     }
 
-    fn read_action(&mut self, reader: &mut BitReader, last_read_id: &mut Option<MessageId>) {
+    fn read_action(&mut self, reader: &mut BitReader, last_read_id: &mut Option<MessageId>) -> Result<(), SerdeErr> {
         let action_id = Self::read_message_id(reader, last_read_id);
 
-        let action_type = EntityActionType::de(reader).unwrap();
+        let action_type = EntityActionType::de(reader)?;
 
         match action_type {
             // Entity Creation
             EntityActionType::SpawnEntity => {
                 // read entity
-                let net_entity = NetEntity::de(reader).unwrap();
+                let net_entity = NetEntity::de(reader)?;
 
                 // read components
-                let components_num = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
+                let components_num = UnsignedVariableInteger::<3>::de(reader)?.get();
                 let mut component_kinds = Vec::new();
                 for _ in 0..components_num {
                     let new_component = P::read(reader, self);
@@ -111,7 +111,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             // Entity Deletion
             EntityActionType::DespawnEntity => {
                 // read all data
-                let net_entity = NetEntity::de(reader).unwrap();
+                let net_entity = NetEntity::de(reader)?;
 
                 self.receiver
                     .buffer_action(action_id, EntityAction::DespawnEntity(net_entity));
@@ -119,7 +119,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             // Add Component to Entity
             EntityActionType::InsertComponent => {
                 // read all data
-                let net_entity = NetEntity::de(reader).unwrap();
+                let net_entity = NetEntity::de(reader)?;
                 let new_component = P::read(reader, self);
                 let new_component_kind = new_component.dyn_ref().kind();
 
@@ -133,8 +133,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             // Component Removal
             EntityActionType::RemoveComponent => {
                 // read all data
-                let net_entity = NetEntity::de(reader).unwrap();
-                let component_kind = P::Kind::de(reader).unwrap();
+                let net_entity = NetEntity::de(reader)?;
+                let component_kind = P::Kind::de(reader)?;
 
                 self.receiver.buffer_action(
                     action_id,
@@ -145,6 +145,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 self.receiver.buffer_action(action_id, EntityAction::Noop);
             }
         }
+
+        Ok(())
     }
 
     fn process_incoming_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
@@ -285,7 +287,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     ) -> Result<(), SerdeErr> {
         let update_count = message_list_header::read(reader)?;
         for _ in 0..update_count {
-            self.read_update(world, server_tick, reader, event_stream);
+            self.read_update(world, server_tick, reader, event_stream)?;
         }
         Ok(())
     }
@@ -296,10 +298,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         server_tick: Tick,
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
-    ) {
-        let net_entity = NetEntity::de(reader).unwrap();
+    ) -> Result<(), SerdeErr> {
+        let net_entity = NetEntity::de(reader)?;
 
-        let components_number = UnsignedVariableInteger::<3>::de(reader).unwrap().get();
+        let components_number = UnsignedVariableInteger::<3>::de(reader)?.get();
 
         for _ in 0..components_number {
             // read incoming update
@@ -316,6 +318,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 )));
             }
         }
+
+        Ok(())
     }
 }
 
