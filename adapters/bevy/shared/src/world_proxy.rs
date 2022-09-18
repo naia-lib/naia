@@ -202,7 +202,7 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
             .resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
                 if let Some(accessor) = data.component_access(component_kind) {
                     if let Some(mut component) = accessor.component_mut(world, entity) {
-                        component.read_apply_update(converter, update)?;
+                        let _update_result = component.read_apply_update(converter, update);
                     }
                 }
             });
