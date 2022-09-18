@@ -60,7 +60,11 @@ impl EntityProperty {
         Ok(())
     }
 
-    pub fn read(&mut self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<(), SerdeErr> {
+    pub fn read(
+        &mut self,
+        reader: &mut BitReader,
+        converter: &dyn NetEntityHandleConverter,
+    ) -> Result<(), SerdeErr> {
         if let Some(net_entity) = Option::<NetEntity>::de(reader)? {
             let handle = converter.net_entity_to_handle(&net_entity);
             *self.handle_prop = Some(handle);

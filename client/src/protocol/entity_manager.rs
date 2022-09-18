@@ -81,7 +81,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         Ok(())
     }
 
-    fn read_action(&mut self, reader: &mut BitReader, last_read_id: &mut Option<MessageId>) -> Result<(), SerdeErr> {
+    fn read_action(
+        &mut self,
+        reader: &mut BitReader,
+        last_read_id: &mut Option<MessageId>,
+    ) -> Result<(), SerdeErr> {
         let action_id = Self::read_message_id(reader, last_read_id)?;
 
         let action_type = EntityActionType::de(reader)?;
@@ -309,7 +313,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             let component_kind = component_update.kind;
 
             if let Some(world_entity) = self.local_to_world_entity.get(&net_entity) {
-                world.component_apply_update(self, world_entity, &component_kind, component_update)?;
+                world.component_apply_update(
+                    self,
+                    world_entity,
+                    &component_kind,
+                    component_update,
+                )?;
 
                 event_stream.push_back(Ok(Event::UpdateComponent(
                     server_tick,

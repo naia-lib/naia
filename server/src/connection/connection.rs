@@ -77,14 +77,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
         if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
             let converter = EntityConverter::new(world_record, &self.entity_manager);
             let channel_reader = ProtocolIo::new(&converter);
-            self.tick_buffer.read_messages(&server_tick, &client_tick, &channel_reader, reader)?;
+            self.tick_buffer
+                .read_messages(&server_tick, &client_tick, &channel_reader, reader)?;
         }
 
         // Read Messages
         {
             let converter = EntityConverter::new(world_record, &self.entity_manager);
             let channel_reader = ProtocolIo::new(&converter);
-            self.base.message_manager.read_messages(&channel_reader, reader)?;
+            self.base
+                .message_manager
+                .read_messages(&channel_reader, reader)?;
         }
 
         Ok(())

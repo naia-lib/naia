@@ -43,7 +43,10 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 1 of Handshake
-    pub fn recv_challenge_request(&mut self, reader: &mut BitReader) -> Result<BitWriter, SerdeErr> {
+    pub fn recv_challenge_request(
+        &mut self,
+        reader: &mut BitReader,
+    ) -> Result<BitWriter, SerdeErr> {
         let timestamp = Timestamp::de(reader)?;
 
         Ok(self.write_challenge_response(&timestamp))

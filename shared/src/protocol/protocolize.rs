@@ -19,7 +19,10 @@ pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
     /// Get kind from a type_id
     fn type_to_kind(type_id: TypeId) -> Option<Self::Kind>;
     /// Read from a bit stream to create a new Replica
-    fn read(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<Self, SerdeErr>;
+    fn read(
+        reader: &mut BitReader,
+        converter: &dyn NetEntityHandleConverter,
+    ) -> Result<Self, SerdeErr>;
     /// Read from a bit stream to create a new Component Update
     fn read_create_update(reader: &mut BitReader) -> Result<ComponentUpdate<Self::Kind>, SerdeErr>;
     /// Get an immutable reference to the inner Component/Message as a

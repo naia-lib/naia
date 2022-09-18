@@ -885,7 +885,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                     // Handshake stuff
                     match header.packet_type {
                         PacketType::ClientChallengeRequest => {
-                            if let Ok(mut writer) = self.handshake_manager.recv_challenge_request(&mut reader) {
+                            if let Ok(mut writer) =
+                                self.handshake_manager.recv_challenge_request(&mut reader)
+                            {
                                 self.io.send_writer(&address, &mut writer);
                             }
                             continue;

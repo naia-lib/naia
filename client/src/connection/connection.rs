@@ -57,7 +57,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     }
 
     pub fn buffer_data_packet(&mut self, incoming_tick: Tick, reader: &mut BitReader) {
-        self.jitter_buffer.add_item(incoming_tick, reader.to_owned());
+        self.jitter_buffer
+            .add_item(incoming_tick, reader.to_owned());
     }
 
     pub fn process_buffered_packets<W: WorldMutType<P, E>>(
@@ -72,14 +73,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             let channel_reader = ProtocolIo::new(&self.entity_manager);
 
             // Read Messages
-            let messages_result = self.base.message_manager.read_messages(&channel_reader, &mut reader);
+            let messages_result = self
+                .base
+                .message_manager
+                .read_messages(&channel_reader, &mut reader);
             if messages_result.is_err() {
                 // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                 continue;
             }
 
             // Read Entity Actions
-            let actions_result = self.entity_manager.read_all(world, server_tick, &mut reader, incoming_events);
+            let actions_result =
+                self.entity_manager
+                    .read_all(world, server_tick, &mut reader, incoming_events);
             if actions_result.is_err() {
                 // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                 continue;

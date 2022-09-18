@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
     message_list_header, sequence_greater_than,
-    serde::{BitReader, Serde, UnsignedVariableInteger, SerdeErr},
+    serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
     ChannelReader, Protocolize, ShortMessageId, Tick,
 };
 
@@ -56,8 +56,7 @@ impl<P: Protocolize> ChannelTickBufferReceiver<P> {
         let mut last_read_message_id: ShortMessageId = 0;
         for _ in 0..message_count {
             // read message id diff, add to last read id
-            let id_diff =
-                UnsignedVariableInteger::<2>::de(reader)?.get() as ShortMessageId;
+            let id_diff = UnsignedVariableInteger::<2>::de(reader)?.get() as ShortMessageId;
             let message_id: ShortMessageId = last_read_message_id + id_diff;
             last_read_message_id = message_id;
 

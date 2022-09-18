@@ -1,14 +1,13 @@
-
 use naia_serde::SerdeErr;
 
 use crate::{
-    ComponentUpdate, Replicate,
     protocol::{
         entity_property::NetEntityHandleConverter,
         protocolize::{ProtocolInserter, Protocolize},
         replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
         replicate::ReplicateSafe,
-    }
+    },
+    ComponentUpdate, Replicate,
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded

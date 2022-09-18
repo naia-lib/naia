@@ -4,9 +4,9 @@ mod inner {
     use std::marker::PhantomData;
 
     use naia_shared::{
-        ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
+        serde::SerdeErr, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
         ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
-        WorldMutType, WorldRefType, serde::SerdeErr
+        WorldMutType, WorldRefType,
     };
 
     pub type EmptyEntity = u8;
