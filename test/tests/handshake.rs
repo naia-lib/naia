@@ -34,7 +34,7 @@ fn end_to_end_handshake_w_auth() {
     {
         reader = BitReader::new(&message_buffer[..message_length]);
         StandardHeader::de(&mut reader).expect("unable to read standard header from stream");
-        writer = server.recv_challenge_request(&mut reader);
+        writer = server.recv_challenge_request(&mut reader).unwrap();
     }
 
     // 3. Server send challenge response
@@ -67,7 +67,8 @@ fn end_to_end_handshake_w_auth() {
     {
         reader = BitReader::new(&message_buffer[..message_length]);
         StandardHeader::de(&mut reader).expect("unable to read standard header from stream");
-        let result = server.recv_connect_request(&mut reader);
+        let address = "127.0.0.1:4000".parse().unwrap();
+        let result = server.recv_connect_request(&address, &mut reader);
         if let HandshakeResult::Success(Some(auth_message)) = result {
             let auth_replica = auth_message
                 .cast_ref::<Auth>()

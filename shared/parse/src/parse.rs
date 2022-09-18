@@ -144,7 +144,7 @@ fn skip_doc_string_inner(source: &mut Peekable<impl Iterator<Item = TokenTree>>)
     if next_group(source).is_none() {
         return false;
     }
-    return true;
+    true
 }
 
 #[allow(dead_code)]
@@ -263,20 +263,20 @@ fn next_struct(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Struct
             next_exact_punct(source, ";").expect("Expected ; on the end of tuple struct");
         }
 
-        return Struct {
+        Struct {
             name: struct_name,
             tuple,
             fields,
-        };
+        }
     } else {
         // skip ; at the end of struct like this: "struct Foo;"
         let _ = next_punct(source);
 
-        return Struct {
+        Struct {
             name: struct_name,
             fields: vec![],
             tuple: true,
-        };
+        }
     }
 }
 
@@ -329,15 +329,15 @@ fn next_enum(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Enum {
             }
         }
 
-        return Enum {
+        Enum {
             name: enum_name,
             variants,
-        };
+        }
     } else {
-        return Enum {
+        Enum {
             name: enum_name,
             variants: vec![],
-        };
+        }
     }
 }
 
