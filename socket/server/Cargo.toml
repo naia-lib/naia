@@ -1,6 +1,6 @@
 [package]
 name = "naia-server-socket"
-version = "0.12.0"
+version = "0.13.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../.."
 description = "An abstraction to provide a common API over either a UDP socket or a service that can establish WebRTC connections"
