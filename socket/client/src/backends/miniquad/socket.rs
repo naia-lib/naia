@@ -61,15 +61,6 @@ impl Socket {
         });
     }
 
-    /// Disconnects the Socket
-    pub fn disconnect(&mut self) {
-        if self.io.is_none() {
-            panic!("Socket is currently disconnected!");
-        }
-        self.io = None;
-        todo!()
-    }
-
     /// Returns whether or not the Socket is currently connected to the server
     pub fn is_connected(&self) -> bool {
         self.io.is_some()

@@ -82,8 +82,7 @@ impl App {
 
                         self.packet_sender.send(message_to_server.as_bytes());
                     } else {
-                        info!("Disconnecting..");
-                        self.socket.disconnect();
+                        info!("Client finished sending messages");
                     }
                 }
             }
