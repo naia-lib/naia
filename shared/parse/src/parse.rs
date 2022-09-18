@@ -133,6 +133,13 @@ pub fn next_group(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Opt
     }
 }
 
+fn skip_doc_string(source: &mut Peekable<impl Iterator<Item = TokenTree>>) {
+    if next_exact_punct(source, "#").is_none() {
+        return;
+    }
+    next_group(source);
+}
+
 #[allow(dead_code)]
 pub fn debug_current_token(source: &mut Peekable<impl Iterator<Item = TokenTree>>) {
     println!("{:?}", source.peek());
@@ -325,6 +332,8 @@ fn next_enum(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Enum {
 
 pub fn parse_data(input: TokenStream) -> Data {
     let mut source = input.into_iter().peekable();
+
+    skip_doc_string(&mut source);
 
     let pub_or_type = next_ident(&mut source).expect("Not an ident");
 
