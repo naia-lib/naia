@@ -134,10 +134,17 @@ pub fn next_group(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Opt
 }
 
 fn skip_doc_string(source: &mut Peekable<impl Iterator<Item = TokenTree>>) {
+    while skip_doc_string_inner(source) {}
+}
+
+fn skip_doc_string_inner(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> bool {
     if next_exact_punct(source, "#").is_none() {
-        return;
+        return false;
     }
-    next_group(source);
+    if next_group(source).is_none() {
+        return false;
+    }
+    return true;
 }
 
 #[allow(dead_code)]
@@ -286,6 +293,8 @@ fn next_enum(source: &mut Peekable<impl Iterator<Item = TokenTree>>) -> Enum {
             if next_eof(&mut body).is_some() {
                 break;
             }
+
+            skip_doc_string(&mut body);
 
             let variant_name = next_ident(&mut body).expect("Unnamed variants are not supported");
             let group = next_group(&mut body);
