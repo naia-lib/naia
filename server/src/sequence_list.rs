@@ -10,40 +10,6 @@ impl<T> SequenceList<T> {
         Self { list: Vec::new() }
     }
 
-    // pub fn pop_oldest(&mut self) -> Option<(u16, T)> {
-    //     return self.list.pop_front();
-    // }
-    //
-    // pub fn len(&self) -> usize {
-    //     self.list.len()
-    // }
-    //
-    // pub fn get(&self, index: usize) -> Option<&(u16, T)> {
-    //     return self.list.get(index);
-    // }
-
-    // pub fn push_from_front(&mut self, id: u16, item: T) {
-    //     let mut index = 0;
-    //
-    //     loop {
-    //         if index < self.list.len() {
-    //             let (old_id, _) = self.list.get(index).unwrap();
-    //             if *old_id == id {
-    //                 panic!("duplicates are not allowed");
-    //             }
-    //             if sequence_greater_than(*old_id, id) {
-    //                 self.list.insert(index, (id, item));
-    //                 break;
-    //             }
-    //         } else {
-    //             self.list.push((id, item));
-    //             break;
-    //         }
-    //
-    //         index += 1;
-    //     }
-    // }
-
     pub fn front(&self) -> Option<&(u16, T)> {
         self.list.get(0)
     }

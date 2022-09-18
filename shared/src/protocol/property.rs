@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use naia_serde::{BitReader, BitWrite, BitWriter, Serde};
+use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::protocol::property_mutate::PropertyMutator;
 
@@ -39,32 +39,32 @@ impl<T: Serde> Property<T> {
 
     /// Given a cursor into incoming packet data, initializes the Property with
     /// the synced value
-    pub fn new_read(reader: &mut BitReader, mutator_index: u8) -> Self {
-        let inner = Self::read_inner(reader);
+    pub fn new_read(reader: &mut BitReader, mutator_index: u8) -> Result<Self, SerdeErr> {
+        let inner = Self::read_inner(reader)?;
 
-        Property::<T> {
+        Ok(Property::<T> {
             inner,
             mutator: None,
             mutator_index,
-        }
+        })
     }
 
     /// Reads from a stream and immediately writes to a stream
     /// Used to buffer updates for later
-    pub fn read_write(bit_reader: &mut BitReader, bit_writer: &mut BitWriter) {
-        T::de(bit_reader)
-            .expect("Property read error.")
-            .ser(bit_writer);
+    pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
+        T::de(reader)?.ser(writer);
+        Ok(())
     }
 
     /// Given a cursor into incoming packet data, updates the Property with the
     /// synced value
-    pub fn read(&mut self, reader: &mut BitReader) {
-        self.inner = Self::read_inner(reader);
+    pub fn read(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
+        self.inner = Self::read_inner(reader)?;
+        Ok(())
     }
 
-    fn read_inner(reader: &mut BitReader) -> T {
-        T::de(reader).expect("Property read error.")
+    fn read_inner(reader: &mut BitReader) -> Result<T, SerdeErr> {
+        T::de(reader)
     }
 
     // Comparison

@@ -30,8 +30,8 @@ pub struct AckManager {
     received_packets: SequenceBuffer<ReceivedPacket>,
 }
 
-impl Default for AckManager {
-    fn default() -> Self {
+impl AckManager {
+    pub fn new() -> Self {
         Self {
             next_packet_index: 0,
             last_recv_packet_index: u16::MAX,
@@ -39,9 +39,7 @@ impl Default for AckManager {
             received_packets: SequenceBuffer::with_capacity(REDUNDANT_PACKET_ACKS_SIZE + 1),
         }
     }
-}
 
-impl AckManager {
     /// Get the index of the next outgoing packet
     pub fn next_sender_packet_index(&self) -> PacketIndex {
         self.next_packet_index

@@ -40,7 +40,14 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
         else if !variant.tuple {
             l!(ser_variants, "Self::{} {{", variant.name);
             for field in &variant.fields {
-                l!(ser_variants, "{}, ", field.field_name.as_ref().unwrap());
+                l!(
+                    ser_variants,
+                    "{}, ",
+                    field
+                        .field_name
+                        .as_ref()
+                        .expect("expected the field to have a name")
+                );
             }
             l!(ser_variants, "} => {");
 
@@ -57,7 +64,10 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
                 l!(
                     ser_variants,
                     "{}.ser(writer);",
-                    field.field_name.as_ref().unwrap()
+                    field
+                        .field_name
+                        .as_ref()
+                        .expect("expected the field to have a name")
                 );
             }
             l!(ser_variants, "}");
@@ -107,7 +117,10 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
                 l!(
                     de_variants,
                     "{}: Serde::de(reader)?,",
-                    field.field_name.as_ref().unwrap()
+                    field
+                        .field_name
+                        .as_ref()
+                        .expect("expected field to have a name")
                 );
             }
             l!(de_variants, "},");
@@ -148,5 +161,5 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
         "
     )
     .parse()
-    .unwrap()
+    .expect("unable to parse valid tokens from string")
 }

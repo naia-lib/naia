@@ -19,6 +19,7 @@ pub fn run() {
         // Realtime Gameplay Loop
         .add_system_to_stage(Stage::Connection, events::connect_event)
         .add_system_to_stage(Stage::Disconnection, events::disconnect_event)
+        .add_system_to_stage(Stage::Rejection, events::reject_event)
         .add_system_to_stage(Stage::ReceiveEvents, events::spawn_entity_event)
         .add_system_to_stage(Stage::ReceiveEvents, events::insert_component_event)
         .add_system_to_stage(Stage::ReceiveEvents, events::update_component_event)

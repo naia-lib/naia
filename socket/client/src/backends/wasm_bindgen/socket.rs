@@ -29,7 +29,7 @@ impl Socket {
         Socket {
             config: config.clone(),
             io: None,
-            server_addr: AddrCell::default(),
+            server_addr: AddrCell::new(),
         }
     }
 
@@ -47,6 +47,11 @@ impl Socket {
         self.setup_io(&data_port);
 
         data_channel.start();
+    }
+
+    /// Returns whether or not the Socket is currently connected to the server
+    pub fn is_connected(&self) -> bool {
+        self.io.is_some()
     }
 
     // Creates a Socket from an underlying DataPort.

@@ -40,3 +40,22 @@ members = [
     "demos/socket/client/wasm_bindgen",
     "demos/socket/client/miniquad",
 ]
+# Do not put demos in the default-members, since they may use conflicting dependencies / feature flags
+default-members = [
+    "client",
+    "server",
+    "shared",
+    "shared/derive",
+    "shared/parse",
+    "shared/serde",
+    "shared/serde/derive",
+    "socket/client",
+    "socket/server",
+    "socket/shared",
+    "adapters/hecs/client",
+    "adapters/hecs/server",
+    "adapters/hecs/shared",
+    "adapters/bevy/client",
+    "adapters/bevy/server",
+    "adapters/bevy/shared",
+]

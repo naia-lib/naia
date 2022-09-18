@@ -4,8 +4,8 @@ use naia_shared::Replicate;
 #[protocol_path = "crate::protocol::Protocol"]
 pub struct Marker;
 
-impl Default for Marker {
-    fn default() -> Self {
+impl Marker {
+    pub fn new() -> Self {
         Marker::new_complete()
     }
 }

@@ -51,7 +51,7 @@ impl Serde for bool {
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        Ok(reader.read_bit())
+        reader.read_bit()
     }
 }
 
@@ -103,7 +103,7 @@ impl Serde for char {
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let mut bytes = [0_u8; 4];
         for byte in &mut bytes {
-            *byte = reader.read_byte();
+            *byte = reader.read_byte()?;
         }
         let mut container = [0_u32];
         unsafe {
@@ -176,7 +176,7 @@ macro_rules! impl_serde_for {
                 const BYTES_LENGTH: usize = std::mem::size_of::<$impl_type>();
                 let mut byte_array = [0_u8; BYTES_LENGTH];
                 for index in 0..BYTES_LENGTH {
-                    byte_array[index] = reader.read_byte();
+                    byte_array[index] = reader.read_byte()?;
                 }
                 let mut container = [0 as $impl_type];
                 unsafe {
@@ -209,7 +209,7 @@ impl Serde for u8 {
     }
 
     fn de(reader: &mut BitReader) -> Result<u8, SerdeErr> {
-        Ok(reader.read_byte())
+        reader.read_byte()
     }
 }
 
@@ -221,7 +221,7 @@ impl Serde for i8 {
     }
 
     fn de(reader: &mut BitReader) -> Result<i8, SerdeErr> {
-        let byte = [reader.read_byte()];
+        let byte = [reader.read_byte()?];
         let mut container = [0_i8];
         unsafe {
             std::ptr::copy_nonoverlapping(
@@ -247,7 +247,7 @@ impl Serde for usize {
     fn de(reader: &mut BitReader) -> Result<usize, SerdeErr> {
         let mut byte_array = [0_u8; 8];
         for byte in &mut byte_array {
-            *byte = reader.read_byte();
+            *byte = reader.read_byte()?;
         }
         let mut container = [0_u64];
         unsafe {
@@ -274,7 +274,7 @@ impl Serde for isize {
     fn de(reader: &mut BitReader) -> Result<isize, SerdeErr> {
         let mut byte_array = [0_u8; 8];
         for byte in &mut byte_array {
-            *byte = reader.read_byte();
+            *byte = reader.read_byte()?;
         }
         let mut container = [0_u64];
         unsafe {

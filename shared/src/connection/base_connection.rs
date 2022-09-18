@@ -39,7 +39,7 @@ impl<P: Protocolize, C: ChannelIndex> BaseConnection<P, C> {
             address,
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
-            ack_manager: AckManager::default(),
+            ack_manager: AckManager::new(),
             message_manager: MessageManager::new(host_type, channel_config),
         }
     }

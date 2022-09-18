@@ -18,41 +18,45 @@ use super::{
 pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<Server<P, Entity, C>>| {
         world.resource_scope(|world, mut server_resource: Mut<ServerResource>| {
-            let event_results = server.receive();
+            let events = server.receive();
+            if events.is_empty() {
+                // In the future, may want to stall the system if we don't receive any events
+                // to keep from the system running empty and using up CPU.
+            } else {
+                unsafe {
+                    let mut authorize_event_writer = world
+                        .get_resource_unchecked_mut::<Events<AuthorizationEvent<P>>>()
+                        .unwrap();
+                    let mut connect_event_writer = world
+                        .get_resource_unchecked_mut::<Events<ConnectionEvent>>()
+                        .unwrap();
+                    let mut disconnect_event_writer = world
+                        .get_resource_unchecked_mut::<Events<DisconnectionEvent>>()
+                        .unwrap();
+                    let mut message_event_writer = world
+                        .get_resource_unchecked_mut::<Events<MessageEvent<P, C>>>()
+                        .unwrap();
 
-            unsafe {
-                let mut authorize_event_writer = world
-                    .get_resource_unchecked_mut::<Events<AuthorizationEvent<P>>>()
-                    .unwrap();
-                let mut connect_event_writer = world
-                    .get_resource_unchecked_mut::<Events<ConnectionEvent>>()
-                    .unwrap();
-                let mut disconnect_event_writer = world
-                    .get_resource_unchecked_mut::<Events<DisconnectionEvent>>()
-                    .unwrap();
-                let mut message_event_writer = world
-                    .get_resource_unchecked_mut::<Events<MessageEvent<P, C>>>()
-                    .unwrap();
-
-                for event_result in event_results {
-                    match event_result {
-                        Ok(Event::Tick) => {
-                            server_resource.ticker.set();
-                            continue;
+                    for event in events {
+                        match event {
+                            Ok(Event::Tick) => {
+                                server_resource.ticker.set();
+                                continue;
+                            }
+                            Ok(Event::Authorization(user_key, auth)) => {
+                                authorize_event_writer.send(AuthorizationEvent(user_key, auth));
+                            }
+                            Ok(Event::Connection(user_key)) => {
+                                connect_event_writer.send(ConnectionEvent(user_key));
+                            }
+                            Ok(Event::Disconnection(user_key, user)) => {
+                                disconnect_event_writer.send(DisconnectionEvent(user_key, user));
+                            }
+                            Ok(Event::Message(user_key, channel, message)) => {
+                                message_event_writer.send(MessageEvent(user_key, channel, message));
+                            }
+                            Err(_) => {}
                         }
-                        Ok(Event::Authorization(user_key, auth)) => {
-                            authorize_event_writer.send(AuthorizationEvent(user_key, auth));
-                        }
-                        Ok(Event::Connection(user_key)) => {
-                            connect_event_writer.send(ConnectionEvent(user_key));
-                        }
-                        Ok(Event::Disconnection(user_key, user)) => {
-                            disconnect_event_writer.send(DisconnectionEvent(user_key, user));
-                        }
-                        Ok(Event::Message(user_key, channel, message)) => {
-                            message_event_writer.send(MessageEvent(user_key, channel, message));
-                        }
-                        Err(_) => {}
                     }
                 }
             }

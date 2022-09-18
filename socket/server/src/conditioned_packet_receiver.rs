@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use crossbeam::channel::Receiver;
+use smol::channel::Receiver;
 
 use naia_socket_shared::{link_condition_logic, LinkConditionerConfig, TimeQueue};
 

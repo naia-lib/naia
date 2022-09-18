@@ -25,8 +25,8 @@ pub struct App {
     pub next_id: u32,
 }
 
-impl Default for App {
-    fn default() -> Self {
+impl App {
+    pub fn default() -> Self {
         info!("Naia Hecs Client Demo started");
 
         app_init(
@@ -36,9 +36,7 @@ impl Default for App {
             Auth::new("charlie", "12345"),
         )
     }
-}
 
-impl App {
     pub fn update(&mut self) {
         process_events(self);
     }

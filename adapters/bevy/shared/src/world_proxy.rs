@@ -4,9 +4,9 @@ use bevy_ecs::{
 };
 
 use naia_shared::{
-    ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, ProtocolKindType, Protocolize,
-    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe, WorldMutType,
-    WorldRefType,
+    serde::SerdeErr, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, ProtocolKindType,
+    Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe,
+    WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -197,15 +197,16 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
         entity: &Entity,
         component_kind: &P::Kind,
         update: ComponentUpdate<P::Kind>,
-    ) {
+    ) -> Result<(), SerdeErr> {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData<P>>| {
                 if let Some(accessor) = data.component_access(component_kind) {
                     if let Some(mut component) = accessor.component_mut(world, entity) {
-                        component.read_apply_update(converter, update);
+                        let _update_result = component.read_apply_update(converter, update);
                     }
                 }
             });
+        Ok(())
     }
 
     fn mirror_entities(&mut self, new_entity: &Entity, old_entity: &Entity) {

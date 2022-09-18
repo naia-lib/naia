@@ -42,7 +42,7 @@ pub fn march_and_mark(app: &mut App) {
     while let Some(entity) = entities_to_add.pop() {
         if !app.has_marker.contains(&entity) {
             // Create Marker component
-            let marker = Marker::default();
+            let marker = Marker::new();
 
             // Add to Naia Server
             app.server
@@ -73,7 +73,9 @@ pub fn march_and_mark(app: &mut App) {
         let last;
         {
             let entity_ref = app.server.entity(&app.world, &entity);
-            let old_name = entity_ref.component::<Name>().unwrap();
+            let old_name = entity_ref
+                .component::<Name>()
+                .expect("entity does not have a Name component");
             first = (*old_name.full).first.clone();
             last = (*old_name.full).last.clone();
         }

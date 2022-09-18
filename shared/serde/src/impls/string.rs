@@ -20,7 +20,7 @@ impl Serde for String {
         let length_usize = length_int.get() as usize;
         let mut bytes: Vec<u8> = Vec::with_capacity(length_usize);
         for _ in 0..length_usize {
-            bytes.push(reader.read_byte());
+            bytes.push(reader.read_byte()?);
         }
 
         let result = std::str::from_utf8(&bytes).unwrap().to_string();

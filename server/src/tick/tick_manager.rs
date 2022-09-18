@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use naia_shared::{
-    serde::{BitReader, BitWriter, Serde},
+    serde::{BitReader, BitWriter, Serde, SerdeErr},
     Tick, Timer,
 };
 
@@ -24,8 +24,8 @@ impl TickManager {
         self.current_tick.ser(writer);
     }
 
-    pub fn read_client_tick(&self, reader: &mut BitReader) -> Tick {
-        Tick::de(reader).unwrap()
+    pub fn read_client_tick(&self, reader: &mut BitReader) -> Result<Tick, SerdeErr> {
+        Tick::de(reader)
     }
 
     /// Whether or not we should emit a tick event

@@ -68,18 +68,28 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         incoming_events: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
-            let mut bit_reader = owned_reader.borrow();
+            let mut reader = owned_reader.borrow();
 
             let channel_reader = ProtocolIo::new(&self.entity_manager);
 
             // Read Messages
-            self.base
+            let messages_result = self
+                .base
                 .message_manager
-                .read_messages(&channel_reader, &mut bit_reader);
+                .read_messages(&channel_reader, &mut reader);
+            if messages_result.is_err() {
+                // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
+                continue;
+            }
 
             // Read Entity Actions
-            self.entity_manager
-                .read_all(world, server_tick, &mut bit_reader, incoming_events);
+            let actions_result =
+                self.entity_manager
+                    .read_all(world, server_tick, &mut reader, incoming_events);
+            if actions_result.is_err() {
+                // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
+                continue;
+            }
         }
     }
 
@@ -111,7 +121,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
         if let Some(tick_manager) = tick_manager_opt {
             self.tick_buffer
                 .as_mut()
-                .unwrap()
+                .expect("connection is not configured with a Tick Buffer")
                 .collect_outgoing_messages(
                     &tick_manager.client_sending_tick(),
                     &tick_manager.server_receivable_tick(),

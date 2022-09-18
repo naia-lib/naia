@@ -1,9 +1,11 @@
 use naia_shared::{derive_serde, serde, Property, Replicate};
 
-// Here's an example of a Custom Property
+/// Here's an example of a Custom Property
 #[derive_serde]
 pub struct FullName {
+    /// First name
     pub first: String,
+    /// Last name
     pub last: String,
 }
 

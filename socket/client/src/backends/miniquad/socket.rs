@@ -61,6 +61,11 @@ impl Socket {
         });
     }
 
+    /// Returns whether or not the Socket is currently connected to the server
+    pub fn is_connected(&self) -> bool {
+        self.io.is_some()
+    }
+
     /// Gets a PacketSender which can be used to send packets through the Socket
     pub fn packet_sender(&self) -> PacketSender {
         return self

@@ -16,7 +16,7 @@ cfg_if! {
         pub fn main() -> Result<(), JsValue> {
             wasm_logger::init(wasm_logger::Config::default());
 
-            start_loop(App::default());
+            start_loop(App::new());
 
             Ok(())
         }

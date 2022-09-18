@@ -55,6 +55,10 @@ pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World)
                             client_resource.disconnector.set();
                             continue;
                         }
+                        Ok(Event::Rejection(_)) => {
+                            client_resource.rejector.set();
+                            continue;
+                        }
                         Ok(Event::Tick) => {
                             client_resource.ticker.set();
                             continue;
@@ -118,6 +122,18 @@ pub fn should_tick(resource: Res<ClientResource>) -> ShouldRun {
     } else {
         ShouldRun::No
     }
+}
+
+pub fn should_reject(resource: Res<ClientResource>) -> ShouldRun {
+    if resource.rejector.is_set() {
+        ShouldRun::Yes
+    } else {
+        ShouldRun::No
+    }
+}
+
+pub fn finish_reject(mut resource: ResMut<ClientResource>) {
+    resource.rejector.reset();
 }
 
 pub fn finish_tick(mut resource: ResMut<ClientResource>) {

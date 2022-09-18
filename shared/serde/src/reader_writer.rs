@@ -1,4 +1,5 @@
 use crate::consts::MAX_BUFFER_SIZE;
+use crate::SerdeErr;
 
 // BitWrite
 
@@ -134,10 +135,10 @@ impl<'b> BitReader<'b> {
         }
     }
 
-    pub(crate) fn read_bit(&mut self) -> bool {
+    pub(crate) fn read_bit(&mut self) -> Result<bool, SerdeErr> {
         if self.state.scratch_index == 0 {
             if self.state.buffer_index == self.buffer.len() {
-                panic!("no more bytes to read");
+                return Err(SerdeErr);
             }
 
             self.state.scratch = self.buffer[self.state.buffer_index];
@@ -152,21 +153,21 @@ impl<'b> BitReader<'b> {
 
         self.state.scratch_index -= 1;
 
-        value != 0
+        Ok(value != 0)
     }
 
-    pub(crate) fn read_byte(&mut self) -> u8 {
+    pub(crate) fn read_byte(&mut self) -> Result<u8, SerdeErr> {
         let mut output = 0;
         for _ in 0..7 {
-            if self.read_bit() {
+            if self.read_bit()? {
                 output |= 128;
             }
             output >>= 1;
         }
-        if self.read_bit() {
+        if self.read_bit()? {
             output |= 128;
         }
-        output
+        Ok(output)
     }
 }
 
@@ -219,7 +220,7 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert!(reader.read_bit());
+        assert!(reader.read_bit().unwrap());
     }
 
     #[test]
@@ -236,9 +237,9 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
     }
 
     #[test]
@@ -261,15 +262,15 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(!reader.read_bit());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
     }
 
     #[test]
@@ -299,22 +300,22 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(!reader.read_bit());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
+        assert!(reader.read_bit().unwrap());
     }
 
     #[test]
@@ -347,25 +348,25 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(!reader.read_bit());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
     }
 
     #[test]
@@ -380,7 +381,7 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert_eq!(123, reader.read_byte());
+        assert_eq!(123, reader.read_byte().unwrap());
     }
 
     #[test]
@@ -399,10 +400,10 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert_eq!(48, reader.read_byte());
-        assert_eq!(151, reader.read_byte());
-        assert_eq!(62, reader.read_byte());
-        assert_eq!(34, reader.read_byte());
-        assert_eq!(2, reader.read_byte());
+        assert_eq!(48, reader.read_byte().unwrap());
+        assert_eq!(151, reader.read_byte().unwrap());
+        assert_eq!(62, reader.read_byte().unwrap());
+        assert_eq!(34, reader.read_byte().unwrap());
+        assert_eq!(2, reader.read_byte().unwrap());
     }
 }

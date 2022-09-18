@@ -1,11 +1,10 @@
 extern crate log;
 
-use std::{future, thread};
-
 use naia_socket_shared::{parse_server_url, SocketConfig};
-use tokio::runtime::Builder;
+
 use webrtc_unreliable_client::Socket as RTCSocket;
 
+use crate::backends::native::runtime::get_runtime;
 use crate::{
     conditioned_packet_receiver::ConditionedPacketReceiver,
     io::Io,
@@ -33,7 +32,7 @@ impl Socket {
     /// Connects to the given server address
     pub fn connect(&mut self, server_session_url: &str) {
         if self.io.is_some() {
-            panic!("Socket already listening!");
+            panic!("Socket already connected!");
         }
 
         let server_session_string = format!(
@@ -43,22 +42,8 @@ impl Socket {
         );
         let conditioner_config = self.config.link_condition.clone();
 
-        let runtime = Builder::new_multi_thread().enable_all().build().unwrap();
-
-        let runtime_handle = runtime.handle().clone();
-
-        thread::Builder::new()
-            .name("tokio-main".to_string())
-            .spawn(move || {
-                let _guard = runtime.enter();
-                runtime.block_on(future::pending::<()>());
-            })
-            .expect("cannot spawn executor thread");
-
-        let _guard = runtime_handle.enter();
-
         let (addr_cell, to_server_sender, to_client_receiver) =
-            runtime_handle.block_on(RTCSocket::connect(&server_session_string));
+            get_runtime().block_on(RTCSocket::connect(&server_session_string));
 
         // Setup Packet Sender & Receiver
         let packet_sender = PacketSender::new(addr_cell.clone(), to_server_sender);
@@ -77,6 +62,11 @@ impl Socket {
             packet_sender,
             packet_receiver: PacketReceiver::new(receiver),
         });
+    }
+
+    /// Returns whether or not the Socket is currently connected to the server
+    pub fn is_connected(&self) -> bool {
+        self.io.is_some()
     }
 
     /// Gets a PacketSender which can be used to send packets through the Socket

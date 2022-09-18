@@ -20,6 +20,11 @@ pub enum HandshakeState {
     Connected,
 }
 
+pub enum HandshakeResult {
+    Connected,
+    Rejected,
+}
+
 pub struct HandshakeManager<P: Protocolize> {
     handshake_timer: Timer,
     pre_connection_timestamp: Timestamp,
@@ -78,15 +83,20 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Call this regularly so handshake manager can process incoming requests
-    pub fn recv(&mut self, reader: &mut BitReader) -> bool {
-        let header = StandardHeader::de(reader).unwrap();
+    pub fn recv(&mut self, reader: &mut BitReader) -> Option<HandshakeResult> {
+        let header_result = StandardHeader::de(reader);
+        if header_result.is_err() {
+            return None;
+        }
+        let header = header_result.unwrap();
         match header.packet_type {
             PacketType::ServerChallengeResponse => {
                 self.recv_challenge_response(reader);
-                false
+                None
             }
             PacketType::ServerConnectResponse => self.recv_connect_response(),
-            _ => false,
+            PacketType::ServerRejectResponse => Some(HandshakeResult::Rejected),
+            _ => None,
         }
     }
 
@@ -103,10 +113,18 @@ impl<P: Protocolize> HandshakeManager<P> {
     // Step 2 of Handshake
     pub fn recv_challenge_response(&mut self, reader: &mut BitReader) {
         if self.connection_state == HandshakeState::AwaitingChallengeResponse {
-            let payload_timestamp = Timestamp::de(reader).unwrap();
+            let timestamp_result = Timestamp::de(reader);
+            if timestamp_result.is_err() {
+                return;
+            }
+            let timestamp = timestamp_result.unwrap();
 
-            if self.pre_connection_timestamp == payload_timestamp {
-                let digest_bytes: Vec<u8> = Vec::<u8>::de(reader).unwrap();
+            if self.pre_connection_timestamp == timestamp {
+                let digest_bytes_result = Vec::<u8>::de(reader);
+                if digest_bytes_result.is_err() {
+                    return;
+                }
+                let digest_bytes = digest_bytes_result.unwrap();
                 self.pre_connection_digest = Some(digest_bytes);
 
                 self.connection_state = HandshakeState::AwaitingConnectResponse;
@@ -138,10 +156,15 @@ impl<P: Protocolize> HandshakeManager<P> {
     }
 
     // Step 4 of Handshake
-    pub fn recv_connect_response(&mut self) -> bool {
+    pub fn recv_connect_response(&mut self) -> Option<HandshakeResult> {
         let was_not_connected = self.connection_state != HandshakeState::Connected;
+
         self.connection_state = HandshakeState::Connected;
-        was_not_connected
+
+        match was_not_connected {
+            true => Some(HandshakeResult::Connected),
+            false => None,
+        }
     }
 
     // Send 10 disconnect packets

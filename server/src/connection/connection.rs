@@ -6,7 +6,7 @@ use std::{
 
 use naia_shared::{
     sequence_greater_than,
-    serde::{BitReader, BitWriter},
+    serde::{BitReader, BitWriter, SerdeErr},
     BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, HostType,
     Instant, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldRefType,
 };
@@ -70,15 +70,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
     pub fn process_incoming_data(
         &mut self,
         server_and_client_tick_opt: Option<(Tick, Tick)>,
-        bit_reader: &mut BitReader,
+        reader: &mut BitReader,
         world_record: &WorldRecord<E, P::Kind>,
-    ) {
+    ) -> Result<(), SerdeErr> {
         // Read Tick Buffered Messages
         if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
             let converter = EntityConverter::new(world_record, &self.entity_manager);
             let channel_reader = ProtocolIo::new(&converter);
             self.tick_buffer
-                .read_messages(&server_tick, &client_tick, &channel_reader, bit_reader);
+                .read_messages(&server_tick, &client_tick, &channel_reader, reader)?;
         }
 
         // Read Messages
@@ -87,8 +87,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
             let channel_reader = ProtocolIo::new(&converter);
             self.base
                 .message_manager
-                .read_messages(&channel_reader, bit_reader);
+                .read_messages(&channel_reader, reader)?;
         }
+
+        Ok(())
     }
 
     // Outgoing data

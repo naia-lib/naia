@@ -30,6 +30,13 @@ pub fn connect_event(client: Client<Protocol, Channels>) {
     info!("Client connected to: {}", client.server_address());
 }
 
+pub fn reject_event(client: Client<Protocol, Channels>) {
+    info!(
+        "Client rejected from connecting to: {}",
+        client.server_address()
+    );
+}
+
 pub fn disconnect_event(client: Client<Protocol, Channels>) {
     info!("Client disconnected from: {}", client.server_address());
 }

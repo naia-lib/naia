@@ -143,8 +143,8 @@ pub enum ChannelDirection {
 // Default Channels
 
 mod define_default_channels {
-    use crate::{{derive_serde, serde}};
     use super::ChannelIndex;
+    use crate::{derive_serde, serde};
 
     #[derive(Eq, Hash)]
     #[derive_serde]

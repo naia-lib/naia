@@ -17,19 +17,11 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = [
-    "bevy/bevy_asset",
-    "bevy/bevy_winit",
-    "bevy/render",
-]
 
 [dependencies]
 naia-bevy-client = { path = "../../../adapters/bevy/client" }
 naia-bevy-demo-shared = { path = "../shared" }
-winit = { version = "0.26" }
-rand = { version = "0.8" }
-getrandom = { version="0.2", features=["wasm-bindgen"] }
-bevy = { version = "0.8", default-features=false }
+bevy = { version = "0.8", default-features = false, features = [ "bevy_asset", "bevy_winit", "render", "x11" ] }
 cfg-if = { version = "1.0" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

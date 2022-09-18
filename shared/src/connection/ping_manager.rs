@@ -49,13 +49,13 @@ impl PingManager {
 
     /// Process an incoming pong payload
     pub fn process_pong(&mut self, reader: &mut BitReader) {
-        let ping_index = PingIndex::de(reader).unwrap();
-
-        match self.sent_pings.remove(ping_index) {
-            None => {}
-            Some(ping_instant) => {
-                let rtt_millis = &ping_instant.elapsed().as_secs_f32() * 1000.0;
-                self.process_new_rtt(rtt_millis);
+        if let Ok(ping_index) = PingIndex::de(reader) {
+            match self.sent_pings.remove(ping_index) {
+                None => {}
+                Some(ping_instant) => {
+                    let rtt_millis = &ping_instant.elapsed().as_secs_f32() * 1000.0;
+                    self.process_new_rtt(rtt_millis);
+                }
             }
         }
     }

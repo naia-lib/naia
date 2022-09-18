@@ -1,5 +1,6 @@
-use crossbeam::channel::Sender;
 use std::net::SocketAddr;
+
+use smol::channel::Sender;
 
 /// Used to send packets to the Server Socket
 #[derive(Clone)]
@@ -16,7 +17,7 @@ impl PacketSender {
     /// Sends a packet to the Server Socket
     pub fn send(&self, address: &SocketAddr, payload: &[u8]) {
         self.channel_sender
-            .send((*address, payload.into()))
+            .try_send((*address, payload.into()))
             .unwrap(); //TODO: handle result..
     }
 }

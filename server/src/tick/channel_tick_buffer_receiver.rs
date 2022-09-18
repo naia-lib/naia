@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
     message_list_header, sequence_greater_than,
-    serde::{BitReader, Serde, UnsignedVariableInteger},
+    serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
     ChannelReader, Protocolize, ShortMessageId, Tick,
 };
 
@@ -26,13 +26,14 @@ impl<P: Protocolize> ChannelTickBufferReceiver<P> {
         host_tick: &Tick,
         remote_tick: &Tick,
         channel_reader: &dyn ChannelReader<P>,
-        bit_reader: &mut BitReader,
-    ) {
+        reader: &mut BitReader,
+    ) -> Result<(), SerdeErr> {
         let mut last_read_tick = *remote_tick;
-        let message_count = message_list_header::read(bit_reader);
+        let message_count = message_list_header::read(reader)?;
         for _ in 0..message_count {
-            self.read_message(host_tick, &mut last_read_tick, channel_reader, bit_reader);
+            self.read_message(host_tick, &mut last_read_tick, channel_reader, reader)?;
         }
+        Ok(())
     }
 
     /// Given incoming packet data, read transmitted Message and store
@@ -42,26 +43,25 @@ impl<P: Protocolize> ChannelTickBufferReceiver<P> {
         host_tick: &Tick,
         last_read_tick: &mut Tick,
         channel_reader: &dyn ChannelReader<P>,
-        bit_reader: &mut BitReader,
-    ) {
+        reader: &mut BitReader,
+    ) -> Result<(), SerdeErr> {
         // read remote tick
-        let remote_tick_diff = UnsignedVariableInteger::<3>::de(bit_reader).unwrap().get() as Tick;
+        let remote_tick_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as Tick;
         *last_read_tick = last_read_tick.wrapping_sub(remote_tick_diff);
         let remote_tick = *last_read_tick;
 
         // read message count
-        let message_count = UnsignedVariableInteger::<3>::de(bit_reader).unwrap().get();
+        let message_count = UnsignedVariableInteger::<3>::de(reader)?.get();
 
         let mut last_read_message_id: ShortMessageId = 0;
         for _ in 0..message_count {
             // read message id diff, add to last read id
-            let id_diff =
-                UnsignedVariableInteger::<2>::de(bit_reader).unwrap().get() as ShortMessageId;
+            let id_diff = UnsignedVariableInteger::<2>::de(reader)?.get() as ShortMessageId;
             let message_id: ShortMessageId = last_read_message_id + id_diff;
             last_read_message_id = message_id;
 
             // read payload
-            let new_message = channel_reader.read(bit_reader);
+            let new_message = channel_reader.read(reader)?;
 
             if !self
                 .incoming_messages
@@ -71,6 +71,8 @@ impl<P: Protocolize> ChannelTickBufferReceiver<P> {
                 // server_tick, client_tick);
             }
         }
+
+        Ok(())
     }
 }
 

@@ -17,7 +17,8 @@ cfg_if! {
 
         pub fn start_loop(app: App) {
             fn set_timeout(f: &Closure<dyn FnMut()>, duration: i32) {
-                web_sys::window().unwrap()
+                web_sys::window()
+                    .expect("unable to get window")
                     .set_timeout_with_callback_and_timeout_and_arguments_0(f.as_ref().unchecked_ref(), duration)
                     .expect("should register `requestAnimationFrame` OK");
             }
@@ -30,12 +31,12 @@ cfg_if! {
                 if let Some(the_app) = Rc::get_mut(&mut rc) {
                     the_app.update();
                 };
-                set_timeout(f.borrow().as_ref().unwrap(), 1);
+                set_timeout(f.borrow().as_ref().expect("unable to borrow function"), 1);
             };
 
             *g.borrow_mut() = Some(Closure::wrap(Box::new(c) as Box<dyn FnMut()>));
 
-            set_timeout(g.borrow().as_ref().unwrap(), 1);
+            set_timeout(g.borrow().as_ref().expect("unable to borrow function"), 1);
         }
     } else {
         pub fn start_loop(app: App) {

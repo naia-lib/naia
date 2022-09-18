@@ -15,6 +15,7 @@ use naia_shared::Timer;
 use naia_socket_demo_shared::{shared_config, PING_MSG, PONG_MSG};
 
 pub struct App {
+    socket: Socket,
     packet_sender: PacketSender,
     packet_receiver: PacketReceiver,
     message_count: u8,
@@ -22,25 +23,31 @@ pub struct App {
     server_addr_str: Option<String>,
 }
 
-impl Default for App {
-    fn default() -> App {
+impl App {
+    pub fn new() -> App {
         info!("Naia Client Socket Demo started");
 
         let mut socket = Socket::new(&shared_config());
         socket.connect("http://127.0.0.1:14191");
 
+        let packet_sender = socket.packet_sender();
+        let packet_receiver = socket.packet_receiver();
+
         App {
-            packet_sender: socket.packet_sender(),
-            packet_receiver: socket.packet_receiver(),
+            socket,
+            packet_sender,
+            packet_receiver,
             message_count: 0,
             timer: Timer::new(Duration::from_secs(1)),
             server_addr_str: None,
         }
     }
-}
 
-impl App {
     pub fn update(&mut self) {
+        if !self.socket.is_connected() {
+            return;
+        }
+
         if self.server_addr_str.is_none() {
             if let ServerAddr::Found(addr) = self.packet_receiver.server_addr() {
                 self.server_addr_str = Some(addr.to_string());
@@ -59,12 +66,17 @@ impl App {
 
                 if message_from_server.eq(PONG_MSG) {
                     self.message_count += 1;
+
+                    if self.message_count == 10 {
+                        info!("Client finished sending messages");
+                    }
                 }
             }
             Ok(None) => {
-                if self.timer.ringing() {
-                    self.timer.reset();
-                    if self.message_count < 10 {
+                if self.message_count < 10 {
+                    if self.timer.ringing() {
+                        self.timer.reset();
+
                         let message_to_server: String = PING_MSG.to_string();
 
                         let server_addr = match self.packet_receiver.server_addr() {

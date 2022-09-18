@@ -36,7 +36,7 @@ impl DataChannel {
         Self {
             server_session_url: format!("{}{}", server_url, config.rtc_endpoint_path.clone()),
             message_channel: MessageChannel::new().expect("can't create message channel"),
-            addr_cell: AddrCell::default(),
+            addr_cell: AddrCell::new(),
             find_addr_func: Rc::new(RefCell::new(FindAddrFuncInner(Box::new(move |_| {})))),
         }
     }

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    BigMap, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
-    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
-    ReplicateSafe, WorldMutType, WorldRefType,
+    serde::SerdeErr, BigMap, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter,
+    Protocolize, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
+    Replicate, ReplicateSafe, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -192,10 +192,11 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         entity: &Entity,
         component_kind: &P::Kind,
         update: ComponentUpdate<P::Kind>,
-    ) {
+    ) -> Result<(), SerdeErr> {
         if let Some(mut component) = component_mut_of_kind(self.world, entity, component_kind) {
-            component.read_apply_update(converter, update);
+            component.read_apply_update(converter, update)?;
         }
+        Ok(())
     }
 
     fn mirror_entities(&mut self, new_entity: &Entity, old_entity: &Entity) {
